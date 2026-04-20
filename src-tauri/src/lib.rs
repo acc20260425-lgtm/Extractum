@@ -7,6 +7,9 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+mod telegram;
+use telegram::{TelegramState, tg_init, tg_is_authenticated};
+
 #[tauri::command]
 fn ping_db() -> String {
     "Rust: Database plugin is initialized and migrations should have run.".to_string()
@@ -24,13 +27,19 @@ pub fn run() {
     ];
 
     tauri::Builder::default()
+        .manage(TelegramState::new()) // Register global state
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:extractum.db", migrations)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![greet, ping_db])
+        .invoke_handler(tauri::generate_handler![
+            greet, 
+            ping_db,
+            tg_init,
+            tg_is_authenticated
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
