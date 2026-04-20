@@ -1,54 +1,243 @@
 # Design Document: Extractum
 
 ## 1. Project Overview
-**Extractum** is a desktop application (Windows/macOS/Linux) designed to collect, store, and analyze information from diverse digital sources, starting with Telegram channels. It leverages local and cloud LLMs to provide deep insights and semantic search across the collected data.
 
-## 2. Core Functional Requirements
-### 2.1 Data Collection (Module 1)
-- **Source:** Telegram Channels (Public and Subscribed).
-- **Mechanism:** MTProto (User Client API) for maximum data access.
-- **Background Tasks:** Periodic syncing and real-time monitoring of selected channels.
-- **Storage:** Metadata and raw message content in SQLite.
+**Extractum** is a desktop application (Windows/macOS/Linux) designed to collect, store, and analyze information from digital sources, starting with Telegram channels.
 
-### 2.2 Data Analysis (Module 2)
-- **Embeddings:** Automatic generation of vector embeddings for all collected text.
-- **Semantic Search:** Fast retrieval of relevant context based on user queries.
-- **LLM Integration:**
-    - **Local:** Ollama/llama.cpp support for private, offline analysis.
-    - **Cloud:** Integration with OpenAI, Anthropic, and Gemini APIs.
-- **RAG Pipeline:** Retrieval-Augmented Generation to answer questions based on the local knowledge base.
+The MVP architecture is intentionally simple:
+- Telegram data is collected through MTProto.
+- All local data is stored in SQLite.
+- Relevant records are selected from SQL storage and sent to a local or cloud LLM for analysis.
+- No vector database, embedding pipeline, or semantic index is used in MVP.
 
-## 3. Tech Stack
-- **Backend (Tauri/Rust):**
-    - `tauri-plugin-sql`: For SQLite management.
-    - `grammers` or `tdlib-sys`: Rust crates for MTProto communication.
-    - `lancedb`: Embeddable vector database for Rust.
-- **Frontend (SvelteKit/TypeScript):**
-    - `shadcn-svelte` or `Skeleton UI`: For high-quality UI components.
-    - `Lucide Icons`: For iconography.
-- **Communication:** Tauri commands (IPC) between frontend and backend.
+## 2. Product Goals
 
-## 4. Architectural Components
-### 4.1 Backend Services (Rust)
-1. **Telegram Manager:** Handles authentication, session management, and message fetching.
-2. **Database Manager:** Manages SQLite schema and migrations.
-3. **Vector Manager:** Handles indexing and semantic retrieval.
-4. **LLM Coordinator:** Bridges local/cloud LLM requests and manages prompt templates.
+The initial product goal is to provide a reliable desktop workflow for:
+- adding Telegram sources;
+- synchronizing messages into a local database;
+- browsing and filtering collected records;
+- sending selected SQL-derived context into an LLM;
+- receiving analytical answers inside the app.
 
-### 4.2 Frontend Layers (SvelteKit)
-1. **Dashboard:** Overview of synced sources and latest data.
-2. **Source Manager:** UI for adding/removing Telegram channels and monitoring sync status.
-3. **Analysis Lab:** Chat interface for querying data and generating reports.
-4. **Settings:** API key management and local LLM configuration.
+The MVP is focused on correctness, privacy, and a short end-to-end path from source ingestion to analysis.
 
-## 5. Data Schema (Draft)
-- **Channels:** `id`, `name`, `username`, `description`, `sync_active`, `last_sync_id`.
-- **Messages:** `id`, `channel_id`, `text`, `timestamp`, `metadata_json`, `embedding_indexed`.
-- **Vector Index:** Optimized for fast cosine similarity search on message embeddings.
+## 3. Core Functional Requirements
 
-## 6. Implementation Phases
-1. **Phase 1: Foundations** - Setup Tauri, SQLite, and basic Svelte UI.
-2. **Phase 2: Telegram Client** - Implement MTProto auth and basic message fetching.
-3. **Phase 3: Vector Storage** - Integrate LanceDB and embedding generation (local/cloud).
-4. **Phase 4: LLM Lab** - Build the RAG pipeline and analysis interface.
-5. **Phase 5: Polish** - Refine UX, add multi-source support, and documentation.
+### 3.1 Data Collection
+- **Primary source:** Telegram channels.
+- **Access method:** MTProto user client for maximum access to public and subscribed channels.
+- **Sync model:** Manual sync first, with a path to background sync later.
+- **Persistence:** Messages and source metadata are stored locally in SQLite.
+
+### 3.2 Data Browsing
+The user must be able to:
+- view configured sources;
+- open collected items for a source;
+- filter items by source, date range, and other available metadata;
+- inspect original message text and, if needed, related metadata.
+
+### 3.3 LLM Analysis
+The user must be able to:
+- select a source, date range, or subset of messages;
+- provide a free-form analysis prompt;
+- send the resulting context to a chosen LLM provider;
+- receive a response inside the application UI.
+
+The context is formed from SQL-selected records, not from a vector retrieval layer.
+
+### 3.4 Configuration
+The application must support:
+- provider selection for LLM analysis;
+- local or cloud model configuration;
+- secure handling of API credentials;
+- basic application settings stored locally.
+
+## 4. Non-Goals for MVP
+
+The following are explicitly out of scope for MVP:
+- vector databases;
+- embeddings;
+- semantic search;
+- automatic RAG pipelines;
+- multi-source ingestion beyond Telegram;
+- advanced collaborative or cloud-sync features.
+
+This scope control is important to keep the first version small and shippable.
+
+## 5. Tech Stack
+
+### 5.1 Backend
+- **Tauri / Rust**
+- `tauri-plugin-sql` for SQLite integration
+- `grammers` or `tdlib-sys` for Telegram MTProto integration
+- ZSTD compression library for compact local storage
+- provider adapters for local and cloud LLMs.
+
+### 5.2 Frontend
+- **SvelteKit / TypeScript**
+- UI component library such as `shadcn-svelte` or `Skeleton UI`
+- `Lucide Icons`
+- Tauri IPC commands for backend interaction.
+
+## 6. Architectural Model
+
+Extractum follows a **Fat Frontend, Thin Backend** approach:
+- **Frontend:** orchestrates user flows, filtering, context selection, and LLM request preparation;
+- **Backend:** handles MTProto, SQLite, ZSTD compression, secrets, and LLM provider calls.
+
+The backend should remain a compact systems layer rather than a full business-logic engine.
+
+<h2>7. Main Components</h2>
+
+<h3>7.1 Backend Services</h3>
+<ol>
+<li><strong>Telegram Manager</strong><br>
+   Handles Telegram authentication, session management, and channel synchronization.</li>
+<li><strong>Database Manager</strong><br>
+   Manages SQLite schema, migrations, inserts, and filtered selects.</li>
+<li><strong>LLM Coordinator</strong><br>
+   Routes requests to the selected provider and normalizes responses.</li>
+<li><strong>Security Layer</strong><br>
+   Handles secret storage, Telegram session persistence, and safe command boundaries.</li>
+</ol>
+
+<h3>7.2 Frontend Layers</h3>
+<ol>
+<li><strong>Dashboard</strong><br>
+   Shows sources, sync state, and recent activity.</li>
+<li><strong>Source Manager</strong><br>
+   Lets the user add, remove, and synchronize Telegram channels.</li>
+<li><strong>Message Browser</strong><br>
+   Displays collected items with filtering and inspection tools.</li>
+<li><strong>Analysis Lab</strong><br>
+   Allows the user to select records, write prompts, and review LLM output.</li>
+<li><strong>Settings</strong><br>
+   Stores LLM provider configuration and app preferences.</li>
+</ol>
+
+<h2>8. Data Model</h2>
+
+The storage model is based on SQLite as the only local database.
+
+<h3>8.1 <code>sources</code></h3>
+Stores data sources such as Telegram channels:
+<ul>
+<li><code>source_type</code></li>
+<li><code>external_id</code></li>
+<li><code>title</code></li>
+<li><code>metadata</code></li>
+<li><code>last_sync_state</code></li>
+<li><code>is_active</code></li>
+<li><code>created_at</code>.</li>
+</ul>
+
+<h3>8.2 <code>items</code></h3>
+Stores collected content:
+<ul>
+<li><code>source_id</code></li>
+<li><code>external_id</code></li>
+<li><code>author</code></li>
+<li><code>published_at</code></li>
+<li><code>content_zstd</code></li>
+<li><code>raw_data_zstd</code>.</li>
+</ul>
+
+<h3>8.3 <code>app_settings</code></h3>
+Stores local application settings as key-value pairs.
+
+<h3>8.4 Compression</h3>
+Heavy text fields and raw API payloads are compressed with ZSTD before being written into SQLite BLOB fields, then decompressed on read.
+
+<h2>9. Data Flow</h2>
+
+<h3>9.1 Sync Flow</h3>
+<ol>
+<li>User initiates source synchronization.</li>
+<li>Frontend calls a Tauri command such as <code>sync_channel</code>.</li>
+<li>Backend fetches data through MTProto.</li>
+<li>Backend compresses and stores normalized content in SQLite.</li>
+</ol>
+
+<h3>9.2 Retrieval Flow</h3>
+<ol>
+<li>User opens a source or applies filters.</li>
+<li>Frontend requests records through a Tauri command such as <code>get_items</code>.</li>
+<li>Backend performs SQL selection and decompresses stored content.</li>
+<li>Frontend receives ready-to-display records.</li>
+</ol>
+
+<h3>9.3 Analysis Flow</h3>
+<ol>
+<li>User selects records or defines filters.</li>
+<li>Frontend assembles an analysis context from SQL-derived items.</li>
+<li>Frontend calls <code>ask_llm</code>.</li>
+<li>Backend forwards the request through <code>LLM Coordinator</code>.</li>
+<li>The chosen provider returns the answer to the UI.</li>
+</ol>
+
+<h2>10. Security Considerations</h2>
+
+Security-sensitive operations must stay in the backend:
+<ul>
+<li>API key storage;</li>
+<li>Telegram session storage;</li>
+<li>LLM provider credentials;</li>
+<li>input validation for IPC commands;</li>
+<li>avoidance of secret leakage through logs.</li>
+</ul>
+
+The frontend must not directly access secrets or low-level Telegram session data.
+
+<h2>11. MVP Milestones</h2>
+
+<h3>Phase 1: Foundations</h3>
+<ul>
+<li>Initialize Tauri + SvelteKit project</li>
+<li>Connect SQLite</li>
+<li>Apply initial schema</li>
+<li>Build minimal source and message UI.</li>
+</ul>
+
+<h3>Phase 2: Telegram Integration</h3>
+<ul>
+<li>Implement Telegram authentication</li>
+<li>Add source registration</li>
+<li>Implement first channel sync</li>
+<li>Save messages into SQLite.</li>
+</ul>
+
+<h3>Phase 3: Browsing and Filtering</h3>
+<ul>
+<li>List sources</li>
+<li>Show stored items</li>
+<li>Add filtering by source and date</li>
+<li>Add message detail view.</li>
+</ul>
+
+<h3>Phase 4: LLM Analysis</h3>
+<ul>
+<li>Implement provider abstraction</li>
+<li>Add one working provider</li>
+<li>Build prompt + context flow</li>
+<li>Render answer in Analysis Lab.</li>
+</ul>
+
+<h3>Phase 5: Polish</h3>
+<ul>
+<li>Improve UX</li>
+<li>Improve error handling</li>
+<li>Refine settings and secret management</li>
+<li>Clean documentation.</li>
+</ul>
+
+<h2>12. Success Criteria for MVP</h2>
+
+The MVP is successful if a user can:
+<ol>
+<li>add a Telegram source;</li>
+<li>sync its messages into local SQLite storage;</li>
+<li>browse and filter collected items;</li>
+<li>select a subset of records;</li>
+<li>send that context to an LLM;</li>
+<li>receive a useful answer inside the app.</li>
+</ol>

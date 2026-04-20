@@ -1,66 +1,245 @@
 # Database Schema Design (SQLite + ZSTD Compression)
 
-## Архитектурное решение (Storage)
-База данных используется исключительно как надежное и компактное хранилище (Key-Value/Document Store) с возможностью быстрых выборок по метаданным (дата, автор, источник). Полнотекстовый поиск средствами БД не используется.
+## 1. Storage Architecture
 
-Для минимизации размера файла базы данных на диске пользователя, тяжелые текстовые поля (`content`, `raw_data`) сжимаются на стороне Rust-бэкенда с использованием алгоритма **Zstandard (zstd)** перед записью и сохраняются в бинарном формате `BLOB`.
+SQLite is used as the single local storage layer for the MVP.
 
-## Таблицы
+The database acts as a compact and reliable local store for:
+- source metadata;
+- collected content items;
+- application settings;
+- fast filtered selection by metadata such as source, date, and author.
 
-### 1. `sources` (Источники данных)
-Хранит информацию о каналах (например, Telegram).
+Database-level full-text search is not part of the MVP.  
+The application selects relevant records through standard SQL queries and sends the resulting context to the LLM for analysis.
 
-| Колонка | Тип | Описание | Индекс |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | Первичный ключ (PK), автоинкремент | PK |
-| `source_type` | TEXT | Тип источника (`'telegram_channel'`, и т.д.) | |
-| `external_id` | TEXT | Уникальный ID в целевой системе (ID канала) | Уникальный (вместе с source_type) |
-| `title` | TEXT | Название источника | |
-| `metadata` | BLOB | Сжатый JSON (zstd) с доп. данными (аватар и т.д.) | |
-| `last_sync_state` | TEXT | Состояние синхронизации (ID последнего сообщения) | |
-| `is_active` | BOOLEAN | Флаг фоновой синхронизации (1/0) | |
-| `created_at` | DATETIME | Дата добавления источника | |
+To reduce the on-disk database size, heavy text fields are compressed in the Rust backend using **Zstandard (zstd)** and stored as `BLOB` values.
 
-### 2. `items` (Сообщения / Контент)
-Хранилище собранных данных. Оптимизировано для быстрых выборок по времени и источнику.
+## 2. Design Principles
 
-| Колонка | Тип | Описание | Индекс |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | Первичный ключ (PK), автоинкремент | PK |
-| `source_id` | INTEGER | Внешний ключ (FK) на `sources.id` | Да |
-| `external_id` | TEXT | ID сообщения в целевой системе | Уникальный (вместе с source_id) |
-| `author` | TEXT | Имя автора / отправителя (опционально) | Да |
-| `published_at` | DATETIME | Оригинальная дата публикации (Unix Timestamp) | Да (Для выборок по диапазону дат) |
-| `content_zstd` | BLOB | Сжатый (zstd) основной текст сообщения | Нет |
-| `raw_data_zstd` | BLOB | Сжатый (zstd) полный сырой ответ API (JSON) | Нет |
-| `is_embedded` | BOOLEAN | Флаг: обработано ли для векторной БД (1/0) | Да |
+The schema is designed around the following principles:
+- one generic table for data sources;
+- one generic table for collected content items;
+- one simple table for application settings;
+- optimized reads for the most common UI and LLM workflows;
+- no vectorization lifecycle, no embedding queue, no semantic index.
 
-### 3. `app_settings` (Настройки приложения)
-Хранение конфигурации.
+This keeps the storage model simple, portable, and aligned with the MVP scope.
 
-| Колонка | Тип | Описание |
+## 3. Tables
+
+### 3.1 `sources`
+Stores configured data sources such as Telegram channels.
+
+| Column | Type | Description |
 | :--- | :--- | :--- |
-| `key` | TEXT | Уникальный ключ настройки (PK) |
-| `value` | TEXT | Значение |
+| `id` | INTEGER | Primary key, autoincrement |
+| `source_type` | TEXT | Source type, for example `telegram_channel` |
+| `external_id` | TEXT | External identifier in the target system |
+| `title` | TEXT | Human-readable source title |
+| `metadata_zstd` | BLOB | ZSTD-compressed JSON metadata |
+| `last_sync_state` | TEXT | Sync cursor or checkpoint, for example last message ID |
+| `is_active` | BOOLEAN | Whether the source participates in sync |
+| `created_at` | DATETIME | Source creation timestamp |
 
-## Индексы (Оптимизация выборок)
-Для обеспечения мгновенных `SELECT` запросов по заданным сценариям:
+### 3.2 `items`
+Stores collected content records such as Telegram messages.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `source_id` | INTEGER | Foreign key to `sources.id` |
+| `external_id` | TEXT | External item identifier in the source system |
+| `author` | TEXT | Optional author or sender name |
+| `published_at` | DATETIME | Original publication timestamp |
+| `content_zstd` | BLOB | ZSTD-compressed normalized text content |
+| `raw_data_zstd` | BLOB | ZSTD-compressed raw API payload |
+
+### 3.3 `app_settings`
+Stores local application settings as simple key-value pairs.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `key` | TEXT | Primary key |
+| `value` | TEXT | Setting value |
+
+## 4. Constraints and Indexes
+
+The schema should enforce uniqueness for both sources and collected items, and should optimize the primary read paths used by the UI and the LLM preparation flow.
 
 ```sql
--- Уникальность сообщений и источников
-CREATE UNIQUE INDEX idx_sources_ext ON sources(source_type, external_id);
-CREATE UNIQUE INDEX idx_items_ext ON items(source_id, external_id);
+-- Sources
+CREATE UNIQUE INDEX idx_sources_ext
+ON sources(source_type, external_id);
 
--- Быстрые выборки сообщений по источнику и дате (основной сценарий)
-CREATE INDEX idx_items_source_date ON items(source_id, published_at DESC);
+-- Items
+CREATE UNIQUE INDEX idx_items_ext
+ON items(source_id, external_id);
 
--- Быстрые выборки по автору
-CREATE INDEX idx_items_author ON items(author);
+CREATE INDEX idx_items_source_date
+ON items(source_id, published_at DESC);
 
--- Поиск необработанных сообщений для векторатора
-CREATE INDEX idx_items_embedded ON items(is_embedded) WHERE is_embedded = 0;
+CREATE INDEX idx_items_author
+ON items(author);
 ```
 
-## Взаимодействие с Rust Backend
-1. **Запись (Insert):** Данные из Telegram API -> Сериализация в JSON (если нужно) -> `zstd::encode` -> `INSERT INTO items (..., content_zstd, raw_data_zstd) VALUES (..., ?, ?)`.
-2. **Чтение (Select):** `SELECT content_zstd FROM items WHERE source_id = ? AND published_at > ?` -> `zstd::decode` -> Десериализация/Отдача на Frontend или LLM.
+
+### 4.1 Why these indexes
+
+- `idx_sources_ext` prevents duplicate registration of the same external source.
+- `idx_items_ext` prevents duplicate storage of the same message inside one source.
+- `idx_items_source_date` supports the main browsing and filtering scenario by source and time range.
+- `idx_items_author` supports optional filtering by sender or author.
+
+No index for embeddings or semantic retrieval is needed, because the MVP does not contain a vector-processing pipeline.
+
+## 5. Compression Strategy
+
+The backend compresses large fields before writing them into SQLite:
+
+- normalized text content goes into `content_zstd`;
+- original API payload goes into `raw_data_zstd`;
+- optional source metadata goes into `metadata_zstd`.
+
+This approach gives three advantages:
+
+- smaller local database size;
+- preservation of both normalized and raw forms of the data;
+- flexibility for future reprocessing without needing to re-fetch everything from Telegram.
+
+
+## 6. Backend Interaction Model
+
+### 6.1 Insert Flow
+
+1. Backend receives data from Telegram MTProto.
+2. Backend normalizes fields needed for UI and analysis.
+3. Backend serializes raw payloads when needed.
+4. Backend compresses large payloads with `zstd`.
+5. Backend inserts rows into `sources` and `items`.
+
+Conceptually:
+
+```sql
+INSERT INTO items (
+  source_id,
+  external_id,
+  author,
+  published_at,
+  content_zstd,
+  raw_data_zstd
+) VALUES (?, ?, ?, ?, ?, ?);
+```
+
+
+### 6.2 Select Flow
+
+1. Frontend requests records using filters.
+2. Backend executes parameterized SQL queries.
+3. Backend decompresses `content_zstd` and, if needed, `raw_data_zstd`.
+4. Backend returns ready-to-use records to the frontend or directly to the LLM request pipeline.
+
+Conceptually:
+
+```sql
+SELECT
+  id,
+  source_id,
+  external_id,
+  author,
+  published_at,
+  content_zstd,
+  raw_data_zstd
+FROM items
+WHERE source_id = ?
+  AND published_at >= ?
+  AND published_at <= ?
+ORDER BY published_at DESC
+LIMIT ?;
+```
+
+
+## 7. Relationship to LLM Analysis
+
+This schema is intentionally built for a **SQL-first analysis flow**:
+
+- records are stored locally in SQLite;
+- frontend or backend selects relevant rows with ordinary SQL;
+- decompressed text is assembled into context blocks;
+- the resulting context is sent to a configured LLM provider.
+
+This means the schema is optimized for deterministic filtering and structured retrieval, not for embedding-based nearest-neighbor search.
+
+## 8. Example Query Scenarios
+
+Typical queries supported by this schema include:
+
+- latest messages from a source;
+- messages from a source in a date range;
+- messages by author;
+- limited record batches for UI pages;
+- selected subsets of records for LLM analysis.
+
+Examples:
+
+```sql
+-- Latest items for one source
+SELECT id, published_at, content_zstd
+FROM items
+WHERE source_id = ?
+ORDER BY published_at DESC
+LIMIT 100;
+```
+
+```sql
+-- Items for one source in a date range
+SELECT id, author, published_at, content_zstd
+FROM items
+WHERE source_id = ?
+  AND published_at BETWEEN ? AND ?
+ORDER BY published_at DESC;
+```
+
+```sql
+-- Items by author inside one source
+SELECT id, published_at, content_zstd
+FROM items
+WHERE source_id = ?
+  AND author = ?
+ORDER BY published_at DESC;
+```
+
+
+<h2>9. Future Extensions</h2>
+
+The schema is intentionally generic enough to support later expansion:
+
+<ul>
+<li>additional <code>source_type</code> values;</li>
+<li>richer metadata in compressed JSON fields;</li>
+<li>optional tagging or classification tables;</li>
+<li>optional cached analysis results.</li>
+</ul>
+
+These extensions can be added later without changing the MVP storage principle that SQLite remains the core local store.
+
+<h2>10. Summary of MVP Storage Boundaries</h2>
+
+The MVP schema includes:
+
+<ul>
+<li><code>sources</code></li>
+<li><code>items</code></li>
+<li><code>app_settings</code></li>
+<li>compressed storage of large payloads</li>
+<li>SQL-based filtered retrieval.</li>
+</ul>
+
+The MVP schema does not include:
+
+<ul>
+<li>embeddings;</li>
+<li>vector indexes;</li>
+<li>semantic retrieval queues;</li>
+<li>vector database synchronization state.</li>
+</ul>
