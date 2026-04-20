@@ -1,4 +1,4 @@
-# Design Document: Extractum
+# Design Document: Extractum (MVP v3)
 
 ## 1. Project Overview
 
@@ -69,7 +69,7 @@ This scope control is important to keep the first version small and shippable.
 ### 5.1 Backend
 - **Tauri / Rust**
 - `tauri-plugin-sql` for SQLite integration
-- `grammers` or `tdlib-sys` for Telegram MTProto integration
+- `grammers` for Telegram MTProto integration
 - ZSTD compression library for compact local storage
 - provider adapters for local and cloud LLMs.
 
@@ -87,104 +87,96 @@ Extractum follows a **Fat Frontend, Thin Backend** approach:
 
 The backend should remain a compact systems layer rather than a full business-logic engine.
 
-<h2>7. Main Components</h2>
+## 7. Main Components
 
-<h3>7.1 Backend Services</h3>
-<ol>
-<li><strong>Telegram Manager</strong><br>
-   Handles Telegram authentication, session management, and channel synchronization.</li>
-<li><strong>Database Manager</strong><br>
-   Manages SQLite schema, migrations, inserts, and filtered selects.</li>
-<li><strong>LLM Coordinator</strong><br>
-   Routes requests to the selected provider and normalizes responses.</li>
-<li><strong>Security Layer</strong><br>
-   Handles secret storage, Telegram session persistence, and safe command boundaries.</li>
-</ol>
+### 7.1 Backend Services
+1. **Telegram Manager**  
+   Handles Telegram authentication, session management, and channel synchronization.
 
-<h3>7.2 Frontend Layers</h3>
-<ol>
-<li><strong>Dashboard</strong><br>
-   Shows sources, sync state, and recent activity.</li>
-<li><strong>Source Manager</strong><br>
-   Lets the user add, remove, and synchronize Telegram channels.</li>
-<li><strong>Message Browser</strong><br>
-   Displays collected items with filtering and inspection tools.</li>
-<li><strong>Analysis Lab</strong><br>
-   Allows the user to select records, write prompts, and review LLM output.</li>
-<li><strong>Settings</strong><br>
-   Stores LLM provider configuration and app preferences.</li>
-</ol>
+2. **Database Manager**  
+   Manages SQLite schema, migrations, inserts, and filtered selects.
 
-<h2>8. Data Model</h2>
+3. **LLM Coordinator**  
+   Routes requests to the selected provider and normalizes responses.
+
+4. **Security Layer**  
+   Handles secret storage, Telegram session persistence, and safe command boundaries.
+
+### 7.2 Frontend Layers
+1. **Dashboard**  
+   Shows sources, sync state, and recent activity.
+
+2. **Source Manager**  
+   Lets the user add, remove, and synchronize Telegram channels.
+
+3. **Message Browser**  
+   Displays collected items with filtering and inspection tools.
+
+4. **Analysis Lab**  
+   Allows the user to select records, write prompts, and review LLM output.
+
+5. **Settings**  
+   Stores LLM provider configuration and app preferences.
+
+## 8. Data Model
 
 The storage model is based on SQLite as the only local database.
 
-<h3>8.1 <code>sources</code></h3>
+### 8.1 `sources`
 Stores data sources such as Telegram channels:
-<ul>
-<li><code>source_type</code></li>
-<li><code>external_id</code></li>
-<li><code>title</code></li>
-<li><code>metadata</code></li>
-<li><code>last_sync_state</code></li>
-<li><code>is_active</code></li>
-<li><code>created_at</code>.</li>
-</ul>
+- `source_type`
+- `external_id`
+- `title`
+- `metadata`
+- `last_sync_state` (`message_id` INTEGER)
+- `is_active`
+- `created_at`.
 
-<h3>8.2 <code>items</code></h3>
+### 8.2 `items`
 Stores collected content:
-<ul>
-<li><code>source_id</code></li>
-<li><code>external_id</code></li>
-<li><code>author</code></li>
-<li><code>published_at</code></li>
-<li><code>content_zstd</code></li>
-<li><code>raw_data_zstd</code>.</li>
-</ul>
+- `source_id`
+- `external_id`
+- `author`
+- `published_at`
+- `content_zstd`
+- `raw_data_zstd`.
 
-<h3>8.3 <code>app_settings</code></h3>
+### 8.3 `app_settings`
 Stores local application settings as key-value pairs.
 
-<h3>8.4 Compression</h3>
+### 8.4 Compression
 Heavy text fields and raw API payloads are compressed with ZSTD before being written into SQLite BLOB fields, then decompressed on read.
 
-<h2>9. Data Flow</h2>
+## 9. Data Flow
 
-<h3>9.1 Sync Flow</h3>
-<ol>
-<li>User initiates source synchronization.</li>
-<li>Frontend calls a Tauri command such as <code>sync_channel</code>.</li>
-<li>Backend fetches data through MTProto.</li>
-<li>Backend compresses and stores normalized content in SQLite.</li>
-</ol>
+### 9.1 Sync Flow
+1. User initiates source synchronization.
+2. Frontend calls a Tauri command such as `sync_channel`.
+3. Backend fetches data through MTProto, managed by `TelegramGuard`.
+4. Backend sends `sync_progress` events to frontend.
+5. Backend compresses and stores normalized content in SQLite.
 
-<h3>9.2 Retrieval Flow</h3>
-<ol>
-<li>User opens a source or applies filters.</li>
-<li>Frontend requests records through a Tauri command such as <code>get_items</code>.</li>
-<li>Backend performs SQL selection and decompresses stored content.</li>
-<li>Frontend receives ready-to-display records.</li>
-</ol>
+### 9.2 Retrieval Flow
+1. User opens a source or applies filters.
+2. Frontend requests records through a Tauri command such as `get_items`.
+3. Backend performs SQL selection and decompresses stored content.
+4. Frontend receives ready-to-display records.
 
-<h3>9.3 Analysis Flow</h3>
-<ol>
-<li>User selects records or defines filters.</li>
-<li>Frontend assembles an analysis context from SQL-derived items.</li>
-<li>Frontend calls <code>ask_llm</code>.</li>
-<li>Backend forwards the request through <code>LLM Coordinator</code>.</li>
-<li>The chosen provider returns the answer to the UI.</li>
-</ol>
+### 9.3 Analysis Flow
+1. User selects records or defines filters.
+2. Frontend assembles an analysis context from SQL-derived items, applying context size limits.
+3. Frontend calls `ask_llm`.
+4. Backend forwards the request through `LLM Coordinator`.
+5. The chosen provider (Gemini) returns the answer to the UI.
 
-<h2>10. Security Considerations</h2>
+## 10. Security Considerations
 
 Security-sensitive operations must stay in the backend:
-<ul>
-<li>API key storage;</li>
-<li>Telegram session storage;</li>
-<li>LLM provider credentials;</li>
-<li>input validation for IPC commands;</li>
-<li>avoidance of secret leakage through logs.</li>
-</ul>
+- API key storage (`keyring` for Gemini);
+- Telegram session storage;
+- LLM provider credentials;
+- input validation for IPC commands;
+- avoidance of secret leakage through logs.
 
 The frontend must not directly access secrets or low-level Telegram session data.
 
@@ -193,17 +185,17 @@ The frontend must not directly access secrets or low-level Telegram session data
 <h3>Phase 1: Foundations</h3>
 <ul>
 <li>Initialize Tauri + SvelteKit project</li>
-<li>Connect SQLite</li>
+<li>Connect SQLite with `tauri-plugin-sql` file-based migrations</li>
 <li>Apply initial schema</li>
 <li>Build minimal source and message UI.</li>
 </ul>
 
 <h3>Phase 2: Telegram Integration</h3>
 <ul>
-<li>Implement Telegram authentication</li>
+<li>Implement Telegram authentication using `grammers`</li>
 <li>Add source registration</li>
-<li>Implement first channel sync</li>
-<li>Save messages into SQLite.</li>
+<li>Implement first channel sync with progress events</li>
+<li>Save messages into SQLite with ZSTD compression.</li>
 </ul>
 
 <h3>Phase 3: Browsing and Filtering</h3>
@@ -216,9 +208,9 @@ The frontend must not directly access secrets or low-level Telegram session data
 
 <h3>Phase 4: LLM Analysis</h3>
 <ul>
-<li>Implement provider abstraction</li>
-<li>Add one working provider</li>
-<li>Build prompt + context flow</li>
+<li>Implement `LLMProvider` abstraction</li>
+<li>Add **Google Gemini** as the first working provider</li>
+<li>Build prompt + context flow with frontend size limits</li>
 <li>Render answer in Analysis Lab.</li>
 </ul>
 
@@ -238,6 +230,9 @@ The MVP is successful if a user can:
 <li>sync its messages into local SQLite storage;</li>
 <li>browse and filter collected items;</li>
 <li>select a subset of records;</li>
-<li>send that context to an LLM;</li>
+<li>send that context to a **Google Gemini LLM**;</li>
 <li>receive a useful answer inside the app.</li>
 </ol>
+
+## 13. Known Limitations of MVP
+- The application in the MVP version does not track editing or deleting messages that have already been loaded into the local database.

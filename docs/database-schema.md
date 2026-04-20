@@ -1,4 +1,4 @@
-# Database Schema Design (SQLite + ZSTD Compression)
+# Database Schema Design (SQLite + ZSTD Compression) v2
 
 ## 1. Storage Architecture
 
@@ -38,7 +38,7 @@ Stores configured data sources such as Telegram channels.
 | `external_id` | TEXT | External identifier in the target system |
 | `title` | TEXT | Human-readable source title |
 | `metadata_zstd` | BLOB | ZSTD-compressed JSON metadata |
-| `last_sync_state` | TEXT | Sync cursor or checkpoint, for example last message ID |
+| `last_sync_state` | INTEGER | Sync cursor or checkpoint: `message_id` of the last synced message |
 | `is_active` | BOOLEAN | Whether the source participates in sync |
 | `created_at` | DATETIME | Source creation timestamp |
 
@@ -63,7 +63,7 @@ Stores local application settings as simple key-value pairs.
 | `key` | TEXT | Primary key |
 | `value` | TEXT | Setting value |
 
-## 4. Constraints and Indexes
+<h2>4. Constraints and Indexes</h2>
 
 The schema should enforce uniqueness for both sources and collected items, and should optimize the primary read paths used by the UI and the LLM preparation flow.
 
@@ -84,39 +84,47 @@ ON items(author);
 ```
 
 
-### 4.1 Why these indexes
+<h3>4.1 Why these indexes</h3>
 
-- `idx_sources_ext` prevents duplicate registration of the same external source.
-- `idx_items_ext` prevents duplicate storage of the same message inside one source.
-- `idx_items_source_date` supports the main browsing and filtering scenario by source and time range.
-- `idx_items_author` supports optional filtering by sender or author.
+<ul>
+<li><code>idx_sources_ext</code> prevents duplicate registration of the same external source.</li>
+<li><code>idx_items_ext</code> prevents duplicate storage of the same message inside one source.</li>
+<li><code>idx_items_source_date</code> supports the main browsing and filtering scenario by source and time range.</li>
+<li><code>idx_items_author</code> supports optional filtering by sender or author.</li>
+</ul>
 
 No index for embeddings or semantic retrieval is needed, because the MVP does not contain a vector-processing pipeline.
 
-## 5. Compression Strategy
+<h2>5. Compression Strategy</h2>
 
 The backend compresses large fields before writing them into SQLite:
 
-- normalized text content goes into `content_zstd`;
-- original API payload goes into `raw_data_zstd`;
-- optional source metadata goes into `metadata_zstd`.
+<ul>
+<li>normalized text content goes into <code>content_zstd</code>;</li>
+<li>original API payload goes into <code>raw_data_zstd</code>;</li>
+<li>optional source metadata goes into <code>metadata_zstd</code>.</li>
+</ul>
 
 This approach gives three advantages:
 
-- smaller local database size;
-- preservation of both normalized and raw forms of the data;
-- flexibility for future reprocessing without needing to re-fetch everything from Telegram.
+<ul>
+<li>smaller local database size;</li>
+<li>preservation of both normalized and raw forms of the data;</li>
+<li>flexibility for future reprocessing without needing to re-fetch everything from Telegram.</li>
+</ul>
 
 
-## 6. Backend Interaction Model
+<h2>6. Backend Interaction Model</h2>
 
-### 6.1 Insert Flow
+<h3>6.1 Insert Flow</h3>
 
-1. Backend receives data from Telegram MTProto.
-2. Backend normalizes fields needed for UI and analysis.
-3. Backend serializes raw payloads when needed.
-4. Backend compresses large payloads with `zstd`.
-5. Backend inserts rows into `sources` and `items`.
+<ol>
+<li>Backend receives data from Telegram MTProto.</li>
+<li>Backend normalizes fields needed for UI and analysis.</li>
+<li>Backend serializes raw payloads when needed.</li>
+<li>Backend compresses large payloads with <code>zstd</code>.</li>
+<li>Backend inserts rows into <code>sources</code> and <code>items</code>.</li>
+</ol>
 
 Conceptually:
 
@@ -132,12 +140,14 @@ INSERT INTO items (
 ```
 
 
-### 6.2 Select Flow
+<h3>6.2 Select Flow</h3>
 
-1. Frontend requests records using filters.
-2. Backend executes parameterized SQL queries.
-3. Backend decompresses `content_zstd` and, if needed, `raw_data_zstd`.
-4. Backend returns ready-to-use records to the frontend or directly to the LLM request pipeline.
+<ol>
+<li>Frontend requests records using filters.</li>
+<li>Backend executes parameterized SQL queries.</li>
+<li>Backend decompresses <code>content_zstd</code> and, if needed, <code>raw_data_zstd</code>.</li>
+<li>Backend returns ready-to-use records to the frontend or directly to the LLM request pipeline.</li>
+</ol>
 
 Conceptually:
 
@@ -159,26 +169,30 @@ LIMIT ?;
 ```
 
 
-## 7. Relationship to LLM Analysis
+<h2>7. Relationship to LLM Analysis</h2>
 
 This schema is intentionally built for a **SQL-first analysis flow**:
 
-- records are stored locally in SQLite;
-- frontend or backend selects relevant rows with ordinary SQL;
-- decompressed text is assembled into context blocks;
-- the resulting context is sent to a configured LLM provider.
+<ul>
+<li>records are stored locally in SQLite;</li>
+<li>frontend or backend selects relevant rows with ordinary SQL;</li>
+<li>decompressed text is assembled into context blocks;</li>
+<li>the resulting context is sent to a configured LLM provider.</li>
+</ul>
 
 This means the schema is optimized for deterministic filtering and structured retrieval, not for embedding-based nearest-neighbor search.
 
-## 8. Example Query Scenarios
+<h2>8. Example Query Scenarios</h2>
 
 Typical queries supported by this schema include:
 
-- latest messages from a source;
-- messages from a source in a date range;
-- messages by author;
-- limited record batches for UI pages;
-- selected subsets of records for LLM analysis.
+<ul>
+<li>latest messages from a source;</li>
+<li>messages from a source in a date range;</li>
+<li>messages by author;</li>
+<li>limited record batches for UI pages;</li>
+<li>selected subsets of records for LLM analysis.</li>
+</ul>
 
 Examples:
 

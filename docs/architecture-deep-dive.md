@@ -1,4 +1,4 @@
-# Deep Dive Architecture: Extractum (MVP)
+# Deep Dive Architecture: Extractum (MVP v3)
 
 ## 1. Architectural Principle: "Fat Frontend, Thin Backend"
 
@@ -9,7 +9,7 @@
 
 Такой подход позволяет держать backend компактным и прикладно-нейтральным, а основную бизнес-логику и UX-логику развивать быстрее на стороне frontend.
 
-## 2. Core Backend Responsibilities
+<h2>2. Core Backend Responsibilities</h2>
 
 Rust backend не должен превращаться в "второе приложение внутри приложения". Его задача — дать frontend небольшой набор надежных примитивов.
 
@@ -132,9 +132,9 @@ SQLite используется как единственное локально
 <li>Пользователь выбирает источник, диапазон, сообщения или режим анализа.</li>
 <li>Frontend либо сам отбирает нужные записи из уже загруженных данных, либо запрашивает дополнительную SQL-выборку.</li>
 <li>Frontend собирает итоговый контекст: список сообщений, выдержки, метаданные, пользовательский prompt.</li>
-<li>Frontend вызывает <code>invoke('ask_llm', { provider, prompt, context })</code>.</li>
+<li>Frontend вызывает <code>invoke('ask_llm', { provider: 'gemini', model: 'gemini-1.5-flash', prompt, context })</code>.</li>
 <li>Backend передает запрос в <code>LLM Coordinator</code>.</li>
-<li><code>LLM Coordinator</code> вызывает выбранный <code>LLMProvider</code>.</li>
+<li><code>LLM Coordinator</code> вызывает выбранный <code>LLMProvider</code> (Google Gemini).</li>
 <li>Ответ модели возвращается в frontend и показывается в UI.</li>
 </ol>
 
@@ -159,7 +159,7 @@ SQLite используется как единственное локально
 
 Backend отвечает за:
 <ul>
-<li>хранение API-ключей через системный keyring;</li>
+<li>хранение API-ключей через системный keyring (для Google Gemini);</li>
 <li>хранение Telegram-сессии в app data directory;</li>
 <li>недопущение утечки секретов в логах;</li>
 <li>валидацию входных параметров Tauri-команд;</li>
@@ -196,7 +196,7 @@ Frontend не должен иметь прямого доступа ни к кл
 <li>просмотр источников и сообщений;</li>
 <li>фильтрация по базовым метаданным;</li>
 <li>отправка SQL-выбранного контекста в LLM;</li>
-<li>поддержка как минимум одного LLM-провайдера.</li>
+<li>поддержка Google Gemini как LLM-провайдера.</li>
 </ul>
 
 В MVP не входят:
