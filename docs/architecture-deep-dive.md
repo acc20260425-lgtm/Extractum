@@ -1,4 +1,4 @@
-# Deep Dive Architecture: Extractum (MVP v3)
+# Deep Dive Architecture: Extractum (MVP v4)
 
 ## 1. Architectural Principle: "Fat Frontend, Thin Backend"
 
