@@ -40,6 +40,7 @@ Stores configured data sources such as Telegram channels.
 | `metadata_zstd` | BLOB | ZSTD-compressed JSON metadata |
 | `last_sync_state` | INTEGER | Sync cursor or checkpoint: `message_id` of the last synced message |
 | `is_active` | BOOLEAN | Whether the source participates in sync |
+| `is_member` | BOOLEAN | Whether the user is subscribed to this source |
 | `created_at` | INTEGER | Unix Timestamp, UTC |
 
 ### 3.2 `items`

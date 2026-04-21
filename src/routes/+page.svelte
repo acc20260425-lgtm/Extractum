@@ -7,233 +7,185 @@
   let apiHash = $state("");
   let phone = $state("");
   let code = $state("");
-  let status = $state("Idle");
-  let isAuthenticated = $state(false);
-  let step = $state<"init" | "phone" | "code" | "authenticated">("init");
+  let status = $state("");
+  let step = $state<"init" | "phone" | "code" | "done">("init");
+  let loading = $state(false);
 
   async function loadSettings() {
     try {
       const db = await Database.load("sqlite:extractum.db");
-      const settings = await db.select<{ key: string, value: string }[]>("SELECT * FROM app_settings");
-      
-      const idSetting = settings.find(s => s.key === "api_id");
-      const hashSetting = settings.find(s => s.key === "api_hash");
-      
-      if (idSetting) apiId = idSetting.value;
-      if (hashSetting) apiHash = hashSetting.value;
-      
-      if (apiId && apiHash) {
-        await initTelegram();
+      const rows = await db.select<{ key: string; value: string }[]>(
+        "SELECT key, value FROM app_settings WHERE key IN ('api_id', 'api_hash')"
+      );
+      for (const r of rows) {
+        if (r.key === "api_id") apiId = r.value;
+        if (r.key === "api_hash") apiHash = r.value;
       }
-    } catch (error) {
-      console.error("Failed to load settings:", error);
+      if (apiId && apiHash) await initTelegram();
+    } catch (e) {
+      console.error(e);
     }
   }
 
-  async function saveSettings() {
+  async function saveAndInit() {
+    if (!apiId || !apiHash) return;
+    loading = true;
     try {
       const db = await Database.load("sqlite:extractum.db");
-      await db.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('api_id', ?), ('api_hash', ?)", [apiId, apiHash]);
-      status = "Settings saved.";
+      await db.execute(
+        "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('api_id', ?), ('api_hash', ?)",
+        [apiId, apiHash]
+      );
       await initTelegram();
-    } catch (error) {
-      status = `Error saving settings: ${error}`;
+    } catch (e) {
+      status = `Error: ${e}`;
+    } finally {
+      loading = false;
     }
   }
 
   async function initTelegram() {
+    loading = true;
+    status = "Connecting...";
     try {
-      status = "Initializing Telegram client...";
-      const isAuth = await invoke<boolean>("tg_init", { 
-        apiId: parseInt(apiId), 
-        apiHash 
+      const isAuth = await invoke<boolean>("tg_init", {
+        apiId: parseInt(apiId),
+        apiHash,
       });
-      isAuthenticated = isAuth;
-      if (isAuthenticated) {
-        step = "authenticated";
-        status = "Already authenticated.";
+      if (isAuth) {
+        step = "done";
+        status = "Connected.";
       } else {
         step = "phone";
-        status = "Telegram client ready. Please sign in.";
+        status = "";
       }
-    } catch (error) {
-      status = `Initialization error: ${error}`;
+    } catch (e) {
+      status = `Error: ${e}`;
+      step = "init";
+    } finally {
+      loading = false;
     }
   }
 
   async function sendCode() {
+    loading = true;
+    status = "";
     try {
-      status = "Sending code...";
       await invoke("tg_send_code", { phone });
       step = "code";
-      status = "Code sent. Please check your Telegram.";
-    } catch (error) {
-      status = `Error sending code: ${error}`;
+    } catch (e) {
+      status = `Error: ${e}`;
+    } finally {
+      loading = false;
     }
   }
 
   async function signIn() {
+    loading = true;
+    status = "";
     try {
-      status = "Signing in...";
-      const result = await invoke<boolean>("tg_sign_in", { code });
-      if (result) {
-        isAuthenticated = true;
-        step = "authenticated";
-        status = "Successfully signed in!";
-      }
-    } catch (error) {
-      status = `Error signing in: ${error}`;
+      await invoke("tg_sign_in", { code });
+      step = "done";
+      status = "Signed in successfully.";
+    } catch (e) {
+      status = `Error: ${e}`;
+    } finally {
+      loading = false;
     }
   }
 
   async function logout() {
+    loading = true;
     try {
       await invoke("tg_logout");
-      isAuthenticated = false;
       step = "phone";
-      status = "Logged out.";
-    } catch (error) {
-      status = `Logout error: ${error}`;
+      status = "";
+    } catch (e) {
+      status = `Error: ${e}`;
+    } finally {
+      loading = false;
     }
   }
 
-  onMount(() => {
-    loadSettings();
-  });
+  onMount(loadSettings);
 </script>
 
-<main class="container">
-  <h1>Extractum: Telegram Setup</h1>
+<h1>Telegram Auth</h1>
 
+{#if status}
+  <p class="status" class:error={status.startsWith("Error")}>{status}</p>
+{/if}
+
+{#if step === "init"}
   <div class="card">
-    <p class="status">Status: <strong>{status}</strong></p>
+    <h3>API Credentials</h3>
+    <p class="hint">Get your credentials at <a href="https://my.telegram.org" target="_blank">my.telegram.org</a></p>
+    <label>API ID
+      <input type="text" bind:value={apiId} placeholder="1234567" />
+    </label>
+    <label>API Hash
+      <input type="text" bind:value={apiHash} placeholder="abcdef..." />
+    </label>
+    <button onclick={saveAndInit} disabled={loading || !apiId || !apiHash}>
+      {loading ? "Connecting..." : "Connect"}
+    </button>
   </div>
+{/if}
 
-  {#if step === "init"}
-    <div class="card">
-      <h3>1. API Credentials</h3>
-      <div class="input-group">
-        <label for="api-id">API ID</label>
-        <input id="api-id" type="text" bind:value={apiId} placeholder="1234567" />
-      </div>
-      <div class="input-group">
-        <label for="api-hash">API Hash</label>
-        <input id="api-hash" type="text" bind:value={apiHash} placeholder="abcdef123456..." />
-      </div>
-      <button onclick={saveSettings}>Initialize Telegram</button>
-    </div>
-  {/if}
+{#if step === "phone"}
+  <div class="card">
+    <h3>Phone Number</h3>
+    <label>International format
+      <input type="tel" bind:value={phone} placeholder="+79991234567" />
+    </label>
+    <button onclick={sendCode} disabled={loading || !phone}>
+      {loading ? "Sending..." : "Send Code"}
+    </button>
+    <button class="secondary" onclick={() => (step = "init")}>Change credentials</button>
+  </div>
+{/if}
 
-  {#if step === "phone"}
-    <div class="card">
-      <h3>2. Telegram Login</h3>
-      <p>Enter your phone number in international format (e.g., +1234567890).</p>
-      <div class="input-group">
-        <input type="text" bind:value={phone} placeholder="+1..." />
-      </div>
-      <button onclick={sendCode}>Send Code</button>
-      <button class="secondary" onclick={() => step = "init"}>Change API Credentials</button>
-    </div>
-  {/if}
+{#if step === "code"}
+  <div class="card">
+    <h3>Verification Code</h3>
+    <p class="hint">Check your Telegram app for the code.</p>
+    <label>Code
+      <input type="text" bind:value={code} placeholder="12345" />
+    </label>
+    <button onclick={signIn} disabled={loading || !code}>
+      {loading ? "Signing in..." : "Sign In"}
+    </button>
+    <button class="secondary" onclick={() => (step = "phone")}>Back</button>
+  </div>
+{/if}
 
-  {#if step === "code"}
-    <div class="card">
-      <h3>3. Enter Code</h3>
-      <p>A verification code was sent to your Telegram app.</p>
-      <div class="input-group">
-        <input type="text" bind:value={code} placeholder="12345" />
-      </div>
-      <button onclick={signIn}>Sign In</button>
-      <button class="secondary" onclick={() => step = "phone"}>Back to Phone</button>
-    </div>
-  {/if}
-
-  {#if step === "authenticated"}
-    <div class="card">
-      <h3>You are Connected!</h3>
-      <p>Telegram is successfully linked with Extractum.</p>
-      <button class="danger" onclick={logout}>Logout</button>
-    </div>
-  {/if}
-</main>
+{#if step === "done"}
+  <div class="card">
+    <h3>✓ Connected to Telegram</h3>
+    <p class="hint">You can now manage sources.</p>
+    <button class="danger" onclick={logout} disabled={loading}>Logout</button>
+  </div>
+{/if}
 
 <style>
-  :root {
-    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-    background-color: #1a1a1a;
-    color: #eee;
-  }
-  .container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 2rem;
-    max-width: 600px;
-    margin: 0 auto;
-  }
   .card {
     background: #2a2a2a;
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
-    width: 100%;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  }
-  .status {
-    font-size: 0.9rem;
-    color: #bbb;
-  }
-  .input-group {
     display: flex;
     flex-direction: column;
-    margin-bottom: 1rem;
+    gap: 0.75rem;
   }
-  .input-group label {
-    margin-bottom: 0.4rem;
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
     font-size: 0.85rem;
     color: #aaa;
   }
-  input {
-    background: #1a1a1a;
-    border: 1px solid #444;
-    color: white;
-    padding: 0.6rem 0.8rem;
-    border-radius: 6px;
-    font-size: 1rem;
-  }
-  input:focus {
-    border-color: #007bff;
-    outline: none;
-  }
-  button {
-    background: #007bff;
-    color: white;
-    border: none;
-    padding: 0.7rem 1.2rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: 600;
-    transition: background 0.2s;
-    width: 100%;
-  }
-  button:hover {
-    background: #0056b3;
-  }
-  button.secondary {
-    background: transparent;
-    border: 1px solid #444;
-    margin-top: 0.5rem;
-  }
-  button.secondary:hover {
-    background: #333;
-  }
-  button.danger {
-    background: #dc3545;
-  }
-  button.danger:hover {
-    background: #a71d2a;
-  }
-  h1 { margin-bottom: 2rem; }
-  h3 { margin-top: 0; margin-bottom: 1rem; }
+  .hint { font-size: 0.85rem; color: #888; margin: 0; }
+  .hint a { color: #007bff; }
+  .status { padding: 0.6rem 1rem; border-radius: 6px; background: #1e3a5f; font-size: 0.9rem; }
+  .status.error { background: #4a1a1a; color: #f88; }
 </style>

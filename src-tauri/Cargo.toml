@@ -18,6 +18,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
 grammers-client = { git = "https://github.com/Lonami/grammers", branch = "master", default-features = false }
 grammers-session = { git = "https://github.com/Lonami/grammers", branch = "master", default-features = false, features = ["serde"] }
 grammers-mtsender = { git = "https://github.com/Lonami/grammers", branch = "master" }

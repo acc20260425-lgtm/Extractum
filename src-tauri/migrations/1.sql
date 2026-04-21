@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS sources (
     metadata_zstd BLOB,
     last_sync_state INTEGER, -- message_id of the last synced message
     is_active BOOLEAN DEFAULT 1,
+    is_member BOOLEAN DEFAULT 0, -- whether the user is subscribed to this channel
     created_at INTEGER NOT NULL -- Unix Timestamp, UTC
 );
 

@@ -10,6 +10,9 @@ fn greet(name: &str) -> String {
 mod telegram;
 use telegram::{TelegramState, tg_init, tg_is_authenticated, tg_send_code, tg_sign_in, tg_logout};
 
+mod sources;
+use sources::{list_telegram_channels, add_telegram_source, list_sources};
+
 #[tauri::command]
 fn ping_db() -> String {
     "Rust: Database plugin is initialized and migrations should have run.".to_string()
@@ -35,13 +38,16 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
-            greet, 
+            greet,
             ping_db,
             tg_init,
             tg_is_authenticated,
             tg_send_code,
             tg_sign_in,
-            tg_logout
+            tg_logout,
+            list_telegram_channels,
+            add_telegram_source,
+            list_sources
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
