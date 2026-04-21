@@ -43,6 +43,12 @@
     last_message_id: number | null;
   }
 
+  interface AccountRuntimeStatus {
+    account_id: number;
+    initialized: boolean;
+    authenticated: boolean;
+  }
+
   let selectedAccountId = $state<number | null>(
     $page.url.searchParams.has("account")
       ? parseInt($page.url.searchParams.get("account")!, 10)
@@ -55,6 +61,7 @@
   let items = $state<ItemRecord[]>([]);
   let manualRef = $state("");
   let status = $state("");
+  let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
   let loadingDialogs = $state(false);
   let loadingItems = $state(false);
   let addingId = $state<number | string | null>(null);
@@ -64,8 +71,28 @@
   async function loadAccounts() {
     try {
       accounts = await invoke<AccountRecord[]>("list_accounts");
+      await loadAccountStatuses();
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  async function loadAccountStatuses() {
+    if (accounts.length === 0) {
+      accountStatuses = {};
+      return;
+    }
+
+    try {
+      const statuses = await invoke<AccountRuntimeStatus[]>("tg_get_account_statuses", {
+        accountIds: accounts.map((account) => account.id),
+      });
+      accountStatuses = Object.fromEntries(
+        statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus])
+      );
+    } catch (e) {
+      console.error(e);
+      accountStatuses = {};
     }
   }
 
@@ -82,6 +109,10 @@
   async function loadDialogs() {
     if (selectedAccountId === null) {
       status = "Select an account first";
+      return;
+    }
+    if (!selectedAccountReady()) {
+      status = "Initialize and sign in this account before loading Telegram channels.";
       return;
     }
     loadingDialogs = true;
@@ -116,6 +147,10 @@
 
   async function addFromDialog(channel: ChannelInfo) {
     if (selectedAccountId === null) return;
+    if (!selectedAccountReady()) {
+      status = "Initialize and sign in this account before adding sources.";
+      return;
+    }
     addingId = channel.id;
     try {
       const ref = channel.username ? `@${channel.username}` : String(channel.id);
@@ -130,6 +165,10 @@
 
   async function addManual() {
     if (!manualRef.trim() || selectedAccountId === null) return;
+    if (!selectedAccountReady()) {
+      status = "Initialize and sign in this account before adding sources.";
+      return;
+    }
     addingId = "manual";
     status = "";
     try {
@@ -180,6 +219,25 @@
 
   function isAlreadyAdded(channel: ChannelInfo) {
     return sources.some((source) => source.external_id === String(channel.id));
+  }
+
+  function runtimeStatus(accountId: number | null) {
+    if (accountId === null) return null;
+    return accountStatuses[accountId] ?? null;
+  }
+
+  function syncDisabledReason(source: SourceRecord) {
+    const runtime = runtimeStatus(source.account_id);
+    if (source.account_id === null) return "Source is not linked to an account.";
+    if (!runtime?.initialized) return "Initialize this account in Telegram before syncing.";
+    if (!runtime.authenticated) return "Sign in to this account again before syncing.";
+    return null;
+  }
+
+  function selectedAccountReady() {
+    if (selectedAccountId === null) return false;
+    const runtime = runtimeStatus(selectedAccountId);
+    return Boolean(runtime?.initialized && runtime.authenticated);
   }
 
   function accountLabel(id: number | null) {
@@ -236,6 +294,7 @@
   {:else}
     <ul class="source-list">
       {#each sources as src}
+        {@const syncReason = syncDisabledReason(src)}
         <li>
           <div class="channel-info">
             <span class="title">{src.title ?? src.external_id}</span>
@@ -245,6 +304,13 @@
             {#if src.last_sync_state !== null}
               <span class="badge">last id {src.last_sync_state}</span>
             {/if}
+            {#if src.account_id !== null}
+              {#if !runtimeStatus(src.account_id)?.initialized}
+                <span class="badge warning">account not connected</span>
+              {:else if !runtimeStatus(src.account_id)?.authenticated}
+                <span class="badge warning">sign in required</span>
+              {/if}
+            {/if}
             {#if src.is_member}
               <span class="badge member">subscribed</span>
             {:else}
@@ -253,7 +319,12 @@
             <button class="secondary small" onclick={() => toggleMessages(src.id)} disabled={!!syncingIds[src.id]}>
               {selectedSourceId === src.id ? "Hide messages" : "View messages"}
             </button>
-            <button class="small" onclick={() => syncSource(src.id)} disabled={!!syncingIds[src.id]}>
+            <button
+              class="small"
+              onclick={() => syncSource(src.id)}
+              disabled={!!syncingIds[src.id] || syncReason !== null}
+              title={syncReason ?? undefined}
+            >
               {syncingIds[src.id] ? "Syncing..." : "Sync"}
             </button>
           </div>
@@ -300,16 +371,19 @@
         placeholder="@channel or https://t.me/channel"
         onkeydown={(e) => e.key === "Enter" && addManual()}
       />
-      <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim()}>
+      <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim() || !selectedAccountReady()}>
         {addingId === "manual" ? "Adding..." : "Add"}
       </button>
     </div>
+    {#if !selectedAccountReady()}
+      <p class="empty">Initialize and sign in the selected account before adding sources.</p>
+    {/if}
   </div>
 
   <div class="card">
     <div class="card-header">
       <h3>My Channels</h3>
-      <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs}>
+      <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs || !selectedAccountReady()}>
         {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
       </button>
     </div>
@@ -410,6 +484,10 @@
     white-space: nowrap;
   }
   .badge.member, .badge.active { background: color-mix(in srgb, #22c55e 18%, var(--panel)); color: #15803d; }
+  .badge.warning {
+    background: color-mix(in srgb, #f59e0b 22%, var(--panel));
+    color: #b45309;
+  }
   .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
   .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
   .status.error { background: var(--status-error-bg); color: var(--status-error-text); }

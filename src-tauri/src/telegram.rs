@@ -25,6 +25,13 @@ pub struct AccountClient {
     pub phone: Option<String>,
 }
 
+#[derive(serde::Serialize)]
+pub struct AccountRuntimeStatus {
+    pub account_id: i64,
+    pub initialized: bool,
+    pub authenticated: bool,
+}
+
 /// Global state: map of account_id → active client
 pub struct TelegramState {
     pub accounts: Mutex<HashMap<i64, AccountClient>>,
@@ -119,6 +126,40 @@ pub async fn tg_is_authenticated(
     } else {
         Ok(false)
     }
+}
+
+#[tauri::command]
+pub async fn tg_get_account_statuses(
+    state: tauri::State<'_, TelegramState>,
+    account_ids: Vec<i64>,
+) -> Result<Vec<AccountRuntimeStatus>, String> {
+    let clients = {
+        let accounts = state.accounts.lock().await;
+        account_ids
+            .into_iter()
+            .map(|account_id| (account_id, accounts.get(&account_id).map(|ac| ac.client.clone())))
+            .collect::<Vec<_>>()
+    };
+
+    let mut statuses = Vec::with_capacity(clients.len());
+    for (account_id, client) in clients {
+        if let Some(client) = client {
+            let authenticated = client.is_authorized().await.map_err(|e| e.to_string())?;
+            statuses.push(AccountRuntimeStatus {
+                account_id,
+                initialized: true,
+                authenticated,
+            });
+        } else {
+            statuses.push(AccountRuntimeStatus {
+                account_id,
+                initialized: false,
+                authenticated: false,
+            });
+        }
+    }
+
+    Ok(statuses)
 }
 
 #[tauri::command]

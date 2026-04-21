@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod telegram;
-use telegram::{TelegramState, tg_init, tg_is_authenticated, tg_send_code, tg_sign_in, tg_logout};
+use telegram::{TelegramState, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_send_code, tg_sign_in, tg_logout};
 
 mod sources;
 use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, list_accounts, get_account, create_account, set_account_phone, clear_account_phone, delete_account};
@@ -128,6 +128,7 @@ pub fn run() {
             ping_db,
             tg_init,
             tg_is_authenticated,
+            tg_get_account_statuses,
             tg_send_code,
             tg_sign_in,
             tg_logout,
