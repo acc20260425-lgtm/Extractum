@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
+  import SourceRow from "$lib/components/source-row.svelte";
 
   interface AccountRecord {
     id: number;
@@ -296,41 +297,17 @@
   {:else}
     <ul class="source-list">
       {#each sources as src}
-        {@const syncReason = syncDisabledReason(src)}
-        <li>
-          <div class="channel-info">
-            <span class="title">{src.title ?? src.external_id}</span>
-            <span class="sub">{accountLabel(src.account_id)}</span>
-          </div>
-          <div class="channel-actions">
-            {#if src.last_synced_at !== null}
-              <span class="badge">synced {formatDate(src.last_synced_at)}</span>
-            {/if}
-            {#if src.account_id !== null}
-              {#if !runtimeStatus(src.account_id)?.initialized}
-                <span class="badge warning">account not connected</span>
-              {:else if !runtimeStatus(src.account_id)?.authenticated}
-                <span class="badge warning">sign in required</span>
-              {/if}
-            {/if}
-            {#if src.is_member}
-              <span class="badge member">subscribed</span>
-            {:else}
-              <span class="badge">not subscribed</span>
-            {/if}
-            <button class="secondary small" onclick={() => toggleMessages(src.id)} disabled={!!syncingIds[src.id]}>
-              {selectedSourceId === src.id ? "Hide messages" : "View messages"}
-            </button>
-            <button
-              class="small"
-              onclick={() => syncSource(src.id)}
-              disabled={!!syncingIds[src.id] || syncReason !== null}
-              title={syncReason ?? undefined}
-            >
-              {syncingIds[src.id] ? "Syncing..." : "Sync"}
-            </button>
-          </div>
-        </li>
+        <SourceRow
+          source={src}
+          selected={selectedSourceId === src.id}
+          syncing={!!syncingIds[src.id]}
+          {accountLabel}
+          {runtimeStatus}
+          {syncDisabledReason}
+          {formatDate}
+          onToggleMessages={toggleMessages}
+          onSync={syncSource}
+        />
       {/each}
     </ul>
   {/if}
@@ -423,35 +400,11 @@
     gap: 0.5rem;
   }
   .source-list li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.6rem 0.75rem;
-    background: var(--panel-strong);
-    border-radius: 8px;
-    gap: 0.5rem;
-  }
-  .channel-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
-  .channel-actions { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
-  .title { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sub { font-size: 0.75rem; color: var(--muted); }
-  .badge {
-    font-size: 0.7rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    background: var(--panel-hover);
-    color: var(--muted);
-    white-space: nowrap;
-  }
-  .badge.member, .badge.active { background: color-mix(in srgb, #22c55e 18%, var(--panel)); color: #15803d; }
-  .badge.warning {
-    background: color-mix(in srgb, #f59e0b 22%, var(--panel));
-    color: #b45309;
+    list-style: none;
   }
   .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
   .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
   .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
-  button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
   .btn-link {
     padding: 0.6rem 1rem;
     border-radius: 6px;
