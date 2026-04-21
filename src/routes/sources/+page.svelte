@@ -22,6 +22,7 @@
     external_id: string;
     title: string | null;
     last_sync_state: number | null;
+    last_synced_at: number | null;
     is_member: boolean;
     is_active: boolean;
     created_at: number;
@@ -301,8 +302,8 @@
             <span class="sub">{accountLabel(src.account_id)}</span>
           </div>
           <div class="channel-actions">
-            {#if src.last_sync_state !== null}
-              <span class="badge">last id {src.last_sync_state}</span>
+            {#if src.last_synced_at !== null}
+              <span class="badge">synced {formatDate(src.last_synced_at)}</span>
             {/if}
             {#if src.account_id !== null}
               {#if !runtimeStatus(src.account_id)?.initialized}

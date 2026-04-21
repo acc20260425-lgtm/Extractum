@@ -114,6 +114,12 @@ pub fn run() {
             sql: include_str!("../migrations/3.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add last synced at to sources",
+            sql: include_str!("../migrations/4.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

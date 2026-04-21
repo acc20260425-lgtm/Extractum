@@ -29,6 +29,7 @@ pub struct SourceRecord {
     pub external_id: String,
     pub title: Option<String>,
     pub last_sync_state: Option<i64>,
+    pub last_synced_at: Option<i64>,
     pub is_member: bool,
     pub is_active: bool,
     pub created_at: i64,
@@ -252,7 +253,7 @@ pub async fn add_telegram_source(
             metadata_zstd = excluded.metadata_zstd,
             is_member = excluded.is_member,
             account_id = excluded.account_id
-        RETURNING id, account_id, external_id, title, last_sync_state, is_active, is_member, created_at
+        RETURNING id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at
         "#,
     )
     .bind(&external_id)
@@ -274,7 +275,7 @@ pub async fn list_sources(
     let pool = get_pool(&handle).await?;
     if let Some(aid) = account_id {
         sqlx::query_as(
-            "SELECT id, account_id, external_id, title, last_sync_state, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
+            "SELECT id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
         )
         .bind(aid)
         .fetch_all(&pool)
@@ -282,7 +283,7 @@ pub async fn list_sources(
         .map_err(|e| e.to_string())
     } else {
         sqlx::query_as(
-            "SELECT id, account_id, external_id, title, last_sync_state, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
+            "SELECT id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
         )
         .fetch_all(&pool)
         .await
@@ -377,23 +378,25 @@ pub async fn sync_channel(
         }
     }
 
-    if max_message_id > previous_last_sync {
-        sqlx::query("UPDATE sources SET last_sync_state = ? WHERE id = ?")
-            .bind(max_message_id)
-            .bind(source.id)
-            .execute(&pool)
-            .await
-            .map_err(|e| e.to_string())?;
-    }
+    let sync_completed_at = now_secs();
+    let last_sync_state = if max_message_id > previous_last_sync {
+        Some(max_message_id)
+    } else {
+        source.last_sync_state
+    };
+
+    sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
+        .bind(last_sync_state)
+        .bind(sync_completed_at)
+        .bind(source.id)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(SyncResult {
         inserted,
         skipped,
-        last_message_id: if max_message_id > 0 {
-            Some(max_message_id)
-        } else {
-            source.last_sync_state
-        },
+        last_message_id: last_sync_state,
     })
 }
 
