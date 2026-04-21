@@ -32,16 +32,6 @@
   </main>
 </div>
 
-<div class="app">
-  <nav>
-    <a href="/" class:active={$page.url.pathname === "/"}>Auth</a>
-    <a href="/sources" class:active={$page.url.pathname.startsWith("/sources")}>Sources</a>
-  </nav>
-  <main>
-    {@render children()}
-  </main>
-</div>
-
 <style>
   :global(*, *::before, *::after) { box-sizing: border-box; }
   :global(body) {
