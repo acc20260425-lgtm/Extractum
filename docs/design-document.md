@@ -3,7 +3,7 @@
 ## 1. Overview
 
 Extractum is a desktop application for collecting information from Telegram channels into a local SQLite database.
-The long-term product goal is a full flow from Telegram ingestion to in-app LLM analysis, but the current implemented slice is focused on account setup and source registration.
+The long-term product goal is a full flow from Telegram ingestion to in-app LLM analysis. The current implemented slice now covers account setup, source registration, manual channel sync, and minimal message browsing.
 
 The MVP architecture remains intentionally simple:
 - Telegram access through MTProto;
@@ -21,7 +21,7 @@ The intended end-to-end MVP flow is:
 5. browse and filter stored records;
 6. send selected SQL-derived context to an LLM.
 
-The project is currently between steps 3 and 4: account and source setup are implemented, while message sync and LLM analysis are still pending.
+The project has now implemented the first half of step 5 in a minimal form: synced messages can be viewed inline on the Sources page, but there is not yet a richer browsing, filtering, or analysis layer.
 
 ## 3. Current implemented functionality
 
@@ -52,26 +52,57 @@ Authenticated accounts can register Telegram channels as sources in two ways:
 - by entering a public channel reference manually (`@handle`, `t.me/...`, or `https://t.me/...`).
 
 Each registered source is linked to the account that added it.
+The source record also stores:
+- `last_sync_state` as the current sync cursor;
+- compressed metadata with channel username when available, so the backend can resolve the source later even if it is not found in current dialogs.
 
-### 3.3 UI shell
+### 3.3 Sync and items
+
+The first message sync slice is implemented as a manual per-source action.
+
+Current sync behavior:
+- the user triggers sync from `/sources`;
+- the backend resolves the Telegram channel from the stored source;
+- messages are loaded through `grammers`;
+- only text/caption content is persisted in `items`;
+- empty-text messages are skipped;
+- duplicates are ignored by `(source_id, external_id)`;
+- `sources.last_sync_state` is updated to the highest synced Telegram message id.
+
+Stored item fields currently used:
+- `source_id`
+- `external_id`
+- `author`
+- `published_at`
+- `ingested_at`
+- `content_zstd`
+- `raw_data_zstd`
+
+### 3.4 UI shell
 
 The current UI includes:
 - account management page
 - per-account auth page
 - source management page
+- source sync controls
+- inline message browsing on the source page
 - shared navigation
 - persistent light/dark theme toggle, with light theme as the default
 
 ## 4. Planned MVP functionality
 
 Still planned for MVP:
-- `sync_channel` command
-- message ingestion into `items`
-- message browsing and filtering UI
+- richer browsing and filtering over stored items
+- pagination or lazy loading for message history
 - message detail view
 - LLM provider abstraction
 - first LLM provider integration
 - prompt + context workflow
+
+Not planned for this stage:
+- background sync worker
+- media ingestion pipeline
+- message edit/delete reconciliation
 
 ## 5. Architecture
 
@@ -82,7 +113,9 @@ Extractum follows a "fat frontend, thin backend" model.
 - routing and page state
 - form handling
 - user flow orchestration
-- filtering and context assembly logic
+- source selection
+- sync triggering
+- rendering synced messages
 - theme/UI presentation
 
 ### Backend responsibilities
@@ -91,8 +124,9 @@ Extractum follows a "fat frontend, thin backend" model.
 - session persistence
 - SQLite migrations
 - shared DB pool access
-- account/source commands
-- future compression and LLM provider calls
+- account/source/item commands
+- ZSTD compression and decompression
+- future LLM provider calls
 
 The backend should stay small and integration-oriented rather than becoming a second application layer.
 
@@ -108,8 +142,8 @@ Current schema:
 
 Current active data paths:
 - `accounts` is fully used
-- `sources` is fully used for registration/listing
-- `items` exists for future sync, but is not yet populated by the app
+- `sources` is fully used for registration/listing/sync cursor state
+- `items` is now populated by manual sync and read by `get_items`
 
 ## 7. Security boundaries
 
@@ -118,6 +152,7 @@ Security-sensitive work stays in the backend:
 - API credentials
 - future provider secrets
 - DB access and migration handling
+- compression/decompression of persisted payloads
 
 The frontend should use Tauri commands and should not directly own low-level persistence or Telegram details.
 
@@ -138,6 +173,8 @@ The current implementation is successful if a user can:
 2. authenticate that account in the app;
 3. persist the Telegram session;
 4. load Telegram channels for that account;
-5. register Telegram channels as local sources.
+5. register Telegram channels as local sources;
+6. sync a source into `items`;
+7. view stored text messages in the app.
 
-The full MVP is successful once sync, browsing, and LLM analysis are also complete.
+The full MVP is successful once richer browsing/filtering and LLM analysis are also complete.

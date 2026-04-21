@@ -3,17 +3,13 @@
 ## 1. Storage model
 
 Extractum uses SQLite as the only local database.
-The schema is intentionally small and supports the current product slice plus the next planned step of message synchronization.
+The schema is intentionally small and now supports the current product slice of account setup, source registration, manual sync, and local message browsing.
 
 Today the application actively uses:
 - `accounts`
 - `sources`
-
-The schema also already includes:
 - `items`
-- `app_settings`
-
-`items` is reserved for upcoming message sync and browsing flows.
+- `app_settings` only as reserved app-level storage
 
 ## 2. Database location and initialization
 
@@ -51,10 +47,10 @@ Stores configured data sources such as Telegram channels.
 | :--- | :--- | :--- |
 | `id` | INTEGER | Primary key |
 | `source_type` | TEXT | Currently `telegram_channel` |
-| `external_id` | TEXT | Telegram channel identifier |
+| `external_id` | TEXT | Telegram bare channel id |
 | `title` | TEXT | Source title |
-| `metadata_zstd` | BLOB | Reserved for compressed metadata |
-| `last_sync_state` | INTEGER | Reserved sync cursor |
+| `metadata_zstd` | BLOB | Compressed source metadata; currently used to store optional username |
+| `last_sync_state` | INTEGER | Highest synced Telegram message id |
 | `is_active` | BOOLEAN | Whether source participates in sync |
 | `is_member` | BOOLEAN | Whether the account is subscribed |
 | `created_at` | INTEGER | Unix timestamp, UTC |
@@ -62,18 +58,23 @@ Stores configured data sources such as Telegram channels.
 
 ### 3.3 `items`
 
-Stores collected Telegram messages once sync is implemented.
+Stores synced Telegram messages.
 
 | Column | Type | Notes |
 | :--- | :--- | :--- |
 | `id` | INTEGER | Primary key |
 | `source_id` | INTEGER | FK to `sources.id` |
-| `external_id` | TEXT | Telegram message identifier |
+| `external_id` | TEXT | Telegram message id |
 | `author` | TEXT | Optional sender/author |
 | `published_at` | INTEGER | Original publication time |
 | `ingested_at` | INTEGER | Ingestion time |
-| `content_zstd` | BLOB | Reserved compressed text |
-| `raw_data_zstd` | BLOB | Reserved compressed payload |
+| `content_zstd` | BLOB | Compressed text body |
+| `raw_data_zstd` | BLOB | Compressed lightweight raw/debug payload |
+
+Current implementation notes:
+- only text/caption content is written to `content_zstd`;
+- empty-text messages are skipped;
+- duplicates are ignored with `ON CONFLICT(source_id, external_id) DO NOTHING`.
 
 ### 3.4 `app_settings`
 
@@ -102,9 +103,9 @@ ON items(author);
 
 Why they exist:
 - `idx_sources_ext` prevents duplicate source registration;
-- `idx_items_ext` will prevent duplicate message storage per source;
-- `idx_items_source_date` supports future browsing by source and time;
-- `idx_items_author` supports future author filtering.
+- `idx_items_ext` prevents duplicate message storage per source;
+- `idx_items_source_date` supports browsing by source and time;
+- `idx_items_author` leaves room for future author filtering.
 
 ## 5. Migrations
 
@@ -141,15 +142,18 @@ The app repairs migration metadata before SQL plugin initialization so that exis
 
 ## 7. Compression status
 
-The schema reserves compressed fields (`metadata_zstd`, `content_zstd`, `raw_data_zstd`) and the backend already depends on `zstd`.
+Compressed fields are now active in the backend:
+- `metadata_zstd` stores source metadata, currently used for an optional Telegram username fallback;
+- `content_zstd` stores synced message text;
+- `raw_data_zstd` stores a lightweight raw/debug payload for future inspection or reprocessing.
 
-Current implementation status:
-- schema support exists;
-- message sync and compression write-path are not implemented yet.
+Compression and decompression are handled in Rust with `zstd`.
+The frontend receives already-decompressed message content through `get_items`.
 
 ## 8. Practical status
 
 As of the current codebase:
 - `accounts` and `sources` are live production tables for the UI;
-- `items` is schema-ready but not yet used by application flows;
+- `items` is populated by manual sync through `sync_channel`;
+- `last_sync_state` is actively maintained on `sources`;
 - the database path, preload, and migration handling are aligned with the running app.

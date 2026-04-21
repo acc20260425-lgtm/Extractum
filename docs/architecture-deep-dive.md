@@ -26,6 +26,8 @@ Responsibilities currently implemented in frontend:
 - auth step transitions
 - source selection flows
 - account filtering in UI
+- manual sync triggers
+- inline message browsing state
 - theme selection and persistence
 
 ### Backend
@@ -45,6 +47,9 @@ Responsibilities currently implemented in backend:
 - account CRUD against SQLite
 - source listing and registration against SQLite
 - Telegram dialog discovery
+- source resolution for sync
+- item persistence and retrieval
+- ZSTD compression/decompression for persisted metadata and message content
 
 ## 3. Telegram subsystem
 
@@ -64,6 +69,15 @@ Current supported Telegram flow:
 5. persist session to disk;
 6. reuse session on later startup;
 7. delete session on logout.
+
+Current sync flow:
+1. frontend calls `sync_channel(source_id)`;
+2. backend loads the source and its `account_id`;
+3. backend gets the active Telegram client for that account;
+4. backend resolves the source channel from dialogs or stored username metadata;
+5. backend iterates Telegram messages;
+6. backend writes normalized rows into `items`;
+7. backend updates `sources.last_sync_state`.
 
 ## 4. Storage subsystem
 
@@ -86,41 +100,44 @@ The active Tauri command layer is intentionally small:
 - DB health: `ping_db`
 - Telegram auth: `tg_init`, `tg_is_authenticated`, `tg_send_code`, `tg_sign_in`, `tg_logout`
 - Accounts: `list_accounts`, `get_account`, `create_account`, `set_account_phone`, `clear_account_phone`, `delete_account`
-- Sources: `list_telegram_channels`, `add_telegram_source`, `list_sources`
+- Sources: `list_telegram_channels`, `add_telegram_source`, `list_sources`, `sync_channel`
+- Items: `get_items`
 
 This matches the current implemented product slice.
 
-## 6. What is not implemented yet
+## 6. Current sync constraints
 
-The architecture already reserves space for later subsystems, but they are not present in the running app yet:
-- message sync into `items`
-- ZSTD write/read path for stored messages
-- browsing and filtering stored items
-- LLM provider abstraction in code
-- Gemini integration
-- analysis UI
+The first sync slice is intentionally narrow:
+- sync is manual and per source;
+- only already-registered sources are syncable;
+- only text/caption content is stored;
+- empty-text messages are skipped;
+- duplicates are ignored, not updated;
+- there is no background worker;
+- there is no reconciliation for edits or deletions;
+- there is no media ingestion.
 
-Those are still planned layers, not current architecture facts.
+This is a deliberate MVP constraint, not an accidental omission.
 
 ## 7. UI architecture notes
 
-The UI is intentionally minimal right now:
+The UI is still intentionally small:
 - route-based pages
 - no shared component library yet
 - no settings page yet
-- no dashboard yet
+- no dedicated message browser route yet
 
-Recent current-state detail:
-- the app now supports both light and dark themes;
+Current-state details:
+- the app supports both light and dark themes;
 - light theme is the default;
-- theme preference is persisted in `localStorage`.
+- theme preference is persisted in `localStorage`;
+- the Sources page now combines source management, sync actions, and a first-pass inline message viewer.
 
 ## 8. Recommended direction
 
 Near-term implementation should continue in this order:
-1. implement `sync_channel`;
-2. write messages into `items`;
-3. add message browsing UI;
-4. add analysis flow and provider integration.
+1. improve message browsing and filtering over `items`;
+2. add pagination or incremental loading to `get_items`;
+3. add analysis flow and provider integration.
 
 That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.

@@ -8,9 +8,9 @@ Right now the project supports:
 - authenticating each account separately;
 - persisting Telegram sessions locally;
 - listing Telegram dialogs/channels for an authenticated account;
-- registering Telegram channels as local sources in SQLite.
-
-The next major implementation milestone is message synchronization into the `items` table.
+- registering Telegram channels as local sources in SQLite;
+- manually syncing one source at a time into `items`;
+- viewing synced messages inline in the Sources UI.
 
 ## What exists in the codebase
 
@@ -18,7 +18,7 @@ The next major implementation milestone is message synchronization into the `ite
 
 - `/accounts`: create, list, and delete Telegram accounts
 - `/auth/[id]`: initialize Telegram client, send code, sign in, sign out
-- `/sources`: filter by account, load Telegram channels, add sources manually or from dialogs
+- `/sources`: filter by account, load Telegram channels, add sources manually or from dialogs, sync a source, view synced messages
 - global app layout with persistent light/dark theme toggle
 
 ### Backend commands
@@ -39,6 +39,8 @@ Implemented Tauri commands:
 - `list_telegram_channels`
 - `add_telegram_source`
 - `list_sources`
+- `sync_channel`
+- `get_items`
 
 ### Storage
 
@@ -48,20 +50,27 @@ Current schema includes:
 - `items`
 - `app_settings`
 
-At the moment, the active product flows use `accounts` and `sources`.
-`items` exists in schema but is not populated yet because sync is not implemented.
+Current active product flows use:
+- `accounts` for multi-account setup;
+- `sources` for source registration and sync cursors;
+- `items` for synced Telegram messages.
 
 ## Current boundaries
 
 In scope now:
 - Telegram authentication
 - account/source management
+- manual per-source sync
+- local message browsing
 - reliable migrations
 - shared SQLite access through `tauri-plugin-sql`
+- ZSTD compression for source metadata and stored message payloads
 
 Out of scope in current implementation:
-- channel sync
-- message browsing
+- background sync
+- pagination beyond the simple first-page `get_items` call
+- message edit/delete reconciliation
+- media ingestion
 - LLM analysis
 - vector DB / embeddings / semantic retrieval
 

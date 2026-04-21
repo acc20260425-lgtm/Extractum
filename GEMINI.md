@@ -8,7 +8,7 @@ It should reflect the current codebase, not the aspirational end-state.
 Extractum uses a "fat frontend, thin backend" model.
 
 - Frontend (`SvelteKit + TypeScript`): UI state, route flows, filters, orchestration, presentation.
-- Backend (`Tauri + Rust`): Telegram integration, SQLite access, migrations, session persistence, security boundaries, future provider calls.
+- Backend (`Tauri + Rust`): Telegram integration, SQLite access, migrations, compression, session persistence, security boundaries, future provider calls.
 
 Rule:
 - keep low-level integration logic in Rust;
@@ -33,6 +33,9 @@ Current implemented Telegram flow:
 - `tg_send_code`
 - `tg_sign_in`
 - `tg_logout`
+- `list_telegram_channels`
+- `add_telegram_source`
+- `sync_channel`
 
 ## 3. Database rules
 
@@ -76,17 +79,17 @@ Accounts and auth:
 - `tg_sign_in`
 - `tg_logout`
 
-Sources:
+Sources and items:
 - `list_telegram_channels`
 - `add_telegram_source`
 - `list_sources`
+- `sync_channel`
+- `get_items`
 
 Utility:
 - `ping_db`
 
 Not implemented yet:
-- `sync_channel`
-- `get_items`
 - `ask_llm`
 
 ## 6. Current product status
@@ -98,11 +101,21 @@ Implemented:
 - account CRUD
 - source registration linked to account
 - source discovery from Telegram dialogs
+- manual per-source sync into `items`
+- inline browsing of synced messages on `/sources`
 - persistent light/dark theme toggle, defaulting to light
 
+Current sync constraints:
+- text-only storage for v1
+- empty-text messages skipped
+- duplicates ignored
+- no media ingestion
+- no edit/delete reconciliation
+- no background sync
+
 Not implemented yet:
-- message sync into `items`
-- browsing stored messages
+- richer item filtering/pagination
+- dedicated message detail views
 - LLM provider integration
 - Gemini analysis flow
 
@@ -113,6 +126,7 @@ Not implemented yet:
 - Prefer updating documentation when code meaningfully changes.
 - Do not introduce vector DB / embedding assumptions into MVP docs or code.
 - Do not reintroduce direct frontend ownership of low-level SQLite or secret-handling behavior.
+- Keep compression/decompression for persisted data in Rust unless the architecture explicitly changes.
 
 ## 8. Security rules
 
