@@ -8,7 +8,7 @@ fn greet(name: &str) -> String {
 }
 
 mod telegram;
-use telegram::{TelegramState, tg_init, tg_is_authenticated};
+use telegram::{TelegramState, tg_init, tg_is_authenticated, tg_send_code, tg_sign_in, tg_logout};
 
 #[tauri::command]
 fn ping_db() -> String {
@@ -38,7 +38,10 @@ pub fn run() {
             greet, 
             ping_db,
             tg_init,
-            tg_is_authenticated
+            tg_is_authenticated,
+            tg_send_code,
+            tg_sign_in,
+            tg_logout
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
