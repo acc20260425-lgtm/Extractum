@@ -47,9 +47,14 @@
     }
   }
 
-  async function deleteAccount(id: number) {
+  async function deleteAccount(account: AccountRecord) {
+    const confirmed = window.confirm(
+      `Delete account "${account.label}"?\n\nThis will also remove its linked sources from the local database.`
+    );
+    if (!confirmed) return;
+
     try {
-      await invoke("delete_account", { accountId: id });
+      await invoke("delete_account", { accountId: account.id });
       await loadAccounts();
     } catch (e) {
       status = `Error: ${e}`;
@@ -82,7 +87,7 @@
             <a href="/auth/{acc.id}" class="btn-link">
               {acc.phone ? "Re-auth" : "Sign in"}
             </a>
-            <button class="danger small" onclick={() => deleteAccount(acc.id)}>Delete</button>
+            <button class="danger small" onclick={() => deleteAccount(acc)}>Delete</button>
           </div>
         </li>
       {/each}
