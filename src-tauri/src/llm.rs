@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_sql::DbInstances;
+use tokio::time::{timeout, Duration};
 
 const DB_URL: &str = "sqlite:extractum.db";
 const LLM_RESPONSE_EVENT: &str = "llm://response";
@@ -10,6 +11,7 @@ const DEFAULT_PROFILE_ID: &str = "default";
 const DEFAULT_PROVIDER: &str = "gemini";
 const DEFAULT_MODEL: &str = "gemini-2.5-flash";
 const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
+const LLM_STREAM_TIMEOUT_SECS: u64 = 90;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -678,7 +680,21 @@ pub async fn ask_llm_stream(
 
     let app_handle = handle.clone();
     tokio::spawn(async move {
-        if let Err(error) = stream_with_provider(app_handle.clone(), request.clone(), resolved_profile).await {
+        let result = timeout(
+            Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
+            stream_with_provider(app_handle.clone(), request.clone(), resolved_profile),
+        )
+        .await;
+
+        let maybe_error = match result {
+            Ok(Ok(())) => None,
+            Ok(Err(error)) => Some(error),
+            Err(_) => Some(format!(
+                "LLM request timed out after {LLM_STREAM_TIMEOUT_SECS} seconds"
+            )),
+        };
+
+        if let Some(error) = maybe_error {
             emit_response_event(
                 &app_handle,
                 &LlmStreamEvent {

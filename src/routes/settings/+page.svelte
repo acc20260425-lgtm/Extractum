@@ -51,6 +51,18 @@
   let activeRequestId = $state<string | null>(null);
   let lastProvider = $state("");
   let lastModel = $state("");
+  let settingsStatusTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function setSettingsStatus(message: string) {
+    settingsStatus = message;
+    if (settingsStatusTimer !== null) {
+      clearTimeout(settingsStatusTimer);
+    }
+    settingsStatusTimer = setTimeout(() => {
+      settingsStatus = "";
+      settingsStatusTimer = null;
+    }, 5000);
+  }
 
   async function loadProfiles() {
     try {
@@ -60,7 +72,7 @@
       defaultModel = state.default_profile.default_model;
       apiKey = state.default_profile.api_key;
     } catch (error) {
-      settingsStatus = `Error loading LLM settings: ${error}`;
+      setSettingsStatus(`Error loading LLM settings: ${error}`);
     }
   }
 
@@ -81,10 +93,10 @@
       provider = state.default_profile.provider;
       defaultModel = state.default_profile.default_model;
       apiKey = state.default_profile.api_key;
-      settingsStatus = successMessage;
+      setSettingsStatus(successMessage);
       return true;
     } catch (error) {
-      settingsStatus = `Error saving LLM settings: ${error}`;
+      setSettingsStatus(`Error saving LLM settings: ${error}`);
       return false;
     } finally {
       saving = false;
@@ -192,6 +204,9 @@
       disposed = true;
       if (detachListener !== null) {
         detachListener();
+      }
+      if (settingsStatusTimer !== null) {
+        clearTimeout(settingsStatusTimer);
       }
     };
   });
