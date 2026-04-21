@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
   import { page } from "$app/stores";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import SourceRow from "$lib/components/source-row.svelte";
@@ -50,6 +51,10 @@
     account_id: number;
     status: "not_initialized" | "restoring" | "ready" | "reauth_required" | "restore_failed";
     message: string | null;
+  }
+
+  interface RuntimeStatusEvent<T> {
+    payload: T;
   }
 
   let selectedAccountId = $state<number | null>(
@@ -292,19 +297,27 @@
 
   onMount(() => {
     let disposed = false;
-    let pollHandle: ReturnType<typeof setInterval> | null = null;
+    let detachListener: (() => void) | null = null;
 
     void loadAccounts();
-
-    pollHandle = setInterval(() => {
-      if (disposed || accounts.length === 0) return;
-      void loadAccountStatuses();
-    }, 2000);
+    void listen<AccountRuntimeStatus>("telegram://account-status", ({ payload }: RuntimeStatusEvent<AccountRuntimeStatus>) => {
+      if (disposed) return;
+      accountStatuses = {
+        ...accountStatuses,
+        [payload.account_id]: payload,
+      };
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+        return;
+      }
+      detachListener = unlisten;
+    });
 
     return () => {
       disposed = true;
-      if (pollHandle !== null) {
-        clearInterval(pollHandle);
+      if (detachListener !== null) {
+        detachListener();
       }
     };
   });

@@ -8,7 +8,7 @@ use grammers_mtsender::SenderPool;
 use grammers_session::types::{DcOption, UpdatesState};
 use grammers_session::{storages::MemorySession, Session, SessionData};
 use sqlx::{Pool, Sqlite};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_sql::DbInstances;
 use tokio::sync::Mutex;
 
@@ -136,21 +136,26 @@ async fn list_account_credentials(handle: &AppHandle) -> Result<Vec<AccountCrede
         .map_err(|e| e.to_string())
 }
 
+const TELEGRAM_ACCOUNT_STATUS_EVENT: &str = "telegram://account-status";
+
 async fn set_account_status(
+    handle: &AppHandle,
     state: &TelegramState,
     account_id: i64,
     status: &str,
     message: Option<String>,
 ) {
-    let mut statuses = state.statuses.lock().await;
-    statuses.insert(
+    let runtime_status = AccountRuntimeStatus {
         account_id,
-        AccountRuntimeStatus {
-            account_id,
-            status: status.to_string(),
-            message,
-        },
-    );
+        status: status.to_string(),
+        message,
+    };
+
+    let mut statuses = state.statuses.lock().await;
+    statuses.insert(account_id, runtime_status.clone());
+    drop(statuses);
+
+    let _ = handle.emit(TELEGRAM_ACCOUNT_STATUS_EVENT, &runtime_status);
 }
 
 async fn init_account_client(
@@ -160,7 +165,7 @@ async fn init_account_client(
     api_id: i32,
     api_hash: String,
 ) -> Result<bool, String> {
-    set_account_status(state, account_id, STATUS_RESTORING, None).await;
+    set_account_status(handle, state, account_id, STATUS_RESTORING, None).await;
 
     let session = load_session(handle, account_id).await;
     let pool = SenderPool::new(Arc::clone(&session), api_id);
@@ -190,7 +195,7 @@ async fn init_account_client(
     } else {
         STATUS_REAUTH_REQUIRED
     };
-    set_account_status(state, account_id, status, None).await;
+    set_account_status(handle, state, account_id, status, None).await;
 
     Ok(is_auth)
 }
@@ -215,7 +220,7 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
 
     for account in accounts {
         if !session_exists(&handle, account.id) {
-            set_account_status(&state, account.id, STATUS_NOT_INITIALIZED, None).await;
+            set_account_status(&handle, &state, account.id, STATUS_NOT_INITIALIZED, None).await;
             continue;
         }
 
@@ -234,6 +239,7 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
                 clients.remove(&account.id);
             }
             set_account_status(
+                &handle,
                 &state,
                 account.id,
                 STATUS_RESTORE_FAILED,
@@ -261,6 +267,7 @@ pub async fn tg_init(
             accounts.remove(&account_id);
             drop(accounts);
             set_account_status(
+                &handle,
                 &state,
                 account_id,
                 STATUS_RESTORE_FAILED,
@@ -352,7 +359,7 @@ pub async fn tg_sign_in(
     };
 
     save_session(&handle, account_id, &session_to_save).await?;
-    set_account_status(&state, account_id, STATUS_READY, None).await;
+    set_account_status(&handle, &state, account_id, STATUS_READY, None).await;
 
     Ok(true)
 }
@@ -375,7 +382,7 @@ pub async fn tg_logout(
         }
     }
 
-    set_account_status(&state, account_id, STATUS_NOT_INITIALIZED, None).await;
+    set_account_status(&handle, &state, account_id, STATUS_NOT_INITIALIZED, None).await;
 
     Ok(true)
 }
