@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { page } from "$app/stores";
+  import ToastHost from "$lib/components/toast-host.svelte";
 
   let { children } = $props();
   let theme = $state<"light" | "dark">("light");
@@ -32,6 +33,7 @@
       {theme === "light" ? "Dark theme" : "Light theme"}
     </button>
   </nav>
+  <ToastHost />
   <main>
     {@render children()}
   </main>

@@ -5,6 +5,7 @@
   import { page } from "$app/stores";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import SourceRow from "$lib/components/source-row.svelte";
+  import { pushErrorToast } from "$lib/toasts";
 
   interface AccountRecord {
     id: number;
@@ -99,7 +100,7 @@
       accounts = await invoke<AccountRecord[]>("list_accounts");
       await loadAccountStatuses();
     } catch (e) {
-      console.error(e);
+      pushErrorToast(`Failed to load accounts for sources: ${e}`);
     }
   }
 
@@ -117,7 +118,7 @@
         statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus])
       );
     } catch (e) {
-      console.error(e);
+      pushErrorToast(`Failed to refresh Telegram account status: ${e}`);
       accountStatuses = {};
     }
   }
@@ -339,7 +340,7 @@
     });
     void listen<RestoreFailureEvent>("telegram://restore-failure", ({ payload }: RuntimeStatusEvent<RestoreFailureEvent>) => {
       if (disposed) return;
-      status = `Error: ${payload.message}`;
+      pushErrorToast(`Telegram session restore failed: ${payload.message}`);
     }).then((unlisten) => {
       if (disposed) {
         unlisten();

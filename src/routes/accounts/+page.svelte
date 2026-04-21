@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { pushErrorToast } from "$lib/toasts";
 
   interface AccountRecord {
     id: number;
@@ -53,7 +54,7 @@
         statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus])
       );
     } catch (e) {
-      console.error(e);
+      pushErrorToast(`Failed to refresh Telegram account status: ${e}`);
       accountStatuses = {};
     }
   }
