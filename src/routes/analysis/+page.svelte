@@ -47,6 +47,19 @@
     error: string | null;
   }
 
+  interface AnalysisTraceRef {
+    ref: string;
+    item_id: number;
+    source_id: number;
+    external_id: string;
+    published_at: number;
+    excerpt: string;
+  }
+
+  interface AnalysisTraceData {
+    refs: AnalysisTraceRef[];
+  }
+
   interface AnalysisRunEvent {
     run_id: number;
     kind: "started" | "progress" | "delta" | "completed" | "failed";
@@ -80,6 +93,12 @@
   let activeProgress = $state("");
   let streamedOutput = $state("");
   let currentRun = $state<AnalysisRunDetail | null>(null);
+  let traceData = $state<AnalysisTraceData>({ refs: [] });
+  let selectedTraceRef = $state<string | null>(null);
+
+  type ReportSegment =
+    | { type: "text"; value: string; key: string }
+    | { type: "ref"; value: string; key: string };
 
   function defaultDateOffset(offsetDays: number) {
     const date = new Date();
@@ -117,6 +136,95 @@
         return "Saving run";
       default:
         return phase || "Running";
+    }
+  }
+
+  function normalizeRef(candidate: string) {
+    const trimmed = candidate.trim().replace(/^\[/, "").replace(/\]$/, "");
+    return /^s\d+-m\d+$/.test(trimmed) ? trimmed : null;
+  }
+
+  function selectedTrace() {
+    if (!selectedTraceRef) return null;
+    return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
+  }
+
+  function parseReportSegments(line: string): ReportSegment[] {
+    const segments: ReportSegment[] = [];
+    const regex = /\[([^\]]+)\]/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null = null;
+
+    while ((match = regex.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        segments.push({
+          type: "text",
+          value: line.slice(lastIndex, match.index),
+          key: `text-${lastIndex}`,
+        });
+      }
+
+      const refs = match[1]
+        .split(",")
+        .map((part) => normalizeRef(part))
+        .filter((value): value is string => value !== null);
+
+      if (refs.length === 0) {
+        segments.push({
+          type: "text",
+          value: match[0],
+          key: `text-${match.index}`,
+        });
+      } else {
+        refs.forEach((ref, refIndex) => {
+          segments.push({
+            type: "ref",
+            value: ref,
+            key: `ref-${match?.index ?? 0}-${ref}-${refIndex}`,
+          });
+          if (refIndex < refs.length - 1) {
+            segments.push({
+              type: "text",
+              value: ", ",
+              key: `comma-${match?.index ?? 0}-${refIndex}`,
+            });
+          }
+        });
+      }
+
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < line.length) {
+      segments.push({
+        type: "text",
+        value: line.slice(lastIndex),
+        key: `text-tail-${lastIndex}`,
+      });
+    }
+
+    if (segments.length === 0) {
+      segments.push({ type: "text", value: "", key: "empty-line" });
+    }
+
+    return segments;
+  }
+
+  function reportLines(text: string) {
+    return text.split("\n").map((line, index) => ({
+      key: `line-${index}`,
+      segments: parseReportSegments(line),
+    }));
+  }
+
+  async function loadTrace(runId: number) {
+    try {
+      traceData = await invoke<AnalysisTraceData>("get_analysis_run_trace", { runId });
+      selectedTraceRef = traceData.refs[0]?.ref ?? null;
+    } catch (error) {
+      traceData = { refs: [] };
+      selectedTraceRef = null;
+      status = `Error loading analysis trace: ${error}`;
     }
   }
 
@@ -168,6 +276,12 @@
       activeRunId = run.id;
       activePhase = run.status;
       activeProgress = "";
+      if (run.has_trace_data) {
+        await loadTrace(run.id);
+      } else {
+        traceData = { refs: [] };
+        selectedTraceRef = null;
+      }
     } catch (error) {
       status = `Error loading analysis run: ${error}`;
     }
@@ -199,6 +313,8 @@
     running = true;
     streamedOutput = "";
     currentRun = null;
+    traceData = { refs: [] };
+    selectedTraceRef = null;
     activePhase = "queued";
     activeProgress = "";
 
@@ -373,11 +489,74 @@
       </div>
     </div>
 
-    {#if streamedOutput}
-      <pre>{streamedOutput}</pre>
-    {:else}
-      <p class="empty">No report output yet.</p>
-    {/if}
+    <div class="report-layout">
+      <div class="report-body">
+        {#if streamedOutput}
+          <div class="report-output">
+            {#each reportLines(streamedOutput) as line (line.key)}
+              <div class="report-line">
+                {#each line.segments as segment (segment.key)}
+                  {#if segment.type === "ref"}
+                    <button
+                      class="ref-chip"
+                      class:active={segment.value === selectedTraceRef}
+                      type="button"
+                      onclick={() => (selectedTraceRef = segment.value)}
+                    >
+                      [{segment.value}]
+                    </button>
+                  {:else}
+                    <span>{segment.value}</span>
+                  {/if}
+                {/each}
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="empty">No report output yet.</p>
+        {/if}
+      </div>
+
+      <aside class="trace-panel">
+        <div class="trace-header">
+          <h4>Traceability</h4>
+          {#if traceData.refs.length > 0}
+            <span class="trace-count">{traceData.refs.length} refs</span>
+          {/if}
+        </div>
+
+        {#if traceData.refs.length === 0}
+          <p class="empty">No saved trace data yet.</p>
+        {:else}
+          <div class="trace-list">
+            {#each traceData.refs as ref}
+              <button
+                class="trace-link"
+                class:selected={ref.ref === selectedTraceRef}
+                type="button"
+                onclick={() => (selectedTraceRef = ref.ref)}
+              >
+                <strong>{ref.ref}</strong>
+                <span>{formatTimestamp(ref.published_at)}</span>
+              </button>
+            {/each}
+          </div>
+
+          {#if selectedTrace()}
+            <div class="trace-detail">
+              <div class="trace-meta">
+                <strong>{selectedTrace()?.ref}</strong>
+                <span>
+                  Source {selectedTrace()?.source_id} / message {selectedTrace()?.external_id}
+                </span>
+                <span>{formatTimestamp(selectedTrace()?.published_at ?? null)}</span>
+              </div>
+              <blockquote>{selectedTrace()?.excerpt}</blockquote>
+            </div>
+          {/if}
+        {/if}
+      </aside>
+    </div>
   </section>
 </div>
 
@@ -487,17 +666,139 @@
     font-size: 0.9rem;
   }
 
-  pre {
+  .report-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .report-body,
+  .trace-panel {
+    min-width: 0;
+  }
+
+  .report-output {
     margin: 0;
     padding: 1rem;
     background: var(--panel-strong);
     border: 1px solid var(--border);
     border-radius: 10px;
     min-height: 22rem;
-    white-space: pre-wrap;
-    word-break: break-word;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
     font: inherit;
     line-height: 1.6;
+  }
+
+  .report-line {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .ref-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.08rem 0.45rem;
+    margin: 0 0.08rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+    color: var(--primary);
+    border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  .ref-chip:hover,
+  .ref-chip.active {
+    background: color-mix(in srgb, var(--primary) 22%, var(--panel));
+  }
+
+  .trace-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-height: 22rem;
+  }
+
+  .trace-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .trace-header h4 {
+    margin: 0;
+  }
+
+  .trace-count {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .trace-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .trace-link {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    width: 100%;
+    padding: 0.75rem 0.85rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    text-align: left;
+  }
+
+  .trace-link:hover,
+  .trace-link.selected {
+    background: var(--panel-hover);
+    border-color: var(--primary);
+  }
+
+  .trace-link span,
+  .trace-meta span {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .trace-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .trace-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  blockquote {
+    margin: 0;
+    padding: 0.9rem 1rem;
+    border-left: 4px solid color-mix(in srgb, var(--primary) 45%, transparent);
+    background: color-mix(in srgb, var(--panel) 70%, transparent);
+    border-radius: 0 10px 10px 0;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .run-list {
@@ -549,6 +850,10 @@
 
   @media (max-width: 1080px) {
     .workspace {
+      grid-template-columns: 1fr;
+    }
+
+    .report-layout {
       grid-template-columns: 1fr;
     }
   }
