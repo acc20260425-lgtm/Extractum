@@ -36,6 +36,9 @@ Each account has:
 - its own active MTProto client in memory
 - its own persisted session file on disk
 
+At startup, the backend now attempts to restore clients automatically for accounts that already have a saved session on disk.
+This restore runs in the background and exposes runtime readiness states to the UI.
+
 Implemented user actions:
 - create account
 - list accounts
@@ -44,6 +47,13 @@ Implemented user actions:
 - send login code
 - sign in
 - sign out
+
+Implemented runtime account states:
+- `not_initialized`
+- `restoring`
+- `ready`
+- `reauth_required`
+- `restore_failed`
 
 ### 3.2 Sources
 
@@ -86,6 +96,7 @@ The current UI includes:
 - source management page
 - source sync controls
 - inline message browsing on the source page
+- runtime Telegram readiness badges on `/accounts` and `/sources`
 - shared navigation
 - persistent light/dark theme toggle, with light theme as the default
 
@@ -154,6 +165,11 @@ Security-sensitive work stays in the backend:
 - DB access and migration handling
 - compression/decompression of persisted payloads
 
+Runtime note:
+- account restore is backend-owned;
+- the UI only observes restore state through `tg_get_account_statuses`;
+- window startup is not blocked by session restore.
+
 The frontend should use Tauri commands and should not directly own low-level persistence or Telegram details.
 
 ## 8. MVP non-goals
@@ -172,9 +188,10 @@ The current implementation is successful if a user can:
 1. create a Telegram account entry;
 2. authenticate that account in the app;
 3. persist the Telegram session;
-4. load Telegram channels for that account;
-5. register Telegram channels as local sources;
-6. sync a source into `items`;
-7. view stored text messages in the app.
+4. restart the app and have that session restore automatically;
+5. load Telegram channels for that account;
+6. register Telegram channels as local sources;
+7. sync a source into `items`;
+8. view stored text messages in the app.
 
 The full MVP is successful once richer browsing/filtering and LLM analysis are also complete.

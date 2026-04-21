@@ -9,6 +9,7 @@ Implemented today:
 - multi-account Telegram setup;
 - Telegram sign-in flow per account;
 - session persistence per account in `app_data_dir`;
+- automatic Telegram client restore on app startup when a saved session exists;
 - local SQLite schema and migrations via `tauri-plugin-sql`;
 - account management UI;
 - source registration UI for Telegram channels;
@@ -93,3 +94,15 @@ The first sync slice is intentionally minimal:
 - `sources.last_sync_state` stores the highest synced Telegram message id;
 - raw debug payload is stored in `raw_data_zstd`;
 - messages are currently viewed inline on `/sources`.
+
+## Current runtime status behavior
+
+Telegram account readiness is now tracked at runtime with explicit statuses:
+- `not_initialized`
+- `restoring`
+- `ready`
+- `reauth_required`
+- `restore_failed`
+
+On startup, the backend restores saved Telegram sessions in the background.
+The `/accounts` and `/sources` pages poll these runtime statuses so the UI can reflect restore progress without blocking window startup.

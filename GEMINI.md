@@ -23,6 +23,7 @@ Important API constraints:
 - `LoginToken` is imported from `grammers_client::client::LoginToken`;
 - `client.request_login_code(&phone, api_hash)` takes two arguments;
 - `TelegramState` stores active clients as `HashMap<account_id, AccountClient>`;
+- `TelegramState` also stores per-account runtime readiness status used by the UI;
 - each account has an independent session file: `telegram_{account_id}.session.json`;
 - `FileSession` is not available in this setup;
 - `SessionData` is wrapped through a serializable `SavedSession` struct for persistence.
@@ -30,12 +31,23 @@ Important API constraints:
 Current implemented Telegram flow:
 - `tg_init`
 - `tg_is_authenticated`
+- `tg_get_account_statuses`
 - `tg_send_code`
 - `tg_sign_in`
 - `tg_logout`
 - `list_telegram_channels`
 - `add_telegram_source`
 - `sync_channel`
+
+Current runtime restore behavior:
+- on app startup, the backend tries to restore saved account sessions in the background;
+- restore must not block window startup;
+- runtime statuses currently used in UI are:
+  - `not_initialized`
+  - `restoring`
+  - `ready`
+  - `reauth_required`
+  - `restore_failed`
 
 ## 3. Database rules
 
@@ -75,6 +87,7 @@ Accounts and auth:
 - `delete_account`
 - `tg_init`
 - `tg_is_authenticated`
+- `tg_get_account_statuses`
 - `tg_send_code`
 - `tg_sign_in`
 - `tg_logout`
@@ -98,11 +111,13 @@ Implemented:
 - multi-account Telegram setup
 - per-account auth flow
 - session persistence
+- startup restore of saved sessions
 - account CRUD
 - source registration linked to account
 - source discovery from Telegram dialogs
 - manual per-source sync into `items`
 - inline browsing of synced messages on `/sources`
+- runtime status display on `/accounts` and `/sources`
 - persistent light/dark theme toggle, defaulting to light
 
 Current sync constraints:

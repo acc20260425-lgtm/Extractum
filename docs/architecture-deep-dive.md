@@ -24,6 +24,7 @@ Shared shell:
 Responsibilities currently implemented in frontend:
 - account creation form state
 - auth step transitions
+- polling runtime Telegram readiness for rendered accounts/sources
 - source selection flows
 - account filtering in UI
 - manual sync triggers
@@ -42,6 +43,7 @@ Responsibilities currently implemented in backend:
 - SQL plugin and migration registration
 - migration metadata patching before plugin initialization
 - Telegram client initialization per account
+- background restore of saved Telegram sessions on startup
 - Telegram login/logout flow
 - Telegram session file persistence
 - account CRUD against SQLite
@@ -58,6 +60,7 @@ Responsibilities currently implemented in backend:
 Current structure:
 - one `TelegramState`
 - one `HashMap<account_id, AccountClient>`
+- one runtime status map keyed by `account_id`
 - one Telegram client per account
 - one session file per account: `telegram_{account_id}.session.json`
 
@@ -67,8 +70,9 @@ Current supported Telegram flow:
 3. send login code;
 4. sign in;
 5. persist session to disk;
-6. reuse session on later startup;
-7. delete session on logout.
+6. restore saved sessions in the background on later startup;
+7. expose runtime status as one of `not_initialized`, `restoring`, `ready`, `reauth_required`, `restore_failed`;
+8. delete session on logout.
 
 Current sync flow:
 1. frontend calls `sync_channel(source_id)`;
@@ -99,6 +103,7 @@ This prevents:
 The active Tauri command layer is intentionally small:
 - DB health: `ping_db`
 - Telegram auth: `tg_init`, `tg_is_authenticated`, `tg_send_code`, `tg_sign_in`, `tg_logout`
+- Telegram runtime state: `tg_get_account_statuses`
 - Accounts: `list_accounts`, `get_account`, `create_account`, `set_account_phone`, `clear_account_phone`, `delete_account`
 - Sources: `list_telegram_channels`, `add_telegram_source`, `list_sources`, `sync_channel`
 - Items: `get_items`
@@ -131,13 +136,15 @@ Current-state details:
 - the app supports both light and dark themes;
 - light theme is the default;
 - theme preference is persisted in `localStorage`;
-- the Sources page now combines source management, sync actions, and a first-pass inline message viewer.
+- the Sources page now combines source management, sync actions, and a first-pass inline message viewer;
+- both `/accounts` and `/sources` surface Telegram runtime readiness from backend state.
 
 ## 8. Recommended direction
 
 Near-term implementation should continue in this order:
 1. improve message browsing and filtering over `items`;
 2. add pagination or incremental loading to `get_items`;
-3. add analysis flow and provider integration.
+3. replace simple UI polling of runtime account status with a more event-driven approach when it becomes worth the complexity;
+4. add analysis flow and provider integration.
 
 That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.

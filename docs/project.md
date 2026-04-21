@@ -7,6 +7,7 @@ Right now the project supports:
 - creating multiple Telegram accounts;
 - authenticating each account separately;
 - persisting Telegram sessions locally;
+- restoring saved Telegram sessions automatically after app restart;
 - listing Telegram dialogs/channels for an authenticated account;
 - registering Telegram channels as local sources in SQLite;
 - manually syncing one source at a time into `items`;
@@ -16,9 +17,9 @@ Right now the project supports:
 
 ### Frontend
 
-- `/accounts`: create, list, and delete Telegram accounts
+- `/accounts`: create, list, and delete Telegram accounts, and show runtime Telegram readiness for each account
 - `/auth/[id]`: initialize Telegram client, send code, sign in, sign out
-- `/sources`: filter by account, load Telegram channels, add sources manually or from dialogs, sync a source, view synced messages
+- `/sources`: filter by account, load Telegram channels, add sources manually or from dialogs, sync a source, view synced messages, and show restore/runtime readiness
 - global app layout with persistent light/dark theme toggle
 
 ### Backend commands
@@ -27,6 +28,7 @@ Implemented Tauri commands:
 - `ping_db`
 - `tg_init`
 - `tg_is_authenticated`
+- `tg_get_account_statuses`
 - `tg_send_code`
 - `tg_sign_in`
 - `tg_logout`
@@ -59,6 +61,7 @@ Current active product flows use:
 
 In scope now:
 - Telegram authentication
+- background restore of saved Telegram sessions on startup
 - account/source management
 - manual per-source sync
 - local message browsing
@@ -68,6 +71,7 @@ In scope now:
 
 Out of scope in current implementation:
 - background sync
+- event-driven runtime status updates
 - pagination beyond the simple first-page `get_items` call
 - message edit/delete reconciliation
 - media ingestion
