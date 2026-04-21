@@ -16,7 +16,7 @@ use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
 
 mod analysis;
 use analysis::{
-    create_analysis_prompt_template, create_analysis_source_group,
+    ask_analysis_run_question, create_analysis_prompt_template, create_analysis_source_group,
     delete_analysis_prompt_template, delete_analysis_source_group, get_analysis_run,
     get_analysis_run_trace, list_analysis_prompt_templates, list_analysis_runs,
     list_analysis_source_groups, list_analysis_sources, start_analysis_report,
@@ -204,6 +204,7 @@ pub fn run() {
             list_analysis_runs,
             get_analysis_run,
             get_analysis_run_trace,
+            ask_analysis_run_question,
             start_analysis_report
         ])
         .run(tauri::generate_context!())

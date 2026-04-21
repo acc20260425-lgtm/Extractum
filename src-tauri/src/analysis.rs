@@ -13,6 +13,7 @@ const TEMPLATE_KIND_REPORT: &str = "report";
 const TEMPLATE_KIND_CHAT: &str = "chat";
 const DEFAULT_REPORT_TEMPLATE_NAME: &str = "Default report";
 const ANALYSIS_RUN_EVENT: &str = "analysis://run";
+const ANALYSIS_CHAT_EVENT: &str = "analysis://chat";
 const ANALYSIS_RUN_TYPE_REPORT: &str = "report";
 const ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE: &str = "single_source";
 const ANALYSIS_SCOPE_TYPE_SOURCE_GROUP: &str = "source_group";
@@ -171,6 +172,16 @@ pub struct AnalysisRunEvent {
     pub error: Option<String>,
 }
 
+#[derive(Serialize)]
+pub struct AnalysisChatEvent {
+    pub request_id: String,
+    pub run_id: i64,
+    pub kind: String,
+    pub delta: Option<String>,
+    pub message: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(FromRow)]
 struct StoredAnalysisItemRow {
     id: i64,
@@ -200,6 +211,12 @@ struct ChunkSummary {
     candidate_refs: Vec<String>,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct AnalysisChatTurn {
+    pub role: String,
+    pub content: String,
+}
+
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -211,12 +228,30 @@ fn emit_analysis_event(handle: &AppHandle, event: &AnalysisRunEvent) {
     let _ = handle.emit(ANALYSIS_RUN_EVENT, event);
 }
 
+fn emit_analysis_chat_event(handle: &AppHandle, event: &AnalysisChatEvent) {
+    let _ = handle.emit(ANALYSIS_CHAT_EVENT, event);
+}
+
 fn validate_template_kind(template_kind: &str) -> Result<String, String> {
     let normalized = template_kind.trim().to_ascii_lowercase();
     match normalized.as_str() {
         TEMPLATE_KIND_REPORT | TEMPLATE_KIND_CHAT => Ok(normalized),
         _ => Err(format!("Unsupported template kind '{template_kind}'")),
     }
+}
+
+fn validate_chat_turns(history: &[AnalysisChatTurn]) -> Result<(), String> {
+    for turn in history {
+        match turn.role.as_str() {
+            "user" | "assistant" => {}
+            other => return Err(format!("Unsupported chat turn role '{other}'")),
+        }
+        if turn.content.trim().is_empty() {
+            return Err("Chat turns cannot be empty".to_string());
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_template_input(
@@ -512,6 +547,27 @@ async fn fetch_source_group(pool: &Pool<Sqlite>, group_id: i64) -> Result<Option
         created_at: group.created_at,
         updated_at: group.updated_at,
     }))
+}
+
+async fn resolve_run_source_ids(pool: &Pool<Sqlite>, run: &AnalysisRunDetail) -> Result<Vec<i64>, String> {
+    if run.scope_type == ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE {
+        let source_id = run
+            .source_id
+            .ok_or_else(|| format!("Analysis run {} is missing source_id", run.id))?;
+        return Ok(vec![source_id]);
+    }
+
+    if run.scope_type == ANALYSIS_SCOPE_TYPE_SOURCE_GROUP {
+        let group_id = run
+            .source_group_id
+            .ok_or_else(|| format!("Analysis run {} is missing source_group_id", run.id))?;
+        let group = fetch_source_group(pool, group_id)
+            .await?
+            .ok_or_else(|| format!("Analysis source group {group_id} not found"))?;
+        return Ok(group.members.into_iter().map(|member| member.source_id).collect());
+    }
+
+    Err(format!("Unsupported analysis scope '{}'", run.scope_type))
 }
 
 async fn insert_analysis_run(
@@ -889,6 +945,137 @@ fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceDa
     AnalysisTraceData { refs: trace_refs }
 }
 
+fn chat_search_terms(question: &str) -> Vec<String> {
+    const STOP_WORDS: &[&str] = &[
+        "the", "and", "for", "with", "that", "this", "from", "into", "about", "what", "when",
+        "where", "which", "have", "has", "were", "will", "would", "could", "should", "как",
+        "что", "это", "для", "про", "или", "если", "когда", "какие", "какой", "где", "после",
+        "над", "под", "ещё", "also", "over",
+    ];
+
+    let mut terms = question
+        .split(|c: char| !c.is_alphanumeric())
+        .map(|part| part.trim().to_ascii_lowercase())
+        .filter(|part| part.len() >= 3 && !STOP_WORDS.contains(&part.as_str()))
+        .collect::<Vec<_>>();
+    terms.sort();
+    terms.dedup();
+    terms.truncate(8);
+    terms
+}
+
+fn find_chat_context_messages<'a>(question: &str, corpus: &'a [CorpusMessage]) -> Vec<&'a CorpusMessage> {
+    let terms = chat_search_terms(question);
+    if terms.is_empty() {
+        return corpus.iter().rev().take(6).collect();
+    }
+
+    let mut scored = corpus
+        .iter()
+        .filter_map(|message| {
+            let haystack = message.content.to_ascii_lowercase();
+            let score = terms
+                .iter()
+                .map(|term| usize::from(haystack.contains(term)))
+                .sum::<usize>();
+            (score > 0).then_some((score, message.published_at, message))
+        })
+        .collect::<Vec<_>>();
+
+    scored.sort_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then_with(|| right.1.cmp(&left.1))
+    });
+
+    scored.into_iter().take(8).map(|(_, _, message)| message).collect()
+}
+
+fn clip_excerpt(content: &str, max_chars: usize) -> String {
+    if content.chars().count() <= max_chars {
+        return content.to_string();
+    }
+
+    let clipped = content.chars().take(max_chars).collect::<String>();
+    format!("{clipped}...")
+}
+
+fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
+    if messages.is_empty() {
+        return "No additional local message matches were found for the current question.".to_string();
+    }
+
+    messages
+        .iter()
+        .map(|message| {
+            format!(
+                "[{ref}] Date: {published_at}\nAuthor: {author}\nExcerpt:\n{excerpt}",
+                ref = message.r#ref,
+                published_at = message.published_at,
+                author = message.author.as_deref().unwrap_or("unknown"),
+                excerpt = clip_excerpt(&message.content, 420)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n---\n\n")
+}
+
+fn build_chat_request(
+    run: &AnalysisRunDetail,
+    history: &[AnalysisChatTurn],
+    question: &str,
+    report_markdown: &str,
+    context_messages: &[&CorpusMessage],
+    model_override: Option<String>,
+) -> LlmChatRequest {
+    let mut messages = vec![
+        LlmMessage {
+            role: "system".to_string(),
+            content: format!(
+                "You answer follow-up questions about a saved Telegram analysis report.\nAnswer in {}.\nUse markdown only.\nGround every important claim in the saved report or the provided message excerpts.\nWhen referring to message evidence, cite refs like [s12-m845].\nDo not invent facts beyond the saved report and provided excerpts.",
+                run.output_language
+            ),
+        },
+        LlmMessage {
+            role: "user".to_string(),
+            content: format!(
+                "Saved report scope: {}\nSaved report period: {} to {}\n\nSaved report markdown:\n\n{}\n\nAdditional local message matches for the current question:\n\n{}",
+                if run.scope_type == ANALYSIS_SCOPE_TYPE_SOURCE_GROUP {
+                    run.source_group_name
+                        .clone()
+                        .unwrap_or_else(|| format!("Group {}", run.source_group_id.unwrap_or_default()))
+                } else {
+                    run.source_title
+                        .clone()
+                        .unwrap_or_else(|| format!("Source {}", run.source_id.unwrap_or_default()))
+                },
+                run.period_from,
+                run.period_to,
+                report_markdown,
+                format_chat_context_messages(context_messages)
+            ),
+        },
+    ];
+
+    messages.extend(history.iter().map(|turn| LlmMessage {
+        role: turn.role.clone(),
+        content: turn.content.clone(),
+    }));
+
+    messages.push(LlmMessage {
+        role: "user".to_string(),
+        content: question.trim().to_string(),
+    });
+
+    LlmChatRequest {
+        request_id: format!("analysis-chat-{}-{}", run.id, now_secs()),
+        profile_id: Some(run.provider_profile.clone()),
+        messages,
+        model_override,
+    }
+}
+
 async fn run_report_pipeline(
     handle: AppHandle,
     run_id: i64,
@@ -1086,6 +1273,125 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
             error: Some(error),
         },
     );
+}
+
+#[tauri::command]
+pub async fn ask_analysis_run_question(
+    handle: AppHandle,
+    run_id: i64,
+    question: String,
+    history: Vec<AnalysisChatTurn>,
+    model_override: Option<String>,
+    profile_id: Option<String>,
+) -> Result<String, String> {
+    let question = question.trim().to_string();
+    if question.is_empty() {
+        return Err("Question cannot be empty".to_string());
+    }
+    validate_chat_turns(&history)?;
+
+    let pool = get_pool(&handle).await?;
+    let run = get_analysis_run(handle.clone(), run_id)
+        .await?
+        .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
+
+    if run.status != ANALYSIS_STATUS_COMPLETED {
+        return Err("Open a completed analysis run before asking follow-up questions".to_string());
+    }
+
+    let report_markdown = run
+        .result_markdown
+        .clone()
+        .filter(|text| !text.trim().is_empty())
+        .ok_or_else(|| "The selected analysis run does not have a saved report".to_string())?;
+
+    let source_ids = resolve_run_source_ids(&pool, &run).await?;
+    let corpus = load_corpus_messages(&pool, &source_ids, run.period_from, run.period_to).await?;
+    let context_messages = find_chat_context_messages(&question, &corpus);
+    let request = build_chat_request(
+        &run,
+        &history,
+        &question,
+        &report_markdown,
+        &context_messages,
+        model_override.clone(),
+    );
+
+    let request_id = request.request_id.clone();
+    let emitted_request_id = request_id.clone();
+    let app_handle = handle.clone();
+    tokio::spawn(async move {
+        let resolved_profile = match resolve_profile_for_backend(&app_handle, profile_id.as_deref()).await {
+            Ok(profile) => profile,
+            Err(error) => {
+                emit_analysis_chat_event(
+                    &app_handle,
+                    &AnalysisChatEvent {
+                        request_id: emitted_request_id.clone(),
+                        run_id,
+                        kind: "failed".to_string(),
+                        delta: None,
+                        message: None,
+                        error: Some(error),
+                    },
+                );
+                return;
+            }
+        };
+
+        emit_analysis_chat_event(
+            &app_handle,
+            &AnalysisChatEvent {
+                request_id: emitted_request_id.clone(),
+                run_id,
+                kind: "started".to_string(),
+                delta: None,
+                message: Some("Preparing grounded answer...".to_string()),
+                error: None,
+            },
+        );
+
+        match run_llm_stream_with_profile(&request, &resolved_profile, |delta| {
+            emit_analysis_chat_event(
+                &app_handle,
+                &AnalysisChatEvent {
+                    request_id: emitted_request_id.clone(),
+                    run_id,
+                    kind: "delta".to_string(),
+                    delta: Some(delta.to_string()),
+                    message: None,
+                    error: None,
+                },
+            );
+        })
+        .await
+        {
+            Ok(_) => emit_analysis_chat_event(
+                &app_handle,
+                &AnalysisChatEvent {
+                    request_id: emitted_request_id.clone(),
+                    run_id,
+                    kind: "completed".to_string(),
+                    delta: None,
+                    message: Some("Answer completed.".to_string()),
+                    error: None,
+                },
+            ),
+            Err(error) => emit_analysis_chat_event(
+                &app_handle,
+                &AnalysisChatEvent {
+                    request_id: emitted_request_id.clone(),
+                    run_id,
+                    kind: "failed".to_string(),
+                    delta: None,
+                    message: None,
+                    error: Some(error),
+                },
+            ),
+        }
+    });
+
+    Ok(request_id)
 }
 
 #[tauri::command]

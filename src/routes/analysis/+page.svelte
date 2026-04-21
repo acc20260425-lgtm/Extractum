@@ -89,6 +89,20 @@
     error: string | null;
   }
 
+  interface AnalysisChatTurn {
+    role: "user" | "assistant";
+    content: string;
+  }
+
+  interface AnalysisChatEvent {
+    request_id: string;
+    run_id: number;
+    kind: "started" | "delta" | "completed" | "failed";
+    delta: string | null;
+    message: string | null;
+    error: string | null;
+  }
+
   interface EventEnvelope<T> {
     payload: T;
   }
@@ -127,6 +141,11 @@
   let traceData = $state<AnalysisTraceData>({ refs: [] });
   let selectedTraceRef = $state<string | null>(null);
   let runFilter = $state<"all" | "completed" | "failed" | "running">("all");
+  let chatQuestion = $state("");
+  let chatMessages = $state<AnalysisChatTurn[]>([]);
+  let chatting = $state(false);
+  let activeChatRequestId = $state<string | null>(null);
+  let activeChatRunId = $state<number | null>(null);
 
   type ReportSegment =
     | { type: "text"; value: string; key: string }
@@ -411,6 +430,13 @@
 
   async function openRun(runId: number) {
     try {
+      if (activeRunId !== runId) {
+        chatMessages = [];
+        chatQuestion = "";
+        chatting = false;
+        activeChatRequestId = null;
+        activeChatRunId = null;
+      }
       const run = await invoke<AnalysisRunDetail | null>("get_analysis_run", { runId });
       if (!run) {
         status = `Analysis run ${runId} was not found.`;
@@ -464,6 +490,11 @@
     currentRun = null;
     traceData = { refs: [] };
     selectedTraceRef = null;
+    chatMessages = [];
+    chatQuestion = "";
+    chatting = false;
+    activeChatRequestId = null;
+    activeChatRunId = null;
     activePhase = "queued";
     activeProgress = "";
 
@@ -484,6 +515,45 @@
     } catch (error) {
       running = false;
       status = `Error starting analysis report: ${error}`;
+    }
+  }
+
+  async function askRunQuestion() {
+    if (!currentRun) {
+      status = "Open a completed report first.";
+      return;
+    }
+    if (currentRun.status !== "completed") {
+      status = "Open a completed report first.";
+      return;
+    }
+    if (!chatQuestion.trim()) {
+      status = "Question cannot be empty.";
+      return;
+    }
+
+    const question = chatQuestion.trim();
+    const history = chatMessages.filter((message) => message.role === "user" || message.role === "assistant");
+    chatMessages = [...chatMessages, { role: "user", content: question }, { role: "assistant", content: "" }];
+    chatQuestion = "";
+    chatting = true;
+    activeChatRunId = currentRun.id;
+
+    try {
+      const requestId = await invoke<string>("ask_analysis_run_question", {
+        runId: currentRun.id,
+        question,
+        history,
+        modelOverride: modelOverride.trim() ? modelOverride.trim() : null,
+        profileId: null,
+      });
+      activeChatRequestId = requestId;
+    } catch (error) {
+      chatMessages = chatMessages.slice(0, -2);
+      chatting = false;
+      activeChatRunId = null;
+      activeChatRequestId = null;
+      status = `Error starting chat answer: ${error}`;
     }
   }
 
@@ -689,6 +759,7 @@
   onMount(() => {
     let disposed = false;
     let detachAnalysisListener: (() => void) | null = null;
+    let detachChatListener: (() => void) | null = null;
 
     void loadSources();
     void loadTemplates();
@@ -744,10 +815,64 @@
       detachAnalysisListener = unlisten;
     });
 
+    void listen<AnalysisChatEvent>("analysis://chat", ({ payload }: EventEnvelope<AnalysisChatEvent>) => {
+      if (
+        disposed ||
+        payload.run_id !== activeChatRunId ||
+        (activeChatRequestId !== null && payload.request_id !== activeChatRequestId)
+      ) {
+        return;
+      }
+
+      if (payload.kind === "started") {
+        if (payload.message) {
+          status = payload.message;
+        }
+        return;
+      }
+
+      if (payload.kind === "delta") {
+        const lastIndex = chatMessages.length - 1;
+        if (lastIndex >= 0 && chatMessages[lastIndex]?.role === "assistant") {
+          const updated = [...chatMessages];
+          updated[lastIndex] = {
+            role: "assistant",
+            content: `${updated[lastIndex].content}${payload.delta ?? ""}`,
+          };
+          chatMessages = updated;
+        }
+        return;
+      }
+
+      if (payload.kind === "completed") {
+        chatting = false;
+        activeChatRequestId = null;
+        if (payload.message) {
+          status = payload.message;
+        }
+        return;
+      }
+
+      if (payload.kind === "failed") {
+        chatting = false;
+        activeChatRequestId = null;
+        status = payload.error ? `Analysis chat failed: ${payload.error}` : "Analysis chat failed.";
+      }
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+        return;
+      }
+      detachChatListener = unlisten;
+    });
+
     return () => {
       disposed = true;
       if (detachAnalysisListener !== null) {
         detachAnalysisListener();
+      }
+      if (detachChatListener !== null) {
+        detachChatListener();
       }
     };
   });
@@ -995,6 +1120,47 @@
     </div>
   </section>
 </div>
+
+<section class="card chat">
+  <div class="panel-header">
+    <div>
+      <h3>Report Chat</h3>
+      <p class="sub">Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.</p>
+    </div>
+  </div>
+
+  {#if !currentRun}
+    <p class="empty">Open a saved run to start a grounded chat.</p>
+  {:else if currentRun.status !== "completed"}
+    <p class="empty">Chat is available only for completed runs.</p>
+  {:else}
+    <div class="chat-thread">
+      {#if chatMessages.length === 0}
+        <p class="empty">No chat turns yet. Ask a follow-up question about this report.</p>
+      {:else}
+        {#each chatMessages as message, index (`${message.role}-${index}`)}
+          <div class={`chat-bubble chat-${message.role}`}>
+            <div class="chat-role">{message.role === "user" ? "You" : "Assistant"}</div>
+            <div class="chat-content">{message.content || (chatting && message.role === "assistant" ? "..." : "")}</div>
+          </div>
+        {/each}
+      {/if}
+    </div>
+
+    <div class="chat-compose">
+      <label>Question
+        <textarea
+          bind:value={chatQuestion}
+          rows="4"
+          placeholder="Ask a grounded follow-up question about this report."
+        ></textarea>
+      </label>
+      <button onclick={askRunQuestion} disabled={chatting || !currentRun || currentRun.status !== "completed"}>
+        {chatting ? "Answering..." : "Ask"}
+      </button>
+    </div>
+  {/if}
+</section>
 
 <section class="card templates">
   <div class="panel-header">
@@ -1545,6 +1711,65 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  .chat {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .chat-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-height: 10rem;
+  }
+
+  .chat-bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-width: min(52rem, 100%);
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .chat-user {
+    align-self: flex-end;
+    background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+    border-color: color-mix(in srgb, var(--primary) 24%, transparent);
+  }
+
+  .chat-assistant {
+    align-self: flex-start;
+    background: var(--panel);
+  }
+
+  .chat-role {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .chat-content {
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .chat-compose {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
   }
 
   .groups {
