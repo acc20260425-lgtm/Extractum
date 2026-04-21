@@ -232,7 +232,9 @@
 
 <style>
   .card {
-    background: #2a2a2a;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -243,9 +245,6 @@
   .row input { flex: 1; }
   select {
     flex: 1;
-    background: #1a1a1a;
-    border: 1px solid #444;
-    color: white;
     padding: 0.6rem 0.8rem;
     border-radius: 6px;
     font-size: 0.95rem;
@@ -256,20 +255,20 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.6rem 0.75rem;
-    background: #1a1a1a;
+    background: var(--panel-strong);
     border-radius: 8px;
     gap: 0.5rem;
   }
   .channel-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
   .channel-actions { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
   .title { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sub { font-size: 0.75rem; color: #888; }
-  .badge { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; background: #333; color: #aaa; white-space: nowrap; }
-  .badge.member, .badge.active { background: #1a3a1a; color: #6f6; }
-  .empty { color: #666; font-size: 0.9rem; margin: 0; }
-  .status { padding: 0.6rem 1rem; border-radius: 6px; background: #1e3a5f; font-size: 0.9rem; margin-bottom: 1rem; }
-  .status.error { background: #4a1a1a; color: #f88; }
+  .sub { font-size: 0.75rem; color: var(--muted); }
+  .badge { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--panel-hover); color: var(--muted); white-space: nowrap; }
+  .badge.member, .badge.active { background: color-mix(in srgb, #22c55e 18%, var(--panel)); color: #15803d; }
+  .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
+  .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
   button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
-  .btn-link { padding: 0.6rem 1rem; border-radius: 6px; background: #007bff; color: white; text-decoration: none; font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
-  .btn-link:hover { background: #0056b3; }
+  .btn-link { padding: 0.6rem 1rem; border-radius: 6px; background: var(--primary); color: white; text-decoration: none; font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
+  .btn-link:hover { background: var(--primary-hover); }
 </style>

@@ -110,7 +110,9 @@
 
 <style>
   .card {
-    background: #2a2a2a;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -124,29 +126,29 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.6rem 0.75rem;
-    background: #1a1a1a;
+    background: var(--panel-strong);
     border-radius: 8px;
     gap: 0.5rem;
   }
   .info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
   .label { font-size: 0.95rem; font-weight: 600; }
-  .sub { font-size: 0.8rem; color: #888; }
+  .sub { font-size: 0.8rem; color: var(--muted); }
   .actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
   .btn-link {
     font-size: 0.8rem;
     padding: 0.3rem 0.7rem;
     border-radius: 6px;
-    background: #007bff;
+    background: var(--primary);
     color: white;
     text-decoration: none;
     font-weight: 600;
   }
-  .btn-link:hover { background: #0056b3; }
+  .btn-link:hover { background: var(--primary-hover); }
   button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
-  label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: #aaa; }
-  .hint { font-size: 0.85rem; color: #888; margin: 0; }
-  .hint a { color: #007bff; }
-  .empty { color: #666; font-size: 0.9rem; margin: 0; }
-  .status { padding: 0.6rem 1rem; border-radius: 6px; background: #1e3a5f; font-size: 0.9rem; margin-bottom: 1rem; }
-  .status.error { background: #4a1a1a; color: #f88; }
+  label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+  .hint { font-size: 0.85rem; color: var(--muted); margin: 0; }
+  .hint a { color: var(--primary); }
+  .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
+  .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
 </style>

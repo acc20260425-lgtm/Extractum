@@ -3,7 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
 
-  const accountId = parseInt($page.params.id);
+  const accountId = parseInt($page.params.id ?? "", 10);
 
   interface AccountRecord {
     id: number;
@@ -168,10 +168,12 @@
 
 <style>
   .back-row { margin-bottom: 1rem; }
-  .back-row a { color: #888; font-size: 0.9rem; text-decoration: none; }
-  .back-row a:hover { color: #eee; }
+  .back-row a { color: var(--muted); font-size: 0.9rem; text-decoration: none; }
+  .back-row a:hover { color: var(--text); }
   .card {
-    background: #2a2a2a;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -179,19 +181,19 @@
     flex-direction: column;
     gap: 0.75rem;
   }
-  label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: #aaa; }
-  .hint { font-size: 0.85rem; color: #888; margin: 0; }
+  label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+  .hint { font-size: 0.85rem; color: var(--muted); margin: 0; }
   .row { display: flex; gap: 0.5rem; align-items: center; }
   .btn-link {
     padding: 0.6rem 1rem;
     border-radius: 6px;
-    background: #007bff;
+    background: var(--primary);
     color: white;
     text-decoration: none;
     font-size: 0.95rem;
     font-weight: 600;
   }
-  .btn-link:hover { background: #0056b3; }
-  .status { padding: 0.6rem 1rem; border-radius: 6px; background: #1e3a5f; font-size: 0.9rem; margin-bottom: 1rem; }
-  .status.error { background: #4a1a1a; color: #f88; }
+  .btn-link:hover { background: var(--primary-hover); }
+  .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
+  .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
 </style>
