@@ -13,8 +13,8 @@
 
   interface AccountRuntimeStatus {
     account_id: number;
-    initialized: boolean;
-    authenticated: boolean;
+    status: "not_initialized" | "restoring" | "ready" | "reauth_required" | "restore_failed";
+    message: string | null;
   }
 
   let {
@@ -41,6 +41,19 @@
 
   const syncReason = $derived(syncDisabledReason(source));
   const sourceRuntimeStatus = $derived(runtimeStatus(source.account_id));
+  const runtimeBadgeLabel = $derived(
+    !sourceRuntimeStatus
+      ? null
+      : sourceRuntimeStatus.status === "restoring"
+        ? "restoring..."
+        : sourceRuntimeStatus.status === "reauth_required"
+          ? "sign in required"
+          : sourceRuntimeStatus.status === "restore_failed"
+            ? "restore failed"
+            : sourceRuntimeStatus.status === "not_initialized"
+              ? "account not connected"
+              : null
+  );
 </script>
 
 <li class:selected={selected}>
@@ -55,10 +68,15 @@
       <span class="badge">synced {formatDate(source.last_synced_at)}</span>
     {/if}
     {#if source.account_id !== null}
-      {#if !sourceRuntimeStatus?.initialized}
-        <span class="badge warning">account not connected</span>
-      {:else if !sourceRuntimeStatus?.authenticated}
-        <span class="badge warning">sign in required</span>
+      {#if runtimeBadgeLabel}
+        <span
+          class="badge warning"
+          title={sourceRuntimeStatus?.status === "restore_failed" && sourceRuntimeStatus.message
+            ? sourceRuntimeStatus.message
+            : undefined}
+        >
+          {runtimeBadgeLabel}
+        </span>
       {/if}
     {/if}
     {#if source.is_member}

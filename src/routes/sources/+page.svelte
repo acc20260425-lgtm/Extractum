@@ -48,8 +48,8 @@
 
   interface AccountRuntimeStatus {
     account_id: number;
-    initialized: boolean;
-    authenticated: boolean;
+    status: "not_initialized" | "restoring" | "ready" | "reauth_required" | "restore_failed";
+    message: string | null;
   }
 
   let selectedAccountId = $state<number | null>(
@@ -227,15 +227,34 @@
   function syncDisabledReason(source: SourceRecord) {
     const runtime = runtimeStatus(source.account_id);
     if (source.account_id === null) return "Source is not linked to an account.";
-    if (!runtime?.initialized) return "Initialize this account in Telegram before syncing.";
-    if (!runtime.authenticated) return "Sign in to this account again before syncing.";
+    if (!runtime || runtime.status === "not_initialized") {
+      return "Initialize this account in Telegram before syncing.";
+    }
+    if (runtime.status === "restoring") {
+      return "This account is still restoring after app startup.";
+    }
+    if (runtime.status === "reauth_required") {
+      return "Sign in to this account again before syncing.";
+    }
+    if (runtime.status === "restore_failed") {
+      return runtime.message ?? "The saved Telegram session could not be restored.";
+    }
     return null;
   }
 
   function selectedAccountReady() {
     if (selectedAccountId === null) return false;
     const runtime = runtimeStatus(selectedAccountId);
-    return Boolean(runtime?.initialized && runtime.authenticated);
+    return runtime?.status === "ready";
+  }
+
+  function runtimeBadge(runtime: AccountRuntimeStatus | null) {
+    if (!runtime) return null;
+    if (runtime.status === "restoring") return "restoring...";
+    if (runtime.status === "reauth_required") return "sign in required";
+    if (runtime.status === "restore_failed") return "restore failed";
+    if (runtime.status === "not_initialized") return "account not connected";
+    return null;
   }
 
   function selectedSource() {
@@ -271,7 +290,24 @@
     void selectSource(sources[0].id);
   });
 
-  onMount(loadAccounts);
+  onMount(() => {
+    let disposed = false;
+    let pollHandle: ReturnType<typeof setInterval> | null = null;
+
+    void loadAccounts();
+
+    pollHandle = setInterval(() => {
+      if (disposed || accounts.length === 0) return;
+      void loadAccountStatuses();
+    }, 2000);
+
+    return () => {
+      disposed = true;
+      if (pollHandle !== null) {
+        clearInterval(pollHandle);
+      }
+    };
+  });
 </script>
 
 <h1>Sources</h1>
@@ -323,7 +359,7 @@
 
   <div class="card pane pane-content">
     {#if selectedSource()}
-      {@const currentSource = selectedSource()}
+      {@const currentSource = selectedSource()!}
       {@const currentSyncReason = syncDisabledReason(currentSource)}
       {@const currentRuntimeStatus = runtimeStatus(currentSource.account_id)}
       <div class="detail-header">
@@ -336,10 +372,16 @@
             <span class="badge">synced {formatDate(currentSource.last_synced_at)}</span>
           {/if}
           {#if currentSource.account_id !== null}
-            {#if !currentRuntimeStatus?.initialized}
-              <span class="badge warning">account not connected</span>
-            {:else if !currentRuntimeStatus?.authenticated}
-              <span class="badge warning">sign in required</span>
+            {@const runtimeBadgeLabel = runtimeBadge(currentRuntimeStatus)}
+            {#if runtimeBadgeLabel}
+              <span
+                class="badge warning"
+                title={currentRuntimeStatus?.status === "restore_failed" && currentRuntimeStatus.message
+                  ? currentRuntimeStatus.message
+                  : undefined}
+              >
+                {runtimeBadgeLabel}
+              </span>
             {/if}
           {/if}
           {#if currentSource.is_member}

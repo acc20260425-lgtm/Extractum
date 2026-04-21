@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod telegram;
-use telegram::{TelegramState, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_send_code, tg_sign_in, tg_logout};
+use telegram::{restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout, tg_send_code, tg_sign_in, TelegramState};
 
 mod sources;
 use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, list_accounts, get_account, create_account, set_account_phone, clear_account_phone, delete_account};
@@ -130,6 +130,13 @@ pub fn run() {
                 .add_migrations("sqlite:extractum.db", migrations)
                 .build(),
         )
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                restore_telegram_accounts(handle).await;
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ping_db,
             tg_init,
