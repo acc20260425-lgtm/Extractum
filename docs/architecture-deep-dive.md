@@ -70,6 +70,7 @@ Responsibilities currently implemented in backend:
 - analysis run persistence and trace persistence
 - source-group persistence for multi-source runs
 - grounded chat context assembly for completed analysis runs
+- persisted chat history storage for completed analysis runs
 
 ## 3. Telegram subsystem
 
@@ -140,6 +141,8 @@ The active Tauri command layer is intentionally small:
   - `get_analysis_run`
   - `get_analysis_run_trace`
   - `resolve_analysis_trace_refs`
+  - `list_analysis_chat_messages`
+  - `clear_analysis_chat_messages`
   - `start_analysis_report`
   - `ask_analysis_run_question`
 
@@ -178,10 +181,25 @@ Current-state details:
 ## 8. Recommended direction
 
 Near-term implementation should continue in this order:
-1. polish `/analysis` UX and sync docs with the current implementation;
-2. decide whether analysis chat history should remain ephemeral or become persisted;
-3. revisit richer item browsing/search over `items`, likely with better filtering or FTS;
-4. extend analysis toward media-aware records when the ingestion model is ready;
+1. implement media-aware sync metadata without introducing full media download yet;
+2. update `/sources` item browsing so media-only posts are represented explicitly;
+3. keep `/analysis` text-only until the media-aware ingestion model settles;
+4. revisit richer item browsing/search over `items`, likely with better filtering or FTS;
 5. revisit secure storage for provider secrets.
 
 That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.
+
+## 9. Planned media-aware sync step
+
+The next product slice should improve the sync/storage boundary, not the analysis boundary first.
+
+Recommended design:
+- keep `content_zstd` as the existing text/caption storage field;
+- add lightweight media-aware metadata to `items` rather than jumping straight to a separate media table;
+- store enough metadata to distinguish text-only, text-with-media, and media-only posts;
+- stop skipping media-only messages during sync when useful metadata exists.
+
+The frontend impact should stay limited at first:
+- `/sources` becomes capable of showing media presence and basic metadata;
+- `/analysis` continues to consume only text-bearing rows;
+- media-only posts remain outside the current report/chat corpus until a later explicit media-aware analysis step.

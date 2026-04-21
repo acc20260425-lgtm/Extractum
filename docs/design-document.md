@@ -89,6 +89,12 @@ Stored item fields currently used:
 - `content_zstd`
 - `raw_data_zstd`
 
+Planned next sync extension:
+- keep `content_zstd` as the text/caption field for compatibility;
+- add media-aware item metadata so media-only Telegram posts stop being skipped;
+- extend `/sources` item rendering to show media presence and lightweight metadata even before file download exists;
+- keep the first analysis pass text-only by reading only rows that still carry textual content.
+
 ### 3.4 UI shell
 
 The current UI includes:
@@ -135,7 +141,8 @@ The currently supported scenarios are:
 - streaming partial output during report generation;
 - saved run history with model and prompt metadata;
 - mandatory traceability to concrete synced messages;
-- report-grounded follow-up chat over completed saved runs.
+- report-grounded follow-up chat over completed saved runs;
+- persisted chat history per saved run.
 
 The analysis UI lives on a dedicated `/analysis` route rather than being embedded into `/sources`.
 
@@ -205,6 +212,7 @@ The analysis slice now adds:
 - `analysis_runs`
 - `analysis_source_groups`
 - `analysis_source_group_members`
+- `analysis_chat_messages`
 
 Planned run storage should support immutable saved artifacts:
 - completed runs stay fixed even if more source messages are synced later;
@@ -216,12 +224,11 @@ Still planned after the current slice:
 - richer browsing and filtering over stored items
 - pagination or lazy loading for message history
 - message detail view
-- optional persisted chat history
 - media-aware analysis
 
 Not planned for this stage:
 - background sync worker
-- media ingestion pipeline
+- full media download pipeline
 - message edit/delete reconciliation
  - vector retrieval / embeddings / RAG
 
@@ -258,7 +265,63 @@ Extractum follows a "fat frontend, thin backend" model.
 The backend should stay small and integration-oriented rather than becoming a second application layer.
 The current analysis pipeline is the one place where the backend intentionally becomes a slightly thicker orchestration boundary, because it owns the local corpus and saved run artifacts.
 
-## 8. Storage model
+## 8. Planned media-aware sync extension
+
+The next major product slice should improve Telegram ingestion fidelity without jumping directly to full media download.
+
+### 8.1 Schema direction
+
+The intended direction is to keep `content_zstd` as the text-bearing field and add lightweight media-aware columns to `items`, for example:
+- `content_kind`
+- `has_media`
+- `media_kind`
+- `media_metadata_zstd`
+
+This should let the app represent:
+- text-only posts
+- text-plus-media posts
+- media-only posts
+
+without forcing a full normalized media table in the first step.
+
+### 8.2 Backend ingestion direction
+
+`sync_channel` should stop treating empty text as an automatic skip.
+
+Instead, the backend should:
+- extract text/caption content when present;
+- extract lightweight media metadata when present;
+- store the item if either text or supported media metadata exists;
+- skip only messages that have neither usable text nor supported media metadata.
+
+The first media-aware slice should not:
+- download files;
+- persist thumbnails/binary previews;
+- add OCR or image understanding.
+
+### 8.3 UI direction
+
+The Sources message browser should become media-aware enough to:
+- show that a synced post contained media;
+- display the primary media kind such as photo, video, or document;
+- show lightweight metadata such as file name or mime type when available;
+- render a useful placeholder for media-only posts instead of pretending the item does not exist.
+
+### 8.4 Analysis compatibility
+
+The current report and chat pipeline should remain text-first for safety.
+
+That means the first media-aware ingestion step should not change analysis semantics yet:
+- `text_only` and `text_with_media` records may continue to participate in analysis because they still have textual content;
+- `media_only` records should be excluded from the current analysis corpus;
+- the analysis UI should explicitly note that media-only posts are not included yet.
+
+This gives the project a safe sequence:
+1. improve sync fidelity;
+2. improve `/sources` browsing;
+3. later revisit media-aware analysis once ingestion and UI metadata are stable.
+
+## 9. Storage model
 
 SQLite is the single local source of truth.
 
@@ -267,10 +330,11 @@ Current schema:
 - `sources`
 - `items`
 - `app_settings`
-
-Planned next schema additions:
 - `analysis_prompt_templates`
 - `analysis_runs`
+- `analysis_source_groups`
+- `analysis_source_group_members`
+- `analysis_chat_messages`
 
 Current active data paths:
 - `accounts` is fully used
@@ -280,8 +344,9 @@ Current active data paths:
 - `analysis_prompt_templates` stores report prompt templates
 - `analysis_runs` stores immutable saved report runs and compressed trace data
 - `analysis_source_groups` and `analysis_source_group_members` store reusable named multi-source scopes
+- `analysis_chat_messages` stores persisted grounded chat history per saved run
 
-## 9. Security boundaries
+## 10. Security boundaries
 
 Security-sensitive work stays in the backend:
 - Telegram session files
@@ -312,7 +377,7 @@ Future secret-storage note:
 
 The frontend should use Tauri commands and should not directly own low-level persistence or Telegram details.
 
-## 10. MVP non-goals
+## 11. MVP non-goals
 
 Still explicitly out of scope:
 - vector databases

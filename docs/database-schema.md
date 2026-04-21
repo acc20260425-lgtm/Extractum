@@ -10,6 +10,11 @@ Today the application actively uses:
 - `sources`
 - `items`
 - `app_settings` for app-level provider settings and temporary LLM API key storage
+- `analysis_prompt_templates`
+- `analysis_runs`
+- `analysis_source_groups`
+- `analysis_source_group_members`
+- `analysis_chat_messages`
 
 ## 2. Database location and initialization
 
@@ -77,6 +82,12 @@ Current implementation notes:
 - empty-text messages are skipped;
 - duplicates are ignored with `ON CONFLICT(source_id, external_id) DO NOTHING`.
 
+Planned next extension:
+- keep `content_zstd` as the text/caption field;
+- add lightweight media-aware item metadata so media-only posts stop being dropped at sync time;
+- likely add fields such as `content_kind`, `has_media`, `media_kind`, and `media_metadata_zstd`;
+- keep analysis text-only at first by continuing to read only rows that still have textual content.
+
 ### 3.4 `app_settings`
 
 Stores simple key/value application settings.
@@ -96,6 +107,26 @@ Important temporary note:
 - `llm.profile.default.api_key` currently stores the Gemini API key in plain SQLite text;
 - this is a deliberate temporary security debt while the first provider abstraction is being built out;
 - later work should migrate this value to secure storage and leave only non-secret provider settings in `app_settings`.
+
+### 3.5 `analysis_prompt_templates`
+
+Stores versioned report/chat prompt templates for the analysis workspace.
+
+### 3.6 `analysis_runs`
+
+Stores immutable saved report runs plus compressed trace data.
+
+### 3.7 `analysis_source_groups`
+
+Stores reusable named groups of sources for multi-source report runs.
+
+### 3.8 `analysis_source_group_members`
+
+Stores group membership rows linking saved source groups to individual sources.
+
+### 3.9 `analysis_chat_messages`
+
+Stores persisted grounded chat history per saved analysis run.
 
 ## 4. Indexes and constraints
 
@@ -131,6 +162,10 @@ Current migration history:
 | 2 | `2.sql` | No-op; `is_member` was already present in migration 1 |
 | 3 | `3.sql` | Add `accounts` and `sources.account_id` |
 | 4 | `4.sql` | Add `sources.last_synced_at` |
+| 5 | `5.sql` | Add `analysis_prompt_templates` and `analysis_runs` |
+| 6 | `6.sql` | Add `analysis_source_groups` and `analysis_source_group_members` |
+| 7 | `7.sql` | Add `analysis_runs.source_group_id` |
+| 8 | `8.sql` | Add `analysis_chat_messages` |
 
 Rules:
 - never delete or rename an existing migration file;
@@ -170,4 +205,5 @@ As of the current codebase:
 - `items` is populated by manual sync through `sync_channel`;
 - `last_sync_state` and `last_synced_at` are actively maintained on `sources`;
 - `app_settings` is now used for temporary LLM provider profile storage;
+- `analysis_prompt_templates`, `analysis_runs`, `analysis_source_groups`, `analysis_source_group_members`, and `analysis_chat_messages` are active tables for the `/analysis` workspace;
 - the database path, preload, and migration handling are aligned with the running app.

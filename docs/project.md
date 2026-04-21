@@ -16,7 +16,8 @@ Right now the project supports:
 - generating saved markdown reports from `/analysis` over already-synced messages;
 - browsing saved analysis runs and trace data;
 - managing reusable source groups for multi-source report runs;
-- asking grounded follow-up questions over completed saved runs.
+- asking grounded follow-up questions over completed saved runs;
+- persisting grounded chat history per saved analysis run.
 
 ## What exists in the codebase
 
@@ -66,6 +67,8 @@ Implemented Tauri commands:
 - `get_analysis_run`
 - `get_analysis_run_trace`
 - `resolve_analysis_trace_refs`
+- `list_analysis_chat_messages`
+- `clear_analysis_chat_messages`
 - `start_analysis_report`
 - `ask_analysis_run_question`
 
@@ -80,6 +83,7 @@ Current schema includes:
 - `analysis_runs`
 - `analysis_source_groups`
 - `analysis_source_group_members`
+- `analysis_chat_messages`
 
 Current active product flows use:
 - `accounts` for multi-account setup;
@@ -111,15 +115,14 @@ Out of scope in current implementation:
 - vector DB / embeddings / semantic retrieval
 
 Planned next:
-- docs and UX polish for the analysis workspace
-- optional persisted chat history for analysis conversations
-- later media-aware analysis
+- media-aware sync metadata before full media download
+- only then extend analysis beyond text-bearing messages
 
 ## Recommended reading order
 
 1. `GEMINI.md`
 2. `src-tauri/src/lib.rs`
-3. `src-tauri/migrations/1.sql`, `2.sql`, `3.sql`, `4.sql`, `5.sql`, `6.sql`, `7.sql`
+3. `src-tauri/migrations/1.sql`, `2.sql`, `3.sql`, `4.sql`, `5.sql`, `6.sql`, `7.sql`, `8.sql`
 4. `src-tauri/src/telegram.rs`
 5. `src-tauri/src/sources.rs`
 6. `src-tauri/src/llm.rs`

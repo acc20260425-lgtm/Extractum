@@ -22,6 +22,7 @@ Implemented today:
 - traceability through clickable message refs and quote lookup;
 - named source groups and multi-source report runs;
 - report-grounded follow-up chat over saved runs and local synced messages;
+- persisted chat history for analysis conversations;
 - persistent light/dark theme toggle, with light theme as default.
 
 Not implemented yet:
@@ -29,7 +30,7 @@ Not implemented yet:
 - message edit/delete reconciliation;
 - media ingestion;
 - advanced filtering/search across synced items;
-- persisted chat history for analysis conversations.
+- full media download or preview rendering.
 
 ## Stack
 
@@ -104,6 +105,12 @@ The first sync slice is intentionally minimal:
 - `sources.last_sync_state` stores the highest synced Telegram message id;
 - raw debug payload is stored in `raw_data_zstd`;
 - messages are currently viewed inline on `/sources`.
+
+Planned next sync extension:
+- keep `content_zstd` as the text/caption field;
+- add media-aware item metadata so media-only posts stop being dropped;
+- keep analysis text-only for now by continuing to read only rows that have textual content;
+- postpone file download, thumbnail storage, and media-aware analysis to a later slice.
 
 ## Current LLM behavior
 
