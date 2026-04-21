@@ -7,7 +7,7 @@ mod telegram;
 use telegram::{TelegramState, tg_init, tg_is_authenticated, tg_send_code, tg_sign_in, tg_logout};
 
 mod sources;
-use sources::{list_telegram_channels, add_telegram_source, list_sources, list_accounts, create_account, set_account_phone, delete_account};
+use sources::{list_telegram_channels, add_telegram_source, list_sources, list_accounts, get_account, create_account, set_account_phone, clear_account_phone, delete_account};
 
 #[tauri::command]
 fn ping_db() -> String {
@@ -132,8 +132,10 @@ pub fn run() {
             tg_sign_in,
             tg_logout,
             list_accounts,
+            get_account,
             create_account,
             set_account_phone,
+            clear_account_phone,
             delete_account,
             list_telegram_channels,
             add_telegram_source,

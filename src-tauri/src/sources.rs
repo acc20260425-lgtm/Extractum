@@ -45,7 +45,7 @@ async fn get_pool(handle: &AppHandle) -> Result<Pool<Sqlite>, String> {
     let instances = instances.0.read().await;
     let db = instances
         .get(DB_URL)
-        .ok_or("Database not initialized. Call Database.load() first.")?;
+        .ok_or("Database not initialized. SQL preload may have failed.")?;
     match db {
         tauri_plugin_sql::DbPool::Sqlite(pool) => Ok(pool.clone()),
         #[allow(unreachable_patterns)]
@@ -60,6 +60,21 @@ pub async fn list_accounts(handle: AppHandle) -> Result<Vec<AccountRecord>, Stri
         "SELECT id, label, api_id, api_hash, phone, created_at FROM accounts ORDER BY created_at ASC",
     )
     .fetch_all(&pool)
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_account(
+    handle: AppHandle,
+    account_id: i64,
+) -> Result<Option<AccountRecord>, String> {
+    let pool = get_pool(&handle).await?;
+    sqlx::query_as(
+        "SELECT id, label, api_id, api_hash, phone, created_at FROM accounts WHERE id = ?",
+    )
+    .bind(account_id)
+    .fetch_optional(&pool)
     .await
     .map_err(|e| e.to_string())
 }
@@ -94,6 +109,17 @@ pub async fn set_account_phone(
     let pool = get_pool(&handle).await?;
     sqlx::query("UPDATE accounts SET phone = ? WHERE id = ?")
         .bind(&phone)
+        .bind(account_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_account_phone(handle: AppHandle, account_id: i64) -> Result<(), String> {
+    let pool = get_pool(&handle).await?;
+    sqlx::query("UPDATE accounts SET phone = NULL WHERE id = ?")
         .bind(account_id)
         .execute(&pool)
         .await

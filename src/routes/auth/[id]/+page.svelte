@@ -2,10 +2,17 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
-  import { goto } from "$app/navigation";
-  import Database from "@tauri-apps/plugin-sql";
 
   const accountId = parseInt($page.params.id);
+
+  interface AccountRecord {
+    id: number;
+    label: string;
+    api_id: number;
+    api_hash: string;
+    phone: string | null;
+    created_at: number;
+  }
 
   let label = $state("");
   let apiId = $state(0);
@@ -18,20 +25,15 @@
 
   async function loadAccount() {
     try {
-      const db = await Database.load("sqlite:extractum.db");
-      const rows = await db.select<{ id: number; label: string; api_id: number; api_hash: string; phone: string | null }[]>(
-        "SELECT id, label, api_id, api_hash, phone FROM accounts WHERE id = ?",
-        [accountId]
-      );
-      if (rows.length === 0) {
+      const acc = await invoke<AccountRecord | null>("get_account", { accountId });
+      if (!acc) {
         status = "Account not found";
         return;
       }
-      const acc = rows[0];
       label = acc.label;
       apiId = acc.api_id;
       apiHash = acc.api_hash;
-      if (acc.phone) phone = acc.phone;
+      phone = acc.phone ?? "";
 
       await initClient();
     } catch (e) {
@@ -96,9 +98,8 @@
     loading = true;
     try {
       await invoke("tg_logout", { accountId });
-      // Clear phone in DB
-      const db = await Database.load("sqlite:extractum.db");
-      await db.execute("UPDATE accounts SET phone = NULL WHERE id = ?", [accountId]);
+      await invoke("clear_account_phone", { accountId });
+      phone = "";
       step = "phone";
       status = "";
     } catch (e) {
