@@ -258,10 +258,17 @@
   });
 
   $effect(() => {
-    if (selectedSourceId !== null && !sources.some((source) => source.id === selectedSourceId)) {
+    if (sources.length === 0) {
       selectedSourceId = null;
       items = [];
+      return;
     }
+
+    if (selectedSourceId !== null && sources.some((source) => source.id === selectedSourceId)) {
+      return;
+    }
+
+    void selectSource(sources[0].id);
   });
 
   onMount(loadAccounts);
