@@ -99,11 +99,13 @@ Sources and items:
 - `sync_channel`
 - `get_items`
 
+LLM:
+- `get_llm_profiles`
+- `save_llm_profile`
+- `ask_llm_stream`
+
 Utility:
 - `ping_db`
-
-Not implemented yet:
-- `ask_llm`
 
 ## 6. Current product status
 
@@ -118,6 +120,7 @@ Implemented:
 - manual per-source sync into `items`
 - inline browsing of synced messages on `/sources`
 - runtime status display on `/accounts` and `/sources`
+- minimal Gemini settings/test UI on `/settings`
 - persistent light/dark theme toggle, defaulting to light
 
 Current sync constraints:
@@ -131,8 +134,7 @@ Current sync constraints:
 Not implemented yet:
 - richer item filtering/pagination
 - dedicated message detail views
-- LLM provider integration
-- Gemini analysis flow
+- source-driven Gemini analysis flow
 
 ## 7. Workflow rules for agents
 
@@ -140,14 +142,15 @@ Not implemented yet:
 - Run `cargo check` after Rust changes.
 - Prefer updating documentation when code meaningfully changes.
 - Do not introduce vector DB / embedding assumptions into MVP docs or code.
-- Do not reintroduce direct frontend ownership of low-level SQLite or secret-handling behavior.
+- Do not reintroduce direct frontend ownership of low-level SQLite behavior unless the current design explicitly allows it.
 - Keep compression/decompression for persisted data in Rust unless the architecture explicitly changes.
 
 ## 8. Security rules
 
 - never log secrets;
 - keep Telegram session persistence in the backend;
-- keep provider/API secrets in the backend;
+- current temporary exception: the Gemini API key is stored in SQLite and read back into `/settings` for editing;
+- treat that exception as temporary security debt and document it when touching LLM code;
 - if secrets later move to secure storage, keep them profile-scoped and aligned with app identity;
 - recommended app identity scheme for parallel installs:
   - `org.ai.extractum`

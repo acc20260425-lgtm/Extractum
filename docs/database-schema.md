@@ -9,7 +9,7 @@ Today the application actively uses:
 - `accounts`
 - `sources`
 - `items`
-- `app_settings` only as reserved app-level storage
+- `app_settings` for app-level provider settings and temporary LLM API key storage
 
 ## 2. Database location and initialization
 
@@ -51,6 +51,7 @@ Stores configured data sources such as Telegram channels.
 | `title` | TEXT | Source title |
 | `metadata_zstd` | BLOB | Compressed source metadata; currently used to store optional username |
 | `last_sync_state` | INTEGER | Highest synced Telegram message id |
+| `last_synced_at` | INTEGER | Unix timestamp of the last successful sync |
 | `is_active` | BOOLEAN | Whether source participates in sync |
 | `is_member` | BOOLEAN | Whether the account is subscribed |
 | `created_at` | INTEGER | Unix timestamp, UTC |
@@ -85,6 +86,17 @@ Stores simple key/value application settings.
 | `key` | TEXT | Primary key |
 | `value` | TEXT | Setting value |
 
+Current active keys include:
+- `llm.active_provider_profile`
+- `llm.profile.default.provider`
+- `llm.profile.default.default_model`
+- `llm.profile.default.api_key`
+
+Important temporary note:
+- `llm.profile.default.api_key` currently stores the Gemini API key in plain SQLite text;
+- this is a deliberate temporary security debt while the first provider abstraction is being built out;
+- later work should migrate this value to secure storage and leave only non-secret provider settings in `app_settings`.
+
 ## 4. Indexes and constraints
 
 ```sql
@@ -118,6 +130,7 @@ Current migration history:
 | 1 | `1.sql` | Initialize `sources`, `items`, `app_settings` |
 | 2 | `2.sql` | No-op; `is_member` was already present in migration 1 |
 | 3 | `3.sql` | Add `accounts` and `sources.account_id` |
+| 4 | `4.sql` | Add `sources.last_synced_at` |
 
 Rules:
 - never delete or rename an existing migration file;
@@ -155,5 +168,6 @@ The frontend receives already-decompressed message content through `get_items`.
 As of the current codebase:
 - `accounts` and `sources` are live production tables for the UI;
 - `items` is populated by manual sync through `sync_channel`;
-- `last_sync_state` is actively maintained on `sources`;
+- `last_sync_state` and `last_synced_at` are actively maintained on `sources`;
+- `app_settings` is now used for temporary LLM provider profile storage;
 - the database path, preload, and migration handling are aligned with the running app.

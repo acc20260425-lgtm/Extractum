@@ -9,6 +9,9 @@ use telegram::{restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_i
 mod sources;
 use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, list_accounts, get_account, create_account, set_account_phone, clear_account_phone, delete_account};
 
+mod llm;
+use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
+
 #[tauri::command]
 fn ping_db() -> String {
     "Rust: Database plugin is initialized and migrations should have run.".to_string()
@@ -155,7 +158,10 @@ pub fn run() {
             add_telegram_source,
             list_sources,
             sync_channel,
-            get_items
+            get_items,
+            get_llm_profiles,
+            save_llm_profile,
+            ask_llm_stream
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

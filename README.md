@@ -1,7 +1,7 @@
 # Extractum
 
 Extractum is a desktop application built with `Tauri`, `SvelteKit`, `TypeScript`, and `Rust`.
-The current MVP focuses on collecting Telegram channel data into local `SQLite`, browsing synced messages, and keeping the architecture ready for a later LLM analysis layer.
+The current MVP focuses on collecting Telegram channel data into local `SQLite`, browsing synced messages, and now includes the first Gemini-backed LLM provider/settings slice for future analysis flows.
 
 ## Current status
 
@@ -16,6 +16,7 @@ Implemented today:
 - source discovery from Telegram dialogs or manual `@handle` / `t.me` input;
 - manual channel sync into `items`;
 - inline message browsing on the Sources page;
+- minimal Gemini settings and streaming test UI on `/settings`;
 - persistent light/dark theme toggle, with light theme as default.
 
 Not implemented yet:
@@ -23,7 +24,7 @@ Not implemented yet:
 - message edit/delete reconciliation;
 - media ingestion;
 - advanced filtering/search across synced items;
-- LLM provider integration and analysis flow.
+- source-driven LLM analysis flow from synced data.
 
 ## Stack
 
@@ -47,9 +48,11 @@ The frontend should call small Tauri commands instead of accessing low-level int
 - `src/routes/accounts/+page.svelte`: account management UI
 - `src/routes/auth/[id]/+page.svelte`: Telegram auth flow for one account
 - `src/routes/sources/+page.svelte`: source listing, sync, and inline message browsing UI
+- `src/routes/settings/+page.svelte`: Gemini provider settings and streaming test UI
 - `src-tauri/src/lib.rs`: Tauri app bootstrap and command registration
 - `src-tauri/src/telegram.rs`: Telegram client lifecycle and session persistence
 - `src-tauri/src/sources.rs`: SQLite-backed account/source/item commands
+- `src-tauri/src/llm.rs`: provider abstraction, Gemini request mapping, and streaming events
 - `src-tauri/migrations/*.sql`: schema migrations
 - `GEMINI.md`: project rules and implementation constraints for AI agents
 
@@ -95,6 +98,20 @@ The first sync slice is intentionally minimal:
 - raw debug payload is stored in `raw_data_zstd`;
 - messages are currently viewed inline on `/sources`.
 
+## Current LLM behavior
+
+The first LLM slice is intentionally narrow:
+- Gemini is the only implemented provider;
+- backend exposes `get_llm_profiles`, `save_llm_profile`, and `ask_llm_stream`;
+- responses stream back to the UI through the `llm://response` Tauri event;
+- frontend owns prompt assembly and sends generic chat-style messages;
+- `/settings` is the only current LLM UI surface.
+
+Temporary security note:
+- the Gemini API key is currently stored in `app_settings` in local SQLite;
+- the settings UI can read the saved key back for editing;
+- this is an explicit temporary security debt and should later move to secure storage.
+
 ## Current runtime status behavior
 
 Telegram account readiness is now tracked at runtime with explicit statuses:
@@ -105,4 +122,4 @@ Telegram account readiness is now tracked at runtime with explicit statuses:
 - `restore_failed`
 
 On startup, the backend restores saved Telegram sessions in the background.
-The `/accounts` and `/sources` pages poll these runtime statuses so the UI can reflect restore progress without blocking window startup.
+The `/accounts` and `/sources` pages now receive runtime status changes through Tauri events rather than simple polling.

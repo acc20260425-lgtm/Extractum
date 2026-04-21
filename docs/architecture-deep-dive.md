@@ -17,6 +17,7 @@ Current pages:
 - `src/routes/accounts/+page.svelte`
 - `src/routes/auth/[id]/+page.svelte`
 - `src/routes/sources/+page.svelte`
+- `src/routes/settings/+page.svelte`
 
 Shared shell:
 - `src/routes/+layout.svelte`
@@ -24,11 +25,13 @@ Shared shell:
 Responsibilities currently implemented in frontend:
 - account creation form state
 - auth step transitions
-- polling runtime Telegram readiness for rendered accounts/sources
+- event-driven runtime Telegram readiness updates for rendered accounts/sources
 - source selection flows
 - account filtering in UI
 - manual sync triggers
 - inline message browsing state
+- LLM settings form state
+- LLM streaming output handling
 - theme selection and persistence
 
 ### Backend
@@ -37,6 +40,7 @@ Current Rust modules:
 - `src-tauri/src/lib.rs`
 - `src-tauri/src/telegram.rs`
 - `src-tauri/src/sources.rs`
+- `src-tauri/src/llm.rs`
 
 Responsibilities currently implemented in backend:
 - Tauri bootstrap
@@ -52,6 +56,8 @@ Responsibilities currently implemented in backend:
 - source resolution for sync
 - item persistence and retrieval
 - ZSTD compression/decompression for persisted metadata and message content
+- temporary LLM profile storage in `app_settings`
+- Gemini provider request mapping and streaming
 
 ## 3. Telegram subsystem
 
@@ -107,6 +113,7 @@ The active Tauri command layer is intentionally small:
 - Accounts: `list_accounts`, `get_account`, `create_account`, `set_account_phone`, `clear_account_phone`, `delete_account`
 - Sources: `list_telegram_channels`, `add_telegram_source`, `list_sources`, `sync_channel`
 - Items: `get_items`
+- LLM: `get_llm_profiles`, `save_llm_profile`, `ask_llm_stream`
 
 This matches the current implemented product slice.
 
@@ -129,7 +136,6 @@ This is a deliberate MVP constraint, not an accidental omission.
 The UI is still intentionally small:
 - route-based pages
 - no shared component library yet
-- no settings page yet
 - no dedicated message browser route yet
 
 Current-state details:
@@ -137,14 +143,15 @@ Current-state details:
 - light theme is the default;
 - theme preference is persisted in `localStorage`;
 - the Sources page now combines source management, sync actions, and a first-pass inline message viewer;
-- both `/accounts` and `/sources` surface Telegram runtime readiness from backend state.
+- both `/accounts` and `/sources` surface Telegram runtime readiness from backend state;
+- `/settings` is the current LLM-only route and is intentionally separate from `/sources`.
 
 ## 8. Recommended direction
 
 Near-term implementation should continue in this order:
 1. improve message browsing and filtering over `items`;
 2. add pagination or incremental loading to `get_items`;
-3. replace simple UI polling of runtime account status with a more event-driven approach when it becomes worth the complexity;
-4. add analysis flow and provider integration.
+3. add source-driven analysis flow on top of the existing Gemini provider layer;
+4. revisit secure storage for provider secrets.
 
 That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.

@@ -3,7 +3,7 @@
 ## 1. Overview
 
 Extractum is a desktop application for collecting information from Telegram channels into a local SQLite database.
-The long-term product goal is a full flow from Telegram ingestion to in-app LLM analysis. The current implemented slice now covers account setup, source registration, manual channel sync, and minimal message browsing.
+The long-term product goal is a full flow from Telegram ingestion to in-app LLM analysis. The current implemented slice now covers account setup, source registration, manual channel sync, minimal message browsing, and the first Gemini-backed LLM provider/settings layer.
 
 The MVP architecture remains intentionally simple:
 - Telegram access through MTProto;
@@ -96,9 +96,29 @@ The current UI includes:
 - source management page
 - source sync controls
 - inline message browsing on the source page
+- settings page for Gemini provider configuration and test calls
 - runtime Telegram readiness badges on `/accounts` and `/sources`
 - shared navigation
 - persistent light/dark theme toggle, with light theme as the default
+
+### 3.5 LLM provider settings and streaming
+
+The first LLM abstraction slice is now implemented in a Gemini-first form.
+
+Current behavior:
+- the backend exposes generic chat-style input through `ask_llm_stream`;
+- the frontend owns prompt/context assembly and sends generic `messages`;
+- the backend resolves the active provider profile from `app_settings`;
+- the first provider adapter is Gemini through the AI Studio API key flow;
+- responses are streamed back through the `llm://response` Tauri event;
+- `/settings` is the current UI surface for editing provider settings and running a test prompt.
+
+Current provider profile model:
+- one app-global active provider profile
+- one currently used profile id: `default`
+- provider: `gemini`
+- editable `default_model`
+- editable `api_key`
 
 ## 4. Planned MVP functionality
 
@@ -106,9 +126,8 @@ Still planned for MVP:
 - richer browsing and filtering over stored items
 - pagination or lazy loading for message history
 - message detail view
-- LLM provider abstraction
-- first LLM provider integration
 - prompt + context workflow
+- source-driven analysis flow that consumes synced records
 
 Not planned for this stage:
 - background sync worker
@@ -127,6 +146,7 @@ Extractum follows a "fat frontend, thin backend" model.
 - source selection
 - sync triggering
 - rendering synced messages
+- prompt/context assembly for provider requests
 - theme/UI presentation
 
 ### Backend responsibilities
@@ -137,7 +157,8 @@ Extractum follows a "fat frontend, thin backend" model.
 - shared DB pool access
 - account/source/item commands
 - ZSTD compression and decompression
-- future LLM provider calls
+- LLM provider profile resolution
+- provider calls and streaming events
 
 The backend should stay small and integration-oriented rather than becoming a second application layer.
 
@@ -155,13 +176,13 @@ Current active data paths:
 - `accounts` is fully used
 - `sources` is fully used for registration/listing/sync cursor state
 - `items` is now populated by manual sync and read by `get_items`
+- `app_settings` is now also used for temporary LLM provider profile storage
 
 ## 7. Security boundaries
 
 Security-sensitive work stays in the backend:
 - Telegram session files
 - API credentials
-- future provider secrets
 - DB access and migration handling
 - compression/decompression of persisted payloads
 
@@ -169,6 +190,12 @@ Runtime note:
 - account restore is backend-owned;
 - the UI only observes restore state through `tg_get_account_statuses`;
 - window startup is not blocked by session restore.
+
+Temporary LLM exception:
+- the Gemini `api_key` is currently stored in `app_settings` in SQLite;
+- the settings UI can read that saved key back for editing;
+- this is a deliberate temporary security debt to speed up the first provider slice;
+- a later migration should move `api_key` into secure storage and restore the stricter backend-only secret boundary.
 
 Future secret-storage note:
 - if `api_hash` moves from SQLite into secure storage, secret keys must be profile-scoped;
@@ -202,6 +229,8 @@ The current implementation is successful if a user can:
 5. load Telegram channels for that account;
 6. register Telegram channels as local sources;
 7. sync a source into `items`;
-8. view stored text messages in the app.
+8. view stored text messages in the app;
+9. configure a Gemini model and API key in `/settings`;
+10. run a streaming Gemini test request from the app.
 
 The full MVP is successful once richer browsing/filtering and LLM analysis are also complete.

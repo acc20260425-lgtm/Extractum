@@ -26,6 +26,7 @@
     <div class="nav-links">
       <a href="/accounts" class:active={$page.url.pathname.startsWith("/accounts") || $page.url.pathname.startsWith("/auth")}>Accounts</a>
       <a href="/sources" class:active={$page.url.pathname.startsWith("/sources")}>Sources</a>
+      <a href="/settings" class:active={$page.url.pathname.startsWith("/settings")}>Settings</a>
     </div>
     <button class="theme-toggle secondary" type="button" onclick={toggleTheme}>
       {theme === "light" ? "Dark theme" : "Light theme"}
