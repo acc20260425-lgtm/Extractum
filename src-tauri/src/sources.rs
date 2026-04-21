@@ -189,6 +189,22 @@ pub async fn delete_account(handle: AppHandle, account_id: i64) -> Result<(), St
 }
 
 #[tauri::command]
+pub async fn delete_source(handle: AppHandle, source_id: i64) -> Result<(), String> {
+    let pool = get_pool(&handle).await?;
+    let result = sqlx::query("DELETE FROM sources WHERE id = ?")
+        .bind(source_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if result.rows_affected() == 0 {
+        return Err(format!("Source {source_id} not found"));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn list_telegram_channels(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,

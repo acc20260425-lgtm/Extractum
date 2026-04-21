@@ -7,7 +7,7 @@ mod telegram;
 use telegram::{restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout, tg_send_code, tg_sign_in, TelegramState};
 
 mod sources;
-use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, list_accounts, get_account, create_account, set_account_phone, clear_account_phone, delete_account};
+use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, list_accounts, get_account, create_account, set_account_phone, clear_account_phone, delete_account, delete_source};
 
 mod llm;
 use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
@@ -154,6 +154,7 @@ pub fn run() {
             set_account_phone,
             clear_account_phone,
             delete_account,
+            delete_source,
             list_telegram_channels,
             add_telegram_source,
             list_sources,

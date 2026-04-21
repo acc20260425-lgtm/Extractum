@@ -21,22 +21,26 @@
     source,
     selected,
     syncing,
+    deleting,
     accountLabel,
     runtimeStatus,
     syncDisabledReason,
     formatDate,
     onSelect,
     onSync,
+    onDelete,
   }: {
     source: SourceRecord;
     selected: boolean;
     syncing: boolean;
+    deleting: boolean;
     accountLabel: (id: number | null) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     syncDisabledReason: (source: SourceRecord) => string | null;
     formatDate: (timestamp: number) => string;
     onSelect: (sourceId: number) => void | Promise<void>;
     onSync: (sourceId: number) => void | Promise<void>;
+    onDelete: (sourceId: number) => void | Promise<void>;
   } = $props();
 
   const syncReason = $derived(syncDisabledReason(source));
@@ -87,10 +91,13 @@
     <button
       class="small"
       onclick={() => onSync(source.id)}
-      disabled={syncing || syncReason !== null}
+      disabled={syncing || deleting || syncReason !== null}
       title={syncReason ?? undefined}
     >
       {syncing ? "Syncing..." : "Sync"}
+    </button>
+    <button class="small danger secondary" onclick={() => onDelete(source.id)} disabled={deleting || syncing}>
+      {deleting ? "Deleting..." : "Delete"}
     </button>
     {#if syncReason}
       <p class="sync-reason">{syncReason}</p>
@@ -168,6 +175,14 @@
   .badge.warning {
     background: color-mix(in srgb, #f59e0b 22%, var(--panel));
     color: #b45309;
+  }
+  button.danger.secondary {
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+    background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+    color: var(--danger);
+  }
+  button.danger.secondary:hover {
+    background: color-mix(in srgb, var(--danger) 18%, var(--panel-hover));
   }
   button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
   .sync-reason {

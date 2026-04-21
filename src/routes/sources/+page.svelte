@@ -81,6 +81,7 @@
   let addingId = $state<number | string | null>(null);
   let selectedSourceId = $state<number | null>(null);
   let syncingIds = $state<Record<number, boolean>>({});
+  let deletingIds = $state<Record<number, boolean>>({});
   let loadSourcesRequestId = 0;
   let syncStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -235,6 +236,35 @@
       const next = { ...syncingIds };
       delete next[sourceId];
       syncingIds = next;
+    }
+  }
+
+  async function deleteSource(sourceId: number) {
+    const source = sources.find((item) => item.id === sourceId);
+    if (!source) return;
+
+    const sourceLabel = source.title ?? source.external_id;
+    const confirmed = window.confirm(
+      `Delete source "${sourceLabel}"?\n\nThis will also remove all synced messages for this source from the local database.`
+    );
+    if (!confirmed) return;
+
+    deletingIds = { ...deletingIds, [sourceId]: true };
+    status = "";
+
+    try {
+      await invoke("delete_source", { sourceId });
+      await loadSources();
+      if (selectedSourceId === sourceId) {
+        items = [];
+      }
+      setSyncStatus(`Source "${sourceLabel}" deleted from the local database.`);
+    } catch (e) {
+      status = `Error: ${e}`;
+    } finally {
+      const next = { ...deletingIds };
+      delete next[sourceId];
+      deletingIds = next;
     }
   }
 
@@ -403,12 +433,14 @@
             source={src}
             selected={selectedSourceId === src.id}
             syncing={!!syncingIds[src.id]}
+            deleting={!!deletingIds[src.id]}
             {accountLabel}
             {runtimeStatus}
             {syncDisabledReason}
             {formatDate}
             onSelect={selectSource}
             onSync={syncSource}
+            onDelete={deleteSource}
           />
         {/each}
       </ul>
@@ -450,10 +482,17 @@
           <button
             class="small"
             onclick={() => syncSource(currentSource.id)}
-            disabled={!!syncingIds[currentSource.id] || currentSyncReason !== null}
+            disabled={!!syncingIds[currentSource.id] || !!deletingIds[currentSource.id] || currentSyncReason !== null}
             title={currentSyncReason ?? undefined}
           >
             {syncingIds[currentSource.id] ? "Syncing..." : "Sync"}
+          </button>
+          <button
+            class="small danger secondary"
+            onclick={() => deleteSource(currentSource.id)}
+            disabled={!!deletingIds[currentSource.id] || !!syncingIds[currentSource.id]}
+          >
+            {deletingIds[currentSource.id] ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>
@@ -659,6 +698,14 @@
     white-space: nowrap;
   }
   .btn-link:hover { background: var(--primary-hover); }
+  button.danger.secondary {
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+    background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+    color: var(--danger);
+  }
+  button.danger.secondary:hover {
+    background: color-mix(in srgb, var(--danger) 18%, var(--panel-hover));
+  }
   @media (max-width: 1180px) {
     .workspace {
       grid-template-columns: 1fr;
