@@ -1,4 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use sha2::{Digest, Sha384};
+use std::path::PathBuf;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod telegram;
@@ -12,35 +14,87 @@ fn ping_db() -> String {
     "Rust: Database plugin is initialized and migrations should have run.".to_string()
 }
 
+const APP_IDENTIFIER: &str = "org.ai.extractum";
+const DB_FILENAME: &str = "extractum.db";
+
 /// Before the sql plugin runs, remove stale migration records whose SQL has changed.
 /// This allows us to update migration files without deleting the database.
-async fn patch_migrations(app: &tauri::AppHandle) {
+async fn patch_migrations(db_path: &PathBuf) {
     use sqlx::SqlitePool;
-    use tauri::Manager;
 
-    let app_dir = match app.path().app_config_dir() {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-    let db_path = app_dir.join("extractum.db");
     if !db_path.exists() {
         return;
     }
 
     let url = format!("sqlite:{}", db_path.to_string_lossy());
     if let Ok(pool) = SqlitePool::connect(&url).await {
-        // Remove migration 2 so it gets re-applied with the new (no-op) SQL and checksum
-        let _ = sqlx::query(
-            "DELETE FROM _sqlx_migrations WHERE version = 2 AND description = 'add is_member to sources'"
+        let expected_checksum = Sha384::digest(include_str!("../migrations/2.sql").as_bytes()).to_vec();
+        let has_v3 = sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = 3)"
         )
-        .execute(&pool)
-        .await;
+        .fetch_one(&pool)
+        .await
+        .map(|exists| exists != 0)
+        .unwrap_or(false);
+
+        let v2_checksum = sqlx::query_scalar::<_, Vec<u8>>(
+            "SELECT checksum FROM _sqlx_migrations WHERE version = 2"
+        )
+        .fetch_optional(&pool)
+        .await
+        .ok()
+        .flatten();
+
+        match v2_checksum {
+            Some(checksum) if checksum != expected_checksum => {
+                if has_v3 {
+                    // Once later migrations are applied, deleting v2 leaves a gap that sqlx will not backfill.
+                    // Update the metadata in place so startup validation passes without replaying schema changes.
+                    let _ = sqlx::query(
+                        "UPDATE _sqlx_migrations
+                         SET description = ?, success = 1, checksum = ?
+                         WHERE version = 2"
+                    )
+                    .bind("add is_member to sources")
+                    .bind(&expected_checksum)
+                    .execute(&pool)
+                    .await;
+                } else {
+                    // Safe only before later migrations exist: let sqlx replay the no-op v2 with the new checksum.
+                    let _ = sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 2")
+                        .execute(&pool)
+                        .await;
+                }
+            }
+            None if has_v3 => {
+                // Repair older upgraded databases that lost v2 metadata after the previous patch strategy.
+                let _ = sqlx::query(
+                    "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+                     VALUES (?, ?, 1, ?, 0)"
+                )
+                .bind(2_i64)
+                .bind("add is_member to sources")
+                .bind(&expected_checksum)
+                .execute(&pool)
+                .await;
+            }
+            _ => {}
+        }
+
         pool.close().await;
     }
 }
 
+fn app_config_db_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Some(db_path) = app_config_db_path() {
+        tauri::async_runtime::block_on(patch_migrations(&db_path));
+    }
+
     let migrations = vec![
         Migration {
             version: 1,
@@ -65,11 +119,6 @@ pub fn run() {
     tauri::Builder::default()
         .manage(TelegramState::new())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            let handle = app.handle().clone();
-            tauri::async_runtime::block_on(patch_migrations(&handle));
-            Ok(())
-        })
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:extractum.db", migrations)

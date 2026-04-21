@@ -25,3 +25,5 @@ grammers-mtsender = { git = "https://github.com/Lonami/grammers", branch = "mast
 zstd = "0.13"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
+sha2 = "0.10"
+dirs = "6"
