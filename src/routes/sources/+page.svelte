@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { page } from "$app/stores";
+
+  interface AccountRecord {
+    id: number;
+    label: string;
+    phone: string | null;
+  }
 
   interface ChannelInfo {
     id: number;
@@ -11,6 +18,7 @@
 
   interface SourceRecord {
     id: number;
+    account_id: number | null;
     external_id: string;
     title: string | null;
     is_member: boolean;
@@ -18,6 +26,14 @@
     created_at: number;
   }
 
+  // Read optional ?account= param from URL
+  let selectedAccountId = $state<number | null>(
+    $page.url.searchParams.has("account")
+      ? parseInt($page.url.searchParams.get("account")!)
+      : null
+  );
+
+  let accounts = $state<AccountRecord[]>([]);
   let sources = $state<SourceRecord[]>([]);
   let dialogs = $state<ChannelInfo[]>([]);
   let manualRef = $state("");
@@ -25,19 +41,35 @@
   let loadingDialogs = $state(false);
   let addingId = $state<number | string | null>(null);
 
+  async function loadAccounts() {
+    try {
+      accounts = await invoke<AccountRecord[]>("list_accounts");
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   async function loadSources() {
     try {
-      sources = await invoke<SourceRecord[]>("list_sources");
+      sources = await invoke<SourceRecord[]>("list_sources", {
+        accountId: selectedAccountId,
+      });
     } catch (e) {
       status = `Error loading sources: ${e}`;
     }
   }
 
   async function loadDialogs() {
+    if (selectedAccountId === null) {
+      status = "Select an account first";
+      return;
+    }
     loadingDialogs = true;
     status = "";
     try {
-      dialogs = await invoke<ChannelInfo[]>("list_telegram_channels");
+      dialogs = await invoke<ChannelInfo[]>("list_telegram_channels", {
+        accountId: selectedAccountId,
+      });
     } catch (e) {
       status = `Error: ${e}`;
     } finally {
@@ -46,10 +78,11 @@
   }
 
   async function addFromDialog(channel: ChannelInfo) {
+    if (selectedAccountId === null) return;
     addingId = channel.id;
     try {
       const ref = channel.username ? `@${channel.username}` : String(channel.id);
-      await invoke("add_telegram_source", { channelRef: ref });
+      await invoke("add_telegram_source", { accountId: selectedAccountId, channelRef: ref });
       await loadSources();
     } catch (e) {
       status = `Error: ${e}`;
@@ -59,11 +92,14 @@
   }
 
   async function addManual() {
-    if (!manualRef.trim()) return;
+    if (!manualRef.trim() || selectedAccountId === null) return;
     addingId = "manual";
     status = "";
     try {
-      await invoke("add_telegram_source", { channelRef: manualRef.trim() });
+      await invoke("add_telegram_source", {
+        accountId: selectedAccountId,
+        channelRef: manualRef.trim(),
+      });
       manualRef = "";
       await loadSources();
     } catch (e) {
@@ -77,7 +113,17 @@
     return sources.some((s) => s.external_id === String(channel.id));
   }
 
-  onMount(loadSources);
+  function accountLabel(id: number | null) {
+    if (id === null) return "—";
+    return accounts.find((a) => a.id === id)?.label ?? `#${id}`;
+  }
+
+  $effect(() => {
+    loadSources();
+    dialogs = [];
+  });
+
+  onMount(loadAccounts);
 </script>
 
 <h1>Sources</h1>
@@ -86,28 +132,44 @@
   <p class="status" class:error={status.startsWith("Error")}>{status}</p>
 {/if}
 
+<!-- Account filter -->
+<div class="card">
+  <h3>Account</h3>
+  <div class="row">
+    <select bind:value={selectedAccountId}>
+      <option value={null}>All accounts</option>
+      {#each accounts as acc}
+        <option value={acc.id}>{acc.label}{acc.phone ? ` (${acc.phone})` : " (not signed in)"}</option>
+      {/each}
+    </select>
+    {#if accounts.length === 0}
+      <a href="/accounts" class="btn-link">Add account</a>
+    {/if}
+  </div>
+</div>
+
 <!-- Added sources -->
 <div class="card">
   <div class="card-header">
     <h3>Added Sources ({sources.length})</h3>
   </div>
   {#if sources.length === 0}
-    <p class="empty">No sources yet. Add channels below.</p>
+    <p class="empty">No sources yet.</p>
   {:else}
     <ul class="source-list">
       {#each sources as src}
         <li>
-          <span class="title">{src.title ?? src.external_id}</span>
-          <span class="badges">
+          <div class="channel-info">
+            <span class="title">{src.title ?? src.external_id}</span>
+            <span class="sub">{accountLabel(src.account_id)}</span>
+          </div>
+          <div class="channel-actions">
             {#if src.is_member}
               <span class="badge member">subscribed</span>
             {:else}
               <span class="badge">not subscribed</span>
             {/if}
-            {#if src.is_active}
-              <span class="badge active">active</span>
-            {/if}
-          </span>
+          </div>
         </li>
       {/each}
     </ul>
@@ -115,64 +177,58 @@
 </div>
 
 <!-- Manual add -->
-<div class="card">
-  <h3>Add by Username or Link</h3>
-  <div class="row">
-    <input
-      type="text"
-      bind:value={manualRef}
-      placeholder="@channel or https://t.me/channel"
-      onkeydown={(e) => e.key === "Enter" && addManual()}
-    />
-    <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim()}>
-      {addingId === "manual" ? "Adding..." : "Add"}
-    </button>
-  </div>
-</div>
-
-<!-- From dialogs -->
-<div class="card">
-  <div class="card-header">
-    <h3>My Channels</h3>
-    <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs}>
-      {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
-    </button>
+{#if selectedAccountId !== null}
+  <div class="card">
+    <h3>Add by Username or Link</h3>
+    <div class="row">
+      <input
+        type="text"
+        bind:value={manualRef}
+        placeholder="@channel or https://t.me/channel"
+        onkeydown={(e) => e.key === "Enter" && addManual()}
+      />
+      <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim()}>
+        {addingId === "manual" ? "Adding..." : "Add"}
+      </button>
+    </div>
   </div>
 
-  {#if dialogs.length > 0}
-    <ul class="source-list">
-      {#each dialogs as ch}
-        {@const added = isAlreadyAdded(ch)}
-        <li>
-          <div class="channel-info">
-            <span class="title">{ch.title}</span>
-            {#if ch.username}
-              <span class="username">@{ch.username}</span>
-            {/if}
-          </div>
-          <div class="channel-actions">
-            {#if !ch.is_member}
-              <span class="badge">not subscribed</span>
-            {/if}
-            {#if added}
-              <span class="badge active">added</span>
-            {:else}
-              <button
-                class="small"
-                onclick={() => addFromDialog(ch)}
-                disabled={addingId === ch.id}
-              >
-                {addingId === ch.id ? "..." : "Add"}
-              </button>
-            {/if}
-          </div>
-        </li>
-      {/each}
-    </ul>
-  {:else if !loadingDialogs}
-    <p class="empty">Click "Load" to see your Telegram channels.</p>
-  {/if}
-</div>
+  <!-- From dialogs -->
+  <div class="card">
+    <div class="card-header">
+      <h3>My Channels</h3>
+      <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs}>
+        {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
+      </button>
+    </div>
+
+    {#if dialogs.length > 0}
+      <ul class="source-list">
+        {#each dialogs as ch}
+          {@const added = isAlreadyAdded(ch)}
+          <li>
+            <div class="channel-info">
+              <span class="title">{ch.title}</span>
+              {#if ch.username}<span class="sub">@{ch.username}</span>{/if}
+            </div>
+            <div class="channel-actions">
+              {#if !ch.is_member}<span class="badge">not subscribed</span>{/if}
+              {#if added}
+                <span class="badge active">added</span>
+              {:else}
+                <button class="small" onclick={() => addFromDialog(ch)} disabled={addingId === ch.id}>
+                  {addingId === ch.id ? "..." : "Add"}
+                </button>
+              {/if}
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {:else if !loadingDialogs}
+      <p class="empty">Click "Load" to see your Telegram channels.</p>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .card {
@@ -181,27 +237,20 @@
     padding: 1.5rem;
     margin-bottom: 1.5rem;
   }
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   .card-header h3 { margin: 0; }
-  .row {
-    display: flex;
-    gap: 0.5rem;
-  }
+  .row { display: flex; gap: 0.5rem; align-items: center; }
   .row input { flex: 1; }
-  .row button { flex-shrink: 0; }
-  .source-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+  select {
+    flex: 1;
+    background: #1a1a1a;
+    border: 1px solid #444;
+    color: white;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
   }
+  .source-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
   .source-list li {
     display: flex;
     justify-content: space-between;
@@ -214,19 +263,13 @@
   .channel-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
   .channel-actions { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
   .title { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .username { font-size: 0.8rem; color: #888; }
-  .badges { display: flex; gap: 0.3rem; flex-shrink: 0; }
-  .badge {
-    font-size: 0.7rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    background: #333;
-    color: #aaa;
-    white-space: nowrap;
-  }
+  .sub { font-size: 0.75rem; color: #888; }
+  .badge { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; background: #333; color: #aaa; white-space: nowrap; }
   .badge.member, .badge.active { background: #1a3a1a; color: #6f6; }
   .empty { color: #666; font-size: 0.9rem; margin: 0; }
   .status { padding: 0.6rem 1rem; border-radius: 6px; background: #1e3a5f; font-size: 0.9rem; margin-bottom: 1rem; }
   .status.error { background: #4a1a1a; color: #f88; }
   button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+  .btn-link { padding: 0.6rem 1rem; border-radius: 6px; background: #007bff; color: white; text-decoration: none; font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
+  .btn-link:hover { background: #0056b3; }
 </style>

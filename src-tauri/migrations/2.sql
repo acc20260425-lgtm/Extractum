@@ -1,2 +1,3 @@
--- Add is_member column to sources table
-ALTER TABLE sources ADD COLUMN is_member BOOLEAN DEFAULT 0;
+-- is_member column already included in migration 1
+-- This migration is intentionally empty (no-op)
+SELECT 1;

@@ -26,8 +26,9 @@ The MVP is focused on correctness, privacy, and a short end-to-end path from sou
 ### 3.1 Data Collection
 - **Primary source:** Telegram channels.
 - **Access method:** MTProto user client for maximum access to public and subscribed channels.
+- **Multiple accounts:** The application supports multiple Telegram accounts simultaneously. Each account has its own API credentials (`api_id`, `api_hash`), phone number, and independent MTProto session.
 - **Sync model:** Manual sync first, with a path to background sync later.
-- **Persistence:** Messages and source metadata are stored locally in SQLite.
+- **Persistence:** Messages and source metadata are stored locally in SQLite. Sources are linked to the account that added them.
 
 ### 3.2 Data Browsing
 The user must be able to:
@@ -207,7 +208,8 @@ The frontend must not directly access secrets or low-level Telegram session data
 <ul>
 <li>Implement Telegram authentication using `grammers` ✓</li>
 <li>Session persistence to app data directory ✓</li>
-<li>Add source registration ✓</li>
+<li>Multi-account support (simultaneous accounts) ✓</li>
+<li>Add source registration with account linking ✓</li>
 <li>Implement first channel sync with progress events</li>
 <li>Save messages into SQLite with ZSTD compression.</li>
 </ul>

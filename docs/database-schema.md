@@ -41,9 +41,22 @@ Stores configured data sources such as Telegram channels.
 | `last_sync_state` | INTEGER | Sync cursor or checkpoint: `message_id` of the last synced message |
 | `is_active` | BOOLEAN | Whether the source participates in sync |
 | `is_member` | BOOLEAN | Whether the user is subscribed to this source |
+| `account_id` | INTEGER | Foreign key to `accounts.id` (`ON DELETE CASCADE`) |
 | `created_at` | INTEGER | Unix Timestamp, UTC |
 
-### 3.2 `items`
+### 3.2 `accounts`
+Stores Telegram account credentials. Multiple accounts are supported simultaneously.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `label` | TEXT | Human-readable name (e.g. "Personal", "Work") |
+| `api_id` | INTEGER | Telegram API ID |
+| `api_hash` | TEXT | Telegram API Hash |
+| `phone` | TEXT | Phone number, set after successful sign-in |
+| `created_at` | INTEGER | Unix Timestamp, UTC |
+
+### 3.3 `items`
 Stores collected content records such as Telegram messages.
 
 | Column | Type | Description |
@@ -57,7 +70,7 @@ Stores collected content records such as Telegram messages.
 | `content_zstd` | BLOB | ZSTD-compressed normalized text content |
 | `raw_data_zstd` | BLOB | ZSTD-compressed raw API payload |
 
-### 3.3 `app_settings`
+### 3.4 `app_settings`
 Stores local application settings as simple key-value pairs.
 
 | Column | Type | Description |
@@ -65,7 +78,25 @@ Stores local application settings as simple key-value pairs.
 | `key` | TEXT | Primary key |
 | `value` | TEXT | Setting value |
 
-## 4. Constraints and Indexes
+## 4. Migration Rules and Known Issues
+
+Migrations are managed by `tauri-plugin-sql` using `sqlx` under the hood. The database is preloaded at Rust startup via `plugins.sql.preload` in `tauri.conf.json`, so migrations run before any frontend command is invoked.
+
+### Rules
+- **Never delete or rename a migration file.** sqlx verifies that all previously applied migrations still exist on disk.
+- **Never change the SQL content of an already-applied migration.** sqlx stores and verifies checksums. Changing a file will cause a startup panic.
+- **To fix a mistake in an applied migration:** add a `patch_migrations()` call in the `setup` hook in `lib.rs` that deletes the stale record from `_sqlx_migrations` before the plugin runs. The migration will then be re-applied with the new checksum.
+- **New schema changes** must always be a new file with the next version number.
+
+### Migration history
+
+| Version | File | Description | Notes |
+| :--- | :--- | :--- | :--- |
+| 1 | `1.sql` | Create `sources`, `items`, `app_settings` tables | Includes `is_member` column |
+| 2 | `2.sql` | Add `is_member` to sources | **No-op** (`SELECT 1`). Column already in v1. Stale checksum patched at startup via `patch_migrations()` |
+| 3 | `3.sql` | Add `accounts` table, add `account_id` to `sources` | — |
+
+## 5. Constraints and Indexes
 
 The schema should enforce uniqueness for both sources and collected items, and should optimize the primary read paths used by the UI and the LLM preparation flow.
 

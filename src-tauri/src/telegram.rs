@@ -1,7 +1,7 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::collections::HashMap;
 
 use grammers_client::{Client, client::LoginToken};
 use grammers_mtsender::SenderPool;
@@ -10,8 +10,6 @@ use grammers_session::types::{DcOption, UpdatesState};
 use tokio::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
-// Serializable snapshot of the session — mirrors SessionData fields
-// but with serde derives (SessionData itself doesn't derive serde).
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SavedSession {
     home_dc: i32,
@@ -19,37 +17,51 @@ struct SavedSession {
     updates_state: UpdatesState,
 }
 
+pub struct AccountClient {
+    pub client: Client,
+    pub session: Arc<MemorySession>,
+    pub api_hash: String,
+    pub login_token: Option<LoginToken>,
+    pub phone: Option<String>,
+}
+
+/// Global state: map of account_id → active client
 pub struct TelegramState {
-    pub client: Mutex<Option<Client>>,
-    pub session: Mutex<Option<Arc<MemorySession>>>,
-    pub api_id: Mutex<Option<i32>>,
-    pub api_hash: Mutex<Option<String>>,
-    pub phone: Mutex<Option<String>>,
-    pub login_token: Mutex<Option<LoginToken>>,
+    pub accounts: Mutex<HashMap<i64, AccountClient>>,
 }
 
 impl TelegramState {
     pub fn new() -> Self {
         Self {
-            client: Mutex::new(None),
-            session: Mutex::new(None),
-            api_id: Mutex::new(None),
-            api_hash: Mutex::new(None),
-            phone: Mutex::new(None),
-            login_token: Mutex::new(None),
+            accounts: Mutex::new(HashMap::new()),
         }
     }
 }
 
-fn get_session_path(handle: &AppHandle) -> Result<PathBuf, String> {
+fn session_path(handle: &AppHandle, account_id: i64) -> Result<PathBuf, String> {
     let app_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_dir.exists() {
-        fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
-    }
-    Ok(app_dir.join("telegram.session.json"))
+    fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
+    Ok(app_dir.join(format!("telegram_{account_id}.session.json")))
 }
 
-async fn save_session(session: &Arc<MemorySession>, path: &PathBuf) -> Result<(), String> {
+async fn load_session(handle: &AppHandle, account_id: i64) -> Arc<MemorySession> {
+    if let Ok(path) = session_path(handle, account_id) {
+        if let Ok(json) = fs::read_to_string(&path) {
+            if let Ok(saved) = serde_json::from_str::<SavedSession>(&json) {
+                let session_data = SessionData {
+                    home_dc: saved.home_dc,
+                    dc_options: saved.dc_options,
+                    peer_infos: HashMap::new(),
+                    updates_state: saved.updates_state,
+                };
+                return Arc::new(MemorySession::from(session_data));
+            }
+        }
+    }
+    Arc::new(MemorySession::default())
+}
+
+async fn save_session(handle: &AppHandle, account_id: i64, session: &Arc<MemorySession>) -> Result<(), String> {
     let home_dc = session.home_dc_id();
     let updates_state = session.updates_state().await;
     let mut dc_options = HashMap::new();
@@ -60,39 +72,21 @@ async fn save_session(session: &Arc<MemorySession>, path: &PathBuf) -> Result<()
     }
     let saved = SavedSession { home_dc, dc_options, updates_state };
     let json = serde_json::to_string(&saved).map_err(|e| e.to_string())?;
+    let path = session_path(handle, account_id)?;
     fs::write(path, json).map_err(|e| e.to_string())
 }
 
+/// Initialize (or re-initialize) a Telegram client for the given account.
+/// Returns true if already authorized.
 #[tauri::command]
 pub async fn tg_init(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    account_id: i64,
     api_id: i32,
     api_hash: String,
 ) -> Result<bool, String> {
-    let mut client_lock = state.client.lock().await;
-    let mut session_lock = state.session.lock().await;
-    let mut id_lock = state.api_id.lock().await;
-    let mut hash_lock = state.api_hash.lock().await;
-
-    *id_lock = Some(api_id);
-    *hash_lock = Some(api_hash.clone());
-
-    let session_path = get_session_path(&handle)?;
-    let session = if session_path.exists() {
-        let json = fs::read_to_string(&session_path).map_err(|e| e.to_string())?;
-        let saved: SavedSession = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-        let session_data = SessionData {
-            home_dc: saved.home_dc,
-            dc_options: saved.dc_options,
-            peer_infos: HashMap::new(),
-            updates_state: saved.updates_state,
-        };
-        Arc::new(MemorySession::from(session_data))
-    } else {
-        Arc::new(MemorySession::default())
-    };
-
+    let session = load_session(&handle, account_id).await;
     let pool = SenderPool::new(Arc::clone(&session), api_id);
 
     tokio::spawn(async move {
@@ -102,17 +96,26 @@ pub async fn tg_init(
     let client = Client::new(pool.handle);
     let is_auth = client.is_authorized().await.map_err(|e| e.to_string())?;
 
-    *client_lock = Some(client);
-    *session_lock = Some(session);
+    let mut accounts = state.accounts.lock().await;
+    accounts.insert(account_id, AccountClient {
+        client,
+        session,
+        api_hash,
+        login_token: None,
+        phone: None,
+    });
 
     Ok(is_auth)
 }
 
 #[tauri::command]
-pub async fn tg_is_authenticated(state: tauri::State<'_, TelegramState>) -> Result<bool, String> {
-    let client_lock = state.client.lock().await;
-    if let Some(client) = &*client_lock {
-        client.is_authorized().await.map_err(|e| e.to_string())
+pub async fn tg_is_authenticated(
+    state: tauri::State<'_, TelegramState>,
+    account_id: i64,
+) -> Result<bool, String> {
+    let accounts = state.accounts.lock().await;
+    if let Some(ac) = accounts.get(&account_id) {
+        ac.client.is_authorized().await.map_err(|e| e.to_string())
     } else {
         Ok(false)
     }
@@ -121,24 +124,19 @@ pub async fn tg_is_authenticated(state: tauri::State<'_, TelegramState>) -> Resu
 #[tauri::command]
 pub async fn tg_send_code(
     state: tauri::State<'_, TelegramState>,
+    account_id: i64,
     phone: String,
 ) -> Result<String, String> {
-    let client_lock = state.client.lock().await;
-    let api_hash_lock = state.api_hash.lock().await;
+    let mut accounts = state.accounts.lock().await;
+    let ac = accounts.get_mut(&account_id).ok_or("Account not initialized")?;
 
-    let client = client_lock.as_ref().ok_or("Telegram client not initialized")?;
-    let api_hash = api_hash_lock.as_ref().ok_or("API Hash not set")?;
-
-    let login_token = client
-        .request_login_code(&phone, api_hash)
+    let token = ac.client
+        .request_login_code(&phone, &ac.api_hash.clone())
         .await
         .map_err(|e| e.to_string())?;
 
-    let mut phone_lock = state.phone.lock().await;
-    *phone_lock = Some(phone);
-
-    let mut token_lock = state.login_token.lock().await;
-    *token_lock = Some(login_token);
+    ac.phone = Some(phone);
+    ac.login_token = Some(token);
 
     Ok("Code sent".to_string())
 }
@@ -147,28 +145,17 @@ pub async fn tg_send_code(
 pub async fn tg_sign_in(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    account_id: i64,
     code: String,
 ) -> Result<bool, String> {
-    let client_lock = state.client.lock().await;
-    let token_lock = state.login_token.lock().await;
+    let mut accounts = state.accounts.lock().await;
+    let ac = accounts.get_mut(&account_id).ok_or("Account not initialized")?;
+    let token = ac.login_token.as_ref().ok_or("Call tg_send_code first")?;
 
-    let client = client_lock.as_ref().ok_or("Telegram client not initialized")?;
-    let token = token_lock.as_ref().ok_or("Login token not found. Call tg_send_code first.")?;
+    ac.client.sign_in(token, &code).await.map_err(|e| e.to_string())?;
+    ac.login_token = None;
 
-    client
-        .sign_in(token, &code)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    drop(client_lock);
-    drop(token_lock);
-
-    // Save session after successful sign-in
-    let session_lock = state.session.lock().await;
-    if let Some(session) = session_lock.as_ref() {
-        let path = get_session_path(&handle)?;
-        save_session(session, &path).await?;
-    }
+    save_session(&handle, account_id, &ac.session).await?;
 
     Ok(true)
 }
@@ -177,25 +164,29 @@ pub async fn tg_sign_in(
 pub async fn tg_logout(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    account_id: i64,
 ) -> Result<bool, String> {
-    let mut client_lock = state.client.lock().await;
-    if let Some(client) = client_lock.take() {
-        let _ = client.sign_out().await;
+    let mut accounts = state.accounts.lock().await;
+    if let Some(ac) = accounts.remove(&account_id) {
+        let _ = ac.client.sign_out().await;
     }
 
-    let mut session_lock = state.session.lock().await;
-    *session_lock = None;
-
-    let mut token_lock = state.login_token.lock().await;
-    *token_lock = None;
-
-    let mut phone_lock = state.phone.lock().await;
-    *phone_lock = None;
-
-    let path = get_session_path(&handle)?;
-    if path.exists() {
-        let _ = fs::remove_file(path);
+    if let Ok(path) = session_path(&handle, account_id) {
+        if path.exists() {
+            let _ = fs::remove_file(path);
+        }
     }
 
     Ok(true)
+}
+
+/// Returns the Client for a given account_id (for use in other modules).
+/// Caller must hold the lock.
+pub async fn get_client<'a>(
+    accounts: &'a HashMap<i64, AccountClient>,
+    account_id: i64,
+) -> Result<&'a Client, String> {
+    accounts.get(&account_id)
+        .map(|ac| &ac.client)
+        .ok_or_else(|| format!("Account {account_id} not initialized"))
 }
