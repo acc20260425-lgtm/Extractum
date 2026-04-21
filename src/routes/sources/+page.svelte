@@ -243,6 +243,11 @@
     return Boolean(runtime?.initialized && runtime.authenticated);
   }
 
+  function selectedSource() {
+    if (selectedSourceId === null) return null;
+    return sources.find((source) => source.id === selectedSourceId) ?? null;
+  }
+
   function accountLabel(id: number | null) {
     if (id === null) return "—";
     return accounts.find((account) => account.id === id)?.label ?? `#${id}`;
@@ -288,34 +293,77 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <h3>Added Sources ({sources.length})</h3>
+<section class="workspace">
+  <div class="card pane pane-list">
+    <div class="card-header">
+      <h3>Added Sources ({sources.length})</h3>
+    </div>
+    {#if sources.length === 0}
+      <p class="empty">No sources yet.</p>
+    {:else}
+      <ul class="source-list">
+        {#each sources as src}
+          <SourceRow
+            source={src}
+            selected={selectedSourceId === src.id}
+            syncing={!!syncingIds[src.id]}
+            {accountLabel}
+            {runtimeStatus}
+            {syncDisabledReason}
+            {formatDate}
+            onToggleMessages={toggleMessages}
+            onSync={syncSource}
+          />
+        {/each}
+      </ul>
+    {/if}
   </div>
-  {#if sources.length === 0}
-    <p class="empty">No sources yet.</p>
-  {:else}
-    <ul class="source-list">
-      {#each sources as src}
-        <SourceRow
-          source={src}
-          selected={selectedSourceId === src.id}
-          syncing={!!syncingIds[src.id]}
-          {accountLabel}
-          {runtimeStatus}
-          {syncDisabledReason}
-          {formatDate}
-          onToggleMessages={toggleMessages}
-          onSync={syncSource}
-        />
-      {/each}
-    </ul>
-  {/if}
-</div>
 
-{#if selectedSourceId !== null}
-  <SourceMessagesPanel {loadingItems} {items} {formatDate} />
-{/if}
+  <div class="card pane pane-content">
+    {#if selectedSource()}
+      {@const currentSource = selectedSource()}
+      {@const currentSyncReason = syncDisabledReason(currentSource)}
+      {@const currentRuntimeStatus = runtimeStatus(currentSource.account_id)}
+      <div class="detail-header">
+        <div class="detail-title">
+          <h3>{currentSource.title ?? currentSource.external_id}</h3>
+          <p>{accountLabel(currentSource.account_id)}</p>
+        </div>
+        <div class="detail-actions">
+          {#if currentSource.last_synced_at !== null}
+            <span class="badge">synced {formatDate(currentSource.last_synced_at)}</span>
+          {/if}
+          {#if currentSource.account_id !== null}
+            {#if !currentRuntimeStatus?.initialized}
+              <span class="badge warning">account not connected</span>
+            {:else if !currentRuntimeStatus?.authenticated}
+              <span class="badge warning">sign in required</span>
+            {/if}
+          {/if}
+          {#if currentSource.is_member}
+            <span class="badge member">subscribed</span>
+          {:else}
+            <span class="badge">not subscribed</span>
+          {/if}
+          <button
+            class="small"
+            onclick={() => syncSource(currentSource.id)}
+            disabled={!!syncingIds[currentSource.id] || currentSyncReason !== null}
+            title={currentSyncReason ?? undefined}
+          >
+            {syncingIds[currentSource.id] ? "Syncing..." : "Sync"}
+          </button>
+        </div>
+      </div>
+      <SourceMessagesPanel {loadingItems} {items} {formatDate} embedded={true} />
+    {:else}
+      <div class="empty-detail">
+        <h3>No source selected</h3>
+        <p>Select a source on the left to view synced messages and run sync actions.</p>
+      </div>
+    {/if}
+  </div>
+</section>
 
 {#if selectedAccountId !== null}
   <div class="card">
@@ -383,6 +431,50 @@
   }
   .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   .card-header h3 { margin: 0; }
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+    margin-bottom: 1.5rem;
+  }
+  .pane {
+    margin-bottom: 0;
+    min-height: 18rem;
+  }
+  .pane-list {
+    position: sticky;
+    top: 1rem;
+  }
+  .pane-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-title h3 {
+    margin: 0 0 0.35rem 0;
+    font-size: 1.1rem;
+  }
+  .detail-title p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .detail-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
   .row { display: flex; gap: 0.5rem; align-items: center; }
   .row input { flex: 1; }
   select {
@@ -402,9 +494,43 @@
   .source-list li {
     list-style: none;
   }
+  .badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    background: var(--panel-hover);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .badge.member {
+    background: color-mix(in srgb, #22c55e 18%, var(--panel));
+    color: #15803d;
+  }
+  .badge.warning {
+    background: color-mix(in srgb, #f59e0b 22%, var(--panel));
+    color: #b45309;
+  }
+  .empty-detail {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 18rem;
+    color: var(--muted);
+  }
+  .empty-detail h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text);
+    font-size: 1.05rem;
+  }
+  .empty-detail p {
+    margin: 0;
+    max-width: 36rem;
+    line-height: 1.5;
+  }
   .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
   .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
   .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
+  button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
   .btn-link {
     padding: 0.6rem 1rem;
     border-radius: 6px;
@@ -416,4 +542,12 @@
     white-space: nowrap;
   }
   .btn-link:hover { background: var(--primary-hover); }
+  @media (max-width: 960px) {
+    .workspace {
+      grid-template-columns: 1fr;
+    }
+    .pane-list {
+      position: static;
+    }
+  }
 </style>

@@ -13,14 +13,16 @@
     loadingItems,
     items,
     formatDate,
+    embedded = false,
   }: {
     loadingItems: boolean;
     items: ItemRecord[];
     formatDate: (timestamp: number) => string;
+    embedded?: boolean;
   } = $props();
 </script>
 
-<div class="card">
+<div class:embedded class="card">
   <div class="card-header">
     <h3>Messages</h3>
     {#if loadingItems}
@@ -53,6 +55,14 @@
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
+  }
+  .card.embedded {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
   }
   .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   .card-header h3 { margin: 0; }
