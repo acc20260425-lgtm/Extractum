@@ -32,11 +32,13 @@
     period_to: number;
     output_language: string;
     prompt_template_id: number | null;
+    prompt_template_name: string | null;
     prompt_template_version: number;
     provider_profile: string;
     provider: string;
     model: string;
     status: string;
+    error: string | null;
     has_trace_data: boolean;
     created_at: number;
     completed_at: number | null;
@@ -100,6 +102,7 @@
   let currentRun = $state<AnalysisRunDetail | null>(null);
   let traceData = $state<AnalysisTraceData>({ refs: [] });
   let selectedTraceRef = $state<string | null>(null);
+  let runFilter = $state<"all" | "completed" | "failed" | "running">("all");
 
   type ReportSegment =
     | { type: "text"; value: string; key: string }
@@ -127,6 +130,15 @@
     return new Date(timestamp * 1000).toLocaleString();
   }
 
+  function formatDay(timestamp: number | null) {
+    if (!timestamp) return "n/a";
+    return new Date(timestamp * 1000).toLocaleDateString();
+  }
+
+  function formatPeriod(periodFromUnix: number, periodToUnix: number) {
+    return `${formatDay(periodFromUnix)} - ${formatDay(periodToUnix)}`;
+  }
+
   function phaseLabel(phase: string) {
     switch (phase) {
       case "load_items":
@@ -142,6 +154,28 @@
       default:
         return phase || "Running";
     }
+  }
+
+  function statusTone(status: string) {
+    switch (status) {
+      case "completed":
+        return "success";
+      case "failed":
+        return "danger";
+      case "running":
+      case "queued":
+        return "info";
+      default:
+        return "neutral";
+    }
+  }
+
+  function filteredRuns() {
+    if (runFilter === "all") return runs;
+    if (runFilter === "running") {
+      return runs.filter((run) => run.status === "running" || run.status === "queued");
+    }
+    return runs.filter((run) => run.status === runFilter);
   }
 
   function normalizeRef(candidate: string) {
@@ -610,6 +644,51 @@
       </div>
     </div>
 
+    {#if currentRun}
+      <div class="run-summary-panel">
+        <div class="run-summary-header">
+          <div class="run-summary-title">
+            <strong>Run #{currentRun.id}</strong>
+            <span class={`badge badge-${statusTone(currentRun.status)}`}>{currentRun.status}</span>
+          </div>
+          <span class="sub">
+            {currentRun.prompt_template_name ?? "Unknown template"} - v{currentRun.prompt_template_version}
+          </span>
+        </div>
+
+        <div class="run-meta-grid">
+          <div>
+            <span class="meta-label">Period</span>
+            <strong>{formatPeriod(currentRun.period_from, currentRun.period_to)}</strong>
+          </div>
+          <div>
+            <span class="meta-label">Output language</span>
+            <strong>{currentRun.output_language}</strong>
+          </div>
+          <div>
+            <span class="meta-label">Created</span>
+            <strong>{formatTimestamp(currentRun.created_at)}</strong>
+          </div>
+          <div>
+            <span class="meta-label">Completed</span>
+            <strong>{formatTimestamp(currentRun.completed_at)}</strong>
+          </div>
+          <div>
+            <span class="meta-label">Provider profile</span>
+            <strong>{currentRun.provider_profile}</strong>
+          </div>
+          <div>
+            <span class="meta-label">Trace refs</span>
+            <strong>{traceData.refs.length}</strong>
+          </div>
+        </div>
+
+        {#if currentRun.error}
+          <p class="run-error">{currentRun.error}</p>
+        {/if}
+      </div>
+    {/if}
+
     <div class="report-layout">
       <div class="report-body">
         {#if streamedOutput}
@@ -729,24 +808,44 @@
 
 <section class="card history">
   <div class="panel-header">
-    <h3>Saved Runs</h3>
-    <button class="secondary" onclick={loadRuns}>Refresh</button>
+    <div>
+      <h3>Saved Runs</h3>
+      <p class="sub">Immutable report runs with saved model, prompt version, and traceability data.</p>
+    </div>
+    <div class="history-actions">
+      <div class="filter-group">
+        <button class:activeFilter={runFilter === "all"} class="secondary" onclick={() => (runFilter = "all")}>All</button>
+        <button class:activeFilter={runFilter === "completed"} class="secondary" onclick={() => (runFilter = "completed")}>Completed</button>
+        <button class:activeFilter={runFilter === "running"} class="secondary" onclick={() => (runFilter = "running")}>Running</button>
+        <button class:activeFilter={runFilter === "failed"} class="secondary" onclick={() => (runFilter = "failed")}>Failed</button>
+      </div>
+      <button class="secondary" onclick={loadRuns}>Refresh</button>
+    </div>
   </div>
 
   {#if runs.length === 0}
     <p class="empty">No analysis runs yet.</p>
+  {:else if filteredRuns().length === 0}
+    <p class="empty">No runs match the current filter.</p>
   {:else}
     <ul class="run-list">
-      {#each runs as run}
+      {#each filteredRuns() as run}
         <li class:selected={run.id === activeRunId}>
           <div class="run-copy">
             <div class="run-title">
               <strong>{run.source_title ?? `Source ${run.source_id ?? "?"}`}</strong>
-              <span class="badge">{run.status}</span>
+              <span class={`badge badge-${statusTone(run.status)}`}>{run.status}</span>
             </div>
             <p class="sub">
-              {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - template v{run.prompt_template_version}
+              {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
             </p>
+            <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
+            {#if run.completed_at}
+              <p class="sub">Completed: {formatTimestamp(run.completed_at)}</p>
+            {/if}
+            {#if run.error}
+              <p class="run-list-error">{run.error}</p>
+            {/if}
           </div>
           <button class="secondary" onclick={() => openRun(run.id)}>Open</button>
         </li>
@@ -856,6 +955,64 @@
     grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
     gap: 1rem;
     align-items: start;
+  }
+
+  .run-summary-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 1rem;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .run-summary-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .run-summary-title {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .run-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
+  }
+
+  .run-meta-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.75rem 0.85rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .meta-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .run-error,
+  .run-list-error {
+    margin: 0;
+    padding: 0.7rem 0.85rem;
+    border-radius: 8px;
+    background: var(--status-error-bg);
+    color: var(--status-error-text);
+    font-size: 0.88rem;
   }
 
   .report-body,
@@ -1033,6 +1190,34 @@
     letter-spacing: 0.04em;
   }
 
+  .badge-success {
+    background: color-mix(in srgb, #1f8f5f 16%, var(--panel));
+    color: #1f8f5f;
+  }
+
+  .badge-danger {
+    background: color-mix(in srgb, var(--danger) 16%, var(--panel));
+    color: var(--danger);
+  }
+
+  .badge-info {
+    background: color-mix(in srgb, var(--primary) 16%, var(--panel));
+    color: var(--primary);
+  }
+
+  .history-actions,
+  .filter-group {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .activeFilter {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+    border-color: var(--primary);
+  }
+
   .templates {
     margin-top: 1.5rem;
     display: flex;
@@ -1075,6 +1260,10 @@
     .template-grid {
       grid-template-columns: 1fr;
     }
+
+    .run-meta-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   @media (max-width: 720px) {
@@ -1085,6 +1274,10 @@
     .run-list li {
       flex-direction: column;
       align-items: stretch;
+    }
+
+    .run-meta-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>

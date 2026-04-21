@@ -68,11 +68,13 @@ pub struct AnalysisRunSummary {
     pub period_to: i64,
     pub output_language: String,
     pub prompt_template_id: Option<i64>,
+    pub prompt_template_name: Option<String>,
     pub prompt_template_version: i64,
     pub provider_profile: String,
     pub provider: String,
     pub model: String,
     pub status: String,
+    pub error: Option<String>,
     pub has_trace_data: bool,
     pub created_at: i64,
     pub completed_at: Option<i64>,
@@ -89,6 +91,7 @@ pub struct AnalysisRunDetail {
     pub period_to: i64,
     pub output_language: String,
     pub prompt_template_id: Option<i64>,
+    pub prompt_template_name: Option<String>,
     pub prompt_template_version: i64,
     pub provider_profile: String,
     pub provider: String,
@@ -112,6 +115,7 @@ struct AnalysisRunRow {
     period_to: i64,
     output_language: String,
     prompt_template_id: Option<i64>,
+    prompt_template_name: Option<String>,
     prompt_template_version: i64,
     provider_profile: String,
     provider: String,
@@ -295,11 +299,13 @@ fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
         period_to: row.period_to,
         output_language: row.output_language,
         prompt_template_id: row.prompt_template_id,
+        prompt_template_name: row.prompt_template_name,
         prompt_template_version: row.prompt_template_version,
         provider_profile: row.provider_profile,
         provider: row.provider,
         model: row.model,
         status: row.status,
+        error: row.error,
         has_trace_data: row.trace_data_zstd.is_some(),
         created_at: row.created_at,
         completed_at: row.completed_at,
@@ -317,6 +323,7 @@ fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         period_to: row.period_to,
         output_language: row.output_language,
         prompt_template_id: row.prompt_template_id,
+        prompt_template_name: row.prompt_template_name,
         prompt_template_version: row.prompt_template_version,
         provider_profile: row.provider_profile,
         provider: row.provider,
@@ -343,6 +350,7 @@ async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> Result<Option<Analys
             runs.period_to,
             runs.output_language,
             runs.prompt_template_id,
+            templates.name AS prompt_template_name,
             runs.prompt_template_version,
             runs.provider_profile,
             runs.provider,
@@ -355,6 +363,7 @@ async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> Result<Option<Analys
             runs.completed_at
         FROM analysis_runs runs
         LEFT JOIN sources ON sources.id = runs.source_id
+        LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
         WHERE runs.id = ?
         "#,
     )
@@ -1160,6 +1169,7 @@ pub async fn list_analysis_runs(
                 runs.period_to,
                 runs.output_language,
                 runs.prompt_template_id,
+                templates.name AS prompt_template_name,
                 runs.prompt_template_version,
                 runs.provider_profile,
                 runs.provider,
@@ -1172,6 +1182,7 @@ pub async fn list_analysis_runs(
                 runs.completed_at
             FROM analysis_runs runs
             LEFT JOIN sources ON sources.id = runs.source_id
+            LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
             WHERE runs.source_id = ?
             ORDER BY runs.created_at DESC
             LIMIT ?
@@ -1195,6 +1206,7 @@ pub async fn list_analysis_runs(
                 runs.period_to,
                 runs.output_language,
                 runs.prompt_template_id,
+                templates.name AS prompt_template_name,
                 runs.prompt_template_version,
                 runs.provider_profile,
                 runs.provider,
@@ -1207,6 +1219,7 @@ pub async fn list_analysis_runs(
                 runs.completed_at
             FROM analysis_runs runs
             LEFT JOIN sources ON sources.id = runs.source_id
+            LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
             ORDER BY runs.created_at DESC
             LIMIT ?
             "#,
