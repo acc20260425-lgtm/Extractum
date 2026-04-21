@@ -94,6 +94,14 @@
     content: string;
   }
 
+  interface AnalysisChatMessage {
+    id: number;
+    run_id: number;
+    role: "user" | "assistant";
+    content: string;
+    created_at: number;
+  }
+
   interface AnalysisChatEvent {
     request_id: string;
     run_id: number;
@@ -140,12 +148,16 @@
   let currentRun = $state<AnalysisRunDetail | null>(null);
   let traceData = $state<AnalysisTraceData>({ refs: [] });
   let selectedTraceRef = $state<string | null>(null);
+  let savedTraceRefs = $state<string[]>([]);
+  let resolvedTraceRefs = $state<string[]>([]);
   let runFilter = $state<"all" | "completed" | "failed" | "running">("all");
   let chatQuestion = $state("");
   let chatMessages = $state<AnalysisChatTurn[]>([]);
   let chatting = $state(false);
   let activeChatRequestId = $state<string | null>(null);
   let activeChatRunId = $state<number | null>(null);
+  let chatThreadElement: HTMLDivElement | null = null;
+  let clearingChat = $state(false);
 
   type ReportSegment =
     | { type: "text"; value: string; key: string }
@@ -248,6 +260,12 @@
     }
     merged.sort((left, right) => left.published_at - right.published_at);
     traceData = { refs: merged };
+  }
+
+  function traceRefOrigin(ref: string) {
+    if (savedTraceRefs.includes(ref)) return "saved";
+    if (resolvedTraceRefs.includes(ref)) return "resolved";
+    return "unknown";
   }
 
   function selectedTemplate() {
@@ -383,6 +401,7 @@
         refs: [ref],
       });
       mergeTraceRefs(resolved);
+      resolvedTraceRefs = [...resolvedTraceRefs, ...resolved.map((entry) => entry.ref).filter((entry) => !resolvedTraceRefs.includes(entry))];
       selectedTraceRef = ref;
     } catch (error) {
       status = `Error resolving trace reference: ${error}`;
@@ -392,9 +411,13 @@
   async function loadTrace(runId: number) {
     try {
       traceData = await invoke<AnalysisTraceData>("get_analysis_run_trace", { runId });
+      savedTraceRefs = traceData.refs.map((ref) => ref.ref);
+      resolvedTraceRefs = [];
       selectedTraceRef = traceData.refs[0]?.ref ?? null;
     } catch (error) {
       traceData = { refs: [] };
+      savedTraceRefs = [];
+      resolvedTraceRefs = [];
       selectedTraceRef = null;
       status = `Error loading analysis trace: ${error}`;
     }
@@ -479,14 +502,30 @@
       activeRunId = run.id;
       activePhase = run.status;
       activeProgress = "";
+      await loadChatMessages(run.id);
       if (run.has_trace_data) {
         await loadTrace(run.id);
       } else {
         traceData = { refs: [] };
+        savedTraceRefs = [];
+        resolvedTraceRefs = [];
         selectedTraceRef = null;
       }
     } catch (error) {
       status = `Error loading analysis run: ${error}`;
+    }
+  }
+
+  async function loadChatMessages(runId: number) {
+    try {
+      const messages = await invoke<AnalysisChatMessage[]>("list_analysis_chat_messages", { runId });
+      chatMessages = messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
+    } catch (error) {
+      chatMessages = [];
+      status = `Error loading analysis chat: ${error}`;
     }
   }
 
@@ -521,6 +560,8 @@
     streamedOutput = "";
     currentRun = null;
     traceData = { refs: [] };
+    savedTraceRefs = [];
+    resolvedTraceRefs = [];
     selectedTraceRef = null;
     chatMessages = [];
     chatQuestion = "";
@@ -565,7 +606,6 @@
     }
 
     const question = chatQuestion.trim();
-    const history = chatMessages.filter((message) => message.role === "user" || message.role === "assistant");
     chatMessages = [...chatMessages, { role: "user", content: question }, { role: "assistant", content: "" }];
     chatQuestion = "";
     chatting = true;
@@ -575,7 +615,6 @@
       const requestId = await invoke<string>("ask_analysis_run_question", {
         runId: currentRun.id,
         question,
-        history,
         modelOverride: modelOverride.trim() ? modelOverride.trim() : null,
         profileId: null,
       });
@@ -586,6 +625,27 @@
       activeChatRunId = null;
       activeChatRequestId = null;
       status = `Error starting chat answer: ${error}`;
+    }
+  }
+
+  async function clearChatMessages() {
+    if (!currentRun) {
+      status = "Open a run first.";
+      return;
+    }
+    if (!window.confirm("Clear saved chat history for this run?")) {
+      return;
+    }
+
+    clearingChat = true;
+    try {
+      await invoke("clear_analysis_chat_messages", { runId: currentRun.id });
+      chatMessages = [];
+      status = "Saved chat history cleared.";
+    } catch (error) {
+      status = `Error clearing analysis chat: ${error}`;
+    } finally {
+      clearingChat = false;
     }
   }
 
@@ -788,6 +848,19 @@
     }
   });
 
+  $effect(() => {
+    const scrollKey = chatMessages.map((message) => `${message.role}:${message.content.length}`).join("|");
+    scrollKey;
+    chatting;
+    if (typeof window === "undefined" || !chatThreadElement) return;
+    requestAnimationFrame(() => {
+      chatThreadElement?.scrollTo({
+        top: chatThreadElement.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+  });
+
   onMount(() => {
     let disposed = false;
     let detachAnalysisListener: (() => void) | null = null;
@@ -879,6 +952,9 @@
       if (payload.kind === "completed") {
         chatting = false;
         activeChatRequestId = null;
+        if (activeChatRunId !== null) {
+          void loadChatMessages(activeChatRunId);
+        }
         if (payload.message) {
           status = payload.message;
         }
@@ -888,6 +964,9 @@
       if (payload.kind === "failed") {
         chatting = false;
         activeChatRequestId = null;
+        if (chatMessages.length >= 2 && chatMessages[chatMessages.length - 1]?.role === "assistant") {
+          chatMessages = chatMessages.slice(0, -2);
+        }
         status = payload.error ? `Analysis chat failed: ${payload.error}` : "Analysis chat failed.";
       }
     }).then((unlisten) => {
@@ -1129,7 +1208,12 @@
                 type="button"
                 onclick={() => (selectedTraceRef = ref.ref)}
               >
-                <strong>{ref.ref}</strong>
+                <div class="trace-link-top">
+                  <strong>{ref.ref}</strong>
+                  <span class={`trace-origin trace-origin-${traceRefOrigin(ref.ref)}`}>
+                    {traceRefOrigin(ref.ref) === "saved" ? "Saved in report" : traceRefOrigin(ref.ref) === "resolved" ? "Resolved from chat" : "Trace ref"}
+                  </span>
+                </div>
                 <span>{formatTimestamp(ref.published_at)}</span>
               </button>
             {/each}
@@ -1159,6 +1243,11 @@
       <h3>Report Chat</h3>
       <p class="sub">Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.</p>
     </div>
+    {#if currentRun && currentRun.status === "completed"}
+      <button class="secondary" onclick={clearChatMessages} disabled={chatting || clearingChat}>
+        {clearingChat ? "Clearing..." : "Clear chat"}
+      </button>
+    {/if}
   </div>
 
   {#if !currentRun}
@@ -1166,9 +1255,9 @@
   {:else if currentRun.status !== "completed"}
     <p class="empty">Chat is available only for completed runs.</p>
   {:else}
-    <div class="chat-thread">
+    <div class="chat-thread" bind:this={chatThreadElement}>
       {#if chatMessages.length === 0}
-        <p class="empty">No chat turns yet. Ask a follow-up question about this report.</p>
+        <p class="empty">No saved chat turns yet. Ask a follow-up question about this report.</p>
       {:else}
         {#each chatMessages as message, index (`${message.role}-${index}`)}
           <div class={`chat-bubble chat-${message.role}`}>
@@ -1642,6 +1731,37 @@
     border-radius: 10px;
     color: var(--text);
     text-align: left;
+  }
+
+  .trace-link-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .trace-origin {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+  }
+
+  .trace-origin-saved {
+    background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+    color: var(--primary);
+    border-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+
+  .trace-origin-resolved {
+    background: color-mix(in srgb, #1f8f5f 12%, var(--panel));
+    color: #1f8f5f;
+    border-color: color-mix(in srgb, #1f8f5f 22%, transparent);
   }
 
   .trace-link:hover,

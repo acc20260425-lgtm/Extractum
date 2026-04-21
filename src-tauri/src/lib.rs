@@ -16,9 +16,9 @@ use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
 
 mod analysis;
 use analysis::{
-    ask_analysis_run_question, create_analysis_prompt_template, create_analysis_source_group,
+    ask_analysis_run_question, clear_analysis_chat_messages, create_analysis_prompt_template, create_analysis_source_group,
     delete_analysis_prompt_template, delete_analysis_source_group, get_analysis_run,
-    get_analysis_run_trace, list_analysis_prompt_templates, list_analysis_runs,
+    get_analysis_run_trace, list_analysis_chat_messages, list_analysis_prompt_templates, list_analysis_runs,
     list_analysis_source_groups, list_analysis_sources, start_analysis_report,
     update_analysis_prompt_template, update_analysis_source_group,
     resolve_analysis_trace_refs,
@@ -153,6 +153,12 @@ pub fn run() {
             sql: include_str!("../migrations/7.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "add analysis chat history",
+            sql: include_str!("../migrations/8.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -206,6 +212,8 @@ pub fn run() {
             get_analysis_run,
             get_analysis_run_trace,
             resolve_analysis_trace_refs,
+            list_analysis_chat_messages,
+            clear_analysis_chat_messages,
             ask_analysis_run_question,
             start_analysis_report
         ])

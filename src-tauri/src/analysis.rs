@@ -217,6 +217,15 @@ pub struct AnalysisChatTurn {
     pub content: String,
 }
 
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+pub struct AnalysisChatMessage {
+    pub id: i64,
+    pub run_id: i64,
+    pub role: String,
+    pub content: String,
+    pub created_at: i64,
+}
+
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -252,6 +261,13 @@ fn validate_chat_turns(history: &[AnalysisChatTurn]) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn validate_chat_role(role: &str) -> Result<(), String> {
+    match role {
+        "user" | "assistant" => Ok(()),
+        other => Err(format!("Unsupported chat role '{other}'")),
+    }
 }
 
 fn validate_template_input(
@@ -568,6 +584,55 @@ async fn resolve_run_source_ids(pool: &Pool<Sqlite>, run: &AnalysisRunDetail) ->
     }
 
     Err(format!("Unsupported analysis scope '{}'", run.scope_type))
+}
+
+async fn load_chat_messages_from_pool(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+) -> Result<Vec<AnalysisChatMessage>, String> {
+    sqlx::query_as(
+        r#"
+        SELECT id, run_id, role, content, created_at
+        FROM analysis_chat_messages
+        WHERE run_id = ?
+        ORDER BY created_at ASC, id ASC
+        "#,
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())
+}
+
+async fn persist_chat_exchange(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+    user_question: &str,
+    assistant_answer: &str,
+) -> Result<(), String> {
+    validate_chat_role("user")?;
+    validate_chat_role("assistant")?;
+
+    let now = now_secs();
+    sqlx::query(
+        r#"
+        INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
+        VALUES (?, ?, ?, ?), (?, ?, ?, ?)
+        "#,
+    )
+    .bind(run_id)
+    .bind("user")
+    .bind(user_question)
+    .bind(now)
+    .bind(run_id)
+    .bind("assistant")
+    .bind(assistant_answer)
+    .bind(now + 1)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 async fn insert_analysis_run(
@@ -1282,11 +1347,40 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
 }
 
 #[tauri::command]
+pub async fn list_analysis_chat_messages(
+    handle: AppHandle,
+    run_id: i64,
+) -> Result<Vec<AnalysisChatMessage>, String> {
+    let pool = get_pool(&handle).await?;
+    let exists = fetch_run_row(&pool, run_id).await?.is_some();
+    if !exists {
+        return Err(format!("Analysis run {run_id} not found"));
+    }
+    load_chat_messages_from_pool(&pool, run_id).await
+}
+
+#[tauri::command]
+pub async fn clear_analysis_chat_messages(handle: AppHandle, run_id: i64) -> Result<(), String> {
+    let pool = get_pool(&handle).await?;
+    let exists = fetch_run_row(&pool, run_id).await?.is_some();
+    if !exists {
+        return Err(format!("Analysis run {run_id} not found"));
+    }
+
+    sqlx::query("DELETE FROM analysis_chat_messages WHERE run_id = ?")
+        .bind(run_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn ask_analysis_run_question(
     handle: AppHandle,
     run_id: i64,
     question: String,
-    history: Vec<AnalysisChatTurn>,
     model_override: Option<String>,
     profile_id: Option<String>,
 ) -> Result<String, String> {
@@ -1294,7 +1388,6 @@ pub async fn ask_analysis_run_question(
     if question.is_empty() {
         return Err("Question cannot be empty".to_string());
     }
-    validate_chat_turns(&history)?;
 
     let pool = get_pool(&handle).await?;
     let run = get_analysis_run(handle.clone(), run_id)
@@ -1314,6 +1407,15 @@ pub async fn ask_analysis_run_question(
     let source_ids = resolve_run_source_ids(&pool, &run).await?;
     let corpus = load_corpus_messages(&pool, &source_ids, run.period_from, run.period_to).await?;
     let context_messages = find_chat_context_messages(&question, &corpus);
+    let history = load_chat_messages_from_pool(&pool, run_id)
+        .await?
+        .into_iter()
+        .map(|message| AnalysisChatTurn {
+            role: message.role,
+            content: message.content,
+        })
+        .collect::<Vec<_>>();
+    validate_chat_turns(&history)?;
     let request = build_chat_request(
         &run,
         &history,
@@ -1372,17 +1474,23 @@ pub async fn ask_analysis_run_question(
         })
         .await
         {
-            Ok(_) => emit_analysis_chat_event(
-                &app_handle,
-                &AnalysisChatEvent {
-                    request_id: emitted_request_id.clone(),
-                    run_id,
-                    kind: "completed".to_string(),
-                    delta: None,
-                    message: Some("Answer completed.".to_string()),
-                    error: None,
-                },
-            ),
+            Ok(completion) => {
+                if let Ok(pool) = get_pool(&app_handle).await {
+                    let _ = persist_chat_exchange(&pool, run_id, &question, &completion.text).await;
+                }
+
+                emit_analysis_chat_event(
+                    &app_handle,
+                    &AnalysisChatEvent {
+                        request_id: emitted_request_id.clone(),
+                        run_id,
+                        kind: "completed".to_string(),
+                        delta: None,
+                        message: Some("Answer completed.".to_string()),
+                        error: None,
+                    },
+                )
+            }
             Err(error) => emit_analysis_chat_event(
                 &app_handle,
                 &AnalysisChatEvent {
