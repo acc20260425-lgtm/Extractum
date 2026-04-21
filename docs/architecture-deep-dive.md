@@ -1,219 +1,126 @@
-# Deep Dive Architecture: Extractum (MVP v4)
+# Architecture Deep Dive
 
-## 1. Architectural Principle: "Fat Frontend, Thin Backend"
+## 1. Core principle
 
-Основной принцип разработки — перенос максимального количества прикладной логики в TypeScript (Frontend), оставляя за Rust (Backend) только задачи, требующие высокой производительности, прямого доступа к системе, работы с бинарными форматами и интеграции с внешними API.
+Extractum uses a "fat frontend, thin backend" architecture.
 
-- **Rust (Backend):** Набор низкоуровневых сервисов и команд. Его зона ответственности — MTProto, работа с SQLite, сжатие/распаковка данных через ZSTD, безопасное хранение секретов, вызовы LLM-провайдеров.
-- **TypeScript (Frontend):** Основной orchestration layer приложения. Здесь находятся состояние интерфейса, сценарии пользователя, фильтрация данных, подготовка SQL-параметров, сбор контекста для LLM и отображение результатов анализа.
+The practical meaning in this codebase is:
+- Svelte pages own user-facing flows and UI state;
+- Rust owns integration boundaries and persistence boundaries;
+- the frontend should call focused Tauri commands instead of reaching into Telegram or SQLite details directly.
 
-Такой подход позволяет держать backend компактным и прикладно-нейтральным, а основную бизнес-логику и UX-логику развивать быстрее на стороне frontend.
+## 2. Current runtime structure
 
-<h2>2. Core Backend Responsibilities</h2>
+### Frontend
 
-Rust backend не должен превращаться в "второе приложение внутри приложения". Его задача — дать frontend небольшой набор надежных примитивов.
+Current pages:
+- `src/routes/accounts/+page.svelte`
+- `src/routes/auth/[id]/+page.svelte`
+- `src/routes/sources/+page.svelte`
 
-<h3>2.1 Telegram Integration</h3>
-Backend реализует:
-<ul>
-<li>авторизацию через MTProto;</li>
-<li>управление Telegram-сессией;</li>
-<li>синхронизацию каналов;</li>
-<li>обработку rate limits, сетевых ошибок и повторных попыток;</li>
-<li>безопасное сохранение новых сообщений в SQLite.</li>
-</ul>
+Shared shell:
+- `src/routes/+layout.svelte`
 
-<h3>2.2 Storage Layer</h3>
-Backend отвечает за:
-<ul>
-<li>открытие и миграции SQLite-базы;</li>
-<li>запись данных в таблицы <code>sources</code>, <code>items</code>, <code>app_settings</code>;</li>
-<li>ZSTD-сжатие полей <code>content_zstd</code>, <code>raw_data_zstd</code> при записи;</li>
-<li>ZSTD-распаковку при чтении;</li>
-<li>выполнение параметризованных SQL-запросов для frontend-сценариев.</li>
-</ul>
+Responsibilities currently implemented in frontend:
+- account creation form state
+- auth step transitions
+- source selection flows
+- account filtering in UI
+- theme selection and persistence
 
-<h3>2.3 LLM Gateway</h3>
-Backend предоставляет единый шлюз к LLM-провайдерам:
-<ul>
-<li>локальные провайдеры, например Ollama;</li>
-<li>облачные провайдеры, например OpenAI, Gemini, Anthropic;</li>
-<li>единый интерфейс вызова для frontend;</li>
-<li>централизованную обработку таймаутов, ошибок и конфигурации провайдера.</li>
-</ul>
+### Backend
 
-<h2>3. Core Frontend Responsibilities</h2>
+Current Rust modules:
+- `src-tauri/src/lib.rs`
+- `src-tauri/src/telegram.rs`
+- `src-tauri/src/sources.rs`
 
-Frontend — это управляющий слой приложения.
+Responsibilities currently implemented in backend:
+- Tauri bootstrap
+- SQL plugin and migration registration
+- migration metadata patching before plugin initialization
+- Telegram client initialization per account
+- Telegram login/logout flow
+- Telegram session file persistence
+- account CRUD against SQLite
+- source listing and registration against SQLite
+- Telegram dialog discovery
 
-Он отвечает за:
-<ul>
-<li>выбор источников и отображение их состояния;</li>
-<li>запуск синхронизации;</li>
-<li>фильтрацию данных по источнику, диапазону дат, автору и другим метаданным;</li>
-<li>выбор набора записей, которые нужно показать пользователю или отправить в LLM;</li>
-<li>формирование итогового контекста для LLM;</li>
-<li>отображение ответа модели и связанных фрагментов данных.</li>
-</ul>
+## 3. Telegram subsystem
 
-Важно: frontend не должен напрямую знать детали MTProto, ZSTD или хранения секретов. Он работает только через Tauri-команды.
+`telegram.rs` manages active MTProto clients in memory.
 
-<h2>4. LLM Provider System</h2>
+Current structure:
+- one `TelegramState`
+- one `HashMap<account_id, AccountClient>`
+- one Telegram client per account
+- one session file per account: `telegram_{account_id}.session.json`
 
-Для гибкости backend должен содержать абстракцию <code>LLMProvider</code>, скрывающую различия между локальными и облачными моделями.
+Current supported Telegram flow:
+1. load account credentials from SQLite;
+2. initialize a client for that account;
+3. send login code;
+4. sign in;
+5. persist session to disk;
+6. reuse session on later startup;
+7. delete session on logout.
 
-Концептуально контракт выглядит так:
+## 4. Storage subsystem
 
-<ul>
-<li>вход: prompt, system instructions, context blocks, provider settings;</li>
-<li>выход: готовый текстовый ответ и служебные метаданные;</li>
-<li>единая точка вызова из frontend: <code>invoke('ask_llm', ...)</code>.</li>
-</ul>
+SQLite is the only local application database.
 
-<h3>4.1 Why no vector store</h3>
-В MVP не используется векторная база и не строится embedding pipeline. Контекст для LLM формируется напрямую из данных, выбранных SQL-запросами из SQLite, после чего передается в модель как обычный текстовый контекст.
+Important architectural decisions already reflected in code:
+- the database is preloaded at startup with `tauri-plugin-sql`;
+- Rust commands read the pool from `DbInstances`;
+- the app should not create a second independent SQLite connection path to another file;
+- migration metadata repair happens before SQL plugin initialization, not in Tauri `setup()`.
 
-Это упрощает архитектуру, уменьшает количество moving parts и позволяет быстрее получить рабочий end-to-end сценарий анализа.
+This prevents:
+- mismatched DB paths;
+- commands racing migrations on startup;
+- checksum-related startup failures for older local databases.
 
-<h2>5. Storage Model</h2>
+## 5. Current command surface
 
-SQLite используется как единственное локальное хранилище данных.
+The active Tauri command layer is intentionally small:
+- DB health: `ping_db`
+- Telegram auth: `tg_init`, `tg_is_authenticated`, `tg_send_code`, `tg_sign_in`, `tg_logout`
+- Accounts: `list_accounts`, `get_account`, `create_account`, `set_account_phone`, `clear_account_phone`, `delete_account`
+- Sources: `list_telegram_channels`, `add_telegram_source`, `list_sources`
 
-<h3>5.1 <code>sources</code></h3>
-Таблица <code>sources</code> хранит информацию об источниках данных:
-<ul>
-<li>тип источника;</li>
-<li>внешний идентификатор;</li>
-<li>отображаемое имя;</li>
-<li>метаданные;</li>
-<li>состояние синхронизации;</li>
-<li>флаг активности.</li>
-</ul>
+This matches the current implemented product slice.
 
-<h3>5.2 <code>items</code></h3>
-Таблица <code>items</code> хранит единицы контента:
-<ul>
-<li>привязку к источнику;</li>
-<li>внешний ID сообщения;</li>
-<li>автора;</li>
-<li>дату публикации;</li>
-<li>основной текст в <code>content_zstd</code>;</li>
-<li>полный сырой API-ответ в <code>raw_data_zstd</code>.</li>
-</ul>
+## 6. What is not implemented yet
 
-<h3>5.3 <code>app_settings</code></h3>
-Таблица <code>app_settings</code> используется для прикладных настроек и конфигурации.
+The architecture already reserves space for later subsystems, but they are not present in the running app yet:
+- message sync into `items`
+- ZSTD write/read path for stored messages
+- browsing and filtering stored items
+- LLM provider abstraction in code
+- Gemini integration
+- analysis UI
 
-<h3>5.4 Compression strategy</h3>
-Текст сообщения и сырой JSON от Telegram сохраняются в сжатом виде через ZSTD. Это уменьшает размер локальной базы и оставляет возможность при необходимости восстановить как нормализованный текст, так и оригинальный API payload.
+Those are still planned layers, not current architecture facts.
 
-<h2>6. Data Flow</h2>
+## 7. UI architecture notes
 
-<h3>6.1 Channel Sync Flow</h3>
-<ol>
-<li>Пользователь выбирает канал и нажимает "Sync".</li>
-<li>Frontend вызывает <code>invoke('sync_channel', { sourceId | channelRef })</code>.</li>
-<li>Backend запускает задачу синхронизации через MTProto-клиент.</li>
-<li>Полученные сообщения проходят через защитный слой TelegramGuard.</li>
-<li>Processor сериализует нужные данные, сжимает тяжелые поля через ZSTD и записывает их в SQLite.</li>
-</ol>
+The UI is intentionally minimal right now:
+- route-based pages
+- no shared component library yet
+- no settings page yet
+- no dashboard yet
 
-<h3>6.2 Message Retrieval Flow</h3>
-<ol>
-<li>Пользователь открывает источник или задает фильтры.</li>
-<li>Frontend вызывает <code>invoke('get_items', filters)</code>.</li>
-<li>Backend выполняет параметризованный <code>SELECT</code> по <code>source_id</code>, <code>published_at</code>, <code>author</code> и другим доступным полям.</li>
-<li>Backend распаковывает <code>content_zstd</code> и, при необходимости, <code>raw_data_zstd</code>.</li>
-<li>Frontend получает готовые для отображения записи.</li>
-</ol>
+Recent current-state detail:
+- the app now supports both light and dark themes;
+- light theme is the default;
+- theme preference is persisted in `localStorage`.
 
-<h3>6.3 LLM Analysis Flow</h3>
-<ol>
-<li>Пользователь выбирает источник, диапазон, сообщения или режим анализа.</li>
-<li>Frontend либо сам отбирает нужные записи из уже загруженных данных, либо запрашивает дополнительную SQL-выборку.</li>
-<li>Frontend собирает итоговый контекст: список сообщений, выдержки, метаданные, пользовательский prompt.</li>
-<li>Frontend вызывает <code>invoke('ask_llm', { provider: 'gemini', model: 'gemini-1.5-flash', prompt, context })</code>.</li>
-<li>Backend передает запрос в <code>LLM Coordinator</code>.</li>
-<li><code>LLM Coordinator</code> вызывает выбранный <code>LLMProvider</code> (Google Gemini).</li>
-<li>Ответ модели возвращается в frontend и показывается в UI.</li>
-</ol>
+## 8. Recommended direction
 
-<h2>7. TelegramGuard</h2>
+Near-term implementation should continue in this order:
+1. implement `sync_channel`;
+2. write messages into `items`;
+3. add message browsing UI;
+4. add analysis flow and provider integration.
 
-<code>TelegramGuard</code> остается отдельным внутренним модулем backend и отвечает за устойчивость Telegram-интеграции.
-
-Его задачи:
-<ul>
-<li>контроль частоты запросов;</li>
-<li>retry/backoff;</li>
-<li>нормализация ошибок;</li>
-<li>защита от "слишком агрессивной" синхронизации;</li>
-<li>предсказуемое поведение фоновых задач синка.</li>
-</ul>
-
-Этот модуль не должен протекать в frontend API. Для frontend всё должно выглядеть как простой статус синхронизации: <code>idle</code>, <code>running</code>, <code>completed</code>, <code>failed</code>.
-
-<h2>8. Security Boundaries</h2>
-
-Безопасность должна быть сконцентрирована в backend.
-
-Backend отвечает за:
-<ul>
-<li>хранение API-ключей через системный keyring (для Google Gemini);</li>
-<li>хранение Telegram-сессии в app data directory;</li>
-<li>недопущение утечки секретов в логах;</li>
-<li>валидацию входных параметров Tauri-команд;</li>
-<li>ограничение произвольного выполнения SQL извне.</li>
-</ul>
-
-Frontend не должен иметь прямого доступа ни к ключам, ни к Telegram session storage.
-
-<h2>9. Recommended Tauri Commands for MVP</h2>
-
-Для MVP достаточно небольшого и понятного API между frontend и backend:
-
-<ul>
-<li><code>init_database</code></li>
-<li><code>list_sources</code></li>
-<li><code>add_telegram_source</code></li>
-<li><code>sync_channel</code></li>
-<li><code>get_items</code></li>
-<li><code>get_item_by_id</code></li>
-<li><code>get_sync_status</code></li>
-<li><code>ask_llm</code></li>
-<li><code>get_settings</code></li>
-<li><code>save_settings</code>.</li>
-</ul>
-
-Важно держать команды прикладными и ограниченными по ответственности. Не стоит делать одну универсальную команду "execute_anything".
-
-<h2>10. MVP Boundary</h2>
-
-В MVP входят:
-<ul>
-<li>подключение Telegram через MTProto;</li>
-<li>хранение данных в SQLite;</li>
-<li>просмотр источников и сообщений;</li>
-<li>фильтрация по базовым метаданным;</li>
-<li>отправка SQL-выбранного контекста в LLM;</li>
-<li>поддержка Google Gemini как LLM-провайдера.</li>
-</ul>
-
-В MVP не входят:
-<ul>
-<li>vector store;</li>
-<li>embeddings;</li>
-<li>semantic search;</li>
-<li>автоматический retrieval pipeline;</li>
-<li>multi-source ingestion beyond Telegram.</li>
-</ul>
-
-<h2>11. Next Steps</h2>
-
-<ol>
-<li>Зафиксировать SQLite schema как единственный источник правды для storage-модели.</li>
-<li>Привести <code>design-document.md</code> в соответствие с этой архитектурой.</li>
-<li>Удалить из <code>database-schema.md</code> поле <code>is_embedded</code> и индекс <code>idx_items_embedded</code>, так как векторизация в MVP отсутствует.</li>
-<li>Реализовать минимальный набор Tauri-команд для sync, select и ask_llm.</li>
-<li>Построить простой UI-поток: source list -&gt; message list -&gt; ask LLM.</li>
-</ol>
+That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.

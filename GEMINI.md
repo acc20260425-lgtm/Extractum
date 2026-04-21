@@ -1,58 +1,123 @@
 # Extractum: Project Context & AI Guidelines
 
-This file is a foundational mandate for AI agents. It takes precedence over general workflows.
+This file is a working contract for AI agents modifying the repository.
+It should reflect the current codebase, not the aspirational end-state.
 
-## 1. Architectural Model: "Fat Frontend, Thin Backend"
+## 1. Architecture
 
-- **Frontend (SvelteKit + TypeScript):** The orchestration layer. Handles UI state, user flows, filtering, LLM context preparation, and SQL parameter logic.
-- **Backend (Tauri + Rust):** A thin systems layer. Handles MTProto (Telegram), SQLite persistence, ZSTD compression/decompression, secure secret management, and LLM provider proxying.
-- **Rule:** Keep business logic in the frontend. The backend should provide small, reliable primitives.
+Extractum uses a "fat frontend, thin backend" model.
 
-## 2. Telegram Integration (grammers 0.8.x)
+- Frontend (`SvelteKit + TypeScript`): UI state, route flows, filters, orchestration, presentation.
+- Backend (`Tauri + Rust`): Telegram integration, SQLite access, migrations, session persistence, security boundaries, future provider calls.
 
-We use the `master` branch of `grammers`. The API has specific constraints that MUST be followed:
+Rule:
+- keep low-level integration logic in Rust;
+- keep user-flow orchestration in the frontend;
+- prefer small, explicit Tauri commands over broad generic commands.
 
-- **Imports:** `LoginToken` is exported via `grammers_client::client::LoginToken`. Do NOT look for it in `auth` or `types`.
-- **Signatures:** `client.request_login_code` takes 2 arguments: `(&phone, api_hash)`. The `api_id` is already managed by the `SenderPool`.
-- **Multiple accounts:** `TelegramState` holds a `HashMap<account_id, AccountClient>`. Each account has its own `Client`, `SenderPool`, `MemorySession`, and session file (`telegram_{id}.session.json`). All commands take `account_id: i64`.
-- **Session Management:** Persisted to `telegram_{account_id}.session.json` in `app_data_dir`. Loaded on `tg_init`, saved on `tg_sign_in`, deleted on `tg_logout`.
-- **`FileSession` does NOT exist** in this version of grammers. `storages` only exports `MemorySession` and `SqliteSession` (behind `sqlite-storage` feature). Do not attempt to use `FileSession`.
-- **`SessionData` does NOT implement `serde::Serialize/Deserialize`** directly. Use the `SavedSession` wrapper struct that mirrors its fields (`home_dc`, `dc_options`, `updates_state`).
-- **Cargo.toml:** `grammers-client` MUST have `default-features = false`. `grammers-session` MUST have `default-features = false, features = ["serde"]`. This prevents `libsql` from being pulled in and causing duplicate SQLite symbol conflicts with `tauri-plugin-sql`.
+## 2. Telegram integration rules
 
-## 3. Storage & Data Model
+The project uses the `master` branch of `grammers`.
 
-- **Database:** SQLite is the single source of truth for local data.
-- **DB location:** `tauri-plugin-sql` stores the database in `app_config_dir` (e.g. `AppData\Roaming\org.ai.extractum\extractum.db` on Windows). This is different from `app_data_dir`. All Rust code accessing the DB must use the same path.
-- **DB initialization:** The database is preloaded at Rust startup via `plugins.sql.preload` in `tauri.conf.json`. This guarantees migrations run before any frontend command is invoked. Do NOT rely on `Database.load()` from the frontend for migration timing.
-- **Rust DB access:** `sources.rs` accesses the DB by retrieving the `Pool<Sqlite>` from `DbInstances` state managed by `tauri-plugin-sql`. This ensures both the plugin and Rust commands use the same connection pool.
-- **Migrations:** Numbered SQL files in `src-tauri/migrations/`, registered in `lib.rs`. Rules:
-  - Never delete or rename a migration file — sqlx verifies all previously applied migrations still exist.
-  - Never change the SQL of an already-applied migration — sqlx verifies checksums. If a change is unavoidable, add a `patch_migrations()` call in `lib.rs` `setup` hook to delete the stale record from `_sqlx_migrations` before the plugin runs.
-  - Migration 2 (`add is_member to sources`) is a no-op (`SELECT 1`) because `is_member` was already included in migration 1. Its `_sqlx_migrations` record is patched at startup via `patch_migrations()`.
-  - Always add new schema changes as a new migration with the next version number.
-- **Compression:** Heavy fields (`content_zstd`, `raw_data_zstd`) MUST be compressed using ZSTD before storage and decompressed on read.
-- **No Vector DB:** MVP explicitly avoids vector databases and embeddings. Context for LLM is derived directly from SQL selections.
+Important API constraints:
+- `LoginToken` is imported from `grammers_client::client::LoginToken`;
+- `client.request_login_code(&phone, api_hash)` takes two arguments;
+- `TelegramState` stores active clients as `HashMap<account_id, AccountClient>`;
+- each account has an independent session file: `telegram_{account_id}.session.json`;
+- `FileSession` is not available in this setup;
+- `SessionData` is wrapped through a serializable `SavedSession` struct for persistence.
 
-## 4. LLM Strategy
+Current implemented Telegram flow:
+- `tg_init`
+- `tg_is_authenticated`
+- `tg_send_code`
+- `tg_sign_in`
+- `tg_logout`
 
-- **Primary Provider:** Google Gemini.
-- **Flow:** Frontend selects records -> Frontend builds text context -> Backend proxies request to Gemini API.
+## 3. Database rules
 
-## 5. Development Workflow Mandates
+- SQLite is the only local database.
+- The DB file is `extractum.db` in `app_config_dir`.
+- The DB is preloaded at startup through `plugins.sql.preload` in `tauri.conf.json`.
+- Rust commands must use the pool exposed by `tauri-plugin-sql` through `DbInstances`.
 
-- **Research First:** Before attempting to fix API errors in external libraries (like `grammers`), the agent MUST read the library source code or search for updated documentation. Never "guess" import paths or method signatures.
-- **Empirical Validation:** Always run `cargo check` after modifying Rust code to ensure compilation.
-- **Security:** Never log secrets. Keep API keys in the backend (using system keyring where appropriate).
+Do not:
+- open a second "manual" SQLite path to a different file;
+- rely on frontend `Database.load()` for migration timing;
+- assume `app_data_dir` and `app_config_dir` are interchangeable.
 
-## 6. Current Status (as of 2026-04-21)
+## 4. Migration rules
 
-- Phase 2 (Telegram Integration) is in progress.
-- Multi-account support implemented: multiple Telegram accounts work simultaneously, each with independent client and session.
-- Full authentication flow per account (init, send code, sign in, logout) implemented.
-- Session persistence per account: `telegram_{id}.session.json` in app data dir.
-- Account management: `accounts` table, commands `list_accounts`, `create_account`, `set_account_phone`, `delete_account`.
-- Source management: sources linked to accounts via `account_id`, filterable by account.
-- DB preloaded at Rust startup via `tauri.conf.json` `plugins.sql.preload` — no frontend dependency for migrations.
-- Migration patch mechanism in place for migration 2 (see Storage section).
-- Next step: Implementing channel synchronization (`sync_channel`) and ZSTD-compressed message storage.
+Migrations live in `src-tauri/migrations/` and are registered in `src-tauri/src/lib.rs`.
+
+Rules:
+- never delete or rename an existing migration file;
+- never casually rewrite an already-applied migration;
+- always add new schema changes as a new migration;
+- if historical migration metadata must be repaired, do it before SQL plugin initialization.
+
+Important current detail:
+- `2.sql` is intentionally a no-op (`SELECT 1;`);
+- migration metadata for version 2 may need repair on older local databases;
+- the project patches `_sqlx_migrations` before registering the SQL plugin.
+
+## 5. Current implemented command surface
+
+Accounts and auth:
+- `list_accounts`
+- `get_account`
+- `create_account`
+- `set_account_phone`
+- `clear_account_phone`
+- `delete_account`
+- `tg_init`
+- `tg_is_authenticated`
+- `tg_send_code`
+- `tg_sign_in`
+- `tg_logout`
+
+Sources:
+- `list_telegram_channels`
+- `add_telegram_source`
+- `list_sources`
+
+Utility:
+- `ping_db`
+
+Not implemented yet:
+- `sync_channel`
+- `get_items`
+- `ask_llm`
+
+## 6. Current product status
+
+Implemented:
+- multi-account Telegram setup
+- per-account auth flow
+- session persistence
+- account CRUD
+- source registration linked to account
+- source discovery from Telegram dialogs
+- persistent light/dark theme toggle, defaulting to light
+
+Not implemented yet:
+- message sync into `items`
+- browsing stored messages
+- LLM provider integration
+- Gemini analysis flow
+
+## 7. Workflow rules for agents
+
+- Read the current Rust code before changing `grammers` integration.
+- Run `cargo check` after Rust changes.
+- Prefer updating documentation when code meaningfully changes.
+- Do not introduce vector DB / embedding assumptions into MVP docs or code.
+- Do not reintroduce direct frontend ownership of low-level SQLite or secret-handling behavior.
+
+## 8. Security rules
+
+- never log secrets;
+- keep Telegram session persistence in the backend;
+- keep provider/API secrets in the backend;
+- validate backend command inputs;
+- preserve the frontend/backend boundary.

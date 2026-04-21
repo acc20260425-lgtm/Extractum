@@ -1,111 +1,95 @@
-# Database Schema Design (SQLite + ZSTD Compression) v3
+# Database Schema Design
 
-## 1. Storage Architecture
+## 1. Storage model
 
-SQLite is used as the single local storage layer for the MVP.
+Extractum uses SQLite as the only local database.
+The schema is intentionally small and supports the current product slice plus the next planned step of message synchronization.
 
-The database acts as a compact and reliable local store for:
-- source metadata;
-- collected content items;
-- application settings;
-- fast filtered selection by metadata such as source, date, and author.
+Today the application actively uses:
+- `accounts`
+- `sources`
 
-Database-level full-text search is not part of the MVP.  
-The application selects relevant records through standard SQL queries and sends the resulting context to the LLM for analysis.
+The schema also already includes:
+- `items`
+- `app_settings`
 
-To reduce the on-disk database size, heavy text fields are compressed in the Rust backend using **Zstandard (zstd)** and stored as `BLOB` values.
+`items` is reserved for upcoming message sync and browsing flows.
 
-## 2. Design Principles
+## 2. Database location and initialization
 
-The schema is designed around the following principles:
-- one generic table for data sources;
-- one generic table for collected content items;
-- one simple table for application settings;
-- optimized reads for the most common UI and LLM workflows;
-- no vectorization lifecycle, no embedding queue, no semantic index.
+- database file: `extractum.db`
+- location: `app_config_dir` managed by `tauri-plugin-sql`
+- preload: configured in `src-tauri/tauri.conf.json` under `plugins.sql.preload`
 
-This keeps the storage model simple, portable, and aligned with the MVP scope.
+This matters because:
+- migrations run before frontend commands are invoked;
+- Rust commands and the plugin must use the same database file and the same pool;
+- direct ad-hoc SQLite access with a different path will create inconsistent state.
+
+Rust DB access in the project goes through `DbInstances` from `tauri-plugin-sql`.
 
 ## 3. Tables
 
-### 3.1 `sources`
+### 3.1 `accounts`
+
+Stores Telegram account configuration.
+
+| Column | Type | Notes |
+| :--- | :--- | :--- |
+| `id` | INTEGER | Primary key |
+| `label` | TEXT | Human-friendly account name |
+| `api_id` | INTEGER | Telegram API ID |
+| `api_hash` | TEXT | Telegram API hash |
+| `phone` | TEXT | Set after successful sign-in |
+| `created_at` | INTEGER | Unix timestamp, UTC |
+
+### 3.2 `sources`
+
 Stores configured data sources such as Telegram channels.
 
-| Column | Type | Description |
+| Column | Type | Notes |
 | :--- | :--- | :--- |
-| `id` | INTEGER | Primary key, autoincrement |
-| `source_type` | TEXT | Source type, for example `telegram_channel` |
-| `external_id` | TEXT | External identifier in the target system |
-| `title` | TEXT | Human-readable source title |
-| `metadata_zstd` | BLOB | ZSTD-compressed JSON metadata |
-| `last_sync_state` | INTEGER | Sync cursor or checkpoint: `message_id` of the last synced message |
-| `is_active` | BOOLEAN | Whether the source participates in sync |
-| `is_member` | BOOLEAN | Whether the user is subscribed to this source |
-| `account_id` | INTEGER | Foreign key to `accounts.id` (`ON DELETE CASCADE`) |
-| `created_at` | INTEGER | Unix Timestamp, UTC |
-
-### 3.2 `accounts`
-Stores Telegram account credentials. Multiple accounts are supported simultaneously.
-
-| Column | Type | Description |
-| :--- | :--- | :--- |
-| `id` | INTEGER | Primary key, autoincrement |
-| `label` | TEXT | Human-readable name (e.g. "Personal", "Work") |
-| `api_id` | INTEGER | Telegram API ID |
-| `api_hash` | TEXT | Telegram API Hash |
-| `phone` | TEXT | Phone number, set after successful sign-in |
-| `created_at` | INTEGER | Unix Timestamp, UTC |
+| `id` | INTEGER | Primary key |
+| `source_type` | TEXT | Currently `telegram_channel` |
+| `external_id` | TEXT | Telegram channel identifier |
+| `title` | TEXT | Source title |
+| `metadata_zstd` | BLOB | Reserved for compressed metadata |
+| `last_sync_state` | INTEGER | Reserved sync cursor |
+| `is_active` | BOOLEAN | Whether source participates in sync |
+| `is_member` | BOOLEAN | Whether the account is subscribed |
+| `created_at` | INTEGER | Unix timestamp, UTC |
+| `account_id` | INTEGER | FK to `accounts.id` |
 
 ### 3.3 `items`
-Stores collected content records such as Telegram messages.
 
-| Column | Type | Description |
+Stores collected Telegram messages once sync is implemented.
+
+| Column | Type | Notes |
 | :--- | :--- | :--- |
-| `id` | INTEGER | Primary key, autoincrement |
-| `source_id` | INTEGER | Foreign key to `sources.id` (`ON DELETE CASCADE`) |
-| `external_id` | TEXT | External item identifier in the source system |
-| `author` | TEXT | Optional author or sender name |
-| `published_at` | INTEGER | Original publication timestamp |
-| `ingested_at` | INTEGER | Unix Timestamp, UTC (когда попало в базу) |
-| `content_zstd` | BLOB | ZSTD-compressed normalized text content |
-| `raw_data_zstd` | BLOB | ZSTD-compressed raw API payload |
+| `id` | INTEGER | Primary key |
+| `source_id` | INTEGER | FK to `sources.id` |
+| `external_id` | TEXT | Telegram message identifier |
+| `author` | TEXT | Optional sender/author |
+| `published_at` | INTEGER | Original publication time |
+| `ingested_at` | INTEGER | Ingestion time |
+| `content_zstd` | BLOB | Reserved compressed text |
+| `raw_data_zstd` | BLOB | Reserved compressed payload |
 
 ### 3.4 `app_settings`
-Stores local application settings as simple key-value pairs.
 
-| Column | Type | Description |
+Stores simple key/value application settings.
+
+| Column | Type | Notes |
 | :--- | :--- | :--- |
 | `key` | TEXT | Primary key |
 | `value` | TEXT | Setting value |
 
-## 4. Migration Rules and Known Issues
-
-Migrations are managed by `tauri-plugin-sql` using `sqlx` under the hood. The database is preloaded at Rust startup via `plugins.sql.preload` in `tauri.conf.json`, so migrations run before any frontend command is invoked.
-
-### Rules
-- **Never delete or rename a migration file.** sqlx verifies that all previously applied migrations still exist on disk.
-- **Never change the SQL content of an already-applied migration.** sqlx stores and verifies checksums. Changing a file will cause a startup panic.
-- **To fix a mistake in an applied migration:** add a `patch_migrations()` call in the `setup` hook in `lib.rs` that deletes the stale record from `_sqlx_migrations` before the plugin runs. The migration will then be re-applied with the new checksum.
-- **New schema changes** must always be a new file with the next version number.
-
-### Migration history
-
-| Version | File | Description | Notes |
-| :--- | :--- | :--- | :--- |
-| 1 | `1.sql` | Create `sources`, `items`, `app_settings` tables | Includes `is_member` column |
-| 2 | `2.sql` | Add `is_member` to sources | **No-op** (`SELECT 1`). Column already in v1. Stale checksum patched at startup via `patch_migrations()` |
-| 3 | `3.sql` | Add `accounts` table, add `account_id` to `sources` | — |
-
-## 5. Constraints and Indexes
-
-The schema should enforce uniqueness for both sources and collected items, and should optimize the primary read paths used by the UI and the LLM preparation flow.
+## 4. Indexes and constraints
 
 ```sql
--- Sources
 CREATE UNIQUE INDEX idx_sources_ext
 ON sources(source_type, external_id);
 
--- Items
 CREATE UNIQUE INDEX idx_items_ext
 ON items(source_id, external_id);
 
@@ -116,171 +100,56 @@ CREATE INDEX idx_items_author
 ON items(author);
 ```
 
+Why they exist:
+- `idx_sources_ext` prevents duplicate source registration;
+- `idx_items_ext` will prevent duplicate message storage per source;
+- `idx_items_source_date` supports future browsing by source and time;
+- `idx_items_author` supports future author filtering.
 
-### 4.1 Why these indexes
+## 5. Migrations
 
-- `idx_sources_ext` prevents duplicate registration of the same external source.
-- `idx_items_ext` prevents duplicate storage of the same message inside one source.
-- `idx_items_source_date` supports the main browsing and filtering scenario by source and time range.
-- `idx_items_author` supports optional filtering by sender or author.
+Migrations live in `src-tauri/migrations/` and are registered in `src-tauri/src/lib.rs`.
 
-No index for embeddings or semantic retrieval is needed, because the MVP does not contain a vector-processing pipeline.
+Current migration history:
 
-<h2>5. Compression Strategy</h2>
+| Version | File | Purpose |
+| :--- | :--- | :--- |
+| 1 | `1.sql` | Initialize `sources`, `items`, `app_settings` |
+| 2 | `2.sql` | No-op; `is_member` was already present in migration 1 |
+| 3 | `3.sql` | Add `accounts` and `sources.account_id` |
 
-The backend compresses large fields before writing them into SQLite:
+Rules:
+- never delete or rename an existing migration file;
+- never casually edit an already-applied migration;
+- always add new schema work as a new migration file;
+- if a historical migration must be repaired, update metadata before SQL plugin initialization.
 
-- normalized text content goes into `content_zstd`;
-- original API payload goes into `raw_data_zstd`;
-- optional source metadata goes into `metadata_zstd`.
+## 6. Migration 2 compatibility note
 
-This approach gives three advantages:
-
-- smaller local database size;
-- preservation of both normalized and raw forms of the data;
-- flexibility for future reprocessing without needing to re-fetch everything from Telegram.
-
-
-<h2>6. Backend Interaction Model</h2>
-
-<h3>6.1 Insert Flow</h3>
-
-<ol>
-<li>Backend receives data from Telegram MTProto.</li>
-<li>Backend normalizes fields needed for UI and analysis.</li>
-<li>Backend serializes raw payloads when needed.</li>
-<li>Backend compresses large payloads with `zstd`.</li>
-<li>Backend inserts rows into `sources` and `items`.</li>
-</ol>
-
-Conceptually:
+`2.sql` is intentionally:
 
 ```sql
-INSERT INTO items (
-  source_id,
-  external_id,
-  author,
-  published_at,
-  content_zstd,
-  raw_data_zstd
-) VALUES (?, ?, ?, ?, ?, ?);
+SELECT 1;
 ```
 
+Reason:
+- `is_member` was already included in `1.sql`;
+- an earlier historical version tried to add it again;
+- older local databases may therefore contain stale migration metadata.
 
-<h3>6.2 Select Flow</h3>
+The app repairs migration metadata before SQL plugin initialization so that existing local databases can still start cleanly.
 
-<ol>
-<li>Frontend requests records using filters.</li>
-<li>Backend executes parameterized SQL queries.</li>
-<li>Backend decompresses `content_zstd` and, if needed, `raw_data_zstd`.</li>
-<li>Backend returns ready-to-use records to the frontend or directly to the LLM request pipeline.</li>
-</ol>
+## 7. Compression status
 
-Conceptually:
+The schema reserves compressed fields (`metadata_zstd`, `content_zstd`, `raw_data_zstd`) and the backend already depends on `zstd`.
 
-```sql
-SELECT
-  id,
-  source_id,
-  external_id,
-  author,
-  published_at,
-  content_zstd,
-  raw_data_zstd
-FROM items
-WHERE source_id = ?
-  AND published_at >= ?
-  AND published_at <= ?
-ORDER BY published_at DESC
-LIMIT ?;
-```
+Current implementation status:
+- schema support exists;
+- message sync and compression write-path are not implemented yet.
 
+## 8. Practical status
 
-<h2>7. Relationship to LLM Analysis</h2>
-
-This schema is intentionally built for a **SQL-first analysis flow**:
-
-<ul>
-<li>records are stored locally in SQLite;</li>
-<li>frontend or backend selects relevant rows with ordinary SQL;</li>
-<li>decompressed text is assembled into context blocks;</li>
-<li>the resulting context is sent to a configured LLM provider.</li>
-</ul>
-
-This means the schema is optimized for deterministic filtering and structured retrieval, not for embedding-based nearest-neighbor search.
-
-<h2>8. Example Query Scenarios</h2>
-
-Typical queries supported by this schema include:
-
-<ul>
-<li>latest messages from a source;</li>
-<li>messages from a source in a date range;</li>
-<li>messages by author;</li>
-<li>limited record batches for UI pages;</li>
-<li>selected subsets of records for LLM analysis.</li>
-</ul>
-
-Examples:
-
-```sql
--- Latest items for one source
-SELECT id, published_at, content_zstd
-FROM items
-WHERE source_id = ?
-ORDER BY published_at DESC
-LIMIT 100;
-```
-
-```sql
--- Items for one source in a date range
-SELECT id, author, published_at, content_zstd
-FROM items
-WHERE source_id = ?
-  AND published_at BETWEEN ? AND ?
-ORDER BY published_at DESC;
-```
-
-```sql
--- Items by author inside one source
-SELECT id, published_at, content_zstd
-FROM items
-WHERE source_id = ?
-  AND author = ?
-ORDER BY published_at DESC;
-```
-
-
-<h2>9. Future Extensions</h2>
-
-The schema is intentionally generic enough to support later expansion:
-
-<ul>
-<li>additional <code>source_type</code> values;</li>
-<li>richer metadata in compressed JSON fields;</li>
-<li>optional tagging or classification tables;</li>
-<li>optional cached analysis results.</li>
-</ul>
-
-These extensions can be added later without changing the MVP storage principle that SQLite remains the core local store.
-
-<h2>10. Summary of MVP Storage Boundaries</h2>
-
-The MVP schema includes:
-
-<ul>
-<li><code>sources</code></li>
-<li><code>items</code></li>
-<li><code>app_settings</code></li>
-<li>compressed storage of large payloads</li>
-<li>SQL-based filtered retrieval.</li>
-</ul>
-
-The MVP schema does not include:
-
-<ul>
-<li>embeddings;</li>
-<li>vector indexes;</li>
-<li>semantic retrieval queues;</li>
-<li>vector database synchronization state.</li>
-</ul>
+As of the current codebase:
+- `accounts` and `sources` are live production tables for the UI;
+- `items` is schema-ready but not yet used by application flows;
+- the database path, preload, and migration handling are aligned with the running app.
