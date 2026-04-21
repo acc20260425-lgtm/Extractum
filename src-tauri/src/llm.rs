@@ -1,11 +1,11 @@
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
-use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_sql::DbInstances;
+use tauri::{AppHandle, Emitter};
 use tokio::time::{timeout, Duration};
 
-const DB_URL: &str = "sqlite:extractum.db";
+use crate::db::get_pool;
+
 const LLM_RESPONSE_EVENT: &str = "llm://response";
 const DEFAULT_PROFILE_ID: &str = "default";
 const DEFAULT_PROVIDER: &str = "gemini";
@@ -145,19 +145,6 @@ struct GoogleApiErrorBody {
     message: String,
     status: Option<String>,
     code: Option<i64>,
-}
-
-async fn get_pool(handle: &AppHandle) -> Result<Pool<Sqlite>, String> {
-    let instances = handle.state::<DbInstances>();
-    let instances = instances.0.read().await;
-    let db = instances
-        .get(DB_URL)
-        .ok_or("Database not initialized. SQL preload may have failed.")?;
-    match db {
-        tauri_plugin_sql::DbPool::Sqlite(pool) => Ok(pool.clone()),
-        #[allow(unreachable_patterns)]
-        _ => Err("Expected SQLite pool".to_string()),
-    }
 }
 
 fn active_profile_key() -> &'static str {

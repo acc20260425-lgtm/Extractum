@@ -3,6 +3,8 @@ use sha2::{Digest, Sha384};
 use std::path::PathBuf;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod db;
+
 mod telegram;
 use telegram::{restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout, tg_send_code, tg_sign_in, TelegramState};
 
@@ -11,6 +13,13 @@ use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_ch
 
 mod llm;
 use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
+
+mod analysis;
+use analysis::{
+    create_analysis_prompt_template, delete_analysis_prompt_template, get_analysis_run,
+    get_analysis_run_trace, list_analysis_prompt_templates, list_analysis_runs,
+    list_analysis_sources, update_analysis_prompt_template,
+};
 
 #[tauri::command]
 fn ping_db() -> String {
@@ -123,6 +132,12 @@ pub fn run() {
             sql: include_str!("../migrations/4.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "add analysis storage",
+            sql: include_str!("../migrations/5.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -162,7 +177,15 @@ pub fn run() {
             get_items,
             get_llm_profiles,
             save_llm_profile,
-            ask_llm_stream
+            ask_llm_stream,
+            list_analysis_sources,
+            list_analysis_prompt_templates,
+            create_analysis_prompt_template,
+            update_analysis_prompt_template,
+            delete_analysis_prompt_template,
+            list_analysis_runs,
+            get_analysis_run,
+            get_analysis_run_trace
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

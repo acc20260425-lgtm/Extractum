@@ -7,12 +7,11 @@ use grammers_client::{client::LoginToken, Client};
 use grammers_mtsender::SenderPool;
 use grammers_session::types::{DcOption, UpdatesState};
 use grammers_session::{storages::MemorySession, Session, SessionData};
-use sqlx::{Pool, Sqlite};
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_sql::DbInstances;
 use tokio::sync::Mutex;
 
-const DB_URL: &str = "sqlite:extractum.db";
+use crate::db::get_pool;
+
 const STATUS_NOT_INITIALIZED: &str = "not_initialized";
 const STATUS_RESTORING: &str = "restoring";
 const STATUS_READY: &str = "ready";
@@ -119,19 +118,6 @@ async fn save_session(
     let json = serde_json::to_string(&saved).map_err(|e| e.to_string())?;
     let path = session_path(handle, account_id)?;
     fs::write(path, json).map_err(|e| e.to_string())
-}
-
-async fn get_pool(handle: &AppHandle) -> Result<Pool<Sqlite>, String> {
-    let instances = handle.state::<DbInstances>();
-    let instances = instances.0.read().await;
-    let db = instances
-        .get(DB_URL)
-        .ok_or("Database not initialized. SQL preload may have failed.")?;
-    match db {
-        tauri_plugin_sql::DbPool::Sqlite(pool) => Ok(pool.clone()),
-        #[allow(unreachable_patterns)]
-        _ => Err("Expected SQLite pool".to_string()),
-    }
 }
 
 async fn list_account_credentials(handle: &AppHandle) -> Result<Vec<AccountCredentials>, String> {

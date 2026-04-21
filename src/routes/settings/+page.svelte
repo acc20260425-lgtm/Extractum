@@ -250,10 +250,10 @@
   </div>
 </div>
 
-<div class="card">
+  <div class="card">
   <h3>Test Provider</h3>
   <label>Prompt
-    <textarea bind:value={testPrompt} rows="6" placeholder="Ask Gemini something simple..." />
+    <textarea bind:value={testPrompt} rows="6" placeholder="Ask Gemini something simple..."></textarea>
   </label>
 
   <div class="actions">

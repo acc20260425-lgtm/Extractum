@@ -2,16 +2,12 @@ use grammers_client::peer::Peer;
 use grammers_session::types::PeerRef;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::Pool;
-use sqlx::Sqlite;
 use std::io::Cursor;
 use tauri::AppHandle;
-use tauri::Manager;
-use tauri_plugin_sql::DbInstances;
 
+use crate::db::get_pool;
 use crate::telegram::TelegramState;
 
-const DB_URL: &str = "sqlite:extractum.db";
 const INITIAL_SYNC_MESSAGE_LIMIT: usize = 500;
 
 #[derive(Serialize)]
@@ -87,20 +83,6 @@ struct StoredItemRow {
 #[derive(Default, Serialize, Deserialize)]
 struct SourceMetadata {
     username: Option<String>,
-}
-
-/// Get the sqlx Pool from tauri-plugin-sql's managed state.
-async fn get_pool(handle: &AppHandle) -> Result<Pool<Sqlite>, String> {
-    let instances = handle.state::<DbInstances>();
-    let instances = instances.0.read().await;
-    let db = instances
-        .get(DB_URL)
-        .ok_or("Database not initialized. SQL preload may have failed.")?;
-    match db {
-        tauri_plugin_sql::DbPool::Sqlite(pool) => Ok(pool.clone()),
-        #[allow(unreachable_patterns)]
-        _ => Err("Expected SQLite pool".to_string()),
-    }
 }
 
 #[tauri::command]
