@@ -209,13 +209,8 @@
     }
   }
 
-  async function toggleMessages(sourceId: number) {
-    if (selectedSourceId === sourceId) {
-      selectedSourceId = null;
-      items = [];
-      return;
-    }
-
+  async function selectSource(sourceId: number) {
+    if (selectedSourceId === sourceId) return;
     selectedSourceId = sourceId;
     await loadItems(sourceId);
   }
@@ -306,15 +301,15 @@
           <SourceRow
             source={src}
             selected={selectedSourceId === src.id}
-            syncing={!!syncingIds[src.id]}
-            {accountLabel}
-            {runtimeStatus}
-            {syncDisabledReason}
-            {formatDate}
-            onToggleMessages={toggleMessages}
-            onSync={syncSource}
-          />
-        {/each}
+          syncing={!!syncingIds[src.id]}
+          {accountLabel}
+          {runtimeStatus}
+          {syncDisabledReason}
+          {formatDate}
+          onSelect={selectSource}
+          onSync={syncSource}
+        />
+      {/each}
       </ul>
     {/if}
   </div>

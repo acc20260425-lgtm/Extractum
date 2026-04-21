@@ -25,7 +25,7 @@
     runtimeStatus,
     syncDisabledReason,
     formatDate,
-    onToggleMessages,
+    onSelect,
     onSync,
   }: {
     source: SourceRecord;
@@ -35,7 +35,7 @@
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     syncDisabledReason: (source: SourceRecord) => string | null;
     formatDate: (timestamp: number) => string;
-    onToggleMessages: (sourceId: number) => void | Promise<void>;
+    onSelect: (sourceId: number) => void | Promise<void>;
     onSync: (sourceId: number) => void | Promise<void>;
   } = $props();
 
@@ -43,10 +43,12 @@
   const sourceRuntimeStatus = $derived(runtimeStatus(source.account_id));
 </script>
 
-<li>
+<li class:selected={selected}>
   <div class="channel-info">
-    <span class="title">{source.title ?? source.external_id}</span>
-    <span class="sub">{accountLabel(source.account_id)}</span>
+    <button class="source-main" onclick={() => onSelect(source.id)}>
+      <span class="title">{source.title ?? source.external_id}</span>
+      <span class="sub">{accountLabel(source.account_id)}</span>
+    </button>
   </div>
   <div class="channel-actions">
     {#if source.last_synced_at !== null}
@@ -64,9 +66,6 @@
     {:else}
       <span class="badge">not subscribed</span>
     {/if}
-    <button class="secondary small" onclick={() => onToggleMessages(source.id)} disabled={syncing}>
-      {selected ? "Hide messages" : "View messages"}
-    </button>
     <button
       class="small"
       onclick={() => onSync(source.id)}
@@ -88,8 +87,25 @@
     border-radius: 8px;
     gap: 0.5rem;
   }
+  li.selected {
+    outline: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+    background: color-mix(in srgb, var(--primary) 10%, var(--panel-strong));
+  }
   .channel-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
   .channel-actions { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .source-main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
   .title { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sub { font-size: 0.75rem; color: var(--muted); }
   .badge {
