@@ -26,7 +26,13 @@ pub fn run() {
             description: "initialize storage",
             sql: include_str!("../migrations/1.sql"),
             kind: MigrationKind::Up,
-        }
+        },
+        Migration {
+            version: 2,
+            description: "add is_member to sources",
+            sql: include_str!("../migrations/2.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

@@ -134,7 +134,8 @@ fn parse_username(input: &str) -> String {
 
 async fn open_pool(handle: &AppHandle) -> Result<SqlitePool, String> {
     let app_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
     let db_path = app_dir.join("extractum.db");
-    let url = format!("sqlite:{}", db_path.to_string_lossy());
+    let url = format!("sqlite:{}?mode=rwc", db_path.to_string_lossy());
     SqlitePool::connect(&url).await.map_err(|e| e.to_string())
 }
