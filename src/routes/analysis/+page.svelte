@@ -119,6 +119,12 @@
   let templates = $state<AnalysisPromptTemplate[]>([]);
   let runs = $state<AnalysisRunSummary[]>([]);
   let groups = $state<AnalysisSourceGroup[]>([]);
+  let loadingSources = $state(false);
+  let loadingTemplates = $state(false);
+  let loadingRuns = $state(false);
+  let loadingGroups = $state(false);
+  let loadingRunDetail = $state(false);
+  let loadingChat = $state(false);
 
   let selectedSourceId = $state("");
   let selectedTemplateId = $state("");
@@ -158,6 +164,7 @@
   let activeChatRunId = $state<number | null>(null);
   let chatThreadElement: HTMLDivElement | null = null;
   let clearingChat = $state(false);
+  let statusTimer: ReturnType<typeof setTimeout> | null = null;
 
   type ReportSegment =
     | { type: "text"; value: string; key: string }
@@ -230,6 +237,10 @@
       default:
         return "neutral";
     }
+  }
+
+  function isErrorStatus(value: string) {
+    return value.startsWith("Error") || value.startsWith("Analysis failed");
   }
 
   function filteredRuns() {
@@ -424,6 +435,7 @@
   }
 
   async function loadSources() {
+    loadingSources = true;
     try {
       const result = await invoke<AnalysisSourceOption[]>("list_analysis_sources");
       sources = result.filter((source) => source.item_count > 0);
@@ -432,10 +444,13 @@
       }
     } catch (error) {
       status = `Error loading analysis sources: ${error}`;
+    } finally {
+      loadingSources = false;
     }
   }
 
   async function loadTemplates() {
+    loadingTemplates = true;
     try {
       templates = await invoke<AnalysisPromptTemplate[]>("list_analysis_prompt_templates", {
         templateKind: "report",
@@ -449,10 +464,13 @@
       }
     } catch (error) {
       status = `Error loading report templates: ${error}`;
+    } finally {
+      loadingTemplates = false;
     }
   }
 
   async function loadGroups() {
+    loadingGroups = true;
     try {
       groups = await invoke<AnalysisSourceGroup[]>("list_analysis_source_groups");
       const selected = selectedGroup();
@@ -468,10 +486,13 @@
       }
     } catch (error) {
       status = `Error loading source groups: ${error}`;
+    } finally {
+      loadingGroups = false;
     }
   }
 
   async function loadRuns() {
+    loadingRuns = true;
     try {
       runs = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
         sourceId: analysisScope === "single_source" && selectedSourceId ? Number(selectedSourceId) : null,
@@ -480,10 +501,13 @@
       });
     } catch (error) {
       status = `Error loading analysis runs: ${error}`;
+    } finally {
+      loadingRuns = false;
     }
   }
 
   async function openRun(runId: number) {
+    loadingRunDetail = true;
     try {
       if (activeRunId !== runId) {
         chatMessages = [];
@@ -513,10 +537,13 @@
       }
     } catch (error) {
       status = `Error loading analysis run: ${error}`;
+    } finally {
+      loadingRunDetail = false;
     }
   }
 
   async function loadChatMessages(runId: number) {
+    loadingChat = true;
     try {
       const messages = await invoke<AnalysisChatMessage[]>("list_analysis_chat_messages", { runId });
       chatMessages = messages.map((message) => ({
@@ -526,6 +553,8 @@
     } catch (error) {
       chatMessages = [];
       status = `Error loading analysis chat: ${error}`;
+    } finally {
+      loadingChat = false;
     }
   }
 
@@ -849,6 +878,21 @@
   });
 
   $effect(() => {
+    if (typeof window === "undefined") return;
+    if (statusTimer) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+    if (!status || isErrorStatus(status)) {
+      return;
+    }
+    statusTimer = window.setTimeout(() => {
+      status = "";
+      statusTimer = null;
+    }, 5000);
+  });
+
+  $effect(() => {
     const scrollKey = chatMessages.map((message) => `${message.role}:${message.content.length}`).join("|");
     scrollKey;
     chatting;
@@ -979,6 +1023,10 @@
 
     return () => {
       disposed = true;
+      if (statusTimer) {
+        clearTimeout(statusTimer);
+        statusTimer = null;
+      }
       if (detachAnalysisListener !== null) {
         detachAnalysisListener();
       }
@@ -992,7 +1040,7 @@
 <h1>Analysis</h1>
 
 {#if status}
-  <p class="status" class:error={status.startsWith("Error") || status.startsWith("Analysis failed")}>
+  <p class="status" class:error={isErrorStatus(status)}>
     {status}
   </p>
 {/if}
@@ -1022,8 +1070,10 @@
 
     {#if analysisScope === "single_source"}
       <label>Source
-        <select bind:value={selectedSourceId}>
-          {#if sources.length === 0}
+        <select bind:value={selectedSourceId} disabled={loadingSources}>
+          {#if loadingSources}
+            <option value="">Loading synced sources...</option>
+          {:else if sources.length === 0}
             <option value="">No synced sources available</option>
           {/if}
           {#each sources as source}
@@ -1035,8 +1085,10 @@
       </label>
     {:else}
       <label>Source group
-        <select bind:value={selectedGroupId}>
-          {#if groups.length === 0}
+        <select bind:value={selectedGroupId} disabled={loadingGroups}>
+          {#if loadingGroups}
+            <option value="">Loading source groups...</option>
+          {:else if groups.length === 0}
             <option value="">No saved groups available</option>
           {/if}
           {#each groups as group}
@@ -1069,8 +1121,10 @@
     </label>
 
     <label>Prompt template
-      <select bind:value={selectedTemplateId}>
-        {#if templates.length === 0}
+      <select bind:value={selectedTemplateId} disabled={loadingTemplates}>
+        {#if loadingTemplates}
+          <option value="">Loading report templates...</option>
+        {:else if templates.length === 0}
           <option value="">No report templates available</option>
         {/if}
         {#each templates as template}
@@ -1163,7 +1217,9 @@
 
     <div class="report-layout">
       <div class="report-body">
-        {#if streamedOutput}
+        {#if loadingRunDetail}
+          <p class="empty">Loading saved run...</p>
+        {:else if streamedOutput}
           <div class="report-output">
             {#each reportLines(streamedOutput) as line (line.key)}
               <div class="report-line">
@@ -1256,7 +1312,9 @@
     <p class="empty">Chat is available only for completed runs.</p>
   {:else}
     <div class="chat-thread" bind:this={chatThreadElement}>
-      {#if chatMessages.length === 0}
+      {#if loadingChat}
+        <p class="empty">Loading saved chat history...</p>
+      {:else if chatMessages.length === 0}
         <p class="empty">No saved chat turns yet. Ask a follow-up question about this report.</p>
       {:else}
         {#each chatMessages as message, index (`${message.role}-${index}`)}
@@ -1299,7 +1357,7 @@
           placeholder="Ask a grounded follow-up question about this report."
         ></textarea>
       </label>
-      <button onclick={askRunQuestion} disabled={chatting || !currentRun || currentRun.status !== "completed"}>
+      <button onclick={askRunQuestion} disabled={chatting || loadingChat || !chatQuestion.trim() || !currentRun || currentRun.status !== "completed"}>
         {chatting ? "Answering..." : "Ask"}
       </button>
     </div>
@@ -1444,7 +1502,9 @@
     </div>
   </div>
 
-  {#if runs.length === 0}
+  {#if loadingRuns}
+    <p class="empty">Loading analysis runs...</p>
+  {:else if runs.length === 0}
     <p class="empty">No analysis runs yet.</p>
   {:else if filteredRuns().length === 0}
     <p class="empty">No runs match the current filter.</p>
