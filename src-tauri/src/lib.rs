@@ -16,9 +16,11 @@ use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
 
 mod analysis;
 use analysis::{
-    create_analysis_prompt_template, delete_analysis_prompt_template, get_analysis_run,
+    create_analysis_prompt_template, create_analysis_source_group,
+    delete_analysis_prompt_template, delete_analysis_source_group, get_analysis_run,
     get_analysis_run_trace, list_analysis_prompt_templates, list_analysis_runs,
-    list_analysis_sources, start_analysis_report, update_analysis_prompt_template,
+    list_analysis_source_groups, list_analysis_sources, start_analysis_report,
+    update_analysis_prompt_template, update_analysis_source_group,
 };
 
 #[tauri::command]
@@ -138,6 +140,12 @@ pub fn run() {
             sql: include_str!("../migrations/5.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "add analysis source groups",
+            sql: include_str!("../migrations/6.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -183,6 +191,10 @@ pub fn run() {
             create_analysis_prompt_template,
             update_analysis_prompt_template,
             delete_analysis_prompt_template,
+            list_analysis_source_groups,
+            create_analysis_source_group,
+            update_analysis_source_group,
+            delete_analysis_source_group,
             list_analysis_runs,
             get_analysis_run,
             get_analysis_run_trace,

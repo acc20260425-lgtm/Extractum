@@ -42,6 +42,22 @@ pub struct AnalysisPromptTemplate {
     pub updated_at: i64,
 }
 
+#[derive(Clone, Serialize, Deserialize, FromRow)]
+pub struct AnalysisSourceGroupMember {
+    pub source_id: i64,
+    pub source_title: Option<String>,
+    pub item_count: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AnalysisSourceGroup {
+    pub id: i64,
+    pub name: String,
+    pub members: Vec<AnalysisSourceGroupMember>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct AnalysisTraceRef {
     pub r#ref: String,
@@ -128,6 +144,14 @@ struct AnalysisRunRow {
     completed_at: Option<i64>,
 }
 
+#[derive(FromRow)]
+struct AnalysisSourceGroupRow {
+    id: i64,
+    name: String,
+    created_at: i64,
+    updated_at: i64,
+}
+
 #[derive(Serialize)]
 pub struct AnalysisRunEvent {
     pub run_id: i64,
@@ -208,6 +232,26 @@ fn validate_template_input(
     Ok((name, template_kind, body))
 }
 
+fn normalize_source_group_input(name: &str, source_ids: Vec<i64>) -> Result<(String, Vec<i64>), String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("Source group name cannot be empty".to_string());
+    }
+
+    let mut source_ids = source_ids
+        .into_iter()
+        .filter(|source_id| *source_id > 0)
+        .collect::<Vec<_>>();
+    source_ids.sort_unstable();
+    source_ids.dedup();
+
+    if source_ids.is_empty() {
+        return Err("Select at least one source for the group".to_string());
+    }
+
+    Ok((name, source_ids))
+}
+
 fn default_report_template_body() -> &'static str {
     r#"Create a grounded report over the provided Telegram messages.
 
@@ -269,6 +313,24 @@ async fn ensure_builtin_report_template(pool: &Pool<Sqlite>) -> Result<(), Strin
     .execute(pool)
     .await
     .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+async fn ensure_sources_exist(pool: &Pool<Sqlite>, source_ids: &[i64]) -> Result<(), String> {
+    for source_id in source_ids {
+        let exists = sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)",
+        )
+        .bind(source_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        if exists == 0 {
+            return Err(format!("Source {source_id} not found"));
+        }
+    }
 
     Ok(())
 }
@@ -391,6 +453,51 @@ async fn fetch_prompt_template(
     .await
     .map_err(|e| e.to_string())?
     .ok_or_else(|| format!("Analysis prompt template {template_id} not found"))
+}
+
+async fn fetch_source_group(pool: &Pool<Sqlite>, group_id: i64) -> Result<Option<AnalysisSourceGroup>, String> {
+    let group = sqlx::query_as::<_, AnalysisSourceGroupRow>(
+        r#"
+        SELECT id, name, created_at, updated_at
+        FROM analysis_source_groups
+        WHERE id = ?
+        "#,
+    )
+    .bind(group_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let Some(group) = group else {
+        return Ok(None);
+    };
+
+    let members = sqlx::query_as::<_, AnalysisSourceGroupMember>(
+        r#"
+        SELECT
+            sources.id AS source_id,
+            sources.title AS source_title,
+            COUNT(items.id) AS item_count
+        FROM analysis_source_group_members members
+        JOIN sources ON sources.id = members.source_id
+        LEFT JOIN items ON items.source_id = sources.id
+        WHERE members.group_id = ?
+        GROUP BY sources.id, sources.title
+        ORDER BY COALESCE(sources.title, ''), sources.id
+        "#,
+    )
+    .bind(group_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(Some(AnalysisSourceGroup {
+        id: group.id,
+        name: group.name,
+        members,
+        created_at: group.created_at,
+        updated_at: group.updated_at,
+    }))
 }
 
 async fn insert_analysis_run(
@@ -988,6 +1095,162 @@ pub async fn list_analysis_sources(handle: AppHandle) -> Result<Vec<AnalysisSour
 }
 
 #[tauri::command]
+pub async fn list_analysis_source_groups(handle: AppHandle) -> Result<Vec<AnalysisSourceGroup>, String> {
+    let pool = get_pool(&handle).await?;
+    let rows = sqlx::query_as::<_, AnalysisSourceGroupRow>(
+        r#"
+        SELECT id, name, created_at, updated_at
+        FROM analysis_source_groups
+        ORDER BY updated_at DESC, id DESC
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut groups = Vec::with_capacity(rows.len());
+    for row in rows {
+        if let Some(group) = fetch_source_group(&pool, row.id).await? {
+            groups.push(group);
+        }
+    }
+
+    Ok(groups)
+}
+
+#[tauri::command]
+pub async fn create_analysis_source_group(
+    handle: AppHandle,
+    name: String,
+    source_ids: Vec<i64>,
+) -> Result<AnalysisSourceGroup, String> {
+    let pool = get_pool(&handle).await?;
+    let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
+    ensure_sources_exist(&pool, &source_ids).await?;
+
+    let now = now_secs();
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    let group_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO analysis_source_groups (name, created_at, updated_at)
+        VALUES (?, ?, ?)
+        RETURNING id
+        "#,
+    )
+    .bind(&name)
+    .bind(now)
+    .bind(now)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    for source_id in source_ids {
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+            VALUES (?, ?, ?)
+            "#,
+        )
+        .bind(group_id)
+        .bind(source_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    fetch_source_group(&pool, group_id)
+        .await?
+        .ok_or_else(|| format!("Analysis source group {group_id} not found after creation"))
+}
+
+#[tauri::command]
+pub async fn update_analysis_source_group(
+    handle: AppHandle,
+    group_id: i64,
+    name: String,
+    source_ids: Vec<i64>,
+) -> Result<AnalysisSourceGroup, String> {
+    let pool = get_pool(&handle).await?;
+    let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
+    ensure_sources_exist(&pool, &source_ids).await?;
+
+    let exists = sqlx::query_scalar::<_, i64>(
+        "SELECT EXISTS(SELECT 1 FROM analysis_source_groups WHERE id = ?)",
+    )
+    .bind(group_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    if exists == 0 {
+        return Err(format!("Analysis source group {group_id} not found"));
+    }
+
+    let now = now_secs();
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        r#"
+        UPDATE analysis_source_groups
+        SET name = ?, updated_at = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(&name)
+    .bind(now)
+    .bind(group_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    sqlx::query("DELETE FROM analysis_source_group_members WHERE group_id = ?")
+        .bind(group_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    for source_id in source_ids {
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+            VALUES (?, ?, ?)
+            "#,
+        )
+        .bind(group_id)
+        .bind(source_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    fetch_source_group(&pool, group_id)
+        .await?
+        .ok_or_else(|| format!("Analysis source group {group_id} not found after update"))
+}
+
+#[tauri::command]
+pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> Result<(), String> {
+    let pool = get_pool(&handle).await?;
+    let result = sqlx::query("DELETE FROM analysis_source_groups WHERE id = ?")
+        .bind(group_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if result.rows_affected() == 0 {
+        return Err(format!("Analysis source group {group_id} not found"));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn list_analysis_prompt_templates(
     handle: AppHandle,
     template_kind: Option<String>,
@@ -1335,8 +1598,8 @@ pub async fn start_analysis_report(
 #[cfg(test)]
 mod tests {
     use super::{
-        compress_trace_data, decode_trace_data, ensure_builtin_report_template, AnalysisTraceData,
-        AnalysisTraceRef, TEMPLATE_KIND_REPORT,
+        compress_trace_data, decode_trace_data, ensure_builtin_report_template,
+        normalize_source_group_input, AnalysisTraceData, AnalysisTraceRef, TEMPLATE_KIND_REPORT,
     };
 
     async fn memory_pool() -> sqlx::SqlitePool {
@@ -1427,5 +1690,14 @@ mod tests {
         let compressed = compress_trace_data(&trace).expect("compress");
         let decoded = decode_trace_data(Some(&compressed)).expect("decode");
         assert_eq!(decoded, trace);
+    }
+
+    #[test]
+    fn source_group_input_is_trimmed_and_deduplicated() {
+        let (name, source_ids) = normalize_source_group_input("  Core sources  ", vec![4, 2, 4, -1, 2])
+            .expect("normalize source group");
+
+        assert_eq!(name, "Core sources");
+        assert_eq!(source_ids, vec![2, 4]);
     }
 }

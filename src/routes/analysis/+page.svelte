@@ -22,6 +22,20 @@
     updated_at: number;
   }
 
+  interface AnalysisSourceGroupMember {
+    source_id: number;
+    source_title: string | null;
+    item_count: number;
+  }
+
+  interface AnalysisSourceGroup {
+    id: number;
+    name: string;
+    members: AnalysisSourceGroupMember[];
+    created_at: number;
+    updated_at: number;
+  }
+
   interface AnalysisRunSummary {
     id: number;
     run_type: string;
@@ -80,9 +94,11 @@
   let sources = $state<AnalysisSourceOption[]>([]);
   let templates = $state<AnalysisPromptTemplate[]>([]);
   let runs = $state<AnalysisRunSummary[]>([]);
+  let groups = $state<AnalysisSourceGroup[]>([]);
 
   let selectedSourceId = $state("");
   let selectedTemplateId = $state("");
+  let selectedGroupId = $state("");
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
@@ -92,6 +108,11 @@
   let editorBoundTemplateId = $state<number | null>(null);
   let savingTemplate = $state(false);
   let deletingTemplate = $state(false);
+  let groupName = $state("");
+  let groupMemberSourceIds = $state<number[]>([]);
+  let editorBoundGroupId = $state<number | null>(null);
+  let savingGroup = $state(false);
+  let deletingGroup = $state(false);
 
   let status = $state("");
   let running = $state(false);
@@ -194,6 +215,12 @@
     return templates.find((template) => template.id === templateId) ?? null;
   }
 
+  function selectedGroup() {
+    const groupId = selectedGroupId ? Number(selectedGroupId) : null;
+    if (groupId === null) return null;
+    return groups.find((group) => group.id === groupId) ?? null;
+  }
+
   function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
     if (!template) {
       editorBoundTemplateId = null;
@@ -205,6 +232,32 @@
     editorBoundTemplateId = template.id;
     templateName = template.name;
     templateBody = template.body;
+  }
+
+  function bindEditorToGroup(group: AnalysisSourceGroup | null) {
+    if (!group) {
+      editorBoundGroupId = null;
+      groupName = "";
+      groupMemberSourceIds = [];
+      return;
+    }
+
+    editorBoundGroupId = group.id;
+    groupName = group.name;
+    groupMemberSourceIds = group.members.map((member) => member.source_id);
+  }
+
+  function isGroupSourceSelected(sourceId: number) {
+    return groupMemberSourceIds.includes(sourceId);
+  }
+
+  function toggleGroupSource(sourceId: number) {
+    if (groupMemberSourceIds.includes(sourceId)) {
+      groupMemberSourceIds = groupMemberSourceIds.filter((id) => id !== sourceId);
+      return;
+    }
+
+    groupMemberSourceIds = [...groupMemberSourceIds, sourceId].sort((a, b) => a - b);
   }
 
   function parseReportSegments(line: string): ReportSegment[] {
@@ -312,6 +365,25 @@
       }
     } catch (error) {
       status = `Error loading report templates: ${error}`;
+    }
+  }
+
+  async function loadGroups() {
+    try {
+      groups = await invoke<AnalysisSourceGroup[]>("list_analysis_source_groups");
+      const selected = selectedGroup();
+      if (!selectedGroupId && groups.length > 0) {
+        selectedGroupId = String(groups[0].id);
+      }
+      if (!selected && groups.length > 0 && selectedGroupId) {
+        selectedGroupId = String(groups[0].id);
+      }
+      const bound = selectedGroup();
+      if (bound && editorBoundGroupId !== bound.id) {
+        bindEditorToGroup(bound);
+      }
+    } catch (error) {
+      status = `Error loading source groups: ${error}`;
     }
   }
 
@@ -485,6 +557,96 @@
     }
   }
 
+  async function saveGroupChanges() {
+    const selected = selectedGroup();
+    if (!selected) {
+      status = "Select a source group first.";
+      return;
+    }
+    if (!groupName.trim()) {
+      status = "Group name cannot be empty.";
+      return;
+    }
+    if (groupMemberSourceIds.length === 0) {
+      status = "Select at least one source for the group.";
+      return;
+    }
+
+    savingGroup = true;
+    try {
+      const updated = await invoke<AnalysisSourceGroup>("update_analysis_source_group", {
+        groupId: selected.id,
+        name: groupName.trim(),
+        sourceIds: groupMemberSourceIds,
+      });
+      status = `Source group "${updated.name}" saved.`;
+      await loadGroups();
+      selectedGroupId = String(updated.id);
+      bindEditorToGroup(updated);
+    } catch (error) {
+      status = `Error saving source group: ${error}`;
+    } finally {
+      savingGroup = false;
+    }
+  }
+
+  async function saveGroupCopy() {
+    if (!groupName.trim()) {
+      status = "Group name cannot be empty.";
+      return;
+    }
+    if (groupMemberSourceIds.length === 0) {
+      status = "Select at least one source for the group.";
+      return;
+    }
+
+    savingGroup = true;
+    try {
+      const created = await invoke<AnalysisSourceGroup>("create_analysis_source_group", {
+        name: groupName.trim(),
+        sourceIds: groupMemberSourceIds,
+      });
+      status = `Source group "${created.name}" created.`;
+      await loadGroups();
+      selectedGroupId = String(created.id);
+      bindEditorToGroup(created);
+    } catch (error) {
+      status = `Error creating source group: ${error}`;
+    } finally {
+      savingGroup = false;
+    }
+  }
+
+  async function deleteGroup() {
+    const selected = selectedGroup();
+    if (!selected) {
+      status = "Select a source group first.";
+      return;
+    }
+    if (!window.confirm(`Delete source group "${selected.name}"?`)) {
+      return;
+    }
+
+    deletingGroup = true;
+    try {
+      await invoke("delete_analysis_source_group", { groupId: selected.id });
+      status = `Source group "${selected.name}" deleted.`;
+      await loadGroups();
+      const fallback = groups[0] ?? null;
+      selectedGroupId = fallback ? String(fallback.id) : "";
+      bindEditorToGroup(fallback);
+    } catch (error) {
+      status = `Error deleting source group: ${error}`;
+    } finally {
+      deletingGroup = false;
+    }
+  }
+
+  function startNewGroup() {
+    selectedGroupId = "";
+    bindEditorToGroup(null);
+  }
+
   $effect(() => {
     if (selectedSourceId) {
       void loadRuns();
@@ -498,12 +660,20 @@
     }
   });
 
+  $effect(() => {
+    const selected = selectedGroup();
+    if (selected && editorBoundGroupId !== selected.id) {
+      bindEditorToGroup(selected);
+    }
+  });
+
   onMount(() => {
     let disposed = false;
     let detachAnalysisListener: (() => void) | null = null;
 
     void loadSources();
     void loadTemplates();
+    void loadGroups();
     void loadRuns();
 
     void listen<AnalysisRunEvent>("analysis://run", ({ payload }: EventEnvelope<AnalysisRunEvent>) => {
@@ -803,6 +973,81 @@
         placeholder="Describe how the report should be structured and what it should emphasize."
       ></textarea>
     </label>
+  </div>
+</section>
+
+<section class="card groups">
+  <div class="panel-header">
+    <div>
+      <h3>Source Groups</h3>
+      <p class="sub">Save reusable named sets of synced sources for future cross-source reports.</p>
+    </div>
+    <div class="template-actions">
+      <button class="secondary" onclick={startNewGroup} disabled={savingGroup || deletingGroup}>
+        New group
+      </button>
+      <button class="secondary" onclick={saveGroupCopy} disabled={savingGroup || deletingGroup}>
+        {savingGroup ? "Saving..." : "Save as new"}
+      </button>
+      <button class="secondary" onclick={saveGroupChanges} disabled={savingGroup || deletingGroup || !selectedGroup()}>
+        {savingGroup ? "Saving..." : "Save changes"}
+      </button>
+      <button class="danger-soft" onclick={deleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup()}>
+        {deletingGroup ? "Deleting..." : "Delete"}
+      </button>
+    </div>
+  </div>
+
+  <div class="group-grid">
+    <div class="group-form">
+      <label>Saved groups
+        <select bind:value={selectedGroupId}>
+          <option value="">Create a new group</option>
+          {#each groups as group}
+            <option value={String(group.id)}>
+              {group.name} - {group.members.length} sources
+            </option>
+          {/each}
+        </select>
+      </label>
+
+      <label>Group name
+        <input type="text" bind:value={groupName} placeholder="Core channels" />
+      </label>
+
+      {#if selectedGroup()}
+        <p class="sub">
+          Updated {formatTimestamp(selectedGroup()?.updated_at ?? null)}
+        </p>
+      {/if}
+    </div>
+
+    <div class="group-members">
+      <div class="members-header">
+        <h4>Group Members</h4>
+        <span class="trace-count">{groupMemberSourceIds.length} selected</span>
+      </div>
+
+      {#if sources.length === 0}
+        <p class="empty">No synced sources available for grouping yet.</p>
+      {:else}
+        <div class="member-list">
+          {#each sources as source}
+            <label class="member-row">
+              <input
+                type="checkbox"
+                checked={isGroupSourceSelected(source.id)}
+                onchange={() => toggleGroupSource(source.id)}
+              />
+              <div class="member-copy">
+                <strong>{source.title ?? `Source ${source.id}`}</strong>
+                <span>{source.item_count} messages</span>
+              </div>
+            </label>
+          {/each}
+        </div>
+      {/if}
+    </div>
   </div>
 </section>
 
@@ -1225,6 +1470,13 @@
     gap: 1rem;
   }
 
+  .groups {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
   .template-actions {
     display: flex;
     gap: 0.6rem;
@@ -1236,6 +1488,72 @@
     grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
     gap: 1rem;
     align-items: start;
+  }
+
+  .group-grid {
+    display: grid;
+    grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .group-form,
+  .group-members {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .members-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .members-header h4 {
+    margin: 0;
+  }
+
+  .member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    max-height: 24rem;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+
+  .member-row {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 0.95rem;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .member-row:hover {
+    background: var(--panel-hover);
+  }
+
+  .member-row input {
+    margin-top: 0.2rem;
+  }
+
+  .member-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .member-copy span {
+    color: var(--muted);
+    font-size: 0.82rem;
   }
 
   :global(button.danger-soft) {
@@ -1258,6 +1576,10 @@
     }
 
     .template-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .group-grid {
       grid-template-columns: 1fr;
     }
 
