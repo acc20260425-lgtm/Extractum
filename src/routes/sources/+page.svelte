@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
+  import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
 
   interface AccountRecord {
     id: number;
@@ -336,30 +337,7 @@
 </div>
 
 {#if selectedSourceId !== null}
-  <div class="card">
-    <div class="card-header">
-      <h3>Messages</h3>
-      {#if loadingItems}
-        <span class="subtle">Loading...</span>
-      {/if}
-    </div>
-
-    {#if !loadingItems && items.length === 0}
-      <p class="empty">No synced text messages yet for this source.</p>
-    {:else if items.length > 0}
-      <ul class="message-list">
-        {#each items as item}
-          <li>
-            <div class="message-meta">
-              <span>{formatDate(item.published_at)}</span>
-              {#if item.author}<span>{item.author}</span>{/if}
-            </div>
-            <p>{item.content}</p>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </div>
+  <SourceMessagesPanel {loadingItems} {items} {formatDate} />
 {/if}
 
 {#if selectedAccountId !== null}
@@ -436,7 +414,7 @@
     border-radius: 6px;
     font-size: 0.95rem;
   }
-  .source-list, .message-list {
+  .source-list {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -453,29 +431,10 @@
     border-radius: 8px;
     gap: 0.5rem;
   }
-  .message-list li {
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 0.9rem 1rem;
-  }
-  .message-list p {
-    margin: 0;
-    white-space: pre-wrap;
-    line-height: 1.45;
-  }
   .channel-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
   .channel-actions { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
-  .message-meta {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    color: var(--muted);
-    font-size: 0.78rem;
-    margin-bottom: 0.5rem;
-  }
   .title { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sub, .subtle { font-size: 0.75rem; color: var(--muted); }
+  .sub { font-size: 0.75rem; color: var(--muted); }
   .badge {
     font-size: 0.7rem;
     padding: 0.15rem 0.5rem;
