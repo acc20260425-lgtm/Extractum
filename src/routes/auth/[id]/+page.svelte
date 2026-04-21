@@ -2,8 +2,10 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
 
   const accountId = parseInt($page.params.id ?? "", 10);
+  const hasValidAccountId = Number.isFinite(accountId);
 
   interface AccountRecord {
     id: number;
@@ -24,6 +26,12 @@
   let loading = $state(false);
 
   async function loadAccount() {
+    if (!hasValidAccountId) {
+      status = "Invalid account ID. Redirecting to accounts...";
+      await goto("/accounts");
+      return;
+    }
+
     try {
       const acc = await invoke<AccountRecord | null>("get_account", { accountId });
       if (!acc) {
@@ -109,7 +117,9 @@
     }
   }
 
-  onMount(loadAccount);
+  onMount(() => {
+    void loadAccount();
+  });
 </script>
 
 <div class="back-row">

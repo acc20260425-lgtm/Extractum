@@ -57,6 +57,10 @@
     payload: T;
   }
 
+  interface RestoreFailureEvent {
+    message: string;
+  }
+
   let selectedAccountId = $state<number | null>(
     $page.url.searchParams.has("account")
       ? parseInt($page.url.searchParams.get("account")!, 10)
@@ -69,12 +73,26 @@
   let items = $state<ItemRecord[]>([]);
   let manualRef = $state("");
   let status = $state("");
+  let syncStatus = $state("");
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
   let loadingDialogs = $state(false);
   let loadingItems = $state(false);
   let addingId = $state<number | string | null>(null);
   let selectedSourceId = $state<number | null>(null);
   let syncingIds = $state<Record<number, boolean>>({});
+  let loadSourcesRequestId = 0;
+  let syncStatusTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function setSyncStatus(message: string) {
+    syncStatus = message;
+    if (syncStatusTimer !== null) {
+      clearTimeout(syncStatusTimer);
+    }
+    syncStatusTimer = setTimeout(() => {
+      syncStatus = "";
+      syncStatusTimer = null;
+    }, 5000);
+  }
 
   async function loadAccounts() {
     try {
@@ -105,11 +123,15 @@
   }
 
   async function loadSources() {
+    const requestId = ++loadSourcesRequestId;
     try {
-      sources = await invoke<SourceRecord[]>("list_sources", {
+      const nextSources = await invoke<SourceRecord[]>("list_sources", {
         accountId: selectedAccountId,
       });
+      if (requestId !== loadSourcesRequestId) return;
+      sources = nextSources;
     } catch (e) {
+      if (requestId !== loadSourcesRequestId) return;
       status = `Error loading sources: ${e}`;
     }
   }
@@ -199,9 +221,10 @@
     try {
       const result = await invoke<SyncResult>("sync_channel", { sourceId });
       await loadSources();
-      status =
+      setSyncStatus(
         `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}` +
-        (result.last_message_id ? `, last message ${result.last_message_id}.` : ".");
+        (result.last_message_id ? `, last message ${result.last_message_id}.` : ".")
+      );
       if (selectedSourceId === sourceId) {
         await loadItems(sourceId);
       }
@@ -277,7 +300,7 @@
   }
 
   $effect(() => {
-    loadSources();
+    void loadSources();
     dialogs = [];
   });
 
@@ -298,6 +321,7 @@
   onMount(() => {
     let disposed = false;
     let detachListener: (() => void) | null = null;
+    let detachRestoreFailureListener: (() => void) | null = null;
 
     void loadAccounts();
     void listen<AccountRuntimeStatus>("telegram://account-status", ({ payload }: RuntimeStatusEvent<AccountRuntimeStatus>) => {
@@ -313,11 +337,27 @@
       }
       detachListener = unlisten;
     });
+    void listen<RestoreFailureEvent>("telegram://restore-failure", ({ payload }: RuntimeStatusEvent<RestoreFailureEvent>) => {
+      if (disposed) return;
+      status = `Error: ${payload.message}`;
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+        return;
+      }
+      detachRestoreFailureListener = unlisten;
+    });
 
     return () => {
       disposed = true;
       if (detachListener !== null) {
         detachListener();
+      }
+      if (detachRestoreFailureListener !== null) {
+        detachRestoreFailureListener();
+      }
+      if (syncStatusTimer !== null) {
+        clearTimeout(syncStatusTimer);
       }
     };
   });
@@ -327,6 +367,10 @@
 
 {#if status}
   <p class="status" class:error={status.startsWith("Error")}>{status}</p>
+{/if}
+
+{#if syncStatus}
+  <p class="status">{syncStatus}</p>
 {/if}
 
 <div class="card">

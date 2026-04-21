@@ -92,6 +92,9 @@
     >
       {syncing ? "Syncing..." : "Sync"}
     </button>
+    {#if syncReason}
+      <p class="sync-reason">{syncReason}</p>
+    {/if}
   </div>
 </li>
 
@@ -167,6 +170,13 @@
     color: #b45309;
   }
   button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+  .sync-reason {
+    margin: 0;
+    width: 100%;
+    font-size: 0.72rem;
+    color: var(--muted);
+    line-height: 1.3;
+  }
   @media (max-width: 1200px) {
     li {
       align-items: flex-start;

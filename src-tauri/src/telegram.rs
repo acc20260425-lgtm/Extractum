@@ -18,6 +18,7 @@ const STATUS_RESTORING: &str = "restoring";
 const STATUS_READY: &str = "ready";
 const STATUS_REAUTH_REQUIRED: &str = "reauth_required";
 const STATUS_RESTORE_FAILED: &str = "restore_failed";
+const TELEGRAM_RESTORE_FAILURE_EVENT: &str = "telegram://restore-failure";
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SavedSession {
@@ -46,6 +47,11 @@ pub struct AccountRuntimeStatus {
     pub account_id: i64,
     pub status: String,
     pub message: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct RestoreFailureEvent {
+    pub message: String,
 }
 
 /// Global state: map of account_id -> active client and runtime readiness
@@ -213,7 +219,12 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
     let accounts = match list_account_credentials(&handle).await {
         Ok(accounts) => accounts,
         Err(error) => {
-            eprintln!("Failed to load accounts for Telegram restore: {error}");
+            let message = format!("Failed to load accounts for Telegram restore: {error}");
+            eprintln!("{message}");
+            let _ = handle.emit(
+                TELEGRAM_RESTORE_FAILURE_EVENT,
+                &RestoreFailureEvent { message },
+            );
             return;
         }
     };
