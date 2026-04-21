@@ -146,6 +146,12 @@ pub fn run() {
             sql: include_str!("../migrations/6.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "add source group id to analysis runs",
+            sql: include_str!("../migrations/7.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

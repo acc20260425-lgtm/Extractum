@@ -42,6 +42,8 @@
     scope_type: string;
     source_id: number | null;
     source_title: string | null;
+    source_group_id: number | null;
+    source_group_name: string | null;
     period_from: number;
     period_to: number;
     output_language: string;
@@ -99,6 +101,7 @@
   let selectedSourceId = $state("");
   let selectedTemplateId = $state("");
   let selectedGroupId = $state("");
+  let analysisScope = $state<"single_source" | "source_group">("single_source");
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
@@ -158,6 +161,13 @@
 
   function formatPeriod(periodFromUnix: number, periodToUnix: number) {
     return `${formatDay(periodFromUnix)} - ${formatDay(periodToUnix)}`;
+  }
+
+  function runTargetLabel(run: Pick<AnalysisRunSummary, "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name">) {
+    if (run.scope_type === "source_group") {
+      return run.source_group_name ?? `Group ${run.source_group_id ?? "?"}`;
+    }
+    return run.source_title ?? `Source ${run.source_id ?? "?"}`;
   }
 
   function phaseLabel(phase: string) {
@@ -390,7 +400,8 @@
   async function loadRuns() {
     try {
       runs = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
-        sourceId: selectedSourceId ? Number(selectedSourceId) : null,
+        sourceId: analysisScope === "single_source" && selectedSourceId ? Number(selectedSourceId) : null,
+        sourceGroupId: analysisScope === "source_group" && selectedGroupId ? Number(selectedGroupId) : null,
         limit: 20,
       });
     } catch (error) {
@@ -422,8 +433,12 @@
   }
 
   async function runReport() {
-    if (!selectedSourceId) {
+    if (analysisScope === "single_source" && !selectedSourceId) {
       status = "Select a source first.";
+      return;
+    }
+    if (analysisScope === "source_group" && !selectedGroupId) {
+      status = "Select a source group first.";
       return;
     }
     if (!selectedTemplateId) {
@@ -454,7 +469,8 @@
 
     try {
       const runId = await invoke<number>("start_analysis_report", {
-        sourceId: Number(selectedSourceId),
+        sourceId: analysisScope === "single_source" ? Number(selectedSourceId) : null,
+        sourceGroupId: analysisScope === "source_group" ? Number(selectedGroupId) : null,
         periodFrom: startOfDayUnix(periodFrom),
         periodTo: endOfDayUnix(periodTo),
         outputLanguage: outputLanguage.trim(),
@@ -648,7 +664,10 @@
   }
 
   $effect(() => {
-    if (selectedSourceId) {
+    if (
+      (analysisScope === "single_source" && selectedSourceId) ||
+      (analysisScope === "source_group" && selectedGroupId)
+    ) {
       void loadRuns();
     }
   });
@@ -746,18 +765,58 @@
   <section class="card controls">
     <h3>Run Report</h3>
 
-    <label>Source
-      <select bind:value={selectedSourceId}>
-        {#if sources.length === 0}
-          <option value="">No synced sources available</option>
-        {/if}
-        {#each sources as source}
-          <option value={String(source.id)}>
-            {(source.title ?? `Source ${source.id}`)} - {source.item_count} messages
-          </option>
-        {/each}
-      </select>
-    </label>
+    <div class="scope-toggle">
+      <button
+        class:activeScope={analysisScope === "single_source"}
+        class="secondary"
+        type="button"
+        onclick={() => (analysisScope = "single_source")}
+      >
+        Single source
+      </button>
+      <button
+        class:activeScope={analysisScope === "source_group"}
+        class="secondary"
+        type="button"
+        onclick={() => (analysisScope = "source_group")}
+      >
+        Source group
+      </button>
+    </div>
+
+    {#if analysisScope === "single_source"}
+      <label>Source
+        <select bind:value={selectedSourceId}>
+          {#if sources.length === 0}
+            <option value="">No synced sources available</option>
+          {/if}
+          {#each sources as source}
+            <option value={String(source.id)}>
+              {(source.title ?? `Source ${source.id}`)} - {source.item_count} messages
+            </option>
+          {/each}
+        </select>
+      </label>
+    {:else}
+      <label>Source group
+        <select bind:value={selectedGroupId}>
+          {#if groups.length === 0}
+            <option value="">No saved groups available</option>
+          {/if}
+          {#each groups as group}
+            <option value={String(group.id)}>
+              {group.name} - {group.members.length} sources
+            </option>
+          {/each}
+        </select>
+      </label>
+
+      {#if selectedGroup()}
+        <p class="sub">
+          {selectedGroup()?.members.length} sources selected for this group report.
+        </p>
+      {/if}
+    {/if}
 
     <div class="grid">
       <label>From
@@ -790,7 +849,10 @@
       <input type="text" bind:value={modelOverride} placeholder="Use active profile default model" />
     </label>
 
-    <button onclick={runReport} disabled={running || !selectedSourceId || !selectedTemplateId}>
+    <button
+      onclick={runReport}
+      disabled={running || !selectedTemplateId || (analysisScope === "single_source" ? !selectedSourceId : !selectedGroupId)}
+    >
       {running ? "Running..." : "Run report"}
     </button>
 
@@ -808,7 +870,7 @@
         <h3>Report Output</h3>
         {#if currentRun}
           <p class="sub">
-            {currentRun.source_title ?? `Source ${currentRun.source_id ?? "?"}`} - {currentRun.provider}/{currentRun.model}
+            {runTargetLabel(currentRun)} - {currentRun.provider}/{currentRun.model}
           </p>
         {/if}
       </div>
@@ -830,6 +892,10 @@
           <div>
             <span class="meta-label">Period</span>
             <strong>{formatPeriod(currentRun.period_from, currentRun.period_to)}</strong>
+          </div>
+          <div>
+            <span class="meta-label">Scope</span>
+            <strong>{currentRun.scope_type === "source_group" ? "Source group" : "Single source"}</strong>
           </div>
           <div>
             <span class="meta-label">Output language</span>
@@ -1078,7 +1144,7 @@
         <li class:selected={run.id === activeRunId}>
           <div class="run-copy">
             <div class="run-title">
-              <strong>{run.source_title ?? `Source ${run.source_id ?? "?"}`}</strong>
+              <strong>{runTargetLabel(run)}</strong>
               <span class={`badge badge-${statusTone(run.status)}`}>{run.status}</span>
             </div>
             <p class="sub">
@@ -1127,6 +1193,12 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.8rem;
+  }
+
+  .scope-toggle {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
   }
 
   label {
@@ -1459,6 +1531,11 @@
   }
 
   .activeFilter {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+    border-color: var(--primary);
+  }
+
+  .activeScope {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
     border-color: var(--primary);
   }

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, Pool, Sqlite};
+use sqlx::{FromRow, Pool, QueryBuilder, Sqlite};
 use std::io::Cursor;
 use tauri::{AppHandle, Emitter};
 
@@ -15,6 +15,7 @@ const DEFAULT_REPORT_TEMPLATE_NAME: &str = "Default report";
 const ANALYSIS_RUN_EVENT: &str = "analysis://run";
 const ANALYSIS_RUN_TYPE_REPORT: &str = "report";
 const ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE: &str = "single_source";
+const ANALYSIS_SCOPE_TYPE_SOURCE_GROUP: &str = "source_group";
 const ANALYSIS_STATUS_QUEUED: &str = "queued";
 const ANALYSIS_STATUS_RUNNING: &str = "running";
 const ANALYSIS_STATUS_COMPLETED: &str = "completed";
@@ -80,6 +81,8 @@ pub struct AnalysisRunSummary {
     pub scope_type: String,
     pub source_id: Option<i64>,
     pub source_title: Option<String>,
+    pub source_group_id: Option<i64>,
+    pub source_group_name: Option<String>,
     pub period_from: i64,
     pub period_to: i64,
     pub output_language: String,
@@ -103,6 +106,8 @@ pub struct AnalysisRunDetail {
     pub scope_type: String,
     pub source_id: Option<i64>,
     pub source_title: Option<String>,
+    pub source_group_id: Option<i64>,
+    pub source_group_name: Option<String>,
     pub period_from: i64,
     pub period_to: i64,
     pub output_language: String,
@@ -127,6 +132,8 @@ struct AnalysisRunRow {
     scope_type: String,
     source_id: Option<i64>,
     source_title: Option<String>,
+    source_group_id: Option<i64>,
+    source_group_name: Option<String>,
     period_from: i64,
     period_to: i64,
     output_language: String,
@@ -357,6 +364,8 @@ fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
         scope_type: row.scope_type,
         source_id: row.source_id,
         source_title: row.source_title,
+        source_group_id: row.source_group_id,
+        source_group_name: row.source_group_name,
         period_from: row.period_from,
         period_to: row.period_to,
         output_language: row.output_language,
@@ -381,6 +390,8 @@ fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         scope_type: row.scope_type,
         source_id: row.source_id,
         source_title: row.source_title,
+        source_group_id: row.source_group_id,
+        source_group_name: row.source_group_name,
         period_from: row.period_from,
         period_to: row.period_to,
         output_language: row.output_language,
@@ -408,6 +419,8 @@ async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> Result<Option<Analys
             runs.scope_type,
             runs.source_id,
             sources.title AS source_title,
+            runs.source_group_id,
+            groups.name AS source_group_name,
             runs.period_from,
             runs.period_to,
             runs.output_language,
@@ -425,6 +438,7 @@ async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> Result<Option<Analys
             runs.completed_at
         FROM analysis_runs runs
         LEFT JOIN sources ON sources.id = runs.source_id
+        LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
         LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
         WHERE runs.id = ?
         "#,
@@ -502,7 +516,9 @@ async fn fetch_source_group(pool: &Pool<Sqlite>, group_id: i64) -> Result<Option
 
 async fn insert_analysis_run(
     pool: &Pool<Sqlite>,
-    source_id: i64,
+    scope_type: &str,
+    source_id: Option<i64>,
+    source_group_id: Option<i64>,
     period_from: i64,
     period_to: i64,
     output_language: &str,
@@ -518,6 +534,7 @@ async fn insert_analysis_run(
             run_type,
             scope_type,
             source_id,
+            source_group_id,
             period_from,
             period_to,
             output_language,
@@ -529,13 +546,14 @@ async fn insert_analysis_run(
             status,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
         "#,
     )
     .bind(ANALYSIS_RUN_TYPE_REPORT)
-    .bind(ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE)
+    .bind(scope_type)
     .bind(source_id)
+    .bind(source_group_id)
     .bind(period_from)
     .bind(period_to)
     .bind(output_language)
@@ -586,24 +604,36 @@ async fn set_run_status(
 
 async fn load_corpus_messages(
     pool: &Pool<Sqlite>,
-    source_id: i64,
+    source_ids: &[i64],
     period_from: i64,
     period_to: i64,
 ) -> Result<Vec<CorpusMessage>, String> {
-    let rows: Vec<StoredAnalysisItemRow> = sqlx::query_as(
-        r#"
-        SELECT id, source_id, external_id, author, published_at, content_zstd
-        FROM items
-        WHERE source_id = ? AND published_at >= ? AND published_at <= ?
-        ORDER BY published_at ASC, id ASC
-        "#,
-    )
-    .bind(source_id)
-    .bind(period_from)
-    .bind(period_to)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    if source_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut query = QueryBuilder::<Sqlite>::new(
+        "SELECT id, source_id, external_id, author, published_at, content_zstd FROM items WHERE published_at >= ",
+    );
+    query.push_bind(period_from);
+    query.push(" AND published_at <= ");
+    query.push_bind(period_to);
+    query.push(" AND source_id IN (");
+
+    {
+        let mut separated = query.separated(", ");
+        for source_id in source_ids {
+            separated.push_bind(source_id);
+        }
+    }
+
+    query.push(") ORDER BY published_at ASC, id ASC");
+
+    let rows: Vec<StoredAnalysisItemRow> = query
+        .build_query_as()
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     rows.into_iter()
         .map(|row| {
@@ -624,17 +654,6 @@ async fn load_corpus_messages(
             })
         })
         .collect()
-}
-
-async fn load_source_title(pool: &Pool<Sqlite>, source_id: i64) -> Result<String, String> {
-    sqlx::query_scalar::<_, Option<String>>("SELECT title FROM sources WHERE id = ?")
-        .bind(source_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?
-        .flatten()
-        .filter(|title| !title.trim().is_empty())
-        .ok_or_else(|| format!("Source {source_id} title is not available"))
 }
 
 fn chunk_messages(messages: &[CorpusMessage], max_chars: usize) -> Vec<Vec<CorpusMessage>> {
@@ -777,7 +796,7 @@ fn summarize_chunk_for_reduce(summary: &ChunkSummary) -> String {
 }
 
 fn build_reduce_request(
-    source_title: &str,
+    scope_label: &str,
     output_language: &str,
     prompt_template: &AnalysisPromptTemplate,
     period_from: i64,
@@ -812,7 +831,7 @@ fn build_reduce_request(
             LlmMessage {
                 role: "user".to_string(),
                 content: format!(
-                    "Source title: {source_title}\nPeriod: {period_from} to {period_to}\n\nUser report template:\n{template}\n\nChunk summaries:\n\n{combined}",
+                    "Analysis scope: {scope_label}\nPeriod: {period_from} to {period_to}\n\nUser report template:\n{template}\n\nChunk summaries:\n\n{combined}",
                     template = prompt_template.body
                 ),
             },
@@ -873,7 +892,8 @@ fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceDa
 async fn run_report_pipeline(
     handle: AppHandle,
     run_id: i64,
-    source_id: i64,
+    scope_label: String,
+    source_ids: Vec<i64>,
     period_from: i64,
     period_to: i64,
     output_language: String,
@@ -907,14 +927,10 @@ async fn run_report_pipeline(
         },
     );
 
-    let corpus = load_corpus_messages(&pool, source_id, period_from, period_to).await?;
+    let corpus = load_corpus_messages(&pool, &source_ids, period_from, period_to).await?;
     if corpus.is_empty() {
-        return Err("No synced messages were found for the selected source and period".to_string());
+        return Err("No synced messages were found for the selected analysis scope and period".to_string());
     }
-
-    let source_title = load_source_title(&pool, source_id)
-        .await
-        .unwrap_or_else(|_| format!("Source {source_id}"));
 
     emit_analysis_event(
         &handle,
@@ -969,7 +985,7 @@ async fn run_report_pipeline(
     );
 
     let reduce_request = build_reduce_request(
-        &source_title,
+        &scope_label,
         &output_language,
         &prompt_template,
         period_from,
@@ -1414,10 +1430,15 @@ pub async fn delete_analysis_prompt_template(
 pub async fn list_analysis_runs(
     handle: AppHandle,
     source_id: Option<i64>,
+    source_group_id: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Vec<AnalysisRunSummary>, String> {
     let pool = get_pool(&handle).await?;
     let limit = limit.unwrap_or(20).clamp(1, 100);
+
+    if source_id.is_some() && source_group_id.is_some() {
+        return Err("Pass either source_id or source_group_id, not both".to_string());
+    }
 
     let rows: Vec<AnalysisRunRow> = if let Some(source_id) = source_id {
         sqlx::query_as(
@@ -1428,6 +1449,8 @@ pub async fn list_analysis_runs(
                 runs.scope_type,
                 runs.source_id,
                 sources.title AS source_title,
+                runs.source_group_id,
+                groups.name AS source_group_name,
                 runs.period_from,
                 runs.period_to,
                 runs.output_language,
@@ -1445,6 +1468,7 @@ pub async fn list_analysis_runs(
                 runs.completed_at
             FROM analysis_runs runs
             LEFT JOIN sources ON sources.id = runs.source_id
+            LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
             LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
             WHERE runs.source_id = ?
             ORDER BY runs.created_at DESC
@@ -1452,6 +1476,46 @@ pub async fn list_analysis_runs(
             "#,
         )
         .bind(source_id)
+        .bind(limit)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?
+    } else if let Some(source_group_id) = source_group_id {
+        sqlx::query_as(
+            r#"
+            SELECT
+                runs.id,
+                runs.run_type,
+                runs.scope_type,
+                runs.source_id,
+                sources.title AS source_title,
+                runs.source_group_id,
+                groups.name AS source_group_name,
+                runs.period_from,
+                runs.period_to,
+                runs.output_language,
+                runs.prompt_template_id,
+                templates.name AS prompt_template_name,
+                runs.prompt_template_version,
+                runs.provider_profile,
+                runs.provider,
+                runs.model,
+                runs.status,
+                runs.result_markdown,
+                runs.trace_data_zstd,
+                runs.error,
+                runs.created_at,
+                runs.completed_at
+            FROM analysis_runs runs
+            LEFT JOIN sources ON sources.id = runs.source_id
+            LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
+            LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
+            WHERE runs.source_group_id = ?
+            ORDER BY runs.created_at DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(source_group_id)
         .bind(limit)
         .fetch_all(&pool)
         .await
@@ -1465,6 +1529,8 @@ pub async fn list_analysis_runs(
                 runs.scope_type,
                 runs.source_id,
                 sources.title AS source_title,
+                runs.source_group_id,
+                groups.name AS source_group_name,
                 runs.period_from,
                 runs.period_to,
                 runs.output_language,
@@ -1482,6 +1548,7 @@ pub async fn list_analysis_runs(
                 runs.completed_at
             FROM analysis_runs runs
             LEFT JOIN sources ON sources.id = runs.source_id
+            LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
             LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
             ORDER BY runs.created_at DESC
             LIMIT ?
@@ -1523,7 +1590,8 @@ pub async fn get_analysis_run_trace(
 #[tauri::command]
 pub async fn start_analysis_report(
     handle: AppHandle,
-    source_id: i64,
+    source_id: Option<i64>,
+    source_group_id: Option<i64>,
     period_from: i64,
     period_to: i64,
     output_language: String,
@@ -1540,29 +1608,74 @@ pub async fn start_analysis_report(
         return Err("Output language cannot be empty".to_string());
     }
 
+    if source_id.is_some() == source_group_id.is_some() {
+        return Err("Select either a source or a source group".to_string());
+    }
+
     let pool = get_pool(&handle).await?;
     let prompt_template = fetch_prompt_template(&pool, prompt_template_id).await?;
     if prompt_template.template_kind != TEMPLATE_KIND_REPORT {
         return Err("Selected prompt template is not a report template".to_string());
     }
 
-    let source_exists = sqlx::query_scalar::<_, i64>(
-        "SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)",
-    )
-    .bind(source_id)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
-    if source_exists == 0 {
-        return Err(format!("Source {source_id} not found"));
-    }
-
     let resolved_profile = resolve_profile_for_backend(&handle, profile_id.as_deref()).await?;
     let effective_model = resolve_effective_model(&resolved_profile, model_override.as_deref())?;
 
+    let (scope_type, resolved_source_id, resolved_group_id, scope_label, source_ids) =
+        if let Some(source_id) = source_id {
+            let source_exists = sqlx::query_scalar::<_, i64>(
+                "SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)",
+            )
+            .bind(source_id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            if source_exists == 0 {
+                return Err(format!("Source {source_id} not found"));
+            }
+
+            let source_title = sqlx::query_scalar::<_, Option<String>>(
+                "SELECT title FROM sources WHERE id = ?",
+            )
+            .bind(source_id)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| e.to_string())?
+            .flatten()
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or_else(|| format!("Source {source_id}"));
+
+            (
+                ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
+                Some(source_id),
+                None,
+                source_title,
+                vec![source_id],
+            )
+        } else {
+            let group_id = source_group_id.expect("validated source_group_id");
+            let group = fetch_source_group(&pool, group_id)
+                .await?
+                .ok_or_else(|| format!("Analysis source group {group_id} not found"))?;
+
+            if group.members.is_empty() {
+                return Err("The selected source group does not contain any sources".to_string());
+            }
+
+            (
+                ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
+                None,
+                Some(group.id),
+                group.name.clone(),
+                group.members.into_iter().map(|member| member.source_id).collect::<Vec<_>>(),
+            )
+        };
+
     let run_id = insert_analysis_run(
         &pool,
-        source_id,
+        scope_type,
+        resolved_source_id,
+        resolved_group_id,
         period_from,
         period_to,
         &output_language,
@@ -1578,7 +1691,8 @@ pub async fn start_analysis_report(
         if let Err(error) = run_report_pipeline(
             app_handle.clone(),
             run_id,
-            source_id,
+            scope_label,
+            source_ids,
             period_from,
             period_to,
             output_language,
@@ -1630,6 +1744,7 @@ mod tests {
                 run_type TEXT NOT NULL,
                 scope_type TEXT NOT NULL,
                 source_id INTEGER,
+                source_group_id INTEGER,
                 period_from INTEGER NOT NULL,
                 period_to INTEGER NOT NULL,
                 output_language TEXT NOT NULL,
