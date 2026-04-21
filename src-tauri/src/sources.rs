@@ -505,6 +505,20 @@ async fn resolve_source_peer(
         .parse::<i64>()
         .map_err(|_| format!("Invalid external_id '{}' for source {}", source.external_id, source.id))?;
 
+    let metadata = decode_source_metadata(source.metadata_zstd.as_deref())?;
+    if let Some(username) = metadata.username {
+        if let Some(peer) = client
+            .resolve_username(&username)
+            .await
+            .map_err(|e| e.to_string())?
+        {
+            return match peer {
+                Peer::Channel(channel) => Ok(channel.raw.clone().into()),
+                _ => Err(format!("Source {} does not resolve to a broadcast channel", source.id)),
+            };
+        }
+    }
+
     let mut dialogs = client.iter_dialogs();
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
         if let Peer::Channel(channel) = dialog.peer() {
@@ -514,22 +528,8 @@ async fn resolve_source_peer(
         }
     }
 
-    let metadata = decode_source_metadata(source.metadata_zstd.as_deref())?;
-    if let Some(username) = metadata.username {
-        let peer = client
-            .resolve_username(&username)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Channel '@{}' not found", username))?;
-
-        return match peer {
-            Peer::Channel(channel) => Ok(channel.raw.clone().into()),
-            _ => Err(format!("Source {} does not resolve to a broadcast channel", source.id)),
-        };
-    }
-
     Err(format!(
-        "Source {} could not be resolved from dialogs or stored username metadata",
+        "Source {} could not be resolved from stored username metadata or dialogs",
         source.id
     ))
 }
