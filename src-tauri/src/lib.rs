@@ -21,6 +21,7 @@ use analysis::{
     get_analysis_run_trace, list_analysis_prompt_templates, list_analysis_runs,
     list_analysis_source_groups, list_analysis_sources, start_analysis_report,
     update_analysis_prompt_template, update_analysis_source_group,
+    resolve_analysis_trace_refs,
 };
 
 #[tauri::command]
@@ -204,6 +205,7 @@ pub fn run() {
             list_analysis_runs,
             get_analysis_run,
             get_analysis_run_trace,
+            resolve_analysis_trace_refs,
             ask_analysis_run_question,
             start_analysis_report
         ])

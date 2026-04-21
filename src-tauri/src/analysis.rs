@@ -919,12 +919,11 @@ fn extract_cited_refs(markdown: &str) -> Vec<String> {
     refs
 }
 
-fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceData {
-    let refs = extract_cited_refs(markdown);
+fn build_trace_refs(refs: &[String], corpus: &[CorpusMessage]) -> Vec<AnalysisTraceRef> {
     let mut trace_refs = Vec::new();
 
     for reference in refs {
-        if let Some(message) = corpus.iter().find(|message| message.r#ref == reference) {
+        if let Some(message) = corpus.iter().find(|message| message.r#ref == *reference) {
             let excerpt = if message.content.len() > 480 {
                 format!("{}...", &message.content[..480])
             } else {
@@ -932,7 +931,7 @@ fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceDa
             };
 
             trace_refs.push(AnalysisTraceRef {
-                r#ref: reference,
+                r#ref: reference.clone(),
                 item_id: message.item_id,
                 source_id: message.source_id,
                 external_id: message.external_id.clone(),
@@ -941,6 +940,13 @@ fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceDa
             });
         }
     }
+
+    trace_refs
+}
+
+fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceData {
+    let refs = extract_cited_refs(markdown);
+    let trace_refs = build_trace_refs(&refs, corpus);
 
     AnalysisTraceData { refs: trace_refs }
 }
@@ -1891,6 +1897,33 @@ pub async fn get_analysis_run_trace(
         .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
 
     decode_trace_data(row.trace_data_zstd.as_deref())
+}
+
+#[tauri::command]
+pub async fn resolve_analysis_trace_refs(
+    handle: AppHandle,
+    run_id: i64,
+    refs: Vec<String>,
+) -> Result<Vec<AnalysisTraceRef>, String> {
+    let mut normalized_refs = refs
+        .into_iter()
+        .filter_map(|reference| normalize_ref(&reference))
+        .collect::<Vec<_>>();
+    normalized_refs.sort();
+    normalized_refs.dedup();
+
+    if normalized_refs.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let pool = get_pool(&handle).await?;
+    let run = get_analysis_run(handle.clone(), run_id)
+        .await?
+        .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
+
+    let source_ids = resolve_run_source_ids(&pool, &run).await?;
+    let corpus = load_corpus_messages(&pool, &source_ids, run.period_from, run.period_to).await?;
+    Ok(build_trace_refs(&normalized_refs, &corpus))
 }
 
 #[tauri::command]

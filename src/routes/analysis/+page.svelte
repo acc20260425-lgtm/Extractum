@@ -238,6 +238,18 @@
     return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
   }
 
+  function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
+    if (nextRefs.length === 0) return;
+    const merged = [...traceData.refs];
+    for (const nextRef of nextRefs) {
+      if (!merged.some((existing) => existing.ref === nextRef.ref)) {
+        merged.push(nextRef);
+      }
+    }
+    merged.sort((left, right) => left.published_at - right.published_at);
+    traceData = { refs: merged };
+  }
+
   function selectedTemplate() {
     const templateId = selectedTemplateId ? Number(selectedTemplateId) : null;
     if (templateId === null) return null;
@@ -355,6 +367,26 @@
       key: `line-${index}`,
       segments: parseReportSegments(line),
     }));
+  }
+
+  async function focusTraceRef(ref: string) {
+    if (!currentRun) return;
+
+    selectedTraceRef = ref;
+    if (traceData.refs.some((entry) => entry.ref === ref)) {
+      return;
+    }
+
+    try {
+      const resolved = await invoke<AnalysisTraceRef[]>("resolve_analysis_trace_refs", {
+        runId: currentRun.id,
+        refs: [ref],
+      });
+      mergeTraceRefs(resolved);
+      selectedTraceRef = ref;
+    } catch (error) {
+      status = `Error resolving trace reference: ${error}`;
+    }
   }
 
   async function loadTrace(runId: number) {
@@ -1062,7 +1094,7 @@
                       class="ref-chip"
                       class:active={segment.value === selectedTraceRef}
                       type="button"
-                      onclick={() => (selectedTraceRef = segment.value)}
+                      onclick={() => void focusTraceRef(segment.value)}
                     >
                       [{segment.value}]
                     </button>
@@ -1141,7 +1173,30 @@
         {#each chatMessages as message, index (`${message.role}-${index}`)}
           <div class={`chat-bubble chat-${message.role}`}>
             <div class="chat-role">{message.role === "user" ? "You" : "Assistant"}</div>
-            <div class="chat-content">{message.content || (chatting && message.role === "assistant" ? "..." : "")}</div>
+            <div class="chat-content">
+              {#if message.role === "assistant" && message.content}
+                {#each reportLines(message.content) as line (line.key)}
+                  <div class="report-line">
+                    {#each line.segments as segment (segment.key)}
+                      {#if segment.type === "ref"}
+                        <button
+                          class="ref-chip"
+                          class:active={segment.value === selectedTraceRef}
+                          type="button"
+                          onclick={() => void focusTraceRef(segment.value)}
+                        >
+                          [{segment.value}]
+                        </button>
+                      {:else}
+                        <span>{segment.value}</span>
+                      {/if}
+                    {/each}
+                  </div>
+                {/each}
+              {:else}
+                {message.content || (chatting && message.role === "assistant" ? "..." : "")}
+              {/if}
+            </div>
           </div>
         {/each}
       {/if}
