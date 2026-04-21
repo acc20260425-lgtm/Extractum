@@ -36,6 +36,10 @@ The user must be able to:
 - filter items by source, date range, and other available metadata;
 - inspect original message text and, if needed, related metadata.
 
+Sources can be added in two ways:
+- by selecting from the list of channels the user is subscribed to (loaded via MTProto dialogs);
+- by entering a username, `@handle`, or `https://t.me/` link manually (works for public channels without subscription).
+
 ### 3.3 LLM Analysis
 The user must be able to:
 - select a source, date range, or subset of messages;
@@ -203,7 +207,7 @@ The frontend must not directly access secrets or low-level Telegram session data
 <ul>
 <li>Implement Telegram authentication using `grammers` ✓</li>
 <li>Session persistence to app data directory ✓</li>
-<li>Add source registration</li>
+<li>Add source registration ✓</li>
 <li>Implement first channel sync with progress events</li>
 <li>Save messages into SQLite with ZSTD compression.</li>
 </ul>

@@ -1,7 +1,36 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { page } from "$app/stores";
+  import Database from "@tauri-apps/plugin-sql";
+
   let { children } = $props();
+  let dbReady = $state(false);
+
+  // Initialize DB on app start — this triggers migrations via tauri-plugin-sql
+  onMount(async () => {
+    try {
+      await Database.load("sqlite:extractum.db");
+      dbReady = true;
+    } catch (e) {
+      console.error("Failed to initialize database:", e);
+      dbReady = true; // show UI anyway
+    }
+  });
 </script>
+
+<div class="app">
+  <nav>
+    <a href="/" class:active={$page.url.pathname === "/"}>Auth</a>
+    <a href="/sources" class:active={$page.url.pathname.startsWith("/sources")}>Sources</a>
+  </nav>
+  <main>
+    {#if dbReady}
+      {@render children()}
+    {:else}
+      <p class="loading">Initializing...</p>
+    {/if}
+  </main>
+</div>
 
 <div class="app">
   <nav>
@@ -53,6 +82,7 @@
   :global(button.danger:hover) { background: #a71d2a; }
   :global(button:disabled) { opacity: 0.5; cursor: not-allowed; }
 
+  .loading { color: #666; padding: 2rem; text-align: center; }
   .app { display: flex; flex-direction: column; min-height: 100vh; }
 
   nav {

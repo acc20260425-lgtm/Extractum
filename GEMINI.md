@@ -22,7 +22,8 @@ We use the `master` branch of `grammers`. The API has specific constraints that 
 ## 3. Storage & Data Model
 
 - **Database:** SQLite is the single source of truth for local data.
-- **Migrations:** Managed via `tauri-plugin-sql` in `src-tauri/migrations/`.
+- **Migrations:** Managed via `tauri-plugin-sql` in `src-tauri/migrations/`. Migrations are applied only when `Database.load()` is called from the frontend. The `+layout.svelte` calls it on app start to guarantee migrations run before any page renders. New migrations must be registered in `lib.rs` with an incrementing `version` number.
+- **Direct DB access from Rust:** `sources.rs` uses `sqlx` directly (same file path as `tauri-plugin-sql`). Always ensure `Database.load()` has been called first (guaranteed by layout) before Rust commands that use `sqlx` are invoked.
 - **Compression:** Heavy fields (`content_zstd`, `raw_data_zstd`) MUST be compressed using ZSTD before storage and decompressed on read.
 - **No Vector DB:** MVP explicitly avoids vector databases and embeddings. Context for LLM is derived directly from SQL selections.
 
@@ -43,4 +44,7 @@ We use the `master` branch of `grammers`. The API has specific constraints that 
 - Full authentication flow (init, send code, sign in, logout) is implemented and compiles cleanly.
 - Session persistence implemented: saved to `telegram.session.json` in app data dir, loaded on restart.
 - Settings persistence (`api_id`, `api_hash`) in SQLite is implemented.
-- Next step: Implementing channel synchronization and ZSTD-compressed message storage.
+- Source management implemented: `list_telegram_channels`, `add_telegram_source`, `list_sources` commands.
+- Sources UI: dialog-based channel picker + manual username/link input, sources list with `is_member` badge.
+- DB migration mechanism: `tauri-plugin-sql` applies migrations on `Database.load()` call; layout triggers this on app start before any page renders.
+- Next step: Implementing channel synchronization (`sync_channel`) and ZSTD-compressed message storage.
