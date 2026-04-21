@@ -173,6 +173,12 @@ Runtime note:
 Future secret-storage note:
 - if `api_hash` moves from SQLite into secure storage, secret keys must be profile-scoped;
 - different app variants or profiles such as `test` and `work` must not share the same secret namespace by accident.
+- recommended app identity scheme:
+  - `org.ai.extractum` for stable
+  - `org.ai.extractum.dev` for dev
+  - `org.ai.extractum.test` for test
+  - `org.ai.extractum.beta` for beta if that channel appears later
+- secure storage service names should follow the same identity split so app variants do not collide.
 
 The frontend should use Tauri commands and should not directly own low-level persistence or Telegram details.
 

@@ -148,5 +148,11 @@ Not implemented yet:
 - never log secrets;
 - keep Telegram session persistence in the backend;
 - keep provider/API secrets in the backend;
+- if secrets later move to secure storage, keep them profile-scoped and aligned with app identity;
+- recommended app identity scheme for parallel installs:
+  - `org.ai.extractum`
+  - `org.ai.extractum.dev`
+  - `org.ai.extractum.test`
+  - `org.ai.extractum.beta`
 - validate backend command inputs;
 - preserve the frontend/backend boundary.
