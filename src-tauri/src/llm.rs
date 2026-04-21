@@ -15,18 +15,18 @@ const LLM_STREAM_TIMEOUT_SECS: u64 = 90;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum ProviderKind {
+pub(crate) enum ProviderKind {
     Gemini,
 }
 
 impl ProviderKind {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Gemini => DEFAULT_PROVIDER,
         }
     }
 
-    fn parse(value: &str) -> Result<Self, String> {
+    pub(crate) fn parse(value: &str) -> Result<Self, String> {
         match value.trim().to_ascii_lowercase().as_str() {
             DEFAULT_PROVIDER => Ok(Self::Gemini),
             other => Err(format!("Unsupported provider '{other}'")),
@@ -82,11 +82,19 @@ pub struct LlmProfilesState {
 }
 
 #[derive(Clone)]
-struct ResolvedLlmProfile {
-    profile_id: String,
-    provider: ProviderKind,
-    default_model: String,
-    api_key: String,
+pub(crate) struct ResolvedLlmProfile {
+    pub(crate) profile_id: String,
+    pub(crate) provider: ProviderKind,
+    pub(crate) default_model: String,
+    pub(crate) api_key: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub(crate) struct LlmCompletion {
+    pub provider: String,
+    pub model: String,
+    pub text: String,
+    pub usage: Option<LlmUsage>,
 }
 
 #[derive(Serialize)]
@@ -440,21 +448,53 @@ fn emit_response_event(handle: &AppHandle, event: &LlmStreamEvent) {
     let _ = handle.emit(LLM_RESPONSE_EVENT, event);
 }
 
-async fn stream_with_provider(
-    handle: AppHandle,
-    request: LlmChatRequest,
-    profile: ResolvedLlmProfile,
-) -> Result<(), String> {
+pub(crate) async fn resolve_profile_for_backend(
+    handle: &AppHandle,
+    requested_profile_id: Option<&str>,
+) -> Result<ResolvedLlmProfile, String> {
+    let pool = get_pool(handle).await?;
+    resolve_profile_from_pool(&pool, requested_profile_id).await
+}
+
+pub(crate) fn resolve_effective_model(
+    profile: &ResolvedLlmProfile,
+    model_override: Option<&str>,
+) -> Result<String, String> {
+    let model = model_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(profile.default_model.as_str())
+        .trim()
+        .to_string();
+
+    if model.is_empty() {
+        return Err("Model override cannot be empty".to_string());
+    }
+
+    Ok(model)
+}
+
+async fn stream_with_provider<F>(
+    request: &LlmChatRequest,
+    profile: &ResolvedLlmProfile,
+    on_delta: &mut F,
+) -> Result<LlmCompletion, String>
+where
+    F: FnMut(&str),
+{
     match profile.provider {
-        ProviderKind::Gemini => stream_gemini_response(handle, request, profile).await,
+        ProviderKind::Gemini => stream_gemini_response(request, profile, on_delta).await,
     }
 }
 
-async fn stream_gemini_response(
-    handle: AppHandle,
-    request: LlmChatRequest,
-    profile: ResolvedLlmProfile,
-) -> Result<(), String> {
+async fn stream_gemini_response<F>(
+    request: &LlmChatRequest,
+    profile: &ResolvedLlmProfile,
+    on_delta: &mut F,
+) -> Result<LlmCompletion, String>
+where
+    F: FnMut(&str),
+{
     if profile.api_key.trim().is_empty() {
         return Err(format!(
             "Profile '{}' does not have a Gemini API key configured",
@@ -462,30 +502,9 @@ async fn stream_gemini_response(
         ));
     }
 
-    let model = request
-        .model_override
-        .clone()
-        .unwrap_or_else(|| profile.default_model.clone())
-        .trim()
-        .to_string();
-    if model.is_empty() {
-        return Err("Model override cannot be empty".to_string());
-    }
+    let model = resolve_effective_model(profile, request.model_override.as_deref())?;
 
     let request_body = build_gemini_request(&request.messages)?;
-    emit_response_event(
-        &handle,
-        &LlmStreamEvent {
-            request_id: request.request_id.clone(),
-            kind: "started".to_string(),
-            delta: None,
-            text: None,
-            provider: profile.provider.as_str().to_string(),
-            model: model.clone(),
-            usage: None,
-            error: None,
-        },
-    );
 
     let url = format!(
         "{GEMINI_API_BASE}/models/{model}:streamGenerateContent?alt=sse"
@@ -493,7 +512,7 @@ async fn stream_gemini_response(
     let client = HttpClient::new();
     let response = client
         .post(url)
-        .header("x-goog-api-key", profile.api_key)
+        .header("x-goog-api-key", profile.api_key.as_str())
         .header("Content-Type", "application/json")
         .json(&request_body)
         .send()
@@ -540,19 +559,7 @@ async fn stream_gemini_response(
             let delta = extract_text(&parsed);
             if !delta.is_empty() {
                 full_text.push_str(&delta);
-                emit_response_event(
-                    &handle,
-                    &LlmStreamEvent {
-                        request_id: request.request_id.clone(),
-                        kind: "delta".to_string(),
-                        delta: Some(delta),
-                        text: None,
-                        provider: profile.provider.as_str().to_string(),
-                        model: model.clone(),
-                        usage: None,
-                        error: None,
-                    },
-                );
+                on_delta(&delta);
             }
         }
     }
@@ -574,38 +581,61 @@ async fn stream_gemini_response(
             let delta = extract_text(&parsed);
             if !delta.is_empty() {
                 full_text.push_str(&delta);
-                emit_response_event(
-                    &handle,
-                    &LlmStreamEvent {
-                        request_id: request.request_id.clone(),
-                        kind: "delta".to_string(),
-                        delta: Some(delta),
-                        text: None,
-                        provider: profile.provider.as_str().to_string(),
-                        model: model.clone(),
-                        usage: None,
-                        error: None,
-                    },
-                );
+                on_delta(&delta);
             }
         }
     }
 
-    emit_response_event(
-        &handle,
-        &LlmStreamEvent {
-            request_id: request.request_id,
-            kind: "completed".to_string(),
-            delta: None,
-            text: Some(full_text),
-            provider: profile.provider.as_str().to_string(),
-            model,
-            usage: last_usage,
-            error: None,
-        },
-    );
+    Ok(LlmCompletion {
+        provider: profile.provider.as_str().to_string(),
+        model,
+        text: full_text,
+        usage: last_usage,
+    })
+}
 
-    Ok(())
+pub(crate) async fn run_llm_collect_with_profile(
+    request: &LlmChatRequest,
+    profile: &ResolvedLlmProfile,
+) -> Result<LlmCompletion, String> {
+    validate_request(request)?;
+
+    let result = timeout(
+        Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
+        stream_with_provider(request, profile, &mut |_| {}),
+    )
+    .await;
+
+    match result {
+        Ok(result) => result,
+        Err(_) => Err(format!(
+            "LLM request timed out after {LLM_STREAM_TIMEOUT_SECS} seconds"
+        )),
+    }
+}
+
+pub(crate) async fn run_llm_stream_with_profile<F>(
+    request: &LlmChatRequest,
+    profile: &ResolvedLlmProfile,
+    mut on_delta: F,
+) -> Result<LlmCompletion, String>
+where
+    F: FnMut(&str),
+{
+    validate_request(request)?;
+
+    let result = timeout(
+        Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
+        stream_with_provider(request, profile, &mut on_delta),
+    )
+    .await;
+
+    match result {
+        Ok(result) => result,
+        Err(_) => Err(format!(
+            "LLM request timed out after {LLM_STREAM_TIMEOUT_SECS} seconds"
+        )),
+    }
 }
 
 #[tauri::command]
@@ -657,31 +687,62 @@ pub async fn ask_llm_stream(
     };
     validate_request(&request)?;
 
-    let pool = get_pool(&handle).await?;
-    let resolved_profile = resolve_profile_from_pool(&pool, request.profile_id.as_deref()).await?;
+    let resolved_profile = resolve_profile_for_backend(&handle, request.profile_id.as_deref()).await?;
     let provider_name = resolved_profile.provider.as_str().to_string();
-    let effective_model = request
-        .model_override
-        .clone()
-        .unwrap_or_else(|| resolved_profile.default_model.clone());
+    let effective_model = resolve_effective_model(&resolved_profile, request.model_override.as_deref())?;
+    let started_request_id = request.request_id.clone();
+    let started_provider = provider_name.clone();
+    let started_model = effective_model.clone();
+
+    emit_response_event(
+        &handle,
+        &LlmStreamEvent {
+            request_id: started_request_id,
+            kind: "started".to_string(),
+            delta: None,
+            text: None,
+            provider: started_provider,
+            model: started_model,
+            usage: None,
+            error: None,
+        },
+    );
 
     let app_handle = handle.clone();
     tokio::spawn(async move {
-        let result = timeout(
-            Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
-            stream_with_provider(app_handle.clone(), request.clone(), resolved_profile),
-        )
-        .await;
-
-        let maybe_error = match result {
-            Ok(Ok(())) => None,
-            Ok(Err(error)) => Some(error),
-            Err(_) => Some(format!(
-                "LLM request timed out after {LLM_STREAM_TIMEOUT_SECS} seconds"
-            )),
-        };
-
-        if let Some(error) = maybe_error {
+        match run_llm_stream_with_profile(&request, &resolved_profile, |delta| {
+            emit_response_event(
+                &app_handle,
+                &LlmStreamEvent {
+                    request_id: request.request_id.clone(),
+                    kind: "delta".to_string(),
+                    delta: Some(delta.to_string()),
+                    text: None,
+                    provider: provider_name.clone(),
+                    model: effective_model.clone(),
+                    usage: None,
+                    error: None,
+                },
+            );
+        })
+        .await
+        {
+            Ok(completion) => {
+                emit_response_event(
+                    &app_handle,
+                    &LlmStreamEvent {
+                        request_id: request.request_id,
+                        kind: "completed".to_string(),
+                        delta: None,
+                        text: Some(completion.text),
+                        provider: completion.provider,
+                        model: completion.model,
+                        usage: completion.usage,
+                        error: None,
+                    },
+                );
+            }
+            Err(error) => {
             emit_response_event(
                 &app_handle,
                 &LlmStreamEvent {
@@ -695,6 +756,7 @@ pub async fn ask_llm_stream(
                     error: Some(error),
                 },
             );
+        }
         }
     });
 

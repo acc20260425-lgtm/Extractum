@@ -18,7 +18,7 @@ mod analysis;
 use analysis::{
     create_analysis_prompt_template, delete_analysis_prompt_template, get_analysis_run,
     get_analysis_run_trace, list_analysis_prompt_templates, list_analysis_runs,
-    list_analysis_sources, update_analysis_prompt_template,
+    list_analysis_sources, start_analysis_report, update_analysis_prompt_template,
 };
 
 #[tauri::command]
@@ -185,7 +185,8 @@ pub fn run() {
             delete_analysis_prompt_template,
             list_analysis_runs,
             get_analysis_run,
-            get_analysis_run_trace
+            get_analysis_run_trace,
+            start_analysis_report
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
