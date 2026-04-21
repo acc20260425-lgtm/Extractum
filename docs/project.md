@@ -12,9 +12,11 @@ Right now the project supports:
 - registering Telegram channels as local sources in SQLite;
 - manually syncing one source at a time into `items`;
 - viewing synced messages inline in the Sources UI;
-- configuring a Gemini provider profile and testing streaming responses from `/settings`.
-
-The next planned slice is a dedicated `/analysis` route for generating saved markdown reports over already-synced messages from one source and a selected time period.
+- configuring a Gemini provider profile and testing streaming responses from `/settings`;
+- generating saved markdown reports from `/analysis` over already-synced messages;
+- browsing saved analysis runs and trace data;
+- managing reusable source groups for multi-source report runs;
+- asking grounded follow-up questions over completed saved runs.
 
 ## What exists in the codebase
 
@@ -24,7 +26,7 @@ The next planned slice is a dedicated `/analysis` route for generating saved mar
 - `/auth/[id]`: initialize Telegram client, send code, sign in, sign out
 - `/sources`: filter by account, load Telegram channels, add sources manually or from dialogs, sync a source, view synced messages, and show restore/runtime readiness
 - `/settings`: edit the default Gemini provider profile and run a streaming test request
-- planned `/analysis`: run saved report-style analysis over synced local messages, then later expand toward traceability UX and chat
+- `/analysis`: run saved report-style analysis over synced local messages, inspect traceability, manage source groups, and ask grounded follow-up questions
 - global app layout with persistent light/dark theme toggle
 
 ### Backend commands
@@ -51,11 +53,21 @@ Implemented Tauri commands:
 - `get_llm_profiles`
 - `save_llm_profile`
 - `ask_llm_stream`
-
-Planned next command surface:
-- analysis template CRUD
-- analysis run start/list/get
-- analysis trace lookup
+- `list_analysis_sources`
+- `list_analysis_prompt_templates`
+- `create_analysis_prompt_template`
+- `update_analysis_prompt_template`
+- `delete_analysis_prompt_template`
+- `list_analysis_source_groups`
+- `create_analysis_source_group`
+- `update_analysis_source_group`
+- `delete_analysis_source_group`
+- `list_analysis_runs`
+- `get_analysis_run`
+- `get_analysis_run_trace`
+- `resolve_analysis_trace_refs`
+- `start_analysis_report`
+- `ask_analysis_run_question`
 
 ### Storage
 
@@ -64,6 +76,10 @@ Current schema includes:
 - `sources`
 - `items`
 - `app_settings`
+- `analysis_prompt_templates`
+- `analysis_runs`
+- `analysis_source_groups`
+- `analysis_source_group_members`
 
 Current active product flows use:
 - `accounts` for multi-account setup;
@@ -83,30 +99,33 @@ In scope now:
 - shared SQLite access through `tauri-plugin-sql`
 - ZSTD compression for source metadata and stored message payloads
 - Gemini-first provider abstraction and streaming test calls
+- backend-owned report generation over synced local `items`
+- saved analysis runs with traceability data
+- grounded report chat over completed saved runs
 
 Out of scope in current implementation:
 - background sync
 - pagination beyond the simple first-page `get_items` call
 - message edit/delete reconciliation
 - media ingestion
-- analysis flow from `/sources` into Gemini responses
 - vector DB / embeddings / semantic retrieval
 
 Planned next:
-- backend-owned analysis retrieval from local `items`
-- saved markdown reports with streaming output
-- traceability through message refs and saved quote metadata
-- later report-grounded chat without embeddings
+- docs and UX polish for the analysis workspace
+- optional persisted chat history for analysis conversations
+- later media-aware analysis
 
 ## Recommended reading order
 
 1. `GEMINI.md`
 2. `src-tauri/src/lib.rs`
-3. `src-tauri/migrations/1.sql`, `2.sql`, `3.sql`, `4.sql`
+3. `src-tauri/migrations/1.sql`, `2.sql`, `3.sql`, `4.sql`, `5.sql`, `6.sql`, `7.sql`
 4. `src-tauri/src/telegram.rs`
 5. `src-tauri/src/sources.rs`
 6. `src-tauri/src/llm.rs`
-7. `src/routes/accounts/+page.svelte`
-8. `src/routes/auth/[id]/+page.svelte`
-9. `src/routes/sources/+page.svelte`
-10. `src/routes/settings/+page.svelte`
+7. `src-tauri/src/analysis.rs`
+8. `src/routes/accounts/+page.svelte`
+9. `src/routes/auth/[id]/+page.svelte`
+10. `src/routes/sources/+page.svelte`
+11. `src/routes/settings/+page.svelte`
+12. `src/routes/analysis/+page.svelte`

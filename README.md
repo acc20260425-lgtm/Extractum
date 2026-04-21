@@ -1,7 +1,7 @@
 # Extractum
 
 Extractum is a desktop application built with `Tauri`, `SvelteKit`, `TypeScript`, and `Rust`.
-The current MVP focuses on collecting Telegram channel data into local `SQLite`, browsing synced messages, and now includes the first Gemini-backed LLM provider/settings slice for future analysis flows.
+The current MVP focuses on collecting Telegram channel data into local `SQLite`, browsing synced messages, and now includes a working Gemini-backed analysis workspace over already-synced records.
 
 ## Current status
 
@@ -17,6 +17,11 @@ Implemented today:
 - manual channel sync into `items`;
 - inline message browsing on the Sources page;
 - minimal Gemini settings and streaming test UI on `/settings`;
+- dedicated `/analysis` workspace for saved markdown reports over synced messages;
+- saved report history with immutable runs;
+- traceability through clickable message refs and quote lookup;
+- named source groups and multi-source report runs;
+- report-grounded follow-up chat over saved runs and local synced messages;
 - persistent light/dark theme toggle, with light theme as default.
 
 Not implemented yet:
@@ -24,7 +29,7 @@ Not implemented yet:
 - message edit/delete reconciliation;
 - media ingestion;
 - advanced filtering/search across synced items;
-- source-driven LLM analysis flow from synced data.
+- persisted chat history for analysis conversations.
 
 ## Stack
 
@@ -49,10 +54,12 @@ The frontend should call small Tauri commands instead of accessing low-level int
 - `src/routes/auth/[id]/+page.svelte`: Telegram auth flow for one account
 - `src/routes/sources/+page.svelte`: source listing, sync, and inline message browsing UI
 - `src/routes/settings/+page.svelte`: Gemini provider settings and streaming test UI
+- `src/routes/analysis/+page.svelte`: saved report generation, traceability, source groups, and grounded chat UI
 - `src-tauri/src/lib.rs`: Tauri app bootstrap and command registration
 - `src-tauri/src/telegram.rs`: Telegram client lifecycle and session persistence
 - `src-tauri/src/sources.rs`: SQLite-backed account/source/item commands
 - `src-tauri/src/llm.rs`: provider abstraction, Gemini request mapping, and streaming events
+- `src-tauri/src/analysis.rs`: analysis runs, templates, source groups, trace lookup, and grounded chat commands
 - `src-tauri/migrations/*.sql`: schema migrations
 - `GEMINI.md`: project rules and implementation constraints for AI agents
 
@@ -100,12 +107,23 @@ The first sync slice is intentionally minimal:
 
 ## Current LLM behavior
 
-The first LLM slice is intentionally narrow:
+The current LLM/analysis slice now includes:
 - Gemini is the only implemented provider;
 - backend exposes `get_llm_profiles`, `save_llm_profile`, and `ask_llm_stream`;
 - responses stream back to the UI through the `llm://response` Tauri event;
-- frontend owns prompt assembly and sends generic chat-style messages;
-- `/settings` is the only current LLM UI surface.
+- `/settings` is the provider configuration and transport test surface;
+- `/analysis` is the first real product surface built on top of the provider layer;
+- backend owns analysis retrieval from local `items`, chunking, map/reduce report generation, saved run persistence, trace data, and grounded chat context assembly;
+- report runs stream through `analysis://run`;
+- follow-up chat streams through `analysis://chat`.
+
+Current analysis behavior:
+- reports run only over already-synced local messages from SQLite;
+- reports can target one source or a saved source group;
+- reports are saved as immutable runs with provider/model/template metadata;
+- report and chat citations use refs like `s12-m845`;
+- refs are clickable in both report output and chat replies;
+- the trace panel can resolve and display cited messages from the current run scope.
 
 Temporary security note:
 - the Gemini API key is currently stored in `app_settings` in local SQLite;

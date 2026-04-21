@@ -3,7 +3,7 @@
 ## 1. Overview
 
 Extractum is a desktop application for collecting information from Telegram channels into a local SQLite database.
-The long-term product goal is a full flow from Telegram ingestion to in-app LLM analysis. The current implemented slice now covers account setup, source registration, manual channel sync, minimal message browsing, and the first Gemini-backed LLM provider/settings layer.
+The long-term product goal is a full flow from Telegram ingestion to in-app LLM analysis. The current implemented slice now covers account setup, source registration, manual channel sync, minimal message browsing, Gemini-backed provider/settings, and a working saved-analysis workspace over synced local records.
 
 The MVP architecture remains intentionally simple:
 - Telegram access through MTProto;
@@ -22,7 +22,7 @@ The intended end-to-end MVP flow is:
 6. run saved LLM-backed analysis over synced records;
 7. later ask follow-up questions against saved reports and synced records.
 
-The project has now implemented the first half of step 5 in a minimal form: synced messages can be viewed inline on the Sources page. The next major product slice is a dedicated `/analysis` flow for report generation over already-synced records.
+The project has now implemented both the initial local message browsing slice and the first dedicated `/analysis` flow over already-synced records.
 
 ## 3. Current implemented functionality
 
@@ -121,41 +121,43 @@ Current provider profile model:
 - editable `default_model`
 - editable `api_key`
 
-## 4. Planned analysis flow
+## 4. Current analysis flow
 
-The next planned slice is a dedicated LLM analysis flow built on top of already-synced local `items`.
+The current LLM analysis flow is built on top of already-synced local `items`.
 
-### 4.1 First supported scenario
+### 4.1 Supported scenarios
 
-The first supported analysis scenario should be:
+The currently supported scenarios are:
 - one selected source;
+- one selected source group;
 - one selected time period;
 - one saved markdown report;
 - streaming partial output during report generation;
 - saved run history with model and prompt metadata;
-- mandatory traceability to concrete synced messages.
+- mandatory traceability to concrete synced messages;
+- report-grounded follow-up chat over completed saved runs.
 
-The first UI surface should be a dedicated `/analysis` route rather than an embedded workflow inside `/sources`.
+The analysis UI lives on a dedicated `/analysis` route rather than being embedded into `/sources`.
 
 ### 4.2 Retrieval boundary
 
 Analysis must use only already-synced local data from SQLite.
 The first report flow should not call Telegram APIs directly and should not depend on live MTProto state after sync has completed.
 
-The backend should own:
+The backend now owns:
 - selecting `items` by source and period;
 - chunking message corpora;
 - map/reduce orchestration;
 - report persistence;
 - traceability data persistence.
 
-The frontend should own:
+The frontend now owns:
 - choosing source, period, language, and prompt template;
 - starting runs;
 - displaying streaming output;
 - browsing saved runs and trace results.
 
-This is a deliberate exception to the current thin-backend LLM test flow, because analysis retrieval and persistence are tightly coupled to local storage.
+This remains a deliberate exception to the thinner `/settings` LLM test flow, because analysis retrieval and persistence are tightly coupled to local storage.
 
 ### 4.3 Output and traceability
 
@@ -167,7 +169,7 @@ Every meaningful conclusion in the report must be traceable back to synced messa
 
 Reports should cite these refs inline, and the backend should persist a compact trace map that can later power expandable quotes in the UI.
 
-The first saved run should therefore persist:
+Each saved run therefore persists:
 - the final markdown result;
 - source and period metadata;
 - provider, model, and prompt version metadata;
@@ -185,8 +187,8 @@ This lets users customize report emphasis and structure without being able to ac
 
 ### 4.5 Planned execution pipeline
 
-The first report pipeline should be:
-1. load synced `items` from SQLite for the selected source and period;
+The implemented report pipeline is:
+1. load synced `items` from SQLite for the selected source or source group and period;
 2. assign stable refs to each message;
 3. chunk the corpus by size;
 4. run per-chunk map summaries through the LLM;
@@ -196,13 +198,11 @@ The first report pipeline should be:
 
 The map stage may use structured intermediate output internally even though the user-facing result is markdown.
 
-## 5. Planned storage additions
+## 5. Storage additions
 
-The first analysis slice should add:
+The analysis slice now adds:
 - `analysis_prompt_templates`
 - `analysis_runs`
-
-Likely later additions:
 - `analysis_source_groups`
 - `analysis_source_group_members`
 
@@ -212,13 +212,12 @@ Planned run storage should support immutable saved artifacts:
 
 ## 6. Planned MVP functionality
 
-Still planned for MVP:
+Still planned after the current slice:
 - richer browsing and filtering over stored items
 - pagination or lazy loading for message history
 - message detail view
-- prompt-template workflow
-- source-driven saved analysis reports over synced records
-- later report-grounded follow-up chat
+- optional persisted chat history
+- media-aware analysis
 
 Not planned for this stage:
 - background sync worker
@@ -257,7 +256,7 @@ Extractum follows a "fat frontend, thin backend" model.
 - analysis run and trace persistence
 
 The backend should stay small and integration-oriented rather than becoming a second application layer.
-The planned analysis pipeline is the one place where the backend intentionally becomes a slightly thicker orchestration boundary, because it owns the local corpus and saved run artifacts.
+The current analysis pipeline is the one place where the backend intentionally becomes a slightly thicker orchestration boundary, because it owns the local corpus and saved run artifacts.
 
 ## 8. Storage model
 
@@ -278,6 +277,9 @@ Current active data paths:
 - `sources` is fully used for registration/listing/sync cursor state
 - `items` is now populated by manual sync and read by `get_items`
 - `app_settings` is now also used for temporary LLM provider profile storage
+- `analysis_prompt_templates` stores report prompt templates
+- `analysis_runs` stores immutable saved report runs and compressed trace data
+- `analysis_source_groups` and `analysis_source_group_members` store reusable named multi-source scopes
 
 ## 9. Security boundaries
 
@@ -334,9 +336,11 @@ The current implementation is successful if a user can:
 9. configure a Gemini model and API key in `/settings`;
 10. run a streaming Gemini test request from the app.
 
-The next success milestone is reached once a user can:
+The current implementation is now successful if a user can also:
 11. open a dedicated `/analysis` route;
-12. choose one synced source and a period;
+12. choose one synced source or one saved source group and a period;
 13. generate a saved markdown report over local `items`;
 14. see streaming partial output while that report is being generated;
-15. reopen that saved run later and inspect its cited message refs.
+15. reopen that saved run later and inspect its cited message refs;
+16. manage prompt templates and reusable source groups from the same workspace;
+17. ask follow-up questions over a completed run and inspect cited refs from chat replies.

@@ -18,7 +18,7 @@ Current pages:
 - `src/routes/auth/[id]/+page.svelte`
 - `src/routes/sources/+page.svelte`
 - `src/routes/settings/+page.svelte`
-- planned `src/routes/analysis/+page.svelte`
+- `src/routes/analysis/+page.svelte`
 
 Shared shell:
 - `src/routes/+layout.svelte`
@@ -33,8 +33,11 @@ Responsibilities currently implemented in frontend:
 - inline message browsing state
 - LLM settings form state
 - LLM streaming output handling
-- planned analysis form state
-- planned analysis run/history rendering
+- analysis form state
+- analysis run/history rendering
+- analysis template editor state
+- source-group editor state
+- report traceability and grounded chat state
 - theme selection and persistence
 
 ### Backend
@@ -44,8 +47,8 @@ Current Rust modules:
 - `src-tauri/src/telegram.rs`
 - `src-tauri/src/sources.rs`
 - `src-tauri/src/llm.rs`
-- planned `src-tauri/src/analysis.rs`
-- planned `src-tauri/src/db.rs`
+- `src-tauri/src/analysis.rs`
+- `src-tauri/src/db.rs`
 
 Responsibilities currently implemented in backend:
 - Tauri bootstrap
@@ -63,8 +66,10 @@ Responsibilities currently implemented in backend:
 - ZSTD compression/decompression for persisted metadata and message content
 - temporary LLM profile storage in `app_settings`
 - Gemini provider request mapping and streaming
-- planned analysis retrieval from `items`
-- planned analysis run persistence and trace persistence
+- analysis retrieval from `items`
+- analysis run persistence and trace persistence
+- source-group persistence for multi-source runs
+- grounded chat context assembly for completed analysis runs
 
 ## 3. Telegram subsystem
 
@@ -121,11 +126,22 @@ The active Tauri command layer is intentionally small:
 - Sources: `list_telegram_channels`, `add_telegram_source`, `list_sources`, `sync_channel`
 - Items: `get_items`
 - LLM: `get_llm_profiles`, `save_llm_profile`, `ask_llm_stream`
-
-Planned next command surface:
-- analysis template CRUD
-- analysis run start/list/get
-- analysis trace lookup
+- Analysis:
+  - `list_analysis_sources`
+  - `list_analysis_prompt_templates`
+  - `create_analysis_prompt_template`
+  - `update_analysis_prompt_template`
+  - `delete_analysis_prompt_template`
+  - `list_analysis_source_groups`
+  - `create_analysis_source_group`
+  - `update_analysis_source_group`
+  - `delete_analysis_source_group`
+  - `list_analysis_runs`
+  - `get_analysis_run`
+  - `get_analysis_run_trace`
+  - `resolve_analysis_trace_refs`
+  - `start_analysis_report`
+  - `ask_analysis_run_question`
 
 This matches the current implemented product slice.
 
@@ -156,17 +172,16 @@ Current-state details:
 - theme preference is persisted in `localStorage`;
 - the Sources page now combines source management, sync actions, and a first-pass inline message viewer;
 - both `/accounts` and `/sources` surface Telegram runtime readiness from backend state;
-- `/settings` is the current LLM-only route and is intentionally separate from `/sources`.
-- the planned `/analysis` route should become the first dedicated report-generation surface over synced local records.
+- `/settings` is the provider-configuration route and intentionally separate from source management.
+- `/analysis` is now the first dedicated report-generation and report-grounded-chat surface over synced local records.
 
 ## 8. Recommended direction
 
 Near-term implementation should continue in this order:
-1. improve message browsing and filtering over `items`;
-2. add pagination or incremental loading to `get_items`;
-3. add backend-owned analysis retrieval and saved report generation over synced `items`;
-4. add a dedicated `/analysis` route with streaming report output and run history;
-5. add traceability UI for cited message refs and saved quotes;
-6. revisit secure storage for provider secrets.
+1. polish `/analysis` UX and sync docs with the current implementation;
+2. decide whether analysis chat history should remain ephemeral or become persisted;
+3. revisit richer item browsing/search over `items`, likely with better filtering or FTS;
+4. extend analysis toward media-aware records when the ingestion model is ready;
+5. revisit secure storage for provider secrets.
 
 That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.
