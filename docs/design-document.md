@@ -201,7 +201,8 @@ The frontend must not directly access secrets or low-level Telegram session data
 
 <h3>Phase 2: Telegram Integration</h3>
 <ul>
-<li>Implement Telegram authentication using `grammers`</li>
+<li>Implement Telegram authentication using `grammers` ✓</li>
+<li>Session persistence to app data directory ✓</li>
 <li>Add source registration</li>
 <li>Implement first channel sync with progress events</li>
 <li>Save messages into SQLite with ZSTD compression.</li>

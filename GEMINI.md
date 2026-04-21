@@ -14,8 +14,10 @@ We use the `master` branch of `grammers`. The API has specific constraints that 
 
 - **Imports:** `LoginToken` is exported via `grammers_client::client::LoginToken`. Do NOT look for it in `auth` or `types`.
 - **Signatures:** `client.request_login_code` takes 2 arguments: `(&phone, api_hash)`. The `api_id` is already managed by the `SenderPool`.
-- **Session Management:** Currently using `MemorySession`. Transition to persistent storage (file or DB) is planned.
-- **Cargo.toml:** `grammers-client` and `grammers-session` MUST have `default-features = false` to avoid conflicts between `libsql` and `tauri-plugin-sql`.
+- **Session Management:** Implemented. Session is persisted to `telegram.session.json` in the app data directory using a custom `SavedSession` struct serialized via `serde_json`. Loaded on `tg_init`, saved on `tg_sign_in`, deleted on `tg_logout`.
+- **`FileSession` does NOT exist** in this version of grammers. `storages` only exports `MemorySession` and `SqliteSession` (behind `sqlite-storage` feature). Do not attempt to use `FileSession`.
+- **`SessionData` does NOT implement `serde::Serialize/Deserialize`** directly. Use the `SavedSession` wrapper struct that mirrors its fields (`home_dc`, `dc_options`, `updates_state`).
+- **Cargo.toml:** `grammers-client` MUST have `default-features = false`. `grammers-session` MUST have `default-features = false, features = ["serde"]`. This prevents `libsql` from being pulled in and causing duplicate SQLite symbol conflicts with `tauri-plugin-sql`.
 
 ## 3. Storage & Data Model
 
@@ -38,6 +40,7 @@ We use the `master` branch of `grammers`. The API has specific constraints that 
 ## 6. Current Status (as of 2026-04-21)
 
 - Phase 2 (Telegram Integration) is in progress.
-- Basic authentication flow (init, send code, sign in) is implemented and verified.
+- Full authentication flow (init, send code, sign in, logout) is implemented and compiles cleanly.
+- Session persistence implemented: saved to `telegram.session.json` in app data dir, loaded on restart.
 - Settings persistence (`api_id`, `api_hash`) in SQLite is implemented.
 - Next step: Implementing channel synchronization and ZSTD-compressed message storage.

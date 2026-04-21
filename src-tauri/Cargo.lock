@@ -1717,6 +1717,8 @@ dependencies = [
  "futures-core",
  "grammers-tl-types",
  "log",
+ "serde",
+ "serde_with",
  "tokio",
 ]
 
