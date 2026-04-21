@@ -155,12 +155,21 @@
   nav a.active { color: white; background: var(--primary); }
   .theme-toggle { white-space: nowrap; }
 
-  main { flex: 1; padding: 2rem; max-width: 700px; margin: 0 auto; width: 100%; }
+  main {
+    flex: 1;
+    padding: 2rem;
+    width: min(1480px, calc(100vw - 3rem));
+    max-width: 1480px;
+    margin: 0 auto;
+  }
 
   @media (max-width: 640px) {
     nav { flex-direction: column; align-items: stretch; }
     .nav-links { justify-content: center; }
     .theme-toggle { width: 100%; }
-    main { padding: 1.25rem; }
+    main {
+      padding: 1.25rem;
+      width: 100%;
+    }
   }
 </style>

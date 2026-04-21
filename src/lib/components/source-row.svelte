@@ -86,19 +86,35 @@
     background: var(--panel-strong);
     border-radius: 8px;
     gap: 0.5rem;
+    min-width: 0;
   }
   li.selected {
     outline: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
     background: color-mix(in srgb, var(--primary) 10%, var(--panel-strong));
   }
-  .channel-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
-  .channel-actions { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .channel-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .channel-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
   .source-main {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.1rem;
     width: 100%;
+    min-width: 0;
     padding: 0;
     border: 0;
     background: transparent;
@@ -106,7 +122,13 @@
     text-align: left;
     cursor: pointer;
   }
-  .title { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .title {
+    font-size: 0.95rem;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .sub { font-size: 0.75rem; color: var(--muted); }
   .badge {
     font-size: 0.7rem;
@@ -114,7 +136,9 @@
     border-radius: 4px;
     background: var(--panel-hover);
     color: var(--muted);
-    white-space: nowrap;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.2;
   }
   .badge.member {
     background: color-mix(in srgb, #22c55e 18%, var(--panel));
@@ -125,4 +149,29 @@
     color: #b45309;
   }
   button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+  @media (max-width: 1200px) {
+    li {
+      align-items: flex-start;
+    }
+    .channel-actions {
+      max-width: 42%;
+    }
+  }
+  @media (max-width: 1024px) {
+    li {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .channel-actions {
+      max-width: 100%;
+      justify-content: flex-start;
+    }
+    .title {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+  }
 </style>

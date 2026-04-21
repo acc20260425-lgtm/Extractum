@@ -308,15 +308,15 @@
           <SourceRow
             source={src}
             selected={selectedSourceId === src.id}
-          syncing={!!syncingIds[src.id]}
-          {accountLabel}
-          {runtimeStatus}
-          {syncDisabledReason}
-          {formatDate}
-          onSelect={selectSource}
-          onSync={syncSource}
-        />
-      {/each}
+            syncing={!!syncingIds[src.id]}
+            {accountLabel}
+            {runtimeStatus}
+            {syncDisabledReason}
+            {formatDate}
+            onSelect={selectSource}
+            onSync={syncSource}
+          />
+        {/each}
       </ul>
     {/if}
   </div>
@@ -435,8 +435,8 @@
   .card-header h3 { margin: 0; }
   .workspace {
     display: grid;
-    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: minmax(360px, 430px) minmax(0, 1fr);
+    gap: 1.25rem;
     align-items: start;
     margin-bottom: 1.5rem;
   }
@@ -452,6 +452,8 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-width: 0;
+    min-height: 40rem;
   }
   .detail-header {
     display: flex;
@@ -460,15 +462,24 @@
     gap: 1rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .detail-title {
+    min-width: 0;
+    flex: 1 1 auto;
   }
   .detail-title h3 {
     margin: 0 0 0.35rem 0;
     font-size: 1.1rem;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .detail-title p {
     margin: 0;
     color: var(--muted);
     font-size: 0.85rem;
+    overflow-wrap: anywhere;
   }
   .detail-actions {
     display: flex;
@@ -476,6 +487,8 @@
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
+    flex: 0 1 22rem;
+    min-width: 0;
   }
   .row { display: flex; gap: 0.5rem; align-items: center; }
   .row input { flex: 1; }
@@ -502,7 +515,9 @@
     border-radius: 4px;
     background: var(--panel-hover);
     color: var(--muted);
-    white-space: nowrap;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.2;
   }
   .badge.member {
     background: color-mix(in srgb, #22c55e 18%, var(--panel));
@@ -544,12 +559,20 @@
     white-space: nowrap;
   }
   .btn-link:hover { background: var(--primary-hover); }
-  @media (max-width: 960px) {
+  @media (max-width: 1180px) {
     .workspace {
       grid-template-columns: 1fr;
     }
     .pane-list {
       position: static;
+    }
+    .detail-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .detail-actions {
+      justify-content: flex-start;
+      flex-basis: auto;
     }
   }
 </style>
