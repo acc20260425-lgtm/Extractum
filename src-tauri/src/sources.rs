@@ -12,6 +12,7 @@ use tauri_plugin_sql::DbInstances;
 use crate::telegram::TelegramState;
 
 const DB_URL: &str = "sqlite:extractum.db";
+const INITIAL_SYNC_MESSAGE_LIMIT: usize = 500;
 
 #[derive(Serialize)]
 pub struct ChannelInfo {
@@ -319,11 +320,16 @@ pub async fn sync_channel(
     }
 
     let peer = resolve_source_peer(&client, &source).await?;
-    let mut messages = client.iter_messages(peer);
     let mut inserted = 0_i64;
     let mut skipped = 0_i64;
     let previous_last_sync = source.last_sync_state.unwrap_or(0);
     let mut max_message_id = previous_last_sync;
+    let mut messages = if previous_last_sync > 0 {
+        client.iter_messages(peer)
+    } else {
+        // First sync is intentionally bounded so old channels do not pull their full history at once.
+        client.iter_messages(peer).limit(INITIAL_SYNC_MESSAGE_LIMIT)
+    };
 
     while let Some(message) = messages.next().await.map_err(|e| e.to_string())? {
         let message_id = i64::from(message.id());
