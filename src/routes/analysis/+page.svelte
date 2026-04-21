@@ -85,6 +85,11 @@
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
   let modelOverride = $state("");
+  let templateName = $state("");
+  let templateBody = $state("");
+  let editorBoundTemplateId = $state<number | null>(null);
+  let savingTemplate = $state(false);
+  let deletingTemplate = $state(false);
 
   let status = $state("");
   let running = $state(false);
@@ -147,6 +152,25 @@
   function selectedTrace() {
     if (!selectedTraceRef) return null;
     return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
+  }
+
+  function selectedTemplate() {
+    const templateId = selectedTemplateId ? Number(selectedTemplateId) : null;
+    if (templateId === null) return null;
+    return templates.find((template) => template.id === templateId) ?? null;
+  }
+
+  function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
+    if (!template) {
+      editorBoundTemplateId = null;
+      templateName = "";
+      templateBody = "";
+      return;
+    }
+
+    editorBoundTemplateId = template.id;
+    templateName = template.name;
+    templateBody = template.body;
   }
 
   function parseReportSegments(line: string): ReportSegment[] {
@@ -248,6 +272,10 @@
       if (!selectedTemplateId && templates.length > 0) {
         selectedTemplateId = String(templates[0].id);
       }
+      const selected = selectedTemplate();
+      if (selected && editorBoundTemplateId !== selected.id) {
+        bindEditorToTemplate(selected);
+      }
     } catch (error) {
       status = `Error loading report templates: ${error}`;
     }
@@ -337,9 +365,102 @@
     }
   }
 
+  async function saveTemplateChanges() {
+    const selected = selectedTemplate();
+    if (!selected) {
+      status = "Select a template first.";
+      return;
+    }
+    if (selected.is_builtin) {
+      status = "Built-in templates cannot be edited directly. Save a copy instead.";
+      return;
+    }
+    if (!templateName.trim() || !templateBody.trim()) {
+      status = "Template name and body cannot be empty.";
+      return;
+    }
+
+    savingTemplate = true;
+    try {
+      const updated = await invoke<AnalysisPromptTemplate>("update_analysis_prompt_template", {
+        templateId: selected.id,
+        name: templateName.trim(),
+        body: templateBody.trim(),
+      });
+      status = `Template "${updated.name}" saved.`;
+      await loadTemplates();
+      selectedTemplateId = String(updated.id);
+      bindEditorToTemplate(updated);
+    } catch (error) {
+      status = `Error saving template: ${error}`;
+    } finally {
+      savingTemplate = false;
+    }
+  }
+
+  async function saveTemplateCopy() {
+    if (!templateName.trim() || !templateBody.trim()) {
+      status = "Template name and body cannot be empty.";
+      return;
+    }
+
+    savingTemplate = true;
+    try {
+      const created = await invoke<AnalysisPromptTemplate>("create_analysis_prompt_template", {
+        name: templateName.trim(),
+        templateKind: "report",
+        body: templateBody.trim(),
+      });
+      status = `Template "${created.name}" created.`;
+      await loadTemplates();
+      selectedTemplateId = String(created.id);
+      bindEditorToTemplate(created);
+    } catch (error) {
+      status = `Error creating template: ${error}`;
+    } finally {
+      savingTemplate = false;
+    }
+  }
+
+  async function deleteTemplate() {
+    const selected = selectedTemplate();
+    if (!selected) {
+      status = "Select a template first.";
+      return;
+    }
+    if (selected.is_builtin) {
+      status = "Built-in templates cannot be deleted.";
+      return;
+    }
+    if (!window.confirm(`Delete template "${selected.name}"?`)) {
+      return;
+    }
+
+    deletingTemplate = true;
+    try {
+      await invoke("delete_analysis_prompt_template", { templateId: selected.id });
+      status = `Template "${selected.name}" deleted.`;
+      await loadTemplates();
+      const fallback = templates[0] ?? null;
+      selectedTemplateId = fallback ? String(fallback.id) : "";
+      bindEditorToTemplate(fallback);
+    } catch (error) {
+      status = `Error deleting template: ${error}`;
+    } finally {
+      deletingTemplate = false;
+    }
+  }
+
   $effect(() => {
     if (selectedSourceId) {
       void loadRuns();
+    }
+  });
+
+  $effect(() => {
+    const selected = selectedTemplate();
+    if (selected && editorBoundTemplateId !== selected.id) {
+      bindEditorToTemplate(selected);
     }
   });
 
@@ -560,6 +681,52 @@
   </section>
 </div>
 
+<section class="card templates">
+  <div class="panel-header">
+    <div>
+      <h3>Prompt Template</h3>
+      {#if selectedTemplate()}
+        <p class="sub">
+          {selectedTemplate()?.name} - v{selectedTemplate()?.version}
+          {selectedTemplate()?.is_builtin ? " - builtin (edit fields below, then save as copy)" : " - custom"}
+        </p>
+      {/if}
+    </div>
+    <div class="template-actions">
+      <button class="secondary" onclick={saveTemplateCopy} disabled={savingTemplate || deletingTemplate}>
+        {savingTemplate ? "Saving..." : "Save as copy"}
+      </button>
+      <button
+        onclick={saveTemplateChanges}
+        disabled={savingTemplate || deletingTemplate || !selectedTemplate() || selectedTemplate()?.is_builtin === true}
+      >
+        {savingTemplate ? "Saving..." : "Save changes"}
+      </button>
+      <button
+        class="danger-soft"
+        onclick={deleteTemplate}
+        disabled={savingTemplate || deletingTemplate || !selectedTemplate() || selectedTemplate()?.is_builtin === true}
+      >
+        {deletingTemplate ? "Deleting..." : "Delete"}
+      </button>
+    </div>
+  </div>
+
+  <div class="template-grid">
+    <label>Template name
+      <input type="text" bind:value={templateName} placeholder="Custom report" />
+    </label>
+
+    <label>Template body
+      <textarea
+        bind:value={templateBody}
+        rows="10"
+        placeholder="Describe how the report should be structured and what it should emphasize."
+      ></textarea>
+    </label>
+  </div>
+</section>
+
 <section class="card history">
   <div class="panel-header">
     <h3>Saved Runs</h3>
@@ -624,6 +791,24 @@
     gap: 0.35rem;
     font-size: 0.9rem;
     color: var(--muted);
+  }
+
+  textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 10rem;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.8rem;
+    border-radius: 8px;
+    font: inherit;
+  }
+
+  textarea:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
   .status {
@@ -848,12 +1033,46 @@
     letter-spacing: 0.04em;
   }
 
+  .templates {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .template-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .template-grid {
+    display: grid;
+    grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  :global(button.danger-soft) {
+    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  }
+
+  :global(button.danger-soft:hover) {
+    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
+  }
+
   @media (max-width: 1080px) {
     .workspace {
       grid-template-columns: 1fr;
     }
 
     .report-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .template-grid {
       grid-template-columns: 1fr;
     }
   }
