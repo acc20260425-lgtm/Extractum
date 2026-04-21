@@ -170,6 +170,10 @@ Runtime note:
 - the UI only observes restore state through `tg_get_account_statuses`;
 - window startup is not blocked by session restore.
 
+Future secret-storage note:
+- if `api_hash` moves from SQLite into secure storage, secret keys must be profile-scoped;
+- different app variants or profiles such as `test` and `work` must not share the same secret namespace by accident.
+
 The frontend should use Tauri commands and should not directly own low-level persistence or Telegram details.
 
 ## 8. MVP non-goals
