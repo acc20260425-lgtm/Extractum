@@ -18,6 +18,7 @@ Current pages:
 - `src/routes/auth/[id]/+page.svelte`
 - `src/routes/sources/+page.svelte`
 - `src/routes/settings/+page.svelte`
+- planned `src/routes/analysis/+page.svelte`
 
 Shared shell:
 - `src/routes/+layout.svelte`
@@ -32,6 +33,8 @@ Responsibilities currently implemented in frontend:
 - inline message browsing state
 - LLM settings form state
 - LLM streaming output handling
+- planned analysis form state
+- planned analysis run/history rendering
 - theme selection and persistence
 
 ### Backend
@@ -41,6 +44,8 @@ Current Rust modules:
 - `src-tauri/src/telegram.rs`
 - `src-tauri/src/sources.rs`
 - `src-tauri/src/llm.rs`
+- planned `src-tauri/src/analysis.rs`
+- planned `src-tauri/src/db.rs`
 
 Responsibilities currently implemented in backend:
 - Tauri bootstrap
@@ -58,6 +63,8 @@ Responsibilities currently implemented in backend:
 - ZSTD compression/decompression for persisted metadata and message content
 - temporary LLM profile storage in `app_settings`
 - Gemini provider request mapping and streaming
+- planned analysis retrieval from `items`
+- planned analysis run persistence and trace persistence
 
 ## 3. Telegram subsystem
 
@@ -115,6 +122,11 @@ The active Tauri command layer is intentionally small:
 - Items: `get_items`
 - LLM: `get_llm_profiles`, `save_llm_profile`, `ask_llm_stream`
 
+Planned next command surface:
+- analysis template CRUD
+- analysis run start/list/get
+- analysis trace lookup
+
 This matches the current implemented product slice.
 
 ## 6. Current sync constraints
@@ -145,13 +157,16 @@ Current-state details:
 - the Sources page now combines source management, sync actions, and a first-pass inline message viewer;
 - both `/accounts` and `/sources` surface Telegram runtime readiness from backend state;
 - `/settings` is the current LLM-only route and is intentionally separate from `/sources`.
+- the planned `/analysis` route should become the first dedicated report-generation surface over synced local records.
 
 ## 8. Recommended direction
 
 Near-term implementation should continue in this order:
 1. improve message browsing and filtering over `items`;
 2. add pagination or incremental loading to `get_items`;
-3. add source-driven analysis flow on top of the existing Gemini provider layer;
-4. revisit secure storage for provider secrets.
+3. add backend-owned analysis retrieval and saved report generation over synced `items`;
+4. add a dedicated `/analysis` route with streaming report output and run history;
+5. add traceability UI for cited message refs and saved quotes;
+6. revisit secure storage for provider secrets.
 
 That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.

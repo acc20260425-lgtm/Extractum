@@ -14,6 +14,8 @@ Right now the project supports:
 - viewing synced messages inline in the Sources UI;
 - configuring a Gemini provider profile and testing streaming responses from `/settings`.
 
+The next planned slice is a dedicated `/analysis` route for generating saved markdown reports over already-synced messages from one source and a selected time period.
+
 ## What exists in the codebase
 
 ### Frontend
@@ -22,6 +24,7 @@ Right now the project supports:
 - `/auth/[id]`: initialize Telegram client, send code, sign in, sign out
 - `/sources`: filter by account, load Telegram channels, add sources manually or from dialogs, sync a source, view synced messages, and show restore/runtime readiness
 - `/settings`: edit the default Gemini provider profile and run a streaming test request
+- planned `/analysis`: run saved report-style analysis over synced local messages, then later expand toward traceability UX and chat
 - global app layout with persistent light/dark theme toggle
 
 ### Backend commands
@@ -48,6 +51,11 @@ Implemented Tauri commands:
 - `get_llm_profiles`
 - `save_llm_profile`
 - `ask_llm_stream`
+
+Planned next command surface:
+- analysis template CRUD
+- analysis run start/list/get
+- analysis trace lookup
 
 ### Storage
 
@@ -83,6 +91,12 @@ Out of scope in current implementation:
 - media ingestion
 - analysis flow from `/sources` into Gemini responses
 - vector DB / embeddings / semantic retrieval
+
+Planned next:
+- backend-owned analysis retrieval from local `items`
+- saved markdown reports with streaming output
+- traceability through message refs and saved quote metadata
+- later report-grounded chat without embeddings
 
 ## Recommended reading order
 
