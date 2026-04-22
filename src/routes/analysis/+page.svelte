@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import RunHistory from "$lib/components/analysis/run-history.svelte";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -1252,55 +1253,20 @@
   </div>
 </section>
 
-<section class="card history">
-  <div class="panel-header">
-    <div>
-      <h3>Saved Runs</h3>
-      <p class="sub">Immutable report runs with saved model, prompt version, and traceability data.</p>
-    </div>
-    <div class="history-actions">
-      <div class="filter-group">
-        <button class:activeFilter={runFilter === "all"} class="secondary" onclick={() => (runFilter = "all")}>All</button>
-        <button class:activeFilter={runFilter === "completed"} class="secondary" onclick={() => (runFilter = "completed")}>Completed</button>
-        <button class:activeFilter={runFilter === "running"} class="secondary" onclick={() => (runFilter = "running")}>Running</button>
-        <button class:activeFilter={runFilter === "failed"} class="secondary" onclick={() => (runFilter = "failed")}>Failed</button>
-      </div>
-      <button class="secondary" onclick={loadRuns}>Refresh</button>
-    </div>
-  </div>
-
-  {#if loadingRuns}
-    <p class="empty">Loading analysis runs...</p>
-  {:else if runs.length === 0}
-    <p class="empty">No analysis runs yet.</p>
-  {:else if filteredRuns().length === 0}
-    <p class="empty">No runs match the current filter.</p>
-  {:else}
-    <ul class="run-list">
-      {#each filteredRuns() as run}
-        <li class:selected={run.id === activeRunId}>
-          <div class="run-copy">
-            <div class="run-title">
-              <strong>{runTargetLabel(run)}</strong>
-              <span class={`badge badge-${statusTone(run.status)}`}>{run.status}</span>
-            </div>
-            <p class="sub">
-              {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
-            </p>
-            <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
-            {#if run.completed_at}
-              <p class="sub">Completed: {formatTimestamp(run.completed_at)}</p>
-            {/if}
-            {#if run.error}
-              <p class="run-list-error">{run.error}</p>
-            {/if}
-          </div>
-          <button class="secondary" onclick={() => openRun(run.id)}>Open</button>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</section>
+<RunHistory
+  {runs}
+  {loadingRuns}
+  {runFilter}
+  {activeRunId}
+  filteredRuns={filteredRuns()}
+  {formatTimestamp}
+  {formatPeriod}
+  {runTargetLabel}
+  {statusTone}
+  onRefresh={loadRuns}
+  onOpenRun={openRun}
+  onChangeFilter={(next) => (runFilter = next)}
+/>
 
 <style>
   .workspace {
@@ -1319,8 +1285,7 @@
   }
 
   .controls,
-  .report,
-  .history {
+  .report {
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -1459,8 +1424,7 @@
     letter-spacing: 0.04em;
   }
 
-  .run-error,
-  .run-list-error {
+  .run-error {
     margin: 0;
     padding: 0.7rem 0.85rem;
     border-radius: 8px;
@@ -1628,43 +1592,6 @@
     word-break: break-word;
   }
 
-  .run-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .run-list li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    border: 1px solid var(--border);
-    background: var(--panel-strong);
-    border-radius: 10px;
-  }
-
-  .run-list li.selected {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
-  }
-
-  .run-copy {
-    min-width: 0;
-  }
-
-  .run-title {
-    display: flex;
-    gap: 0.6rem;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 0.35rem;
-  }
-
   .badge {
     padding: 0.2rem 0.55rem;
     border-radius: 999px;
@@ -1688,19 +1615,6 @@
   .badge-info {
     background: color-mix(in srgb, var(--primary) 16%, var(--panel));
     color: var(--primary);
-  }
-
-  .history-actions,
-  .filter-group {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .activeFilter {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
-    border-color: var(--primary);
   }
 
   .activeScope {
@@ -1895,11 +1809,6 @@
   @media (max-width: 720px) {
     .grid {
       grid-template-columns: 1fr;
-    }
-
-    .run-list li {
-      flex-direction: column;
-      align-items: stretch;
     }
 
     .run-meta-grid {
