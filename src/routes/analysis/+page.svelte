@@ -4,6 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import RunHistory from "$lib/components/analysis/run-history.svelte";
+  import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import TracePanel from "$lib/components/analysis/trace-panel.svelte";
   import {
@@ -1037,80 +1038,25 @@
   onDeleteTemplate={deleteTemplate}
 />
 
-<section class="card groups">
-  <div class="panel-header">
-    <div>
-      <h3>Source Groups</h3>
-      <p class="sub">Save reusable named sets of synced sources for future cross-source reports.</p>
-    </div>
-    <div class="template-actions">
-      <button class="secondary" onclick={startNewGroup} disabled={savingGroup || deletingGroup}>
-        New group
-      </button>
-      <button class="secondary" onclick={saveGroupCopy} disabled={savingGroup || deletingGroup}>
-        {savingGroup ? "Saving..." : "Save as new"}
-      </button>
-      <button class="secondary" onclick={saveGroupChanges} disabled={savingGroup || deletingGroup || !selectedGroup()}>
-        {savingGroup ? "Saving..." : "Save changes"}
-      </button>
-      <button class="danger-soft" onclick={deleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup()}>
-        {deletingGroup ? "Deleting..." : "Delete"}
-      </button>
-    </div>
-  </div>
-
-  <div class="group-grid">
-    <div class="group-form">
-      <label>Saved groups
-        <select bind:value={selectedGroupId}>
-          <option value="">Create a new group</option>
-          {#each groups as group}
-            <option value={String(group.id)}>
-              {group.name} - {group.members.length} sources
-            </option>
-          {/each}
-        </select>
-      </label>
-
-      <label>Group name
-        <input type="text" bind:value={groupName} placeholder="Core channels" />
-      </label>
-
-      {#if selectedGroup()}
-        <p class="sub">
-          Updated {formatTimestamp(selectedGroup()?.updated_at ?? null)}
-        </p>
-      {/if}
-    </div>
-
-    <div class="group-members">
-      <div class="members-header">
-        <h4>Group Members</h4>
-        <span class="trace-count">{groupMemberSourceIds.length} selected</span>
-      </div>
-
-      {#if sources.length === 0}
-        <p class="empty">No synced sources available for grouping yet.</p>
-      {:else}
-        <div class="member-list">
-          {#each sources as source}
-            <label class="member-row">
-              <input
-                type="checkbox"
-                checked={isGroupSourceSelected(source.id)}
-                onchange={() => toggleGroupSource(source.id)}
-              />
-              <div class="member-copy">
-                <strong>{source.title ?? `Source ${source.id}`}</strong>
-                <span>{source.item_count} messages</span>
-              </div>
-            </label>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  </div>
-</section>
+<SourceGroupEditor
+  {groups}
+  {selectedGroupId}
+  selectedGroup={selectedGroup()}
+  {groupName}
+  {groupMemberSourceIds}
+  {sources}
+  {savingGroup}
+  {deletingGroup}
+  {formatTimestamp}
+  {isGroupSourceSelected}
+  onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
+  onChangeGroupName={(value) => (groupName = value)}
+  onToggleSource={toggleGroupSource}
+  onStartNewGroup={startNewGroup}
+  onSaveGroupCopy={saveGroupCopy}
+  onSaveGroupChanges={saveGroupChanges}
+  onDeleteGroup={deleteGroup}
+/>
 
 <RunHistory
   {runs}
@@ -1328,85 +1274,6 @@
     gap: 0.9rem;
   }
 
-  .groups {
-    margin-top: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .template-actions {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-  }
-
-  .group-grid {
-    display: grid;
-    grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
-    gap: 1rem;
-    align-items: start;
-  }
-
-  .group-form,
-  .group-members {
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-  }
-
-  .members-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .members-header h4 {
-    margin: 0;
-  }
-
-  .member-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    max-height: 24rem;
-    overflow: auto;
-    padding-right: 0.25rem;
-  }
-
-  .member-row {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.85rem 0.95rem;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    cursor: pointer;
-  }
-
-  .member-row:hover {
-    background: var(--panel-hover);
-  }
-
-  .member-row input {
-    margin-top: 0.2rem;
-  }
-
-  .member-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-
-  .member-copy span {
-    color: var(--muted);
-    font-size: 0.82rem;
-  }
-
   :global(button.danger-soft) {
     background: color-mix(in srgb, var(--danger) 14%, var(--panel));
     color: var(--danger);
@@ -1423,10 +1290,6 @@
     }
 
     .report-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .group-grid {
       grid-template-columns: 1fr;
     }
 
