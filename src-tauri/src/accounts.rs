@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri::AppHandle;
 
 use crate::db::get_pool;
+use crate::telegram::{clear_account_runtime, TelegramState};
 
 #[derive(Serialize, sqlx::FromRow)]
 pub struct AccountRecord {
@@ -91,12 +92,17 @@ pub async fn clear_account_phone(handle: AppHandle, account_id: i64) -> Result<(
 }
 
 #[tauri::command]
-pub async fn delete_account(handle: AppHandle, account_id: i64) -> Result<(), String> {
+pub async fn delete_account(
+    handle: AppHandle,
+    state: tauri::State<'_, TelegramState>,
+    account_id: i64,
+) -> Result<(), String> {
     let pool = get_pool(&handle).await?;
     sqlx::query("DELETE FROM accounts WHERE id = ?")
         .bind(account_id)
         .execute(&pool)
         .await
         .map_err(|e| e.to_string())?;
+    clear_account_runtime(&handle, &state, account_id, true).await;
     Ok(())
 }

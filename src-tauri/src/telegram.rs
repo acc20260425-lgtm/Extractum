@@ -150,6 +150,29 @@ async fn set_account_status(
     let _ = handle.emit(TELEGRAM_ACCOUNT_STATUS_EVENT, &runtime_status);
 }
 
+pub async fn clear_account_runtime(
+    handle: &AppHandle,
+    state: &TelegramState,
+    account_id: i64,
+    sign_out: bool,
+) {
+    let mut accounts = state.accounts.lock().await;
+    if let Some(ac) = accounts.remove(&account_id) {
+        if sign_out {
+            let _ = ac.client.sign_out().await;
+        }
+    }
+    drop(accounts);
+
+    if let Ok(path) = session_path(handle, account_id) {
+        if path.exists() {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    set_account_status(handle, state, account_id, STATUS_NOT_INITIALIZED, None).await;
+}
+
 async fn init_account_client(
     handle: &AppHandle,
     state: &TelegramState,
@@ -367,20 +390,7 @@ pub async fn tg_logout(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
 ) -> Result<bool, String> {
-    let mut accounts = state.accounts.lock().await;
-    if let Some(ac) = accounts.remove(&account_id) {
-        let _ = ac.client.sign_out().await;
-    }
-    drop(accounts);
-
-    if let Ok(path) = session_path(&handle, account_id) {
-        if path.exists() {
-            let _ = fs::remove_file(path);
-        }
-    }
-
-    set_account_status(&handle, &state, account_id, STATUS_NOT_INITIALIZED, None).await;
-
+    clear_account_runtime(&handle, &state, account_id, true).await;
     Ok(true)
 }
 
