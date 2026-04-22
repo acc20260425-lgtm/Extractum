@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
 use crate::db::get_pool;
+use crate::error::{AppError, AppResult};
 use crate::llm::{
     resolve_effective_model, resolve_profile_for_backend, run_llm_collect_with_profile,
     run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
@@ -460,24 +461,30 @@ pub async fn start_analysis_report(
     prompt_template_id: i64,
     model_override: Option<String>,
     profile_id: Option<String>,
-) -> Result<i64, String> {
+) -> AppResult<i64> {
     if period_from > period_to {
-        return Err("period_from must be less than or equal to period_to".to_string());
+        return Err(AppError::validation(
+            "period_from must be less than or equal to period_to",
+        ));
     }
 
     let output_language = output_language.trim().to_string();
     if output_language.is_empty() {
-        return Err("Output language cannot be empty".to_string());
+        return Err(AppError::validation("Output language cannot be empty"));
     }
 
     if source_id.is_some() == source_group_id.is_some() {
-        return Err("Select either a source or a source group".to_string());
+        return Err(AppError::validation(
+            "Select either a source or a source group",
+        ));
     }
 
     let pool = get_pool(&handle).await?;
     let prompt_template = fetch_prompt_template(&pool, prompt_template_id).await?;
     if prompt_template.template_kind != TEMPLATE_KIND_REPORT {
-        return Err("Selected prompt template is not a report template".to_string());
+        return Err(AppError::validation(
+            "Selected prompt template is not a report template",
+        ));
     }
 
     let resolved_profile = resolve_profile_for_backend(&handle, profile_id.as_deref()).await?;
@@ -492,7 +499,7 @@ pub async fn start_analysis_report(
                     .await
                     .map_err(|e| e.to_string())?;
             if source_exists == 0 {
-                return Err(format!("Source {source_id} not found"));
+                return Err(AppError::not_found(format!("Source {source_id} not found")));
             }
 
             let source_title =
@@ -514,12 +521,14 @@ pub async fn start_analysis_report(
             )
         } else {
             let group_id = source_group_id.expect("validated source_group_id");
-            let group = fetch_source_group(&pool, group_id)
-                .await?
-                .ok_or_else(|| format!("Analysis source group {group_id} not found"))?;
+            let group = fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
+                AppError::not_found(format!("Analysis source group {group_id} not found"))
+            })?;
 
             if group.members.is_empty() {
-                return Err("The selected source group does not contain any sources".to_string());
+                return Err(AppError::validation(
+                    "The selected source group does not contain any sources",
+                ));
             }
 
             (
@@ -549,9 +558,9 @@ pub async fn start_analysis_report(
     )
     .await?
     {
-        return Err(format!(
+        return Err(AppError::conflict(format!(
             "An identical analysis report is already queued or running (run {existing_run_id})"
-        ));
+        )));
     }
 
     let run_id = insert_analysis_run(

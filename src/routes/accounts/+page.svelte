@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { formatAppError } from "$lib/app-error";
   import { pushErrorToast } from "$lib/toasts";
 
   interface AccountRecord {
@@ -36,7 +37,7 @@
       accounts = await invoke<AccountRecord[]>("list_accounts");
       await loadAccountStatuses();
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("loading accounts", e);
     }
   }
 
@@ -54,7 +55,7 @@
         statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus])
       );
     } catch (e) {
-      pushErrorToast(`Failed to refresh Telegram account status: ${e}`);
+      pushErrorToast(formatAppError("refreshing Telegram account status", e));
       accountStatuses = {};
     }
   }
@@ -96,7 +97,7 @@
       newApiHash = "";
       await loadAccounts();
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("creating the account", e);
     } finally {
       creating = false;
     }
@@ -112,7 +113,7 @@
       await invoke("delete_account", { accountId: account.id });
       await loadAccounts();
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("deleting the account", e);
     }
   }
 
@@ -156,7 +157,7 @@
     <p class="empty">No accounts yet. Add one below.</p>
   {:else}
     <ul class="list">
-      {#each accounts as acc}
+      {#each accounts as acc (acc.id)}
         {@const runtime = runtimeStatus(acc.id)}
         <li>
           <div class="info">

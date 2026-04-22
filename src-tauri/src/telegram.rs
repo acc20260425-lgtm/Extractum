@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
 use crate::db::get_pool;
+use crate::error::{AppError, AppResult};
 
 const STATUS_NOT_INITIALIZED: &str = "not_initialized";
 const STATUS_RESTORING: &str = "restoring";
@@ -279,7 +280,7 @@ pub async fn tg_init(
     account_id: i64,
     api_id: i32,
     api_hash: String,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     match init_account_client(&handle, &state, account_id, api_id, api_hash).await {
         Ok(is_auth) => Ok(is_auth),
         Err(error) => {
@@ -294,7 +295,7 @@ pub async fn tg_init(
                 Some(restore_failure_message(error.clone())),
             )
             .await;
-            Err(error)
+            Err(error.into())
         }
     }
 }
@@ -303,14 +304,14 @@ pub async fn tg_init(
 pub async fn tg_is_authenticated(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     let client = {
         let accounts = state.accounts.lock().await;
         accounts.get(&account_id).map(|ac| ac.client.clone())
     };
 
     if let Some(client) = client {
-        client.is_authorized().await.map_err(|e| e.to_string())
+        Ok(client.is_authorized().await.map_err(|e| e.to_string())?)
     } else {
         Ok(false)
     }
@@ -320,7 +321,7 @@ pub async fn tg_is_authenticated(
 pub async fn tg_get_account_statuses(
     state: tauri::State<'_, TelegramState>,
     account_ids: Vec<i64>,
-) -> Result<Vec<AccountRuntimeStatus>, String> {
+) -> AppResult<Vec<AccountRuntimeStatus>> {
     let statuses = state.statuses.lock().await;
     Ok(account_ids
         .into_iter()
@@ -342,11 +343,11 @@ pub async fn tg_send_code(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
     phone: String,
-) -> Result<String, String> {
+) -> AppResult<String> {
     let mut accounts = state.accounts.lock().await;
     let ac = accounts
         .get_mut(&account_id)
-        .ok_or("Account not initialized")?;
+        .ok_or_else(|| AppError::auth("Account not initialized"))?;
 
     let token = ac
         .client
@@ -366,13 +367,16 @@ pub async fn tg_sign_in(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
     code: String,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     let session_to_save = {
         let mut accounts = state.accounts.lock().await;
         let ac = accounts
             .get_mut(&account_id)
-            .ok_or("Account not initialized")?;
-        let token = ac.login_token.as_ref().ok_or("Call tg_send_code first")?;
+            .ok_or_else(|| AppError::auth("Account not initialized"))?;
+        let token = ac
+            .login_token
+            .as_ref()
+            .ok_or_else(|| AppError::auth("Call tg_send_code first"))?;
 
         ac.client
             .sign_in(token, &code)
@@ -393,7 +397,7 @@ pub async fn tg_logout(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     clear_account_runtime(&handle, &state, account_id, true).await;
     Ok(true)
 }
@@ -403,9 +407,9 @@ pub async fn tg_logout(
 pub async fn get_client<'a>(
     accounts: &'a HashMap<i64, AccountClient>,
     account_id: i64,
-) -> Result<&'a Client, String> {
+) -> AppResult<&'a Client> {
     accounts
         .get(&account_id)
         .map(|ac| &ac.client)
-        .ok_or_else(|| format!("Account {account_id} not initialized"))
+        .ok_or_else(|| AppError::auth(format!("Account {account_id} not initialized")))
 }

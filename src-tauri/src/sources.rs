@@ -6,6 +6,7 @@ use std::io::Cursor;
 use tauri::AppHandle;
 
 use crate::db::get_pool;
+use crate::error::{AppError, AppResult};
 use crate::telegram::TelegramState;
 
 const INITIAL_SYNC_MESSAGE_LIMIT: usize = 500;
@@ -127,7 +128,7 @@ struct DocumentSignals {
 }
 
 #[tauri::command]
-pub async fn delete_source(handle: AppHandle, source_id: i64) -> Result<(), String> {
+pub async fn delete_source(handle: AppHandle, source_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     let result = sqlx::query("DELETE FROM sources WHERE id = ?")
         .bind(source_id)
@@ -136,7 +137,7 @@ pub async fn delete_source(handle: AppHandle, source_id: i64) -> Result<(), Stri
         .map_err(|e| e.to_string())?;
 
     if result.rows_affected() == 0 {
-        return Err(format!("Source {source_id} not found"));
+        return Err(AppError::not_found(format!("Source {source_id} not found")));
     }
 
     Ok(())
@@ -146,7 +147,7 @@ pub async fn delete_source(handle: AppHandle, source_id: i64) -> Result<(), Stri
 pub async fn list_telegram_channels(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
-) -> Result<Vec<ChannelInfo>, String> {
+) -> AppResult<Vec<ChannelInfo>> {
     let accounts = state.accounts.lock().await;
     let client = crate::telegram::get_client(&accounts, account_id).await?;
 
@@ -171,7 +172,7 @@ pub async fn add_telegram_source(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
     channel_ref: String,
-) -> Result<SourceRecord, String> {
+) -> AppResult<SourceRecord> {
     let accounts = state.accounts.lock().await;
     let client = crate::telegram::get_client(&accounts, account_id).await?;
 
@@ -184,7 +185,7 @@ pub async fn add_telegram_source(
     drop(accounts);
 
     let pool = get_pool(&handle).await?;
-    sqlx::query_as(
+    Ok(sqlx::query_as(
         r#"
         INSERT INTO sources (source_type, external_id, title, metadata_zstd, is_active, is_member, account_id, created_at)
         VALUES ('telegram_channel', ?, ?, ?, 1, ?, ?, ?)
@@ -204,30 +205,30 @@ pub async fn add_telegram_source(
     .bind(now)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?)
 }
 
 #[tauri::command]
 pub async fn list_sources(
     handle: AppHandle,
     account_id: Option<i64>,
-) -> Result<Vec<SourceRecord>, String> {
+) -> AppResult<Vec<SourceRecord>> {
     let pool = get_pool(&handle).await?;
     if let Some(aid) = account_id {
-        sqlx::query_as(
+        Ok(sqlx::query_as(
             "SELECT id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
         )
         .bind(aid)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?)
     } else {
-        sqlx::query_as(
+        Ok(sqlx::query_as(
             "SELECT id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
         )
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?)
     }
 }
 
@@ -236,7 +237,7 @@ pub async fn sync_channel(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
     source_id: i64,
-) -> Result<SyncResult, String> {
+) -> AppResult<SyncResult> {
     let pool = get_pool(&handle).await?;
     let source: SourceSyncTarget = sqlx::query_as(
         "SELECT id, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
@@ -245,11 +246,11 @@ pub async fn sync_channel(
     .fetch_optional(&pool)
     .await
     .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("Source {source_id} not found"))?;
+    .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))?;
 
-    let account_id = source
-        .account_id
-        .ok_or_else(|| format!("Source {source_id} is not linked to an account"))?;
+    let account_id = source.account_id.ok_or_else(|| {
+        AppError::validation(format!("Source {source_id} is not linked to an account"))
+    })?;
 
     let client = {
         let accounts = state.accounts.lock().await;
@@ -259,7 +260,9 @@ pub async fn sync_channel(
     };
 
     if !client.is_authorized().await.map_err(|e| e.to_string())? {
-        return Err(format!("Account {account_id} is not authenticated"));
+        return Err(AppError::auth(format!(
+            "Account {account_id} is not authenticated"
+        )));
     }
 
     let peer = resolve_source_peer(&client, &source).await?;
@@ -387,7 +390,7 @@ pub async fn get_items(
     source_id: i64,
     limit: i64,
     before_published_at: Option<i64>,
-) -> Result<Vec<ItemRecord>, String> {
+) -> AppResult<Vec<ItemRecord>> {
     let pool = get_pool(&handle).await?;
     let limit = limit.clamp(1, 200);
     let rows: Vec<StoredItemRow> = if let Some(before) = before_published_at {
@@ -445,7 +448,8 @@ pub async fn get_items(
         .map_err(|e| e.to_string())?
     };
 
-    rows.into_iter()
+    Ok(rows
+        .into_iter()
         .map(|row| {
             let media_metadata = decode_media_metadata(row.media_metadata_zstd.as_deref())?;
             Ok(ItemRecord {
@@ -468,7 +472,7 @@ pub async fn get_items(
                 has_raw_data: row.raw_data_zstd.is_some(),
             })
         })
-        .collect()
+        .collect::<Result<Vec<_>, String>>()?)
 }
 
 fn parse_username(input: &str) -> String {

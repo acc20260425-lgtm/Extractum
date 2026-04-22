@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { page } from "$app/stores";
+  import { formatAppError } from "$lib/app-error";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import SourceRow from "$lib/components/source-row.svelte";
   import { pushErrorToast } from "$lib/toasts";
@@ -107,7 +108,7 @@
       accounts = await invoke<AccountRecord[]>("list_accounts");
       await loadAccountStatuses();
     } catch (e) {
-      pushErrorToast(`Failed to load accounts for sources: ${e}`);
+      pushErrorToast(formatAppError("loading accounts for sources", e));
     }
   }
 
@@ -125,7 +126,7 @@
         statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus])
       );
     } catch (e) {
-      pushErrorToast(`Failed to refresh Telegram account status: ${e}`);
+      pushErrorToast(formatAppError("refreshing Telegram account status", e));
       accountStatuses = {};
     }
   }
@@ -140,7 +141,7 @@
       sources = nextSources;
     } catch (e) {
       if (requestId !== loadSourcesRequestId) return;
-      status = `Error loading sources: ${e}`;
+      status = formatAppError("loading sources", e);
     }
   }
 
@@ -160,7 +161,7 @@
         accountId: selectedAccountId,
       });
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("loading Telegram channels", e);
     } finally {
       loadingDialogs = false;
     }
@@ -177,7 +178,7 @@
       });
     } catch (e) {
       items = [];
-      status = `Error loading messages: ${e}`;
+      status = formatAppError("loading messages", e);
     } finally {
       loadingItems = false;
     }
@@ -195,7 +196,7 @@
       await invoke("add_telegram_source", { accountId: selectedAccountId, channelRef: ref });
       await loadSources();
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("adding the source from dialogs", e);
     } finally {
       addingId = null;
     }
@@ -217,7 +218,7 @@
       manualRef = "";
       await loadSources();
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("adding the source", e);
     } finally {
       addingId = null;
     }
@@ -237,7 +238,7 @@
         await loadItems(sourceId);
       }
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("syncing the source", e);
     } finally {
       const next = { ...syncingIds };
       delete next[sourceId];
@@ -266,7 +267,7 @@
       }
       setSyncStatus(`Source "${sourceLabel}" deleted from the local database.`);
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("deleting the source", e);
     } finally {
       const next = { ...deletingIds };
       delete next[sourceId];
@@ -415,7 +416,7 @@
   <div class="row">
     <select bind:value={selectedAccountId}>
       <option value={null}>All accounts</option>
-      {#each accounts as acc}
+      {#each accounts as acc (acc.id)}
         <option value={acc.id}>{acc.label}{acc.phone ? ` (${acc.phone})` : " (not signed in)"}</option>
       {/each}
     </select>
@@ -434,7 +435,7 @@
       <p class="empty">No sources yet.</p>
     {:else}
       <ul class="source-list">
-        {#each sources as src}
+        {#each sources as src (src.id)}
           <SourceRow
             source={src}
             selected={selectedSourceId === src.id}
@@ -541,7 +542,7 @@
 
     {#if dialogs.length > 0}
       <ul class="source-list">
-        {#each dialogs as ch}
+        {#each dialogs as ch (ch.id)}
           {@const added = isAlreadyAdded(ch)}
           <li>
             <div class="channel-info">

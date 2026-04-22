@@ -1,4 +1,5 @@
 mod db;
+mod error;
 mod migrations;
 use migrations::{build_migrations, prepare_database};
 

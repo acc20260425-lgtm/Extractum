@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
 use crate::db::get_pool;
+use crate::error::{AppError, AppResult};
 
 use super::models::AnalysisPromptTemplate;
 use super::store::ensure_builtin_report_template;
@@ -38,13 +39,13 @@ fn validate_template_input(
 pub async fn list_analysis_prompt_templates(
     handle: AppHandle,
     template_kind: Option<String>,
-) -> Result<Vec<AnalysisPromptTemplate>, String> {
+) -> AppResult<Vec<AnalysisPromptTemplate>> {
     let pool = get_pool(&handle).await?;
     ensure_builtin_report_template(&pool).await?;
 
     if let Some(template_kind) = template_kind {
         let template_kind = validate_template_kind(&template_kind)?;
-        sqlx::query_as::<_, AnalysisPromptTemplate>(
+        Ok(sqlx::query_as::<_, AnalysisPromptTemplate>(
             r#"
             SELECT id, name, template_kind, body, version, is_builtin, created_at, updated_at
             FROM analysis_prompt_templates
@@ -55,9 +56,9 @@ pub async fn list_analysis_prompt_templates(
         .bind(template_kind)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?)
     } else {
-        sqlx::query_as::<_, AnalysisPromptTemplate>(
+        Ok(sqlx::query_as::<_, AnalysisPromptTemplate>(
             r#"
             SELECT id, name, template_kind, body, version, is_builtin, created_at, updated_at
             FROM analysis_prompt_templates
@@ -66,7 +67,7 @@ pub async fn list_analysis_prompt_templates(
         )
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?)
     }
 }
 
@@ -76,12 +77,12 @@ pub async fn create_analysis_prompt_template(
     name: String,
     template_kind: String,
     body: String,
-) -> Result<AnalysisPromptTemplate, String> {
+) -> AppResult<AnalysisPromptTemplate> {
     let pool = get_pool(&handle).await?;
     let (name, template_kind, body) = validate_template_input(&name, &template_kind, &body)?;
     let now = now_secs();
 
-    sqlx::query_as::<_, AnalysisPromptTemplate>(
+    Ok(sqlx::query_as::<_, AnalysisPromptTemplate>(
         r#"
         INSERT INTO analysis_prompt_templates (
             name,
@@ -103,7 +104,7 @@ pub async fn create_analysis_prompt_template(
     .bind(now)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?)
 }
 
 #[tauri::command]
@@ -112,7 +113,7 @@ pub async fn update_analysis_prompt_template(
     template_id: i64,
     name: String,
     body: String,
-) -> Result<AnalysisPromptTemplate, String> {
+) -> AppResult<AnalysisPromptTemplate> {
     let pool = get_pool(&handle).await?;
     let existing: AnalysisPromptTemplate = sqlx::query_as::<_, AnalysisPromptTemplate>(
         r#"
@@ -125,24 +126,28 @@ pub async fn update_analysis_prompt_template(
     .fetch_optional(&pool)
     .await
     .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("Analysis prompt template {template_id} not found"))?;
+    .ok_or_else(|| {
+        AppError::not_found(format!("Analysis prompt template {template_id} not found"))
+    })?;
 
     if existing.is_builtin {
-        return Err("Built-in templates cannot be edited directly".to_string());
+        return Err(AppError::conflict(
+            "Built-in templates cannot be edited directly",
+        ));
     }
 
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err("Template name cannot be empty".to_string());
+        return Err(AppError::validation("Template name cannot be empty"));
     }
 
     let body = body.trim().to_string();
     if body.is_empty() {
-        return Err("Template body cannot be empty".to_string());
+        return Err(AppError::validation("Template body cannot be empty"));
     }
 
     let now = now_secs();
-    sqlx::query_as::<_, AnalysisPromptTemplate>(
+    Ok(sqlx::query_as::<_, AnalysisPromptTemplate>(
         r#"
         UPDATE analysis_prompt_templates
         SET
@@ -160,14 +165,11 @@ pub async fn update_analysis_prompt_template(
     .bind(template_id)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?)
 }
 
 #[tauri::command]
-pub async fn delete_analysis_prompt_template(
-    handle: AppHandle,
-    template_id: i64,
-) -> Result<(), String> {
+pub async fn delete_analysis_prompt_template(handle: AppHandle, template_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     let template: Option<(i64, bool)> =
         sqlx::query_as("SELECT id, is_builtin FROM analysis_prompt_templates WHERE id = ?")
@@ -177,11 +179,13 @@ pub async fn delete_analysis_prompt_template(
             .map_err(|e| e.to_string())?;
 
     let Some((_, is_builtin)) = template else {
-        return Err(format!("Analysis prompt template {template_id} not found"));
+        return Err(AppError::not_found(format!(
+            "Analysis prompt template {template_id} not found"
+        )));
     };
 
     if is_builtin {
-        return Err("Built-in templates cannot be deleted".to_string());
+        return Err(AppError::conflict("Built-in templates cannot be deleted"));
     }
 
     sqlx::query("DELETE FROM analysis_prompt_templates WHERE id = ?")

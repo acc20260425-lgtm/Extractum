@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
+  import { formatAppError } from "$lib/app-error";
 
   const accountId = parseInt($page.params.id ?? "", 10);
   const hasValidAccountId = Number.isFinite(accountId);
@@ -45,7 +46,7 @@
 
       await initClient();
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("loading the account", e);
     }
   }
 
@@ -66,7 +67,7 @@
         status = "";
       }
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("initializing Telegram", e);
       step = "phone";
     } finally {
       loading = false;
@@ -80,7 +81,7 @@
       await invoke("tg_send_code", { accountId, phone });
       step = "code";
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("sending the Telegram code", e);
     } finally {
       loading = false;
     }
@@ -96,7 +97,7 @@
       step = "done";
       status = "Signed in successfully.";
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("signing in", e);
     } finally {
       loading = false;
     }
@@ -111,7 +112,7 @@
       step = "phone";
       status = "";
     } catch (e) {
-      status = `Error: ${e}`;
+      status = formatAppError("logging out", e);
     } finally {
       loading = false;
     }

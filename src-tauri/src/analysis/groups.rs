@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
 use crate::db::get_pool;
+use crate::error::{AppError, AppResult};
 
 use super::models::{AnalysisSourceGroup, AnalysisSourceGroupRow};
 use super::now_secs;
@@ -30,9 +31,7 @@ pub(crate) fn normalize_source_group_input(
 }
 
 #[tauri::command]
-pub async fn list_analysis_source_groups(
-    handle: AppHandle,
-) -> Result<Vec<AnalysisSourceGroup>, String> {
+pub async fn list_analysis_source_groups(handle: AppHandle) -> AppResult<Vec<AnalysisSourceGroup>> {
     let pool = get_pool(&handle).await?;
     let rows = sqlx::query_as::<_, AnalysisSourceGroupRow>(
         r#"
@@ -60,7 +59,7 @@ pub async fn create_analysis_source_group(
     handle: AppHandle,
     name: String,
     source_ids: Vec<i64>,
-) -> Result<AnalysisSourceGroup, String> {
+) -> AppResult<AnalysisSourceGroup> {
     let pool = get_pool(&handle).await?;
     let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
     ensure_sources_exist(&pool, &source_ids).await?;
@@ -99,9 +98,11 @@ pub async fn create_analysis_source_group(
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    fetch_source_group(&pool, group_id)
-        .await?
-        .ok_or_else(|| format!("Analysis source group {group_id} not found after creation"))
+    Ok(fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
+        AppError::not_found(format!(
+            "Analysis source group {group_id} not found after creation"
+        ))
+    })?)
 }
 
 #[tauri::command]
@@ -110,7 +111,7 @@ pub async fn update_analysis_source_group(
     group_id: i64,
     name: String,
     source_ids: Vec<i64>,
-) -> Result<AnalysisSourceGroup, String> {
+) -> AppResult<AnalysisSourceGroup> {
     let pool = get_pool(&handle).await?;
     let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
     ensure_sources_exist(&pool, &source_ids).await?;
@@ -123,7 +124,9 @@ pub async fn update_analysis_source_group(
     .await
     .map_err(|e| e.to_string())?;
     if exists == 0 {
-        return Err(format!("Analysis source group {group_id} not found"));
+        return Err(AppError::not_found(format!(
+            "Analysis source group {group_id} not found"
+        )));
     }
 
     let now = now_secs();
@@ -166,13 +169,15 @@ pub async fn update_analysis_source_group(
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    fetch_source_group(&pool, group_id)
-        .await?
-        .ok_or_else(|| format!("Analysis source group {group_id} not found after update"))
+    Ok(fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
+        AppError::not_found(format!(
+            "Analysis source group {group_id} not found after update"
+        ))
+    })?)
 }
 
 #[tauri::command]
-pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> Result<(), String> {
+pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     let result = sqlx::query("DELETE FROM analysis_source_groups WHERE id = ?")
         .bind(group_id)
@@ -181,7 +186,9 @@ pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> R
         .map_err(|e| e.to_string())?;
 
     if result.rows_affected() == 0 {
-        return Err(format!("Analysis source group {group_id} not found"));
+        return Err(AppError::not_found(format!(
+            "Analysis source group {group_id} not found"
+        )));
     }
 
     Ok(())

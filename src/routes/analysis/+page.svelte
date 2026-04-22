@@ -9,6 +9,7 @@
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import TracePanel from "$lib/components/analysis/trace-panel.svelte";
+  import { formatAppError } from "$lib/app-error";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -188,7 +189,7 @@
       resolvedTraceRefs = [...resolvedTraceRefs, ...resolved.map((entry) => entry.ref).filter((entry) => !resolvedTraceRefs.includes(entry))];
       selectedTraceRef = ref;
     } catch (error) {
-      status = `Error resolving trace reference: ${error}`;
+      status = formatAppError("resolving the trace reference", error);
     }
   }
 
@@ -203,7 +204,7 @@
       savedTraceRefs = [];
       resolvedTraceRefs = [];
       selectedTraceRef = null;
-      status = `Error loading analysis trace: ${error}`;
+      status = formatAppError("loading the analysis trace", error);
     }
   }
 
@@ -216,7 +217,7 @@
         selectedSourceId = String(sources[0].id);
       }
     } catch (error) {
-      status = `Error loading analysis sources: ${error}`;
+      status = formatAppError("loading analysis sources", error);
     } finally {
       loadingSources = false;
     }
@@ -236,7 +237,7 @@
         bindEditorToTemplate(selected);
       }
     } catch (error) {
-      status = `Error loading report templates: ${error}`;
+      status = formatAppError("loading report templates", error);
     } finally {
       loadingTemplates = false;
     }
@@ -258,7 +259,7 @@
         bindEditorToGroup(bound);
       }
     } catch (error) {
-      status = `Error loading source groups: ${error}`;
+      status = formatAppError("loading source groups", error);
     } finally {
       loadingGroups = false;
     }
@@ -273,7 +274,7 @@
         limit: 20,
       });
     } catch (error) {
-      status = `Error loading analysis runs: ${error}`;
+      status = formatAppError("loading analysis runs", error);
     } finally {
       loadingRuns = false;
     }
@@ -309,7 +310,7 @@
         selectedTraceRef = null;
       }
     } catch (error) {
-      status = `Error loading analysis run: ${error}`;
+      status = formatAppError("loading the analysis run", error);
     } finally {
       loadingRunDetail = false;
     }
@@ -325,7 +326,7 @@
       }));
     } catch (error) {
       chatMessages = [];
-      status = `Error loading analysis chat: ${error}`;
+      status = formatAppError("loading analysis chat", error);
     } finally {
       loadingChat = false;
     }
@@ -393,7 +394,7 @@
       await loadRuns();
     } catch (error) {
       running = false;
-      status = `Error starting analysis report: ${error}`;
+      status = formatAppError("starting the analysis report", error);
     }
   }
 
@@ -430,7 +431,7 @@
       chatting = false;
       activeChatRunId = null;
       activeChatRequestId = null;
-      status = `Error starting chat answer: ${error}`;
+      status = formatAppError("starting the chat answer", error);
     }
   }
 
@@ -449,7 +450,7 @@
       chatMessages = [];
       status = "Saved chat history cleared.";
     } catch (error) {
-      status = `Error clearing analysis chat: ${error}`;
+      status = formatAppError("clearing analysis chat", error);
     } finally {
       clearingChat = false;
     }
@@ -482,7 +483,7 @@
       selectedTemplateId = String(updated.id);
       bindEditorToTemplate(updated);
     } catch (error) {
-      status = `Error saving template: ${error}`;
+      status = formatAppError("saving the template", error);
     } finally {
       savingTemplate = false;
     }
@@ -506,7 +507,7 @@
       selectedTemplateId = String(created.id);
       bindEditorToTemplate(created);
     } catch (error) {
-      status = `Error creating template: ${error}`;
+      status = formatAppError("creating the template", error);
     } finally {
       savingTemplate = false;
     }
@@ -535,7 +536,7 @@
       selectedTemplateId = fallback ? String(fallback.id) : "";
       bindEditorToTemplate(fallback);
     } catch (error) {
-      status = `Error deleting template: ${error}`;
+      status = formatAppError("deleting the template", error);
     } finally {
       deletingTemplate = false;
     }
@@ -568,7 +569,7 @@
       selectedGroupId = String(updated.id);
       bindEditorToGroup(updated);
     } catch (error) {
-      status = `Error saving source group: ${error}`;
+      status = formatAppError("saving the source group", error);
     } finally {
       savingGroup = false;
     }
@@ -595,7 +596,7 @@
       selectedGroupId = String(created.id);
       bindEditorToGroup(created);
     } catch (error) {
-      status = `Error creating source group: ${error}`;
+      status = formatAppError("creating the source group", error);
     } finally {
       savingGroup = false;
     }
@@ -620,7 +621,7 @@
       selectedGroupId = fallback ? String(fallback.id) : "";
       bindEditorToGroup(fallback);
     } catch (error) {
-      status = `Error deleting source group: ${error}`;
+      status = formatAppError("deleting the source group", error);
     } finally {
       deletingGroup = false;
     }

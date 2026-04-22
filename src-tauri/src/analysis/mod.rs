@@ -17,6 +17,7 @@ use self::models::{
 use self::store::{fetch_run_row, load_run_corpus_messages, map_run_detail, map_run_summary};
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
 use crate::db::get_pool;
+use crate::error::{AppError, AppResult};
 
 pub use self::chat::{
     ask_analysis_run_question, clear_analysis_chat_messages, list_analysis_chat_messages,
@@ -98,9 +99,9 @@ fn decompress_text(bytes: &[u8]) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn list_analysis_sources(handle: AppHandle) -> Result<Vec<AnalysisSourceOption>, String> {
+pub async fn list_analysis_sources(handle: AppHandle) -> AppResult<Vec<AnalysisSourceOption>> {
     let pool = get_pool(&handle).await?;
-    sqlx::query_as(
+    Ok(sqlx::query_as(
         r#"
         SELECT
             sources.id,
@@ -116,7 +117,7 @@ pub async fn list_analysis_sources(handle: AppHandle) -> Result<Vec<AnalysisSour
     )
     .fetch_all(&pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?)
 }
 
 #[tauri::command]
@@ -125,12 +126,14 @@ pub async fn list_analysis_runs(
     source_id: Option<i64>,
     source_group_id: Option<i64>,
     limit: Option<i64>,
-) -> Result<Vec<AnalysisRunSummary>, String> {
+) -> AppResult<Vec<AnalysisRunSummary>> {
     let pool = get_pool(&handle).await?;
     let limit = limit.unwrap_or(20).clamp(1, 100);
 
     if source_id.is_some() && source_group_id.is_some() {
-        return Err("Pass either source_id or source_group_id, not both".to_string());
+        return Err(AppError::validation(
+            "Pass either source_id or source_group_id, not both",
+        ));
     }
 
     let rows: Vec<AnalysisRunRow> = if let Some(source_id) = source_id {
@@ -263,7 +266,7 @@ pub async fn list_analysis_runs(
 pub async fn get_analysis_run(
     handle: AppHandle,
     run_id: i64,
-) -> Result<Option<AnalysisRunDetail>, String> {
+) -> AppResult<Option<AnalysisRunDetail>> {
     let pool = get_pool(&handle).await?;
     Ok(fetch_run_row(&pool, run_id).await?.map(map_run_detail))
 }
@@ -272,13 +275,13 @@ pub async fn get_analysis_run(
 pub async fn get_analysis_run_trace(
     handle: AppHandle,
     run_id: i64,
-) -> Result<AnalysisTraceData, String> {
+) -> AppResult<AnalysisTraceData> {
     let pool = get_pool(&handle).await?;
     let row = fetch_run_row(&pool, run_id)
         .await?
-        .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
+        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
-    decode_trace_data(row.trace_data_zstd.as_deref())
+    Ok(decode_trace_data(row.trace_data_zstd.as_deref())?)
 }
 
 #[tauri::command]
@@ -286,7 +289,7 @@ pub async fn resolve_analysis_trace_refs(
     handle: AppHandle,
     run_id: i64,
     refs: Vec<String>,
-) -> Result<Vec<AnalysisTraceRef>, String> {
+) -> AppResult<Vec<AnalysisTraceRef>> {
     let mut normalized_refs = refs
         .into_iter()
         .filter_map(|reference| normalize_ref(&reference))
@@ -301,7 +304,7 @@ pub async fn resolve_analysis_trace_refs(
     let pool = get_pool(&handle).await?;
     let run = get_analysis_run(handle.clone(), run_id)
         .await?
-        .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
+        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
     let corpus = load_run_corpus_messages(&pool, &run).await?;
     Ok(build_trace_refs(&normalized_refs, &corpus))

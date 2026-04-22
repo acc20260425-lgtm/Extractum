@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::time::{timeout, Duration};
 
 use crate::db::get_pool;
+use crate::error::AppResult;
 
 const LLM_RESPONSE_EVENT: &str = "llm://response";
 const DEFAULT_PROFILE_ID: &str = "default";
@@ -644,9 +645,9 @@ where
 }
 
 #[tauri::command]
-pub async fn get_llm_profiles(handle: AppHandle) -> Result<LlmProfilesState, String> {
+pub async fn get_llm_profiles(handle: AppHandle) -> AppResult<LlmProfilesState> {
     let pool = get_pool(&handle).await?;
-    load_profiles_state_from_pool(&pool).await
+    Ok(load_profiles_state_from_pool(&pool).await?)
 }
 
 #[tauri::command]
@@ -657,7 +658,7 @@ pub async fn save_llm_profile(
     default_model: String,
     api_key: String,
     set_active: Option<bool>,
-) -> Result<LlmProfilesState, String> {
+) -> AppResult<LlmProfilesState> {
     let pool = get_pool(&handle).await?;
     let (profile_id, provider_kind, default_model) =
         validate_profile_input(profile_id, provider, default_model)?;
@@ -673,7 +674,7 @@ pub async fn save_llm_profile(
     )
     .await?;
 
-    load_profiles_state_from_pool(&pool).await
+    Ok(load_profiles_state_from_pool(&pool).await?)
 }
 
 #[tauri::command]
@@ -683,7 +684,7 @@ pub async fn ask_llm_stream(
     messages: Vec<LlmMessage>,
     model_override: Option<String>,
     profile_id: Option<String>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let request = LlmChatRequest {
         request_id,
         profile_id,

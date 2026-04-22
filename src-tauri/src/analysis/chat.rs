@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
 use crate::db::get_pool;
+use crate::error::{AppError, AppResult};
 use crate::llm::{
     resolve_profile_for_backend, run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
 };
@@ -178,21 +179,25 @@ fn build_chat_request(
 pub async fn list_analysis_chat_messages(
     handle: AppHandle,
     run_id: i64,
-) -> Result<Vec<AnalysisChatMessage>, String> {
+) -> AppResult<Vec<AnalysisChatMessage>> {
     let pool = get_pool(&handle).await?;
     let exists = fetch_run_row(&pool, run_id).await?.is_some();
     if !exists {
-        return Err(format!("Analysis run {run_id} not found"));
+        return Err(AppError::not_found(format!(
+            "Analysis run {run_id} not found"
+        )));
     }
-    load_chat_messages_from_pool(&pool, run_id).await
+    Ok(load_chat_messages_from_pool(&pool, run_id).await?)
 }
 
 #[tauri::command]
-pub async fn clear_analysis_chat_messages(handle: AppHandle, run_id: i64) -> Result<(), String> {
+pub async fn clear_analysis_chat_messages(handle: AppHandle, run_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     let exists = fetch_run_row(&pool, run_id).await?.is_some();
     if !exists {
-        return Err(format!("Analysis run {run_id} not found"));
+        return Err(AppError::not_found(format!(
+            "Analysis run {run_id} not found"
+        )));
     }
 
     sqlx::query("DELETE FROM analysis_chat_messages WHERE run_id = ?")
@@ -211,28 +216,32 @@ pub async fn ask_analysis_run_question(
     question: String,
     model_override: Option<String>,
     profile_id: Option<String>,
-) -> Result<String, String> {
+) -> AppResult<String> {
     let question = question.trim().to_string();
     if question.is_empty() {
-        return Err("Question cannot be empty".to_string());
+        return Err(AppError::validation("Question cannot be empty"));
     }
 
     let pool = get_pool(&handle).await?;
     let run_row = fetch_run_row(&pool, run_id)
         .await?
-        .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
+        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
     let run = map_run_detail(run_row);
     let scope_label = resolve_run_scope_label(&run);
 
     if run.status != ANALYSIS_STATUS_COMPLETED {
-        return Err("Open a completed analysis run before asking follow-up questions".to_string());
+        return Err(AppError::validation(
+            "Open a completed analysis run before asking follow-up questions",
+        ));
     }
 
     let report_markdown = run
         .result_markdown
         .clone()
         .filter(|text| !text.trim().is_empty())
-        .ok_or_else(|| "The selected analysis run does not have a saved report".to_string())?;
+        .ok_or_else(|| {
+            AppError::conflict("The selected analysis run does not have a saved report")
+        })?;
 
     let corpus = load_run_corpus_messages(&pool, &run).await?;
     let context_messages = find_chat_context_messages(&question, &corpus);

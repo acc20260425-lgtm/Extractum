@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { formatAppError } from "$lib/app-error";
 
   interface LlmProfile {
     profile_id: string;
@@ -72,7 +73,7 @@
       defaultModel = state.default_profile.default_model;
       apiKey = state.default_profile.api_key;
     } catch (error) {
-      setSettingsStatus(`Error loading LLM settings: ${error}`);
+      setSettingsStatus(formatAppError("loading LLM settings", error));
     }
   }
 
@@ -96,7 +97,7 @@
       setSettingsStatus(successMessage);
       return true;
     } catch (error) {
-      setSettingsStatus(`Error saving LLM settings: ${error}`);
+      setSettingsStatus(formatAppError("saving LLM settings", error));
       return false;
     } finally {
       saving = false;
@@ -138,7 +139,7 @@
       });
     } catch (error) {
       testing = false;
-      testStatus = `Error starting LLM test: ${error}`;
+      testStatus = formatAppError("starting the LLM test", error);
     }
   }
 
