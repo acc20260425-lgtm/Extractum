@@ -38,7 +38,13 @@
     external_id: string;
     author: string | null;
     published_at: number;
-    content: string;
+    content: string | null;
+    content_kind: string;
+    has_media: boolean;
+    media_kind: string | null;
+    media_summary: string | null;
+    media_file_name: string | null;
+    media_mime_type: string | null;
     has_raw_data: boolean;
   }
 

@@ -61,15 +61,17 @@ pub(crate) async fn ensure_builtin_report_template(pool: &Pool<Sqlite>) -> Resul
     Ok(())
 }
 
-pub(crate) async fn ensure_sources_exist(pool: &Pool<Sqlite>, source_ids: &[i64]) -> Result<(), String> {
+pub(crate) async fn ensure_sources_exist(
+    pool: &Pool<Sqlite>,
+    source_ids: &[i64],
+) -> Result<(), String> {
     for source_id in source_ids {
-        let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)",
-        )
-        .bind(source_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+        let exists =
+            sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)")
+                .bind(source_id)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| e.to_string())?;
 
         if exists == 0 {
             return Err(format!("Source {source_id} not found"));
@@ -132,7 +134,10 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
     }
 }
 
-pub(crate) async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> Result<Option<AnalysisRunRow>, String> {
+pub(crate) async fn fetch_run_row(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+) -> Result<Option<AnalysisRunRow>, String> {
     sqlx::query_as(
         r#"
         SELECT
@@ -216,7 +221,7 @@ pub(crate) async fn fetch_source_group(
         SELECT
             sources.id AS source_id,
             sources.title AS source_title,
-            COUNT(items.id) AS item_count
+            COUNT(items.content_zstd) AS item_count
         FROM analysis_source_group_members members
         JOIN sources ON sources.id = members.source_id
         LEFT JOIN items ON items.source_id = sources.id
@@ -257,7 +262,11 @@ pub(crate) async fn resolve_run_source_ids(
         let group = fetch_source_group(pool, group_id)
             .await?
             .ok_or_else(|| format!("Analysis source group {group_id} not found"))?;
-        return Ok(group.members.into_iter().map(|member| member.source_id).collect());
+        return Ok(group
+            .members
+            .into_iter()
+            .map(|member| member.source_id)
+            .collect());
     }
 
     Err(format!("Unsupported analysis scope '{}'", run.scope_type))
@@ -475,7 +484,7 @@ pub(crate) async fn load_corpus_messages(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "SELECT id, source_id, external_id, author, published_at, content_zstd FROM items WHERE published_at >= ",
+        "SELECT id, source_id, external_id, author, published_at, content_zstd FROM items WHERE content_zstd IS NOT NULL AND published_at >= ",
     );
     query.push_bind(period_from);
     query.push(" AND published_at <= ");

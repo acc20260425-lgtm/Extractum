@@ -24,8 +24,10 @@ fn chunk_messages(messages: &[CorpusMessage], max_chars: usize) -> Vec<Vec<Corpu
     let mut current_chars = 0usize;
 
     for message in messages {
-        let estimated_len =
-            message.content.len() + message.r#ref.len() + message.author.as_deref().unwrap_or("").len() + 64;
+        let estimated_len = message.content.len()
+            + message.r#ref.len()
+            + message.author.as_deref().unwrap_or("").len()
+            + 64;
 
         if !current.is_empty() && current_chars + estimated_len > max_chars {
             chunks.push(current);
@@ -60,7 +62,11 @@ fn format_chunk_corpus(messages: &[CorpusMessage]) -> String {
         .join("\n\n---\n\n")
 }
 
-fn build_map_request(chunk_index: usize, total_chunks: usize, messages: &[CorpusMessage]) -> LlmChatRequest {
+fn build_map_request(
+    chunk_index: usize,
+    total_chunks: usize,
+    messages: &[CorpusMessage],
+) -> LlmChatRequest {
     LlmChatRequest {
         request_id: format!("analysis-map-{}-{}", now_secs(), chunk_index),
         profile_id: None,
@@ -246,7 +252,16 @@ async fn run_report_pipeline(
     profile_id: Option<String>,
 ) -> Result<(), String> {
     let pool = get_pool(&handle).await?;
-    set_run_status(&pool, run_id, ANALYSIS_STATUS_RUNNING, None, None, None, None).await?;
+    set_run_status(
+        &pool,
+        run_id,
+        ANALYSIS_STATUS_RUNNING,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await?;
 
     emit_analysis_event(
         &handle,
@@ -264,7 +279,9 @@ async fn run_report_pipeline(
 
     let corpus = load_corpus_messages(&pool, &source_ids, period_from, period_to).await?;
     if corpus.is_empty() {
-        return Err("No synced messages were found for the selected analysis scope and period".to_string());
+        return Err(
+            "No synced messages were found for the selected analysis scope and period".to_string(),
+        );
     }
 
     emit_analysis_event(
@@ -273,7 +290,10 @@ async fn run_report_pipeline(
             run_id,
             kind: "progress".to_string(),
             phase: "chunking".to_string(),
-            message: Some(format!("Loaded {} messages. Preparing chunks...", corpus.len())),
+            message: Some(format!(
+                "Loaded {} messages. Preparing chunks...",
+                corpus.len()
+            )),
             progress_current: None,
             progress_total: None,
             delta: None,
@@ -292,7 +312,11 @@ async fn run_report_pipeline(
                 run_id,
                 kind: "progress".to_string(),
                 phase: "map".to_string(),
-                message: Some(format!("Analyzing chunk {} of {}...", index + 1, chunks.len())),
+                message: Some(format!(
+                    "Analyzing chunk {} of {}...",
+                    index + 1,
+                    chunks.len()
+                )),
                 progress_current: Some((index + 1) as i64),
                 progress_total: Some(chunks.len() as i64),
                 delta: None,
@@ -459,27 +483,25 @@ pub async fn start_analysis_report(
 
     let (scope_type, resolved_source_id, resolved_group_id, scope_label, source_ids) =
         if let Some(source_id) = source_id {
-            let source_exists = sqlx::query_scalar::<_, i64>(
-                "SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)",
-            )
-            .bind(source_id)
-            .fetch_one(&pool)
-            .await
-            .map_err(|e| e.to_string())?;
+            let source_exists =
+                sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)")
+                    .bind(source_id)
+                    .fetch_one(&pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
             if source_exists == 0 {
                 return Err(format!("Source {source_id} not found"));
             }
 
-            let source_title = sqlx::query_scalar::<_, Option<String>>(
-                "SELECT title FROM sources WHERE id = ?",
-            )
-            .bind(source_id)
-            .fetch_optional(&pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .flatten()
-            .filter(|title| !title.trim().is_empty())
-            .unwrap_or_else(|| format!("Source {source_id}"));
+            let source_title =
+                sqlx::query_scalar::<_, Option<String>>("SELECT title FROM sources WHERE id = ?")
+                    .bind(source_id)
+                    .fetch_optional(&pool)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .flatten()
+                    .filter(|title| !title.trim().is_empty())
+                    .unwrap_or_else(|| format!("Source {source_id}"));
 
             (
                 ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
@@ -503,7 +525,11 @@ pub async fn start_analysis_report(
                 None,
                 Some(group.id),
                 group.name.clone(),
-                group.members.into_iter().map(|member| member.source_id).collect::<Vec<_>>(),
+                group
+                    .members
+                    .into_iter()
+                    .map(|member| member.source_id)
+                    .collect::<Vec<_>>(),
             )
         };
 

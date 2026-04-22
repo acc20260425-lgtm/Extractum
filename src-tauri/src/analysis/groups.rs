@@ -3,10 +3,13 @@ use tauri::AppHandle;
 use crate::db::get_pool;
 
 use super::models::{AnalysisSourceGroup, AnalysisSourceGroupRow};
-use super::store::{ensure_sources_exist, fetch_source_group};
 use super::now_secs;
+use super::store::{ensure_sources_exist, fetch_source_group};
 
-pub(crate) fn normalize_source_group_input(name: &str, source_ids: Vec<i64>) -> Result<(String, Vec<i64>), String> {
+pub(crate) fn normalize_source_group_input(
+    name: &str,
+    source_ids: Vec<i64>,
+) -> Result<(String, Vec<i64>), String> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("Source group name cannot be empty".to_string());
@@ -27,7 +30,9 @@ pub(crate) fn normalize_source_group_input(name: &str, source_ids: Vec<i64>) -> 
 }
 
 #[tauri::command]
-pub async fn list_analysis_source_groups(handle: AppHandle) -> Result<Vec<AnalysisSourceGroup>, String> {
+pub async fn list_analysis_source_groups(
+    handle: AppHandle,
+) -> Result<Vec<AnalysisSourceGroup>, String> {
     let pool = get_pool(&handle).await?;
     let rows = sqlx::query_as::<_, AnalysisSourceGroupRow>(
         r#"

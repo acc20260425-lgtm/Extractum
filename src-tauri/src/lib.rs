@@ -3,25 +3,34 @@ mod migrations;
 use migrations::{build_migrations, prepare_database};
 
 mod accounts;
-use accounts::{clear_account_phone, create_account, delete_account, get_account, list_accounts, set_account_phone};
+use accounts::{
+    clear_account_phone, create_account, delete_account, get_account, list_accounts,
+    set_account_phone,
+};
 
 mod telegram;
-use telegram::{restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout, tg_send_code, tg_sign_in, TelegramState};
+use telegram::{
+    restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout,
+    tg_send_code, tg_sign_in, TelegramState,
+};
 
 mod sources;
-use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, delete_source};
+use sources::{
+    add_telegram_source, delete_source, get_items, list_sources, list_telegram_channels,
+    sync_channel,
+};
 
 mod llm;
-use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
+use llm::{ask_llm_stream, get_llm_profiles, save_llm_profile};
 
 mod analysis;
 use analysis::{
-    ask_analysis_run_question, clear_analysis_chat_messages, create_analysis_prompt_template, create_analysis_source_group,
-    delete_analysis_prompt_template, delete_analysis_source_group, get_analysis_run,
-    get_analysis_run_trace, list_analysis_chat_messages, list_analysis_prompt_templates, list_analysis_runs,
-    list_analysis_source_groups, list_analysis_sources, start_analysis_report,
+    ask_analysis_run_question, clear_analysis_chat_messages, create_analysis_prompt_template,
+    create_analysis_source_group, delete_analysis_prompt_template, delete_analysis_source_group,
+    get_analysis_run, get_analysis_run_trace, list_analysis_chat_messages,
+    list_analysis_prompt_templates, list_analysis_runs, list_analysis_source_groups,
+    list_analysis_sources, resolve_analysis_trace_refs, start_analysis_report,
     update_analysis_prompt_template, update_analysis_source_group,
-    resolve_analysis_trace_refs,
 };
 
 #[tauri::command]

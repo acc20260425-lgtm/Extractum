@@ -344,7 +344,9 @@ pub async fn tg_send_code(
     phone: String,
 ) -> Result<String, String> {
     let mut accounts = state.accounts.lock().await;
-    let ac = accounts.get_mut(&account_id).ok_or("Account not initialized")?;
+    let ac = accounts
+        .get_mut(&account_id)
+        .ok_or("Account not initialized")?;
 
     let token = ac
         .client
@@ -367,7 +369,9 @@ pub async fn tg_sign_in(
 ) -> Result<bool, String> {
     let session_to_save = {
         let mut accounts = state.accounts.lock().await;
-        let ac = accounts.get_mut(&account_id).ok_or("Account not initialized")?;
+        let ac = accounts
+            .get_mut(&account_id)
+            .ok_or("Account not initialized")?;
         let token = ac.login_token.as_ref().ok_or("Call tg_send_code first")?;
 
         ac.client

@@ -10,13 +10,15 @@ use std::io::Cursor;
 
 use tauri::{AppHandle, Emitter};
 
-use crate::db::get_pool;
 use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow,
     AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
-use self::store::{fetch_run_row, load_corpus_messages, map_run_detail, map_run_summary, resolve_run_source_ids};
+use self::store::{
+    fetch_run_row, load_corpus_messages, map_run_detail, map_run_summary, resolve_run_source_ids,
+};
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
+use crate::db::get_pool;
 
 pub use self::chat::{
     ask_analysis_run_question, clear_analysis_chat_messages, list_analysis_chat_messages,
@@ -106,7 +108,7 @@ pub async fn list_analysis_sources(handle: AppHandle) -> Result<Vec<AnalysisSour
             sources.id,
             sources.account_id,
             sources.title,
-            COUNT(items.id) AS item_count,
+            COUNT(items.content_zstd) AS item_count,
             sources.last_synced_at
         FROM sources
         LEFT JOIN items ON items.source_id = sources.id
@@ -307,12 +309,10 @@ pub async fn resolve_analysis_trace_refs(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        decode_trace_data, AnalysisTraceData, AnalysisTraceRef, TEMPLATE_KIND_REPORT,
-    };
     use super::groups::normalize_source_group_input;
     use super::store::ensure_builtin_report_template;
     use super::trace::compress_trace_data;
+    use super::{decode_trace_data, AnalysisTraceData, AnalysisTraceRef, TEMPLATE_KIND_REPORT};
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -407,8 +407,9 @@ mod tests {
 
     #[test]
     fn source_group_input_is_trimmed_and_deduplicated() {
-        let (name, source_ids) = normalize_source_group_input("  Core sources  ", vec![4, 2, 4, -1, 2])
-            .expect("normalize source group");
+        let (name, source_ids) =
+            normalize_source_group_input("  Core sources  ", vec![4, 2, 4, -1, 2])
+                .expect("normalize source group");
 
         assert_eq!(name, "Core sources");
         assert_eq!(source_ids, vec![2, 4]);

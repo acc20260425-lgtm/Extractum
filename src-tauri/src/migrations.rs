@@ -16,7 +16,8 @@ async fn patch_migrations(db_path: &PathBuf) {
 
     let url = format!("sqlite:{}", db_path.to_string_lossy());
     if let Ok(pool) = SqlitePool::connect(&url).await {
-        let expected_checksum = Sha384::digest(include_str!("../migrations/2.sql").as_bytes()).to_vec();
+        let expected_checksum =
+            Sha384::digest(include_str!("../migrations/2.sql").as_bytes()).to_vec();
         let has_v3 = sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = 3)",
         )
@@ -131,6 +132,12 @@ pub fn build_migrations() -> Vec<Migration> {
             version: 8,
             description: "add analysis chat history",
             sql: include_str!("../migrations/8.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 9,
+            description: "add media aware item metadata",
+            sql: include_str!("../migrations/9.sql"),
             kind: MigrationKind::Up,
         },
     ]

@@ -196,7 +196,10 @@ async fn write_setting(pool: &Pool<Sqlite>, key: &str, value: &str) -> Result<()
     Ok(())
 }
 
-async fn load_profile_from_pool(pool: &Pool<Sqlite>, profile_id: &str) -> Result<LlmProfile, String> {
+async fn load_profile_from_pool(
+    pool: &Pool<Sqlite>,
+    profile_id: &str,
+) -> Result<LlmProfile, String> {
     let provider = read_setting(pool, &profile_provider_key(profile_id))
         .await?
         .unwrap_or_else(|| DEFAULT_PROVIDER.to_string());
@@ -440,7 +443,11 @@ fn format_google_error(status: reqwest::StatusCode, body: &str) -> String {
     if body.trim().is_empty() {
         format!("Gemini request failed with HTTP {}", status.as_u16())
     } else {
-        format!("Gemini request failed with HTTP {}: {}", status.as_u16(), body.trim())
+        format!(
+            "Gemini request failed with HTTP {}: {}",
+            status.as_u16(),
+            body.trim()
+        )
     }
 }
 
@@ -506,9 +513,7 @@ where
 
     let request_body = build_gemini_request(&request.messages)?;
 
-    let url = format!(
-        "{GEMINI_API_BASE}/models/{model}:streamGenerateContent?alt=sse"
-    );
+    let url = format!("{GEMINI_API_BASE}/models/{model}:streamGenerateContent?alt=sse");
     let client = HttpClient::new();
     let response = client
         .post(url)
@@ -687,9 +692,11 @@ pub async fn ask_llm_stream(
     };
     validate_request(&request)?;
 
-    let resolved_profile = resolve_profile_for_backend(&handle, request.profile_id.as_deref()).await?;
+    let resolved_profile =
+        resolve_profile_for_backend(&handle, request.profile_id.as_deref()).await?;
     let provider_name = resolved_profile.provider.as_str().to_string();
-    let effective_model = resolve_effective_model(&resolved_profile, request.model_override.as_deref())?;
+    let effective_model =
+        resolve_effective_model(&resolved_profile, request.model_override.as_deref())?;
     let started_request_id = request.request_id.clone();
     let started_provider = provider_name.clone();
     let started_model = effective_model.clone();
@@ -743,20 +750,20 @@ pub async fn ask_llm_stream(
                 );
             }
             Err(error) => {
-            emit_response_event(
-                &app_handle,
-                &LlmStreamEvent {
-                    request_id: request.request_id,
-                    kind: "failed".to_string(),
-                    delta: None,
-                    text: None,
-                    provider: provider_name,
-                    model: effective_model,
-                    usage: None,
-                    error: Some(error),
-                },
-            );
-        }
+                emit_response_event(
+                    &app_handle,
+                    &LlmStreamEvent {
+                        request_id: request.request_id,
+                        kind: "failed".to_string(),
+                        delta: None,
+                        text: None,
+                        provider: provider_name,
+                        model: effective_model,
+                        usage: None,
+                        error: Some(error),
+                    },
+                );
+            }
         }
     });
 
@@ -767,7 +774,7 @@ pub async fn ask_llm_stream(
 mod tests {
     use super::{
         build_gemini_request, extract_text, find_event_boundary, load_profiles_state_from_pool,
-        map_usage, parse_sse_data, save_profile_to_pool, resolve_profile_from_pool, GeminiContent,
+        map_usage, parse_sse_data, resolve_profile_from_pool, save_profile_to_pool, GeminiContent,
         GeminiGenerateContentResponse, GeminiPart, LlmMessage,
     };
 
@@ -786,9 +793,16 @@ mod tests {
     async fn profile_settings_roundtrip_through_app_settings() {
         let pool = memory_pool().await;
 
-        save_profile_to_pool(&pool, "default", "gemini", "gemini-2.5-flash", "test-key", true)
-            .await
-            .expect("save profile");
+        save_profile_to_pool(
+            &pool,
+            "default",
+            "gemini",
+            "gemini-2.5-flash",
+            "test-key",
+            true,
+        )
+        .await
+        .expect("save profile");
 
         let state = load_profiles_state_from_pool(&pool)
             .await

@@ -5,7 +5,13 @@
     external_id: string;
     author: string | null;
     published_at: number;
-    content: string;
+    content: string | null;
+    content_kind: string;
+    has_media: boolean;
+    media_kind: string | null;
+    media_summary: string | null;
+    media_file_name: string | null;
+    media_mime_type: string | null;
     has_raw_data: boolean;
   }
 
@@ -20,6 +26,17 @@
     formatDate: (timestamp: number) => string;
     embedded?: boolean;
   } = $props();
+
+  function formatMediaKind(kind: string | null) {
+    if (!kind) return "media";
+    return kind.replaceAll("_", " ");
+  }
+
+  function mediaDetails(item: ItemRecord) {
+    return [item.media_summary, item.media_file_name, item.media_mime_type].filter(
+      (value, index, values): value is string => !!value && values.indexOf(value) === index
+    );
+  }
 </script>
 
 <div class:embedded class="card">
@@ -31,16 +48,32 @@
   </div>
 
   {#if !loadingItems && items.length === 0}
-    <p class="empty">No synced text messages yet for this source.</p>
+    <p class="empty">No synced messages yet for this source.</p>
   {:else if items.length > 0}
     <ul class="message-list">
-      {#each items as item}
+      {#each items as item (item.id)}
         <li>
           <div class="message-meta">
             <span>{formatDate(item.published_at)}</span>
             {#if item.author}<span>{item.author}</span>{/if}
+            {#if item.has_media}
+              <span class="media-badge">{formatMediaKind(item.media_kind)}</span>
+            {/if}
           </div>
-          <p>{item.content}</p>
+          {#if item.content}
+            <p>{item.content}</p>
+          {/if}
+          {#if item.has_media}
+            {@const details = mediaDetails(item)}
+            <div class="media-block">
+              {#if !item.content}
+                <p class="media-placeholder">Media-only post</p>
+              {/if}
+              {#if details.length > 0}
+                <p class="media-summary">{details.join(" · ")}</p>
+              {/if}
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -92,6 +125,30 @@
     color: var(--muted);
     font-size: 0.78rem;
     margin-bottom: 0.5rem;
+  }
+  .media-badge {
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 999px;
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.08rem 0.5rem;
+    text-transform: capitalize;
+  }
+  .media-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .media-placeholder,
+  .media-summary {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+  .media-placeholder {
+    font-weight: 600;
   }
   .subtle { font-size: 0.75rem; color: var(--muted); }
   .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }

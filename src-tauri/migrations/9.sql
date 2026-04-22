@@ -1,0 +1,4 @@
+ALTER TABLE items ADD COLUMN content_kind TEXT NOT NULL DEFAULT 'text_only';
+ALTER TABLE items ADD COLUMN has_media BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE items ADD COLUMN media_kind TEXT;
+ALTER TABLE items ADD COLUMN media_metadata_zstd BLOB;

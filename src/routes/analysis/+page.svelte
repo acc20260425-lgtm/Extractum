@@ -802,6 +802,10 @@
 </script>
 
 <h1>Analysis</h1>
+<p class="note">
+  Reports and follow-up chat currently use only synced items that still contain text or captions.
+  Media-only posts remain visible on <code>/sources</code> but are not included in analysis yet.
+</p>
 
 {#if status}
   <p class="status" class:error={isErrorStatus(status)}>
@@ -960,6 +964,14 @@
     background: var(--status-bg);
     font-size: 0.9rem;
     margin-bottom: 1rem;
+  }
+
+  .note {
+    color: var(--muted);
+    font-size: 0.92rem;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    max-width: 72ch;
   }
 
   .status.error {

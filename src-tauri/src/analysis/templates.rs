@@ -169,13 +169,12 @@ pub async fn delete_analysis_prompt_template(
     template_id: i64,
 ) -> Result<(), String> {
     let pool = get_pool(&handle).await?;
-    let template: Option<(i64, bool)> = sqlx::query_as(
-        "SELECT id, is_builtin FROM analysis_prompt_templates WHERE id = ?",
-    )
-    .bind(template_id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let template: Option<(i64, bool)> =
+        sqlx::query_as("SELECT id, is_builtin FROM analysis_prompt_templates WHERE id = ?")
+            .bind(template_id)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let Some((_, is_builtin)) = template else {
         return Err(format!("Analysis prompt template {template_id} not found"));

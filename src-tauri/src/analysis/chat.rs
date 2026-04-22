@@ -1,9 +1,13 @@
 use tauri::AppHandle;
 
 use crate::db::get_pool;
-use crate::llm::{resolve_profile_for_backend, run_llm_stream_with_profile, LlmChatRequest, LlmMessage};
+use crate::llm::{
+    resolve_profile_for_backend, run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
+};
 
-use super::models::{AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage};
+use super::models::{
+    AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage,
+};
 use super::store::{
     fetch_run_row, load_chat_messages_from_pool, load_corpus_messages, map_run_detail,
     persist_chat_exchange, resolve_run_source_ids,
@@ -15,10 +19,43 @@ use super::{
 
 fn chat_search_terms(question: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
-        "the", "and", "for", "with", "that", "this", "from", "into", "about", "what", "when",
-        "where", "which", "have", "has", "were", "will", "would", "could", "should", "РєР°Рє",
-        "С‡С‚Рѕ", "СЌС‚Рѕ", "РґР»СЏ", "РїСЂРѕ", "РёР»Рё", "РµСЃР»Рё", "РєРѕРіРґР°", "РєР°РєРёРµ", "РєР°РєРѕР№", "РіРґРµ", "РїРѕСЃР»Рµ",
-        "РЅР°Рґ", "РїРѕРґ", "РµС‰С‘", "also", "over",
+        "the",
+        "and",
+        "for",
+        "with",
+        "that",
+        "this",
+        "from",
+        "into",
+        "about",
+        "what",
+        "when",
+        "where",
+        "which",
+        "have",
+        "has",
+        "were",
+        "will",
+        "would",
+        "could",
+        "should",
+        "РєР°Рє",
+        "С‡С‚Рѕ",
+        "СЌС‚Рѕ",
+        "РґР»СЏ",
+        "РїСЂРѕ",
+        "РёР»Рё",
+        "РµСЃР»Рё",
+        "РєРѕРіРґР°",
+        "РєР°РєРёРµ",
+        "РєР°РєРѕР№",
+        "РіРґРµ",
+        "РїРѕСЃР»Рµ",
+        "РЅР°Рґ",
+        "РїРѕРґ",
+        "РµС‰С‘",
+        "also",
+        "over",
     ];
 
     let mut terms = question
@@ -32,7 +69,10 @@ fn chat_search_terms(question: &str) -> Vec<String> {
     terms
 }
 
-fn find_chat_context_messages<'a>(question: &str, corpus: &'a [CorpusMessage]) -> Vec<&'a CorpusMessage> {
+fn find_chat_context_messages<'a>(
+    question: &str,
+    corpus: &'a [CorpusMessage],
+) -> Vec<&'a CorpusMessage> {
     let terms = chat_search_terms(question);
     if terms.is_empty() {
         return corpus.iter().rev().take(6).collect();
@@ -52,7 +92,11 @@ fn find_chat_context_messages<'a>(question: &str, corpus: &'a [CorpusMessage]) -
 
     scored.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| right.1.cmp(&left.1)));
 
-    scored.into_iter().take(8).map(|(_, _, message)| message).collect()
+    scored
+        .into_iter()
+        .take(8)
+        .map(|(_, _, message)| message)
+        .collect()
 }
 
 fn clip_excerpt(content: &str, max_chars: usize) -> String {
@@ -66,7 +110,8 @@ fn clip_excerpt(content: &str, max_chars: usize) -> String {
 
 fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
     if messages.is_empty() {
-        return "No additional local message matches were found for the current question.".to_string();
+        return "No additional local message matches were found for the current question."
+            .to_string();
     }
 
     messages
@@ -223,23 +268,24 @@ pub async fn ask_analysis_run_question(
     let emitted_request_id = request_id.clone();
     let app_handle = handle.clone();
     tokio::spawn(async move {
-        let resolved_profile = match resolve_profile_for_backend(&app_handle, profile_id.as_deref()).await {
-            Ok(profile) => profile,
-            Err(error) => {
-                emit_analysis_chat_event(
-                    &app_handle,
-                    &AnalysisChatEvent {
-                        request_id: emitted_request_id.clone(),
-                        run_id,
-                        kind: "failed".to_string(),
-                        delta: None,
-                        message: None,
-                        error: Some(error),
-                    },
-                );
-                return;
-            }
-        };
+        let resolved_profile =
+            match resolve_profile_for_backend(&app_handle, profile_id.as_deref()).await {
+                Ok(profile) => profile,
+                Err(error) => {
+                    emit_analysis_chat_event(
+                        &app_handle,
+                        &AnalysisChatEvent {
+                            request_id: emitted_request_id.clone(),
+                            run_id,
+                            kind: "failed".to_string(),
+                            delta: None,
+                            message: None,
+                            error: Some(error),
+                        },
+                    );
+                    return;
+                }
+            };
 
         emit_analysis_chat_event(
             &app_handle,
