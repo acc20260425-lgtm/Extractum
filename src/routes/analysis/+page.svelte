@@ -2,118 +2,31 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-
-  interface AnalysisSourceOption {
-    id: number;
-    account_id: number | null;
-    title: string | null;
-    item_count: number;
-    last_synced_at: number | null;
-  }
-
-  interface AnalysisPromptTemplate {
-    id: number;
-    name: string;
-    template_kind: string;
-    body: string;
-    version: number;
-    is_builtin: boolean;
-    created_at: number;
-    updated_at: number;
-  }
-
-  interface AnalysisSourceGroupMember {
-    source_id: number;
-    source_title: string | null;
-    item_count: number;
-  }
-
-  interface AnalysisSourceGroup {
-    id: number;
-    name: string;
-    members: AnalysisSourceGroupMember[];
-    created_at: number;
-    updated_at: number;
-  }
-
-  interface AnalysisRunSummary {
-    id: number;
-    run_type: string;
-    scope_type: string;
-    source_id: number | null;
-    source_title: string | null;
-    source_group_id: number | null;
-    source_group_name: string | null;
-    period_from: number;
-    period_to: number;
-    output_language: string;
-    prompt_template_id: number | null;
-    prompt_template_name: string | null;
-    prompt_template_version: number;
-    provider_profile: string;
-    provider: string;
-    model: string;
-    status: string;
-    error: string | null;
-    has_trace_data: boolean;
-    created_at: number;
-    completed_at: number | null;
-  }
-
-  interface AnalysisRunDetail extends AnalysisRunSummary {
-    result_markdown: string | null;
-    error: string | null;
-  }
-
-  interface AnalysisTraceRef {
-    ref: string;
-    item_id: number;
-    source_id: number;
-    external_id: string;
-    published_at: number;
-    excerpt: string;
-  }
-
-  interface AnalysisTraceData {
-    refs: AnalysisTraceRef[];
-  }
-
-  interface AnalysisRunEvent {
-    run_id: number;
-    kind: "started" | "progress" | "delta" | "completed" | "failed";
-    phase: string;
-    message: string | null;
-    progress_current: number | null;
-    progress_total: number | null;
-    delta: string | null;
-    error: string | null;
-  }
-
-  interface AnalysisChatTurn {
-    role: "user" | "assistant";
-    content: string;
-  }
-
-  interface AnalysisChatMessage {
-    id: number;
-    run_id: number;
-    role: "user" | "assistant";
-    content: string;
-    created_at: number;
-  }
-
-  interface AnalysisChatEvent {
-    request_id: string;
-    run_id: number;
-    kind: "started" | "delta" | "completed" | "failed";
-    delta: string | null;
-    message: string | null;
-    error: string | null;
-  }
-
-  interface EventEnvelope<T> {
-    payload: T;
-  }
+  import {
+    defaultDateOffset,
+    endOfDayUnix,
+    formatPeriod,
+    formatTimestamp,
+    phaseLabel,
+    reportLines,
+    runTargetLabel,
+    startOfDayUnix,
+    statusTone,
+  } from "$lib/analysis-utils";
+  import type {
+    AnalysisChatEvent,
+    AnalysisChatMessage,
+    AnalysisChatTurn,
+    AnalysisPromptTemplate,
+    AnalysisRunDetail,
+    AnalysisRunEvent,
+    AnalysisRunSummary,
+    AnalysisSourceGroup,
+    AnalysisSourceOption,
+    AnalysisTraceData,
+    AnalysisTraceRef,
+    EventEnvelope,
+  } from "$lib/types/analysis";
 
   let sources = $state<AnalysisSourceOption[]>([]);
   let templates = $state<AnalysisPromptTemplate[]>([]);
@@ -166,79 +79,6 @@
   let clearingChat = $state(false);
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
 
-  type ReportSegment =
-    | { type: "text"; value: string; key: string }
-    | { type: "ref"; value: string; key: string };
-
-  function defaultDateOffset(offsetDays: number) {
-    const date = new Date();
-    date.setDate(date.getDate() + offsetDays);
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, "0");
-    const day = `${date.getDate()}`.padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
-  function startOfDayUnix(dateString: string) {
-    return Math.floor(new Date(`${dateString}T00:00:00`).getTime() / 1000);
-  }
-
-  function endOfDayUnix(dateString: string) {
-    return Math.floor(new Date(`${dateString}T23:59:59`).getTime() / 1000);
-  }
-
-  function formatTimestamp(timestamp: number | null) {
-    if (!timestamp) return "n/a";
-    return new Date(timestamp * 1000).toLocaleString();
-  }
-
-  function formatDay(timestamp: number | null) {
-    if (!timestamp) return "n/a";
-    return new Date(timestamp * 1000).toLocaleDateString();
-  }
-
-  function formatPeriod(periodFromUnix: number, periodToUnix: number) {
-    return `${formatDay(periodFromUnix)} - ${formatDay(periodToUnix)}`;
-  }
-
-  function runTargetLabel(run: Pick<AnalysisRunSummary, "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name">) {
-    if (run.scope_type === "source_group") {
-      return run.source_group_name ?? `Group ${run.source_group_id ?? "?"}`;
-    }
-    return run.source_title ?? `Source ${run.source_id ?? "?"}`;
-  }
-
-  function phaseLabel(phase: string) {
-    switch (phase) {
-      case "load_items":
-        return "Loading items";
-      case "chunking":
-        return "Chunking corpus";
-      case "map":
-        return "Analyzing chunks";
-      case "reduce":
-        return "Writing report";
-      case "persist":
-        return "Saving run";
-      default:
-        return phase || "Running";
-    }
-  }
-
-  function statusTone(status: string) {
-    switch (status) {
-      case "completed":
-        return "success";
-      case "failed":
-        return "danger";
-      case "running":
-      case "queued":
-        return "info";
-      default:
-        return "neutral";
-    }
-  }
-
   function isErrorStatus(value: string) {
     return value.startsWith("Error") || value.startsWith("Analysis failed");
   }
@@ -249,11 +89,6 @@
       return runs.filter((run) => run.status === "running" || run.status === "queued");
     }
     return runs.filter((run) => run.status === runFilter);
-  }
-
-  function normalizeRef(candidate: string) {
-    const trimmed = candidate.trim().replace(/^\[/, "").replace(/\]$/, "");
-    return /^s\d+-m\d+$/.test(trimmed) ? trimmed : null;
   }
 
   function selectedTrace() {
@@ -328,74 +163,6 @@
     }
 
     groupMemberSourceIds = [...groupMemberSourceIds, sourceId].sort((a, b) => a - b);
-  }
-
-  function parseReportSegments(line: string): ReportSegment[] {
-    const segments: ReportSegment[] = [];
-    const regex = /\[([^\]]+)\]/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null = null;
-
-    while ((match = regex.exec(line)) !== null) {
-      if (match.index > lastIndex) {
-        segments.push({
-          type: "text",
-          value: line.slice(lastIndex, match.index),
-          key: `text-${lastIndex}`,
-        });
-      }
-
-      const refs = match[1]
-        .split(",")
-        .map((part) => normalizeRef(part))
-        .filter((value): value is string => value !== null);
-
-      if (refs.length === 0) {
-        segments.push({
-          type: "text",
-          value: match[0],
-          key: `text-${match.index}`,
-        });
-      } else {
-        refs.forEach((ref, refIndex) => {
-          segments.push({
-            type: "ref",
-            value: ref,
-            key: `ref-${match?.index ?? 0}-${ref}-${refIndex}`,
-          });
-          if (refIndex < refs.length - 1) {
-            segments.push({
-              type: "text",
-              value: ", ",
-              key: `comma-${match?.index ?? 0}-${refIndex}`,
-            });
-          }
-        });
-      }
-
-      lastIndex = regex.lastIndex;
-    }
-
-    if (lastIndex < line.length) {
-      segments.push({
-        type: "text",
-        value: line.slice(lastIndex),
-        key: `text-tail-${lastIndex}`,
-      });
-    }
-
-    if (segments.length === 0) {
-      segments.push({ type: "text", value: "", key: "empty-line" });
-    }
-
-    return segments;
-  }
-
-  function reportLines(text: string) {
-    return text.split("\n").map((line, index) => ({
-      key: `line-${index}`,
-      segments: parseReportSegments(line),
-    }));
   }
 
   async function focusTraceRef(ref: string) {
