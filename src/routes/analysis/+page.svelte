@@ -5,6 +5,7 @@
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import RunHistory from "$lib/components/analysis/run-history.svelte";
   import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
+  import RunControls from "$lib/components/analysis/run-controls.svelte";
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import TracePanel from "$lib/components/analysis/trace-panel.svelte";
@@ -805,113 +806,36 @@
 {/if}
 
 <div class="workspace">
-  <section class="card controls">
-    <h3>Run Report</h3>
-
-    <div class="scope-toggle">
-      <button
-        class:activeScope={analysisScope === "single_source"}
-        class="secondary"
-        type="button"
-        onclick={() => (analysisScope = "single_source")}
-      >
-        Single source
-      </button>
-      <button
-        class:activeScope={analysisScope === "source_group"}
-        class="secondary"
-        type="button"
-        onclick={() => (analysisScope = "source_group")}
-      >
-        Source group
-      </button>
-    </div>
-
-    {#if analysisScope === "single_source"}
-      <label>Source
-        <select bind:value={selectedSourceId} disabled={loadingSources}>
-          {#if loadingSources}
-            <option value="">Loading synced sources...</option>
-          {:else if sources.length === 0}
-            <option value="">No synced sources available</option>
-          {/if}
-          {#each sources as source}
-            <option value={String(source.id)}>
-              {(source.title ?? `Source ${source.id}`)} - {source.item_count} messages
-            </option>
-          {/each}
-        </select>
-      </label>
-    {:else}
-      <label>Source group
-        <select bind:value={selectedGroupId} disabled={loadingGroups}>
-          {#if loadingGroups}
-            <option value="">Loading source groups...</option>
-          {:else if groups.length === 0}
-            <option value="">No saved groups available</option>
-          {/if}
-          {#each groups as group}
-            <option value={String(group.id)}>
-              {group.name} - {group.members.length} sources
-            </option>
-          {/each}
-        </select>
-      </label>
-
-      {#if selectedGroup()}
-        <p class="sub">
-          {selectedGroup()?.members.length} sources selected for this group report.
-        </p>
-      {/if}
-    {/if}
-
-    <div class="grid">
-      <label>From
-        <input type="date" bind:value={periodFrom} />
-      </label>
-
-      <label>To
-        <input type="date" bind:value={periodTo} />
-      </label>
-    </div>
-
-    <label>Output language
-      <input type="text" bind:value={outputLanguage} placeholder="Russian" />
-    </label>
-
-    <label>Prompt template
-      <select bind:value={selectedTemplateId} disabled={loadingTemplates}>
-        {#if loadingTemplates}
-          <option value="">Loading report templates...</option>
-        {:else if templates.length === 0}
-          <option value="">No report templates available</option>
-        {/if}
-        {#each templates as template}
-          <option value={String(template.id)}>
-            {template.name}{template.is_builtin ? " - builtin" : ""}
-          </option>
-        {/each}
-      </select>
-    </label>
-
-    <label>Model override
-      <input type="text" bind:value={modelOverride} placeholder="Use active profile default model" />
-    </label>
-
-    <button
-      onclick={runReport}
-      disabled={running || !selectedTemplateId || (analysisScope === "single_source" ? !selectedSourceId : !selectedGroupId)}
-    >
-      {running ? "Running..." : "Run report"}
-    </button>
-
-    <div class="meta-panel">
-      <div><strong>Phase:</strong> {phaseLabel(activePhase)}</div>
-      {#if activeProgress}
-        <div><strong>Progress:</strong> {activeProgress}</div>
-      {/if}
-    </div>
-  </section>
+  <RunControls
+    {analysisScope}
+    {selectedSourceId}
+    {selectedGroupId}
+    {selectedTemplateId}
+    {periodFrom}
+    {periodTo}
+    {outputLanguage}
+    {modelOverride}
+    {sources}
+    {groups}
+    {templates}
+    {loadingSources}
+    {loadingGroups}
+    {loadingTemplates}
+    {running}
+    {activePhase}
+    {activeProgress}
+    selectedGroupSourceCount={selectedGroup()?.members.length ?? null}
+    {phaseLabel}
+    onChangeScope={(scope) => (analysisScope = scope)}
+    onChangeSelectedSourceId={(value) => (selectedSourceId = value)}
+    onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
+    onChangePeriodFrom={(value) => (periodFrom = value)}
+    onChangePeriodTo={(value) => (periodTo = value)}
+    onChangeOutputLanguage={(value) => (outputLanguage = value)}
+    onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
+    onChangeModelOverride={(value) => (modelOverride = value)}
+    onRunReport={runReport}
+  />
 
   <section class="card report">
     <div class="report-layout">
@@ -1020,31 +944,10 @@
     padding: 1.5rem;
   }
 
-  .controls,
   .report {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.8rem;
-  }
-
-  .scope-toggle {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    font-size: 0.9rem;
-    color: var(--muted);
   }
 
   .status {
@@ -1060,34 +963,11 @@
     color: var(--status-error-text);
   }
 
-  .meta-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.8rem 1rem;
-    border-radius: 10px;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 0.9rem;
-  }
-
-  .sub {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
-  }
-
   .report-layout {
     display: grid;
     grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
     gap: 1rem;
     align-items: start;
-  }
-
-  .activeScope {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
-    border-color: var(--primary);
   }
 
   :global(button.danger-soft) {
@@ -1111,9 +991,4 @@
 
   }
 
-  @media (max-width: 720px) {
-    .grid {
-      grid-template-columns: 1fr;
-    }
-  }
 </style>
