@@ -89,18 +89,13 @@
     return value.startsWith("Error") || value.startsWith("Analysis failed");
   }
 
-  function filteredRuns() {
+  const filteredRuns = $derived.by(() => {
     if (runFilter === "all") return runs;
     if (runFilter === "running") {
       return runs.filter((run) => run.status === "running" || run.status === "queued");
     }
     return runs.filter((run) => run.status === runFilter);
-  }
-
-  function selectedTrace() {
-    if (!selectedTraceRef) return null;
-    return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
-  }
+  });
 
   function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
     if (nextRefs.length === 0) return;
@@ -120,17 +115,22 @@
     return "unknown";
   }
 
-  function selectedTemplate() {
+  const selectedTrace = $derived.by(() => {
+    if (!selectedTraceRef) return null;
+    return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
+  });
+
+  const selectedTemplate = $derived.by(() => {
     const templateId = selectedTemplateId ? Number(selectedTemplateId) : null;
     if (templateId === null) return null;
     return templates.find((template) => template.id === templateId) ?? null;
-  }
+  });
 
-  function selectedGroup() {
+  const selectedGroup = $derived.by(() => {
     const groupId = selectedGroupId ? Number(selectedGroupId) : null;
     if (groupId === null) return null;
     return groups.find((group) => group.id === groupId) ?? null;
-  }
+  });
 
   function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
     if (!template) {
@@ -231,7 +231,7 @@
       if (!selectedTemplateId && templates.length > 0) {
         selectedTemplateId = String(templates[0].id);
       }
-      const selected = selectedTemplate();
+      const selected = selectedTemplate;
       if (selected && editorBoundTemplateId !== selected.id) {
         bindEditorToTemplate(selected);
       }
@@ -246,14 +246,14 @@
     loadingGroups = true;
     try {
       groups = await invoke<AnalysisSourceGroup[]>("list_analysis_source_groups");
-      const selected = selectedGroup();
+      const selected = selectedGroup;
       if (!selectedGroupId && groups.length > 0) {
         selectedGroupId = String(groups[0].id);
       }
       if (!selected && groups.length > 0 && selectedGroupId) {
         selectedGroupId = String(groups[0].id);
       }
-      const bound = selectedGroup();
+      const bound = selectedGroup;
       if (bound && editorBoundGroupId !== bound.id) {
         bindEditorToGroup(bound);
       }
@@ -452,7 +452,7 @@
   }
 
   async function saveTemplateChanges() {
-    const selected = selectedTemplate();
+    const selected = selectedTemplate;
     if (!selected) {
       status = "Select a template first.";
       return;
@@ -509,7 +509,7 @@
   }
 
   async function deleteTemplate() {
-    const selected = selectedTemplate();
+    const selected = selectedTemplate;
     if (!selected) {
       status = "Select a template first.";
       return;
@@ -538,7 +538,7 @@
   }
 
   async function saveGroupChanges() {
-    const selected = selectedGroup();
+    const selected = selectedGroup;
     if (!selected) {
       status = "Select a source group first.";
       return;
@@ -598,7 +598,7 @@
   }
 
   async function deleteGroup() {
-    const selected = selectedGroup();
+    const selected = selectedGroup;
     if (!selected) {
       status = "Select a source group first.";
       return;
@@ -637,14 +637,14 @@
   });
 
   $effect(() => {
-    const selected = selectedTemplate();
+    const selected = selectedTemplate;
     if (selected && editorBoundTemplateId !== selected.id) {
       bindEditorToTemplate(selected);
     }
   });
 
   $effect(() => {
-    const selected = selectedGroup();
+    const selected = selectedGroup;
     if (selected && editorBoundGroupId !== selected.id) {
       bindEditorToGroup(selected);
     }
@@ -824,7 +824,7 @@
     {running}
     {activePhase}
     {activeProgress}
-    selectedGroupSourceCount={selectedGroup()?.members.length ?? null}
+    selectedGroupSourceCount={selectedGroup?.members.length ?? null}
     {phaseLabel}
     onChangeScope={(scope) => (analysisScope = scope)}
     onChangeSelectedSourceId={(value) => (selectedSourceId = value)}
@@ -856,7 +856,7 @@
       <TracePanel
         traceRefs={traceData.refs}
         {selectedTraceRef}
-        selectedTrace={selectedTrace()}
+        {selectedTrace}
         {formatTimestamp}
         {traceRefOrigin}
         onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
@@ -881,7 +881,7 @@
 />
 
 <TemplateEditor
-  selectedTemplate={selectedTemplate()}
+  {selectedTemplate}
   {templateName}
   {templateBody}
   {savingTemplate}
@@ -896,7 +896,7 @@
 <SourceGroupEditor
   {groups}
   {selectedGroupId}
-  selectedGroup={selectedGroup()}
+  {selectedGroup}
   {groupName}
   {groupMemberSourceIds}
   {sources}
@@ -918,7 +918,7 @@
   {loadingRuns}
   {runFilter}
   {activeRunId}
-  filteredRuns={filteredRuns()}
+  {filteredRuns}
   {formatTimestamp}
   {formatPeriod}
   {runTargetLabel}
