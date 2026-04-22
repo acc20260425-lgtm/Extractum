@@ -4,6 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import RunHistory from "$lib/components/analysis/run-history.svelte";
+  import TracePanel from "$lib/components/analysis/trace-panel.svelte";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -939,50 +940,14 @@
         onFocusTraceRef={focusTraceRef}
       />
 
-      <aside class="trace-panel">
-        <div class="trace-header">
-          <h4>Traceability</h4>
-          {#if traceData.refs.length > 0}
-            <span class="trace-count">{traceData.refs.length} refs</span>
-          {/if}
-        </div>
-
-        {#if traceData.refs.length === 0}
-          <p class="empty">No saved trace data yet.</p>
-        {:else}
-          <div class="trace-list">
-            {#each traceData.refs as ref}
-              <button
-                class="trace-link"
-                class:selected={ref.ref === selectedTraceRef}
-                type="button"
-                onclick={() => (selectedTraceRef = ref.ref)}
-              >
-                <div class="trace-link-top">
-                  <strong>{ref.ref}</strong>
-                  <span class={`trace-origin trace-origin-${traceRefOrigin(ref.ref)}`}>
-                    {traceRefOrigin(ref.ref) === "saved" ? "Saved in report" : traceRefOrigin(ref.ref) === "resolved" ? "Resolved from chat" : "Trace ref"}
-                  </span>
-                </div>
-                <span>{formatTimestamp(ref.published_at)}</span>
-              </button>
-            {/each}
-          </div>
-
-          {#if selectedTrace()}
-            <div class="trace-detail">
-              <div class="trace-meta">
-                <strong>{selectedTrace()?.ref}</strong>
-                <span>
-                  Source {selectedTrace()?.source_id} / message {selectedTrace()?.external_id}
-                </span>
-                <span>{formatTimestamp(selectedTrace()?.published_at ?? null)}</span>
-              </div>
-              <blockquote>{selectedTrace()?.excerpt}</blockquote>
-            </div>
-          {/if}
-        {/if}
-      </aside>
+      <TracePanel
+        traceRefs={traceData.refs}
+        {selectedTraceRef}
+        selectedTrace={selectedTrace()}
+        {formatTimestamp}
+        {traceRefOrigin}
+        onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
+      />
     </div>
   </section>
 </div>
@@ -1302,124 +1267,9 @@
     align-items: start;
   }
 
-  .trace-panel {
-    min-width: 0;
-  }
-
-  .trace-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    padding: 1rem;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    min-height: 22rem;
-  }
-
-  .trace-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .trace-header h4 {
-    margin: 0;
-  }
-
   .trace-count {
     color: var(--muted);
     font-size: 0.85rem;
-  }
-
-  .trace-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .trace-link {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.2rem;
-    width: 100%;
-    padding: 0.75rem 0.85rem;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    text-align: left;
-  }
-
-  .trace-link-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .trace-origin {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.45rem;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    letter-spacing: 0.02em;
-    border: 1px solid transparent;
-  }
-
-  .trace-origin-saved {
-    background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-    color: var(--primary);
-    border-color: color-mix(in srgb, var(--primary) 22%, transparent);
-  }
-
-  .trace-origin-resolved {
-    background: color-mix(in srgb, #1f8f5f 12%, var(--panel));
-    color: #1f8f5f;
-    border-color: color-mix(in srgb, #1f8f5f 22%, transparent);
-  }
-
-  .trace-link:hover,
-  .trace-link.selected {
-    background: var(--panel-hover);
-    border-color: var(--primary);
-  }
-
-  .trace-link span,
-  .trace-meta span {
-    color: var(--muted);
-    font-size: 0.82rem;
-  }
-
-  .trace-detail {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    padding-top: 0.25rem;
-    border-top: 1px solid var(--border);
-  }
-
-  .trace-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-
-  blockquote {
-    margin: 0;
-    padding: 0.9rem 1rem;
-    border-left: 4px solid color-mix(in srgb, var(--primary) 45%, transparent);
-    background: color-mix(in srgb, var(--panel) 70%, transparent);
-    border-radius: 0 10px 10px 0;
-    color: var(--text);
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 
   .report-line {
