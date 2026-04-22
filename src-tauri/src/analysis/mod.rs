@@ -1,5 +1,7 @@
+mod groups;
 mod models;
 mod store;
+mod templates;
 mod trace;
 
 use std::io::Cursor;
@@ -13,16 +15,23 @@ use crate::llm::{
 use self::models::{
     AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisPromptTemplate,
     AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow, AnalysisRunSummary,
-    AnalysisSourceGroup, AnalysisSourceGroupRow, AnalysisSourceOption, AnalysisTraceData,
-    AnalysisTraceRef, ChunkSummary, CorpusMessage,
+    AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef, ChunkSummary, CorpusMessage,
 };
 use self::store::{
-    ensure_builtin_report_template, ensure_sources_exist, fetch_prompt_template, fetch_run_row,
-    fetch_source_group, insert_analysis_run, load_chat_messages_from_pool, load_corpus_messages,
-    map_run_detail, map_run_summary, persist_chat_exchange, resolve_run_source_ids, set_run_status,
+    fetch_prompt_template, fetch_run_row, fetch_source_group, insert_analysis_run,
+    load_chat_messages_from_pool, load_corpus_messages, map_run_detail, map_run_summary,
+    persist_chat_exchange, resolve_run_source_ids, set_run_status,
 };
 use self::trace::{
     build_trace_data, build_trace_refs, compress_trace_data, decode_trace_data, normalize_ref,
+};
+pub use self::groups::{
+    create_analysis_source_group, delete_analysis_source_group, list_analysis_source_groups,
+    update_analysis_source_group,
+};
+pub use self::templates::{
+    create_analysis_prompt_template, delete_analysis_prompt_template,
+    list_analysis_prompt_templates, update_analysis_prompt_template,
 };
 
 const TEMPLATE_KIND_REPORT: &str = "report";
@@ -54,14 +63,6 @@ fn emit_analysis_chat_event(handle: &AppHandle, event: &AnalysisChatEvent) {
     let _ = handle.emit(ANALYSIS_CHAT_EVENT, event);
 }
 
-fn validate_template_kind(template_kind: &str) -> Result<String, String> {
-    let normalized = template_kind.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        TEMPLATE_KIND_REPORT | TEMPLATE_KIND_CHAT => Ok(normalized),
-        _ => Err(format!("Unsupported template kind '{template_kind}'")),
-    }
-}
-
 fn validate_chat_turns(history: &[AnalysisChatTurn]) -> Result<(), String> {
     for turn in history {
         match turn.role.as_str() {
@@ -81,46 +82,6 @@ fn validate_chat_role(role: &str) -> Result<(), String> {
         "user" | "assistant" => Ok(()),
         other => Err(format!("Unsupported chat role '{other}'")),
     }
-}
-
-fn validate_template_input(
-    name: &str,
-    template_kind: &str,
-    body: &str,
-) -> Result<(String, String, String), String> {
-    let name = name.trim().to_string();
-    if name.is_empty() {
-        return Err("Template name cannot be empty".to_string());
-    }
-
-    let template_kind = validate_template_kind(template_kind)?;
-
-    let body = body.trim().to_string();
-    if body.is_empty() {
-        return Err("Template body cannot be empty".to_string());
-    }
-
-    Ok((name, template_kind, body))
-}
-
-fn normalize_source_group_input(name: &str, source_ids: Vec<i64>) -> Result<(String, Vec<i64>), String> {
-    let name = name.trim().to_string();
-    if name.is_empty() {
-        return Err("Source group name cannot be empty".to_string());
-    }
-
-    let mut source_ids = source_ids
-        .into_iter()
-        .filter(|source_id| *source_id > 0)
-        .collect::<Vec<_>>();
-    source_ids.sort_unstable();
-    source_ids.dedup();
-
-    if source_ids.is_empty() {
-        return Err("Select at least one source for the group".to_string());
-    }
-
-    Ok((name, source_ids))
 }
 
 fn default_report_template_body() -> &'static str {
@@ -819,322 +780,6 @@ pub async fn list_analysis_sources(handle: AppHandle) -> Result<Vec<AnalysisSour
 }
 
 #[tauri::command]
-pub async fn list_analysis_source_groups(handle: AppHandle) -> Result<Vec<AnalysisSourceGroup>, String> {
-    let pool = get_pool(&handle).await?;
-    let rows = sqlx::query_as::<_, AnalysisSourceGroupRow>(
-        r#"
-        SELECT id, name, created_at, updated_at
-        FROM analysis_source_groups
-        ORDER BY updated_at DESC, id DESC
-        "#,
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let mut groups = Vec::with_capacity(rows.len());
-    for row in rows {
-        if let Some(group) = fetch_source_group(&pool, row.id).await? {
-            groups.push(group);
-        }
-    }
-
-    Ok(groups)
-}
-
-#[tauri::command]
-pub async fn create_analysis_source_group(
-    handle: AppHandle,
-    name: String,
-    source_ids: Vec<i64>,
-) -> Result<AnalysisSourceGroup, String> {
-    let pool = get_pool(&handle).await?;
-    let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
-    ensure_sources_exist(&pool, &source_ids).await?;
-
-    let now = now_secs();
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-
-    let group_id: i64 = sqlx::query_scalar(
-        r#"
-        INSERT INTO analysis_source_groups (name, created_at, updated_at)
-        VALUES (?, ?, ?)
-        RETURNING id
-        "#,
-    )
-    .bind(&name)
-    .bind(now)
-    .bind(now)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    for source_id in source_ids {
-        sqlx::query(
-            r#"
-            INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
-            VALUES (?, ?, ?)
-            "#,
-        )
-        .bind(group_id)
-        .bind(source_id)
-        .bind(now)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-    }
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-
-    fetch_source_group(&pool, group_id)
-        .await?
-        .ok_or_else(|| format!("Analysis source group {group_id} not found after creation"))
-}
-
-#[tauri::command]
-pub async fn update_analysis_source_group(
-    handle: AppHandle,
-    group_id: i64,
-    name: String,
-    source_ids: Vec<i64>,
-) -> Result<AnalysisSourceGroup, String> {
-    let pool = get_pool(&handle).await?;
-    let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
-    ensure_sources_exist(&pool, &source_ids).await?;
-
-    let exists = sqlx::query_scalar::<_, i64>(
-        "SELECT EXISTS(SELECT 1 FROM analysis_source_groups WHERE id = ?)",
-    )
-    .bind(group_id)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
-    if exists == 0 {
-        return Err(format!("Analysis source group {group_id} not found"));
-    }
-
-    let now = now_secs();
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-
-    sqlx::query(
-        r#"
-        UPDATE analysis_source_groups
-        SET name = ?, updated_at = ?
-        WHERE id = ?
-        "#,
-    )
-    .bind(&name)
-    .bind(now)
-    .bind(group_id)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    sqlx::query("DELETE FROM analysis_source_group_members WHERE group_id = ?")
-        .bind(group_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    for source_id in source_ids {
-        sqlx::query(
-            r#"
-            INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
-            VALUES (?, ?, ?)
-            "#,
-        )
-        .bind(group_id)
-        .bind(source_id)
-        .bind(now)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-    }
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-
-    fetch_source_group(&pool, group_id)
-        .await?
-        .ok_or_else(|| format!("Analysis source group {group_id} not found after update"))
-}
-
-#[tauri::command]
-pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> Result<(), String> {
-    let pool = get_pool(&handle).await?;
-    let result = sqlx::query("DELETE FROM analysis_source_groups WHERE id = ?")
-        .bind(group_id)
-        .execute(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if result.rows_affected() == 0 {
-        return Err(format!("Analysis source group {group_id} not found"));
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn list_analysis_prompt_templates(
-    handle: AppHandle,
-    template_kind: Option<String>,
-) -> Result<Vec<AnalysisPromptTemplate>, String> {
-    let pool = get_pool(&handle).await?;
-    ensure_builtin_report_template(&pool).await?;
-
-    if let Some(template_kind) = template_kind {
-        let template_kind = validate_template_kind(&template_kind)?;
-        sqlx::query_as(
-            r#"
-            SELECT id, name, template_kind, body, version, is_builtin, created_at, updated_at
-            FROM analysis_prompt_templates
-            WHERE template_kind = ?
-            ORDER BY is_builtin DESC, updated_at DESC, id DESC
-            "#,
-        )
-        .bind(template_kind)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())
-    } else {
-        sqlx::query_as(
-            r#"
-            SELECT id, name, template_kind, body, version, is_builtin, created_at, updated_at
-            FROM analysis_prompt_templates
-            ORDER BY template_kind ASC, is_builtin DESC, updated_at DESC, id DESC
-            "#,
-        )
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())
-    }
-}
-
-#[tauri::command]
-pub async fn create_analysis_prompt_template(
-    handle: AppHandle,
-    name: String,
-    template_kind: String,
-    body: String,
-) -> Result<AnalysisPromptTemplate, String> {
-    let pool = get_pool(&handle).await?;
-    let (name, template_kind, body) = validate_template_input(&name, &template_kind, &body)?;
-    let now = now_secs();
-
-    sqlx::query_as(
-        r#"
-        INSERT INTO analysis_prompt_templates (
-            name,
-            template_kind,
-            body,
-            version,
-            is_builtin,
-            created_at,
-            updated_at
-        )
-        VALUES (?, ?, ?, 1, 0, ?, ?)
-        RETURNING id, name, template_kind, body, version, is_builtin, created_at, updated_at
-        "#,
-    )
-    .bind(name)
-    .bind(template_kind)
-    .bind(body)
-    .bind(now)
-    .bind(now)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn update_analysis_prompt_template(
-    handle: AppHandle,
-    template_id: i64,
-    name: String,
-    body: String,
-) -> Result<AnalysisPromptTemplate, String> {
-    let pool = get_pool(&handle).await?;
-    let existing: AnalysisPromptTemplate = sqlx::query_as(
-        r#"
-        SELECT id, name, template_kind, body, version, is_builtin, created_at, updated_at
-        FROM analysis_prompt_templates
-        WHERE id = ?
-        "#,
-    )
-    .bind(template_id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("Analysis prompt template {template_id} not found"))?;
-
-    if existing.is_builtin {
-        return Err("Built-in templates cannot be edited directly".to_string());
-    }
-
-    let name = name.trim().to_string();
-    if name.is_empty() {
-        return Err("Template name cannot be empty".to_string());
-    }
-
-    let body = body.trim().to_string();
-    if body.is_empty() {
-        return Err("Template body cannot be empty".to_string());
-    }
-
-    let now = now_secs();
-    sqlx::query_as(
-        r#"
-        UPDATE analysis_prompt_templates
-        SET
-            name = ?,
-            body = ?,
-            version = version + 1,
-            updated_at = ?
-        WHERE id = ?
-        RETURNING id, name, template_kind, body, version, is_builtin, created_at, updated_at
-        "#,
-    )
-    .bind(name)
-    .bind(body)
-    .bind(now)
-    .bind(template_id)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn delete_analysis_prompt_template(
-    handle: AppHandle,
-    template_id: i64,
-) -> Result<(), String> {
-    let pool = get_pool(&handle).await?;
-    let template: Option<(i64, bool)> = sqlx::query_as(
-        "SELECT id, is_builtin FROM analysis_prompt_templates WHERE id = ?",
-    )
-    .bind(template_id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let Some((_, is_builtin)) = template else {
-        return Err(format!("Analysis prompt template {template_id} not found"));
-    };
-
-    if is_builtin {
-        return Err("Built-in templates cannot be deleted".to_string());
-    }
-
-    sqlx::query("DELETE FROM analysis_prompt_templates WHERE id = ?")
-        .bind(template_id)
-        .execute(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn list_analysis_runs(
     handle: AppHandle,
     source_id: Option<i64>,
@@ -1447,9 +1092,11 @@ pub async fn start_analysis_report(
 #[cfg(test)]
 mod tests {
     use super::{
-        compress_trace_data, decode_trace_data, ensure_builtin_report_template,
-        normalize_source_group_input, AnalysisTraceData, AnalysisTraceRef, TEMPLATE_KIND_REPORT,
+        compress_trace_data, decode_trace_data, AnalysisTraceData, AnalysisTraceRef,
+        TEMPLATE_KIND_REPORT,
     };
+    use super::groups::normalize_source_group_input;
+    use super::store::ensure_builtin_report_template;
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
