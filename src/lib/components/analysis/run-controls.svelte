@@ -105,7 +105,7 @@
         {:else if sources.length === 0}
           <option value="">No synced sources available</option>
         {/if}
-        {#each sources as source}
+        {#each sources as source (source.id)}
           <option value={String(source.id)}>
             {(source.title ?? `Source ${source.id}`)} - {source.item_count} messages
           </option>
@@ -124,7 +124,7 @@
         {:else if groups.length === 0}
           <option value="">No saved groups available</option>
         {/if}
-        {#each groups as group}
+        {#each groups as group (group.id)}
           <option value={String(group.id)}>
             {group.name} - {group.members.length} sources
           </option>
@@ -177,7 +177,7 @@
       {:else if templates.length === 0}
         <option value="">No report templates available</option>
       {/if}
-      {#each templates as template}
+      {#each templates as template (template.id)}
         <option value={String(template.id)}>
           {template.name}{template.is_builtin ? " - builtin" : ""}
         </option>
@@ -219,6 +219,7 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-width: 0;
   }
 
   .scope-toggle {
@@ -239,6 +240,15 @@
     gap: 0.35rem;
     font-size: 0.9rem;
     color: var(--muted);
+    min-width: 0;
+  }
+
+  select,
+  input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .sub {
