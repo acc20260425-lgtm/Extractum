@@ -1,205 +1,127 @@
 # Architecture Deep Dive
 
-## 1. Core principle
+## 1. Layer split
 
-Extractum uses a "fat frontend, thin backend" architecture.
+The repository is intentionally split into two strong responsibilities.
 
-The practical meaning in this codebase is:
-- Svelte pages own user-facing flows and UI state;
-- Rust owns integration boundaries and persistence boundaries;
-- the frontend should call focused Tauri commands instead of reaching into Telegram or SQLite details directly.
+### Backend (`src-tauri/src`)
 
-## 2. Current runtime structure
+Owns:
 
-### Frontend
+- Telegram integration
+- account runtime state and restore
+- SQLite access
+- migrations
+- compression / decompression
+- analysis orchestration
+- typed Tauri command errors
 
-Current pages:
-- `src/routes/accounts/+page.svelte`
-- `src/routes/auth/[id]/+page.svelte`
+### Frontend (`src/routes`, `src/lib`)
+
+Owns:
+
+- route-level workflow
+- UI state
+- optimistic interaction and feedback
+- filtering and presentation
+- error normalization for display
+
+## 2. Telegram ingest flow
+
+### 2.1 Account lifecycle
+
+Accounts are stored locally and may restore their Telegram session on startup. The frontend observes runtime status and uses that to gate actions like sync.
+
+### 2.2 Source resolution
+
+Sources can be added:
+
+- by username / `t.me` reference;
+- from the current account's dialogs.
+
+If username-based resolution is unavailable, source resolution can still fall back to dialog scanning by bare channel id.
+
+### 2.3 Sync strategy
+
+Sync operates per source:
+
+- first sync uses a configurable policy window;
+- later sync resumes incrementally;
+- duplicate items are ignored by `(source_id, external_id)` uniqueness.
+
+## 3. Item model
+
+The current `items` model is intentionally richer than the current analysis corpus.
+
+Stored dimensions include:
+
+- text content when present;
+- raw compressed payload;
+- `content_kind`;
+- `has_media`;
+- `media_kind`;
+- compressed media metadata.
+
+This allows `/sources` to present a more faithful archive even though `/analysis` still stays text-first.
+
+## 4. Analysis architecture
+
+### 4.1 Report generation
+
+The report flow:
+
+1. resolve scope
+2. load prompt template
+3. load corpus
+4. call the provider
+5. persist result + trace data
+6. persist frozen snapshot
+
+### 4.2 Saved run semantics
+
+The saved run model is snapshot-first for new runs.
+
+Frozen snapshot storage solves three drift problems:
+
+- corpus drift after later syncs;
+- source-group membership drift;
+- evidence drift during follow-up chat / trace resolution.
+
+### 4.3 Legacy compatibility
+
+Older runs without snapshot rows can still fall back to live tables. This keeps upgrades non-breaking while making new runs more stable.
+
+## 5. Error boundary
+
+The backend now exposes structured `AppError` values. The frontend normalizes them through `src/lib/app-error.ts`.
+
+This is intentionally minimal: the app gets better UX than raw strings without introducing a large error framework.
+
+## 6. Known architectural debt
+
+- secrets still live in SQLite-backed settings;
+- peer resolution may still be expensive on large accounts because of dialog scans;
+- the analysis layer has not yet become media-aware;
+- Telegram session storage may still deserve a more robust long-term format.
+
+## 7. Practical entry points
+
+If you are changing ingest:
+
+- `src-tauri/src/sources.rs`
 - `src/routes/sources/+page.svelte`
-- `src/routes/settings/+page.svelte`
+
+If you are changing analysis:
+
+- `src-tauri/src/analysis/`
 - `src/routes/analysis/+page.svelte`
 
-Shared shell:
-- `src/routes/+layout.svelte`
+If you are changing app-wide failure behavior:
 
-Responsibilities currently implemented in frontend:
-- account creation form state
-- auth step transitions
-- event-driven runtime Telegram readiness updates for rendered accounts/sources
-- source selection flows
-- account filtering in UI
-- manual sync triggers
-- inline message browsing state
-- LLM settings form state
-- LLM streaming output handling
-- analysis form state
-- analysis run/history rendering
-- analysis template editor state
-- source-group editor state
-- report traceability and grounded chat state
-- theme selection and persistence
+- `src-tauri/src/error.rs`
+- `src/lib/app-error.ts`
 
-### Backend
+If you are changing storage:
 
-Current Rust modules:
-- `src-tauri/src/lib.rs`
-- `src-tauri/src/telegram.rs`
-- `src-tauri/src/sources.rs`
-- `src-tauri/src/llm.rs`
-- `src-tauri/src/analysis.rs`
-- `src-tauri/src/db.rs`
-
-Responsibilities currently implemented in backend:
-- Tauri bootstrap
-- SQL plugin and migration registration
-- migration metadata patching before plugin initialization
-- Telegram client initialization per account
-- background restore of saved Telegram sessions on startup
-- Telegram login/logout flow
-- Telegram session file persistence
-- account CRUD against SQLite
-- source listing and registration against SQLite
-- Telegram dialog discovery
-- source resolution for sync
-- item persistence and retrieval
-- ZSTD compression/decompression for persisted metadata and message content
-- temporary LLM profile storage in `app_settings`
-- Gemini provider request mapping and streaming
-- analysis retrieval from `items`
-- analysis run persistence and trace persistence
-- source-group persistence for multi-source runs
-- grounded chat context assembly for completed analysis runs
-- persisted chat history storage for completed analysis runs
-
-## 3. Telegram subsystem
-
-`telegram.rs` manages active MTProto clients in memory.
-
-Current structure:
-- one `TelegramState`
-- one `HashMap<account_id, AccountClient>`
-- one runtime status map keyed by `account_id`
-- one Telegram client per account
-- one session file per account: `telegram_{account_id}.session.json`
-
-Current supported Telegram flow:
-1. load account credentials from SQLite;
-2. initialize a client for that account;
-3. send login code;
-4. sign in;
-5. persist session to disk;
-6. restore saved sessions in the background on later startup;
-7. expose runtime status as one of `not_initialized`, `restoring`, `ready`, `reauth_required`, `restore_failed`;
-8. delete session on logout.
-
-Current sync flow:
-1. frontend calls `sync_channel(source_id)`;
-2. backend loads the source and its `account_id`;
-3. backend gets the active Telegram client for that account;
-4. backend resolves the source channel from dialogs or stored username metadata;
-5. backend iterates Telegram messages;
-6. backend writes normalized rows into `items`;
-7. backend updates `sources.last_sync_state`.
-
-## 4. Storage subsystem
-
-SQLite is the only local application database.
-
-Important architectural decisions already reflected in code:
-- the database is preloaded at startup with `tauri-plugin-sql`;
-- Rust commands read the pool from `DbInstances`;
-- the app should not create a second independent SQLite connection path to another file;
-- migration metadata repair happens before SQL plugin initialization, not in Tauri `setup()`.
-
-This prevents:
-- mismatched DB paths;
-- commands racing migrations on startup;
-- checksum-related startup failures for older local databases.
-
-## 5. Current command surface
-
-The active Tauri command layer is intentionally small:
-- DB health: `ping_db`
-- Telegram auth: `tg_init`, `tg_is_authenticated`, `tg_send_code`, `tg_sign_in`, `tg_logout`
-- Telegram runtime state: `tg_get_account_statuses`
-- Accounts: `list_accounts`, `get_account`, `create_account`, `set_account_phone`, `clear_account_phone`, `delete_account`
-- Sources: `list_telegram_channels`, `add_telegram_source`, `list_sources`, `sync_channel`
-- Items: `get_items`
-- LLM: `get_llm_profiles`, `save_llm_profile`, `ask_llm_stream`
-- Analysis:
-  - `list_analysis_sources`
-  - `list_analysis_prompt_templates`
-  - `create_analysis_prompt_template`
-  - `update_analysis_prompt_template`
-  - `delete_analysis_prompt_template`
-  - `list_analysis_source_groups`
-  - `create_analysis_source_group`
-  - `update_analysis_source_group`
-  - `delete_analysis_source_group`
-  - `list_analysis_runs`
-  - `get_analysis_run`
-  - `get_analysis_run_trace`
-  - `resolve_analysis_trace_refs`
-  - `list_analysis_chat_messages`
-  - `clear_analysis_chat_messages`
-  - `start_analysis_report`
-  - `ask_analysis_run_question`
-
-This matches the current implemented product slice.
-
-## 6. Current sync constraints
-
-The first sync slice is intentionally narrow:
-- sync is manual and per source;
-- only already-registered sources are syncable;
-- only text/caption content is stored;
-- empty-text messages are skipped;
-- duplicates are ignored, not updated;
-- there is no background worker;
-- there is no reconciliation for edits or deletions;
-- there is no media ingestion.
-
-This is a deliberate MVP constraint, not an accidental omission.
-
-## 7. UI architecture notes
-
-The UI is still intentionally small:
-- route-based pages
-- no shared component library yet
-- no dedicated message browser route yet
-
-Current-state details:
-- the app supports both light and dark themes;
-- light theme is the default;
-- theme preference is persisted in `localStorage`;
-- the Sources page now combines source management, sync actions, and a first-pass inline message viewer;
-- both `/accounts` and `/sources` surface Telegram runtime readiness from backend state;
-- `/settings` is the provider-configuration route and intentionally separate from source management.
-- `/analysis` is now the first dedicated report-generation and report-grounded-chat surface over synced local records.
-
-## 8. Recommended direction
-
-Near-term implementation should continue in this order:
-1. implement media-aware sync metadata without introducing full media download yet;
-2. update `/sources` item browsing so media-only posts are represented explicitly;
-3. keep `/analysis` text-only until the media-aware ingestion model settles;
-4. revisit richer item browsing/search over `items`, likely with better filtering or FTS;
-5. revisit secure storage for provider secrets.
-
-That preserves the intended architecture: frontend orchestration, backend integrations, SQLite as the single local source of truth.
-
-## 9. Planned media-aware sync step
-
-The next product slice should improve the sync/storage boundary, not the analysis boundary first.
-
-Recommended design:
-- keep `content_zstd` as the existing text/caption storage field;
-- add lightweight media-aware metadata to `items` rather than jumping straight to a separate media table;
-- store enough metadata to distinguish text-only, text-with-media, and media-only posts;
-- stop skipping media-only messages during sync when useful metadata exists.
-
-The frontend impact should stay limited at first:
-- `/sources` becomes capable of showing media presence and basic metadata;
-- `/analysis` continues to consume only text-bearing rows;
-- media-only posts remain outside the current report/chat corpus until a later explicit media-aware analysis step.
+- `src-tauri/src/migrations.rs`
+- `src-tauri/migrations/`

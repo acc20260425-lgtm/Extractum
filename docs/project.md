@@ -1,134 +1,124 @@
-# Project Snapshot
+# Project State
 
-## Summary
+This document is the shortest current-state snapshot of the repository.
 
-Extractum is an MVP desktop tool for working with Telegram channels as local research sources.
-Right now the project supports:
-- creating multiple Telegram accounts;
-- authenticating each account separately;
-- persisting Telegram sessions locally;
-- restoring saved Telegram sessions automatically after app restart;
-- listing Telegram dialogs/channels for an authenticated account;
-- registering Telegram channels as local sources in SQLite;
-- manually syncing one source at a time into `items`;
-- viewing synced messages inline in the Sources UI;
-- configuring a Gemini provider profile and testing streaming responses from `/settings`;
-- generating saved markdown reports from `/analysis` over already-synced messages;
-- browsing saved analysis runs and trace data;
-- managing reusable source groups for multi-source report runs;
-- asking grounded follow-up questions over completed saved runs;
-- persisting grounded chat history per saved analysis run.
+## Stack
 
-## What exists in the codebase
+- frontend: `SvelteKit 2`, `Svelte 5`, `TypeScript`
+- desktop shell: `Tauri 2`
+- backend: `Rust`
+- local storage: `SQLite`
+- LLM: Gemini provider flow
 
-### Frontend
+## Product slice
 
-- `/accounts`: create, list, and delete Telegram accounts, and show runtime Telegram readiness for each account
-- `/auth/[id]`: initialize Telegram client, send code, sign in, sign out
-- `/sources`: filter by account, load Telegram channels, add sources manually or from dialogs, sync a source, view synced messages, and show restore/runtime readiness
-- `/settings`: edit the default Gemini provider profile and run a streaming test request
-- `/analysis`: run saved report-style analysis over synced local messages, inspect traceability, manage source groups, and ask grounded follow-up questions
-- global app layout with persistent light/dark theme toggle
+The app is a local Telegram ingest and analysis workspace.
 
-### Backend commands
+Implemented:
 
-Implemented Tauri commands:
-- `ping_db`
+- Telegram account management and sign-in flow
+- startup session restore
+- source management for Telegram broadcast channels
+- history sync into local SQLite
+- media-aware sync metadata for text-bearing and media-only items
+- configurable initial sync window
+- source groups for analysis
+- saved reports
+- follow-up chat on saved runs
+- immutable saved run corpus snapshots
+- typed app errors across Tauri commands
+
+Not implemented yet:
+
+- secure storage for all secrets
+- full media download / previews
+- media-aware analysis beyond the current text-first corpus
+
+## Main routes
+
+- `/accounts`
+  - create and delete local Telegram accounts
+  - observe runtime status updates
+- `/auth/[id]`
+  - initialize Telegram login
+  - send code
+  - sign in
+  - log out
+- `/sources`
+  - list Telegram dialogs
+  - add sources manually or from dialogs
+  - sync source history
+  - configure the first sync policy
+  - browse synced items
+- `/settings`
+  - store active LLM provider profile
+  - run a Gemini connectivity test
+- `/analysis`
+  - manage report templates
+  - manage source groups
+  - run reports
+  - inspect trace refs
+  - ask follow-up questions against saved runs
+
+## Backend command areas
+
+### Accounts / auth
+
+- account CRUD
 - `tg_init`
-- `tg_is_authenticated`
-- `tg_get_account_statuses`
 - `tg_send_code`
 - `tg_sign_in`
 - `tg_logout`
-- `list_accounts`
-- `get_account`
-- `create_account`
-- `set_account_phone`
-- `clear_account_phone`
-- `delete_account`
+- runtime account status refresh / restore
+
+### Sources
+
 - `list_telegram_channels`
 - `add_telegram_source`
 - `list_sources`
+- `delete_source`
 - `sync_channel`
 - `get_items`
-- `get_llm_profiles`
-- `save_llm_profile`
-- `ask_llm_stream`
-- `list_analysis_sources`
-- `list_analysis_prompt_templates`
-- `create_analysis_prompt_template`
-- `update_analysis_prompt_template`
-- `delete_analysis_prompt_template`
-- `list_analysis_source_groups`
-- `create_analysis_source_group`
-- `update_analysis_source_group`
-- `delete_analysis_source_group`
-- `list_analysis_runs`
-- `get_analysis_run`
-- `get_analysis_run_trace`
-- `resolve_analysis_trace_refs`
-- `list_analysis_chat_messages`
-- `clear_analysis_chat_messages`
-- `start_analysis_report`
-- `ask_analysis_run_question`
+- `get_sync_settings`
+- `save_sync_settings`
 
-### Storage
+### Analysis
 
-Current schema includes:
-- `accounts`
-- `sources`
-- `items`
-- `app_settings`
-- `analysis_prompt_templates`
-- `analysis_runs`
-- `analysis_source_groups`
-- `analysis_source_group_members`
-- `analysis_chat_messages`
+- report generation
+- saved runs listing and detail loading
+- trace resolution
+- follow-up chat
+- prompt template CRUD
+- source group CRUD
 
-Current active product flows use:
-- `accounts` for multi-account setup;
-- `sources` for source registration and sync cursors;
-- `items` for synced Telegram messages;
-- `app_settings` for temporary LLM provider profile storage.
+### Settings / LLM
 
-## Current boundaries
+- load and save LLM settings
+- test Gemini provider connectivity
 
-In scope now:
-- Telegram authentication
-- background restore of saved Telegram sessions on startup
-- account/source management
-- manual per-source sync
-- local message browsing
-- reliable migrations
-- shared SQLite access through `tauri-plugin-sql`
-- ZSTD compression for source metadata and stored message payloads
-- Gemini-first provider abstraction and streaming test calls
-- backend-owned report generation over synced local `items`
-- saved analysis runs with traceability data
-- grounded report chat over completed saved runs
+## Important persistence
 
-Out of scope in current implementation:
-- background sync
-- pagination beyond the simple first-page `get_items` call
-- message edit/delete reconciliation
-- media ingestion
-- vector DB / embeddings / semantic retrieval
+- `sources`: registered Telegram channels
+- `items`: synced Telegram messages and media-aware metadata
+- `app_settings`: app-level key/value storage
+- `analysis_runs`: saved report runs
+- `analysis_run_messages`: frozen corpus snapshot for saved runs
+- `analysis_chat_messages`: follow-up chat history
 
-Planned next:
-- media-aware sync metadata before full media download
-- only then extend analysis beyond text-bearing messages
+## Current practical constraints
 
-## Recommended reading order
+- analysis corpus still requires text content;
+- media-only items are stored and visible, but not yet analyzed;
+- LLM `api_key` remains in `app_settings` for now;
+- Telegram peer resolution can still fall back to dialog scanning.
 
-1. `GEMINI.md`
-2. `src-tauri/src/lib.rs`
-3. `src-tauri/migrations/1.sql`, `2.sql`, `3.sql`, `4.sql`, `5.sql`, `6.sql`, `7.sql`, `8.sql`
-4. `src-tauri/src/telegram.rs`
-5. `src-tauri/src/sources.rs`
-6. `src-tauri/src/llm.rs`
-7. `src-tauri/src/analysis.rs`
-8. `src/routes/accounts/+page.svelte`
-9. `src/routes/auth/[id]/+page.svelte`
-10. `src/routes/sources/+page.svelte`
-11. `src/routes/settings/+page.svelte`
-12. `src/routes/analysis/+page.svelte`
+## Reading order for implementation work
+
+1. `src-tauri/src/sources.rs`
+2. `src-tauri/src/analysis/`
+3. `src/routes/sources/+page.svelte`
+4. `src/routes/analysis/+page.svelte`
+5. `src-tauri/src/error.rs`
+6. `src-tauri/src/migrations.rs`
+7. `src-tauri/migrations/9.sql`
+8. `src-tauri/migrations/10.sql`

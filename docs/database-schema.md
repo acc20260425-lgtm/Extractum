@@ -1,209 +1,185 @@
-# Database Schema Design
+# Database Schema
 
-## 1. Storage model
+This document describes the current local SQLite schema at a practical level.
 
-Extractum uses SQLite as the only local database.
-The schema is intentionally small and now supports the current product slice of account setup, source registration, manual sync, and local message browsing.
+## 1. Core tables
 
-Today the application actively uses:
-- `accounts`
-- `sources`
-- `items`
-- `app_settings` for app-level provider settings and temporary LLM API key storage
-- `analysis_prompt_templates`
-- `analysis_runs`
-- `analysis_source_groups`
-- `analysis_source_group_members`
-- `analysis_chat_messages`
+### 1.1 `sources`
 
-## 2. Database location and initialization
+Stores registered Telegram sources.
 
-- database file: `extractum.db`
-- location: `app_config_dir` managed by `tauri-plugin-sql`
-- preload: configured in `src-tauri/tauri.conf.json` under `plugins.sql.preload`
+Important fields:
 
-This matters because:
-- migrations run before frontend commands are invoked;
-- Rust commands and the plugin must use the same database file and the same pool;
-- direct ad-hoc SQLite access with a different path will create inconsistent state.
+- `id`
+- `source_type`
+- `external_id`
+- `title`
+- `metadata_zstd`
+- `last_sync_state`
+- `last_synced_at`
+- `account_id`
+- `is_active`
+- `is_member`
+- `created_at`
 
-Rust DB access in the project goes through `DbInstances` from `tauri-plugin-sql`.
+Important constraints / indexes:
 
-## 3. Tables
+- unique source by `(source_type, external_id)`
 
-### 3.1 `accounts`
-
-Stores Telegram account configuration.
-
-| Column | Type | Notes |
-| :--- | :--- | :--- |
-| `id` | INTEGER | Primary key |
-| `label` | TEXT | Human-friendly account name |
-| `api_id` | INTEGER | Telegram API ID |
-| `api_hash` | TEXT | Telegram API hash |
-| `phone` | TEXT | Set after successful sign-in |
-| `created_at` | INTEGER | Unix timestamp, UTC |
-
-### 3.2 `sources`
-
-Stores configured data sources such as Telegram channels.
-
-| Column | Type | Notes |
-| :--- | :--- | :--- |
-| `id` | INTEGER | Primary key |
-| `source_type` | TEXT | Currently `telegram_channel` |
-| `external_id` | TEXT | Telegram bare channel id |
-| `title` | TEXT | Source title |
-| `metadata_zstd` | BLOB | Compressed source metadata; currently used to store optional username |
-| `last_sync_state` | INTEGER | Highest synced Telegram message id |
-| `last_synced_at` | INTEGER | Unix timestamp of the last successful sync |
-| `is_active` | BOOLEAN | Whether source participates in sync |
-| `is_member` | BOOLEAN | Whether the account is subscribed |
-| `created_at` | INTEGER | Unix timestamp, UTC |
-| `account_id` | INTEGER | FK to `accounts.id` |
-
-### 3.3 `items`
+### 1.2 `items`
 
 Stores synced Telegram messages.
 
-| Column | Type | Notes |
-| :--- | :--- | :--- |
-| `id` | INTEGER | Primary key |
-| `source_id` | INTEGER | FK to `sources.id` |
-| `external_id` | TEXT | Telegram message id |
-| `author` | TEXT | Optional sender/author |
-| `published_at` | INTEGER | Original publication time |
-| `ingested_at` | INTEGER | Ingestion time |
-| `content_zstd` | BLOB | Compressed text body |
-| `raw_data_zstd` | BLOB | Compressed lightweight raw/debug payload |
+Important fields:
 
-Current implementation notes:
-- only text/caption content is written to `content_zstd`;
-- empty-text messages are skipped;
-- duplicates are ignored with `ON CONFLICT(source_id, external_id) DO NOTHING`.
+- `id`
+- `source_id`
+- `external_id`
+- `author`
+- `published_at`
+- `ingested_at`
+- `content_zstd`
+- `raw_data_zstd`
+- `content_kind`
+- `has_media`
+- `media_kind`
+- `media_metadata_zstd`
 
-Planned next extension:
-- keep `content_zstd` as the text/caption field;
-- add lightweight media-aware item metadata so media-only posts stop being dropped at sync time;
-- likely add fields such as `content_kind`, `has_media`, `media_kind`, and `media_metadata_zstd`;
-- keep analysis text-only at first by continuing to read only rows that still have textual content.
+`content_kind` values:
 
-### 3.4 `app_settings`
+- `text_only`
+- `text_with_media`
+- `media_only`
 
-Stores simple key/value application settings.
+Notes:
 
-| Column | Type | Notes |
-| :--- | :--- | :--- |
-| `key` | TEXT | Primary key |
-| `value` | TEXT | Setting value |
+- rows may have text, media metadata, or both;
+- rows without both text and useful media metadata are skipped during ingest.
 
-Current active keys include:
-- `llm.active_provider_profile`
-- `llm.profile.default.provider`
-- `llm.profile.default.default_model`
-- `llm.profile.default.api_key`
+Important constraints / indexes:
 
-Important temporary note:
-- `llm.profile.default.api_key` currently stores the Gemini API key in plain SQLite text;
-- this is a deliberate temporary security debt while the first provider abstraction is being built out;
-- later work should migrate this value to secure storage and leave only non-secret provider settings in `app_settings`.
+- unique item by `(source_id, external_id)`
+- browse index on `(source_id, published_at DESC)`
+- author index on `author`
 
-### 3.5 `analysis_prompt_templates`
+### 1.3 `app_settings`
 
-Stores versioned report/chat prompt templates for the analysis workspace.
+Simple key/value storage for app-wide settings.
 
-### 3.6 `analysis_runs`
+Currently used for:
 
-Stores immutable saved report runs plus compressed trace data.
+- LLM provider settings
+- temporary Gemini API key storage
+- initial sync policy settings
 
-### 3.7 `analysis_source_groups`
+Known active keys include:
 
-Stores reusable named groups of sources for multi-source report runs.
+- `sync.initial.mode`
+- `sync.initial.value`
 
-### 3.8 `analysis_source_group_members`
+## 2. Analysis tables
 
-Stores group membership rows linking saved source groups to individual sources.
+### 2.1 `analysis_prompt_templates`
 
-### 3.9 `analysis_chat_messages`
+Stores saved report prompt templates.
 
-Stores persisted grounded chat history per saved analysis run.
+Important fields:
 
-## 4. Indexes and constraints
+- `id`
+- `name`
+- `template_kind`
+- `body`
+- `version`
+- `is_builtin`
+- `created_at`
+- `updated_at`
 
-```sql
-CREATE UNIQUE INDEX idx_sources_ext
-ON sources(source_type, external_id);
+### 2.2 `analysis_runs`
 
-CREATE UNIQUE INDEX idx_items_ext
-ON items(source_id, external_id);
+Stores saved report runs.
 
-CREATE INDEX idx_items_source_date
-ON items(source_id, published_at DESC);
+Important fields:
 
-CREATE INDEX idx_items_author
-ON items(author);
-```
+- `id`
+- `run_type`
+- `scope_type`
+- `source_id`
+- `source_group_id`
+- `period_from`
+- `period_to`
+- `output_language`
+- `prompt_template_id`
+- `prompt_template_version`
+- `provider_profile`
+- `provider`
+- `model`
+- `status`
+- `result_markdown`
+- `trace_data_zstd`
+- `scope_label_snapshot`
+- `error`
+- `created_at`
+- `completed_at`
 
-Why they exist:
-- `idx_sources_ext` prevents duplicate source registration;
-- `idx_items_ext` prevents duplicate message storage per source;
-- `idx_items_source_date` supports browsing by source and time;
-- `idx_items_author` leaves room for future author filtering.
+### 2.3 `analysis_source_groups`
 
-## 5. Migrations
+Named source groups for reusable analysis scope.
 
-Migrations live in `src-tauri/migrations/` and are registered in `src-tauri/src/lib.rs`.
+### 2.4 `analysis_source_group_members`
 
-Current migration history:
+Join table between groups and sources.
+
+### 2.5 `analysis_chat_messages`
+
+Stores follow-up chat exchanges for a saved run.
+
+Important fields:
+
+- `id`
+- `run_id`
+- `role`
+- `content`
+- `created_at`
+
+### 2.6 `analysis_run_messages`
+
+Stores the frozen corpus snapshot for a saved run.
+
+Important fields:
+
+- `run_id`
+- `item_id`
+- `source_id`
+- `external_id`
+- `author`
+- `published_at`
+- `ref`
+- `content_zstd`
+
+Purpose:
+
+- preserve the exact text corpus used by the run;
+- stabilize follow-up chat and trace resolution;
+- preserve effective source-group membership for the run.
+
+## 3. Migration history
 
 | Version | File | Purpose |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | 1 | `1.sql` | Initialize `sources`, `items`, `app_settings` |
-| 2 | `2.sql` | No-op; `is_member` was already present in migration 1 |
-| 3 | `3.sql` | Add `accounts` and `sources.account_id` |
-| 4 | `4.sql` | Add `sources.last_synced_at` |
-| 5 | `5.sql` | Add `analysis_prompt_templates` and `analysis_runs` |
-| 6 | `6.sql` | Add `analysis_source_groups` and `analysis_source_group_members` |
-| 7 | `7.sql` | Add `analysis_runs.source_group_id` |
-| 8 | `8.sql` | Add `analysis_chat_messages` |
+| 2 | `2.sql` | Add `is_member` to `sources` |
+| 3 | `3.sql` | Add `accounts` table |
+| 4 | `4.sql` | Add `last_synced_at` to `sources` |
+| 5 | `5.sql` | Add analysis templates and runs |
+| 6 | `6.sql` | Add analysis source groups |
+| 7 | `7.sql` | Add `source_group_id` to `analysis_runs` |
+| 8 | `8.sql` | Add analysis chat history |
+| 9 | `9.sql` | Add media-aware metadata to `items` |
+| 10 | `10.sql` | Add saved run snapshot storage |
 
-Rules:
-- never delete or rename an existing migration file;
-- never casually edit an already-applied migration;
-- always add new schema work as a new migration file;
-- if a historical migration must be repaired, update metadata before SQL plugin initialization.
+## 4. Current behavior implications
 
-## 6. Migration 2 compatibility note
-
-`2.sql` is intentionally:
-
-```sql
-SELECT 1;
-```
-
-Reason:
-- `is_member` was already included in `1.sql`;
-- an earlier historical version tried to add it again;
-- older local databases may therefore contain stale migration metadata.
-
-The app repairs migration metadata before SQL plugin initialization so that existing local databases can still start cleanly.
-
-## 7. Compression status
-
-Compressed fields are now active in the backend:
-- `metadata_zstd` stores source metadata, currently used for an optional Telegram username fallback;
-- `content_zstd` stores synced message text;
-- `raw_data_zstd` stores a lightweight raw/debug payload for future inspection or reprocessing.
-
-Compression and decompression are handled in Rust with `zstd`.
-The frontend receives already-decompressed message content through `get_items`.
-
-## 8. Practical status
-
-As of the current codebase:
-- `accounts` and `sources` are live production tables for the UI;
-- `items` is populated by manual sync through `sync_channel`;
-- `last_sync_state` and `last_synced_at` are actively maintained on `sources`;
-- `app_settings` is now used for temporary LLM provider profile storage;
-- `analysis_prompt_templates`, `analysis_runs`, `analysis_source_groups`, `analysis_source_group_members`, and `analysis_chat_messages` are active tables for the `/analysis` workspace;
-- the database path, preload, and migration handling are aligned with the running app.
+- `/sources` can render media-bearing and media-only items from `items`;
+- `/analysis` still loads only text-bearing corpus rows;
+- saved analysis runs now prefer `analysis_run_messages` over live `items`;
+- `app_settings` still contains secrets temporarily, which remains a security debt.
