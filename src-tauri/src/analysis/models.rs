@@ -181,7 +181,7 @@ pub(crate) struct CorpusMessage {
     pub(crate) r#ref: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct ChunkSummary {
     pub(crate) summary: String,
     pub(crate) topics: Vec<String>,

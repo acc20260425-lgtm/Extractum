@@ -8,7 +8,8 @@ use crate::llm::{
 
 use super::models::{AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary, CorpusMessage};
 use super::store::{
-    fetch_prompt_template, fetch_source_group, insert_analysis_run, load_corpus_messages, set_run_status,
+    fetch_prompt_template, fetch_source_group, find_active_duplicate_run, insert_analysis_run,
+    load_corpus_messages, set_run_status,
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
@@ -81,12 +82,62 @@ fn build_map_request(chunk_index: usize, total_chunks: usize, messages: &[Corpus
 }
 
 fn extract_json_payload(text: &str) -> Result<&str, String> {
-    let start = text.find('{').ok_or("LLM response did not contain JSON")?;
-    let end = text.rfind('}').ok_or("LLM response did not contain a closing JSON object")?;
-    if end < start {
-        return Err("LLM response contained malformed JSON boundaries".to_string());
+    let mut search_from = 0usize;
+    let mut saw_candidate = false;
+
+    while let Some(relative_start) = text[search_from..].find('{') {
+        let start = search_from + relative_start;
+        let mut depth = 0usize;
+        let mut in_string = false;
+        let mut escaping = false;
+
+        for (offset, character) in text[start..].char_indices() {
+            if in_string {
+                if escaping {
+                    escaping = false;
+                    continue;
+                }
+                match character {
+                    '\\' => escaping = true,
+                    '"' => in_string = false,
+                    _ => {}
+                }
+                continue;
+            }
+
+            match character {
+                '"' => in_string = true,
+                '{' => depth += 1,
+                '}' => {
+                    if depth == 0 {
+                        break;
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        saw_candidate = true;
+                        let end = start + offset + character.len_utf8();
+                        let candidate = &text[start..end];
+                        if serde_json::from_str::<serde_json::Value>(candidate).is_ok() {
+                            return Ok(candidate);
+                        }
+                        search_from = start + 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if search_from <= start {
+            return Err("LLM response contained malformed JSON boundaries".to_string());
+        }
     }
-    Ok(&text[start..=end])
+
+    if saw_candidate {
+        Err("LLM response did not contain a valid JSON object".to_string())
+    } else {
+        Err("LLM response did not contain JSON".to_string())
+    }
 }
 
 fn parse_chunk_summary(text: &str) -> Result<ChunkSummary, String> {
@@ -456,6 +507,25 @@ pub async fn start_analysis_report(
             )
         };
 
+    if let Some(existing_run_id) = find_active_duplicate_run(
+        &pool,
+        scope_type,
+        resolved_source_id,
+        resolved_group_id,
+        period_from,
+        period_to,
+        &output_language,
+        prompt_template.id,
+        &resolved_profile.profile_id,
+        &effective_model,
+    )
+    .await?
+    {
+        return Err(format!(
+            "An identical analysis report is already queued or running (run {existing_run_id})"
+        ));
+    }
+
     let run_id = insert_analysis_run(
         &pool,
         scope_type,
@@ -492,4 +562,48 @@ pub async fn start_analysis_report(
     });
 
     Ok(run_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_json_payload, parse_chunk_summary};
+
+    const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-m2"]}"#;
+
+    #[test]
+    fn extracts_json_with_text_before_and_after() {
+        let response = format!("Preface\n{SAMPLE_JSON}\nTail");
+        let payload = extract_json_payload(&response).expect("extract payload");
+
+        assert_eq!(payload, SAMPLE_JSON);
+    }
+
+    #[test]
+    fn extracts_json_inside_markdown_fence() {
+        let response = format!("```json\n{SAMPLE_JSON}\n```");
+        let payload = extract_json_payload(&response).expect("extract fenced payload");
+
+        assert_eq!(payload, SAMPLE_JSON);
+    }
+
+    #[test]
+    fn parse_chunk_summary_ignores_non_json_prefix_with_braces() {
+        let summary = parse_chunk_summary(&format!("Note {{not json}}\n{SAMPLE_JSON}"))
+            .expect("parse summary");
+
+        assert_eq!(summary.summary, "Brief");
+        assert_eq!(summary.topics, vec!["sync".to_string()]);
+    }
+
+    #[test]
+    fn parse_chunk_summary_rejects_malformed_payload() {
+        let error = parse_chunk_summary("```json\n{\"summary\": }\n```")
+            .expect_err("malformed payload should fail");
+
+        assert!(
+            error.contains("Failed to parse chunk summary JSON")
+                || error.contains("malformed JSON")
+                || error.contains("valid JSON object")
+        );
+    }
 }

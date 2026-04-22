@@ -75,6 +75,13 @@ struct SourceMetadata {
     username: Option<String>,
 }
 
+struct ResolvedChannelSource {
+    external_id: String,
+    title: String,
+    is_member: bool,
+    username: Option<String>,
+}
+
 #[tauri::command]
 pub async fn delete_source(handle: AppHandle, source_id: i64) -> Result<(), String> {
     let pool = get_pool(&handle).await?;
@@ -124,23 +131,9 @@ pub async fn add_telegram_source(
     let accounts = state.accounts.lock().await;
     let client = crate::telegram::get_client(&accounts, account_id).await?;
 
-    let username = parse_username(&channel_ref);
-    let peer = client
-        .resolve_username(&username)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Channel '{}' not found", channel_ref))?;
-
-    let channel = match peer {
-        Peer::Channel(c) => c,
-        _ => return Err("Not a broadcast channel".to_string()),
-    };
-
-    let external_id = channel.id().bare_id().to_string();
-    let title = channel.title().to_string();
-    let is_member = !channel.raw.left;
+    let resolved = resolve_channel_source(&client, &channel_ref).await?;
     let metadata_zstd = encode_source_metadata(&SourceMetadata {
-        username: channel.username().map(|s| s.to_string()),
+        username: resolved.username,
     })?;
     let now = now_secs();
 
@@ -159,10 +152,10 @@ pub async fn add_telegram_source(
         RETURNING id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at
         "#,
     )
-    .bind(&external_id)
-    .bind(&title)
+    .bind(&resolved.external_id)
+    .bind(&resolved.title)
     .bind(metadata_zstd)
-    .bind(is_member)
+    .bind(resolved.is_member)
     .bind(account_id)
     .bind(now)
     .fetch_one(&pool)
@@ -380,6 +373,55 @@ fn now_secs() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
+}
+
+async fn resolve_channel_source(
+    client: &grammers_client::Client,
+    channel_ref: &str,
+) -> Result<ResolvedChannelSource, String> {
+    let trimmed = channel_ref.trim();
+    let username = parse_username(trimmed);
+
+    if !username.is_empty() && !username.chars().all(|char| char.is_ascii_digit()) {
+        let peer = client
+            .resolve_username(&username)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Channel '{}' not found", channel_ref))?;
+
+        return match peer {
+            Peer::Channel(channel) => Ok(ResolvedChannelSource {
+                external_id: channel.id().bare_id().to_string(),
+                title: channel.title().to_string(),
+                is_member: !channel.raw.left,
+                username: channel.username().map(|value| value.to_string()),
+            }),
+            _ => Err("Not a broadcast channel".to_string()),
+        };
+    }
+
+    let Ok(channel_id) = trimmed.parse::<i64>() else {
+        return Err(format!("Channel '{}' not found", channel_ref));
+    };
+
+    let mut dialogs = client.iter_dialogs();
+    while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
+        if let Peer::Channel(channel) = dialog.peer() {
+            if channel.id().bare_id() == channel_id {
+                return Ok(ResolvedChannelSource {
+                    external_id: channel.id().bare_id().to_string(),
+                    title: channel.title().to_string(),
+                    is_member: !channel.raw.left,
+                    username: channel.username().map(|value| value.to_string()),
+                });
+            }
+        }
+    }
+
+    Err(format!(
+        "Channel '{}' could not be found in this account's dialogs",
+        channel_ref
+    ))
 }
 
 fn compress_text(input: &str) -> Result<Vec<u8>, String> {

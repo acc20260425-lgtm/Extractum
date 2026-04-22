@@ -8,7 +8,8 @@ use super::models::{
 use super::{
     decompress_text, default_report_template_body, now_secs, validate_chat_role,
     ANALYSIS_RUN_TYPE_REPORT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
-    ANALYSIS_STATUS_QUEUED, DEFAULT_REPORT_TEMPLATE_NAME, TEMPLATE_KIND_REPORT,
+    ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING, DEFAULT_REPORT_TEMPLATE_NAME,
+    TEMPLATE_KIND_REPORT,
 };
 
 async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> Result<bool, String> {
@@ -290,25 +291,89 @@ pub(crate) async fn persist_chat_exchange(
     validate_chat_role("assistant")?;
 
     let now = now_secs();
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
     sqlx::query(
         r#"
         INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
-        VALUES (?, ?, ?, ?), (?, ?, ?, ?)
+        VALUES (?, ?, ?, ?)
         "#,
     )
     .bind(run_id)
     .bind("user")
     .bind(user_question)
     .bind(now)
-    .bind(run_id)
-    .bind("assistant")
-    .bind(assistant_answer)
-    .bind(now + 1)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
 
+    sqlx::query(
+        r#"
+        INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
+        VALUES (?, ?, ?, ?)
+        "#,
+    )
+    .bind(run_id)
+    .bind("assistant")
+    .bind(assistant_answer)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
     Ok(())
+}
+
+pub(crate) async fn find_active_duplicate_run(
+    pool: &Pool<Sqlite>,
+    scope_type: &str,
+    source_id: Option<i64>,
+    source_group_id: Option<i64>,
+    period_from: i64,
+    period_to: i64,
+    output_language: &str,
+    prompt_template_id: i64,
+    provider_profile: &str,
+    model: &str,
+) -> Result<Option<i64>, String> {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT id
+        FROM analysis_runs
+        WHERE run_type = ?
+          AND scope_type = ?
+          AND (source_id = ? OR (source_id IS NULL AND ? IS NULL))
+          AND (source_group_id = ? OR (source_group_id IS NULL AND ? IS NULL))
+          AND period_from = ?
+          AND period_to = ?
+          AND output_language = ?
+          AND prompt_template_id = ?
+          AND provider_profile = ?
+          AND model = ?
+          AND status IN (?, ?)
+        ORDER BY created_at DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(ANALYSIS_RUN_TYPE_REPORT)
+    .bind(scope_type)
+    .bind(source_id)
+    .bind(source_id)
+    .bind(source_group_id)
+    .bind(source_group_id)
+    .bind(period_from)
+    .bind(period_to)
+    .bind(output_language)
+    .bind(prompt_template_id)
+    .bind(provider_profile)
+    .bind(model)
+    .bind(ANALYSIS_STATUS_QUEUED)
+    .bind(ANALYSIS_STATUS_RUNNING)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())
 }
 
 pub(crate) async fn insert_analysis_run(

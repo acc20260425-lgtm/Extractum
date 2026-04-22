@@ -332,6 +332,10 @@
   }
 
   async function runReport() {
+    if (running) {
+      status = "A report is already running.";
+      return;
+    }
     if (analysisScope === "single_source" && !selectedSourceId) {
       status = "Select a source first.";
       return;
