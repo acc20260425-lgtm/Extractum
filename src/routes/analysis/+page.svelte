@@ -4,6 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import RunHistory from "$lib/components/analysis/run-history.svelte";
+  import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import TracePanel from "$lib/components/analysis/trace-panel.svelte";
   import {
     defaultDateOffset,
@@ -1023,51 +1024,18 @@
   {/if}
 </section>
 
-<section class="card templates">
-  <div class="panel-header">
-    <div>
-      <h3>Prompt Template</h3>
-      {#if selectedTemplate()}
-        <p class="sub">
-          {selectedTemplate()?.name} - v{selectedTemplate()?.version}
-          {selectedTemplate()?.is_builtin ? " - builtin (edit fields below, then save as copy)" : " - custom"}
-        </p>
-      {/if}
-    </div>
-    <div class="template-actions">
-      <button class="secondary" onclick={saveTemplateCopy} disabled={savingTemplate || deletingTemplate}>
-        {savingTemplate ? "Saving..." : "Save as copy"}
-      </button>
-      <button
-        onclick={saveTemplateChanges}
-        disabled={savingTemplate || deletingTemplate || !selectedTemplate() || selectedTemplate()?.is_builtin === true}
-      >
-        {savingTemplate ? "Saving..." : "Save changes"}
-      </button>
-      <button
-        class="danger-soft"
-        onclick={deleteTemplate}
-        disabled={savingTemplate || deletingTemplate || !selectedTemplate() || selectedTemplate()?.is_builtin === true}
-      >
-        {deletingTemplate ? "Deleting..." : "Delete"}
-      </button>
-    </div>
-  </div>
-
-  <div class="template-grid">
-    <label>Template name
-      <input type="text" bind:value={templateName} placeholder="Custom report" />
-    </label>
-
-    <label>Template body
-      <textarea
-        bind:value={templateBody}
-        rows="10"
-        placeholder="Describe how the report should be structured and what it should emphasize."
-      ></textarea>
-    </label>
-  </div>
-</section>
+<TemplateEditor
+  selectedTemplate={selectedTemplate()}
+  {templateName}
+  {templateBody}
+  {savingTemplate}
+  {deletingTemplate}
+  onChangeTemplateName={(value) => (templateName = value)}
+  onChangeTemplateBody={(value) => (templateBody = value)}
+  onSaveTemplateCopy={saveTemplateCopy}
+  onSaveTemplateChanges={saveTemplateChanges}
+  onDeleteTemplate={deleteTemplate}
+/>
 
 <section class="card groups">
   <div class="panel-header">
@@ -1301,13 +1269,6 @@
     border-color: var(--primary);
   }
 
-  .templates {
-    margin-top: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
   .chat {
     margin-top: 1.5rem;
     display: flex;
@@ -1378,13 +1339,6 @@
     display: flex;
     gap: 0.6rem;
     flex-wrap: wrap;
-  }
-
-  .template-grid {
-    display: grid;
-    grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
-    gap: 1rem;
-    align-items: start;
   }
 
   .group-grid {
@@ -1469,10 +1423,6 @@
     }
 
     .report-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .template-grid {
       grid-template-columns: 1fr;
     }
 
