@@ -102,6 +102,8 @@ pub struct AnalysisRunDetail {
     pub has_trace_data: bool,
     pub created_at: i64,
     pub completed_at: Option<i64>,
+    #[serde(skip_serializing)]
+    pub(crate) scope_label_snapshot: Option<String>,
 }
 
 #[derive(FromRow)]
@@ -125,6 +127,7 @@ pub(crate) struct AnalysisRunRow {
     pub(crate) status: String,
     pub(crate) result_markdown: Option<String>,
     pub(crate) trace_data_zstd: Option<Vec<u8>>,
+    pub(crate) scope_label_snapshot: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) created_at: i64,
     pub(crate) completed_at: Option<i64>,
@@ -168,6 +171,17 @@ pub(crate) struct StoredAnalysisItemRow {
     pub(crate) author: Option<String>,
     pub(crate) published_at: i64,
     pub(crate) content_zstd: Option<Vec<u8>>,
+}
+
+#[derive(FromRow)]
+pub(crate) struct StoredRunSnapshotRow {
+    pub(crate) item_id: i64,
+    pub(crate) source_id: i64,
+    pub(crate) external_id: String,
+    pub(crate) author: Option<String>,
+    pub(crate) published_at: i64,
+    pub(crate) r#ref: String,
+    pub(crate) content_zstd: Vec<u8>,
 }
 
 #[derive(Clone)]

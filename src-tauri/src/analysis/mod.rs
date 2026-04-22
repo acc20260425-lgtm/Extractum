@@ -14,9 +14,7 @@ use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow,
     AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
-use self::store::{
-    fetch_run_row, load_corpus_messages, map_run_detail, map_run_summary, resolve_run_source_ids,
-};
+use self::store::{fetch_run_row, load_run_corpus_messages, map_run_detail, map_run_summary};
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
 use crate::db::get_pool;
 
@@ -158,6 +156,7 @@ pub async fn list_analysis_runs(
                 runs.status,
                 runs.result_markdown,
                 runs.trace_data_zstd,
+                runs.scope_label_snapshot,
                 runs.error,
                 runs.created_at,
                 runs.completed_at
@@ -198,6 +197,7 @@ pub async fn list_analysis_runs(
                 runs.status,
                 runs.result_markdown,
                 runs.trace_data_zstd,
+                runs.scope_label_snapshot,
                 runs.error,
                 runs.created_at,
                 runs.completed_at
@@ -238,6 +238,7 @@ pub async fn list_analysis_runs(
                 runs.status,
                 runs.result_markdown,
                 runs.trace_data_zstd,
+                runs.scope_label_snapshot,
                 runs.error,
                 runs.created_at,
                 runs.completed_at
@@ -302,8 +303,7 @@ pub async fn resolve_analysis_trace_refs(
         .await?
         .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
 
-    let source_ids = resolve_run_source_ids(&pool, &run).await?;
-    let corpus = load_corpus_messages(&pool, &source_ids, run.period_from, run.period_to).await?;
+    let corpus = load_run_corpus_messages(&pool, &run).await?;
     Ok(build_trace_refs(&normalized_refs, &corpus))
 }
 
@@ -354,6 +354,7 @@ mod tests {
                 status TEXT NOT NULL,
                 result_markdown TEXT,
                 trace_data_zstd BLOB,
+                scope_label_snapshot TEXT,
                 error TEXT,
                 created_at INTEGER NOT NULL,
                 completed_at INTEGER

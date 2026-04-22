@@ -140,5 +140,11 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/9.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "add analysis run snapshots",
+            sql: include_str!("../migrations/10.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

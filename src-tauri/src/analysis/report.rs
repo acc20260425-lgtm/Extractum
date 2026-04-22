@@ -9,7 +9,7 @@ use crate::llm::{
 use super::models::{AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary, CorpusMessage};
 use super::store::{
     fetch_prompt_template, fetch_source_group, find_active_duplicate_run, insert_analysis_run,
-    load_corpus_messages, set_run_status,
+    load_corpus_messages, persist_run_snapshot, set_run_status,
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
@@ -386,6 +386,8 @@ async fn run_report_pipeline(
             error: None,
         },
     );
+
+    persist_run_snapshot(&pool, run_id, &scope_label, &corpus).await?;
 
     set_run_status(
         &pool,

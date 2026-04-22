@@ -9,13 +9,10 @@ use super::models::{
     AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage,
 };
 use super::store::{
-    fetch_run_row, load_chat_messages_from_pool, load_corpus_messages, map_run_detail,
-    persist_chat_exchange, resolve_run_source_ids,
+    fetch_run_row, load_chat_messages_from_pool, load_run_corpus_messages, map_run_detail,
+    persist_chat_exchange, resolve_run_scope_label,
 };
-use super::{
-    emit_analysis_chat_event, now_secs, validate_chat_turns, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
-    ANALYSIS_STATUS_COMPLETED,
-};
+use super::{emit_analysis_chat_event, now_secs, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
 
 fn chat_search_terms(question: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
@@ -131,6 +128,7 @@ fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
 
 fn build_chat_request(
     run: &AnalysisRunDetail,
+    scope_label: &str,
     history: &[AnalysisChatTurn],
     question: &str,
     report_markdown: &str,
@@ -149,15 +147,7 @@ fn build_chat_request(
             role: "user".to_string(),
             content: format!(
                 "Saved report scope: {}\nSaved report period: {} to {}\n\nSaved report markdown:\n\n{}\n\nAdditional local message matches for the current question:\n\n{}",
-                if run.scope_type == ANALYSIS_SCOPE_TYPE_SOURCE_GROUP {
-                    run.source_group_name
-                        .clone()
-                        .unwrap_or_else(|| format!("Group {}", run.source_group_id.unwrap_or_default()))
-                } else {
-                    run.source_title
-                        .clone()
-                        .unwrap_or_else(|| format!("Source {}", run.source_id.unwrap_or_default()))
-                },
+                scope_label,
                 run.period_from,
                 run.period_to,
                 report_markdown,
@@ -228,10 +218,11 @@ pub async fn ask_analysis_run_question(
     }
 
     let pool = get_pool(&handle).await?;
-    let run = fetch_run_row(&pool, run_id)
+    let run_row = fetch_run_row(&pool, run_id)
         .await?
-        .map(map_run_detail)
         .ok_or_else(|| format!("Analysis run {run_id} not found"))?;
+    let run = map_run_detail(run_row);
+    let scope_label = resolve_run_scope_label(&run);
 
     if run.status != ANALYSIS_STATUS_COMPLETED {
         return Err("Open a completed analysis run before asking follow-up questions".to_string());
@@ -243,8 +234,7 @@ pub async fn ask_analysis_run_question(
         .filter(|text| !text.trim().is_empty())
         .ok_or_else(|| "The selected analysis run does not have a saved report".to_string())?;
 
-    let source_ids = resolve_run_source_ids(&pool, &run).await?;
-    let corpus = load_corpus_messages(&pool, &source_ids, run.period_from, run.period_to).await?;
+    let corpus = load_run_corpus_messages(&pool, &run).await?;
     let context_messages = find_chat_context_messages(&question, &corpus);
     let history = load_chat_messages_from_pool(&pool, run_id)
         .await?
@@ -257,6 +247,7 @@ pub async fn ask_analysis_run_question(
     validate_chat_turns(&history)?;
     let request = build_chat_request(
         &run,
+        &scope_label,
         &history,
         &question,
         &report_markdown,
