@@ -1,5 +1,7 @@
-use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, Pool, QueryBuilder, Sqlite};
+mod models;
+mod trace;
+
+use sqlx::{Pool, QueryBuilder, Sqlite};
 use std::io::Cursor;
 use tauri::{AppHandle, Emitter};
 
@@ -7,6 +9,16 @@ use crate::db::get_pool;
 use crate::llm::{
     resolve_effective_model, resolve_profile_for_backend, run_llm_collect_with_profile,
     run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
+};
+use self::models::{
+    AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisPromptTemplate,
+    AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow, AnalysisRunSummary,
+    AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceGroupRow,
+    AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef, ChunkSummary, CorpusMessage,
+    StoredAnalysisItemRow,
+};
+use self::trace::{
+    build_trace_data, build_trace_refs, compress_trace_data, decode_trace_data, normalize_ref,
 };
 
 const TEMPLATE_KIND_REPORT: &str = "report";
@@ -22,209 +34,6 @@ const ANALYSIS_STATUS_RUNNING: &str = "running";
 const ANALYSIS_STATUS_COMPLETED: &str = "completed";
 const ANALYSIS_STATUS_FAILED: &str = "failed";
 const ANALYSIS_CHUNK_TARGET_CHARS: usize = 16_000;
-
-#[derive(Serialize, FromRow)]
-pub struct AnalysisSourceOption {
-    pub id: i64,
-    pub account_id: Option<i64>,
-    pub title: Option<String>,
-    pub item_count: i64,
-    pub last_synced_at: Option<i64>,
-}
-
-#[derive(Clone, Serialize, Deserialize, FromRow)]
-pub struct AnalysisPromptTemplate {
-    pub id: i64,
-    pub name: String,
-    pub template_kind: String,
-    pub body: String,
-    pub version: i64,
-    pub is_builtin: bool,
-    pub created_at: i64,
-    pub updated_at: i64,
-}
-
-#[derive(Clone, Serialize, Deserialize, FromRow)]
-pub struct AnalysisSourceGroupMember {
-    pub source_id: i64,
-    pub source_title: Option<String>,
-    pub item_count: i64,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct AnalysisSourceGroup {
-    pub id: i64,
-    pub name: String,
-    pub members: Vec<AnalysisSourceGroupMember>,
-    pub created_at: i64,
-    pub updated_at: i64,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct AnalysisTraceRef {
-    pub r#ref: String,
-    pub item_id: i64,
-    pub source_id: i64,
-    pub external_id: String,
-    pub published_at: i64,
-    pub excerpt: String,
-}
-
-#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct AnalysisTraceData {
-    pub refs: Vec<AnalysisTraceRef>,
-}
-
-#[derive(Serialize)]
-pub struct AnalysisRunSummary {
-    pub id: i64,
-    pub run_type: String,
-    pub scope_type: String,
-    pub source_id: Option<i64>,
-    pub source_title: Option<String>,
-    pub source_group_id: Option<i64>,
-    pub source_group_name: Option<String>,
-    pub period_from: i64,
-    pub period_to: i64,
-    pub output_language: String,
-    pub prompt_template_id: Option<i64>,
-    pub prompt_template_name: Option<String>,
-    pub prompt_template_version: i64,
-    pub provider_profile: String,
-    pub provider: String,
-    pub model: String,
-    pub status: String,
-    pub error: Option<String>,
-    pub has_trace_data: bool,
-    pub created_at: i64,
-    pub completed_at: Option<i64>,
-}
-
-#[derive(Serialize)]
-pub struct AnalysisRunDetail {
-    pub id: i64,
-    pub run_type: String,
-    pub scope_type: String,
-    pub source_id: Option<i64>,
-    pub source_title: Option<String>,
-    pub source_group_id: Option<i64>,
-    pub source_group_name: Option<String>,
-    pub period_from: i64,
-    pub period_to: i64,
-    pub output_language: String,
-    pub prompt_template_id: Option<i64>,
-    pub prompt_template_name: Option<String>,
-    pub prompt_template_version: i64,
-    pub provider_profile: String,
-    pub provider: String,
-    pub model: String,
-    pub status: String,
-    pub result_markdown: Option<String>,
-    pub error: Option<String>,
-    pub has_trace_data: bool,
-    pub created_at: i64,
-    pub completed_at: Option<i64>,
-}
-
-#[derive(FromRow)]
-struct AnalysisRunRow {
-    id: i64,
-    run_type: String,
-    scope_type: String,
-    source_id: Option<i64>,
-    source_title: Option<String>,
-    source_group_id: Option<i64>,
-    source_group_name: Option<String>,
-    period_from: i64,
-    period_to: i64,
-    output_language: String,
-    prompt_template_id: Option<i64>,
-    prompt_template_name: Option<String>,
-    prompt_template_version: i64,
-    provider_profile: String,
-    provider: String,
-    model: String,
-    status: String,
-    result_markdown: Option<String>,
-    trace_data_zstd: Option<Vec<u8>>,
-    error: Option<String>,
-    created_at: i64,
-    completed_at: Option<i64>,
-}
-
-#[derive(FromRow)]
-struct AnalysisSourceGroupRow {
-    id: i64,
-    name: String,
-    created_at: i64,
-    updated_at: i64,
-}
-
-#[derive(Serialize)]
-pub struct AnalysisRunEvent {
-    pub run_id: i64,
-    pub kind: String,
-    pub phase: String,
-    pub message: Option<String>,
-    pub progress_current: Option<i64>,
-    pub progress_total: Option<i64>,
-    pub delta: Option<String>,
-    pub error: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct AnalysisChatEvent {
-    pub request_id: String,
-    pub run_id: i64,
-    pub kind: String,
-    pub delta: Option<String>,
-    pub message: Option<String>,
-    pub error: Option<String>,
-}
-
-#[derive(FromRow)]
-struct StoredAnalysisItemRow {
-    id: i64,
-    source_id: i64,
-    external_id: String,
-    author: Option<String>,
-    published_at: i64,
-    content_zstd: Option<Vec<u8>>,
-}
-
-#[derive(Clone)]
-struct CorpusMessage {
-    item_id: i64,
-    source_id: i64,
-    external_id: String,
-    published_at: i64,
-    author: Option<String>,
-    content: String,
-    r#ref: String,
-}
-
-#[derive(Deserialize)]
-struct ChunkSummary {
-    summary: String,
-    topics: Vec<String>,
-    notable_points: Vec<String>,
-    candidate_refs: Vec<String>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct AnalysisChatTurn {
-    pub role: String,
-    pub content: String,
-}
-
-#[derive(Clone, Serialize, Deserialize, FromRow)]
-pub struct AnalysisChatMessage {
-    pub id: i64,
-    pub run_id: i64,
-    pub role: String,
-    pub content: String,
-    pub created_at: i64,
-}
 
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
@@ -391,21 +200,6 @@ async fn ensure_sources_exist(pool: &Pool<Sqlite>, source_ids: &[i64]) -> Result
     }
 
     Ok(())
-}
-
-#[allow(dead_code)]
-fn compress_trace_data(trace_data: &AnalysisTraceData) -> Result<Vec<u8>, String> {
-    let json = serde_json::to_vec(trace_data).map_err(|e| e.to_string())?;
-    zstd::encode_all(Cursor::new(json), 3).map_err(|e| e.to_string())
-}
-
-fn decode_trace_data(bytes: Option<&[u8]>) -> Result<AnalysisTraceData, String> {
-    let Some(bytes) = bytes else {
-        return Ok(AnalysisTraceData::default());
-    };
-
-    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(|e| e.to_string())?;
-    serde_json::from_slice(&decoded).map_err(|e| e.to_string())
 }
 
 fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
@@ -854,24 +648,6 @@ fn parse_chunk_summary(text: &str) -> Result<ChunkSummary, String> {
     serde_json::from_str(payload).map_err(|e| format!("Failed to parse chunk summary JSON: {e}"))
 }
 
-fn normalize_ref(candidate: &str) -> Option<String> {
-    let candidate = candidate.trim().trim_matches('[').trim_matches(']');
-    let (source_part, message_part) = candidate.split_once("-m")?;
-    if !source_part.starts_with('s') {
-        return None;
-    }
-    let source_digits = &source_part[1..];
-    if source_digits.is_empty()
-        || message_part.is_empty()
-        || !source_digits.chars().all(|c| c.is_ascii_digit())
-        || !message_part.chars().all(|c| c.is_ascii_digit())
-    {
-        return None;
-    }
-
-    Some(format!("s{source_digits}-m{message_part}"))
-}
-
 fn summarize_chunk_for_reduce(summary: &ChunkSummary) -> String {
     let topics = if summary.topics.is_empty() {
         "- none".to_string()
@@ -958,62 +734,6 @@ fn build_reduce_request(
             },
         ],
     }
-}
-
-fn extract_cited_refs(markdown: &str) -> Vec<String> {
-    let mut refs = Vec::new();
-    let mut cursor = 0usize;
-
-    while let Some(relative_start) = markdown[cursor..].find('[') {
-        let start = cursor + relative_start;
-        let Some(relative_end) = markdown[start + 1..].find(']') else {
-            break;
-        };
-        let end = start + 1 + relative_end;
-        let inside = &markdown[start + 1..end];
-        for part in inside.split(',') {
-            if let Some(reference) = normalize_ref(part) {
-                if !refs.contains(&reference) {
-                    refs.push(reference);
-                }
-            }
-        }
-        cursor = end + 1;
-    }
-
-    refs
-}
-
-fn build_trace_refs(refs: &[String], corpus: &[CorpusMessage]) -> Vec<AnalysisTraceRef> {
-    let mut trace_refs = Vec::new();
-
-    for reference in refs {
-        if let Some(message) = corpus.iter().find(|message| message.r#ref == *reference) {
-            let excerpt = if message.content.len() > 480 {
-                format!("{}...", &message.content[..480])
-            } else {
-                message.content.clone()
-            };
-
-            trace_refs.push(AnalysisTraceRef {
-                r#ref: reference.clone(),
-                item_id: message.item_id,
-                source_id: message.source_id,
-                external_id: message.external_id.clone(),
-                published_at: message.published_at,
-                excerpt,
-            });
-        }
-    }
-
-    trace_refs
-}
-
-fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceData {
-    let refs = extract_cited_refs(markdown);
-    let trace_refs = build_trace_refs(&refs, corpus);
-
-    AnalysisTraceData { refs: trace_refs }
 }
 
 fn chat_search_terms(question: &str) -> Vec<String> {
