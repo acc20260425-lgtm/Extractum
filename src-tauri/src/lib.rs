@@ -5,11 +5,14 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod db;
 
+mod accounts;
+use accounts::{clear_account_phone, create_account, delete_account, get_account, list_accounts, set_account_phone};
+
 mod telegram;
 use telegram::{restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout, tg_send_code, tg_sign_in, TelegramState};
 
 mod sources;
-use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, list_accounts, get_account, create_account, set_account_phone, clear_account_phone, delete_account, delete_source};
+use sources::{list_telegram_channels, add_telegram_source, list_sources, sync_channel, get_items, delete_source};
 
 mod llm;
 use llm::{get_llm_profiles, save_llm_profile, ask_llm_stream};
