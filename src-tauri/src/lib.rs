@@ -17,8 +17,8 @@ use telegram::{
 
 mod sources;
 use sources::{
-    add_telegram_source, delete_source, get_items, list_sources, list_telegram_channels,
-    sync_channel,
+    add_telegram_source, delete_source, get_items, get_sync_settings, list_sources,
+    list_telegram_channels, save_sync_settings, sync_channel,
 };
 
 mod llm;
@@ -76,6 +76,8 @@ pub fn run() {
             list_telegram_channels,
             add_telegram_source,
             list_sources,
+            get_sync_settings,
+            save_sync_settings,
             sync_channel,
             get_items,
             get_llm_profiles,

@@ -53,6 +53,12 @@
     inserted: number;
     skipped: number;
     last_message_id: number | null;
+    initial_sync_policy_applied: string | null;
+  }
+
+  interface SyncSettingsRecord {
+    initial_sync_mode: "recent_messages" | "recent_days";
+    initial_sync_value: number;
   }
 
   interface AccountRuntimeStatus {
@@ -89,6 +95,10 @@
   let selectedSourceId = $state<number | null>(null);
   let syncingIds = $state<Record<number, boolean>>({});
   let deletingIds = $state<Record<number, boolean>>({});
+  let initialSyncMode = $state<SyncSettingsRecord["initial_sync_mode"]>("recent_messages");
+  let initialSyncValue = $state("500");
+  let loadingSyncSettings = $state(false);
+  let savingSyncSettings = $state(false);
   let loadSourcesRequestId = 0;
   let syncStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -142,6 +152,42 @@
     } catch (e) {
       if (requestId !== loadSourcesRequestId) return;
       status = formatAppError("loading sources", e);
+    }
+  }
+
+  async function loadSyncSettings() {
+    loadingSyncSettings = true;
+    try {
+      const settings = await invoke<SyncSettingsRecord>("get_sync_settings");
+      initialSyncMode = settings.initial_sync_mode;
+      initialSyncValue = String(settings.initial_sync_value);
+    } catch (e) {
+      pushErrorToast(formatAppError("loading sync settings", e));
+    } finally {
+      loadingSyncSettings = false;
+    }
+  }
+
+  async function saveSyncSettings() {
+    const parsedValue = parseInt(initialSyncValue, 10);
+    if (!Number.isFinite(parsedValue)) {
+      status = "Initial sync value must be a number.";
+      return;
+    }
+
+    savingSyncSettings = true;
+    try {
+      const settings = await invoke<SyncSettingsRecord>("save_sync_settings", {
+        initialSyncMode,
+        initialSyncValue: parsedValue,
+      });
+      initialSyncMode = settings.initial_sync_mode;
+      initialSyncValue = String(settings.initial_sync_value);
+      status = `Initial sync policy saved: ${initialSyncPolicyLabel(settings.initial_sync_mode, settings.initial_sync_value)}.`;
+    } catch (e) {
+      status = formatAppError("saving sync settings", e);
+    } finally {
+      savingSyncSettings = false;
     }
   }
 
@@ -232,7 +278,10 @@
       await loadSources();
       setSyncStatus(
         `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}` +
-        (result.last_message_id ? `, last message ${result.last_message_id}.` : ".")
+        (result.last_message_id ? `, last message ${result.last_message_id}.` : ".") +
+        (result.initial_sync_policy_applied
+          ? ` First sync policy applied: ${result.initial_sync_policy_applied}.`
+          : "")
       );
       if (selectedSourceId === sourceId) {
         await loadItems(sourceId);
@@ -337,6 +386,26 @@
     return new Date(timestamp * 1000).toLocaleString();
   }
 
+  function initialSyncValueLabel() {
+    const parsedValue = parseInt(initialSyncValue, 10);
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  }
+
+  function initialSyncPolicyLabel(
+    mode: SyncSettingsRecord["initial_sync_mode"],
+    value: number | null
+  ) {
+    if (value === null) return "an invalid setting";
+    if (mode === "recent_days") {
+      return `last ${value} ${value === 1 ? "day" : "days"}`;
+    }
+    return `last ${value} ${value === 1 ? "message" : "messages"}`;
+  }
+
+  function initialSyncPolicySummary() {
+    return initialSyncPolicyLabel(initialSyncMode, initialSyncValueLabel());
+  }
+
   $effect(() => {
     void loadSources();
     dialogs = [];
@@ -362,6 +431,7 @@
     let detachRestoreFailureListener: (() => void) | null = null;
 
     void loadAccounts();
+    void loadSyncSettings();
     void listen<AccountRuntimeStatus>("telegram://account-status", ({ payload }: RuntimeStatusEvent<AccountRuntimeStatus>) => {
       if (disposed) return;
       accountStatuses = {
@@ -426,6 +496,41 @@
   </div>
 </div>
 
+<div class="card">
+  <div class="card-header">
+    <h3>Initial Sync Policy</h3>
+  </div>
+  <p class="hint">
+    Applies only to sources that have never been synced before. Later syncs still fetch only newer
+    messages incrementally.
+  </p>
+  <div class="policy-grid">
+    <label>Mode
+      <select bind:value={initialSyncMode} disabled={loadingSyncSettings || savingSyncSettings}>
+        <option value="recent_messages">Recent messages</option>
+        <option value="recent_days">Recent days</option>
+      </select>
+    </label>
+    <label>Value
+      <input
+        type="number"
+        min={initialSyncMode === "recent_days" ? 1 : 50}
+        max={initialSyncMode === "recent_days" ? 365 : 5000}
+        bind:value={initialSyncValue}
+        disabled={loadingSyncSettings || savingSyncSettings}
+      />
+    </label>
+  </div>
+  <div class="row policy-actions">
+    <button onclick={saveSyncSettings} disabled={loadingSyncSettings || savingSyncSettings || !initialSyncValue.trim()}>
+      {savingSyncSettings ? "Saving..." : "Save policy"}
+    </button>
+    <span class="policy-summary">
+      Current first sync window: {initialSyncPolicySummary()}
+    </span>
+  </div>
+</div>
+
 <section class="workspace">
   <div class="card pane pane-list">
     <div class="card-header">
@@ -463,6 +568,12 @@
         <div class="detail-title">
           <h3>{currentSource.title ?? currentSource.external_id}</h3>
           <p>{accountLabel(currentSource.account_id)}</p>
+          {#if currentSource.last_sync_state === null}
+            <p class="first-sync-note">
+              First sync will import {initialSyncPolicySummary()}. After that, this source switches
+              to incremental sync using only newer Telegram messages.
+            </p>
+          {/if}
         </div>
         <div class="detail-actions">
           {#if currentSource.last_synced_at !== null}
@@ -638,11 +749,32 @@
   }
   .row { display: flex; gap: 0.5rem; align-items: center; }
   .row input { flex: 1; }
+  .policy-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) minmax(120px, 180px);
+    gap: 0.8rem;
+    align-items: end;
+  }
+  .policy-actions {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  .policy-summary {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
   select {
     flex: 1;
     padding: 0.6rem 0.8rem;
     border-radius: 6px;
     font-size: 0.95rem;
+  }
+  .first-sync-note {
+    margin: 0.5rem 0 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+    max-width: 42rem;
   }
   .source-list {
     list-style: none;
@@ -715,6 +847,9 @@
   }
   @media (max-width: 1180px) {
     .workspace {
+      grid-template-columns: 1fr;
+    }
+    .policy-grid {
       grid-template-columns: 1fr;
     }
     .pane-list {

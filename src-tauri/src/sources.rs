@@ -9,10 +9,48 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::telegram::TelegramState;
 
-const INITIAL_SYNC_MESSAGE_LIMIT: usize = 500;
+const DEFAULT_INITIAL_SYNC_MESSAGE_LIMIT: i64 = 500;
+const MIN_INITIAL_SYNC_MESSAGE_LIMIT: i64 = 50;
+const MAX_INITIAL_SYNC_MESSAGE_LIMIT: i64 = 5_000;
+const DEFAULT_INITIAL_SYNC_DAY_LIMIT: i64 = 30;
+const MIN_INITIAL_SYNC_DAY_LIMIT: i64 = 1;
+const MAX_INITIAL_SYNC_DAY_LIMIT: i64 = 365;
+const INITIAL_SYNC_MODE_SETTING_KEY: &str = "sync.initial.mode";
+const INITIAL_SYNC_VALUE_SETTING_KEY: &str = "sync.initial.value";
 const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
 const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
 const CONTENT_KIND_MEDIA_ONLY: &str = "media_only";
+const SECONDS_PER_DAY: i64 = 86_400;
+
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InitialSyncMode {
+    RecentMessages,
+    RecentDays,
+}
+
+impl InitialSyncMode {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "recent_messages" => Ok(Self::RecentMessages),
+            "recent_days" => Ok(Self::RecentDays),
+            other => Err(format!("Unsupported initial sync mode '{other}'")),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::RecentMessages => "recent_messages",
+            Self::RecentDays => "recent_days",
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct SyncSettingsRecord {
+    pub initial_sync_mode: InitialSyncMode,
+    pub initial_sync_value: i64,
+}
 
 #[derive(Serialize)]
 pub struct ChannelInfo {
@@ -40,6 +78,7 @@ pub struct SyncResult {
     pub inserted: i64,
     pub skipped: i64,
     pub last_message_id: Option<i64>,
+    pub initial_sync_policy_applied: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -125,6 +164,165 @@ struct DocumentSignals {
     has_audio: bool,
     is_voice: bool,
     is_animated: bool,
+}
+
+fn default_sync_settings() -> SyncSettingsRecord {
+    SyncSettingsRecord {
+        initial_sync_mode: InitialSyncMode::RecentMessages,
+        initial_sync_value: DEFAULT_INITIAL_SYNC_MESSAGE_LIMIT,
+    }
+}
+
+fn validate_sync_settings(
+    initial_sync_mode: InitialSyncMode,
+    initial_sync_value: i64,
+) -> AppResult<SyncSettingsRecord> {
+    let allowed_range = match initial_sync_mode {
+        InitialSyncMode::RecentMessages => {
+            MIN_INITIAL_SYNC_MESSAGE_LIMIT..=MAX_INITIAL_SYNC_MESSAGE_LIMIT
+        }
+        InitialSyncMode::RecentDays => MIN_INITIAL_SYNC_DAY_LIMIT..=MAX_INITIAL_SYNC_DAY_LIMIT,
+    };
+
+    if !allowed_range.contains(&initial_sync_value) {
+        let (unit_label, min_value, max_value) = match initial_sync_mode {
+            InitialSyncMode::RecentMessages => (
+                "messages",
+                MIN_INITIAL_SYNC_MESSAGE_LIMIT,
+                MAX_INITIAL_SYNC_MESSAGE_LIMIT,
+            ),
+            InitialSyncMode::RecentDays => (
+                "days",
+                MIN_INITIAL_SYNC_DAY_LIMIT,
+                MAX_INITIAL_SYNC_DAY_LIMIT,
+            ),
+        };
+        return Err(AppError::validation(format!(
+            "Initial sync value for {} must be between {} and {} {}",
+            initial_sync_mode.as_str(),
+            min_value,
+            max_value,
+            unit_label
+        )));
+    }
+
+    Ok(SyncSettingsRecord {
+        initial_sync_mode,
+        initial_sync_value,
+    })
+}
+
+fn initial_sync_policy_label(settings: &SyncSettingsRecord) -> String {
+    match settings.initial_sync_mode {
+        InitialSyncMode::RecentMessages => {
+            let unit = if settings.initial_sync_value == 1 {
+                "message"
+            } else {
+                "messages"
+            };
+            format!("last {} {}", settings.initial_sync_value, unit)
+        }
+        InitialSyncMode::RecentDays => {
+            let unit = if settings.initial_sync_value == 1 {
+                "day"
+            } else {
+                "days"
+            };
+            format!("last {} {}", settings.initial_sync_value, unit)
+        }
+    }
+}
+
+async fn read_setting(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    key: &str,
+) -> Result<Option<String>, String> {
+    sqlx::query_scalar::<_, String>("SELECT value FROM app_settings WHERE key = ?")
+        .bind(key)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+async fn write_setting(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    key: &str,
+    value: &str,
+) -> Result<(), String> {
+    sqlx::query(
+        r#"
+        INSERT INTO app_settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        "#,
+    )
+    .bind(key)
+    .bind(value)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+async fn load_sync_settings_from_pool(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+) -> AppResult<SyncSettingsRecord> {
+    let default_settings = default_sync_settings();
+    let mode = read_setting(pool, INITIAL_SYNC_MODE_SETTING_KEY)
+        .await?
+        .as_deref()
+        .map(InitialSyncMode::parse)
+        .transpose()?
+        .unwrap_or(default_settings.initial_sync_mode);
+    let value = read_setting(pool, INITIAL_SYNC_VALUE_SETTING_KEY)
+        .await?
+        .as_deref()
+        .and_then(|stored| stored.trim().parse::<i64>().ok())
+        .unwrap_or(match mode {
+            InitialSyncMode::RecentMessages => DEFAULT_INITIAL_SYNC_MESSAGE_LIMIT,
+            InitialSyncMode::RecentDays => DEFAULT_INITIAL_SYNC_DAY_LIMIT,
+        });
+
+    validate_sync_settings(mode, value)
+}
+
+async fn save_sync_settings_to_pool(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    settings: &SyncSettingsRecord,
+) -> AppResult<()> {
+    write_setting(
+        pool,
+        INITIAL_SYNC_MODE_SETTING_KEY,
+        settings.initial_sync_mode.as_str(),
+    )
+    .await?;
+    write_setting(
+        pool,
+        INITIAL_SYNC_VALUE_SETTING_KEY,
+        &settings.initial_sync_value.to_string(),
+    )
+    .await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_sync_settings(handle: AppHandle) -> AppResult<SyncSettingsRecord> {
+    let pool = get_pool(&handle).await?;
+    load_sync_settings_from_pool(&pool).await
+}
+
+#[tauri::command]
+pub async fn save_sync_settings(
+    handle: AppHandle,
+    initial_sync_mode: String,
+    initial_sync_value: i64,
+) -> AppResult<SyncSettingsRecord> {
+    let pool = get_pool(&handle).await?;
+    let mode = InitialSyncMode::parse(&initial_sync_mode)?;
+    let settings = validate_sync_settings(mode, initial_sync_value)?;
+    save_sync_settings_to_pool(&pool, &settings).await?;
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -269,18 +467,45 @@ pub async fn sync_channel(
     let mut inserted = 0_i64;
     let mut skipped = 0_i64;
     let previous_last_sync = source.last_sync_state.unwrap_or(0);
-    let mut max_message_id = previous_last_sync;
-    let mut messages = if previous_last_sync > 0 {
-        client.iter_messages(peer)
+    let initial_sync_settings = if previous_last_sync == 0 {
+        Some(load_sync_settings_from_pool(&pool).await?)
     } else {
-        // First sync is intentionally bounded so old channels do not pull their full history at once.
-        client.iter_messages(peer).limit(INITIAL_SYNC_MESSAGE_LIMIT)
+        None
+    };
+    let initial_sync_policy_applied = initial_sync_settings
+        .as_ref()
+        .map(initial_sync_policy_label);
+    let initial_sync_cutoff =
+        initial_sync_settings
+            .as_ref()
+            .and_then(|settings| match settings.initial_sync_mode {
+                InitialSyncMode::RecentDays => {
+                    Some(now_secs() - settings.initial_sync_value * SECONDS_PER_DAY)
+                }
+                InitialSyncMode::RecentMessages => None,
+            });
+    let mut max_message_id = previous_last_sync;
+    let mut messages = if let Some(settings) = initial_sync_settings.as_ref() {
+        match settings.initial_sync_mode {
+            InitialSyncMode::RecentMessages => client
+                .iter_messages(peer)
+                .limit(settings.initial_sync_value as usize),
+            InitialSyncMode::RecentDays => client.iter_messages(peer),
+        }
+    } else {
+        client.iter_messages(peer)
     };
 
     while let Some(message) = messages.next().await.map_err(|e| e.to_string())? {
         let message_id = i64::from(message.id());
         if previous_last_sync > 0 && message_id <= previous_last_sync {
             break;
+        }
+        let published_at = message.date().timestamp();
+        if let Some(cutoff) = initial_sync_cutoff {
+            if published_at < cutoff {
+                break;
+            }
         }
 
         if message_id > max_message_id {
@@ -313,7 +538,6 @@ pub async fn sync_channel(
         }
 
         let author = message_author(&message);
-        let published_at = message.date().timestamp();
         let raw_data_zstd = compress_json_bytes(&build_raw_payload(
             &message,
             &source.title,
@@ -381,6 +605,7 @@ pub async fn sync_channel(
         inserted,
         skipped,
         last_message_id: last_sync_state,
+        initial_sync_policy_applied,
     })
 }
 
@@ -887,10 +1112,24 @@ fn build_raw_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        compress_text, decode_media_metadata, decompress_text, derive_content_kind,
-        derive_document_media_kind, encode_media_metadata, DocumentSignals, ItemMediaMetadata,
-        CONTENT_KIND_MEDIA_ONLY, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
+        compress_text, decode_media_metadata, decompress_text, default_sync_settings,
+        derive_content_kind, derive_document_media_kind, encode_media_metadata,
+        initial_sync_policy_label, load_sync_settings_from_pool, save_sync_settings_to_pool,
+        validate_sync_settings, DocumentSignals, InitialSyncMode, ItemMediaMetadata,
+        SyncSettingsRecord, CONTENT_KIND_MEDIA_ONLY, CONTENT_KIND_TEXT_ONLY,
+        CONTENT_KIND_TEXT_WITH_MEDIA,
     };
+
+    async fn memory_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query("CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT)")
+            .execute(&pool)
+            .await
+            .expect("create app_settings");
+        pool
+    }
 
     #[test]
     fn text_roundtrip_through_zstd() {
@@ -949,5 +1188,60 @@ mod tests {
             ..DocumentSignals::default()
         };
         assert_eq!(derive_document_media_kind(&image), "image");
+    }
+
+    #[test]
+    fn initial_sync_policy_label_formats_messages_and_days() {
+        assert_eq!(
+            initial_sync_policy_label(&SyncSettingsRecord {
+                initial_sync_mode: InitialSyncMode::RecentMessages,
+                initial_sync_value: 500,
+            }),
+            "last 500 messages"
+        );
+        assert_eq!(
+            initial_sync_policy_label(&SyncSettingsRecord {
+                initial_sync_mode: InitialSyncMode::RecentDays,
+                initial_sync_value: 1,
+            }),
+            "last 1 day"
+        );
+    }
+
+    #[test]
+    fn validate_sync_settings_rejects_out_of_range_values() {
+        let result = validate_sync_settings(InitialSyncMode::RecentDays, 0);
+        assert!(result.is_err());
+
+        let result = validate_sync_settings(InitialSyncMode::RecentMessages, 10_000);
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn sync_settings_default_when_app_settings_are_missing() {
+        let pool = memory_pool().await;
+        let loaded = load_sync_settings_from_pool(&pool)
+            .await
+            .expect("load default sync settings");
+
+        assert_eq!(loaded, default_sync_settings());
+    }
+
+    #[tokio::test]
+    async fn sync_settings_roundtrip_through_app_settings() {
+        let pool = memory_pool().await;
+        let expected = SyncSettingsRecord {
+            initial_sync_mode: InitialSyncMode::RecentDays,
+            initial_sync_value: 14,
+        };
+
+        save_sync_settings_to_pool(&pool, &expected)
+            .await
+            .expect("save sync settings");
+        let loaded = load_sync_settings_from_pool(&pool)
+            .await
+            .expect("load sync settings");
+
+        assert_eq!(loaded, expected);
     }
 }
