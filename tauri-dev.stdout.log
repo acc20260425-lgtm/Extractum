@@ -1,0 +1,11 @@
+
+> extractum@0.1.0 tauri
+> tauri dev
+
+
+> extractum@0.1.0 dev
+> vite dev
+
+[MCP][ELEMENT_PICKER][INFO] Element picker event listeners registered
+[MCP][PLUGIN][INFO] MCP Bridge plugin initialized for 'extractum' (org.ai.extractum) on 0.0.0.0:9224
+[MCP][WS_SERVER][INFO] WebSocket server listening on: 0.0.0.0:9224

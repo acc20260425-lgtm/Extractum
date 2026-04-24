@@ -43,14 +43,21 @@ fn ping_db() -> String {
 pub fn run() {
     prepare_database();
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .manage(TelegramState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:extractum.db", build_migrations())
                 .build(),
-        )
+        );
+
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+
+    builder
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

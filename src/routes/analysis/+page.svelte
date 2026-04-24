@@ -833,6 +833,7 @@
     {running}
     {activePhase}
     {activeProgress}
+    showRunMeta={running || activeRunId !== null || currentRun !== null}
     selectedGroupSourceCount={selectedGroup?.members.length ?? null}
     {phaseLabel}
     onChangeScope={(scope) => (analysisScope = scope)}

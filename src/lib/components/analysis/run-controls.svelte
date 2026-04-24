@@ -23,6 +23,7 @@
     running,
     activePhase,
     activeProgress,
+    showRunMeta,
     selectedGroupSourceCount,
     phaseLabel,
     onChangeScope,
@@ -52,6 +53,7 @@
     running: boolean;
     activePhase: string;
     activeProgress: string;
+    showRunMeta: boolean;
     selectedGroupSourceCount: number | null;
     phaseLabel: (phase: string) => string;
     onChangeScope: (scope: "single_source" | "source_group") => void;
@@ -198,12 +200,14 @@
     {running ? "Running..." : "Run report"}
   </button>
 
-  <div class="meta-panel">
-    <div><strong>Phase:</strong> {phaseLabel(activePhase)}</div>
-    {#if activeProgress}
-      <div><strong>Progress:</strong> {activeProgress}</div>
-    {/if}
-  </div>
+  {#if showRunMeta}
+    <div class="meta-panel">
+      <div><strong>Phase:</strong> {phaseLabel(activePhase)}</div>
+      {#if activeProgress}
+        <div><strong>Progress:</strong> {activeProgress}</div>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 <style>

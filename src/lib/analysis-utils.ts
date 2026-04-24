@@ -45,6 +45,8 @@ export function runTargetLabel(
 
 export function phaseLabel(phase: string) {
   switch (phase) {
+    case "queued":
+      return "Queued";
     case "load_items":
       return "Loading items";
     case "chunking":
@@ -55,8 +57,16 @@ export function phaseLabel(phase: string) {
       return "Writing report";
     case "persist":
       return "Saving run";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+    case "running":
+      return "Running";
+    case "idle":
+      return "Idle";
     default:
-      return phase || "Running";
+      return phase || "Idle";
   }
 }
 
