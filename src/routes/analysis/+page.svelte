@@ -633,12 +633,16 @@
   }
 
   $effect(() => {
-    if (
+    const hasSelectedTarget =
       (analysisScope === "single_source" && selectedSourceId) ||
-      (analysisScope === "source_group" && selectedGroupId)
-    ) {
-      void loadRuns();
+      (analysisScope === "source_group" && selectedGroupId);
+
+    if (!hasSelectedTarget) {
+      runs = [];
+      return;
     }
+
+    void loadRuns();
   });
 
   $effect(() => {
