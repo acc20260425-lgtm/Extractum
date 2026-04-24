@@ -66,39 +66,39 @@
       <span class="title">{source.title ?? source.external_id}</span>
       <span class="sub">{accountLabel(source.account_id)}</span>
     </button>
-  </div>
-  <div class="channel-actions">
-    {#if source.last_synced_at !== null}
-      <span class="badge">synced {formatDate(source.last_synced_at)}</span>
-    {/if}
-    {#if source.account_id !== null}
-      {#if runtimeBadgeLabel}
-        <span
-          class="badge warning"
-          title={sourceRuntimeStatus?.status === "restore_failed" && sourceRuntimeStatus.message
-            ? sourceRuntimeStatus.message
-            : undefined}
-        >
-          {runtimeBadgeLabel}
-        </span>
+    <div class="channel-actions">
+      {#if source.last_synced_at !== null}
+        <span class="badge">synced {formatDate(source.last_synced_at)}</span>
       {/if}
-    {/if}
-    {#if source.is_member}
-      <span class="badge member">subscribed</span>
-    {:else}
-      <span class="badge">not subscribed</span>
-    {/if}
-    <button
-      class="small"
-      onclick={() => onSync(source.id)}
-      disabled={syncing || deleting || syncReason !== null}
-      title={syncReason ?? undefined}
-    >
-      {syncing ? "Syncing..." : "Sync"}
-    </button>
-    <button class="small danger secondary" onclick={() => onDelete(source.id)} disabled={deleting || syncing}>
-      {deleting ? "Deleting..." : "Delete"}
-    </button>
+      {#if source.account_id !== null}
+        {#if runtimeBadgeLabel}
+          <span
+            class="badge warning"
+            title={sourceRuntimeStatus?.status === "restore_failed" && sourceRuntimeStatus.message
+              ? sourceRuntimeStatus.message
+              : undefined}
+          >
+            {runtimeBadgeLabel}
+          </span>
+        {/if}
+      {/if}
+      {#if source.is_member}
+        <span class="badge member">subscribed</span>
+      {:else}
+        <span class="badge">not subscribed</span>
+      {/if}
+      <button
+        class="small"
+        onclick={() => onSync(source.id)}
+        disabled={syncing || deleting || syncReason !== null}
+        title={syncReason ?? undefined}
+      >
+        {syncing ? "Syncing..." : "Sync"}
+      </button>
+      <button class="small danger secondary" onclick={() => onDelete(source.id)} disabled={deleting || syncing}>
+        {deleting ? "Deleting..." : "Delete"}
+      </button>
+    </div>
     {#if syncReason}
       <p class="sync-reason">{syncReason}</p>
     {/if}
@@ -108,8 +108,7 @@
 <style>
   li {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     padding: 0.6rem 0.75rem;
     background: var(--panel-strong);
     border-radius: 8px;
@@ -123,18 +122,16 @@
   .channel-info {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: 0.35rem;
     min-width: 0;
-    flex: 1 1 auto;
+    width: 100%;
   }
   .channel-actions {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.4rem;
-    flex: 0 1 auto;
-    min-width: 0;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    min-width: 0;
   }
   .source-main {
     display: flex;
@@ -153,9 +150,8 @@
   .title {
     font-size: 0.95rem;
     max-width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .sub { font-size: 0.75rem; color: var(--muted); }
   .badge {
@@ -196,25 +192,10 @@
     li {
       align-items: flex-start;
     }
-    .channel-actions {
-      max-width: 42%;
-    }
   }
   @media (max-width: 1024px) {
-    li {
-      flex-direction: column;
-      align-items: stretch;
-    }
     .channel-actions {
       max-width: 100%;
-      justify-content: flex-start;
-    }
-    .title {
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      overflow-wrap: anywhere;
-      word-break: break-word;
     }
   }
 </style>
