@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
+  import DesktopDialog from "$lib/components/desktop-dialog.svelte";
 
   interface LlmProfile {
     profile_id: string;
@@ -49,6 +50,7 @@
   let testOutput = $state("");
   let testUsage = $state<LlmUsage | null>(null);
   let testing = $state(false);
+  let testDialogOpen = $state(false);
   let activeRequestId = $state<string | null>(null);
   let lastProvider = $state("");
   let lastModel = $state("");
@@ -155,6 +157,14 @@
     return parts.join(" | ");
   }
 
+  function openTestDialog() {
+    testDialogOpen = true;
+  }
+
+  function closeTestDialog() {
+    testDialogOpen = false;
+  }
+
   onMount(() => {
     let disposed = false;
     let detachListener: (() => void) | null = null;
@@ -251,16 +261,27 @@
   </div>
 </div>
 
-  <div class="card">
+<div class="card">
   <h3>Test Provider</h3>
-  <label>Prompt
-    <textarea bind:value={testPrompt} rows="6" placeholder="Ask Gemini something simple..."></textarea>
-  </label>
-
-  <div class="actions">
-    <button onclick={runTest} disabled={testing || !testPrompt.trim() || !defaultModel.trim()}>
-      {testing ? "Streaming..." : "Run test"}
-    </button>
+  <p class="hint">
+    Run a quick smoke test with the currently saved model and key before returning to analysis workflows.
+  </p>
+  <div class="test-summary">
+    <div class="summary-copy">
+      <span class="summary-label">Prompt draft</span>
+      <p>{testPrompt}</p>
+    </div>
+    <div class="summary-meta">
+      {#if lastProvider || lastModel}
+        <span class="summary-chip">{lastProvider}{lastProvider && lastModel ? " / " : ""}{lastModel}</span>
+      {/if}
+      {#if testUsage}
+        <span class="summary-chip">{usageLine(testUsage)}</span>
+      {/if}
+      <button class="secondary" onclick={openTestDialog}>
+        {testOutput || testing ? "Open test console" : "Open test"}
+      </button>
+    </div>
   </div>
 
   {#if testStatus}
@@ -269,23 +290,58 @@
     </p>
   {/if}
 
-  <div class="output-card">
+  <div class="output-card compact">
     <div class="output-header">
-      <span class="output-label">Streaming output</span>
-      {#if lastProvider || lastModel}
-        <span class="output-meta">{lastProvider}{lastProvider && lastModel ? " / " : ""}{lastModel}</span>
+      <span class="output-label">Latest response</span>
+      {#if testing}
+        <span class="output-meta">streaming...</span>
       {/if}
     </div>
     {#if testOutput}
       <pre>{testOutput}</pre>
     {:else}
-      <p class="empty">No output yet.</p>
-    {/if}
-    {#if testUsage}
-      <p class="usage">{usageLine(testUsage)}</p>
+      <p class="empty">No output yet. Open the test console to run a prompt.</p>
     {/if}
   </div>
 </div>
+
+<DesktopDialog
+  open={testDialogOpen}
+  title="Provider Test Console"
+  description="Run a live request with the active settings and inspect the streamed response before using it in reports."
+  labelledBy="provider-test-title"
+  width="52rem"
+  onClose={closeTestDialog}
+>
+  <div class="test-dialog">
+    <label>Prompt
+      <textarea bind:value={testPrompt} rows="8" placeholder="Ask Gemini something simple..."></textarea>
+    </label>
+
+    <div class="actions modal-actions">
+      <button onclick={runTest} disabled={testing || !testPrompt.trim() || !defaultModel.trim()}>
+        {testing ? "Streaming..." : "Run test"}
+      </button>
+      {#if lastProvider || lastModel}
+        <span class="dialog-meta">{lastProvider}{lastProvider && lastModel ? " / " : ""}{lastModel}</span>
+      {/if}
+    </div>
+
+    <div class="output-card">
+      <div class="output-header">
+        <span class="output-label">Streaming output</span>
+        {#if testUsage}
+          <span class="output-meta">{usageLine(testUsage)}</span>
+        {/if}
+      </div>
+      {#if testOutput}
+        <pre>{testOutput}</pre>
+      {:else}
+        <p class="empty">No output yet.</p>
+      {/if}
+    </div>
+  </div>
+</DesktopDialog>
 
 <style>
   .card {
@@ -338,6 +394,56 @@
     flex-wrap: wrap;
   }
 
+  .test-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 0.95rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-strong);
+  }
+
+  .summary-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  .summary-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .summary-copy p {
+    margin: 0;
+    color: var(--text);
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .summary-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .summary-chip,
+  .dialog-meta {
+    color: var(--muted);
+    font-size: 0.82rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--panel-hover) 80%, transparent);
+  }
+
   .hint {
     margin: 0;
     color: var(--muted);
@@ -369,6 +475,10 @@
     min-height: 14rem;
   }
 
+  .output-card.compact {
+    min-height: 10rem;
+  }
+
   .output-header {
     display: flex;
     justify-content: space-between;
@@ -383,7 +493,6 @@
   }
 
   .output-meta,
-  .usage,
   .empty {
     margin: 0;
     color: var(--muted);
@@ -398,9 +507,26 @@
     line-height: 1.6;
   }
 
+  .test-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .modal-actions {
+    align-items: center;
+    justify-content: space-between;
+  }
+
   @media (max-width: 720px) {
     .grid {
       grid-template-columns: 1fr;
+    }
+
+    .test-summary,
+    .modal-actions {
+      flex-direction: column;
+      align-items: stretch;
     }
   }
 </style>
