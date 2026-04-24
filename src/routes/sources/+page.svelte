@@ -97,6 +97,8 @@
   let deletingIds = $state<Record<number, boolean>>({});
   let initialSyncMode = $state<SyncSettingsRecord["initial_sync_mode"]>("recent_messages");
   let initialSyncValue = $state("500");
+  let savedInitialSyncMode = $state<SyncSettingsRecord["initial_sync_mode"]>("recent_messages");
+  let savedInitialSyncValue = $state<number>(500);
   let loadingSyncSettings = $state(false);
   let savingSyncSettings = $state(false);
   let loadSourcesRequestId = 0;
@@ -161,6 +163,8 @@
       const settings = await invoke<SyncSettingsRecord>("get_sync_settings");
       initialSyncMode = settings.initial_sync_mode;
       initialSyncValue = String(settings.initial_sync_value);
+      savedInitialSyncMode = settings.initial_sync_mode;
+      savedInitialSyncValue = settings.initial_sync_value;
     } catch (e) {
       pushErrorToast(formatAppError("loading sync settings", e));
     } finally {
@@ -183,6 +187,8 @@
       });
       initialSyncMode = settings.initial_sync_mode;
       initialSyncValue = String(settings.initial_sync_value);
+      savedInitialSyncMode = settings.initial_sync_mode;
+      savedInitialSyncValue = settings.initial_sync_value;
       status = `Initial sync policy saved: ${initialSyncPolicyLabel(settings.initial_sync_mode, settings.initial_sync_value)}.`;
     } catch (e) {
       status = formatAppError("saving sync settings", e);
@@ -391,6 +397,28 @@
     return Number.isFinite(parsedValue) ? parsedValue : null;
   }
 
+  function initialSyncAllowedRange() {
+    if (initialSyncMode === "recent_days") {
+      return { min: 1, max: 365, unit: "days" };
+    }
+
+    return { min: 50, max: 5000, unit: "messages" };
+  }
+
+  function initialSyncValidationMessage() {
+    const parsedValue = initialSyncValueLabel();
+    if (parsedValue === null) {
+      return "Initial sync value must be a number.";
+    }
+
+    const { min, max, unit } = initialSyncAllowedRange();
+    if (parsedValue < min || parsedValue > max) {
+      return `Initial sync value must be between ${min} and ${max} ${unit}.`;
+    }
+
+    return "";
+  }
+
   function initialSyncPolicyLabel(
     mode: SyncSettingsRecord["initial_sync_mode"],
     value: number | null
@@ -403,7 +431,7 @@
   }
 
   function initialSyncPolicySummary() {
-    return initialSyncPolicyLabel(initialSyncMode, initialSyncValueLabel());
+    return initialSyncPolicyLabel(savedInitialSyncMode, savedInitialSyncValue);
   }
 
   $effect(() => {
@@ -522,13 +550,19 @@
     </label>
   </div>
   <div class="row policy-actions">
-    <button onclick={saveSyncSettings} disabled={loadingSyncSettings || savingSyncSettings || !initialSyncValue.trim()}>
+    <button
+      onclick={saveSyncSettings}
+      disabled={loadingSyncSettings || savingSyncSettings || !!initialSyncValidationMessage()}
+    >
       {savingSyncSettings ? "Saving..." : "Save policy"}
     </button>
     <span class="policy-summary">
       Current first sync window: {initialSyncPolicySummary()}
     </span>
   </div>
+  {#if initialSyncValidationMessage()}
+    <p class="validation-message">{initialSyncValidationMessage()}</p>
+  {/if}
 </div>
 
 <section class="workspace">
@@ -761,6 +795,11 @@
   }
   .policy-summary {
     color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .validation-message {
+    margin: 0.75rem 0 0 0;
+    color: var(--status-error-text);
     font-size: 0.85rem;
   }
   select {
