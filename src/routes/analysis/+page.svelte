@@ -10,6 +10,7 @@
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import TracePanel from "$lib/components/analysis/trace-panel.svelte";
   import { formatAppError } from "$lib/app-error";
+  import { openConfirmModal } from "$lib/modals";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -440,7 +441,14 @@
       status = "Open a run first.";
       return;
     }
-    if (!window.confirm("Clear saved chat history for this run?")) {
+    const confirmed = await openConfirmModal({
+      title: "Clear chat history?",
+      message: "This will remove all saved follow-up messages for the currently opened run.",
+      confirmLabel: "Clear history",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -523,7 +531,14 @@
       status = "Built-in templates cannot be deleted.";
       return;
     }
-    if (!window.confirm(`Delete template "${selected.name}"?`)) {
+    const confirmed = await openConfirmModal({
+      title: "Delete template?",
+      message: `The template "${selected.name}" will be removed from the local app.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -608,7 +623,14 @@
       status = "Select a source group first.";
       return;
     }
-    if (!window.confirm(`Delete source group "${selected.name}"?`)) {
+    const confirmed = await openConfirmModal({
+      title: "Delete source group?",
+      message: `The group "${selected.name}" will be removed, but its synced sources will stay available for analysis.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) {
       return;
     }
 

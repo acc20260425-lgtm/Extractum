@@ -38,6 +38,21 @@
     onSaveGroupChanges: () => void | Promise<void>;
     onDeleteGroup: () => void | Promise<void>;
   } = $props();
+
+  let editorOpen = $state(false);
+
+  function openNewGroupEditor() {
+    onStartNewGroup();
+    editorOpen = true;
+  }
+
+  function openSelectedGroupEditor() {
+    editorOpen = true;
+  }
+
+  function closeEditor() {
+    editorOpen = false;
+  }
 </script>
 
 <section class="card groups">
@@ -47,14 +62,15 @@
       <p class="sub">Save reusable named sets of synced sources for future cross-source reports.</p>
     </div>
     <div class="group-actions">
-      <button class="secondary" onclick={onStartNewGroup} disabled={savingGroup || deletingGroup}>
+      <button class="secondary" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
         New group
       </button>
-      <button class="secondary" onclick={onSaveGroupCopy} disabled={savingGroup || deletingGroup}>
-        {savingGroup ? "Saving..." : "Save as new"}
-      </button>
-      <button class="secondary" onclick={onSaveGroupChanges} disabled={savingGroup || deletingGroup || !selectedGroup}>
-        {savingGroup ? "Saving..." : "Save changes"}
+      <button
+        class="secondary"
+        onclick={openSelectedGroupEditor}
+        disabled={savingGroup || deletingGroup || (!selectedGroup && !groupName.trim() && groupMemberSourceIds.length === 0)}
+      >
+        {selectedGroup ? "Edit group" : "Open editor"}
       </button>
       <button class="danger-soft" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
         {deletingGroup ? "Deleting..." : "Delete"}
@@ -70,7 +86,7 @@
           onchange={(event) => onChangeSelectedGroupId((event.currentTarget as HTMLSelectElement).value)}
         >
           <option value="">Create a new group</option>
-          {#each groups as group}
+          {#each groups as group (group.id)}
             <option value={String(group.id)}>
               {group.name} - {group.members.length} sources
             </option>
@@ -79,24 +95,21 @@
       </label>
 
       <label>Group name
-        <input
-          type="text"
-          value={groupName}
-          placeholder="Core channels"
-          oninput={(event) => onChangeGroupName((event.currentTarget as HTMLInputElement).value)}
-        />
+        <input type="text" value={groupName} placeholder="Core channels" readonly />
       </label>
 
       {#if selectedGroup}
         <p class="sub">
           Updated {formatTimestamp(selectedGroup.updated_at)}
         </p>
+      {:else if groupName || groupMemberSourceIds.length > 0}
+        <p class="sub">Unsaved draft group</p>
       {/if}
     </div>
 
     <div class="group-members">
       <div class="members-header">
-        <h4>Group Members</h4>
+        <h4>{selectedGroup ? "Saved Members" : "Draft Members"}</h4>
         <span class="selected-count">{groupMemberSourceIds.length} selected</span>
       </div>
 
@@ -104,12 +117,12 @@
         <p class="empty">No synced sources available for grouping yet.</p>
       {:else}
         <div class="member-list">
-          {#each sources as source}
+          {#each sources as source (source.id)}
             <label class="member-row">
               <input
                 type="checkbox"
                 checked={isGroupSourceSelected(source.id)}
-                onchange={() => onToggleSource(source.id)}
+                disabled
               />
               <div class="member-copy">
                 <strong>{source.title ?? `Source ${source.id}`}</strong>
@@ -122,6 +135,89 @@
     </div>
   </div>
 </section>
+
+<svelte:window
+  onkeydown={(event) => {
+    if (editorOpen && event.key === "Escape") {
+      event.preventDefault();
+      closeEditor();
+    }
+  }}
+/>
+
+{#if editorOpen}
+  <div class="modal-backdrop" role="presentation" onclick={(event) => event.target === event.currentTarget && closeEditor()}>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="group-editor-title">
+      <header class="modal-header">
+        <div>
+          <h4 id="group-editor-title">{selectedGroup ? "Edit Source Group" : "New Source Group"}</h4>
+          <p class="sub">
+            Build reusable source sets for recurring cross-source reports.
+          </p>
+        </div>
+        <button class="ghost close-button" type="button" onclick={closeEditor} aria-label="Close dialog">
+          Close
+        </button>
+      </header>
+
+      <div class="modal-body">
+        <div class="editor-grid">
+          <label>Group name
+            <input
+              type="text"
+              value={groupName}
+              placeholder="Core channels"
+              oninput={(event) => onChangeGroupName((event.currentTarget as HTMLInputElement).value)}
+            />
+          </label>
+
+          <div class="group-members modal-members">
+            <div class="members-header">
+              <h4>Members</h4>
+              <span class="selected-count">{groupMemberSourceIds.length} selected</span>
+            </div>
+
+            {#if sources.length === 0}
+              <p class="empty">No synced sources available for grouping yet.</p>
+            {:else}
+              <div class="member-list">
+                {#each sources as source (source.id)}
+                  <label class="member-row">
+                    <input
+                      type="checkbox"
+                      checked={isGroupSourceSelected(source.id)}
+                      onchange={() => onToggleSource(source.id)}
+                    />
+                    <div class="member-copy">
+                      <strong>{source.title ?? `Source ${source.id}`}</strong>
+                      <span>{source.item_count} messages</span>
+                    </div>
+                  </label>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <footer class="modal-actions">
+        <button class="secondary" type="button" onclick={closeEditor}>
+          Cancel
+        </button>
+        <button class="secondary" type="button" onclick={onSaveGroupCopy} disabled={savingGroup || deletingGroup}>
+          {savingGroup ? "Saving..." : "Save as new"}
+        </button>
+        <button
+          type="button"
+          onclick={onSaveGroupChanges}
+          disabled={savingGroup || deletingGroup || !selectedGroup}
+        >
+          {savingGroup ? "Saving..." : "Save changes"}
+        </button>
+      </footer>
+    </div>
+  </div>
+{/if}
 
 <style>
   .card {
@@ -224,6 +320,12 @@
     margin-top: 0.2rem;
   }
 
+  .group-form input[readonly] {
+    cursor: default;
+    color: var(--text);
+    background: var(--panel-strong);
+  }
+
   .member-copy {
     display: flex;
     flex-direction: column;
@@ -236,9 +338,109 @@
     font-size: 0.82rem;
   }
 
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: color-mix(in srgb, #0f172a 28%, transparent);
+    backdrop-filter: blur(6px);
+  }
+
+  .modal-card {
+    width: min(44rem, calc(100vw - 2rem));
+    max-height: min(85vh, 52rem);
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--panel) 97%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 94%, transparent);
+    box-shadow:
+      0 18px 42px rgba(15, 23, 42, 0.18),
+      0 3px 10px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-actions {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-top: 0.95rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h4 {
+    margin: 0 0 0.25rem;
+    font-size: 0.98rem;
+    font-weight: 650;
+  }
+
+  .modal-body {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    overflow: auto;
+  }
+
+  .editor-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .modal-members {
+    min-height: 0;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.85rem;
+    padding-bottom: 0.95rem;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-strong) 54%, transparent);
+  }
+
+  .close-button {
+    white-space: nowrap;
+  }
+
   @media (max-width: 1080px) {
     .group-grid {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .modal-backdrop {
+      padding: 1rem;
+      align-items: flex-end;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-height: 92vh;
+      border-radius: 18px 18px 14px 14px;
+    }
+
+    .modal-actions {
+      flex-direction: column-reverse;
+    }
+
+    .modal-actions :global(button) {
+      width: 100%;
     }
   }
 </style>
