@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { page } from "$app/stores";
+  import ModalHost from "$lib/components/modal-host.svelte";
   import ToastHost from "$lib/components/toast-host.svelte";
 
   let { children } = $props();
@@ -35,6 +36,7 @@
     </button>
   </nav>
   <ToastHost />
+  <ModalHost />
   <main>
     {@render children()}
   </main>

@@ -6,6 +6,7 @@
   import { formatAppError } from "$lib/app-error";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import SourceRow from "$lib/components/source-row.svelte";
+  import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
 
   interface AccountRecord {
@@ -306,9 +307,15 @@
     if (!source) return;
 
     const sourceLabel = source.title ?? source.external_id;
-    const confirmed = window.confirm(
-      `Delete source "${sourceLabel}"?\n\nThis will also remove all synced messages for this source from the local database.`
-    );
+    const confirmed = await openConfirmModal({
+      title: "Delete source?",
+      message:
+        `The source "${sourceLabel}" will be removed from the app.\n\n` +
+        "All synced messages for this source will also be deleted from the local database.",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     deletingIds = { ...deletingIds, [sourceId]: true };
