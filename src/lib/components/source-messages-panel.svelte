@@ -20,11 +20,13 @@
     items,
     formatDate,
     embedded = false,
+    previewLimit = 200,
   }: {
     loadingItems: boolean;
     items: ItemRecord[];
     formatDate: (timestamp: number) => string;
     embedded?: boolean;
+    previewLimit?: number;
   } = $props();
 
   function formatMediaKind(kind: string | null) {
@@ -44,6 +46,14 @@
     <h3>Messages</h3>
     {#if loadingItems}
       <span class="subtle">Loading...</span>
+    {:else if items.length > 0}
+      <span class="subtle">
+        Showing {items.length}
+        {#if items.length >= previewLimit}
+          latest
+        {/if}
+        message{items.length === 1 ? "" : "s"}
+      </span>
     {/if}
   </div>
 

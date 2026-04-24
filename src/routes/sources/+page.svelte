@@ -77,6 +77,8 @@
     message: string;
   }
 
+  const MESSAGES_PREVIEW_LIMIT = 200;
+
   let selectedAccountId = $state<number | null>(
     $page.url.searchParams.has("account")
       ? parseInt($page.url.searchParams.get("account")!, 10)
@@ -228,7 +230,7 @@
     try {
       items = await invoke<ItemRecord[]>("get_items", {
         sourceId,
-        limit: 50,
+        limit: MESSAGES_PREVIEW_LIMIT,
         beforePublishedAt: null,
       });
     } catch (e) {
@@ -669,7 +671,13 @@
           </button>
         </div>
       </div>
-      <SourceMessagesPanel {loadingItems} {items} {formatDate} embedded={true} />
+      <SourceMessagesPanel
+        {loadingItems}
+        {items}
+        {formatDate}
+        embedded={true}
+        previewLimit={MESSAGES_PREVIEW_LIMIT}
+      />
     {:else}
       <div class="empty-detail">
         <h3>No source selected</h3>
