@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from "svelte";
+  import { cubicOut } from "svelte/easing";
   import { fade, scale } from "svelte/transition";
   import {
     activeModal,
@@ -6,16 +8,95 @@
     dismissActiveModal,
   } from "$lib/modals";
 
+  let modalElement = $state<HTMLDivElement | null>(null);
+  let cancelButton = $state<HTMLButtonElement | null>(null);
+  let confirmButton = $state<HTMLButtonElement | null>(null);
+  let previousFocusedElement = $state<HTMLElement | null>(null);
+
   function handleBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {
       dismissActiveModal();
     }
   }
+
+  async function focusModal() {
+    if (!$activeModal) return;
+
+    previousFocusedElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+    await tick();
+    cancelButton?.focus();
+  }
+
+  function restoreFocus() {
+    previousFocusedElement?.focus();
+    previousFocusedElement = null;
+  }
+
+  function trapFocus(event: KeyboardEvent) {
+    if (event.key !== "Tab" || !modalElement) return;
+
+    const focusable = Array.from(
+      modalElement.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((element) => !element.hasAttribute("hidden"));
+
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+      return;
+    }
+
+    if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function handleModalKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      dismissActiveModal();
+      return;
+    }
+
+    if (event.key === "Enter") {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "BUTTON") return;
+
+      event.preventDefault();
+      confirmActiveModal();
+      return;
+    }
+
+    trapFocus(event);
+  }
+
+  $effect(() => {
+    if ($activeModal) {
+      void focusModal();
+      return;
+    }
+
+    restoreFocus();
+  });
 </script>
 
 <svelte:window
   onkeydown={(event) => {
-    if ($activeModal && event.key === "Escape") {
+    if ($activeModal && event.key === "Escape" && event.target === document.body) {
       event.preventDefault();
       dismissActiveModal();
     }
@@ -27,18 +108,20 @@
     class="modal-backdrop"
     role="presentation"
     onclick={handleBackdropClick}
-    transition:fade={{ duration: 140 }}
+    transition:fade={{ duration: 120 }}
   >
     {#if $activeModal.kind === "confirm"}
       <div
+        bind:this={modalElement}
         class="modal-card"
         class:danger={$activeModal.tone === "danger"}
-        role="alertdialog"
+        role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
         aria-describedby="modal-description"
         tabindex="-1"
-        transition:scale={{ duration: 180, start: 0.96 }}
+        onkeydown={handleModalKeydown}
+        transition:scale={{ duration: 150, start: 0.985, easing: cubicOut }}
       >
         <header class="modal-header">
           <h2 id="modal-title">{$activeModal.title}</h2>
@@ -49,10 +132,16 @@
         </div>
 
         <footer class="modal-actions">
-          <button class="secondary" type="button" onclick={dismissActiveModal}>
+          <button
+            bind:this={cancelButton}
+            class="secondary"
+            type="button"
+            onclick={dismissActiveModal}
+          >
             {$activeModal.cancelLabel}
           </button>
           <button
+            bind:this={confirmButton}
             class:danger={$activeModal.tone === "danger"}
             type="button"
             onclick={confirmActiveModal}
@@ -74,67 +163,69 @@
     align-items: center;
     justify-content: center;
     padding: 1.5rem;
-    background: color-mix(in srgb, #020617 44%, transparent);
-    backdrop-filter: blur(10px);
+    background: color-mix(in srgb, #0f172a 28%, transparent);
+    backdrop-filter: blur(6px);
   }
 
   .modal-card {
-    width: min(30rem, calc(100vw - 2rem));
-    border-radius: 18px;
-    background: color-mix(in srgb, var(--panel) 94%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    width: min(28rem, calc(100vw - 2rem));
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--panel) 97%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 94%, transparent);
     box-shadow:
-      0 28px 80px rgba(2, 6, 23, 0.28),
-      0 6px 20px rgba(2, 6, 23, 0.12);
+      0 18px 42px rgba(15, 23, 42, 0.18),
+      0 3px 10px rgba(15, 23, 42, 0.08);
     overflow: hidden;
   }
 
   .modal-card.danger {
-    border-color: color-mix(in srgb, var(--danger) 34%, var(--border));
+    border-color: color-mix(in srgb, var(--danger) 22%, var(--border));
   }
 
   .modal-header,
   .modal-body,
   .modal-actions {
-    padding-left: 1.2rem;
-    padding-right: 1.2rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
   .modal-header {
-    padding-top: 1.15rem;
-    padding-bottom: 0.35rem;
+    padding-top: 0.95rem;
+    padding-bottom: 0.2rem;
   }
 
   .modal-header h2 {
     margin: 0;
-    font-size: 1.05rem;
-    letter-spacing: 0.01em;
+    font-size: 0.98rem;
+    font-weight: 650;
+    letter-spacing: 0;
   }
 
   .modal-body {
-    padding-top: 0.35rem;
-    padding-bottom: 1rem;
+    padding-top: 0.3rem;
+    padding-bottom: 0.9rem;
   }
 
   .modal-body p {
     margin: 0;
     color: var(--muted);
-    line-height: 1.55;
+    font-size: 0.91rem;
+    line-height: 1.45;
     white-space: pre-wrap;
   }
 
   .modal-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 0.65rem;
-    padding-top: 0.95rem;
-    padding-bottom: 1.15rem;
+    gap: 0.5rem;
+    padding-top: 0.85rem;
+    padding-bottom: 0.95rem;
     border-top: 1px solid var(--border);
-    background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+    background: color-mix(in srgb, var(--panel-strong) 54%, transparent);
   }
 
   button.danger {
-    background: var(--danger);
+    background: color-mix(in srgb, var(--danger) 90%, black 10%);
   }
 
   button.danger:hover {
