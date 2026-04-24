@@ -4,6 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { page } from "$app/stores";
   import { formatAppError } from "$lib/app-error";
+  import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import SourceRow from "$lib/components/source-row.svelte";
   import { openConfirmModal } from "$lib/modals";
@@ -93,6 +94,7 @@
   let loadingDialogs = $state(false);
   let loadingItems = $state(false);
   let addingId = $state<number | string | null>(null);
+  let addSourceDialogOpen = $state(false);
   let selectedSourceId = $state<number | null>(null);
   let syncingIds = $state<Record<number, boolean>>({});
   let deletingIds = $state<Record<number, boolean>>({});
@@ -275,6 +277,14 @@
     } finally {
       addingId = null;
     }
+  }
+
+  function openAddSourceDialog() {
+    addSourceDialogOpen = true;
+  }
+
+  function closeAddSourceDialog() {
+    addSourceDialogOpen = false;
   }
 
   async function syncSource(sourceId: number) {
@@ -527,6 +537,10 @@
     </select>
     {#if accounts.length === 0}
       <a href="/accounts" class="btn-link">Add account</a>
+    {:else if selectedAccountId !== null}
+      <button class="secondary" onclick={openAddSourceDialog}>
+        Add source
+      </button>
     {/if}
   </div>
 </div>
@@ -666,59 +680,73 @@
 </section>
 
 {#if selectedAccountId !== null}
-  <div class="card">
-    <h3>Add by Username or Link</h3>
-    <div class="row">
-      <input
-        type="text"
-        bind:value={manualRef}
-        placeholder="@channel or https://t.me/channel"
-        onkeydown={(e) => e.key === "Enter" && addManual()}
-      />
-      <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim() || !selectedAccountReady()}>
-        {addingId === "manual" ? "Adding..." : "Add"}
-      </button>
-    </div>
-    {#if !selectedAccountReady()}
-      <p class="empty">Initialize and sign in the selected account before adding sources.</p>
-    {/if}
-  </div>
-
-  <div class="card">
-    <div class="card-header">
-      <h3>My Channels</h3>
-      <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs || !selectedAccountReady()}>
-        {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
-      </button>
-    </div>
-
-    {#if dialogs.length > 0}
-      <ul class="source-list">
-        {#each dialogs as ch (ch.id)}
-          {@const added = isAlreadyAdded(ch)}
-          <li>
-            <div class="channel-info">
-              <span class="title">{ch.title}</span>
-              {#if ch.username}<span class="sub">@{ch.username}</span>{/if}
-            </div>
-            <div class="channel-actions">
-              {#if !ch.is_member}<span class="badge">not subscribed</span>{/if}
-              {#if added}
-                <span class="badge active">added</span>
-              {:else}
-                <button class="small" onclick={() => addFromDialog(ch)} disabled={addingId === ch.id}>
-                  {addingId === ch.id ? "..." : "Add"}
-                </button>
-              {/if}
-            </div>
-          </li>
-        {/each}
-      </ul>
-    {:else if !loadingDialogs}
-      <p class="empty">Click "Load" to see your Telegram channels.</p>
-    {/if}
-  </div>
 {/if}
+
+<DesktopDialog
+  open={addSourceDialogOpen && selectedAccountId !== null}
+  title="Add Source"
+  description="Add a Telegram source manually or pick one from the selected account's available channels."
+  labelledBy="add-source-title"
+  width="52rem"
+  onClose={closeAddSourceDialog}
+>
+  <div class="add-source-dialog">
+    <section class="dialog-section">
+      <div class="section-header">
+        <h4>Add by Username or Link</h4>
+      </div>
+      <div class="row">
+        <input
+          type="text"
+          bind:value={manualRef}
+          placeholder="@channel or https://t.me/channel"
+          onkeydown={(e) => e.key === "Enter" && addManual()}
+        />
+        <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim() || !selectedAccountReady()}>
+          {addingId === "manual" ? "Adding..." : "Add"}
+        </button>
+      </div>
+      {#if !selectedAccountReady()}
+        <p class="empty">Initialize and sign in the selected account before adding sources.</p>
+      {/if}
+    </section>
+
+    <section class="dialog-section">
+      <div class="section-header">
+        <h4>My Channels</h4>
+        <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs || !selectedAccountReady()}>
+          {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
+        </button>
+      </div>
+
+      {#if dialogs.length > 0}
+        <ul class="source-list">
+          {#each dialogs as ch (ch.id)}
+            {@const added = isAlreadyAdded(ch)}
+            <li>
+              <div class="channel-info">
+                <span class="title">{ch.title}</span>
+                {#if ch.username}<span class="sub">@{ch.username}</span>{/if}
+              </div>
+              <div class="channel-actions">
+                {#if !ch.is_member}<span class="badge">not subscribed</span>{/if}
+                {#if added}
+                  <span class="badge active">added</span>
+                {:else}
+                  <button class="small" onclick={() => addFromDialog(ch)} disabled={addingId === ch.id}>
+                    {addingId === ch.id ? "..." : "Add"}
+                  </button>
+                {/if}
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {:else if !loadingDialogs}
+        <p class="empty">Click "Load" to see your Telegram channels.</p>
+      {/if}
+    </section>
+  </div>
+</DesktopDialog>
 
 <style>
   .card {
@@ -790,6 +818,31 @@
   }
   .row { display: flex; gap: 0.5rem; align-items: center; }
   .row input { flex: 1; }
+  .add-source-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .dialog-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 0.95rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-strong);
+  }
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .section-header h4 {
+    margin: 0;
+    font-size: 0.95rem;
+  }
   .policy-grid {
     display: grid;
     grid-template-columns: minmax(180px, 220px) minmax(120px, 180px);
@@ -908,6 +961,9 @@
     .detail-actions {
       justify-content: flex-start;
       flex-basis: auto;
+    }
+    .section-header {
+      align-items: stretch;
     }
   }
 </style>
