@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
+  import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
 
   interface AccountRecord {
@@ -104,9 +105,15 @@
   }
 
   async function deleteAccount(account: AccountRecord) {
-    const confirmed = window.confirm(
-      `Delete account "${account.label}"?\n\nThis will also remove its linked sources from the local database.`
-    );
+    const confirmed = await openConfirmModal({
+      title: "Delete account?",
+      message:
+        `The account "${account.label}" will be removed from the local app.\n\n` +
+        "Its linked sources will also be deleted from the local database.",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     try {
