@@ -70,7 +70,7 @@
                 <p class="media-placeholder">Media-only post</p>
               {/if}
               {#if details.length > 0}
-                <p class="media-summary">{details.join(" · ")}</p>
+                <p class="media-summary">{details.join(" | ")}</p>
               {/if}
             </div>
           {/if}

@@ -401,7 +401,7 @@
   }
 
   function accountLabel(id: number | null) {
-    if (id === null) return "—";
+    if (id === null) return "-";
     return accounts.find((account) => account.id === id)?.label ?? `#${id}`;
   }
 
