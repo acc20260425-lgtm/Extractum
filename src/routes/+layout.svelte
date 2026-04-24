@@ -17,6 +17,34 @@
       localStorage.setItem("theme", theme);
     }
   }
+
+  const navItems = [
+    {
+      href: "/accounts",
+      label: "Accounts",
+      caption: "Telegram access",
+      active: (pathname: string) =>
+        pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
+    },
+    {
+      href: "/sources",
+      label: "Sources",
+      caption: "Channels and sync",
+      active: (pathname: string) => pathname.startsWith("/sources"),
+    },
+    {
+      href: "/analysis",
+      label: "Analysis",
+      caption: "Reports and chat",
+      active: (pathname: string) => pathname.startsWith("/analysis"),
+    },
+    {
+      href: "/settings",
+      label: "Settings",
+      caption: "Models and app",
+      active: (pathname: string) => pathname.startsWith("/settings"),
+    },
+  ];
 </script>
 
 <svelte:head>
@@ -24,22 +52,45 @@
 </svelte:head>
 
 <div class="app" data-theme={theme}>
-  <nav>
-    <div class="nav-links">
-      <a href="/accounts" class:active={$page.url.pathname.startsWith("/accounts") || $page.url.pathname.startsWith("/auth")}>Accounts</a>
-      <a href="/sources" class:active={$page.url.pathname.startsWith("/sources")}>Sources</a>
-      <a href="/analysis" class:active={$page.url.pathname.startsWith("/analysis")}>Analysis</a>
-      <a href="/settings" class:active={$page.url.pathname.startsWith("/settings")}>Settings</a>
-    </div>
-    <button class="theme-toggle secondary" type="button" onclick={toggleTheme}>
-      {theme === "light" ? "Dark theme" : "Light theme"}
-    </button>
-  </nav>
   <ToastHost />
   <ModalHost />
-  <main>
-    {@render children()}
-  </main>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <a class="brand" href="/accounts">
+          <span class="brand-mark" aria-hidden="true">E</span>
+          <span class="brand-copy">
+            <strong>Extractum</strong>
+            <small>Research workspace</small>
+          </span>
+        </a>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Primary">
+        {#each navItems as item (item.href)}
+          <a
+            href={item.href}
+            class:active={item.active($page.url.pathname)}
+          >
+            <span class="nav-label">{item.label}</span>
+            <span class="nav-caption">{item.caption}</span>
+          </a>
+        {/each}
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="theme-toggle secondary" type="button" onclick={toggleTheme}>
+          {theme === "light" ? "Dark theme" : "Light theme"}
+        </button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <div class="workspace-inner">
+        {@render children()}
+      </div>
+    </main>
+  </div>
 </div>
 
 <style>
@@ -132,50 +183,169 @@
   :global(button:disabled) { opacity: 0.5; cursor: not-allowed; }
 
   .app {
-    display: flex;
-    flex-direction: column;
     min-height: 100vh;
     color: var(--text);
   }
 
-  nav {
+  .shell {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1.5rem;
-    background: color-mix(in srgb, var(--panel) 88%, transparent);
-    border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(14px);
+    min-height: 100vh;
   }
-  .nav-links { display: flex; gap: 0.25rem; flex-wrap: wrap; }
-  nav a {
+
+  .sidebar {
+    width: 248px;
+    flex: 0 0 248px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1rem 0.85rem 1rem 1rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, white 6%), var(--panel));
+    border-right: 1px solid var(--border);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .sidebar-header {
+    padding: 0.25rem 0.25rem 0;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: inherit;
+    text-decoration: none;
+    padding: 0.45rem 0.55rem;
+    border-radius: 14px;
+  }
+
+  .brand:hover {
+    background: color-mix(in srgb, var(--panel-hover) 68%, transparent);
+  }
+
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 75%, black));
+    color: white;
+    font-size: 1rem;
+    font-weight: 700;
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.2);
+  }
+
+  .brand-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .brand-copy strong {
+    font-size: 0.98rem;
+    line-height: 1.1;
+  }
+
+  .brand-copy small {
+    color: var(--muted);
+    font-size: 0.77rem;
+    line-height: 1.1;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .sidebar-nav a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    padding: 0.72rem 0.85rem;
+    border-radius: 14px;
     color: var(--muted);
     text-decoration: none;
-    padding: 0.4rem 0.8rem;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    transition: color 0.2s, background 0.2s;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    border: 1px solid transparent;
   }
-  nav a:hover { color: var(--text); background: var(--panel-hover); }
-  nav a.active { color: white; background: var(--primary); }
-  .theme-toggle { white-space: nowrap; }
 
-  main {
+  .sidebar-nav a:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--panel-hover) 72%, transparent);
+    border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  }
+
+  .sidebar-nav a.active {
+    color: var(--text);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--primary) 12%, var(--panel)), color-mix(in srgb, var(--primary) 7%, var(--panel)));
+    border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
+  }
+
+  .nav-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  .nav-caption {
+    font-size: 0.76rem;
+    line-height: 1.2;
+    color: var(--muted);
+  }
+
+  .sidebar-nav a.active .nav-caption,
+  .sidebar-nav a:hover .nav-caption {
+    color: color-mix(in srgb, var(--muted) 72%, var(--text));
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 0.25rem;
+  }
+
+  .theme-toggle {
+    width: 100%;
+    white-space: nowrap;
+  }
+
+  .workspace {
     flex: 1;
-    padding: 2rem;
-    width: min(1480px, calc(100vw - 3rem));
-    max-width: 1480px;
+    min-width: 0;
+    padding: 1.25rem;
+  }
+
+  .workspace-inner {
+    width: min(1480px, 100%);
     margin: 0 auto;
   }
 
-  @media (max-width: 640px) {
-    nav { flex-direction: column; align-items: stretch; }
-    .nav-links { justify-content: center; }
-    .theme-toggle { width: 100%; }
-    main {
-      padding: 1.25rem;
-      width: 100%;
+  @media (max-width: 820px) {
+    .shell {
+      flex-direction: column;
+    }
+
+    .sidebar {
+      width: auto;
+      flex-basis: auto;
+      padding: 0.9rem;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      box-shadow: none;
+    }
+
+    .sidebar-nav {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .workspace {
+      padding: 1rem;
     }
   }
 </style>
