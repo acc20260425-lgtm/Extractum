@@ -44,6 +44,20 @@ Implementation notes:
 - Database docs include `telegram_source_kind` and uniqueness by `(account_id, source_type, telegram_source_kind, external_id)`.
 - Migration history includes versions 11 and 12.
 
+### Peer Identity Metadata Foundation
+
+Status: partial.
+
+Why it mattered: private channels and supergroups can require Telegram peer identity beyond username and bare id. The source metadata format can now preserve identity details without changing the table schema.
+
+Implementation notes:
+
+- `SourceMetadata` remains backward-compatible with old username-only payloads.
+- New metadata can record whether a source was added from dialogs or username flow.
+- New metadata can record `access_hash` for channel-backed sources when `grammers` exposes it.
+- Sync can resolve channel and supergroup sources from stored `access_hash` before falling back to dialog scanning.
+- Small groups still rely on dialog/session resolution because they do not use channel `access_hash`.
+
 ## Telegram Runtime Validation
 
 Priority: high.
@@ -109,6 +123,8 @@ Risks:
 - Avatar refresh should not block core sync work.
 
 ## Private Sources And Peer Identity
+
+Status: partial.
 
 Priority: high.
 

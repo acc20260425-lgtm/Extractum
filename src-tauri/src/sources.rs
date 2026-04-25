@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
 use grammers_client::{media::Media, peer::Peer, tl};
-use grammers_session::types::PeerRef;
+use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::Cursor;
@@ -140,6 +140,8 @@ struct StoredItemRow {
 #[derive(Default, Serialize, Deserialize)]
 struct SourceMetadata {
     username: Option<String>,
+    added_from: Option<String>,
+    access_hash: Option<i64>,
 }
 
 struct ResolvedTelegramSource {
@@ -148,6 +150,7 @@ struct ResolvedTelegramSource {
     telegram_source_kind: String,
     is_member: bool,
     username: Option<String>,
+    access_hash: Option<i64>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
@@ -481,6 +484,15 @@ pub async fn add_telegram_source(
         resolve_telegram_source(&client, &source_ref, telegram_source_kind.as_deref()).await?;
     let metadata_zstd = encode_source_metadata(&SourceMetadata {
         username: resolved.username.clone(),
+        added_from: Some(
+            if telegram_source_kind.is_some() {
+                "dialog"
+            } else {
+                "username"
+            }
+            .to_string(),
+        ),
+        access_hash: resolved.access_hash,
     })?;
     let now = now_secs();
 
@@ -930,7 +942,22 @@ fn resolved_telegram_source_from_peer(peer: &Peer) -> Option<ResolvedTelegramSou
         telegram_source_kind: source.telegram_source_kind,
         is_member: source.is_member,
         username: source.username,
+        access_hash: peer_access_hash(peer),
     })
+}
+
+fn peer_access_hash(peer: &Peer) -> Option<i64> {
+    match peer {
+        Peer::Channel(channel) => channel.raw.access_hash,
+        Peer::Group(group) => match &group.raw {
+            tl::enums::Chat::Channel(channel) => channel.access_hash,
+            tl::enums::Chat::ChannelForbidden(channel) => Some(channel.access_hash),
+            tl::enums::Chat::Empty(_)
+            | tl::enums::Chat::Chat(_)
+            | tl::enums::Chat::Forbidden(_) => None,
+        },
+        Peer::User(_) => None,
+    }
 }
 
 fn compress_text(input: &str) -> Result<Vec<u8>, String> {
@@ -991,14 +1018,18 @@ async fn resolve_source_peer(
     })?;
 
     let metadata = decode_source_metadata(source.metadata_zstd.as_deref())?;
-    if let Some(username) = metadata.username {
+    if let Some(username) = metadata.username.as_deref() {
         if let Some(peer) = client
-            .resolve_username(&username)
+            .resolve_username(username)
             .await
             .map_err(|e| e.to_string())?
         {
             return peer_ref_for_source_kind(&peer, &source.telegram_source_kind, source.id);
         }
+    }
+
+    if let Some(peer_ref) = source_peer_ref_from_metadata(&source, telegram_source_id, &metadata)? {
+        return Ok(peer_ref);
     }
 
     let mut dialogs = client.iter_dialogs();
@@ -1013,9 +1044,31 @@ async fn resolve_source_peer(
     }
 
     Err(format!(
-        "Source {} could not be resolved from stored username metadata or dialogs",
+        "Source {} could not be resolved from stored username, peer identity metadata, or dialogs. If this is a private Telegram source, re-add it from the account's dialogs.",
         source.id
     ))
+}
+
+fn source_peer_ref_from_metadata(
+    source: &SourceSyncTarget,
+    telegram_source_id: i64,
+    metadata: &SourceMetadata,
+) -> Result<Option<PeerRef>, String> {
+    let Some(access_hash) = metadata.access_hash else {
+        return Ok(None);
+    };
+
+    match source.telegram_source_kind.as_str() {
+        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => Ok(Some(PeerRef {
+            id: PeerId::channel(telegram_source_id),
+            auth: PeerAuth::from_hash(access_hash),
+        })),
+        TELEGRAM_KIND_GROUP => Ok(None),
+        other => Err(format!(
+            "Source {} has unsupported telegram_source_kind '{}'",
+            source.id, other
+        )),
+    }
 }
 
 fn peer_ref_for_source_kind(
@@ -1307,12 +1360,14 @@ fn build_raw_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        compress_text, decode_media_metadata, decompress_text, default_sync_settings,
-        derive_content_kind, derive_document_media_kind, encode_media_metadata,
-        initial_sync_policy_label, load_sync_settings_from_pool, save_sync_settings_to_pool,
+        compress_text, decode_media_metadata, decode_source_metadata, decompress_text,
+        default_sync_settings, derive_content_kind, derive_document_media_kind,
+        encode_media_metadata, encode_source_metadata, initial_sync_policy_label,
+        load_sync_settings_from_pool, save_sync_settings_to_pool, source_peer_ref_from_metadata,
         validate_sync_settings, DocumentSignals, InitialSyncMode, ItemMediaMetadata,
-        SyncSettingsRecord, CONTENT_KIND_MEDIA_ONLY, CONTENT_KIND_TEXT_ONLY,
-        CONTENT_KIND_TEXT_WITH_MEDIA,
+        SourceMetadata, SourceSyncTarget, SyncSettingsRecord, CONTENT_KIND_MEDIA_ONLY,
+        CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA, TELEGRAM_KIND_CHANNEL,
+        TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
     };
 
     async fn memory_pool() -> sqlx::SqlitePool {
@@ -1349,6 +1404,80 @@ mod tests {
         let encoded = encode_media_metadata(&original).expect("encode");
         let decoded = decode_media_metadata(Some(&encoded)).expect("decode");
         assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn source_metadata_decodes_old_username_only_payloads() {
+        let encoded = super::compress_json_bytes(br#"{"username":"example"}"#).expect("encode");
+        let decoded = decode_source_metadata(Some(&encoded)).expect("decode");
+
+        assert_eq!(decoded.username.as_deref(), Some("example"));
+        assert_eq!(decoded.added_from, None);
+        assert_eq!(decoded.access_hash, None);
+    }
+
+    #[test]
+    fn source_metadata_roundtrip_preserves_peer_identity() {
+        let original = SourceMetadata {
+            username: Some("example".to_string()),
+            added_from: Some("dialog".to_string()),
+            access_hash: Some(42),
+        };
+
+        let encoded = encode_source_metadata(&original).expect("encode");
+        let decoded = decode_source_metadata(Some(&encoded)).expect("decode");
+
+        assert_eq!(decoded.username, original.username);
+        assert_eq!(decoded.added_from, original.added_from);
+        assert_eq!(decoded.access_hash, original.access_hash);
+    }
+
+    #[test]
+    fn peer_ref_from_metadata_uses_channel_access_hash() {
+        let source = SourceSyncTarget {
+            id: 7,
+            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
+            account_id: Some(1),
+            external_id: "12345".to_string(),
+            title: Some("Example".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+        let metadata = SourceMetadata {
+            access_hash: Some(67890),
+            ..SourceMetadata::default()
+        };
+
+        let peer_ref = source_peer_ref_from_metadata(&source, 12345, &metadata)
+            .expect("metadata peer ref")
+            .expect("peer ref");
+
+        assert_eq!(peer_ref.id.bare_id(), 12345);
+        assert_eq!(peer_ref.auth.hash(), 67890);
+    }
+
+    #[test]
+    fn peer_ref_from_metadata_ignores_small_groups_without_access_hash_identity() {
+        let source = SourceSyncTarget {
+            id: 7,
+            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            telegram_source_kind: TELEGRAM_KIND_GROUP.to_string(),
+            account_id: Some(1),
+            external_id: "12345".to_string(),
+            title: Some("Example".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+        let metadata = SourceMetadata {
+            access_hash: Some(67890),
+            ..SourceMetadata::default()
+        };
+
+        let peer_ref =
+            source_peer_ref_from_metadata(&source, 12345, &metadata).expect("metadata peer ref");
+
+        assert!(peer_ref.is_none());
     }
 
     #[test]
