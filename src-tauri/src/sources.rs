@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use grammers_client::{media::Media, peer::Peer, tl};
 use grammers_session::types::PeerRef;
 use serde::{Deserialize, Serialize};
@@ -58,6 +59,7 @@ pub struct ChannelInfo {
     pub title: String,
     pub username: Option<String>,
     pub is_member: bool,
+    pub photo_data_url: Option<String>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -346,22 +348,54 @@ pub async fn list_telegram_channels(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
 ) -> AppResult<Vec<ChannelInfo>> {
-    let accounts = state.accounts.lock().await;
-    let client = crate::telegram::get_client(&accounts, account_id).await?;
+    let client = {
+        let accounts = state.accounts.lock().await;
+        crate::telegram::get_client(&accounts, account_id)
+            .await?
+            .clone()
+    };
 
     let mut channels = Vec::new();
     let mut dialogs = client.iter_dialogs();
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
         if let Peer::Channel(channel) = dialog.peer() {
+            let photo_data_url = channel_photo_data_url(&client, dialog.peer())
+                .await
+                .unwrap_or(None);
             channels.push(ChannelInfo {
                 id: channel.id().bare_id(),
                 title: channel.title().to_string(),
                 username: channel.username().map(|s| s.to_string()),
                 is_member: !channel.raw.left,
+                photo_data_url,
             });
         }
     }
     Ok(channels)
+}
+
+async fn channel_photo_data_url(
+    client: &grammers_client::Client,
+    peer: &Peer,
+) -> Result<Option<String>, String> {
+    let Some(photo) = peer.photo(false).await else {
+        return Ok(None);
+    };
+
+    let mut bytes = Vec::new();
+    let mut download = client.iter_download(&photo).chunk_size(4 * 1024);
+    while let Some(chunk) = download.next().await.map_err(|e| e.to_string())? {
+        bytes.extend(chunk);
+    }
+
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(format!(
+        "data:image/jpeg;base64,{}",
+        general_purpose::STANDARD.encode(bytes)
+    )))
 }
 
 #[tauri::command]

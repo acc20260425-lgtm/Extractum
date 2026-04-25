@@ -21,6 +21,7 @@
     title: string;
     username: string | null;
     is_member: boolean;
+    photo_data_url: string | null;
   }
 
   interface SourceRecord {
@@ -357,6 +358,10 @@
 
   function isAlreadyAdded(channel: ChannelInfo) {
     return sources.some((source) => source.external_id === String(channel.id));
+  }
+
+  function channelInitial(channel: ChannelInfo) {
+    return channel.title.trim().charAt(0).toUpperCase() || "#";
   }
 
   function runtimeStatus(accountId: number | null) {
@@ -729,6 +734,13 @@
           {#each dialogs as ch (ch.id)}
             {@const added = isAlreadyAdded(ch)}
             <li>
+              <div class="channel-avatar" aria-hidden="true">
+                {#if ch.photo_data_url}
+                  <img src={ch.photo_data_url} alt="" loading="lazy" />
+                {:else}
+                  <span>{channelInitial(ch)}</span>
+                {/if}
+              </div>
               <div class="channel-info">
                 <span class="title">{ch.title}</span>
                 {#if ch.username}<span class="sub">@{ch.username}</span>{/if}
@@ -890,6 +902,60 @@
   }
   .source-list li {
     list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .channel-avatar {
+    flex: 0 0 2.25rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--primary) 14%, var(--panel-hover));
+    color: var(--primary);
+    font-size: 0.9rem;
+    font-weight: 700;
+    align-self: center;
+  }
+  .channel-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .channel-info {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .channel-info .title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .channel-info .sub {
+    color: var(--muted);
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+  }
+  .channel-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    flex-wrap: wrap;
   }
   .badge {
     font-size: 0.7rem;
