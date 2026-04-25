@@ -39,7 +39,13 @@ Sources can be added:
 - by username / `t.me` reference;
 - from the current account's dialogs.
 
-If username-based resolution is unavailable, source resolution can still fall back to dialog scanning by bare channel id.
+If username-based resolution is unavailable, source resolution can still fall back to dialog scanning by bare source id and `telegram_source_kind`.
+
+Supported Telegram source kinds are:
+
+- `channel`
+- `supergroup`
+- `group`
 
 ### 2.3 Sync strategy
 
@@ -100,7 +106,7 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 ## 6. Known architectural debt
 
 - secrets still live in SQLite-backed settings;
-- peer resolution may still be expensive on large accounts because of dialog scans;
+- private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - the analysis layer has not yet become media-aware;
 - Telegram session storage may still deserve a more robust long-term format.
 

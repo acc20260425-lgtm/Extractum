@@ -16,6 +16,34 @@ Implementation notes:
 - `add_telegram_source` uses the same conflict target.
 - Migration `12.sql` updates the index without rewriting source rows.
 
+### Add Source Dialog UX
+
+Status: done.
+
+Why it mattered: after including groups, the dialog list can become much longer. Users can now search, filter, and scan counts without assuming the Telegram API returned an incomplete list.
+
+Implementation notes:
+
+- The Add Source dialog has local search by title and username.
+- Filters cover `All`, `Channels`, `Supergroups`, and `Groups`.
+- The dialog shows filtered and total counts.
+- Dialog rows are sorted by title, then by source kind.
+- Already-added detection is scoped by account, kind, and external id.
+- Loading, not-ready, not-loaded, and no-match states are distinct.
+
+### Documentation Refresh
+
+Status: done.
+
+Why it mattered: project docs still described source management as broadcast-channel-only after the code moved to Telegram source kinds.
+
+Implementation notes:
+
+- Project, design, database, README, architecture, and agent context docs now describe Telegram sources.
+- Command names now use `list_telegram_sources` and `sync_source`.
+- Database docs include `telegram_source_kind` and uniqueness by `(account_id, source_type, telegram_source_kind, external_id)`.
+- Migration history includes versions 11 and 12.
+
 ## Telegram Runtime Validation
 
 Priority: high.
@@ -48,36 +76,6 @@ Risks:
 - Private sources without username may only be resolvable while they are present in dialogs.
 - Telegram bare ids can be ambiguous without source kind, so adding from dialog must keep passing `telegramSourceKind`.
 - Some historical/migrated group states may need extra metadata beyond bare id and username.
-
-## Add Source Dialog UX
-
-Priority: medium.
-
-Goal: make the Add Source dialog usable when an account has many Telegram dialogs.
-
-Why it matters: after including groups, the dialog list can become much longer. Without search and filters, users can miss sources or assume the list is incomplete.
-
-Scope:
-
-- Add a local search field for title and username.
-- Add filters for `All`, `Channels`, `Supergroups`, and `Groups`.
-- Add visible counters for total sources and filtered sources.
-- Add a loading state that explains that profile pictures may make first load slower.
-- Sort sources by title, with a secondary sort by kind.
-- Keep already-added detection scoped to account, kind, and external id.
-- Preserve keyboard accessibility for search, filter buttons, and Add actions.
-
-Acceptance criteria:
-
-- Users can find a source by typing part of its title or username.
-- Users can filter the list to only groups or only channels.
-- Empty states distinguish between "not loaded", "no matches", and "account not ready".
-- UI remains usable on smaller desktop widths.
-
-Risks:
-
-- Downloading many avatars during list load can make filtering feel slow unless the list render stays lightweight.
-- If filters are added before runtime validation, users may misinterpret Telegram API gaps as app filtering bugs.
 
 ## Persist And Show Source Avatars
 
@@ -140,25 +138,3 @@ Risks:
 - Access hash handling may depend on `grammers` raw peer variants and can change across library updates.
 - Storing more Telegram identity data improves reliability but increases responsibility for local sensitive metadata.
 - Some private or forbidden peers may remain impossible to sync after the account loses access.
-
-## Documentation Refresh
-
-Priority: low.
-
-Goal: update project docs so they match the new Telegram source model.
-
-Why it matters: current docs still describe source management as broadcast-channel-only in a few places.
-
-Scope:
-
-- Update `docs/project.md` command names from `list_telegram_channels` and `sync_channel` to `list_telegram_sources` and `sync_source`.
-- Update `docs/design-document.md` source model from "Telegram channel" to "Telegram source".
-- Update `docs/database-schema.md` to include `telegram_source_kind`.
-- Update source uniqueness docs to mention `(account_id, source_type, telegram_source_kind, external_id)`.
-- Add migration history entries for versions 11 and 12.
-
-Acceptance criteria:
-
-- Docs no longer imply that only broadcast channels are supported.
-- Database docs match the current migrations.
-- A new contributor can understand channels, groups, and supergroups without reading the full Rust implementation first.

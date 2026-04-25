@@ -1,6 +1,6 @@
 # Extractum
 
-Extractum is a desktop-first Telegram channel ingest and analysis workspace built with:
+Extractum is a desktop-first Telegram source ingest and analysis workspace built with:
 
 - `SvelteKit 2 + Svelte 5 + TypeScript`
 - `Tauri 2 + Rust`
@@ -9,8 +9,8 @@ Extractum is a desktop-first Telegram channel ingest and analysis workspace buil
 The current product slice is a local-first MVP for:
 
 - managing Telegram accounts and sessions;
-- adding broadcast channels as sources;
-- syncing channel history into local SQLite storage;
+- adding Telegram channels, supergroups, and groups as sources;
+- syncing source history into local SQLite storage;
 - browsing synced items in `/sources`;
 - generating Gemini-backed analysis reports in `/analysis`;
 - asking follow-up questions against saved analysis runs.
@@ -27,6 +27,8 @@ The current product slice is a local-first MVP for:
 ### Source ingest
 
 - sources are stored in `sources`;
+- Telegram sources carry a `telegram_source_kind` of `channel`, `supergroup`, or `group`;
+- source uniqueness is scoped by account, source type, kind, and external id;
 - synced Telegram messages are stored in `items`;
 - the first sync window is configurable:
   - `recent_messages(N)`
@@ -108,6 +110,8 @@ Recent schema additions:
 
 - migration `9.sql`: media-aware item metadata
 - migration `10.sql`: immutable saved run snapshots
+- migration `11.sql`: Telegram source kind
+- migration `12.sql`: account-scoped source uniqueness
 
 ## Error model
 
@@ -128,7 +132,7 @@ The frontend normalizes these errors through `src/lib/app-error.ts` instead of r
 2. `docs/architecture-deep-dive.md`
 3. `docs/database-schema.md`
 4. `docs/design-document.md`
-5. `reference/plan.txt`
+5. `docs/backlog.md`
 
 ## Status of the backlog
 
@@ -140,4 +144,4 @@ The old backlog items for:
 - typed application errors;
 - configurable initial sync policy
 
-are completed. The active open backlog now lives in `reference/plan.txt`.
+are completed. The active open backlog now lives in `docs/backlog.md`.

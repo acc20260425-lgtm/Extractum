@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-Extractum is a desktop-first research tool for collecting Telegram channel history into a local archive and running structured analysis over that archive.
+Extractum is a desktop-first research tool for collecting Telegram source history into a local archive and running structured analysis over that archive.
 
 The design goals are:
 
@@ -48,13 +48,16 @@ That lets the product preserve media-bearing and media-only posts today without 
 
 ### 3.1 Source model
 
-Each Telegram channel is stored in `sources` with:
+Each Telegram source is stored in `sources` with:
 
 - `external_id`
 - `title`
+- `telegram_source_kind` (`channel`, `supergroup`, or `group`)
 - optional compressed metadata
 - account linkage
 - sync state
+
+Source identity is scoped by account and kind. This matters because the same Telegram channel or group can exist in more than one local account, and Telegram bare ids can overlap across source kinds.
 
 ### 3.2 Sync model
 
@@ -179,6 +182,6 @@ Those items are now implemented and should no longer be treated as future milest
 The most meaningful remaining design questions are:
 
 - how to move secrets out of SQLite cleanly;
-- whether Telegram peer resolution should gain stronger cached identity data;
+- whether private Telegram peer resolution should gain stronger cached identity data;
 - how to expand analysis beyond text-bearing corpus items;
 - whether Telegram session storage should remain JSON-based long term.

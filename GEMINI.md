@@ -35,9 +35,9 @@ Current implemented Telegram flow:
 - `tg_send_code`
 - `tg_sign_in`
 - `tg_logout`
-- `list_telegram_channels`
+- `list_telegram_sources`
 - `add_telegram_source`
-- `sync_channel`
+- `sync_source`
 
 Current runtime restore behavior:
 - on app startup, the backend tries to restore saved account sessions in the background;
@@ -93,10 +93,10 @@ Accounts and auth:
 - `tg_logout`
 
 Sources and items:
-- `list_telegram_channels`
+- `list_telegram_sources`
 - `add_telegram_source`
 - `list_sources`
-- `sync_channel`
+- `sync_source`
 - `get_items`
 
 LLM:
@@ -115,7 +115,7 @@ Implemented:
 - session persistence
 - startup restore of saved sessions
 - account CRUD
-- source registration linked to account
+- source registration linked to account and Telegram source kind
 - source discovery from Telegram dialogs
 - manual per-source sync into `items`
 - inline browsing of synced messages on `/sources`
@@ -124,17 +124,16 @@ Implemented:
 - persistent light/dark theme toggle, defaulting to light
 
 Current sync constraints:
-- text-only storage for v1
-- empty-text messages skipped
+- analysis remains text-first even though ingest stores media metadata
 - duplicates ignored
-- no media ingestion
+- no binary media download
 - no edit/delete reconciliation
 - no background sync
 
 Not implemented yet:
 - richer item filtering/pagination
 - dedicated message detail views
-- source-driven Gemini analysis flow
+- media-aware analysis beyond the current text-first corpus
 
 ## 7. Workflow rules for agents
 

@@ -12,6 +12,7 @@ Important fields:
 
 - `id`
 - `source_type`
+- `telegram_source_kind`
 - `external_id`
 - `title`
 - `metadata_zstd`
@@ -24,7 +25,19 @@ Important fields:
 
 Important constraints / indexes:
 
-- unique source by `(source_type, external_id)`
+- unique source by `(account_id, source_type, telegram_source_kind, external_id)`
+
+`telegram_source_kind` values:
+
+- `channel`
+- `supergroup`
+- `group`
+
+Notes:
+
+- older rows that used `source_type = 'telegram_channel'` are migrated to `source_type = 'telegram'`;
+- uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
+- uniqueness includes `telegram_source_kind` because Telegram bare ids are not enough to safely describe every peer shape.
 
 ### 1.2 `items`
 
@@ -176,6 +189,8 @@ Purpose:
 | 8 | `8.sql` | Add analysis chat history |
 | 9 | `9.sql` | Add media-aware metadata to `items` |
 | 10 | `10.sql` | Add saved run snapshot storage |
+| 11 | `11.sql` | Add `telegram_source_kind` and migrate Telegram channels to generic Telegram sources |
+| 12 | `12.sql` | Scope source uniqueness by `account_id` |
 
 ## 4. Current behavior implications
 

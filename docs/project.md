@@ -18,7 +18,7 @@ Implemented:
 
 - Telegram account management and sign-in flow
 - startup session restore
-- source management for Telegram broadcast channels
+- source management for Telegram channels, supergroups, and groups
 - history sync into local SQLite
 - media-aware sync metadata for text-bearing and media-only items
 - configurable initial sync window
@@ -73,11 +73,11 @@ Not implemented yet:
 
 ### Sources
 
-- `list_telegram_channels`
+- `list_telegram_sources`
 - `add_telegram_source`
 - `list_sources`
 - `delete_source`
-- `sync_channel`
+- `sync_source`
 - `get_items`
 - `get_sync_settings`
 - `save_sync_settings`
@@ -98,7 +98,7 @@ Not implemented yet:
 
 ## Important persistence
 
-- `sources`: registered Telegram channels
+- `sources`: registered Telegram sources
 - `items`: synced Telegram messages and media-aware metadata
 - `app_settings`: app-level key/value storage
 - `analysis_runs`: saved report runs
@@ -110,7 +110,7 @@ Not implemented yet:
 - analysis corpus still requires text content;
 - media-only items are stored and visible, but not yet analyzed;
 - LLM `api_key` remains in `app_settings` for now;
-- Telegram peer resolution can still fall back to dialog scanning.
+- Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
 
 ## Reading order for implementation work
 
@@ -120,5 +120,5 @@ Not implemented yet:
 4. `src/routes/analysis/+page.svelte`
 5. `src-tauri/src/error.rs`
 6. `src-tauri/src/migrations.rs`
-7. `src-tauri/migrations/9.sql`
-8. `src-tauri/migrations/10.sql`
+7. `src-tauri/migrations/11.sql`
+8. `src-tauri/migrations/12.sql`
