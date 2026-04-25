@@ -22,6 +22,10 @@ const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
 const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
 const CONTENT_KIND_MEDIA_ONLY: &str = "media_only";
 const SECONDS_PER_DAY: i64 = 86_400;
+const TELEGRAM_SOURCE_TYPE: &str = "telegram";
+const TELEGRAM_KIND_CHANNEL: &str = "channel";
+const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
+const TELEGRAM_KIND_GROUP: &str = "group";
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -54,10 +58,11 @@ pub struct SyncSettingsRecord {
 }
 
 #[derive(Serialize)]
-pub struct ChannelInfo {
+pub struct TelegramSourceInfo {
     pub id: i64,
     pub title: String,
     pub username: Option<String>,
+    pub telegram_source_kind: String,
     pub is_member: bool,
     pub photo_data_url: Option<String>,
 }
@@ -65,6 +70,8 @@ pub struct ChannelInfo {
 #[derive(Serialize, sqlx::FromRow)]
 pub struct SourceRecord {
     pub id: i64,
+    pub source_type: String,
+    pub telegram_source_kind: String,
     pub account_id: Option<i64>,
     pub external_id: String,
     pub title: Option<String>,
@@ -103,6 +110,8 @@ pub struct ItemRecord {
 #[derive(sqlx::FromRow)]
 struct SourceSyncTarget {
     id: i64,
+    source_type: String,
+    telegram_source_kind: String,
     account_id: Option<i64>,
     external_id: String,
     title: Option<String>,
@@ -130,9 +139,10 @@ struct SourceMetadata {
     username: Option<String>,
 }
 
-struct ResolvedChannelSource {
+struct ResolvedTelegramSource {
     external_id: String,
     title: String,
+    telegram_source_kind: String,
     is_member: bool,
     username: Option<String>,
 }
@@ -344,10 +354,10 @@ pub async fn delete_source(handle: AppHandle, source_id: i64) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub async fn list_telegram_channels(
+pub async fn list_telegram_sources(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
-) -> AppResult<Vec<ChannelInfo>> {
+) -> AppResult<Vec<TelegramSourceInfo>> {
     let client = {
         let accounts = state.accounts.lock().await;
         crate::telegram::get_client(&accounts, account_id)
@@ -355,26 +365,20 @@ pub async fn list_telegram_channels(
             .clone()
     };
 
-    let mut channels = Vec::new();
+    let mut sources = Vec::new();
     let mut dialogs = client.iter_dialogs();
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
-        if let Peer::Channel(channel) = dialog.peer() {
-            let photo_data_url = channel_photo_data_url(&client, dialog.peer())
+        if let Some(mut source) = telegram_source_info_from_peer(dialog.peer()) {
+            source.photo_data_url = peer_photo_data_url(&client, dialog.peer())
                 .await
                 .unwrap_or(None);
-            channels.push(ChannelInfo {
-                id: channel.id().bare_id(),
-                title: channel.title().to_string(),
-                username: channel.username().map(|s| s.to_string()),
-                is_member: !channel.raw.left,
-                photo_data_url,
-            });
+            sources.push(source);
         }
     }
-    Ok(channels)
+    Ok(sources)
 }
 
-async fn channel_photo_data_url(
+async fn peer_photo_data_url(
     client: &grammers_client::Client,
     peer: &Peer,
 ) -> Result<Option<String>, String> {
@@ -398,37 +402,103 @@ async fn channel_photo_data_url(
     )))
 }
 
+fn telegram_source_info_from_peer(peer: &Peer) -> Option<TelegramSourceInfo> {
+    match peer {
+        Peer::Channel(channel) => Some(TelegramSourceInfo {
+            id: channel.id().bare_id(),
+            title: channel.title().to_string(),
+            username: channel.username().map(|value| value.to_string()),
+            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
+            is_member: !channel.raw.left,
+            photo_data_url: None,
+        }),
+        Peer::Group(group) => Some(TelegramSourceInfo {
+            id: group.id().bare_id(),
+            title: group.title().unwrap_or("Untitled group").to_string(),
+            username: group.username().map(|value| value.to_string()),
+            telegram_source_kind: telegram_group_kind(group).to_string(),
+            is_member: telegram_group_is_member(group),
+            photo_data_url: None,
+        }),
+        Peer::User(_) => None,
+    }
+}
+
+fn telegram_group_kind(group: &grammers_client::peer::Group) -> &'static str {
+    if group.is_megagroup() {
+        TELEGRAM_KIND_SUPERGROUP
+    } else {
+        TELEGRAM_KIND_GROUP
+    }
+}
+
+fn telegram_group_is_member(group: &grammers_client::peer::Group) -> bool {
+    match &group.raw {
+        tl::enums::Chat::Chat(chat) => !chat.left && !chat.deactivated,
+        tl::enums::Chat::Channel(channel) => !channel.left,
+        tl::enums::Chat::Empty(_)
+        | tl::enums::Chat::Forbidden(_)
+        | tl::enums::Chat::ChannelForbidden(_) => false,
+    }
+}
+
 #[tauri::command]
 pub async fn add_telegram_source(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
-    channel_ref: String,
+    source_ref: String,
+    telegram_source_kind: Option<String>,
 ) -> AppResult<SourceRecord> {
-    let accounts = state.accounts.lock().await;
-    let client = crate::telegram::get_client(&accounts, account_id).await?;
+    let client = {
+        let accounts = state.accounts.lock().await;
+        crate::telegram::get_client(&accounts, account_id)
+            .await?
+            .clone()
+    };
 
-    let resolved = resolve_channel_source(&client, &channel_ref).await?;
+    let resolved =
+        resolve_telegram_source(&client, &source_ref, telegram_source_kind.as_deref()).await?;
     let metadata_zstd = encode_source_metadata(&SourceMetadata {
-        username: resolved.username,
+        username: resolved.username.clone(),
     })?;
     let now = now_secs();
-
-    drop(accounts);
 
     let pool = get_pool(&handle).await?;
     Ok(sqlx::query_as(
         r#"
-        INSERT INTO sources (source_type, external_id, title, metadata_zstd, is_active, is_member, account_id, created_at)
-        VALUES ('telegram_channel', ?, ?, ?, 1, ?, ?, ?)
-        ON CONFLICT(source_type, external_id) DO UPDATE SET
+        INSERT INTO sources (
+            source_type,
+            telegram_source_kind,
+            external_id,
+            title,
+            metadata_zstd,
+            is_active,
+            is_member,
+            account_id,
+            created_at
+        )
+        VALUES ('telegram', ?, ?, ?, ?, 1, ?, ?, ?)
+        ON CONFLICT(source_type, telegram_source_kind, external_id) DO UPDATE SET
             title = excluded.title,
             metadata_zstd = excluded.metadata_zstd,
             is_member = excluded.is_member,
             account_id = excluded.account_id
-        RETURNING id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at
+        RETURNING
+            id,
+            source_type,
+            telegram_source_kind,
+            account_id,
+            external_id,
+            title,
+            last_sync_state,
+            last_synced_at,
+            is_active,
+            is_member,
+            created_at
         "#,
     )
+    .bind(&resolved.telegram_source_kind)
     .bind(&resolved.external_id)
     .bind(&resolved.title)
     .bind(metadata_zstd)
@@ -448,7 +518,7 @@ pub async fn list_sources(
     let pool = get_pool(&handle).await?;
     if let Some(aid) = account_id {
         Ok(sqlx::query_as(
-            "SELECT id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
+            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
         )
         .bind(aid)
         .fetch_all(&pool)
@@ -456,7 +526,7 @@ pub async fn list_sources(
         .map_err(|e| e.to_string())?)
     } else {
         Ok(sqlx::query_as(
-            "SELECT id, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
+            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
         )
         .fetch_all(&pool)
         .await
@@ -465,14 +535,14 @@ pub async fn list_sources(
 }
 
 #[tauri::command]
-pub async fn sync_channel(
+pub async fn sync_source(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
     source_id: i64,
 ) -> AppResult<SyncResult> {
     let pool = get_pool(&handle).await?;
     let source: SourceSyncTarget = sqlx::query_as(
-        "SELECT id, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
+        "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
     )
     .bind(source_id)
     .fetch_optional(&pool)
@@ -752,11 +822,12 @@ fn now_secs() -> i64 {
         .as_secs() as i64
 }
 
-async fn resolve_channel_source(
+async fn resolve_telegram_source(
     client: &grammers_client::Client,
-    channel_ref: &str,
-) -> Result<ResolvedChannelSource, String> {
-    let trimmed = channel_ref.trim();
+    source_ref: &str,
+    expected_kind: Option<&str>,
+) -> Result<ResolvedTelegramSource, String> {
+    let trimmed = source_ref.trim();
     let username = parse_username(trimmed);
 
     if !username.is_empty() && !username.chars().all(|char| char.is_ascii_digit()) {
@@ -764,41 +835,82 @@ async fn resolve_channel_source(
             .resolve_username(&username)
             .await
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Channel '{}' not found", channel_ref))?;
+            .ok_or_else(|| format!("Telegram source '{}' not found", source_ref))?;
 
-        return match peer {
-            Peer::Channel(channel) => Ok(ResolvedChannelSource {
-                external_id: channel.id().bare_id().to_string(),
-                title: channel.title().to_string(),
-                is_member: !channel.raw.left,
-                username: channel.username().map(|value| value.to_string()),
-            }),
-            _ => Err("Not a broadcast channel".to_string()),
-        };
+        let source = resolved_telegram_source_from_peer(&peer)
+            .ok_or_else(|| "Not a Telegram channel, group, or supergroup".to_string())?;
+        validate_expected_telegram_source_kind(&source, expected_kind)?;
+        return Ok(source);
     }
 
-    let Ok(channel_id) = trimmed.parse::<i64>() else {
-        return Err(format!("Channel '{}' not found", channel_ref));
+    let Ok(source_id) = trimmed.parse::<i64>() else {
+        return Err(format!("Telegram source '{}' not found", source_ref));
     };
 
     let mut dialogs = client.iter_dialogs();
+    let mut found_wrong_kind = false;
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
-        if let Peer::Channel(channel) = dialog.peer() {
-            if channel.id().bare_id() == channel_id {
-                return Ok(ResolvedChannelSource {
-                    external_id: channel.id().bare_id().to_string(),
-                    title: channel.title().to_string(),
-                    is_member: !channel.raw.left,
-                    username: channel.username().map(|value| value.to_string()),
-                });
+        if dialog.peer().id().bare_id() == source_id {
+            if let Some(source) = resolved_telegram_source_from_peer(dialog.peer()) {
+                if telegram_source_kind_matches(&source, expected_kind)? {
+                    return Ok(source);
+                }
+                found_wrong_kind = true;
             }
         }
     }
 
+    if found_wrong_kind {
+        return Err(format!(
+            "Telegram source '{}' was found, but not as the requested source kind",
+            source_ref
+        ));
+    }
+
     Err(format!(
-        "Channel '{}' could not be found in this account's dialogs",
-        channel_ref
+        "Telegram source '{}' could not be found in this account's dialogs",
+        source_ref
     ))
+}
+
+fn telegram_source_kind_matches(
+    source: &ResolvedTelegramSource,
+    expected_kind: Option<&str>,
+) -> Result<bool, String> {
+    let Some(expected_kind) = expected_kind else {
+        return Ok(true);
+    };
+
+    ensure_supported_telegram_source_kind(expected_kind)?;
+    Ok(source.telegram_source_kind == expected_kind)
+}
+
+fn validate_expected_telegram_source_kind(
+    source: &ResolvedTelegramSource,
+    expected_kind: Option<&str>,
+) -> Result<(), String> {
+    if telegram_source_kind_matches(source, expected_kind)? {
+        Ok(())
+    } else {
+        Err("Resolved Telegram source has a different source kind".to_string())
+    }
+}
+
+fn ensure_supported_telegram_source_kind(kind: &str) -> Result<(), String> {
+    match kind {
+        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP => Ok(()),
+        other => Err(format!("Unsupported telegram_source_kind '{other}'")),
+    }
+}
+
+fn resolved_telegram_source_from_peer(peer: &Peer) -> Option<ResolvedTelegramSource> {
+    telegram_source_info_from_peer(peer).map(|source| ResolvedTelegramSource {
+        external_id: source.id.to_string(),
+        title: source.title,
+        telegram_source_kind: source.telegram_source_kind,
+        is_member: source.is_member,
+        username: source.username,
+    })
 }
 
 fn compress_text(input: &str) -> Result<Vec<u8>, String> {
@@ -844,7 +956,14 @@ async fn resolve_source_peer(
     client: &grammers_client::Client,
     source: &SourceSyncTarget,
 ) -> Result<PeerRef, String> {
-    let channel_id = source.external_id.parse::<i64>().map_err(|_| {
+    if source.source_type != TELEGRAM_SOURCE_TYPE {
+        return Err(format!(
+            "Source {} has unsupported source_type '{}'",
+            source.id, source.source_type
+        ));
+    }
+
+    let telegram_source_id = source.external_id.parse::<i64>().map_err(|_| {
         format!(
             "Invalid external_id '{}' for source {}",
             source.external_id, source.id
@@ -858,22 +977,18 @@ async fn resolve_source_peer(
             .await
             .map_err(|e| e.to_string())?
         {
-            return match peer {
-                Peer::Channel(channel) => Ok(channel.raw.clone().into()),
-                _ => Err(format!(
-                    "Source {} does not resolve to a broadcast channel",
-                    source.id
-                )),
-            };
+            return peer_ref_for_source_kind(&peer, &source.telegram_source_kind, source.id);
         }
     }
 
     let mut dialogs = client.iter_dialogs();
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
-        if let Peer::Channel(channel) = dialog.peer() {
-            if channel.id().bare_id() == channel_id {
-                return Ok(channel.raw.clone().into());
-            }
+        if dialog.peer().id().bare_id() == telegram_source_id {
+            return peer_ref_for_source_kind(
+                dialog.peer(),
+                &source.telegram_source_kind,
+                source.id,
+            );
         }
     }
 
@@ -881,6 +996,32 @@ async fn resolve_source_peer(
         "Source {} could not be resolved from stored username metadata or dialogs",
         source.id
     ))
+}
+
+fn peer_ref_for_source_kind(
+    peer: &Peer,
+    telegram_source_kind: &str,
+    source_id: i64,
+) -> Result<PeerRef, String> {
+    match (telegram_source_kind, peer) {
+        (TELEGRAM_KIND_CHANNEL, Peer::Channel(channel)) => Ok(channel.raw.clone().into()),
+        (TELEGRAM_KIND_SUPERGROUP, Peer::Group(group)) if group.is_megagroup() => {
+            Ok(group.raw.clone().into())
+        }
+        (TELEGRAM_KIND_GROUP, Peer::Group(group)) if !group.is_megagroup() => {
+            Ok(group.raw.clone().into())
+        }
+        (TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP, _) => {
+            Err(format!(
+                "Source {} resolved to a different Telegram source kind",
+                source_id
+            ))
+        }
+        (other, _) => Err(format!(
+            "Source {} has unsupported telegram_source_kind '{}'",
+            source_id, other
+        )),
+    }
 }
 
 fn message_author(message: &grammers_client::message::Message) -> Option<String> {

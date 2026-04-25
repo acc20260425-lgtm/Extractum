@@ -1,6 +1,10 @@
 <script lang="ts">
+  type TelegramSourceKind = "channel" | "supergroup" | "group";
+
   interface SourceRecord {
     id: number;
+    source_type: string;
+    telegram_source_kind: TelegramSourceKind;
     account_id: number | null;
     external_id: string;
     title: string | null;
@@ -25,6 +29,8 @@
     accountLabel,
     runtimeStatus,
     syncDisabledReason,
+    sourceKindLabel,
+    membershipLabel,
     formatDate,
     onSelect,
     onSync,
@@ -37,6 +43,8 @@
     accountLabel: (id: number | null) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     syncDisabledReason: (source: SourceRecord) => string | null;
+    sourceKindLabel: (kind: string) => string;
+    membershipLabel: (kind: string, isMember: boolean) => string;
     formatDate: (timestamp: number) => string;
     onSelect: (sourceId: number) => void | Promise<void>;
     onSync: (sourceId: number) => void | Promise<void>;
@@ -67,6 +75,7 @@
       <span class="sub">{accountLabel(source.account_id)}</span>
     </button>
     <div class="channel-actions">
+      <span class="badge">{sourceKindLabel(source.telegram_source_kind)}</span>
       {#if source.last_synced_at !== null}
         <span class="badge">synced {formatDate(source.last_synced_at)}</span>
       {/if}
@@ -83,9 +92,9 @@
         {/if}
       {/if}
       {#if source.is_member}
-        <span class="badge member">subscribed</span>
+        <span class="badge member">{membershipLabel(source.telegram_source_kind, source.is_member)}</span>
       {:else}
-        <span class="badge">not subscribed</span>
+        <span class="badge">{membershipLabel(source.telegram_source_kind, source.is_member)}</span>
       {/if}
       <button
         class="small"

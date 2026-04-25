@@ -146,5 +146,11 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/10.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "add telegram source kind",
+            sql: include_str!("../migrations/11.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

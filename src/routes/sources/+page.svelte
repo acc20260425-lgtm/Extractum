@@ -16,16 +16,21 @@
     phone: string | null;
   }
 
-  interface ChannelInfo {
+  type TelegramSourceKind = "channel" | "supergroup" | "group";
+
+  interface TelegramSourceInfo {
     id: number;
     title: string;
     username: string | null;
+    telegram_source_kind: TelegramSourceKind;
     is_member: boolean;
     photo_data_url: string | null;
   }
 
   interface SourceRecord {
     id: number;
+    source_type: string;
+    telegram_source_kind: TelegramSourceKind;
     account_id: number | null;
     external_id: string;
     title: string | null;
@@ -88,7 +93,7 @@
 
   let accounts = $state<AccountRecord[]>([]);
   let sources = $state<SourceRecord[]>([]);
-  let dialogs = $state<ChannelInfo[]>([]);
+  let dialogs = $state<TelegramSourceInfo[]>([]);
   let items = $state<ItemRecord[]>([]);
   let manualRef = $state("");
   let status = $state("");
@@ -209,17 +214,17 @@
       return;
     }
     if (!selectedAccountReady()) {
-      status = "Initialize and sign in this account before loading Telegram channels.";
+      status = "Initialize and sign in this account before loading Telegram sources.";
       return;
     }
     loadingDialogs = true;
     status = "";
     try {
-      dialogs = await invoke<ChannelInfo[]>("list_telegram_channels", {
+      dialogs = await invoke<TelegramSourceInfo[]>("list_telegram_sources", {
         accountId: selectedAccountId,
       });
     } catch (e) {
-      status = formatAppError("loading Telegram channels", e);
+      status = formatAppError("loading Telegram sources", e);
     } finally {
       loadingDialogs = false;
     }
@@ -242,16 +247,20 @@
     }
   }
 
-  async function addFromDialog(channel: ChannelInfo) {
+  async function addFromDialog(source: TelegramSourceInfo) {
     if (selectedAccountId === null) return;
     if (!selectedAccountReady()) {
       status = "Initialize and sign in this account before adding sources.";
       return;
     }
-    addingId = channel.id;
+    addingId = source.id;
     try {
-      const ref = channel.username ? `@${channel.username}` : String(channel.id);
-      await invoke("add_telegram_source", { accountId: selectedAccountId, channelRef: ref });
+      const ref = source.username ? `@${source.username}` : String(source.id);
+      await invoke("add_telegram_source", {
+        accountId: selectedAccountId,
+        sourceRef: ref,
+        telegramSourceKind: source.telegram_source_kind,
+      });
       await loadSources();
     } catch (e) {
       status = formatAppError("adding the source from dialogs", e);
@@ -271,7 +280,8 @@
     try {
       await invoke("add_telegram_source", {
         accountId: selectedAccountId,
-        channelRef: manualRef.trim(),
+        sourceRef: manualRef.trim(),
+        telegramSourceKind: null,
       });
       manualRef = "";
       await loadSources();
@@ -294,7 +304,7 @@
     syncingIds = { ...syncingIds, [sourceId]: true };
     status = "";
     try {
-      const result = await invoke<SyncResult>("sync_channel", { sourceId });
+      const result = await invoke<SyncResult>("sync_source", { sourceId });
       await loadSources();
       setSyncStatus(
         `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}` +
@@ -356,12 +366,37 @@
     await loadItems(sourceId);
   }
 
-  function isAlreadyAdded(channel: ChannelInfo) {
-    return sources.some((source) => source.external_id === String(channel.id));
+  function isAlreadyAdded(source: TelegramSourceInfo) {
+    return sources.some(
+      (item) =>
+        item.source_type === "telegram" &&
+        item.external_id === String(source.id) &&
+        item.telegram_source_kind === source.telegram_source_kind
+    );
   }
 
-  function channelInitial(channel: ChannelInfo) {
-    return channel.title.trim().charAt(0).toUpperCase() || "#";
+  function channelInitial(source: TelegramSourceInfo) {
+    return source.title.trim().charAt(0).toUpperCase() || "#";
+  }
+
+  function sourceKindLabel(kind: string) {
+    switch (kind) {
+      case "channel":
+        return "channel";
+      case "supergroup":
+        return "supergroup";
+      case "group":
+        return "group";
+      default:
+        return "telegram";
+    }
+  }
+
+  function membershipLabel(kind: string, isMember: boolean) {
+    if (kind === "channel") {
+      return isMember ? "subscribed" : "not subscribed";
+    }
+    return isMember ? "member" : "not a member";
   }
 
   function runtimeStatus(accountId: number | null) {
@@ -611,6 +646,8 @@
             {accountLabel}
             {runtimeStatus}
             {syncDisabledReason}
+            {sourceKindLabel}
+            {membershipLabel}
             {formatDate}
             onSelect={selectSource}
             onSync={syncSource}
@@ -638,6 +675,7 @@
           {/if}
         </div>
         <div class="detail-actions">
+          <span class="badge">{sourceKindLabel(currentSource.telegram_source_kind)}</span>
           {#if currentSource.last_synced_at !== null}
             <span class="badge">synced {formatDate(currentSource.last_synced_at)}</span>
           {/if}
@@ -655,9 +693,13 @@
             {/if}
           {/if}
           {#if currentSource.is_member}
-            <span class="badge member">subscribed</span>
+            <span class="badge member">
+              {membershipLabel(currentSource.telegram_source_kind, currentSource.is_member)}
+            </span>
           {:else}
-            <span class="badge">not subscribed</span>
+            <span class="badge">
+              {membershipLabel(currentSource.telegram_source_kind, currentSource.is_member)}
+            </span>
           {/if}
           <button
             class="small"
@@ -695,7 +737,7 @@
 <DesktopDialog
   open={addSourceDialogOpen && selectedAccountId !== null}
   title="Add Source"
-  description="Add a Telegram source manually or pick one from the selected account's available channels."
+  description="Add a Telegram source manually or pick one from the selected account's available channels and groups."
   labelledBy="add-source-title"
   width="52rem"
   onClose={closeAddSourceDialog}
@@ -709,7 +751,7 @@
         <input
           type="text"
           bind:value={manualRef}
-          placeholder="@channel or https://t.me/channel"
+          placeholder="@channel, @group, or https://t.me/name"
           onkeydown={(e) => e.key === "Enter" && addManual()}
         />
         <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim() || !selectedAccountReady()}>
@@ -723,7 +765,7 @@
 
     <section class="dialog-section">
       <div class="section-header">
-        <h4>My Channels</h4>
+        <h4>My Telegram Sources</h4>
         <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs || !selectedAccountReady()}>
           {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
         </button>
@@ -746,7 +788,10 @@
                 {#if ch.username}<span class="sub">@{ch.username}</span>{/if}
               </div>
               <div class="channel-actions">
-                {#if !ch.is_member}<span class="badge">not subscribed</span>{/if}
+                <span class="badge">{sourceKindLabel(ch.telegram_source_kind)}</span>
+                {#if !ch.is_member}
+                  <span class="badge">{membershipLabel(ch.telegram_source_kind, ch.is_member)}</span>
+                {/if}
                 {#if added}
                   <span class="badge active">added</span>
                 {:else}
@@ -759,7 +804,7 @@
           {/each}
         </ul>
       {:else if !loadingDialogs}
-        <p class="empty">Click "Load" to see your Telegram channels.</p>
+        <p class="empty">Click "Load" to see your Telegram channels and groups.</p>
       {/if}
     </section>
   </div>
