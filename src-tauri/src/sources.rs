@@ -479,7 +479,7 @@ pub async fn add_telegram_source(
             created_at
         )
         VALUES ('telegram', ?, ?, ?, ?, 1, ?, ?, ?)
-        ON CONFLICT(source_type, telegram_source_kind, external_id) DO UPDATE SET
+        ON CONFLICT(account_id, source_type, telegram_source_kind, external_id) DO UPDATE SET
             title = excluded.title,
             metadata_zstd = excluded.metadata_zstd,
             is_member = excluded.is_member,
