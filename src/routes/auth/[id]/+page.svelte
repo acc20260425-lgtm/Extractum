@@ -124,7 +124,7 @@
 </script>
 
 <div class="back-row">
-  <a href="/accounts">← Accounts</a>
+  <a href="/accounts">&larr; Accounts</a>
 </div>
 
 <h1>{label || "Account"}</h1>
@@ -168,7 +168,7 @@
 
 {#if step === "done"}
   <div class="card">
-    <h3>✓ Authenticated</h3>
+    <h3>&#10003; Authenticated</h3>
     <p class="hint">Phone: {phone}</p>
     <div class="row">
       <a href="/sources?account={accountId}" class="btn-link">View Sources</a>
