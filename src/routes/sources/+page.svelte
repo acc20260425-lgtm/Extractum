@@ -687,9 +687,6 @@
   </div>
 </section>
 
-{#if selectedAccountId !== null}
-{/if}
-
 <DesktopDialog
   open={addSourceDialogOpen && selectedAccountId !== null}
   title="Add Source"
