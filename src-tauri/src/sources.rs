@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::Cursor;
 use tauri::AppHandle;
+use tokio::time::{timeout, Duration, Instant};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -26,6 +27,8 @@ const TELEGRAM_SOURCE_TYPE: &str = "telegram";
 const TELEGRAM_KIND_CHANNEL: &str = "channel";
 const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
 const TELEGRAM_KIND_GROUP: &str = "group";
+const TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS: u64 = 750;
+const TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS: u64 = 4_000;
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -367,15 +370,32 @@ pub async fn list_telegram_sources(
 
     let mut sources = Vec::new();
     let mut dialogs = client.iter_dialogs();
+    let photo_budget_started_at = Instant::now();
+    let photo_budget = Duration::from_millis(TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS);
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
         if let Some(mut source) = telegram_source_info_from_peer(dialog.peer()) {
-            source.photo_data_url = peer_photo_data_url(&client, dialog.peer())
-                .await
-                .unwrap_or(None);
+            if photo_budget_started_at.elapsed() < photo_budget {
+                source.photo_data_url =
+                    peer_photo_data_url_with_timeout(&client, dialog.peer()).await;
+            }
             sources.push(source);
         }
     }
     Ok(sources)
+}
+
+async fn peer_photo_data_url_with_timeout(
+    client: &grammers_client::Client,
+    peer: &Peer,
+) -> Option<String> {
+    timeout(
+        Duration::from_millis(TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS),
+        peer_photo_data_url(client, peer),
+    )
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .flatten()
 }
 
 async fn peer_photo_data_url(
