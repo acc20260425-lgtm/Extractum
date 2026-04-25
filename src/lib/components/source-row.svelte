@@ -13,6 +13,7 @@
     is_member: boolean;
     is_active: boolean;
     created_at: number;
+    avatar_data_url: string | null;
   }
 
   interface AccountRuntimeStatus {
@@ -66,9 +67,20 @@
               ? "account not connected"
               : null
   );
+
+  function sourceInitial() {
+    return (source.title ?? source.external_id).trim().charAt(0).toUpperCase() || "#";
+  }
 </script>
 
 <li class:selected={selected}>
+  <div class="source-avatar" aria-hidden="true">
+    {#if source.avatar_data_url}
+      <img src={source.avatar_data_url} alt="" loading="lazy" />
+    {:else}
+      <span>{sourceInitial()}</span>
+    {/if}
+  </div>
   <div class="channel-info">
     <button class="source-main" onclick={() => onSelect(source.id)}>
       <span class="title">{source.title ?? source.external_id}</span>
@@ -127,6 +139,26 @@
   li.selected {
     outline: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
     background: color-mix(in srgb, var(--primary) 10%, var(--panel-strong));
+  }
+  .source-avatar {
+    flex: 0 0 2.25rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--primary) 14%, var(--panel-hover));
+    color: var(--primary);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+  .source-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .channel-info {
     display: flex;

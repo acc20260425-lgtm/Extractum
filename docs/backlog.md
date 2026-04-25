@@ -58,6 +58,20 @@ Implementation notes:
 - Sync can resolve channel and supergroup sources from stored `access_hash` before falling back to dialog scanning.
 - Small groups still rely on dialog/session resolution because they do not use channel `access_hash`.
 
+### Persist And Show Source Avatars
+
+Status: done.
+
+Why it mattered: avatars make it easier to recognize Telegram sources, especially when channels and groups have similar names.
+
+Implementation notes:
+
+- Source avatars are cached under the app data directory instead of being stored as base64 blobs in SQLite.
+- `SourceMetadata` stores an optional `avatar_cache_key` and remains backward-compatible with older metadata.
+- `SourceRecord` exposes an optional `avatar_data_url` read from the local cache.
+- Added Sources rows and the source detail header show cached avatars with stable initial fallbacks.
+- Add Source and Sync refresh the cached avatar when Telegram returns a profile photo; avatar failures do not block source listing or sync.
+
 ## Telegram Runtime Validation
 
 Priority: high.
@@ -90,37 +104,6 @@ Risks:
 - Private sources without username may only be resolvable while they are present in dialogs.
 - Telegram bare ids can be ambiguous without source kind, so adding from dialog must keep passing `telegramSourceKind`.
 - Some historical/migrated group states may need extra metadata beyond bare id and username.
-
-## Persist And Show Source Avatars
-
-Priority: medium.
-
-Goal: show source profile pictures not only in the Add Source dialog, but also in the Added Sources list and source detail header.
-
-Why it matters: avatars make it easier to recognize Telegram sources, especially when channels and groups have similar names.
-
-Scope:
-
-- Decide where to store avatar data or avatar references.
-- Prefer storing compact metadata over large base64 blobs directly in `sources`.
-- Add a cache strategy for downloaded profile photos.
-- Update `SourceRecord` to expose an optional avatar URL or data URL.
-- Update `SourceRow` to render avatar with the same fallback initial used in the Add Source dialog.
-- Update source detail header to show the avatar next to the title.
-- Refresh avatar when loading dialogs or syncing a source.
-
-Acceptance criteria:
-
-- Added sources show an avatar when one is available.
-- Sources without avatar show a stable fallback initial.
-- Avatar loading failure does not break source listing or sync.
-- The storage approach does not noticeably bloat SQLite for large source lists.
-
-Risks:
-
-- Base64 image data in SQLite can grow quickly.
-- Telegram photo references may expire or require the account session to fetch.
-- Avatar refresh should not block core sync work.
 
 ## Private Sources And Peer Identity
 

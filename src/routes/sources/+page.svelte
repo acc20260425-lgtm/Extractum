@@ -40,6 +40,7 @@
     is_member: boolean;
     is_active: boolean;
     created_at: number;
+    avatar_data_url: string | null;
   }
 
   interface ItemRecord {
@@ -424,6 +425,10 @@
     return source.title.trim().charAt(0).toUpperCase() || "#";
   }
 
+  function sourceInitial(source: SourceRecord) {
+    return (source.title ?? source.external_id).trim().charAt(0).toUpperCase() || "#";
+  }
+
   function sourceKindLabel(kind: string) {
     switch (kind) {
       case "channel":
@@ -711,15 +716,24 @@
       {@const currentSyncReason = syncDisabledReason(currentSource)}
       {@const currentRuntimeStatus = runtimeStatus(currentSource.account_id)}
       <div class="detail-header">
-        <div class="detail-title">
-          <h3>{currentSource.title ?? currentSource.external_id}</h3>
-          <p>{accountLabel(currentSource.account_id)}</p>
-          {#if currentSource.last_sync_state === null}
-            <p class="first-sync-note">
-              First sync will import {initialSyncPolicySummary()}. After that, this source switches
-              to incremental sync using only newer Telegram messages.
-            </p>
-          {/if}
+        <div class="detail-identity">
+          <div class="channel-avatar detail-avatar" aria-hidden="true">
+            {#if currentSource.avatar_data_url}
+              <img src={currentSource.avatar_data_url} alt="" loading="lazy" />
+            {:else}
+              <span>{sourceInitial(currentSource)}</span>
+            {/if}
+          </div>
+          <div class="detail-title">
+            <h3>{currentSource.title ?? currentSource.external_id}</h3>
+            <p>{accountLabel(currentSource.account_id)}</p>
+            {#if currentSource.last_sync_state === null}
+              <p class="first-sync-note">
+                First sync will import {initialSyncPolicySummary()}. After that, this source switches
+                to incremental sync using only newer Telegram messages.
+              </p>
+            {/if}
+          </div>
         </div>
         <div class="detail-actions">
           <span class="badge">{sourceKindLabel(currentSource.telegram_source_kind)}</span>
@@ -939,6 +953,13 @@
     min-width: 0;
     flex: 1 1 auto;
   }
+  .detail-identity {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+  }
   .detail-title h3 {
     margin: 0 0 0.35rem 0;
     font-size: 1.1rem;
@@ -1100,6 +1121,12 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .detail-avatar {
+    flex-basis: 2.75rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1rem;
   }
   .channel-info {
     min-width: 0;

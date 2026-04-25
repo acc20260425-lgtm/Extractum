@@ -3,8 +3,8 @@ use grammers_client::{media::Media, peer::Peer, tl};
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::io::Cursor;
-use tauri::AppHandle;
+use std::{fs, io::Cursor, path::PathBuf};
+use tauri::{AppHandle, Manager};
 use tokio::time::{timeout, Duration, Instant};
 
 use crate::db::get_pool;
@@ -29,6 +29,7 @@ const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
 const TELEGRAM_KIND_GROUP: &str = "group";
 const TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS: u64 = 750;
 const TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS: u64 = 4_000;
+const TELEGRAM_SOURCE_AVATAR_CACHE_DIR: &str = "source_avatars";
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -70,7 +71,7 @@ pub struct TelegramSourceInfo {
     pub photo_data_url: Option<String>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct SourceRecord {
     pub id: i64,
     pub source_type: String,
@@ -83,6 +84,7 @@ pub struct SourceRecord {
     pub is_member: bool,
     pub is_active: bool,
     pub created_at: i64,
+    pub avatar_data_url: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -123,6 +125,22 @@ struct SourceSyncTarget {
 }
 
 #[derive(sqlx::FromRow)]
+struct SourceRecordRow {
+    id: i64,
+    source_type: String,
+    telegram_source_kind: String,
+    account_id: Option<i64>,
+    external_id: String,
+    title: Option<String>,
+    metadata_zstd: Option<Vec<u8>>,
+    last_sync_state: Option<i64>,
+    last_synced_at: Option<i64>,
+    is_active: bool,
+    is_member: bool,
+    created_at: i64,
+}
+
+#[derive(sqlx::FromRow)]
 struct StoredItemRow {
     id: i64,
     source_id: i64,
@@ -142,6 +160,7 @@ struct SourceMetadata {
     username: Option<String>,
     added_from: Option<String>,
     access_hash: Option<i64>,
+    avatar_cache_key: Option<String>,
 }
 
 struct ResolvedTelegramSource {
@@ -151,6 +170,7 @@ struct ResolvedTelegramSource {
     is_member: bool,
     username: Option<String>,
     access_hash: Option<i64>,
+    avatar_bytes: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
@@ -391,9 +411,18 @@ async fn peer_photo_data_url_with_timeout(
     client: &grammers_client::Client,
     peer: &Peer,
 ) -> Option<String> {
+    peer_photo_bytes_with_timeout(client, peer)
+        .await
+        .map(photo_bytes_data_url)
+}
+
+async fn peer_photo_bytes_with_timeout(
+    client: &grammers_client::Client,
+    peer: &Peer,
+) -> Option<Vec<u8>> {
     timeout(
         Duration::from_millis(TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS),
-        peer_photo_data_url(client, peer),
+        peer_photo_bytes(client, peer),
     )
     .await
     .ok()
@@ -401,10 +430,10 @@ async fn peer_photo_data_url_with_timeout(
     .flatten()
 }
 
-async fn peer_photo_data_url(
+async fn peer_photo_bytes(
     client: &grammers_client::Client,
     peer: &Peer,
-) -> Result<Option<String>, String> {
+) -> Result<Option<Vec<u8>>, String> {
     let Some(photo) = peer.photo(false).await else {
         return Ok(None);
     };
@@ -419,10 +448,14 @@ async fn peer_photo_data_url(
         return Ok(None);
     }
 
-    Ok(Some(format!(
+    Ok(Some(bytes))
+}
+
+fn photo_bytes_data_url(bytes: Vec<u8>) -> String {
+    format!(
         "data:image/jpeg;base64,{}",
         general_purpose::STANDARD.encode(bytes)
-    )))
+    )
 }
 
 fn telegram_source_info_from_peer(peer: &Peer) -> Option<TelegramSourceInfo> {
@@ -465,6 +498,54 @@ fn telegram_group_is_member(group: &grammers_client::peer::Group) -> bool {
     }
 }
 
+fn source_avatar_cache_key(
+    account_id: i64,
+    telegram_source_kind: &str,
+    external_id: &str,
+) -> String {
+    format!("{account_id}_{telegram_source_kind}_{external_id}.jpg")
+}
+
+fn source_avatar_cache_dir(handle: &AppHandle) -> Result<PathBuf, String> {
+    Ok(handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(TELEGRAM_SOURCE_AVATAR_CACHE_DIR))
+}
+
+fn cache_source_avatar(
+    handle: &AppHandle,
+    account_id: i64,
+    telegram_source_kind: &str,
+    external_id: &str,
+    bytes: &[u8],
+) -> Result<Option<String>, String> {
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+
+    let cache_key = source_avatar_cache_key(account_id, telegram_source_kind, external_id);
+    let cache_dir = source_avatar_cache_dir(handle)?;
+    fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+    fs::write(cache_dir.join(&cache_key), bytes).map_err(|e| e.to_string())?;
+    Ok(Some(cache_key))
+}
+
+fn read_source_avatar_data_url(handle: &AppHandle, cache_key: &str) -> Option<String> {
+    if cache_key.contains(['/', '\\']) {
+        return None;
+    }
+
+    let path = source_avatar_cache_dir(handle).ok()?.join(cache_key);
+    let bytes = fs::read(path).ok()?;
+    if bytes.is_empty() {
+        return None;
+    }
+
+    Some(photo_bytes_data_url(bytes))
+}
+
 #[tauri::command]
 pub async fn add_telegram_source(
     handle: AppHandle,
@@ -482,6 +563,17 @@ pub async fn add_telegram_source(
 
     let resolved =
         resolve_telegram_source(&client, &source_ref, telegram_source_kind.as_deref()).await?;
+    let avatar_cache_key = if let Some(bytes) = resolved.avatar_bytes.as_deref() {
+        cache_source_avatar(
+            &handle,
+            account_id,
+            &resolved.telegram_source_kind,
+            &resolved.external_id,
+            bytes,
+        )?
+    } else {
+        None
+    };
     let metadata_zstd = encode_source_metadata(&SourceMetadata {
         username: resolved.username.clone(),
         added_from: Some(
@@ -493,11 +585,12 @@ pub async fn add_telegram_source(
             .to_string(),
         ),
         access_hash: resolved.access_hash,
+        avatar_cache_key,
     })?;
     let now = now_secs();
 
     let pool = get_pool(&handle).await?;
-    Ok(sqlx::query_as(
+    let row: SourceRecordRow = sqlx::query_as(
         r#"
         INSERT INTO sources (
             source_type,
@@ -523,6 +616,7 @@ pub async fn add_telegram_source(
             account_id,
             external_id,
             title,
+            metadata_zstd,
             last_sync_state,
             last_synced_at,
             is_active,
@@ -539,7 +633,8 @@ pub async fn add_telegram_source(
     .bind(now)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(|e| e.to_string())?;
+    source_record_from_row(&handle, row)
 }
 
 #[tauri::command]
@@ -548,22 +643,49 @@ pub async fn list_sources(
     account_id: Option<i64>,
 ) -> AppResult<Vec<SourceRecord>> {
     let pool = get_pool(&handle).await?;
-    if let Some(aid) = account_id {
-        Ok(sqlx::query_as(
-            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
+    let rows: Vec<SourceRecordRow> = if let Some(aid) = account_id {
+        sqlx::query_as(
+            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
         )
         .bind(aid)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?
     } else {
-        Ok(sqlx::query_as(
-            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
+        sqlx::query_as(
+            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
         )
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?)
-    }
+        .map_err(|e| e.to_string())?
+    };
+
+    rows.into_iter()
+        .map(|row| source_record_from_row(&handle, row))
+        .collect()
+}
+
+fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult<SourceRecord> {
+    let metadata = decode_source_metadata(row.metadata_zstd.as_deref())?;
+    let avatar_data_url = metadata
+        .avatar_cache_key
+        .as_deref()
+        .and_then(|cache_key| read_source_avatar_data_url(handle, cache_key));
+
+    Ok(SourceRecord {
+        id: row.id,
+        source_type: row.source_type,
+        telegram_source_kind: row.telegram_source_kind,
+        account_id: row.account_id,
+        external_id: row.external_id,
+        title: row.title,
+        last_sync_state: row.last_sync_state,
+        last_synced_at: row.last_synced_at,
+        is_member: row.is_member,
+        is_active: row.is_active,
+        created_at: row.created_at,
+        avatar_data_url,
+    })
 }
 
 #[tauri::command]
@@ -600,6 +722,8 @@ pub async fn sync_source(
     }
 
     let peer = resolve_source_peer(&client, &source).await?;
+    let refreshed_metadata_zstd =
+        refresh_source_avatar_cache(&handle, &client, &source, account_id, peer).await;
     let mut inserted = 0_i64;
     let mut skipped = 0_i64;
     let previous_last_sync = source.last_sync_state.unwrap_or(0);
@@ -729,13 +853,26 @@ pub async fn sync_source(
         source.last_sync_state
     };
 
-    sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
+    if let Some(metadata_zstd) = refreshed_metadata_zstd {
+        sqlx::query(
+            "UPDATE sources SET last_sync_state = ?, last_synced_at = ?, metadata_zstd = ? WHERE id = ?",
+        )
         .bind(last_sync_state)
         .bind(sync_completed_at)
+        .bind(metadata_zstd)
         .bind(source.id)
         .execute(&pool)
         .await
         .map_err(|e| e.to_string())?;
+    } else {
+        sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
+            .bind(last_sync_state)
+            .bind(sync_completed_at)
+            .bind(source.id)
+            .execute(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
 
     Ok(SyncResult {
         inserted,
@@ -743,6 +880,30 @@ pub async fn sync_source(
         last_message_id: last_sync_state,
         initial_sync_policy_applied,
     })
+}
+
+async fn refresh_source_avatar_cache(
+    handle: &AppHandle,
+    client: &grammers_client::Client,
+    source: &SourceSyncTarget,
+    account_id: i64,
+    peer_ref: PeerRef,
+) -> Option<Vec<u8>> {
+    let peer = client.resolve_peer(peer_ref).await.ok()?;
+    let bytes = peer_photo_bytes_with_timeout(client, &peer).await?;
+    let cache_key = cache_source_avatar(
+        handle,
+        account_id,
+        &source.telegram_source_kind,
+        &source.external_id,
+        &bytes,
+    )
+    .ok()
+    .flatten()?;
+
+    let mut metadata = decode_source_metadata(source.metadata_zstd.as_deref()).ok()?;
+    metadata.avatar_cache_key = Some(cache_key);
+    encode_source_metadata(&metadata).ok()
 }
 
 #[tauri::command]
@@ -869,9 +1030,10 @@ async fn resolve_telegram_source(
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Telegram source '{}' not found", source_ref))?;
 
-        let source = resolved_telegram_source_from_peer(&peer)
+        let mut source = resolved_telegram_source_from_peer(&peer)
             .ok_or_else(|| "Not a Telegram channel, group, or supergroup".to_string())?;
         validate_expected_telegram_source_kind(&source, expected_kind)?;
+        source.avatar_bytes = peer_photo_bytes_with_timeout(client, &peer).await;
         return Ok(source);
     }
 
@@ -885,6 +1047,9 @@ async fn resolve_telegram_source(
         if dialog.peer().id().bare_id() == source_id {
             if let Some(source) = resolved_telegram_source_from_peer(dialog.peer()) {
                 if telegram_source_kind_matches(&source, expected_kind)? {
+                    let mut source = source;
+                    source.avatar_bytes =
+                        peer_photo_bytes_with_timeout(client, dialog.peer()).await;
                     return Ok(source);
                 }
                 found_wrong_kind = true;
@@ -943,6 +1108,7 @@ fn resolved_telegram_source_from_peer(peer: &Peer) -> Option<ResolvedTelegramSou
         is_member: source.is_member,
         username: source.username,
         access_hash: peer_access_hash(peer),
+        avatar_bytes: None,
     })
 }
 
@@ -1414,6 +1580,7 @@ mod tests {
         assert_eq!(decoded.username.as_deref(), Some("example"));
         assert_eq!(decoded.added_from, None);
         assert_eq!(decoded.access_hash, None);
+        assert_eq!(decoded.avatar_cache_key, None);
     }
 
     #[test]
@@ -1422,6 +1589,7 @@ mod tests {
             username: Some("example".to_string()),
             added_from: Some("dialog".to_string()),
             access_hash: Some(42),
+            avatar_cache_key: Some("1_channel_42.jpg".to_string()),
         };
 
         let encoded = encode_source_metadata(&original).expect("encode");
@@ -1430,6 +1598,7 @@ mod tests {
         assert_eq!(decoded.username, original.username);
         assert_eq!(decoded.added_from, original.added_from);
         assert_eq!(decoded.access_hash, original.access_hash);
+        assert_eq!(decoded.avatar_cache_key, original.avatar_cache_key);
     }
 
     #[test]
