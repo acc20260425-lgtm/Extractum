@@ -17,6 +17,7 @@
   }
 
   type TelegramSourceKind = "channel" | "supergroup" | "group";
+  type DialogKindFilter = "all" | TelegramSourceKind;
 
   interface TelegramSourceInfo {
     id: number;
@@ -84,6 +85,12 @@
   }
 
   const MESSAGES_PREVIEW_LIMIT = 200;
+  const DIALOG_KIND_FILTERS: { value: DialogKindFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "channel", label: "Channels" },
+    { value: "supergroup", label: "Supergroups" },
+    { value: "group", label: "Groups" },
+  ];
 
   let selectedAccountId = $state<number | null>(
     $page.url.searchParams.has("account")
@@ -96,6 +103,8 @@
   let dialogs = $state<TelegramSourceInfo[]>([]);
   let items = $state<ItemRecord[]>([]);
   let manualRef = $state("");
+  let dialogSearch = $state("");
+  let dialogKindFilter = $state<DialogKindFilter>("all");
   let status = $state("");
   let syncStatus = $state("");
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
@@ -114,6 +123,26 @@
   let savingSyncSettings = $state(false);
   let loadSourcesRequestId = 0;
   let syncStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  let sortedDialogs = $derived.by(() => {
+    return [...dialogs].sort((a, b) => {
+      const titleCompare = a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+      if (titleCompare !== 0) return titleCompare;
+      return dialogKindRank(a.telegram_source_kind) - dialogKindRank(b.telegram_source_kind);
+    });
+  });
+  let filteredDialogs = $derived.by(() => {
+    const query = dialogSearch.trim().toLocaleLowerCase();
+    return sortedDialogs.filter((source) => {
+      const matchesKind =
+        dialogKindFilter === "all" || source.telegram_source_kind === dialogKindFilter;
+      if (!matchesKind) return false;
+      if (!query) return true;
+      return (
+        source.title.toLocaleLowerCase().includes(query) ||
+        (source.username?.toLocaleLowerCase().includes(query) ?? false)
+      );
+    });
+  });
 
   function setSyncStatus(message: string) {
     syncStatus = message;
@@ -253,7 +282,7 @@
       status = "Initialize and sign in this account before adding sources.";
       return;
     }
-    addingId = source.id;
+    addingId = dialogIdentity(source);
     try {
       const ref = source.username ? `@${source.username}` : String(source.id);
       await invoke("add_telegram_source", {
@@ -370,9 +399,25 @@
     return sources.some(
       (item) =>
         item.source_type === "telegram" &&
+        item.account_id === selectedAccountId &&
         item.external_id === String(source.id) &&
         item.telegram_source_kind === source.telegram_source_kind
     );
+  }
+
+  function dialogIdentity(source: TelegramSourceInfo) {
+    return `${source.telegram_source_kind}:${source.id}`;
+  }
+
+  function dialogKindRank(kind: TelegramSourceKind) {
+    if (kind === "channel") return 0;
+    if (kind === "supergroup") return 1;
+    return 2;
+  }
+
+  function dialogKindCount(filter: DialogKindFilter) {
+    if (filter === "all") return dialogs.length;
+    return dialogs.filter((source) => source.telegram_source_kind === filter).length;
   }
 
   function channelInitial(source: TelegramSourceInfo) {
@@ -496,6 +541,8 @@
   $effect(() => {
     void loadSources();
     dialogs = [];
+    dialogSearch = "";
+    dialogKindFilter = "all";
   });
 
   $effect(() => {
@@ -766,14 +813,48 @@
     <section class="dialog-section">
       <div class="section-header">
         <h4>My Telegram Sources</h4>
-        <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs || !selectedAccountReady()}>
-          {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
-        </button>
+        <div class="section-actions">
+          {#if dialogs.length > 0}
+            <span class="counter">Showing {filteredDialogs.length} of {dialogs.length}</span>
+          {/if}
+          <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs || !selectedAccountReady()}>
+            {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
+          </button>
+        </div>
       </div>
 
       {#if dialogs.length > 0}
+        <div class="dialog-tools">
+          <input
+            type="search"
+            bind:value={dialogSearch}
+            placeholder="Search title or username"
+            aria-label="Search Telegram sources"
+          />
+          <div class="filter-group" aria-label="Filter Telegram sources by kind">
+            {#each DIALOG_KIND_FILTERS as filter (filter.value)}
+              <button
+                type="button"
+                class="small secondary"
+                class:active-filter={dialogKindFilter === filter.value}
+                aria-pressed={dialogKindFilter === filter.value}
+                onclick={() => (dialogKindFilter = filter.value)}
+              >
+                {filter.label}
+                <span>{dialogKindCount(filter.value)}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      {#if loadingDialogs}
+        <p class="empty">Loading Telegram sources. The first load can take longer while profile pictures are fetched.</p>
+      {:else if !selectedAccountReady()}
+        <p class="empty">Initialize and sign in the selected account before loading Telegram sources.</p>
+      {:else if dialogs.length > 0 && filteredDialogs.length > 0}
         <ul class="source-list">
-          {#each dialogs as ch (ch.id)}
+          {#each filteredDialogs as ch (dialogIdentity(ch))}
             {@const added = isAlreadyAdded(ch)}
             <li>
               <div class="channel-avatar" aria-hidden="true">
@@ -795,14 +876,16 @@
                 {#if added}
                   <span class="badge active">added</span>
                 {:else}
-                  <button class="small" onclick={() => addFromDialog(ch)} disabled={addingId === ch.id}>
-                    {addingId === ch.id ? "..." : "Add"}
+                  <button class="small" onclick={() => addFromDialog(ch)} disabled={addingId === dialogIdentity(ch)}>
+                    {addingId === dialogIdentity(ch) ? "..." : "Add"}
                   </button>
                 {/if}
               </div>
             </li>
           {/each}
         </ul>
+      {:else if dialogs.length > 0}
+        <p class="empty">No Telegram sources match the current search and filter.</p>
       {:else if !loadingDialogs}
         <p class="empty">Click "Load" to see your Telegram channels and groups.</p>
       {/if}
@@ -904,6 +987,47 @@
   .section-header h4 {
     margin: 0;
     font-size: 0.95rem;
+  }
+  .section-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .counter {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .dialog-tools {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  .dialog-tools input {
+    min-width: 0;
+  }
+  .filter-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .filter-group button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .filter-group button span {
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+  .filter-group button.active-filter {
+    border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+    background: color-mix(in srgb, var(--primary) 12%, var(--panel-hover));
+    color: var(--primary);
   }
   .policy-grid {
     display: grid;
@@ -1080,6 +1204,15 @@
     }
     .section-header {
       align-items: stretch;
+    }
+    .section-actions {
+      justify-content: space-between;
+    }
+    .dialog-tools {
+      grid-template-columns: 1fr;
+    }
+    .filter-group {
+      justify-content: flex-start;
     }
   }
 </style>
