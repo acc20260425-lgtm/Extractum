@@ -1,4 +1,4 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -17,9 +17,9 @@ use super::store::{
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
-    emit_analysis_event, now_secs, ANALYSIS_CHUNK_TARGET_CHARS, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
-    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_FAILED,
-    ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
+    emit_analysis_event, now_secs, AnalysisState, ANALYSIS_CHUNK_TARGET_CHARS,
+    ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_COMPLETED,
+    ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
 };
 
 fn chunk_messages(messages: &[CorpusMessage], max_chars: usize) -> Vec<Vec<CorpusMessage>> {
@@ -491,6 +491,7 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
 #[tauri::command]
 pub async fn start_analysis_report(
     handle: AppHandle,
+    state: tauri::State<'_, AnalysisState>,
     source_id: Option<i64>,
     source_group_id: Option<i64>,
     period_from: i64,
@@ -596,9 +597,23 @@ pub async fn start_analysis_report(
     )
     .await?
     {
-        return Err(AppError::conflict(format!(
-            "An identical analysis report is already queued or running (run {existing_run_id})"
-        )));
+        let active_run_ids = state.active_report_run_ids().await;
+        if active_run_ids.contains(&existing_run_id) {
+            return Err(AppError::conflict(format!(
+                "An identical analysis report is already queued or running (run {existing_run_id})"
+            )));
+        }
+
+        set_run_status(
+            &pool,
+            existing_run_id,
+            ANALYSIS_STATUS_FAILED,
+            None,
+            None,
+            Some("Analysis run did not finish before the app was restarted."),
+            Some(now_secs()),
+        )
+        .await?;
     }
 
     let run_id = insert_analysis_run(
@@ -615,6 +630,8 @@ pub async fn start_analysis_report(
         &effective_model,
     )
     .await?;
+
+    state.insert_active_report_run(run_id).await;
 
     let app_handle = handle.clone();
     tokio::spawn(async move {
@@ -634,6 +651,10 @@ pub async fn start_analysis_report(
         {
             fail_run(&app_handle, run_id, error).await;
         }
+        app_handle
+            .state::<AnalysisState>()
+            .remove_active_report_run(run_id)
+            .await;
     });
 
     Ok(run_id)

@@ -6,9 +6,11 @@ mod store;
 mod templates;
 mod trace;
 
+use std::collections::HashSet;
 use std::io::Cursor;
 
 use tauri::{AppHandle, Emitter};
+use tokio::sync::Mutex;
 
 use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow,
@@ -45,6 +47,30 @@ const ANALYSIS_STATUS_RUNNING: &str = "running";
 const ANALYSIS_STATUS_COMPLETED: &str = "completed";
 const ANALYSIS_STATUS_FAILED: &str = "failed";
 const ANALYSIS_CHUNK_TARGET_CHARS: usize = 16_000;
+
+pub struct AnalysisState {
+    active_report_runs: Mutex<HashSet<i64>>,
+}
+
+impl AnalysisState {
+    pub fn new() -> Self {
+        Self {
+            active_report_runs: Mutex::new(HashSet::new()),
+        }
+    }
+
+    async fn insert_active_report_run(&self, run_id: i64) {
+        self.active_report_runs.lock().await.insert(run_id);
+    }
+
+    async fn remove_active_report_run(&self, run_id: i64) {
+        self.active_report_runs.lock().await.remove(&run_id);
+    }
+
+    async fn active_report_run_ids(&self) -> HashSet<i64> {
+        self.active_report_runs.lock().await.clone()
+    }
+}
 
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
@@ -260,6 +286,36 @@ pub async fn list_analysis_runs(
     };
 
     Ok(rows.into_iter().map(map_run_summary).collect())
+}
+
+#[tauri::command]
+pub async fn list_active_analysis_runs(
+    handle: AppHandle,
+    state: tauri::State<'_, AnalysisState>,
+) -> AppResult<Vec<AnalysisRunSummary>> {
+    let pool = get_pool(&handle).await?;
+    let active_ids = state.active_report_run_ids().await;
+    let mut active_runs = Vec::new();
+    let mut stale_ids = Vec::new();
+
+    for run_id in active_ids {
+        match fetch_run_row(&pool, run_id).await? {
+            Some(row)
+                if row.status == ANALYSIS_STATUS_QUEUED
+                    || row.status == ANALYSIS_STATUS_RUNNING =>
+            {
+                active_runs.push(map_run_summary(row));
+            }
+            _ => stale_ids.push(run_id),
+        }
+    }
+
+    for run_id in stale_ids {
+        state.remove_active_report_run(run_id).await;
+    }
+
+    active_runs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    Ok(active_runs)
 }
 
 #[tauri::command]

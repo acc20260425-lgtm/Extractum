@@ -8,8 +8,6 @@
     templateBody,
     savingTemplate,
     deletingTemplate,
-    onChangeTemplateName,
-    onChangeTemplateBody,
     onSaveTemplateCopy,
     onSaveTemplateChanges,
     onDeleteTemplate,
@@ -19,25 +17,37 @@
     templateBody: string;
     savingTemplate: boolean;
     deletingTemplate: boolean;
-    onChangeTemplateName: (value: string) => void;
-    onChangeTemplateBody: (value: string) => void;
-    onSaveTemplateCopy: () => void | Promise<void>;
-    onSaveTemplateChanges: () => void | Promise<void>;
+    onSaveTemplateCopy: (name: string, body: string) => void | Promise<void>;
+    onSaveTemplateChanges: (name: string, body: string) => void | Promise<void>;
     onDeleteTemplate: () => void | Promise<void>;
   } = $props();
 
   let editorOpen = $state(false);
+  let editorMode = $state<"edit" | "new">("edit");
+  let draftName = $state("");
+  let draftBody = $state("");
 
   function canEditSelectedTemplate() {
     return !!selectedTemplate && selectedTemplate.is_builtin !== true;
   }
 
-  function openEditor() {
+  function openEditor(mode: "edit" | "new") {
+    editorMode = mode;
+    draftName = mode === "new" ? "" : templateName;
+    draftBody = mode === "new" ? "" : templateBody;
     editorOpen = true;
   }
 
   function closeEditor() {
     editorOpen = false;
+  }
+
+  function saveCopy() {
+    return onSaveTemplateCopy(draftName, draftBody);
+  }
+
+  function saveChanges() {
+    return onSaveTemplateChanges(draftName, draftBody);
   }
 </script>
 
@@ -53,9 +63,12 @@
       {/if}
     </div>
     <div class="template-actions">
+      <button class="secondary" onclick={() => openEditor("new")} disabled={savingTemplate || deletingTemplate}>
+        New template
+      </button>
       <button
         class="secondary"
-        onclick={openEditor}
+        onclick={() => openEditor("edit")}
         disabled={savingTemplate || deletingTemplate || (!selectedTemplate && !templateName.trim() && !templateBody.trim())}
       >
         {selectedTemplate ? "Edit template" : "Open editor"}
@@ -87,7 +100,7 @@
 
 <DesktopDialog
   open={editorOpen}
-  title={selectedTemplate ? "Edit Prompt Template" : "New Prompt Template"}
+  title={editorMode === "new" ? "New Prompt Template" : "Edit Prompt Template"}
   description="Shape how reports are structured, prioritized, and phrased before each analysis run."
   labelledBy="template-editor-title"
   width="46rem"
@@ -97,9 +110,9 @@
     <label>Template name
       <input
         type="text"
-        value={templateName}
+        value={draftName}
         placeholder="Custom report"
-        oninput={(event) => onChangeTemplateName((event.currentTarget as HTMLInputElement).value)}
+        oninput={(event) => (draftName = (event.currentTarget as HTMLInputElement).value)}
       />
     </label>
 
@@ -107,24 +120,26 @@
       <textarea
         rows="12"
         placeholder="Describe how the report should be structured and what it should emphasize."
-        oninput={(event) => onChangeTemplateBody((event.currentTarget as HTMLTextAreaElement).value)}
-      >{templateBody}</textarea>
+        oninput={(event) => (draftBody = (event.currentTarget as HTMLTextAreaElement).value)}
+      >{draftBody}</textarea>
     </label>
 
     <footer class="modal-actions">
       <button class="secondary" type="button" onclick={closeEditor}>
         Cancel
       </button>
-      <button class="secondary" type="button" onclick={onSaveTemplateCopy} disabled={savingTemplate || deletingTemplate}>
-        {savingTemplate ? "Saving..." : "Save as copy"}
+      <button class="secondary" type="button" onclick={saveCopy} disabled={savingTemplate || deletingTemplate}>
+        {savingTemplate ? "Saving..." : editorMode === "new" ? "Create template" : "Save as copy"}
       </button>
-      <button
-        type="button"
-        onclick={onSaveTemplateChanges}
-        disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
-      >
-        {savingTemplate ? "Saving..." : "Save changes"}
-      </button>
+      {#if editorMode === "edit"}
+        <button
+          type="button"
+          onclick={saveChanges}
+          disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
+        >
+          {savingTemplate ? "Saving..." : "Save changes"}
+        </button>
+      {/if}
     </footer>
   </div>
 </DesktopDialog>

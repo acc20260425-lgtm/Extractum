@@ -281,7 +281,6 @@
         sourceGroupId: analysisScope === "source_group" && selectedGroupId ? Number(selectedGroupId) : null,
         limit: 20,
       });
-      restoreActiveRunFromSummaries(runs);
     } catch (error) {
       status = formatAppError("loading analysis runs", error);
     } finally {
@@ -297,6 +296,12 @@
 
     const activeRun = summaries.find((run) => isActiveRunStatus(run.status));
     if (!activeRun) {
+      if (running && currentRun === null) {
+        running = false;
+        activeRunId = null;
+        activePhase = "";
+        activeProgress = "";
+      }
       return;
     }
 
@@ -309,11 +314,7 @@
 
   async function restoreActiveRun() {
     try {
-      const activeRuns = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
-        sourceId: null,
-        sourceGroupId: null,
-        limit: 20,
-      });
+      const activeRuns = await invoke<AnalysisRunSummary[]>("list_active_analysis_runs");
       restoreActiveRunFromSummaries(activeRuns);
     } catch (error) {
       status = formatAppError("restoring active analysis run", error);
@@ -505,7 +506,7 @@
     }
   }
 
-  async function saveTemplateChanges() {
+  async function saveTemplateChanges(nextName = templateName, nextBody = templateBody) {
     const selected = selectedTemplate;
     if (!selected) {
       status = "Select a template first.";
@@ -515,7 +516,7 @@
       status = "Built-in templates cannot be edited directly. Save a copy instead.";
       return;
     }
-    if (!templateName.trim() || !templateBody.trim()) {
+    if (!nextName.trim() || !nextBody.trim()) {
       status = "Template name and body cannot be empty.";
       return;
     }
@@ -524,8 +525,8 @@
     try {
       const updated = await invoke<AnalysisPromptTemplate>("update_analysis_prompt_template", {
         templateId: selected.id,
-        name: templateName.trim(),
-        body: templateBody.trim(),
+        name: nextName.trim(),
+        body: nextBody.trim(),
       });
       status = `Template "${updated.name}" saved.`;
       await loadTemplates();
@@ -538,8 +539,8 @@
     }
   }
 
-  async function saveTemplateCopy() {
-    if (!templateName.trim() || !templateBody.trim()) {
+  async function saveTemplateCopy(nextName = templateName, nextBody = templateBody) {
+    if (!nextName.trim() || !nextBody.trim()) {
       status = "Template name and body cannot be empty.";
       return;
     }
@@ -547,9 +548,9 @@
     savingTemplate = true;
     try {
       const created = await invoke<AnalysisPromptTemplate>("create_analysis_prompt_template", {
-        name: templateName.trim(),
+        name: nextName.trim(),
         templateKind: "report",
-        body: templateBody.trim(),
+        body: nextBody.trim(),
       });
       status = `Template "${created.name}" created.`;
       await loadTemplates();
@@ -984,8 +985,6 @@
   {templateBody}
   {savingTemplate}
   {deletingTemplate}
-  onChangeTemplateName={(value) => (templateName = value)}
-  onChangeTemplateBody={(value) => (templateBody = value)}
   onSaveTemplateCopy={saveTemplateCopy}
   onSaveTemplateChanges={saveTemplateChanges}
   onDeleteTemplate={deleteTemplate}
