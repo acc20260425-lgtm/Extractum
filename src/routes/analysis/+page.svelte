@@ -1035,4 +1035,10 @@
 
   }
 
+  @media (max-width: 1500px) {
+    .report-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
 </style>

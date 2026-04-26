@@ -299,6 +299,8 @@
 
   .member-row input {
     margin-top: 0.2rem;
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .group-form input[readonly] {
