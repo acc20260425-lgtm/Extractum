@@ -94,6 +94,10 @@
     return value.startsWith("Error") || value.startsWith("Analysis failed");
   }
 
+  function isActiveRunStatus(value: string) {
+    return value === "queued" || value === "running";
+  }
+
   const filteredRuns = $derived.by(() => {
     if (runFilter === "all") return runs;
     if (runFilter === "running") {
@@ -277,10 +281,42 @@
         sourceGroupId: analysisScope === "source_group" && selectedGroupId ? Number(selectedGroupId) : null,
         limit: 20,
       });
+      restoreActiveRunFromSummaries(runs);
     } catch (error) {
       status = formatAppError("loading analysis runs", error);
     } finally {
       loadingRuns = false;
+    }
+  }
+
+  function restoreActiveRunFromSummaries(summaries: AnalysisRunSummary[]) {
+    if (activeRunId !== null && summaries.some((run) => run.id === activeRunId && isActiveRunStatus(run.status))) {
+      running = true;
+      return;
+    }
+
+    const activeRun = summaries.find((run) => isActiveRunStatus(run.status));
+    if (!activeRun) {
+      return;
+    }
+
+    activeRunId = activeRun.id;
+    running = true;
+    activePhase = activeRun.status;
+    activeProgress = "";
+    status = `Resumed ${activeRun.status} analysis run ${activeRun.id}.`;
+  }
+
+  async function restoreActiveRun() {
+    try {
+      const activeRuns = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
+        sourceId: null,
+        sourceGroupId: null,
+        limit: 20,
+      });
+      restoreActiveRunFromSummaries(activeRuns);
+    } catch (error) {
+      status = formatAppError("restoring active analysis run", error);
     }
   }
 
@@ -710,9 +746,19 @@
     void loadTemplates();
     void loadGroups();
     void loadRuns();
+    void restoreActiveRun();
 
     void listen<AnalysisRunEvent>("analysis://run", ({ payload }: EventEnvelope<AnalysisRunEvent>) => {
-      if (disposed || payload.run_id !== activeRunId) {
+      if (disposed) {
+        return;
+      }
+
+      if (activeRunId === null && (payload.kind === "started" || payload.kind === "progress" || payload.kind === "delta")) {
+        activeRunId = payload.run_id;
+        running = true;
+      }
+
+      if (payload.run_id !== activeRunId) {
         return;
       }
 
