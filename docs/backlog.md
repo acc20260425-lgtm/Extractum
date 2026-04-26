@@ -137,3 +137,54 @@ Risks:
 - Access hash handling may depend on `grammers` raw peer variants and can change across library updates.
 - Storing more Telegram identity data improves reliability but increases responsibility for local sensitive metadata.
 - Some private or forbidden peers may remain impossible to sync after the account loses access.
+
+## LLM Module Refactor For Provider Growth
+
+Status: planned.
+
+Priority: high.
+
+Goal: split `src-tauri/src/llm.rs` into focused modules so Gemini, OmniRoute, and future OpenAI-compatible providers can evolve without growing one large mixed-responsibility file.
+
+Why it matters: `llm.rs` currently combines provider profile storage, provider-specific request/response mapping, SSE parsing, streaming execution, Tauri commands, and tests. OmniRoute support already added a second provider style. Planned parallel LLM requests will be safer if request lifecycle code is isolated and each request keeps its own buffer, usage, timeout, callbacks, and `request_id`.
+
+Scope:
+
+- Keep behavior unchanged and do not add parallel LLM request support in this refactor.
+- Convert `src-tauri/src/llm.rs` into `src-tauri/src/llm/mod.rs`.
+- Add `src-tauri/src/llm/types.rs` for shared structs such as `LlmMessage`, `LlmChatRequest`, `LlmUsage`, `LlmStreamEvent`, `LlmProfile`, `LlmProfilesState`, `LlmProviderModel`, `ResolvedLlmProfile`, and `LlmCompletion`.
+- Add `src-tauri/src/llm/profiles.rs` for app settings keys, profile load/save, profile validation, and profile resolution.
+- Add `src-tauri/src/llm/gemini.rs` for Gemini request/response structs, request mapping, usage mapping, errors, streaming, and model listing.
+- Add `src-tauri/src/llm/openai_compat.rs` for generic OpenAI-compatible request/response structs, streaming, model listing, usage mapping, and error formatting.
+- Add `src-tauri/src/llm/streaming.rs` for shared SSE helpers such as event boundary detection and `data:` parsing.
+- Add `src-tauri/src/llm/runner.rs` for request validation, effective model resolution, provider dispatch, timeout handling, and collect/stream runner functions.
+- Keep Tauri commands in `llm/mod.rs`: `get_llm_profiles`, `save_llm_profile`, `list_llm_provider_models`, and `ask_llm_stream`.
+- Keep exported backend helpers available for analysis code: profile resolution and collect/stream execution.
+- Introduce a provider config shape that includes `base_url` for OpenAI-compatible providers. OmniRoute should continue using `http://localhost:20128/v1`, but the code should no longer hard-code that URL deep inside the OpenAI-compatible implementation.
+
+Suggested commit split:
+
+1. `refactor: split llm types and profile storage`
+2. `refactor: extract llm providers and streaming helpers`
+3. `refactor: move llm execution into runner`
+
+Parallel-readiness notes:
+
+- Provider clients should remain stateless or request-local.
+- Stream buffers, accumulated text, usage, timeout, and callbacks must stay local to one runner invocation.
+- All emitted stream events must continue carrying `request_id`.
+- No active-request registry, cancellation handles, queueing, rate limits, or multi-stream UI should be added in this refactor.
+
+Acceptance criteria:
+
+- Public Tauri command names and frontend invocation payloads remain unchanged.
+- Gemini model listing and Test Provider still work.
+- OmniRoute model listing and Test Provider still work.
+- Analysis report generation and follow-up chat still compile against the exported LLM helpers.
+- `cargo fmt`, `cargo test llm`, `cargo check`, and `npm.cmd run check` pass.
+
+Risks:
+
+- Moving many private helpers can temporarily break Rust visibility boundaries.
+- Keeping compatibility with analysis code requires careful re-export decisions from `llm/mod.rs`.
+- Introducing `base_url` as internal config now should not force a database migration or UI change unless explicitly planned later.
