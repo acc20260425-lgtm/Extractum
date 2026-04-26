@@ -150,7 +150,19 @@ pub struct AnalysisRunEvent {
     pub progress_current: Option<i64>,
     pub progress_total: Option<i64>,
     pub delta: Option<String>,
+    pub chunk_summary: Option<AnalysisChunkSummaryEvent>,
     pub error: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct AnalysisChunkSummaryEvent {
+    pub index: i64,
+    pub total: i64,
+    pub message_count: i64,
+    pub summary: String,
+    pub topics: Vec<String>,
+    pub notable_points: Vec<String>,
+    pub candidate_refs: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -195,7 +207,7 @@ pub(crate) struct CorpusMessage {
     pub(crate) r#ref: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct ChunkSummary {
     pub(crate) summary: String,
     pub(crate) topics: Vec<String>,

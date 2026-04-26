@@ -73,6 +73,16 @@ export interface AnalysisTraceData {
   refs: AnalysisTraceRef[];
 }
 
+export interface AnalysisChunkSummaryEvent {
+  index: number;
+  total: number;
+  message_count: number;
+  summary: string;
+  topics: string[];
+  notable_points: string[];
+  candidate_refs: string[];
+}
+
 export interface AnalysisRunEvent {
   run_id: number;
   kind: "started" | "progress" | "delta" | "completed" | "failed";
@@ -81,6 +91,7 @@ export interface AnalysisRunEvent {
   progress_current: number | null;
   progress_total: number | null;
   delta: string | null;
+  chunk_summary: AnalysisChunkSummaryEvent | null;
   error: string | null;
 }
 

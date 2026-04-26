@@ -5,6 +5,7 @@
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import RunHistory from "$lib/components/analysis/run-history.svelte";
   import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
+  import ChunkSummaries from "$lib/components/analysis/chunk-summaries.svelte";
   import RunControls from "$lib/components/analysis/run-controls.svelte";
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
@@ -26,6 +27,7 @@
     AnalysisChatEvent,
     AnalysisChatMessage,
     AnalysisChatTurn,
+    AnalysisChunkSummaryEvent,
     AnalysisPromptTemplate,
     AnalysisRunDetail,
     AnalysisRunEvent,
@@ -72,6 +74,7 @@
   let activeRunId = $state<number | null>(null);
   let activePhase = $state("");
   let activeProgress = $state("");
+  let chunkSummaries = $state<AnalysisChunkSummaryEvent[]>([]);
   let streamedOutput = $state("");
   let currentRun = $state<AnalysisRunDetail | null>(null);
   let traceData = $state<AnalysisTraceData>({ refs: [] });
@@ -297,6 +300,7 @@
         return;
       }
       currentRun = run;
+      chunkSummaries = [];
       streamedOutput = run.result_markdown ?? "";
       activeRunId = run.id;
       activePhase = run.status;
@@ -366,6 +370,7 @@
     status = "";
     running = true;
     streamedOutput = "";
+    chunkSummaries = [];
     currentRun = null;
     traceData = { refs: [] };
     savedTraceRefs = [];
@@ -717,6 +722,13 @@
           ? `${payload.progress_current}/${payload.progress_total}`
           : "";
 
+      if (payload.chunk_summary) {
+        const nextSummaries = chunkSummaries.filter((chunk) => chunk.index !== payload.chunk_summary?.index);
+        nextSummaries.push(payload.chunk_summary);
+        nextSummaries.sort((left, right) => left.index - right.index);
+        chunkSummaries = nextSummaries;
+      }
+
       if (payload.kind === "started" || payload.kind === "progress") {
         if (payload.message) {
           status = payload.message;
@@ -841,37 +853,41 @@
 {/if}
 
 <div class="workspace">
-  <RunControls
-    {analysisScope}
-    {selectedSourceId}
-    {selectedGroupId}
-    {selectedTemplateId}
-    {periodFrom}
-    {periodTo}
-    {outputLanguage}
-    {modelOverride}
-    {sources}
-    {groups}
-    {templates}
-    {loadingSources}
-    {loadingGroups}
-    {loadingTemplates}
-    {running}
-    {activePhase}
-    {activeProgress}
-    showRunMeta={running || activeRunId !== null || currentRun !== null}
-    selectedGroupSourceCount={selectedGroup?.members.length ?? null}
-    {phaseLabel}
-    onChangeScope={(scope) => (analysisScope = scope)}
-    onChangeSelectedSourceId={(value) => (selectedSourceId = value)}
-    onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
-    onChangePeriodFrom={(value) => (periodFrom = value)}
-    onChangePeriodTo={(value) => (periodTo = value)}
-    onChangeOutputLanguage={(value) => (outputLanguage = value)}
-    onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
-    onChangeModelOverride={(value) => (modelOverride = value)}
-    onRunReport={runReport}
-  />
+  <div class="control-stack">
+    <RunControls
+      {analysisScope}
+      {selectedSourceId}
+      {selectedGroupId}
+      {selectedTemplateId}
+      {periodFrom}
+      {periodTo}
+      {outputLanguage}
+      {modelOverride}
+      {sources}
+      {groups}
+      {templates}
+      {loadingSources}
+      {loadingGroups}
+      {loadingTemplates}
+      {running}
+      {activePhase}
+      {activeProgress}
+      showRunMeta={running || activeRunId !== null || currentRun !== null}
+      selectedGroupSourceCount={selectedGroup?.members.length ?? null}
+      {phaseLabel}
+      onChangeScope={(scope) => (analysisScope = scope)}
+      onChangeSelectedSourceId={(value) => (selectedSourceId = value)}
+      onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
+      onChangePeriodFrom={(value) => (periodFrom = value)}
+      onChangePeriodTo={(value) => (periodTo = value)}
+      onChangeOutputLanguage={(value) => (outputLanguage = value)}
+      onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
+      onChangeModelOverride={(value) => (modelOverride = value)}
+      onRunReport={runReport}
+    />
+
+    <ChunkSummaries summaries={chunkSummaries} {running} />
+  </div>
 
   <section class="card report">
     <div class="report-layout">
@@ -970,6 +986,12 @@
     grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
     gap: 1.5rem;
     align-items: start;
+  }
+
+  .control-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .card {

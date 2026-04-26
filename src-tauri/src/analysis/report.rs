@@ -7,7 +7,10 @@ use crate::llm::{
     run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
 };
 
-use super::models::{AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary, CorpusMessage};
+use super::models::{
+    AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary,
+    CorpusMessage,
+};
 use super::store::{
     fetch_prompt_template, fetch_source_group, find_active_duplicate_run, insert_analysis_run,
     load_corpus_messages, persist_run_snapshot, set_run_status,
@@ -274,6 +277,7 @@ async fn run_report_pipeline(
             progress_current: None,
             progress_total: None,
             delta: None,
+            chunk_summary: None,
             error: None,
         },
     );
@@ -298,6 +302,7 @@ async fn run_report_pipeline(
             progress_current: None,
             progress_total: None,
             delta: None,
+            chunk_summary: None,
             error: None,
         },
     );
@@ -321,13 +326,41 @@ async fn run_report_pipeline(
                 progress_current: Some((index + 1) as i64),
                 progress_total: Some(chunks.len() as i64),
                 delta: None,
+                chunk_summary: None,
                 error: None,
             },
         );
 
         let request = build_map_request(index + 1, chunks.len(), chunk);
         let completion = run_llm_collect_with_profile(&request, &resolved_profile).await?;
-        chunk_summaries.push(parse_chunk_summary(&completion.text)?);
+        let summary = parse_chunk_summary(&completion.text)?;
+        emit_analysis_event(
+            &handle,
+            &AnalysisRunEvent {
+                run_id,
+                kind: "progress".to_string(),
+                phase: "map".to_string(),
+                message: Some(format!(
+                    "Chunk {} of {} summarized.",
+                    index + 1,
+                    chunks.len()
+                )),
+                progress_current: Some((index + 1) as i64),
+                progress_total: Some(chunks.len() as i64),
+                delta: None,
+                chunk_summary: Some(AnalysisChunkSummaryEvent {
+                    index: (index + 1) as i64,
+                    total: chunks.len() as i64,
+                    message_count: chunk.len() as i64,
+                    summary: summary.summary.clone(),
+                    topics: summary.topics.clone(),
+                    notable_points: summary.notable_points.clone(),
+                    candidate_refs: summary.candidate_refs.clone(),
+                }),
+                error: None,
+            },
+        );
+        chunk_summaries.push(summary);
     }
 
     emit_analysis_event(
@@ -340,6 +373,7 @@ async fn run_report_pipeline(
             progress_current: None,
             progress_total: None,
             delta: None,
+            chunk_summary: None,
             error: None,
         },
     );
@@ -365,6 +399,7 @@ async fn run_report_pipeline(
                 progress_current: None,
                 progress_total: None,
                 delta: Some(delta.to_string()),
+                chunk_summary: None,
                 error: None,
             },
         );
@@ -384,6 +419,7 @@ async fn run_report_pipeline(
             progress_current: None,
             progress_total: None,
             delta: None,
+            chunk_summary: None,
             error: None,
         },
     );
@@ -414,6 +450,7 @@ async fn run_report_pipeline(
             progress_current: None,
             progress_total: None,
             delta: None,
+            chunk_summary: None,
             error: None,
         },
     );
@@ -445,6 +482,7 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
             progress_current: None,
             progress_total: None,
             delta: None,
+            chunk_summary: None,
             error: Some(error),
         },
     );
