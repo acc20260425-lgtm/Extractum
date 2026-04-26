@@ -66,6 +66,10 @@
   let testDialogOpen = $state(false);
   let activeRequestId = $state<string | null>(null);
   let settingsStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  const providerOptions = [
+    { value: "gemini", label: "Gemini", placeholder: "gemini-2.5-flash", keyPlaceholder: "AIza..." },
+    { value: "omniroute", label: "OmniRoute", placeholder: "if/kimi-k2-thinking", keyPlaceholder: "sk_omniroute" },
+  ];
 
   function setSettingsStatus(message: string) {
     settingsStatus = message;
@@ -106,12 +110,35 @@
 
       availableModels = models;
       if (showSuccess) {
-        modelsStatus = `Loaded ${models.length} Gemini models.`;
+        modelsStatus = `Loaded ${models.length} ${providerLabel()} models.`;
       }
     } catch (error) {
-      modelsStatus = formatAppError("loading Gemini models", error);
+      modelsStatus = formatAppError(`loading ${providerLabel()} models`, error);
     } finally {
       loadingModels = false;
+    }
+  }
+
+  function providerLabel(value = provider) {
+    return providerOptions.find((option) => option.value === value)?.label ?? value;
+  }
+
+  function providerPlaceholder() {
+    return providerOptions.find((option) => option.value === provider)?.placeholder ?? "model-id";
+  }
+
+  function apiKeyPlaceholder() {
+    return providerOptions.find((option) => option.value === provider)?.keyPlaceholder ?? "API key";
+  }
+
+  function handleProviderChange() {
+    availableModels = [];
+    modelsStatus = "";
+    if (provider === "gemini" && defaultModel.startsWith("if/")) {
+      defaultModel = "gemini-2.5-flash";
+    }
+    if (provider === "omniroute" && defaultModel.startsWith("gemini-")) {
+      defaultModel = "";
     }
   }
 
@@ -269,8 +296,8 @@
 <div class="card">
   <h3>LLM Provider</h3>
   <p class="hint">
-    First implementation is Gemini-only. The API key is temporarily stored in local SQLite for development
-    convenience. This is a known security debt and will later move to secure storage.
+    Gemini and OmniRoute are supported. OmniRoute uses its OpenAI-compatible endpoint at
+    http://localhost:20128/v1. The API key is temporarily stored in local SQLite for development convenience.
   </p>
 
   <div class="grid">
@@ -279,7 +306,11 @@
     </label>
 
     <label>Provider
-      <input type="text" bind:value={provider} disabled />
+      <select bind:value={provider} onchange={handleProviderChange}>
+        {#each providerOptions as option (option.value)}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </select>
     </label>
   </div>
 
@@ -294,12 +325,12 @@
         {/each}
       </select>
     {:else}
-      <input type="text" bind:value={defaultModel} placeholder="gemini-2.5-flash" />
+      <input type="text" bind:value={defaultModel} placeholder={providerPlaceholder()} />
     {/if}
   </label>
 
   <label>API key
-    <input type="text" bind:value={apiKey} placeholder="AIza..." />
+    <input type="text" bind:value={apiKey} placeholder={apiKeyPlaceholder()} />
   </label>
 
   <div class="actions">
@@ -396,7 +427,7 @@
 >
   <div class="test-dialog">
     <label>Prompt
-      <textarea bind:value={testPrompt} rows="8" placeholder="Ask Gemini something simple..."></textarea>
+      <textarea bind:value={testPrompt} rows="8" placeholder={`Ask ${providerLabel()} something simple...`}></textarea>
     </label>
 
     <div class="actions modal-actions">
