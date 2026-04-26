@@ -198,7 +198,7 @@ fn map_gemini_model(model: GeminiModel) -> LlmProviderModel {
     }
 }
 
-pub(super) async fn stream_gemini_response<F>(
+pub(in crate::llm) async fn stream_gemini_response<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,

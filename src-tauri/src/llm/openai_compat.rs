@@ -205,7 +205,7 @@ fn map_openai_compat_model(model: OpenAiCompatModel) -> LlmProviderModel {
     }
 }
 
-pub(super) async fn stream_openai_compat_response<F>(
+pub(in crate::llm) async fn stream_openai_compat_response<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,
