@@ -22,7 +22,7 @@ use sources::{
 };
 
 mod llm;
-use llm::{ask_llm_stream, get_llm_profiles, save_llm_profile};
+use llm::{ask_llm_stream, get_llm_profiles, list_llm_provider_models, save_llm_profile};
 
 mod analysis;
 use analysis::{
@@ -89,6 +89,7 @@ pub fn run() {
             get_items,
             get_llm_profiles,
             save_llm_profile,
+            list_llm_provider_models,
             ask_llm_stream,
             list_analysis_sources,
             list_analysis_prompt_templates,

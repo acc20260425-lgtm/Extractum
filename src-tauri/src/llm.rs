@@ -13,6 +13,7 @@ const DEFAULT_PROVIDER: &str = "gemini";
 const DEFAULT_MODEL: &str = "gemini-2.5-flash";
 const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
 const LLM_STREAM_TIMEOUT_SECS: u64 = 90;
+const GEMINI_MODELS_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -80,6 +81,17 @@ pub struct LlmProfile {
 pub struct LlmProfilesState {
     pub active_profile: String,
     pub default_profile: LlmProfile,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct LlmProviderModel {
+    pub model: String,
+    pub name: String,
+    pub display_name: String,
+    pub description: String,
+    pub input_token_limit: Option<i64>,
+    pub output_token_limit: Option<i64>,
+    pub supported_generation_methods: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -154,6 +166,24 @@ struct GoogleApiErrorBody {
     message: String,
     status: Option<String>,
     code: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiListModelsResponse {
+    models: Option<Vec<GeminiModel>>,
+    next_page_token: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiModel {
+    name: String,
+    display_name: Option<String>,
+    description: Option<String>,
+    input_token_limit: Option<i64>,
+    output_token_limit: Option<i64>,
+    supported_generation_methods: Option<Vec<String>>,
 }
 
 fn active_profile_key() -> &'static str {
@@ -452,6 +482,26 @@ fn format_google_error(status: reqwest::StatusCode, body: &str) -> String {
     }
 }
 
+fn strip_gemini_model_prefix(name: &str) -> String {
+    name.strip_prefix("models/").unwrap_or(name).to_string()
+}
+
+fn map_gemini_model(model: GeminiModel) -> LlmProviderModel {
+    let model_id = strip_gemini_model_prefix(&model.name);
+    LlmProviderModel {
+        display_name: model
+            .display_name
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| model_id.clone()),
+        description: model.description.unwrap_or_default(),
+        input_token_limit: model.input_token_limit,
+        output_token_limit: model.output_token_limit,
+        supported_generation_methods: model.supported_generation_methods.unwrap_or_default(),
+        model: model_id,
+        name: model.name,
+    }
+}
+
 fn emit_response_event(handle: &AppHandle, event: &LlmStreamEvent) {
     let _ = handle.emit(LLM_RESPONSE_EVENT, event);
 }
@@ -600,6 +650,65 @@ where
     })
 }
 
+async fn list_gemini_models(api_key: &str) -> Result<Vec<LlmProviderModel>, String> {
+    if api_key.trim().is_empty() {
+        return Err("Gemini API key is required to load available models".to_string());
+    }
+
+    let client = HttpClient::new();
+    let mut page_token: Option<String> = None;
+    let mut models = Vec::new();
+
+    loop {
+        let mut request = client
+            .get(format!("{GEMINI_API_BASE}/models"))
+            .header("x-goog-api-key", api_key)
+            .query(&[("pageSize", "1000")]);
+
+        if let Some(token) = page_token.as_deref() {
+            request = request.query(&[("pageToken", token)]);
+        }
+
+        let response = request.send().await.map_err(|e| e.to_string())?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format_google_error(status, &body));
+        }
+
+        let parsed: GeminiListModelsResponse = response.json().await.map_err(|e| e.to_string())?;
+        models.extend(
+            parsed
+                .models
+                .unwrap_or_default()
+                .into_iter()
+                .map(map_gemini_model)
+                .filter(|model| {
+                    model
+                        .supported_generation_methods
+                        .iter()
+                        .any(|method| method == "generateContent")
+                }),
+        );
+
+        page_token = parsed
+            .next_page_token
+            .filter(|token| !token.trim().is_empty());
+        if page_token.is_none() {
+            break;
+        }
+    }
+
+    models.sort_by(|left, right| {
+        left.display_name
+            .to_ascii_lowercase()
+            .cmp(&right.display_name.to_ascii_lowercase())
+            .then_with(|| left.model.cmp(&right.model))
+    });
+
+    Ok(models)
+}
+
 pub(crate) async fn run_llm_collect_with_profile(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
@@ -675,6 +784,47 @@ pub async fn save_llm_profile(
     .await?;
 
     Ok(load_profiles_state_from_pool(&pool).await?)
+}
+
+#[tauri::command]
+pub async fn list_llm_provider_models(
+    handle: AppHandle,
+    provider: String,
+    profile_id: Option<String>,
+    api_key: Option<String>,
+) -> AppResult<Vec<LlmProviderModel>> {
+    let provider_kind = ProviderKind::parse(&provider)?;
+    let configured_key = api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+
+    let api_key = if let Some(key) = configured_key {
+        key
+    } else {
+        let pool = get_pool(&handle).await?;
+        let profile = resolve_profile_from_pool(&pool, profile_id.as_deref()).await?;
+        profile.api_key
+    };
+
+    let result = timeout(
+        Duration::from_secs(GEMINI_MODELS_TIMEOUT_SECS),
+        async move {
+            match provider_kind {
+                ProviderKind::Gemini => list_gemini_models(&api_key).await,
+            }
+        },
+    )
+    .await;
+
+    match result {
+        Ok(models) => Ok(models?),
+        Err(_) => Err(format!(
+            "Loading Gemini models timed out after {GEMINI_MODELS_TIMEOUT_SECS} seconds"
+        )
+        .into()),
+    }
 }
 
 #[tauri::command]
@@ -775,8 +925,9 @@ pub async fn ask_llm_stream(
 mod tests {
     use super::{
         build_gemini_request, extract_text, find_event_boundary, load_profiles_state_from_pool,
-        map_usage, parse_sse_data, resolve_profile_from_pool, save_profile_to_pool, GeminiContent,
-        GeminiGenerateContentResponse, GeminiPart, LlmMessage,
+        map_gemini_model, map_usage, parse_sse_data, resolve_profile_from_pool,
+        save_profile_to_pool, GeminiContent, GeminiGenerateContentResponse, GeminiModel,
+        GeminiPart, LlmMessage,
     };
 
     async fn memory_pool() -> sqlx::SqlitePool {
@@ -877,5 +1028,27 @@ mod tests {
         assert_eq!(usage.input_tokens, Some(3));
         assert_eq!(usage.output_tokens, Some(4));
         assert_eq!(usage.total_tokens, Some(7));
+    }
+
+    #[test]
+    fn gemini_model_mapping_uses_short_model_id() {
+        let model = map_gemini_model(GeminiModel {
+            name: "models/gemini-2.5-flash".to_string(),
+            display_name: Some("Gemini 2.5 Flash".to_string()),
+            description: Some("Fast model".to_string()),
+            input_token_limit: Some(1_048_576),
+            output_token_limit: Some(65_536),
+            supported_generation_methods: Some(vec![
+                "generateContent".to_string(),
+                "countTokens".to_string(),
+            ]),
+        });
+
+        assert_eq!(model.model, "gemini-2.5-flash");
+        assert_eq!(model.name, "models/gemini-2.5-flash");
+        assert_eq!(model.display_name, "Gemini 2.5 Flash");
+        assert!(model
+            .supported_generation_methods
+            .contains(&"generateContent".to_string()));
     }
 }

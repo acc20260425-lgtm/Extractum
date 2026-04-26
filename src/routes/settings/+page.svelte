@@ -17,6 +17,16 @@
     default_profile: LlmProfile;
   }
 
+  interface LlmProviderModel {
+    model: string;
+    name: string;
+    display_name: string;
+    description: string;
+    input_token_limit: number | null;
+    output_token_limit: number | null;
+    supported_generation_methods: string[];
+  }
+
   interface LlmUsage {
     input_tokens: number | null;
     output_tokens: number | null;
@@ -44,6 +54,9 @@
   let apiKey = $state("");
   let settingsStatus = $state("");
   let saving = $state(false);
+  let availableModels = $state<LlmProviderModel[]>([]);
+  let loadingModels = $state(false);
+  let modelsStatus = $state("");
 
   let testPrompt = $state("Summarize why local-first analysis tools are useful for research.");
   let testStatus = $state("");
@@ -52,8 +65,6 @@
   let testing = $state(false);
   let testDialogOpen = $state(false);
   let activeRequestId = $state<string | null>(null);
-  let lastProvider = $state("");
-  let lastModel = $state("");
   let settingsStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
   function setSettingsStatus(message: string) {
@@ -74,9 +85,43 @@
       provider = state.default_profile.provider;
       defaultModel = state.default_profile.default_model;
       apiKey = state.default_profile.api_key;
+      if (apiKey.trim()) {
+        void loadProviderModels(false);
+      }
     } catch (error) {
       setSettingsStatus(formatAppError("loading LLM settings", error));
     }
+  }
+
+  async function loadProviderModels(showSuccess = true) {
+    loadingModels = true;
+    modelsStatus = "";
+
+    try {
+      const models = await invoke<LlmProviderModel[]>("list_llm_provider_models", {
+        provider,
+        profileId: activeProfile || "default",
+        apiKey: apiKey.trim() ? apiKey : null,
+      });
+
+      availableModels = models;
+      if (showSuccess) {
+        modelsStatus = `Loaded ${models.length} Gemini models.`;
+      }
+    } catch (error) {
+      modelsStatus = formatAppError("loading Gemini models", error);
+    } finally {
+      loadingModels = false;
+    }
+  }
+
+  function formatTokenLimit(value: number | null) {
+    if (value === null) return "";
+    return value.toLocaleString();
+  }
+
+  function providerModelLine() {
+    return `${provider}${provider && defaultModel ? " / " : ""}${defaultModel}`;
   }
 
   async function saveProfile(successMessage = "LLM settings saved.") {
@@ -124,8 +169,6 @@
     testStatus = "";
     testing = true;
     activeRequestId = newRequestId();
-    lastProvider = provider;
-    lastModel = defaultModel;
 
     try {
       await invoke("ask_llm_stream", {
@@ -177,8 +220,6 @@
 
       if (payload.kind === "started") {
         testStatus = `Streaming response from ${payload.provider}/${payload.model}...`;
-        lastProvider = payload.provider;
-        lastModel = payload.model;
         return;
       }
 
@@ -191,16 +232,12 @@
         testing = false;
         testOutput = payload.text ?? testOutput;
         testUsage = payload.usage;
-        lastProvider = payload.provider;
-        lastModel = payload.model;
         testStatus = `Response completed from ${payload.provider}/${payload.model}.`;
         return;
       }
 
       if (payload.kind === "failed") {
         testing = false;
-        lastProvider = payload.provider;
-        lastModel = payload.model;
         testStatus = `LLM request failed: ${payload.error ?? "Unknown provider error"}`;
       }
     }).then((unlisten) => {
@@ -247,7 +284,18 @@
   </div>
 
   <label>Default model
-    <input type="text" bind:value={defaultModel} placeholder="gemini-2.5-flash" />
+    {#if availableModels.length > 0}
+      <select bind:value={defaultModel}>
+        {#if !availableModels.some((model) => model.model === defaultModel)}
+          <option value={defaultModel}>{defaultModel}</option>
+        {/if}
+        {#each availableModels as model (model.model)}
+          <option value={model.model}>{model.display_name} - {model.model}</option>
+        {/each}
+      </select>
+    {:else}
+      <input type="text" bind:value={defaultModel} placeholder="gemini-2.5-flash" />
+    {/if}
   </label>
 
   <label>API key
@@ -258,7 +306,40 @@
     <button onclick={() => saveProfile()} disabled={saving || !defaultModel.trim()}>
       {saving ? "Saving..." : "Save"}
     </button>
+    <button class="secondary" onclick={() => loadProviderModels()} disabled={loadingModels || !apiKey.trim()}>
+      {loadingModels ? "Loading models..." : "Refresh models"}
+    </button>
   </div>
+
+  {#if modelsStatus}
+    <p class="status compact" class:error={modelsStatus.startsWith("Error")}>{modelsStatus}</p>
+  {/if}
+
+  {#if availableModels.length > 0}
+    <div class="model-list">
+      {#each availableModels as model (model.model)}
+        <button
+          class:active={model.model === defaultModel}
+          type="button"
+          onclick={() => (defaultModel = model.model)}
+          title={model.description}
+        >
+          <span class="model-name">{model.display_name}</span>
+          <span class="model-id">{model.model}</span>
+          {#if model.input_token_limit !== null || model.output_token_limit !== null}
+            <span class="model-limits">
+              {#if model.input_token_limit !== null}
+                in {formatTokenLimit(model.input_token_limit)}
+              {/if}
+              {#if model.output_token_limit !== null}
+                out {formatTokenLimit(model.output_token_limit)}
+              {/if}
+            </span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <div class="card">
@@ -272,8 +353,8 @@
       <p>{testPrompt}</p>
     </div>
     <div class="summary-meta">
-      {#if lastProvider || lastModel}
-        <span class="summary-chip">{lastProvider}{lastProvider && lastModel ? " / " : ""}{lastModel}</span>
+      {#if provider || defaultModel}
+        <span class="summary-chip">{providerModelLine()}</span>
       {/if}
       {#if testUsage}
         <span class="summary-chip">{usageLine(testUsage)}</span>
@@ -322,8 +403,8 @@
       <button onclick={runTest} disabled={testing || !testPrompt.trim() || !defaultModel.trim()}>
         {testing ? "Streaming..." : "Run test"}
       </button>
-      {#if lastProvider || lastModel}
-        <span class="dialog-meta">{lastProvider}{lastProvider && lastModel ? " / " : ""}{lastModel}</span>
+      {#if provider || defaultModel}
+        <span class="dialog-meta">{providerModelLine()}</span>
       {/if}
     </div>
 
@@ -388,10 +469,69 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
+  select {
+    width: 100%;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.8rem;
+    border-radius: 8px;
+    font: inherit;
+  }
+
+  select:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
   .actions {
     display: flex;
     gap: 0.6rem;
     flex-wrap: wrap;
+  }
+
+  .model-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 0.65rem;
+    max-height: 22rem;
+    overflow: auto;
+    padding: 0.15rem;
+  }
+
+  .model-list button {
+    align-items: flex-start;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    min-height: 6.5rem;
+    padding: 0.85rem;
+    text-align: left;
+  }
+
+  .model-list button:hover,
+  .model-list button.active {
+    border-color: var(--primary);
+    background: var(--panel-hover);
+  }
+
+  .model-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .model-id,
+  .model-limits {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .test-summary {
@@ -457,6 +597,10 @@
     background: var(--status-bg);
     font-size: 0.9rem;
     margin-bottom: 1rem;
+  }
+
+  .status.compact {
+    margin-bottom: 0;
   }
 
   .status.error {
