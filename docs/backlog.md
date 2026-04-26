@@ -1,109 +1,33 @@
 # Backlog
 
-This backlog tracks known follow-up work after expanding Telegram sources from broadcast channels to Telegram source kinds.
-
-## Recently Completed
-
-### Scope Telegram Source Uniqueness By Account
-
-Status: done.
-
-Why it mattered: the same Telegram channel or group can exist in multiple local Telegram accounts. Source uniqueness is now scoped by `account_id`, so adding the same Telegram source to another account no longer reassigns the existing source row.
-
-Implementation notes:
-
-- `sources` uniqueness is now `(account_id, source_type, telegram_source_kind, external_id)`.
-- `add_telegram_source` uses the same conflict target.
-- Migration `12.sql` updates the index without rewriting source rows.
-
-### Add Source Dialog UX
-
-Status: done.
-
-Why it mattered: after including groups, the dialog list can become much longer. Users can now search, filter, and scan counts without assuming the Telegram API returned an incomplete list.
-
-Implementation notes:
-
-- The Add Source dialog has local search by title and username.
-- Filters cover `All`, `Channels`, `Supergroups`, and `Groups`.
-- The dialog shows filtered and total counts.
-- Dialog rows are sorted by title, then by source kind.
-- Already-added detection is scoped by account, kind, and external id.
-- Loading, not-ready, not-loaded, and no-match states are distinct.
-
-### Documentation Refresh
-
-Status: done.
-
-Why it mattered: project docs still described source management as broadcast-channel-only after the code moved to Telegram source kinds.
-
-Implementation notes:
-
-- Project, design, database, README, architecture, and agent context docs now describe Telegram sources.
-- Command names now use `list_telegram_sources` and `sync_source`.
-- Database docs include `telegram_source_kind` and uniqueness by `(account_id, source_type, telegram_source_kind, external_id)`.
-- Migration history includes versions 11 and 12.
-
-### Peer Identity Metadata Foundation
-
-Status: partial.
-
-Why it mattered: private channels and supergroups can require Telegram peer identity beyond username and bare id. The source metadata format can now preserve identity details without changing the table schema.
-
-Implementation notes:
-
-- `SourceMetadata` remains backward-compatible with old username-only payloads.
-- New metadata can record whether a source was added from dialogs or username flow.
-- New metadata can record `access_hash` for channel-backed sources when `grammers` exposes it.
-- Sync can resolve channel and supergroup sources from stored `access_hash` before falling back to dialog scanning.
-- Small groups still rely on dialog/session resolution because they do not use channel `access_hash`.
-
-### Persist And Show Source Avatars
-
-Status: done.
-
-Why it mattered: avatars make it easier to recognize Telegram sources, especially when channels and groups have similar names.
-
-Implementation notes:
-
-- Source avatars are cached under the app data directory instead of being stored as base64 blobs in SQLite.
-- `SourceMetadata` stores an optional `avatar_cache_key` and remains backward-compatible with older metadata.
-- `SourceRecord` exposes an optional `avatar_data_url` read from the local cache.
-- Added Sources rows and the source detail header show cached avatars with stable initial fallbacks.
-- Add Source and Sync refresh the cached avatar when Telegram returns a profile photo; avatar failures do not block source listing or sync.
+This backlog tracks active follow-up work only. Completed implementation history belongs in release notes, commit history, or the related design/database documents.
 
 ## Telegram Runtime Validation
 
+Status: open.
+
 Priority: high.
 
-Goal: verify the new `telegram_source_kind` model against real Telegram accounts and real dialogs.
+Goal: verify the current `telegram_source_kind` model against real Telegram accounts and real dialogs.
 
-Why it matters: `cargo check` and `svelte-check` confirm compile-time safety, but the meaningful risk is in Telegram runtime behavior. `grammers` can expose broadcast channels, supergroups, small groups, forbidden/min peers, and migrated groups with slightly different raw shapes.
+Why it matters: compile-time checks cannot cover Telegram peer shapes. `grammers` can expose broadcast channels, supergroups, small groups, forbidden/min peers, migrated groups, and private peers with subtly different identity data.
 
 Scope:
 
-- Verify that `list_telegram_sources` returns broadcast channels.
-- Verify that `list_telegram_sources` returns supergroups.
-- Verify that `list_telegram_sources` returns regular small groups if the account has any.
-- Verify that profile pictures load for channels and groups.
+- Verify that `list_telegram_sources` returns broadcast channels, supergroups, and regular small groups.
+- Verify that source avatars load for channels and groups.
 - Verify that adding from the dialog list stores the expected `telegram_source_kind`.
 - Verify that manual add by `@username` works for public channels and public groups.
 - Verify that sync works for `channel`, `supergroup`, and `group`.
-- Verify behavior when the user is no longer a member of a group/channel.
-- Verify behavior for migrated small group to supergroup dialogs.
+- Verify behavior when the user is no longer a member of a group or channel.
+- Verify behavior for migrated small-group-to-supergroup dialogs.
 
 Acceptance criteria:
 
 - The Add Source dialog shows channels, supergroups, and groups with correct labels.
 - A source added from account A does not affect the same source added from account B.
 - Sync inserts messages for each supported kind without resolving to the wrong peer.
-- Any unsupported or inaccessible Telegram peer produces a friendly typed error instead of a silent failure.
-
-Risks:
-
-- Private sources without username may only be resolvable while they are present in dialogs.
-- Telegram bare ids can be ambiguous without source kind, so adding from dialog must keep passing `telegramSourceKind`.
-- Some historical/migrated group states may need extra metadata beyond bare id and username.
+- Unsupported or inaccessible Telegram peers produce friendly typed errors.
 
 ## Private Sources And Peer Identity
 
@@ -111,80 +35,188 @@ Status: partial.
 
 Priority: high.
 
-Goal: make private Telegram channels/groups predictable by storing enough peer identity to resolve them without relying only on username or dialog scanning.
+Goal: make private Telegram channels and groups predictable by storing enough peer identity to resolve them without relying only on username or dialog scanning.
 
-Why it matters: public sources can be resolved by username, but private sources often cannot. Bare id plus kind helps, but Telegram access usually needs session peer cache or access hash.
+Why it matters: public sources can be resolved by username, but private sources often cannot. Bare id plus kind helps, but Telegram access may need session peer cache, access hash, or dialog-derived identity.
 
 Scope:
 
-- Extend `SourceMetadata` to store peer identity data when available.
-- Consider storing `access_hash` for channels and supergroups.
-- Consider storing whether the source was added from dialog or by username.
+- Audit current `SourceMetadata` coverage for dialog-picked private sources.
+- Store peer identity data when `grammers` exposes it.
 - Keep manual numeric add constrained to dialogs unless metadata is sufficient.
-- Improve error messages for private sources that disappeared from dialogs.
-- Add migration/backward compatibility for existing metadata.
-- Document which Telegram source refs are supported: `@username`, `t.me/name`, and dialog-picked private source.
+- Improve errors for private sources that disappeared from dialogs.
+- Document supported Telegram source refs: `@username`, `t.me/name`, and dialog-picked private source.
 
 Acceptance criteria:
 
-- Private sources added from dialogs continue syncing if Telegram session cache can resolve them.
+- Private sources added from dialogs continue syncing when Telegram session data can resolve them.
 - If a private source cannot be resolved, the app explains the likely reason and suggests re-adding from dialogs.
 - Public username sources still sync through username resolution.
-- Existing sources with old metadata continue to work through fallback dialog scanning.
+- Existing sources with older metadata continue to work through fallback dialog scanning.
 
-Risks:
+## Secure Secret Storage
 
-- Access hash handling may depend on `grammers` raw peer variants and can change across library updates.
-- Storing more Telegram identity data improves reliability but increases responsibility for local sensitive metadata.
-- Some private or forbidden peers may remain impossible to sync after the account loses access.
-
-## LLM Module Refactor For Provider Growth
-
-Status: planned.
+Status: open.
 
 Priority: high.
 
-Goal: split `src-tauri/src/llm.rs` into focused modules so Gemini, OmniRoute, and future OpenAI-compatible providers can evolve without growing one large mixed-responsibility file.
+Goal: move sensitive credentials out of SQLite-backed `app_settings`.
 
-Why it matters: `llm.rs` currently combines provider profile storage, provider-specific request/response mapping, SSE parsing, streaming execution, Tauri commands, and tests. OmniRoute support already added a second provider style. Planned parallel LLM requests will be safer if request lifecycle code is isolated and each request keeps its own buffer, usage, timeout, callbacks, and `request_id`.
+Why it matters: LLM API keys and Telegram credentials are currently easy to inspect in the local database. That is acceptable only as development debt.
 
 Scope:
 
-- Keep behavior unchanged and do not add parallel LLM request support in this refactor.
-- Convert `src-tauri/src/llm.rs` into `src-tauri/src/llm/mod.rs`.
-- Add `src-tauri/src/llm/types.rs` for shared structs such as `LlmMessage`, `LlmChatRequest`, `LlmUsage`, `LlmStreamEvent`, `LlmProfile`, `LlmProfilesState`, `LlmProviderModel`, `ResolvedLlmProfile`, and `LlmCompletion`.
-- Add `src-tauri/src/llm/profiles.rs` for app settings keys, profile load/save, profile validation, and profile resolution.
-- Add `src-tauri/src/llm/gemini.rs` for Gemini request/response structs, request mapping, usage mapping, errors, streaming, and model listing.
-- Add `src-tauri/src/llm/openai_compat.rs` for generic OpenAI-compatible request/response structs, streaming, model listing, usage mapping, and error formatting.
-- Add `src-tauri/src/llm/streaming.rs` for shared SSE helpers such as event boundary detection and `data:` parsing.
-- Add `src-tauri/src/llm/runner.rs` for request validation, effective model resolution, provider dispatch, timeout handling, and collect/stream runner functions.
-- Keep Tauri commands in `llm/mod.rs`: `get_llm_profiles`, `save_llm_profile`, `list_llm_provider_models`, and `ask_llm_stream`.
-- Keep exported backend helpers available for analysis code: profile resolution and collect/stream execution.
-- Introduce a provider config shape that includes `base_url` for OpenAI-compatible providers. OmniRoute should continue using `http://localhost:20128/v1`, but the code should no longer hard-code that URL deep inside the OpenAI-compatible implementation.
-
-Suggested commit split:
-
-1. `refactor: split llm types and profile storage`
-2. `refactor: extract llm providers and streaming helpers`
-3. `refactor: move llm execution into runner`
-
-Parallel-readiness notes:
-
-- Provider clients should remain stateless or request-local.
-- Stream buffers, accumulated text, usage, timeout, and callbacks must stay local to one runner invocation.
-- All emitted stream events must continue carrying `request_id`.
-- No active-request registry, cancellation handles, queueing, rate limits, or multi-stream UI should be added in this refactor.
+- Move LLM API keys to a secure store appropriate for Tauri desktop apps.
+- Review Telegram `api_hash` and session storage responsibilities.
+- Keep secrets profile/account scoped.
+- Preserve existing settings through a migration or one-time import path.
+- Avoid logging secrets in backend errors, frontend status text, or debug output.
 
 Acceptance criteria:
 
-- Public Tauri command names and frontend invocation payloads remain unchanged.
-- Gemini model listing and Test Provider still work.
-- OmniRoute model listing and Test Provider still work.
-- Analysis report generation and follow-up chat still compile against the exported LLM helpers.
-- `cargo fmt`, `cargo test llm`, `cargo check`, and `npm.cmd run check` pass.
+- New LLM provider keys are not persisted in plain SQLite.
+- Existing configured keys can be migrated or re-entered without breaking the app.
+- `/settings` can still edit provider settings without exposing secrets unnecessarily.
 
-Risks:
+## LLM Provider Configuration
 
-- Moving many private helpers can temporarily break Rust visibility boundaries.
-- Keeping compatibility with analysis code requires careful re-export decisions from `llm/mod.rs`.
-- Introducing `base_url` as internal config now should not force a database migration or UI change unless explicitly planned later.
+Status: open.
+
+Priority: high.
+
+Goal: turn Gemini and OmniRoute support into a provider configuration model that can grow beyond the current hard-coded default profile.
+
+Why it matters: the backend now has a modular LLM implementation, but the product still exposes only one active profile and hard-codes OmniRoute's OpenAI-compatible `base_url`.
+
+Scope:
+
+- Add provider profile management beyond the single `default` profile.
+- Decide whether `base_url` should be stored for OpenAI-compatible providers and exposed in `/settings`.
+- Validate model list and Test Provider flows for Gemini and OmniRoute.
+- Make provider labels, placeholders, and error messages provider-neutral where appropriate.
+- Update analysis run metadata if user-facing provider profile names become editable.
+
+Acceptance criteria:
+
+- Users can configure Gemini and OmniRoute without code changes.
+- OpenAI-compatible providers can reuse the same backend path with a configured `base_url`.
+- Test Provider always uses the saved provider/model/key the user sees in settings.
+
+## LLM Parallel Request Support
+
+Status: planned.
+
+Priority: medium.
+
+Goal: support multiple LLM requests running at the same time without mixing stream state, progress state, or UI output.
+
+Why it matters: analysis map chunks, report reduction, follow-up chat, and provider smoke tests can all need request-scoped lifecycle handling. The refactored LLM runner is ready for this, but no concurrency policy exists yet.
+
+Scope:
+
+- Define concurrency limits per provider/profile.
+- Add active request tracking keyed by `request_id`.
+- Add cancellation support for long-running requests.
+- Keep stream buffers, usage, timeout, and callbacks request-local.
+- Decide how the frontend should display multiple active streams.
+- Ensure analysis progress and provider test output ignore unrelated request events.
+
+Acceptance criteria:
+
+- Concurrent LLM requests cannot overwrite each other's output.
+- A user can cancel a long-running request.
+- Provider and analysis events remain traceable by `request_id`.
+
+## Saved Runs Discoverability
+
+Status: open.
+
+Priority: medium.
+
+Goal: make previous analysis runs easy to find even when the current analysis scope changes.
+
+Why it matters: the current `Saved Runs` panel is scoped to the selected source or source group. That can make older runs look missing when the user switches scope or opens Analysis without the original target selected.
+
+Scope:
+
+- Decide whether Saved Runs should default to global history or scoped history.
+- Add explicit scope filters if both behaviors are useful.
+- Preserve the ability to open completed runs regardless of current composer scope.
+- Consider search/filter by source, source group, provider, model, template, status, and date.
+- Keep active-run restoration separate from historical run browsing.
+
+Acceptance criteria:
+
+- Users can find previous saved runs without reconstructing the original source/group selection.
+- Scoped filtering remains available when useful.
+- Running/queued runs remain visually distinct from completed/failed history.
+
+## Media Download And Preview
+
+Status: open.
+
+Priority: medium.
+
+Goal: extend media-aware ingest from metadata-only storage to optional binary media download and preview.
+
+Why it matters: `/sources` already preserves media metadata, but users cannot inspect the actual files from the local archive.
+
+Scope:
+
+- Decide storage layout for downloaded media files.
+- Add download policy controls so media does not unexpectedly consume disk.
+- Render safe previews for common media types.
+- Preserve existing metadata-only behavior as the default or fallback.
+- Handle missing/deleted Telegram media gracefully.
+
+Acceptance criteria:
+
+- Users can opt into downloading media for selected sources or items.
+- Downloaded media is stored outside SQLite with stable metadata references.
+- `/sources` can preview common downloaded media types.
+
+## Media-Aware Analysis
+
+Status: open.
+
+Priority: medium.
+
+Goal: let analysis workflows account for media-bearing and media-only items in a controlled way.
+
+Why it matters: current analysis is text-first. Media-only posts are visible in `/sources` but excluded from the analysis corpus, which can hide important evidence.
+
+Scope:
+
+- Define how media metadata should appear in text-only prompts.
+- Decide whether downloaded media can be sent to multimodal providers.
+- Add citation semantics for media evidence.
+- Update trace resolution and report viewer to handle media refs.
+- Keep text-only analysis available for providers without multimodal support.
+
+Acceptance criteria:
+
+- Reports can mention relevant media metadata with clear citations.
+- Media-only items do not silently disappear when the selected analysis mode supports them.
+- Non-multimodal providers degrade predictably.
+
+## Documentation Refresh
+
+Status: open.
+
+Priority: low.
+
+Goal: align project docs with the current LLM and settings implementation.
+
+Why it matters: several docs still describe the LLM flow as Gemini-only, while the app now supports Gemini and OmniRoute through a modular backend.
+
+Scope:
+
+- Update `README.md`, `docs/project.md`, `docs/design-document.md`, `docs/database-schema.md`, and `docs/architecture-deep-dive.md`.
+- Replace Gemini-only language with provider-neutral language where appropriate.
+- Document OmniRoute's OpenAI-compatible path and current hard-coded `base_url` limitation.
+- Keep the secure-storage warning current.
+
+Acceptance criteria:
+
+- New contributors can understand the current Gemini/OmniRoute provider flow from docs.
+- The docs no longer list completed LLM refactor work as future work.
