@@ -131,10 +131,17 @@ Goal: remove duplication and isolate pure logic before product-facing changes.
 
 #### 1.1. Extract `src-tauri/src/compression.rs`
 
-- [ ] move `compress_text`, `decompress_text`, and `compress_json_bytes`
-- [ ] remove duplicate compression logic from `analysis/mod.rs`
-- [ ] update imports in `sources.rs` and analysis modules
-- [ ] add unit tests for round-trips and boundary cases
+- [x] move `compress_text`, `decompress_text`, and `compress_json_bytes`
+- [x] remove duplicate compression logic from `analysis/mod.rs`
+- [x] update imports in `sources.rs` and analysis modules
+- [x] add unit tests for round-trips and boundary cases
+
+Notes:
+
+- completed via shared module `src-tauri/src/compression.rs`
+- `analysis/store.rs` snapshot compression now also uses the shared helper
+- verification completed with `cargo fmt` and `cargo test`
+- current Rust test count after this step: `37 passed`
 
 #### 1.2. Extract `src-tauri/src/media.rs`
 
@@ -505,12 +512,23 @@ Expected outcome: code, behavior, and documentation converge again.
 
 If implementation starts directly from this file, the recommended opening sequence is:
 
-1. extract `compression.rs`
-2. extract `media.rs`
-3. create `src/lib/types/sources.ts` and `src/lib/types/accounts.ts`
-4. replace deprecated page store usage
-5. refactor `sync_source`
-6. validate real Telegram runtime behavior on actual accounts and dialogs
+1. extract `media.rs`
+2. create `src/lib/types/sources.ts` and `src/lib/types/accounts.ts`
+3. replace deprecated page store usage
+4. refactor `sync_source`
+5. validate real Telegram runtime behavior on actual accounts and dialogs
+
+### Session Handoff
+
+Current implementation checkpoint:
+
+- shared compression helpers extracted into `src-tauri/src/compression.rs`
+- `sources.rs`, `analysis/mod.rs`, and `analysis/store.rs` switched to the shared compression helpers
+- formatting and Rust tests passed after the change
+
+Recommended next step:
+
+- continue with **Phase 1.2**, extracting media parsing into `src-tauri/src/media.rs`
 
 ---
 
