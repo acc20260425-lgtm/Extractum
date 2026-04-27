@@ -1,26 +1,6 @@
 <script lang="ts">
-  type TelegramSourceKind = "channel" | "supergroup" | "group";
-
-  interface SourceRecord {
-    id: number;
-    source_type: string;
-    telegram_source_kind: TelegramSourceKind;
-    account_id: number | null;
-    external_id: string;
-    title: string | null;
-    last_sync_state: number | null;
-    last_synced_at: number | null;
-    is_member: boolean;
-    is_active: boolean;
-    created_at: number;
-    avatar_data_url: string | null;
-  }
-
-  interface AccountRuntimeStatus {
-    account_id: number;
-    status: "not_initialized" | "restoring" | "ready" | "reauth_required" | "restore_failed";
-    message: string | null;
-  }
+  import type { AccountRuntimeStatus } from "$lib/types/accounts";
+  import type { SourceRecord } from "$lib/types/sources";
 
   let {
     source,

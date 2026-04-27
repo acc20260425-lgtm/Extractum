@@ -4,18 +4,10 @@
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import { formatAppError } from "$lib/app-error";
+  import type { AccountRecord } from "$lib/types/accounts";
 
   const accountId = parseInt($page.params.id ?? "", 10);
   const hasValidAccountId = Number.isFinite(accountId);
-
-  interface AccountRecord {
-    id: number;
-    label: string;
-    api_id: number;
-    api_hash: string;
-    phone: string | null;
-    created_at: number;
-  }
 
   let label = $state("");
   let apiId = $state(0);

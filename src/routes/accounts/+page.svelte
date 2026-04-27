@@ -5,21 +5,7 @@
   import { formatAppError } from "$lib/app-error";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
-
-  interface AccountRecord {
-    id: number;
-    label: string;
-    api_id: number;
-    api_hash: string;
-    phone: string | null;
-    created_at: number;
-  }
-
-  interface AccountRuntimeStatus {
-    account_id: number;
-    status: "not_initialized" | "restoring" | "ready" | "reauth_required" | "restore_failed";
-    message: string | null;
-  }
+  import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
 
   interface RuntimeStatusEvent<T> {
     payload: T;
