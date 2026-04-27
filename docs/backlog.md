@@ -187,14 +187,21 @@ Goal: improve ingest maintainability while validating Telegram behavior against 
 
 #### 2.1. Split `sync_source`
 
-- [ ] extract `load_source`
-- [ ] extract `get_authorized_client`
-- [ ] extract `resolve_and_refresh_peer`
-- [ ] extract `determine_sync_policy`
-- [ ] extract `extract_items_from_messages`
-- [ ] extract `persist_items`
-- [ ] extract `finalize_sync`
-- [ ] add characterization tests and storage-focused tests
+- [x] extract `load_source`
+- [x] extract `get_authorized_client`
+- [x] extract `resolve_and_refresh_peer`
+- [x] extract `determine_sync_policy`
+- [x] extract `extract_items_from_messages`
+- [x] extract `persist_items`
+- [x] extract `finalize_sync`
+- [x] add characterization tests and storage-focused tests
+
+Notes:
+
+- `sync_source` is now an orchestration layer over focused helpers for source loading, account/client auth, peer resolution, sync policy, ingest persistence, and finalization
+- added storage-focused tests covering missing-source loading, initial-vs-incremental sync policy behavior, and final source-state persistence updates
+- verification completed with `cargo test`
+- current Rust test count after this step: `41 passed`
 
 #### 2.2. Telegram Runtime Validation
 

@@ -172,6 +172,24 @@ struct ResolvedTelegramSource {
     avatar_bytes: Option<Vec<u8>>,
 }
 
+struct ResolvedSyncPeer {
+    peer: PeerRef,
+    refreshed_metadata_zstd: Option<Vec<u8>>,
+}
+
+struct SyncPolicy {
+    previous_last_sync: i64,
+    initial_sync_settings: Option<SyncSettingsRecord>,
+    initial_sync_policy_applied: Option<String>,
+    initial_sync_cutoff: Option<i64>,
+}
+
+struct IngestOutcome {
+    inserted: i64,
+    skipped: i64,
+    max_message_id: i64,
+}
+
 fn default_sync_settings() -> SyncSettingsRecord {
     SyncSettingsRecord {
         initial_sync_mode: InitialSyncMode::RecentMessages,
@@ -514,6 +532,243 @@ fn read_source_avatar_data_url(handle: &AppHandle, cache_key: &str) -> Option<St
     Some(photo_bytes_data_url(bytes))
 }
 
+async fn load_source(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<SourceSyncTarget> {
+    sqlx::query_as(
+        "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
+    )
+    .bind(source_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))
+}
+
+async fn get_authorized_client(
+    state: tauri::State<'_, TelegramState>,
+    account_id: i64,
+) -> AppResult<grammers_client::Client> {
+    let client = {
+        let accounts = state.accounts.lock().await;
+        crate::telegram::get_client(&accounts, account_id)
+            .await?
+            .clone()
+    };
+
+    if !client.is_authorized().await.map_err(|e| e.to_string())? {
+        return Err(AppError::auth(format!(
+            "Account {account_id} is not authenticated"
+        )));
+    }
+
+    Ok(client)
+}
+
+async fn resolve_and_refresh_peer(
+    handle: &AppHandle,
+    client: &grammers_client::Client,
+    source: &SourceSyncTarget,
+    account_id: i64,
+) -> Result<ResolvedSyncPeer, String> {
+    let peer = resolve_source_peer(client, source).await?;
+    let refreshed_metadata_zstd =
+        refresh_source_avatar_cache(handle, client, source, account_id, peer).await;
+
+    Ok(ResolvedSyncPeer {
+        peer,
+        refreshed_metadata_zstd,
+    })
+}
+
+async fn determine_sync_policy(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source: &SourceSyncTarget,
+) -> AppResult<SyncPolicy> {
+    let previous_last_sync = source.last_sync_state.unwrap_or(0);
+    let initial_sync_settings = if previous_last_sync == 0 {
+        Some(load_sync_settings_from_pool(pool).await?)
+    } else {
+        None
+    };
+    let initial_sync_policy_applied = initial_sync_settings
+        .as_ref()
+        .map(initial_sync_policy_label);
+    let initial_sync_cutoff =
+        initial_sync_settings
+            .as_ref()
+            .and_then(|settings| match settings.initial_sync_mode {
+                InitialSyncMode::RecentDays => {
+                    Some(now_secs() - settings.initial_sync_value * SECONDS_PER_DAY)
+                }
+                InitialSyncMode::RecentMessages => None,
+            });
+
+    Ok(SyncPolicy {
+        previous_last_sync,
+        initial_sync_settings,
+        initial_sync_policy_applied,
+        initial_sync_cutoff,
+    })
+}
+
+async fn persist_items(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    client: &grammers_client::Client,
+    peer: PeerRef,
+    source: &SourceSyncTarget,
+    sync_policy: &SyncPolicy,
+) -> Result<IngestOutcome, String> {
+    let mut inserted = 0_i64;
+    let mut skipped = 0_i64;
+    let mut max_message_id = sync_policy.previous_last_sync;
+    let mut messages = if let Some(settings) = sync_policy.initial_sync_settings.as_ref() {
+        match settings.initial_sync_mode {
+            InitialSyncMode::RecentMessages => client
+                .iter_messages(peer)
+                .limit(settings.initial_sync_value as usize),
+            InitialSyncMode::RecentDays => client.iter_messages(peer),
+        }
+    } else {
+        client.iter_messages(peer)
+    };
+
+    while let Some(message) = messages.next().await.map_err(|e| e.to_string())? {
+        let message_id = i64::from(message.id());
+        if sync_policy.previous_last_sync > 0 && message_id <= sync_policy.previous_last_sync {
+            break;
+        }
+        let published_at = message.date().timestamp();
+        if let Some(cutoff) = sync_policy.initial_sync_cutoff {
+            if published_at < cutoff {
+                break;
+            }
+        }
+
+        if message_id > max_message_id {
+            max_message_id = message_id;
+        }
+
+        let item_payload = match extract_item_payload(&message) {
+            Some(payload) => payload,
+            None => {
+                skipped += 1;
+                continue;
+            }
+        };
+
+        let content_zstd = item_payload
+            .content
+            .as_deref()
+            .map(compress_text)
+            .transpose()?;
+        let media_kind = item_payload.media.as_ref().map(|media| media.kind.clone());
+        let media_metadata_zstd = item_payload
+            .media
+            .as_ref()
+            .map(|media| encode_media_metadata(&media.metadata))
+            .transpose()?;
+
+        if content_zstd.is_none() && media_metadata_zstd.is_none() {
+            skipped += 1;
+            continue;
+        }
+
+        let author = message_author(&message);
+        let raw_data_zstd = compress_json_bytes(&build_raw_payload(
+            &message,
+            &source.title,
+            &author,
+            &item_payload,
+        )?)?;
+
+        let result = sqlx::query(
+            r#"
+            INSERT INTO items (
+                source_id,
+                external_id,
+                author,
+                published_at,
+                ingested_at,
+                content_zstd,
+                raw_data_zstd,
+                content_kind,
+                has_media,
+                media_kind,
+                media_metadata_zstd
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_id, external_id) DO NOTHING
+            "#,
+        )
+        .bind(source.id)
+        .bind(message_id.to_string())
+        .bind(&author)
+        .bind(published_at)
+        .bind(now_secs())
+        .bind(content_zstd)
+        .bind(raw_data_zstd)
+        .bind(item_payload.content_kind)
+        .bind(item_payload.media.is_some())
+        .bind(&media_kind)
+        .bind(media_metadata_zstd)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        if result.rows_affected() == 1 {
+            inserted += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    Ok(IngestOutcome {
+        inserted,
+        skipped,
+        max_message_id,
+    })
+}
+
+async fn finalize_sync(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source: &SourceSyncTarget,
+    previous_last_sync: i64,
+    max_message_id: i64,
+    refreshed_metadata_zstd: Option<Vec<u8>>,
+) -> Result<Option<i64>, String> {
+    let sync_completed_at = now_secs();
+    let last_sync_state = if max_message_id > previous_last_sync {
+        Some(max_message_id)
+    } else {
+        source.last_sync_state
+    };
+
+    if let Some(metadata_zstd) = refreshed_metadata_zstd {
+        sqlx::query(
+            "UPDATE sources SET last_sync_state = ?, last_synced_at = ?, metadata_zstd = ? WHERE id = ?",
+        )
+        .bind(last_sync_state)
+        .bind(sync_completed_at)
+        .bind(metadata_zstd)
+        .bind(source.id)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    } else {
+        sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
+            .bind(last_sync_state)
+            .bind(sync_completed_at)
+            .bind(source.id)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(last_sync_state)
+}
+
 #[tauri::command]
 pub async fn add_telegram_source(
     handle: AppHandle,
@@ -663,190 +918,30 @@ pub async fn sync_source(
     source_id: i64,
 ) -> AppResult<SyncResult> {
     let pool = get_pool(&handle).await?;
-    let source: SourceSyncTarget = sqlx::query_as(
-        "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
-    )
-    .bind(source_id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))?;
+    let source = load_source(&pool, source_id).await?;
 
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
 
-    let client = {
-        let accounts = state.accounts.lock().await;
-        crate::telegram::get_client(&accounts, account_id)
-            .await?
-            .clone()
-    };
-
-    if !client.is_authorized().await.map_err(|e| e.to_string())? {
-        return Err(AppError::auth(format!(
-            "Account {account_id} is not authenticated"
-        )));
-    }
-
-    let peer = resolve_source_peer(&client, &source).await?;
-    let refreshed_metadata_zstd =
-        refresh_source_avatar_cache(&handle, &client, &source, account_id, peer).await;
-    let mut inserted = 0_i64;
-    let mut skipped = 0_i64;
-    let previous_last_sync = source.last_sync_state.unwrap_or(0);
-    let initial_sync_settings = if previous_last_sync == 0 {
-        Some(load_sync_settings_from_pool(&pool).await?)
-    } else {
-        None
-    };
-    let initial_sync_policy_applied = initial_sync_settings
-        .as_ref()
-        .map(initial_sync_policy_label);
-    let initial_sync_cutoff =
-        initial_sync_settings
-            .as_ref()
-            .and_then(|settings| match settings.initial_sync_mode {
-                InitialSyncMode::RecentDays => {
-                    Some(now_secs() - settings.initial_sync_value * SECONDS_PER_DAY)
-                }
-                InitialSyncMode::RecentMessages => None,
-            });
-    let mut max_message_id = previous_last_sync;
-    let mut messages = if let Some(settings) = initial_sync_settings.as_ref() {
-        match settings.initial_sync_mode {
-            InitialSyncMode::RecentMessages => client
-                .iter_messages(peer)
-                .limit(settings.initial_sync_value as usize),
-            InitialSyncMode::RecentDays => client.iter_messages(peer),
-        }
-    } else {
-        client.iter_messages(peer)
-    };
-
-    while let Some(message) = messages.next().await.map_err(|e| e.to_string())? {
-        let message_id = i64::from(message.id());
-        if previous_last_sync > 0 && message_id <= previous_last_sync {
-            break;
-        }
-        let published_at = message.date().timestamp();
-        if let Some(cutoff) = initial_sync_cutoff {
-            if published_at < cutoff {
-                break;
-            }
-        }
-
-        if message_id > max_message_id {
-            max_message_id = message_id;
-        }
-
-        let item_payload = match extract_item_payload(&message) {
-            Some(payload) => payload,
-            None => {
-                skipped += 1;
-                continue;
-            }
-        };
-
-        let content_zstd = item_payload
-            .content
-            .as_deref()
-            .map(compress_text)
-            .transpose()?;
-        let media_kind = item_payload.media.as_ref().map(|media| media.kind.clone());
-        let media_metadata_zstd = item_payload
-            .media
-            .as_ref()
-            .map(|media| encode_media_metadata(&media.metadata))
-            .transpose()?;
-
-        if content_zstd.is_none() && media_metadata_zstd.is_none() {
-            skipped += 1;
-            continue;
-        }
-
-        let author = message_author(&message);
-        let raw_data_zstd = compress_json_bytes(&build_raw_payload(
-            &message,
-            &source.title,
-            &author,
-            &item_payload,
-        )?)?;
-
-        let result = sqlx::query(
-            r#"
-            INSERT INTO items (
-                source_id,
-                external_id,
-                author,
-                published_at,
-                ingested_at,
-                content_zstd,
-                raw_data_zstd,
-                content_kind,
-                has_media,
-                media_kind,
-                media_metadata_zstd
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(source_id, external_id) DO NOTHING
-            "#,
-        )
-        .bind(source.id)
-        .bind(message_id.to_string())
-        .bind(&author)
-        .bind(published_at)
-        .bind(now_secs())
-        .bind(content_zstd)
-        .bind(raw_data_zstd)
-        .bind(item_payload.content_kind)
-        .bind(item_payload.media.is_some())
-        .bind(&media_kind)
-        .bind(media_metadata_zstd)
-        .execute(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-        if result.rows_affected() == 1 {
-            inserted += 1;
-        } else {
-            skipped += 1;
-        }
-    }
-
-    let sync_completed_at = now_secs();
-    let last_sync_state = if max_message_id > previous_last_sync {
-        Some(max_message_id)
-    } else {
-        source.last_sync_state
-    };
-
-    if let Some(metadata_zstd) = refreshed_metadata_zstd {
-        sqlx::query(
-            "UPDATE sources SET last_sync_state = ?, last_synced_at = ?, metadata_zstd = ? WHERE id = ?",
-        )
-        .bind(last_sync_state)
-        .bind(sync_completed_at)
-        .bind(metadata_zstd)
-        .bind(source.id)
-        .execute(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
-    } else {
-        sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
-            .bind(last_sync_state)
-            .bind(sync_completed_at)
-            .bind(source.id)
-            .execute(&pool)
-            .await
-            .map_err(|e| e.to_string())?;
-    }
+    let client = get_authorized_client(state, account_id).await?;
+    let resolved_peer = resolve_and_refresh_peer(&handle, &client, &source, account_id).await?;
+    let sync_policy = determine_sync_policy(&pool, &source).await?;
+    let ingest = persist_items(&pool, &client, resolved_peer.peer, &source, &sync_policy).await?;
+    let last_sync_state = finalize_sync(
+        &pool,
+        &source,
+        sync_policy.previous_last_sync,
+        ingest.max_message_id,
+        resolved_peer.refreshed_metadata_zstd,
+    )
+    .await?;
 
     Ok(SyncResult {
-        inserted,
-        skipped,
+        inserted: ingest.inserted,
+        skipped: ingest.skipped,
         last_message_id: last_sync_state,
-        initial_sync_policy_applied,
+        initial_sync_policy_applied: sync_policy.initial_sync_policy_applied,
     })
 }
 
@@ -1258,12 +1353,14 @@ fn build_raw_payload(
 mod tests {
     use super::{
         decode_media_metadata, decode_source_metadata, default_sync_settings,
-        encode_media_metadata, encode_source_metadata, initial_sync_policy_label,
-        load_sync_settings_from_pool, save_sync_settings_to_pool, source_peer_ref_from_metadata,
-        validate_sync_settings, InitialSyncMode, SourceMetadata, SourceSyncTarget,
-        SyncSettingsRecord, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
+        determine_sync_policy, encode_media_metadata, encode_source_metadata, finalize_sync,
+        initial_sync_policy_label, load_source, load_sync_settings_from_pool,
+        save_sync_settings_to_pool, source_peer_ref_from_metadata, validate_sync_settings,
+        InitialSyncMode, SourceMetadata, SourceRecordRow, SourceSyncTarget, SyncSettingsRecord,
+        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
     };
     use crate::compression::{compress_json_bytes, compress_text, decompress_text};
+    use crate::error::{AppErrorKind};
     use crate::media::ItemMediaMetadata;
 
     async fn memory_pool() -> sqlx::SqlitePool {
@@ -1274,6 +1371,32 @@ mod tests {
             .execute(&pool)
             .await
             .expect("create app_settings");
+        pool
+    }
+
+    async fn memory_pool_with_sources() -> sqlx::SqlitePool {
+        let pool = memory_pool().await;
+        sqlx::query(
+            r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY,
+                source_type TEXT NOT NULL,
+                telegram_source_kind TEXT NOT NULL,
+                account_id INTEGER,
+                external_id TEXT NOT NULL,
+                title TEXT,
+                metadata_zstd BLOB,
+                last_sync_state INTEGER,
+                last_synced_at INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                is_member INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create sources");
         pool
     }
 
@@ -1432,5 +1555,131 @@ mod tests {
             .expect("load sync settings");
 
         assert_eq!(loaded, expected);
+    }
+
+    #[tokio::test]
+    async fn load_source_returns_not_found_for_missing_source() {
+        let pool = memory_pool_with_sources().await;
+        let error = match load_source(&pool, 999).await {
+            Ok(_) => panic!("expected missing source error"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn determine_sync_policy_only_applies_initial_settings_on_first_sync() {
+        let pool = memory_pool_with_sources().await;
+        let source = SourceSyncTarget {
+            id: 1,
+            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
+            account_id: Some(1),
+            external_id: "12345".to_string(),
+            title: Some("Example".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+
+        let initial = determine_sync_policy(&pool, &source)
+            .await
+            .expect("determine initial policy");
+        assert_eq!(initial.previous_last_sync, 0);
+        assert_eq!(
+            initial.initial_sync_policy_applied.as_deref(),
+            Some("last 500 messages")
+        );
+        assert!(initial.initial_sync_settings.is_some());
+        assert_eq!(initial.initial_sync_cutoff, None);
+
+        let incremental = determine_sync_policy(
+            &pool,
+            &SourceSyncTarget {
+                last_sync_state: Some(77),
+                ..source
+            },
+        )
+        .await
+        .expect("determine incremental policy");
+        assert_eq!(incremental.previous_last_sync, 77);
+        assert!(incremental.initial_sync_settings.is_none());
+        assert!(incremental.initial_sync_policy_applied.is_none());
+        assert_eq!(incremental.initial_sync_cutoff, None);
+    }
+
+    #[tokio::test]
+    async fn finalize_sync_updates_source_state_and_metadata() {
+        let pool = memory_pool_with_sources().await;
+        let metadata_zstd = encode_source_metadata(&SourceMetadata {
+            username: Some("before".to_string()),
+            ..SourceMetadata::default()
+        })
+        .expect("encode initial metadata");
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id,
+                source_type,
+                telegram_source_kind,
+                account_id,
+                external_id,
+                title,
+                metadata_zstd,
+                last_sync_state,
+                last_synced_at,
+                is_active,
+                is_member,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind(TELEGRAM_SOURCE_TYPE)
+        .bind(TELEGRAM_KIND_CHANNEL)
+        .bind(1_i64)
+        .bind("12345")
+        .bind("Example")
+        .bind(metadata_zstd)
+        .bind(5_i64)
+        .bind(10_i64)
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind(20_i64)
+        .execute(&pool)
+        .await
+        .expect("insert source");
+
+        let source = load_source(&pool, 1).await.expect("load source");
+        let updated_metadata_zstd = encode_source_metadata(&SourceMetadata {
+            username: Some("after".to_string()),
+            avatar_cache_key: Some("1_channel_12345.jpg".to_string()),
+            ..SourceMetadata::default()
+        })
+        .expect("encode updated metadata");
+
+        let last_sync_state = finalize_sync(&pool, &source, 5, 9, Some(updated_metadata_zstd))
+            .await
+            .expect("finalize sync");
+        assert_eq!(last_sync_state, Some(9));
+
+        let row: SourceRecordRow = sqlx::query_as(
+            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE id = ?",
+        )
+        .bind(1_i64)
+        .fetch_one(&pool)
+        .await
+        .expect("reload updated source");
+
+        assert_eq!(row.last_sync_state, Some(9));
+        assert!(row.last_synced_at.is_some());
+        let decoded_metadata =
+            decode_source_metadata(row.metadata_zstd.as_deref()).expect("decode metadata");
+        assert_eq!(decoded_metadata.username.as_deref(), Some("after"));
+        assert_eq!(
+            decoded_metadata.avatar_cache_key.as_deref(),
+            Some("1_channel_12345.jpg")
+        );
     }
 }
