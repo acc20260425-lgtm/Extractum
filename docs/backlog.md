@@ -277,6 +277,156 @@ Acceptance criteria:
 - [ ] public username sources still sync through username resolution
 - [ ] existing sources with older metadata continue to work through fallback dialog scanning
 
+Implementation plan:
+
+##### 2.3.1. Audit current peer identity behavior
+
+Goal: document what is stored today and where private-source fragility still comes from.
+
+- [ ] describe the current resolution chain in `resolve_source_peer`: username -> metadata identity -> dialog scan
+- [ ] record the current `SourceMetadata` contract and which fields are actually used during sync
+- [ ] separate already-supported flows from fragile flows for public sources, dialog-picked private sources, and legacy sources
+- [ ] document the main risk cases: private source without username, small `group`, and dialog-dependent resolution
+
+Definition of done:
+
+- [ ] there is a short written summary in backlog notes or code comments that explains the current contract and its limitations
+
+##### 2.3.2. Design the new peer identity model
+
+Goal: replace loosely related metadata fields with an explicit peer identity model.
+
+- [ ] define a nested metadata structure such as `peer_identity`
+- [ ] include enough fields to distinguish `username`-resolved sources from dialog-picked private sources
+- [ ] capture the intended resolution strategy explicitly rather than inferring it indirectly
+- [ ] keep all new fields backward-compatible with existing rows by using optional fields where needed
+
+Definition of done:
+
+- [ ] the target `SourceMetadata` shape is decided and maps cleanly to supported Telegram source flows
+
+##### 2.3.3. Implement backward-compatible metadata serialization
+
+Goal: introduce the new metadata model without breaking stored sources.
+
+- [ ] update `SourceMetadata` in `src-tauri/src/sources.rs`
+- [ ] update `encode_source_metadata`
+- [ ] update `decode_source_metadata`
+- [ ] keep existing legacy payloads decodable without a database migration
+- [ ] add unit tests for old payload decode and new payload roundtrip
+
+Definition of done:
+
+- [ ] old metadata payloads still decode successfully
+- [ ] new metadata payloads roundtrip through compression and JSON encoding
+
+##### 2.3.4. Expand metadata captured by `add_telegram_source`
+
+Goal: store enough identity data at add time to make later sync more predictable.
+
+- [ ] when adding from dialogs, persist explicit dialog-picked peer identity data
+- [ ] when adding by username, persist explicit username-based resolution metadata
+- [ ] preserve avatar cache handling while expanding metadata
+- [ ] keep the persisted source record shape backward-compatible for the rest of the app
+
+Definition of done:
+
+- [ ] newly added public and dialog-picked private sources store explicit identity strategy information
+
+##### 2.3.5. Refactor `resolve_source_peer` into an explicit resolution pipeline
+
+Goal: make peer resolution deterministic and understandable instead of relying on loosely ordered fallbacks.
+
+- [ ] make resolution strategy selection explicit based on stored metadata
+- [ ] prefer username resolution for username-based public sources
+- [ ] prefer stored peer identity for dialog-picked private `channel` and `supergroup` sources
+- [ ] keep dialog scanning only as a compatibility fallback where appropriate
+- [ ] return clearer failure reasons when no resolution path succeeds
+
+Definition of done:
+
+- [ ] `resolve_source_peer` reads as an explicit rules pipeline rather than a chain of opportunistic fallbacks
+
+##### 2.3.6. Define support boundaries by Telegram source kind
+
+Goal: avoid pretending that all source kinds support the same identity guarantees.
+
+- [ ] define the expected private/public behavior for `channel`
+- [ ] define the expected private/public behavior for `supergroup`
+- [ ] define the practical limitations for `group`
+- [ ] ensure the code and docs use the same support language for each kind
+
+Definition of done:
+
+- [ ] supported and limited flows are explicitly documented for `channel`, `supergroup`, and `group`
+
+##### 2.3.7. Tighten manual add rules
+
+Goal: prevent users from creating private-source records that cannot be synced predictably later.
+
+- [ ] keep `@username` and `t.me/name` as supported manual refs for public sources
+- [ ] keep dialog-picked private sources as the preferred supported private flow
+- [ ] reject or clearly discourage numeric/manual private adds when metadata is insufficient
+- [ ] return friendly errors when a numeric source cannot be found in dialogs
+
+Definition of done:
+
+- [ ] manual add no longer suggests unsupported private-source flows are stable
+
+##### 2.3.8. Improve typed errors for private-source resolution
+
+Goal: explain failure modes clearly enough that the user knows what to do next.
+
+- [ ] add a clear private-source resolution failure message that recommends re-adding from dialogs
+- [ ] distinguish username resolution failure from stored-identity failure where possible
+- [ ] keep source-kind mismatch errors structured and user-facing
+- [ ] avoid generic internal failures for expected private-source edge cases
+
+Definition of done:
+
+- [ ] private-source sync failures return user-actionable typed errors
+
+##### 2.3.9. Add targeted tests for new resolution contracts
+
+Goal: lock in the new behavior and reduce regressions around private-source handling.
+
+- [ ] test old metadata decode compatibility
+- [ ] test new metadata roundtrip coverage
+- [ ] test stored peer identity resolution for `channel` and `supergroup`
+- [ ] test that `group` does not pretend to support unsupported identity-only resolution
+- [ ] test friendly failure behavior for private sources that can no longer be resolved
+- [ ] test unsupported manual/private add cases
+
+Definition of done:
+
+- [ ] the new resolution contracts are covered by unit or storage-oriented tests where feasible
+
+##### 2.3.10. Refresh documentation
+
+Goal: align the docs with the new private-source contract.
+
+- [ ] update `docs/architecture-deep-dive.md`
+- [ ] update `docs/backlog.md`
+- [ ] document the supported Telegram source refs: `@username`, `t.me/name`, and dialog-picked private source
+- [ ] document the remaining limitations for small `group` sources and legacy fallback behavior
+
+Definition of done:
+
+- [ ] a contributor can understand the new private-source rules from docs without re-deriving them from `sources.rs`
+
+Recommended implementation sequence:
+
+- [ ] Stage A: audit current behavior, design the metadata model, and land backward-compatible serialization
+- [ ] Stage B: update add-time metadata capture and refactor the resolution pipeline
+- [ ] Stage C: tighten manual-add rules, improve typed errors, add the final test coverage, and refresh docs
+
+Phase completion gate:
+
+- [ ] private dialog-picked `channel` and `supergroup` sources resolve predictably through stored identity when Telegram provides sufficient data
+- [ ] legacy sources remain functional through compatibility fallbacks
+- [ ] unsupported private-source flows are rejected or clearly explained instead of behaving unpredictably
+- [ ] documentation reflects the new peer identity contract and the remaining limitations
+
 Expected outcome: ingest code becomes easier to change, and Telegram behavior is validated beyond static reading of the code.
 
 ---
