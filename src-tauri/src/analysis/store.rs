@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use sqlx::{Pool, QueryBuilder, Sqlite};
 
 use super::models::{
@@ -13,6 +11,7 @@ use super::{
     ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING, DEFAULT_REPORT_TEMPLATE_NAME,
     TEMPLATE_KIND_REPORT,
 };
+use crate::compression::compress_text;
 
 async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> Result<bool, String> {
     sqlx::query_scalar::<_, i64>(
@@ -313,10 +312,6 @@ pub(crate) async fn resolve_run_source_ids(
     Err(format!("Unsupported analysis scope '{}'", run.scope_type))
 }
 
-fn compress_snapshot_text(input: &str) -> Result<Vec<u8>, String> {
-    zstd::encode_all(Cursor::new(input.as_bytes()), 3).map_err(|e| e.to_string())
-}
-
 pub(crate) async fn load_chat_messages_from_pool(
     pool: &Pool<Sqlite>,
     run_id: i64,
@@ -514,7 +509,7 @@ pub(crate) async fn persist_run_snapshot(
         .map_err(|e| e.to_string())?;
 
     for message in corpus {
-        let content_zstd = compress_snapshot_text(&message.content)?;
+        let content_zstd = compress_text(&message.content)?;
         sqlx::query(
             r#"
             INSERT INTO analysis_run_messages (

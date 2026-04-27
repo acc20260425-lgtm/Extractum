@@ -7,8 +7,6 @@ mod templates;
 mod trace;
 
 use std::collections::HashSet;
-use std::io::Cursor;
-
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
@@ -18,6 +16,7 @@ use self::models::{
 };
 use self::store::{fetch_run_row, load_run_corpus_messages, map_run_detail, map_run_summary};
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
+use crate::compression::decompress_text;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 
@@ -117,11 +116,6 @@ Focus on:
 - supporting examples from the source material
 
 Always keep the report concise, readable, and useful for later follow-up analysis."#
-}
-
-fn decompress_text(bytes: &[u8]) -> Result<String, String> {
-    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(|e| e.to_string())?;
-    String::from_utf8(decoded).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

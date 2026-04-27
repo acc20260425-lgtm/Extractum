@@ -1,3 +1,4 @@
+mod compression;
 mod db;
 mod error;
 mod migrations;

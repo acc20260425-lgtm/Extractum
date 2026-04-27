@@ -3,10 +3,11 @@ use grammers_client::{media::Media, peer::Peer, tl};
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{fs, io::Cursor, path::PathBuf};
+use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 use tokio::time::{timeout, Duration, Instant};
 
+use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, decompress_text};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::telegram::TelegramState;
@@ -1126,19 +1127,6 @@ fn peer_access_hash(peer: &Peer) -> Option<i64> {
     }
 }
 
-fn compress_text(input: &str) -> Result<Vec<u8>, String> {
-    zstd::encode_all(Cursor::new(input.as_bytes()), 3).map_err(|e| e.to_string())
-}
-
-fn compress_json_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    zstd::encode_all(Cursor::new(bytes), 3).map_err(|e| e.to_string())
-}
-
-fn decompress_text(bytes: &[u8]) -> Result<String, String> {
-    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(|e| e.to_string())?;
-    String::from_utf8(decoded).map_err(|e| e.to_string())
-}
-
 fn encode_source_metadata(metadata: &SourceMetadata) -> Result<Vec<u8>, String> {
     let json = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
     compress_json_bytes(&json)
@@ -1153,7 +1141,7 @@ fn decode_source_metadata(bytes: Option<&[u8]>) -> Result<SourceMetadata, String
     let Some(bytes) = bytes else {
         return Ok(SourceMetadata::default());
     };
-    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    let decoded = decompress_bytes(bytes)?;
     serde_json::from_slice(&decoded).map_err(|e| e.to_string())
 }
 
@@ -1161,7 +1149,7 @@ fn decode_media_metadata(bytes: Option<&[u8]>) -> Result<ItemMediaMetadata, Stri
     let Some(bytes) = bytes else {
         return Ok(ItemMediaMetadata::default());
     };
-    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    let decoded = decompress_bytes(bytes)?;
     serde_json::from_slice(&decoded).map_err(|e| e.to_string())
 }
 
@@ -1526,15 +1514,15 @@ fn build_raw_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        compress_text, decode_media_metadata, decode_source_metadata, decompress_text,
-        default_sync_settings, derive_content_kind, derive_document_media_kind,
-        encode_media_metadata, encode_source_metadata, initial_sync_policy_label,
-        load_sync_settings_from_pool, save_sync_settings_to_pool, source_peer_ref_from_metadata,
-        validate_sync_settings, DocumentSignals, InitialSyncMode, ItemMediaMetadata,
-        SourceMetadata, SourceSyncTarget, SyncSettingsRecord, CONTENT_KIND_MEDIA_ONLY,
-        CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA, TELEGRAM_KIND_CHANNEL,
-        TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
+        decode_media_metadata, decode_source_metadata, default_sync_settings, derive_content_kind,
+        derive_document_media_kind, encode_media_metadata, encode_source_metadata,
+        initial_sync_policy_label, load_sync_settings_from_pool, save_sync_settings_to_pool,
+        source_peer_ref_from_metadata, validate_sync_settings, DocumentSignals, InitialSyncMode,
+        ItemMediaMetadata, SourceMetadata, SourceSyncTarget, SyncSettingsRecord,
+        CONTENT_KIND_MEDIA_ONLY, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
+        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
     };
+    use crate::compression::{compress_json_bytes, compress_text, decompress_text};
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -1574,7 +1562,7 @@ mod tests {
 
     #[test]
     fn source_metadata_decodes_old_username_only_payloads() {
-        let encoded = super::compress_json_bytes(br#"{"username":"example"}"#).expect("encode");
+        let encoded = compress_json_bytes(br#"{"username":"example"}"#).expect("encode");
         let decoded = decode_source_metadata(Some(&encoded)).expect("decode");
 
         assert_eq!(decoded.username.as_deref(), Some("example"));
