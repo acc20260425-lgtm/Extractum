@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { formatAppError } from "$lib/app-error";
   import type { AccountRecord } from "$lib/types/accounts";
 
-  const accountId = parseInt($page.params.id ?? "", 10);
+  const accountId = parseInt(page.params.id ?? "", 10);
   const hasValidAccountId = Number.isFinite(accountId);
 
   let label = $state("");

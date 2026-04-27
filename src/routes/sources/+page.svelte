@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { formatAppError } from "$lib/app-error";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
@@ -37,8 +37,8 @@
   ];
 
   let selectedAccountId = $state<number | null>(
-    $page.url.searchParams.has("account")
-      ? parseInt($page.url.searchParams.get("account")!, 10)
+    page.url.searchParams.has("account")
+      ? parseInt(page.url.searchParams.get("account")!, 10)
       : null
   );
 

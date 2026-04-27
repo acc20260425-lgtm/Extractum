@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from "$app/environment";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import ModalHost from "$lib/components/modal-host.svelte";
   import ToastHost from "$lib/components/toast-host.svelte";
 
@@ -70,7 +70,7 @@
         {#each navItems as item (item.href)}
           <a
             href={item.href}
-            class:active={item.active($page.url.pathname)}
+            class:active={item.active(page.url.pathname)}
           >
             <span class="nav-label">{item.label}</span>
             <span class="nav-caption">{item.caption}</span>

@@ -166,8 +166,14 @@ Notes:
 
 #### 1.4. Remove deprecated page store usage
 
-- [ ] replace `$app/stores` with `$app/state` where required
-- [ ] verify `+layout.svelte`, `sources/+page.svelte`, and `auth/[id]/+page.svelte`
+- [x] replace `$app/stores` with `$app/state` where required
+- [x] verify `+layout.svelte`, `sources/+page.svelte`, and `auth/[id]/+page.svelte`
+
+Notes:
+
+- completed in `src/routes/+layout.svelte`, `src/routes/sources/+page.svelte`, and `src/routes/auth/[id]/+page.svelte`
+- project search confirms no remaining `$app/stores` imports under `src/`
+- changed files passed targeted `svelte_autofixer` validation
 
 Expected outcome: simpler base modules, lower follow-up risk, cleaner frontend reuse.
 
