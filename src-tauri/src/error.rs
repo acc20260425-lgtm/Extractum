@@ -83,9 +83,11 @@ fn classify_message(message: &str) -> AppError {
     let lower = normalized.to_ascii_lowercase();
 
     let kind = if lower.contains("not found")
+        || lower.contains("was not found")
         || lower.contains("is missing")
         || lower.contains("missing source_id")
         || lower.contains("missing source_group_id")
+        || lower.contains("could not be resolved")
     {
         AppErrorKind::NotFound
     } else if lower.contains("already queued")
@@ -118,6 +120,8 @@ fn classify_message(message: &str) -> AppError {
         || lower.contains("must be")
         || lower.contains("required")
         || lower.contains("not a broadcast channel")
+        || lower.contains("requested source kind")
+        || lower.contains("different telegram source kind")
         || lower.contains("pass either")
     {
         AppErrorKind::Validation
@@ -144,4 +148,36 @@ fn classify_message(message: &str) -> AppError {
             normalized.to_string()
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AppErrorKind, classify_message};
+
+    #[test]
+    fn classify_message_treats_dialog_lookup_misses_as_not_found() {
+        let error = classify_message(
+            "Telegram source '123' was not found in this account's dialogs",
+        );
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+    }
+
+    #[test]
+    fn classify_message_treats_resolution_failures_as_not_found() {
+        let error = classify_message(
+            "Source 7 could not be resolved from stored username, peer identity metadata, or dialogs",
+        );
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+    }
+
+    #[test]
+    fn classify_message_treats_source_kind_mismatches_as_validation() {
+        let error = classify_message(
+            "Resolved Telegram source has a different Telegram source kind than the requested source kind",
+        );
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+    }
 }

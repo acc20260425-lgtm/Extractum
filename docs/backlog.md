@@ -216,9 +216,9 @@ Why it matters: compile-time checks cannot cover Telegram peer shapes. `grammers
 Scope:
 
 - [ ] verify that `list_telegram_sources` returns broadcast channels, supergroups, and regular small groups
-- [ ] verify that source avatars load for channels and groups
+- [x] verify that source avatars load for channels and groups
 - [ ] verify that adding from the dialog list stores the expected `telegram_source_kind`
-- [ ] verify that manual add by `@username` works for public channels and public groups
+- [x] verify that manual add by `@username` works for public channels and public groups
 - [ ] verify that sync works for `channel`, `supergroup`, and `group`
 - [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
@@ -228,7 +228,29 @@ Acceptance criteria:
 - [ ] the Add Source dialog shows channels, supergroups, and groups with correct labels
 - [ ] a source added from account A does not affect the same source added from account B
 - [ ] sync inserts messages for each supported kind without resolving to the wrong peer
-- [ ] unsupported or inaccessible Telegram peers produce friendly typed errors
+- [x] unsupported or inaccessible Telegram peers produce friendly typed errors
+
+Notes:
+
+- backend error classification now treats dialog lookup misses and peer-resolution misses as typed `not_found` errors instead of generic internal failures
+- Telegram source-kind mismatch paths now return validation-friendly messages that include the requested and actual kind
+- added unit coverage for Telegram username/link parsing and source-kind mismatch reporting
+- live runtime spot-check completed on April 27, 2026 against account `Life`
+- `list_telegram_sources` returned real `channel` and `supergroup` dialogs for that account; no legacy small `group` dialogs were present in this specific dataset
+- dialog avatar fetch works in production flow for at least part of the dialog list; this account returned 4 dialogs with avatar data during the check
+- manual add by `@username` was validated for one public channel (`@turboproject` -> stored as `channel`) and one public supergroup (`@WhiteBirdChat` -> stored as `supergroup`)
+- sync was validated for those runtime-added public sources before cleanup:
+  - `AI Projects` (`channel`): inserted `263`, skipped `0`, first-sync policy `last 30 days`
+  - `WBChat` (`supergroup`): inserted `2654`, skipped `2`, first-sync policy `last 30 days`
+- typed runtime errors were validated on a real account:
+  - wrong expected kind returns structured `validation`
+  - numeric dialog miss returns structured `not_found`
+- live validation is still pending for:
+  - a real legacy small `group`
+  - behavior after leaving a group or channel
+  - migrated small-group-to-supergroup dialogs
+  - dialog-list add flow explicitly validated through the Add Source UI rather than via command-level runtime add
+  - cross-account isolation validated on two real Telegram accounts
 
 #### 2.3. Private Sources And Peer Identity
 

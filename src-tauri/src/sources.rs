@@ -1122,13 +1122,13 @@ async fn resolve_telegram_source(
 
     if found_wrong_kind {
         return Err(format!(
-            "Telegram source '{}' was found, but not as the requested source kind",
+            "Telegram source '{}' was found, but it has a different Telegram source kind than the requested source kind",
             source_ref
         ));
     }
 
     Err(format!(
-        "Telegram source '{}' could not be found in this account's dialogs",
+        "Telegram source '{}' was not found in this account's dialogs",
         source_ref
     ))
 }
@@ -1152,7 +1152,11 @@ fn validate_expected_telegram_source_kind(
     if telegram_source_kind_matches(source, expected_kind)? {
         Ok(())
     } else {
-        Err("Resolved Telegram source has a different source kind".to_string())
+        Err(format!(
+            "Resolved Telegram source has a different Telegram source kind than the requested source kind: expected '{}', got '{}'",
+            expected_kind.unwrap_or("unknown"),
+            source.telegram_source_kind
+        ))
     }
 }
 
@@ -1300,12 +1304,12 @@ fn peer_ref_for_source_kind(
         (TELEGRAM_KIND_GROUP, Peer::Group(group)) if !group.is_megagroup() => {
             Ok(group.raw.clone().into())
         }
-        (TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP, _) => {
-            Err(format!(
-                "Source {} resolved to a different Telegram source kind",
+        (TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP, _) => Err(
+            format!(
+                "Source {} resolved to a different Telegram source kind than the requested source kind",
                 source_id
-            ))
-        }
+            ),
+        ),
         (other, _) => Err(format!(
             "Source {} has unsupported telegram_source_kind '{}'",
             source_id, other
@@ -1354,10 +1358,12 @@ mod tests {
     use super::{
         decode_media_metadata, decode_source_metadata, default_sync_settings,
         determine_sync_policy, encode_media_metadata, encode_source_metadata, finalize_sync,
-        initial_sync_policy_label, load_source, load_sync_settings_from_pool,
-        save_sync_settings_to_pool, source_peer_ref_from_metadata, validate_sync_settings,
-        InitialSyncMode, SourceMetadata, SourceRecordRow, SourceSyncTarget, SyncSettingsRecord,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
+        initial_sync_policy_label, load_source, load_sync_settings_from_pool, parse_username,
+        save_sync_settings_to_pool, source_peer_ref_from_metadata,
+        validate_expected_telegram_source_kind, validate_sync_settings, InitialSyncMode,
+        ResolvedTelegramSource, SourceMetadata, SourceRecordRow, SourceSyncTarget,
+        SyncSettingsRecord, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+        TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
     };
     use crate::compression::{compress_json_bytes, compress_text, decompress_text};
     use crate::error::{AppErrorKind};
@@ -1452,6 +1458,33 @@ mod tests {
         assert_eq!(decoded.added_from, original.added_from);
         assert_eq!(decoded.access_hash, original.access_hash);
         assert_eq!(decoded.avatar_cache_key, original.avatar_cache_key);
+    }
+
+    #[test]
+    fn parse_username_accepts_username_and_t_me_links() {
+        assert_eq!(parse_username("@example"), "example");
+        assert_eq!(parse_username("t.me/example"), "example");
+        assert_eq!(parse_username("https://t.me/example/42"), "example");
+    }
+
+    #[test]
+    fn validate_expected_telegram_source_kind_reports_requested_and_actual_kind() {
+        let source = ResolvedTelegramSource {
+            external_id: "123".to_string(),
+            title: "Example".to_string(),
+            telegram_source_kind: TELEGRAM_KIND_SUPERGROUP.to_string(),
+            is_member: true,
+            username: Some("example".to_string()),
+            access_hash: Some(42),
+            avatar_bytes: None,
+        };
+
+        let error = validate_expected_telegram_source_kind(&source, Some(TELEGRAM_KIND_CHANNEL))
+            .expect_err("expected kind mismatch");
+
+        assert!(error.contains("requested source kind"));
+        assert!(error.contains(TELEGRAM_KIND_CHANNEL));
+        assert!(error.contains(TELEGRAM_KIND_SUPERGROUP));
     }
 
     #[test]
