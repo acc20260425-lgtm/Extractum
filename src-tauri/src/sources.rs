@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
-use grammers_client::{media::Media, peer::Peer, tl};
+use grammers_client::{peer::Peer, tl};
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -10,6 +10,7 @@ use tokio::time::{timeout, Duration, Instant};
 use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, decompress_text};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::media::{extract_item_payload, ExtractedItemPayload, ItemMediaMetadata};
 use crate::telegram::TelegramState;
 
 const DEFAULT_INITIAL_SYNC_MESSAGE_LIMIT: i64 = 500;
@@ -20,9 +21,6 @@ const MIN_INITIAL_SYNC_DAY_LIMIT: i64 = 1;
 const MAX_INITIAL_SYNC_DAY_LIMIT: i64 = 365;
 const INITIAL_SYNC_MODE_SETTING_KEY: &str = "sync.initial.mode";
 const INITIAL_SYNC_VALUE_SETTING_KEY: &str = "sync.initial.value";
-const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
-const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
-const CONTENT_KIND_MEDIA_ONLY: &str = "media_only";
 const SECONDS_PER_DAY: i64 = 86_400;
 const TELEGRAM_SOURCE_TYPE: &str = "telegram";
 const TELEGRAM_KIND_CHANNEL: &str = "channel";
@@ -172,37 +170,6 @@ struct ResolvedTelegramSource {
     username: Option<String>,
     access_hash: Option<i64>,
     avatar_bytes: Option<Vec<u8>>,
-}
-
-#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
-struct ItemMediaMetadata {
-    summary: Option<String>,
-    file_name: Option<String>,
-    mime_type: Option<String>,
-    size_bytes: Option<i64>,
-    width: Option<i32>,
-    height: Option<i32>,
-    duration_seconds: Option<f64>,
-}
-
-struct ExtractedMediaPayload {
-    kind: String,
-    metadata: ItemMediaMetadata,
-}
-
-struct ExtractedItemPayload {
-    content: Option<String>,
-    content_kind: &'static str,
-    media: Option<ExtractedMediaPayload>,
-}
-
-#[derive(Default)]
-struct DocumentSignals {
-    mime_type: Option<String>,
-    has_video: bool,
-    has_audio: bool,
-    is_voice: bool,
-    is_animated: bool,
 }
 
 fn default_sync_settings() -> SyncSettingsRecord {
@@ -1264,230 +1231,6 @@ fn message_author(message: &grammers_client::message::Message) -> Option<String>
     })
 }
 
-fn trimmed_non_empty(input: &str) -> Option<String> {
-    let trimmed = input.trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
-fn media_label(kind: &str) -> &'static str {
-    match kind {
-        "photo" => "Photo",
-        "video" => "Video",
-        "audio" => "Audio",
-        "voice" => "Voice message",
-        "image" => "Image",
-        "animation" => "Animation",
-        "sticker" => "Sticker",
-        "contact" => "Contact card",
-        "poll" => "Poll",
-        "location" => "Location",
-        "live_location" => "Live location",
-        "venue" => "Venue",
-        "webpage" => "Web page preview",
-        "dice" => "Dice",
-        _ => "Document",
-    }
-}
-
-fn derive_content_kind(has_content: bool, has_media: bool) -> &'static str {
-    match (has_content, has_media) {
-        (true, true) => CONTENT_KIND_TEXT_WITH_MEDIA,
-        (false, true) => CONTENT_KIND_MEDIA_ONLY,
-        _ => CONTENT_KIND_TEXT_ONLY,
-    }
-}
-
-fn collect_document_signals(document: &grammers_client::media::Document) -> DocumentSignals {
-    let mut signals = DocumentSignals {
-        mime_type: document.mime_type().map(str::to_string),
-        is_animated: document.is_animated(),
-        ..DocumentSignals::default()
-    };
-
-    if let Some(tl::enums::Document::Document(raw_document)) = document.raw.document.as_ref() {
-        for attribute in &raw_document.attributes {
-            match attribute {
-                tl::enums::DocumentAttribute::Video(_) => signals.has_video = true,
-                tl::enums::DocumentAttribute::Audio(audio) => {
-                    signals.has_audio = true;
-                    signals.is_voice = audio.voice;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    signals
-}
-
-fn derive_document_media_kind(signals: &DocumentSignals) -> &'static str {
-    let mime_type = signals.mime_type.as_deref().unwrap_or("");
-
-    if signals.has_video || mime_type.starts_with("video/") {
-        return "video";
-    }
-    if signals.is_voice {
-        return "voice";
-    }
-    if signals.has_audio || mime_type.starts_with("audio/") {
-        return "audio";
-    }
-    if signals.is_animated {
-        return "animation";
-    }
-    if mime_type.starts_with("image/") {
-        return "image";
-    }
-    "document"
-}
-
-fn contact_summary(contact: &grammers_client::media::Contact) -> String {
-    let display_name = [contact.first_name(), contact.last_name()]
-        .into_iter()
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    if !display_name.is_empty() {
-        return format!("Contact: {display_name}");
-    }
-
-    if !contact.phone_number().trim().is_empty() {
-        return format!("Contact: {}", contact.phone_number().trim());
-    }
-
-    "Contact card".to_string()
-}
-
-fn extract_document_media_payload(
-    document: &grammers_client::media::Document,
-) -> ExtractedMediaPayload {
-    let signals = collect_document_signals(document);
-    let kind = derive_document_media_kind(&signals).to_string();
-    let resolution = document.resolution();
-
-    ExtractedMediaPayload {
-        kind: kind.clone(),
-        metadata: ItemMediaMetadata {
-            summary: Some(media_label(&kind).to_string()),
-            file_name: document.name().and_then(|name| trimmed_non_empty(name)),
-            mime_type: document.mime_type().map(str::to_string),
-            size_bytes: document.size().and_then(|size| i64::try_from(size).ok()),
-            width: resolution.map(|(width, _)| width),
-            height: resolution.map(|(_, height)| height),
-            duration_seconds: document.duration(),
-        },
-    }
-}
-
-fn extract_media_payload(media: Media) -> ExtractedMediaPayload {
-    match media {
-        Media::Photo(photo) => ExtractedMediaPayload {
-            kind: "photo".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some("Photo".to_string()),
-                size_bytes: photo.size().and_then(|size| i64::try_from(size).ok()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::Document(document) => extract_document_media_payload(&document),
-        Media::Sticker(sticker) => ExtractedMediaPayload {
-            kind: "sticker".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some(if sticker.emoji().trim().is_empty() {
-                    "Sticker".to_string()
-                } else {
-                    format!("Sticker {}", sticker.emoji().trim())
-                }),
-                file_name: sticker.document.name().and_then(trimmed_non_empty),
-                mime_type: sticker.document.mime_type().map(str::to_string),
-                size_bytes: sticker
-                    .document
-                    .size()
-                    .and_then(|size| i64::try_from(size).ok()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::Contact(contact) => ExtractedMediaPayload {
-            kind: "contact".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some(contact_summary(&contact)),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::Poll(_) => ExtractedMediaPayload {
-            kind: "poll".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some("Poll".to_string()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::Geo(_) => ExtractedMediaPayload {
-            kind: "location".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some("Location".to_string()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::Dice(_) => ExtractedMediaPayload {
-            kind: "dice".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some("Dice".to_string()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::Venue(venue) => ExtractedMediaPayload {
-            kind: "venue".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: trimmed_non_empty(&venue.raw_venue.title)
-                    .or_else(|| Some("Venue".to_string())),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::GeoLive(_) => ExtractedMediaPayload {
-            kind: "live_location".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some("Live location".to_string()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        Media::WebPage(_) => ExtractedMediaPayload {
-            kind: "webpage".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some("Web page preview".to_string()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-        _ => ExtractedMediaPayload {
-            kind: "document".to_string(),
-            metadata: ItemMediaMetadata {
-                summary: Some("Media".to_string()),
-                ..ItemMediaMetadata::default()
-            },
-        },
-    }
-}
-
-fn extract_item_payload(
-    message: &grammers_client::message::Message,
-) -> Option<ExtractedItemPayload> {
-    let content = trimmed_non_empty(message.text());
-    let media = message.media().map(extract_media_payload);
-    let has_content = content.is_some();
-    let has_media = media.is_some();
-
-    if !has_content && !has_media {
-        return None;
-    }
-
-    Some(ExtractedItemPayload {
-        content,
-        content_kind: derive_content_kind(has_content, has_media),
-        media,
-    })
-}
-
 fn build_raw_payload(
     message: &grammers_client::message::Message,
     source_title: &Option<String>,
@@ -1514,15 +1257,14 @@ fn build_raw_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_media_metadata, decode_source_metadata, default_sync_settings, derive_content_kind,
-        derive_document_media_kind, encode_media_metadata, encode_source_metadata,
-        initial_sync_policy_label, load_sync_settings_from_pool, save_sync_settings_to_pool,
-        source_peer_ref_from_metadata, validate_sync_settings, DocumentSignals, InitialSyncMode,
-        ItemMediaMetadata, SourceMetadata, SourceSyncTarget, SyncSettingsRecord,
-        CONTENT_KIND_MEDIA_ONLY, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
+        decode_media_metadata, decode_source_metadata, default_sync_settings,
+        encode_media_metadata, encode_source_metadata, initial_sync_policy_label,
+        load_sync_settings_from_pool, save_sync_settings_to_pool, source_peer_ref_from_metadata,
+        validate_sync_settings, InitialSyncMode, SourceMetadata, SourceSyncTarget,
+        SyncSettingsRecord, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_SOURCE_TYPE,
     };
     use crate::compression::{compress_json_bytes, compress_text, decompress_text};
+    use crate::media::ItemMediaMetadata;
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -1635,40 +1377,6 @@ mod tests {
             source_peer_ref_from_metadata(&source, 12345, &metadata).expect("metadata peer ref");
 
         assert!(peer_ref.is_none());
-    }
-
-    #[test]
-    fn derive_content_kind_tracks_text_and_media_presence() {
-        assert_eq!(derive_content_kind(true, false), CONTENT_KIND_TEXT_ONLY);
-        assert_eq!(
-            derive_content_kind(true, true),
-            CONTENT_KIND_TEXT_WITH_MEDIA
-        );
-        assert_eq!(derive_content_kind(false, true), CONTENT_KIND_MEDIA_ONLY);
-    }
-
-    #[test]
-    fn derive_document_media_kind_prefers_specific_signals() {
-        let voice = DocumentSignals {
-            mime_type: Some("audio/ogg".to_string()),
-            has_audio: true,
-            is_voice: true,
-            ..DocumentSignals::default()
-        };
-        assert_eq!(derive_document_media_kind(&voice), "voice");
-
-        let video = DocumentSignals {
-            mime_type: Some("application/octet-stream".to_string()),
-            has_video: true,
-            ..DocumentSignals::default()
-        };
-        assert_eq!(derive_document_media_kind(&video), "video");
-
-        let image = DocumentSignals {
-            mime_type: Some("image/png".to_string()),
-            ..DocumentSignals::default()
-        };
-        assert_eq!(derive_document_media_kind(&image), "image");
     }
 
     #[test]

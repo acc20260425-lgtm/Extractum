@@ -145,9 +145,17 @@ Notes:
 
 #### 1.2. Extract `src-tauri/src/media.rs`
 
-- [ ] move `ExtractedItemPayload`, `ExtractedMediaPayload`, `ItemMediaMetadata`, and `DocumentSignals`
-- [ ] move `extract_item_payload`, `extract_media_payload`, `derive_content_kind`, and `media_label`
-- [ ] add unit tests for media extraction branches
+- [x] move `ExtractedItemPayload`, `ExtractedMediaPayload`, `ItemMediaMetadata`, and `DocumentSignals`
+- [x] move `extract_item_payload`, `extract_media_payload`, `derive_content_kind`, and `media_label`
+- [x] add unit tests for media extraction branches
+
+Notes:
+
+- completed via shared module `src-tauri/src/media.rs`
+- `sources.rs` now imports shared media extraction types and helpers instead of owning them locally
+- media-focused unit coverage now lives with the shared module
+- verification completed with `cargo fmt` and `cargo test`
+- current Rust test count after this step: `38 passed`
 
 #### 1.3. Centralize frontend types
 
@@ -528,7 +536,7 @@ Current implementation checkpoint:
 
 Recommended next step:
 
-- continue with **Phase 1.2**, extracting media parsing into `src-tauri/src/media.rs`
+- continue with **Phase 1.3**, centralizing frontend `sources` and `accounts` types
 
 ---
 
