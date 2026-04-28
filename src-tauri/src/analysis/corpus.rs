@@ -310,6 +310,7 @@ mod tests {
             source_title: None,
             source_group_id: Some(9),
             source_group_name: Some("Live group".to_string()),
+            scope_label: "Frozen group".to_string(),
             period_from: 1_700_000_000,
             period_to: 1_800_000_000,
             output_language: "English".to_string(),

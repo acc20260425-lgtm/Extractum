@@ -82,6 +82,7 @@
   let savedTraceRefs = $state<string[]>([]);
   let resolvedTraceRefs = $state<string[]>([]);
   let runFilter = $state<"all" | "completed" | "failed" | "running">("all");
+  let historyScope = $state<"all" | "current">("all");
   let chatQuestion = $state("");
   let chatMessages = $state<AnalysisChatTurn[]>([]);
   let chatting = $state(false);
@@ -104,6 +105,31 @@
       return runs.filter((run) => run.status === "running" || run.status === "queued");
     }
     return runs.filter((run) => run.status === runFilter);
+  });
+
+  const historyScopeParams = $derived.by(() => {
+    if (historyScope === "all") {
+      return {
+        sourceId: null as number | null,
+        sourceGroupId: null as number | null,
+      };
+    }
+
+    if (analysisScope === "single_source" && selectedSourceId) {
+      return {
+        sourceId: Number(selectedSourceId),
+        sourceGroupId: null as number | null,
+      };
+    }
+
+    if (analysisScope === "source_group" && selectedGroupId) {
+      return {
+        sourceId: null as number | null,
+        sourceGroupId: Number(selectedGroupId),
+      };
+    }
+
+    return null;
   });
 
   function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
@@ -274,12 +300,18 @@
   }
 
   async function loadRuns() {
+    const params = historyScopeParams;
+    if (params === null) {
+      runs = [];
+      return;
+    }
+
     loadingRuns = true;
     try {
       runs = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
-        sourceId: analysisScope === "single_source" && selectedSourceId ? Number(selectedSourceId) : null,
-        sourceGroupId: analysisScope === "source_group" && selectedGroupId ? Number(selectedGroupId) : null,
-        limit: 20,
+        sourceId: params.sourceId,
+        sourceGroupId: params.sourceGroupId,
+        limit: 50,
       });
     } catch (error) {
       status = formatAppError("loading analysis runs", error);
@@ -697,11 +729,7 @@
   }
 
   $effect(() => {
-    const hasSelectedTarget =
-      (analysisScope === "single_source" && selectedSourceId) ||
-      (analysisScope === "source_group" && selectedGroupId);
-
-    if (!hasSelectedTarget) {
+    if (historyScopeParams === null) {
       runs = [];
       return;
     }
@@ -746,7 +774,6 @@
     void loadSources();
     void loadTemplates();
     void loadGroups();
-    void loadRuns();
     void restoreActiveRun();
 
     void listen<AnalysisRunEvent>("analysis://run", ({ payload }: EventEnvelope<AnalysisRunEvent>) => {
@@ -1013,6 +1040,8 @@
 <RunHistory
   {runs}
   {loadingRuns}
+  {historyScope}
+  historyTargetReady={historyScopeParams !== null}
   {runFilter}
   {activeRunId}
   {filteredRuns}
@@ -1023,6 +1052,7 @@
   onRefresh={loadRuns}
   onOpenRun={openRun}
   onChangeFilter={(next) => (runFilter = next)}
+  onChangeHistoryScope={(next) => (historyScope = next)}
 />
 
 <style>

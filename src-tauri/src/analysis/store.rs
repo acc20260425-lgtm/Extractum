@@ -80,7 +80,46 @@ pub(crate) async fn ensure_sources_exist(
     Ok(())
 }
 
+fn resolve_run_scope_label_parts(
+    scope_type: &str,
+    source_id: Option<i64>,
+    source_title: Option<&str>,
+    source_group_id: Option<i64>,
+    source_group_name: Option<&str>,
+    scope_label_snapshot: Option<&str>,
+) -> String {
+    if let Some(label) = scope_label_snapshot {
+        let trimmed = label.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    if scope_type == ANALYSIS_SCOPE_TYPE_SOURCE_GROUP {
+        return source_group_name
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("Group {}", source_group_id.unwrap_or_default()));
+    }
+
+    source_title
+        .map(ToString::to_string)
+        .unwrap_or_else(|| format!("Source {}", source_id.unwrap_or_default()))
+}
+
+fn resolve_run_row_scope_label(row: &AnalysisRunRow) -> String {
+    resolve_run_scope_label_parts(
+        &row.scope_type,
+        row.source_id,
+        row.source_title.as_deref(),
+        row.source_group_id,
+        row.source_group_name.as_deref(),
+        row.scope_label_snapshot.as_deref(),
+    )
+}
+
 pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
+    let scope_label = resolve_run_row_scope_label(&row);
+
     AnalysisRunSummary {
         id: row.id,
         run_type: row.run_type,
@@ -89,6 +128,7 @@ pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
         source_title: row.source_title,
         source_group_id: row.source_group_id,
         source_group_name: row.source_group_name,
+        scope_label,
         period_from: row.period_from,
         period_to: row.period_to,
         output_language: row.output_language,
@@ -107,6 +147,8 @@ pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
 }
 
 pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
+    let scope_label = resolve_run_row_scope_label(&row);
+
     AnalysisRunDetail {
         id: row.id,
         run_type: row.run_type,
@@ -115,6 +157,7 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         source_title: row.source_title,
         source_group_id: row.source_group_id,
         source_group_name: row.source_group_name,
+        scope_label,
         period_from: row.period_from,
         period_to: row.period_to,
         output_language: row.output_language,
@@ -246,23 +289,18 @@ pub(crate) async fn fetch_source_group(
 }
 
 pub(crate) fn resolve_run_scope_label(run: &AnalysisRunDetail) -> String {
-    if let Some(label) = run.scope_label_snapshot.as_deref() {
-        let trimmed = label.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
+    if !run.scope_label.trim().is_empty() {
+        return run.scope_label.clone();
     }
 
-    if run.scope_type == ANALYSIS_SCOPE_TYPE_SOURCE_GROUP {
-        return run
-            .source_group_name
-            .clone()
-            .unwrap_or_else(|| format!("Group {}", run.source_group_id.unwrap_or_default()));
-    }
-
-    run.source_title
-        .clone()
-        .unwrap_or_else(|| format!("Source {}", run.source_id.unwrap_or_default()))
+    resolve_run_scope_label_parts(
+        &run.scope_type,
+        run.source_id,
+        run.source_title.as_deref(),
+        run.source_group_id,
+        run.source_group_name.as_deref(),
+        run.scope_label_snapshot.as_deref(),
+    )
 }
 
 pub(crate) async fn find_active_duplicate_run(
@@ -467,11 +505,11 @@ pub(crate) async fn set_run_status(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_run_scope_label;
-    use crate::analysis::models::AnalysisRunDetail;
+    use super::{map_run_detail, map_run_summary, resolve_run_scope_label};
+    use crate::analysis::models::{AnalysisRunDetail, AnalysisRunRow};
 
-    fn sample_run() -> AnalysisRunDetail {
-        AnalysisRunDetail {
+    fn sample_run_row() -> AnalysisRunRow {
+        AnalysisRunRow {
             id: 1,
             run_type: "report".to_string(),
             scope_type: "source_group".to_string(),
@@ -490,17 +528,27 @@ mod tests {
             model: "gemini-2.5-flash".to_string(),
             status: "completed".to_string(),
             result_markdown: Some("Saved report".to_string()),
+            trace_data_zstd: Some(vec![1, 2, 3]),
+            scope_label_snapshot: Some("Frozen group".to_string()),
             error: None,
-            has_trace_data: true,
             created_at: 1_710_000_500,
             completed_at: Some(1_710_000_600),
-            scope_label_snapshot: Some("Frozen group".to_string()),
         }
+    }
+
+    fn sample_run() -> AnalysisRunDetail {
+        map_run_detail(sample_run_row())
     }
 
     #[test]
     fn resolve_run_scope_label_prefers_frozen_value() {
         let run = sample_run();
         assert_eq!(resolve_run_scope_label(&run), "Frozen group");
+    }
+
+    #[test]
+    fn map_run_summary_exposes_frozen_scope_label() {
+        let summary = map_run_summary(sample_run_row());
+        assert_eq!(summary.scope_label, "Frozen group");
     }
 }

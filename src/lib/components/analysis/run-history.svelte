@@ -2,10 +2,13 @@
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
   type RunFilter = "all" | "completed" | "failed" | "running";
+  type HistoryScope = "all" | "current";
 
   let {
     runs,
     loadingRuns,
+    historyScope,
+    historyTargetReady,
     runFilter,
     activeRunId,
     filteredRuns,
@@ -16,9 +19,12 @@
     onRefresh,
     onOpenRun,
     onChangeFilter,
+    onChangeHistoryScope,
   }: {
     runs: AnalysisRunSummary[];
     loadingRuns: boolean;
+    historyScope: HistoryScope;
+    historyTargetReady: boolean;
     runFilter: RunFilter;
     activeRunId: number | null;
     filteredRuns: AnalysisRunSummary[];
@@ -27,13 +33,14 @@
     runTargetLabel: (
       run: Pick<
         AnalysisRunSummary,
-        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name"
+        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
       >
     ) => string;
     statusTone: (status: string) => string;
     onRefresh: () => void | Promise<void>;
     onOpenRun: (runId: number) => void | Promise<void>;
     onChangeFilter: (next: RunFilter) => void;
+    onChangeHistoryScope: (next: HistoryScope) => void;
   } = $props();
 </script>
 
@@ -44,6 +51,18 @@
       <p class="sub">Immutable report runs with saved model, prompt version, and traceability data.</p>
     </div>
     <div class="history-actions">
+      <div class="filter-group">
+        <button class:activeFilter={historyScope === "all"} class="secondary" onclick={() => onChangeHistoryScope("all")}>
+          All runs
+        </button>
+        <button
+          class:activeFilter={historyScope === "current"}
+          class="secondary"
+          onclick={() => onChangeHistoryScope("current")}
+        >
+          Current scope
+        </button>
+      </div>
       <div class="filter-group">
         <button class:activeFilter={runFilter === "all"} class="secondary" onclick={() => onChangeFilter("all")}>All</button>
         <button class:activeFilter={runFilter === "completed"} class="secondary" onclick={() => onChangeFilter("completed")}>Completed</button>
@@ -56,13 +75,15 @@
 
   {#if loadingRuns}
     <p class="empty">Loading analysis runs...</p>
+  {:else if historyScope === "current" && !historyTargetReady}
+    <p class="empty">Select a source or source group to browse current-scope history.</p>
   {:else if runs.length === 0}
-    <p class="empty">No analysis runs yet.</p>
+    <p class="empty">{historyScope === "all" ? "No analysis runs yet." : "No saved runs for the current scope yet."}</p>
   {:else if filteredRuns.length === 0}
     <p class="empty">No runs match the current filter.</p>
   {:else}
     <ul class="run-list">
-      {#each filteredRuns as run}
+      {#each filteredRuns as run (run.id)}
         <li class:selected={run.id === activeRunId}>
           <div class="run-copy">
             <div class="run-title">
