@@ -28,7 +28,7 @@ pub use self::groups::{
     create_analysis_source_group, delete_analysis_source_group, list_analysis_source_groups,
     update_analysis_source_group,
 };
-pub use self::report::start_analysis_report;
+pub use self::report::{cancel_analysis_run, cleanup_interrupted_analysis_runs, start_analysis_report};
 pub use self::templates::{
     create_analysis_prompt_template, delete_analysis_prompt_template,
     list_analysis_prompt_templates, update_analysis_prompt_template,
@@ -46,29 +46,48 @@ const ANALYSIS_STATUS_QUEUED: &str = "queued";
 const ANALYSIS_STATUS_RUNNING: &str = "running";
 const ANALYSIS_STATUS_COMPLETED: &str = "completed";
 const ANALYSIS_STATUS_FAILED: &str = "failed";
+const ANALYSIS_STATUS_CANCELLED: &str = "cancelled";
 const ANALYSIS_CHUNK_TARGET_CHARS: usize = 16_000;
 
 pub struct AnalysisState {
     active_report_runs: Mutex<HashSet<i64>>,
+    cancelled_report_runs: Mutex<HashSet<i64>>,
 }
 
 impl AnalysisState {
     pub fn new() -> Self {
         Self {
             active_report_runs: Mutex::new(HashSet::new()),
+            cancelled_report_runs: Mutex::new(HashSet::new()),
         }
     }
 
     async fn insert_active_report_run(&self, run_id: i64) {
         self.active_report_runs.lock().await.insert(run_id);
+        self.cancelled_report_runs.lock().await.remove(&run_id);
     }
 
     async fn remove_active_report_run(&self, run_id: i64) {
         self.active_report_runs.lock().await.remove(&run_id);
+        self.cancelled_report_runs.lock().await.remove(&run_id);
     }
 
     async fn active_report_run_ids(&self) -> HashSet<i64> {
         self.active_report_runs.lock().await.clone()
+    }
+
+    async fn request_report_run_cancel(&self, run_id: i64) -> bool {
+        let active_runs = self.active_report_runs.lock().await;
+        if !active_runs.contains(&run_id) {
+            return false;
+        }
+        drop(active_runs);
+        self.cancelled_report_runs.lock().await.insert(run_id);
+        true
+    }
+
+    async fn is_report_run_cancelled(&self, run_id: i64) -> bool {
+        self.cancelled_report_runs.lock().await.contains(&run_id)
     }
 }
 

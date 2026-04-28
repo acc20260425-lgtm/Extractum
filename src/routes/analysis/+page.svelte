@@ -40,6 +40,24 @@
     EventEnvelope,
   } from "$lib/types/analysis";
 
+  type LiveRunState = {
+    phase: string;
+    progress: string;
+    queuePosition: number | null;
+    chunkSummaries: AnalysisChunkSummaryEvent[];
+    streamedOutput: string;
+  };
+
+  function createEmptyLiveRunState(): LiveRunState {
+    return {
+      phase: "",
+      progress: "",
+      queuePosition: null,
+      chunkSummaries: [],
+      streamedOutput: "",
+    };
+  }
+
   let sources = $state<AnalysisSourceOption[]>([]);
   let templates = $state<AnalysisPromptTemplate[]>([]);
   let runs = $state<AnalysisRunSummary[]>([]);
@@ -73,12 +91,9 @@
   let deletingGroup = $state(false);
 
   let status = $state("");
-  let running = $state(false);
+  let startingReport = $state(false);
   let activeRunId = $state<number | null>(null);
-  let activePhase = $state("");
-  let activeProgress = $state("");
-  let chunkSummaries = $state<AnalysisChunkSummaryEvent[]>([]);
-  let streamedOutput = $state("");
+  let liveRuns = $state<Record<number, LiveRunState>>({});
   let currentRun = $state<AnalysisRunDetail | null>(null);
   let traceData = $state<AnalysisTraceData>({ refs: [] });
   let selectedTraceRef = $state<string | null>(null);
@@ -100,6 +115,123 @@
 
   function isActiveRunStatus(value: string) {
     return value === "queued" || value === "running";
+  }
+
+  function clearTraceState() {
+    traceData = { refs: [] };
+    savedTraceRefs = [];
+    resolvedTraceRefs = [];
+    selectedTraceRef = null;
+  }
+
+  function clearChatState() {
+    chatMessages = [];
+    chatQuestion = "";
+    chatting = false;
+    activeChatRequestId = null;
+    activeChatRunId = null;
+  }
+
+  function dropPendingChatExchange() {
+    if (
+      chatMessages.length >= 2 &&
+      chatMessages[chatMessages.length - 1]?.role === "assistant" &&
+      chatMessages[chatMessages.length - 2]?.role === "user"
+    ) {
+      chatMessages = chatMessages.slice(0, -2);
+    }
+  }
+
+  function getLiveRunState(runId: number) {
+    return liveRuns[runId] ?? createEmptyLiveRunState();
+  }
+
+  function updateLiveRunState(
+    runId: number,
+    updater: (current: LiveRunState) => LiveRunState,
+  ) {
+    const current = getLiveRunState(runId);
+    liveRuns = {
+      ...liveRuns,
+      [runId]: updater(current),
+    };
+  }
+
+  function syncRunSnapshot(runId: number, status: string) {
+    updateLiveRunState(runId, (current) => ({
+      ...current,
+      phase: status,
+      progress: isActiveRunStatus(status) ? current.progress : "",
+      queuePosition: isActiveRunStatus(status) ? current.queuePosition : null,
+    }));
+  }
+
+  function pruneLiveRuns(activeRunIds: number[], preserveRunId: number | null = null) {
+    const keepIds = new Set(activeRunIds);
+    if (preserveRunId !== null) {
+      keepIds.add(preserveRunId);
+    }
+
+    liveRuns = Object.fromEntries(
+      Object.entries(liveRuns).filter(([runId]) => keepIds.has(Number(runId))),
+    );
+  }
+
+  function livePhase(runId: number) {
+    return liveRuns[runId]?.phase ?? "";
+  }
+
+  function liveProgress(runId: number) {
+    return liveRuns[runId]?.progress ?? "";
+  }
+
+  function formatRunProgress(payload: AnalysisRunEvent, currentProgress: string) {
+    if (
+      payload.progress_current !== null &&
+      payload.progress_total !== null
+    ) {
+      return `${payload.progress_current}/${payload.progress_total}`;
+    }
+
+    if (payload.queue_position !== null) {
+      return `Queue ${payload.queue_position}`;
+    }
+
+    if (
+      payload.kind === "completed" ||
+      payload.kind === "failed" ||
+      payload.kind === "cancelled"
+    ) {
+      return "";
+    }
+
+    return currentProgress;
+  }
+
+  function applyRunEvent(payload: AnalysisRunEvent) {
+    updateLiveRunState(payload.run_id, (current) => {
+      const nextSummaries = payload.chunk_summary
+        ? [...current.chunkSummaries.filter((chunk) => chunk.index !== payload.chunk_summary?.index), payload.chunk_summary].sort(
+            (left, right) => left.index - right.index,
+          )
+        : current.chunkSummaries;
+      const nextPhase =
+        payload.kind === "completed" ||
+        payload.kind === "failed" ||
+        payload.kind === "cancelled"
+          ? payload.kind
+          : payload.phase || current.phase;
+
+      return {
+        phase: nextPhase,
+        progress: formatRunProgress(payload, current.progress),
+        queuePosition: payload.queue_position,
+        chunkSummaries: nextSummaries,
+        streamedOutput: payload.delta
+          ? `${current.streamedOutput}${payload.delta}`
+          : current.streamedOutput,
+      };
+    });
   }
 
   const filteredRuns = $derived.by(() => {
@@ -131,6 +263,39 @@
 
     return null;
   });
+
+  const focusedLiveRun = $derived.by(() => {
+    if (activeRunId === null) return null;
+    return liveRuns[activeRunId] ?? null;
+  });
+
+  const activeRunIds = $derived.by(() => activeRuns.map((run) => run.id));
+
+  const activePhase = $derived.by(
+    () => focusedLiveRun?.phase || currentRun?.status || "",
+  );
+
+  const activeProgress = $derived.by(() => focusedLiveRun?.progress || "");
+
+  const focusedChunkSummaries = $derived.by(
+    () => focusedLiveRun?.chunkSummaries ?? [],
+  );
+
+  const focusedStreamedOutput = $derived.by(() => {
+    if (focusedLiveRun?.streamedOutput) {
+      return focusedLiveRun.streamedOutput;
+    }
+
+    return currentRun?.result_markdown ?? "";
+  });
+
+  const selectedRunIsActive = $derived.by(
+    () => activeRunId !== null && activeRunIds.includes(activeRunId),
+  );
+
+  const canCancelCurrentRun = $derived.by(
+    () => activeRunId !== null && activeRunIds.includes(activeRunId),
+  );
 
   function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
     if (nextRefs.length === 0) return;
@@ -220,7 +385,12 @@
         refs: [ref],
       });
       mergeTraceRefs(resolved);
-      resolvedTraceRefs = [...resolvedTraceRefs, ...resolved.map((entry) => entry.ref).filter((entry) => !resolvedTraceRefs.includes(entry))];
+      resolvedTraceRefs = [
+        ...resolvedTraceRefs,
+        ...resolved
+          .map((entry) => entry.ref)
+          .filter((entry) => !resolvedTraceRefs.includes(entry)),
+      ];
       selectedTraceRef = ref;
     } catch (error) {
       status = formatAppError("resolving the trace reference", error);
@@ -234,10 +404,7 @@
       resolvedTraceRefs = [];
       selectedTraceRef = traceData.refs[0]?.ref ?? null;
     } catch (error) {
-      traceData = { refs: [] };
-      savedTraceRefs = [];
-      resolvedTraceRefs = [];
-      selectedTraceRef = null;
+      clearTraceState();
       status = formatAppError("loading the analysis trace", error);
     }
   }
@@ -322,33 +489,30 @@
   }
 
   function syncActiveRunState(summaries: AnalysisRunSummary[]) {
-    const currentActiveRun =
-      activeRunId !== null
-        ? summaries.find((run) => run.id === activeRunId && isActiveRunStatus(run.status))
-        : null;
+    for (const run of summaries) {
+      syncRunSnapshot(run.id, run.status);
+    }
 
-    if (currentActiveRun) {
-      running = true;
-      activePhase = currentActiveRun.status;
+    pruneLiveRuns(
+      summaries.map((run) => run.id),
+      currentRun?.id ?? null,
+    );
+
+    if (currentRun !== null) {
       return;
     }
 
-    const activeRun = summaries.find((run) => isActiveRunStatus(run.status));
-    if (!activeRun) {
-      if (running && currentRun === null) {
-        running = false;
-        activeRunId = null;
-        activePhase = "";
-        activeProgress = "";
-      }
+    const selectedRunIsStillActive =
+      activeRunId !== null && summaries.some((run) => run.id === activeRunId);
+
+    if (!selectedRunIsStillActive && summaries.length > 0) {
+      void openRun(summaries[0].id);
       return;
     }
 
-    activeRunId = activeRun.id;
-    running = true;
-    activePhase = activeRun.status;
-    activeProgress = "";
-    status = `Resumed ${activeRun.status} analysis run ${activeRun.id}.`;
+    if (summaries.length === 0) {
+      activeRunId = null;
+    }
   }
 
   async function loadActiveRuns() {
@@ -364,35 +528,49 @@
     }
   }
 
+  async function cancelChat({ silent = false }: { silent?: boolean } = {}) {
+    if (!activeChatRequestId) {
+      return;
+    }
+
+    const requestId = activeChatRequestId;
+    try {
+      await invoke("cancel_llm_request", { requestId });
+      if (!silent) {
+        status = "Cancelling answer...";
+      }
+    } catch (error) {
+      if (!silent) {
+        status = formatAppError("cancelling the chat answer", error);
+      }
+    }
+  }
+
   async function openRun(runId: number) {
+    if (activeChatRequestId !== null && activeChatRunId !== null && activeChatRunId !== runId) {
+      await cancelChat({ silent: true });
+      clearChatState();
+    }
+
+    activeRunId = runId;
     loadingRunDetail = true;
     try {
-      if (activeRunId !== runId) {
-        chatMessages = [];
-        chatQuestion = "";
-        chatting = false;
-        activeChatRequestId = null;
-        activeChatRunId = null;
-      }
       const run = await invoke<AnalysisRunDetail | null>("get_analysis_run", { runId });
       if (!run) {
         status = `Analysis run ${runId} was not found.`;
+        if (currentRun?.id === runId) {
+          currentRun = null;
+        }
         return;
       }
+
       currentRun = run;
-      chunkSummaries = [];
-      streamedOutput = run.result_markdown ?? "";
-      activeRunId = run.id;
-      activePhase = run.status;
-      activeProgress = "";
+      syncRunSnapshot(run.id, run.status);
       await loadChatMessages(run.id);
       if (run.has_trace_data) {
         await loadTrace(run.id);
       } else {
-        traceData = { refs: [] };
-        savedTraceRefs = [];
-        resolvedTraceRefs = [];
-        selectedTraceRef = null;
+        clearTraceState();
       }
     } catch (error) {
       status = formatAppError("loading the analysis run", error);
@@ -418,10 +596,6 @@
   }
 
   async function runReport() {
-    if (running) {
-      status = "A report is already running.";
-      return;
-    }
     if (analysisScope === "single_source" && !selectedSourceId) {
       status = "Select a source first.";
       return;
@@ -447,22 +621,15 @@
       return;
     }
 
+    startingReport = true;
     status = "";
-    running = true;
-    streamedOutput = "";
-    chunkSummaries = [];
+
+    if (activeChatRequestId !== null) {
+      await cancelChat({ silent: true });
+    }
+    clearChatState();
+    clearTraceState();
     currentRun = null;
-    traceData = { refs: [] };
-    savedTraceRefs = [];
-    resolvedTraceRefs = [];
-    selectedTraceRef = null;
-    chatMessages = [];
-    chatQuestion = "";
-    chatting = false;
-    activeChatRequestId = null;
-    activeChatRunId = null;
-    activePhase = "queued";
-    activeProgress = "";
 
     try {
       const runId = await invoke<number>("start_analysis_report", {
@@ -476,11 +643,32 @@
         profileId: null,
       });
 
+      liveRuns = {
+        ...liveRuns,
+        [runId]: {
+          phase: "queued",
+          progress: "",
+          queuePosition: null,
+          chunkSummaries: [],
+          streamedOutput: "",
+        },
+      };
       activeRunId = runId;
-      await loadActiveRuns();
+
+      await Promise.all([loadActiveRuns(), openRun(runId)]);
     } catch (error) {
-      running = false;
       status = formatAppError("starting the analysis report", error);
+    } finally {
+      startingReport = false;
+    }
+  }
+
+  async function cancelActiveRun(runId: number) {
+    try {
+      await invoke("cancel_analysis_run", { runId });
+      status = `Cancelling analysis run ${runId}...`;
+    } catch (error) {
+      status = formatAppError("cancelling the analysis run", error);
     }
   }
 
@@ -499,7 +687,11 @@
     }
 
     const question = chatQuestion.trim();
-    chatMessages = [...chatMessages, { role: "user", content: question }, { role: "assistant", content: "" }];
+    chatMessages = [
+      ...chatMessages,
+      { role: "user", content: question },
+      { role: "assistant", content: "" },
+    ];
     chatQuestion = "";
     chatting = true;
     activeChatRunId = currentRun.id;
@@ -513,7 +705,7 @@
       });
       activeChatRequestId = requestId;
     } catch (error) {
-      chatMessages = chatMessages.slice(0, -2);
+      dropPendingChatExchange();
       chatting = false;
       activeChatRunId = null;
       activeChatRequestId = null;
@@ -792,62 +984,39 @@
         return;
       }
 
-      if (payload.kind === "started") {
-        void loadActiveRuns();
-      }
+      applyRunEvent(payload);
 
-      if (activeRunId === null && (payload.kind === "started" || payload.kind === "progress" || payload.kind === "delta")) {
+      if (activeRunId === null) {
         activeRunId = payload.run_id;
-        running = true;
+        void openRun(payload.run_id);
       }
 
-      if (payload.run_id !== activeRunId) {
-        return;
-      }
-
-      activePhase = payload.phase;
-      activeProgress =
-        payload.progress_current !== null && payload.progress_total !== null
-          ? `${payload.progress_current}/${payload.progress_total}`
-          : "";
-
-      if (payload.chunk_summary) {
-        const nextSummaries = chunkSummaries.filter((chunk) => chunk.index !== payload.chunk_summary?.index);
-        nextSummaries.push(payload.chunk_summary);
-        nextSummaries.sort((left, right) => left.index - right.index);
-        chunkSummaries = nextSummaries;
-      }
-
-      if (payload.kind === "started" || payload.kind === "progress") {
+      if (
+        payload.kind === "queued" ||
+        payload.kind === "started" ||
+        payload.kind === "progress"
+      ) {
         if (payload.message) {
           status = payload.message;
         }
-        return;
       }
 
-      if (payload.kind === "delta") {
-        streamedOutput += payload.delta ?? "";
-        return;
-      }
-
-      if (payload.kind === "completed") {
-        running = false;
-        status = payload.message ?? "Report completed.";
-        void loadActiveRuns();
-        void loadRuns();
-        if (activeRunId !== null) {
-          void openRun(activeRunId);
+      if (
+        payload.kind === "completed" ||
+        payload.kind === "failed" ||
+        payload.kind === "cancelled"
+      ) {
+        if (payload.message) {
+          status = payload.message;
+        } else if (payload.error) {
+          status = `Analysis failed: ${payload.error}`;
         }
-        return;
-      }
 
-      if (payload.kind === "failed") {
-        running = false;
-        status = payload.error ? `Analysis failed: ${payload.error}` : "Analysis failed.";
         void loadActiveRuns();
         void loadRuns();
-        if (activeRunId !== null) {
-          void openRun(activeRunId);
+
+        if (activeRunId === payload.run_id || currentRun?.id === payload.run_id) {
+          void openRun(payload.run_id);
         }
       }
     }).then((unlisten) => {
@@ -867,7 +1036,7 @@
         return;
       }
 
-      if (payload.kind === "started") {
+      if (payload.kind === "queued" || payload.kind === "started") {
         if (payload.message) {
           status = payload.message;
         }
@@ -893,19 +1062,24 @@
         if (activeChatRunId !== null) {
           void loadChatMessages(activeChatRunId);
         }
+        activeChatRunId = null;
         if (payload.message) {
           status = payload.message;
         }
         return;
       }
 
-      if (payload.kind === "failed") {
+      if (payload.kind === "failed" || payload.kind === "cancelled") {
         chatting = false;
         activeChatRequestId = null;
-        if (chatMessages.length >= 2 && chatMessages[chatMessages.length - 1]?.role === "assistant") {
-          chatMessages = chatMessages.slice(0, -2);
-        }
-        status = payload.error ? `Analysis chat failed: ${payload.error}` : "Analysis chat failed.";
+        activeChatRunId = null;
+        dropPendingChatExchange();
+        status =
+          payload.kind === "cancelled"
+            ? payload.message ?? "Answer cancelled."
+            : payload.error
+              ? `Analysis chat failed: ${payload.error}`
+              : "Analysis chat failed.";
       }
     }).then((unlisten) => {
       if (disposed) {
@@ -960,10 +1134,10 @@
       {loadingSources}
       {loadingGroups}
       {loadingTemplates}
-      {running}
+      launching={startingReport}
       {activePhase}
       {activeProgress}
-      showRunMeta={running || activeRunId !== null || currentRun !== null}
+      showRunMeta={startingReport || activeRunId !== null || currentRun !== null}
       selectedGroupSourceCount={selectedGroup?.members.length ?? null}
       {phaseLabel}
       onChangeScope={(scope) => (analysisScope = scope)}
@@ -977,7 +1151,7 @@
       onRunReport={runReport}
     />
 
-    <ChunkSummaries summaries={chunkSummaries} {running} />
+    <ChunkSummaries summaries={focusedChunkSummaries} running={selectedRunIsActive} />
   </div>
 
   <section class="card report">
@@ -985,15 +1159,23 @@
       <ReportViewer
         {currentRun}
         {loadingRunDetail}
-        {streamedOutput}
+        streamedOutput={focusedStreamedOutput}
         traceRefCount={traceData.refs.length}
         {selectedTraceRef}
+        livePhase={activePhase}
+        liveProgress={activeProgress}
+        {canCancelCurrentRun}
         {formatTimestamp}
         {formatPeriod}
         {runTargetLabel}
         {statusTone}
         {reportLines}
         onFocusTraceRef={focusTraceRef}
+        onCancelCurrentRun={() => {
+          if (activeRunId !== null) {
+            return cancelActiveRun(activeRunId);
+          }
+        }}
       />
 
       <TracePanel
@@ -1014,11 +1196,13 @@
   {chatMessages}
   {chatQuestion}
   {chatting}
+  canCancelChat={chatting && activeChatRequestId !== null}
   {clearingChat}
   {selectedTraceRef}
   {reportLines}
   onFocusTraceRef={focusTraceRef}
   onAskQuestion={askRunQuestion}
+  onCancelChat={cancelChat}
   onClearChat={clearChatMessages}
   onChangeChatQuestion={(value) => (chatQuestion = value)}
 />
@@ -1060,10 +1244,14 @@
   {activeRunId}
   {formatTimestamp}
   {formatPeriod}
+  {phaseLabel}
+  {livePhase}
+  {liveProgress}
   {runTargetLabel}
   {statusTone}
   onRefresh={loadActiveRuns}
   onOpenRun={openRun}
+  onCancelRun={cancelActiveRun}
 />
 
 <RunHistory
@@ -1158,7 +1346,6 @@
     .report-layout {
       grid-template-columns: 1fr;
     }
-
   }
 
   @media (max-width: 1500px) {
@@ -1166,5 +1353,4 @@
       grid-template-columns: 1fr;
     }
   }
-
 </style>

@@ -86,8 +86,10 @@ export interface AnalysisChunkSummaryEvent {
 
 export interface AnalysisRunEvent {
   run_id: number;
-  kind: "started" | "progress" | "delta" | "completed" | "failed";
+  request_id: string | null;
+  kind: "queued" | "started" | "progress" | "delta" | "completed" | "failed" | "cancelled";
   phase: string;
+  queue_position: number | null;
   message: string | null;
   progress_current: number | null;
   progress_total: number | null;
@@ -112,7 +114,8 @@ export interface AnalysisChatMessage {
 export interface AnalysisChatEvent {
   request_id: string;
   run_id: number;
-  kind: "started" | "delta" | "completed" | "failed";
+  kind: "queued" | "started" | "delta" | "completed" | "failed" | "cancelled";
+  queue_position: number | null;
   delta: string | null;
   message: string | null;
   error: string | null;

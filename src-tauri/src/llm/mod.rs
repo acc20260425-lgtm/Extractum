@@ -1,14 +1,15 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::{timeout, Duration};
 
 use crate::db::get_pool;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 
 mod gemini;
 mod openai_compat;
 mod profiles;
 mod runner;
+mod scheduler;
 mod streaming;
 mod types;
 
@@ -21,6 +22,9 @@ use profiles::{
 pub(crate) use runner::{
     resolve_effective_model, run_llm_collect_with_profile, run_llm_stream_with_profile,
     validate_request,
+};
+pub(crate) use scheduler::{
+    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
 };
 pub use types::{
     LlmChatRequest, LlmMessage, LlmProfile, LlmProfilesState, LlmProviderModel, LlmStreamEvent,
@@ -101,6 +105,30 @@ fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> Result<
 
 fn emit_response_event(handle: &AppHandle, event: &LlmStreamEvent) {
     let _ = handle.emit(LLM_RESPONSE_EVENT, event);
+}
+
+fn build_stream_event(
+    request_id: String,
+    kind: &str,
+    provider: String,
+    model: String,
+    queue_position: Option<usize>,
+    delta: Option<String>,
+    text: Option<String>,
+    usage: Option<LlmUsage>,
+    error: Option<String>,
+) -> LlmStreamEvent {
+    LlmStreamEvent {
+        request_id,
+        kind: kind.to_string(),
+        queue_position,
+        delta,
+        text,
+        provider,
+        model,
+        usage,
+        error,
+    }
 }
 
 pub(crate) async fn resolve_profile_for_backend(
@@ -252,75 +280,173 @@ pub async fn ask_llm_stream(
     let provider_name = resolved_profile.provider.as_str().to_string();
     let effective_model =
         resolve_effective_model(&resolved_profile, request.model_override.as_deref())?;
-    let started_request_id = request.request_id.clone();
-    let started_provider = provider_name.clone();
-    let started_model = effective_model.clone();
-
-    emit_response_event(
-        &handle,
-        &LlmStreamEvent {
-            request_id: started_request_id,
-            kind: "started".to_string(),
-            delta: None,
-            text: None,
-            provider: started_provider,
-            model: started_model,
-            usage: None,
-            error: None,
-        },
-    );
 
     let app_handle = handle.clone();
+    let request_meta = LlmRequestMetadata {
+        request_id: request.request_id.clone(),
+        profile_id: resolved_profile.profile_id.clone(),
+        provider: provider_name.clone(),
+        kind: LlmRequestKind::ProviderTest,
+        priority: LlmRequestPriority::Interactive,
+        owner_run_id: None,
+    };
     tokio::spawn(async move {
-        match run_llm_stream_with_profile(&request, &resolved_profile, |delta| {
-            emit_response_event(
-                &app_handle,
-                &LlmStreamEvent {
-                    request_id: request.request_id.clone(),
-                    kind: "delta".to_string(),
-                    delta: Some(delta.to_string()),
-                    text: None,
-                    provider: provider_name.clone(),
-                    model: effective_model.clone(),
-                    usage: None,
-                    error: None,
+        let scheduler = app_handle.state::<LlmSchedulerState>();
+        let queued_handle = app_handle.clone();
+        let started_handle = app_handle.clone();
+        let delta_handle = app_handle.clone();
+        let completed_handle = app_handle.clone();
+        let failed_handle = app_handle.clone();
+        let cancelled_handle = app_handle.clone();
+        let queued_request_id = request.request_id.clone();
+        let started_request_id = request.request_id.clone();
+        let delta_request_id = request.request_id.clone();
+        let completed_request_id = request.request_id.clone();
+        let failed_request_id = request.request_id.clone();
+        let cancelled_request_id = request.request_id.clone();
+        let queued_provider = provider_name.clone();
+        let started_provider = provider_name.clone();
+        let delta_provider = provider_name.clone();
+        let failed_provider = provider_name.clone();
+        let cancelled_provider = provider_name.clone();
+        let queued_model = effective_model.clone();
+        let started_model = effective_model.clone();
+        let delta_model = effective_model.clone();
+        let failed_model = effective_model.clone();
+        let cancelled_model = effective_model.clone();
+        let scheduled_request = request.clone();
+        let scheduled_profile = resolved_profile.clone();
+
+        match scheduler
+            .run_request(
+                request_meta,
+                move |position| {
+                    emit_response_event(
+                        &queued_handle,
+                        &build_stream_event(
+                            queued_request_id.clone(),
+                            "queued",
+                            queued_provider.clone(),
+                            queued_model.clone(),
+                            Some(position),
+                            None,
+                            None,
+                            None,
+                            None,
+                        ),
+                    );
                 },
-            );
-        })
-        .await
+                move |control| async move {
+                    emit_response_event(
+                        &started_handle,
+                        &build_stream_event(
+                            started_request_id,
+                            "started",
+                            started_provider,
+                            started_model,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        ),
+                    );
+
+                    control
+                        .run_cancellable(run_llm_stream_with_profile(
+                            &scheduled_request,
+                            &scheduled_profile,
+                            |delta| {
+                                emit_response_event(
+                                    &delta_handle,
+                                    &build_stream_event(
+                                        delta_request_id.clone(),
+                                        "delta",
+                                        delta_provider.clone(),
+                                        delta_model.clone(),
+                                        None,
+                                        Some(delta.to_string()),
+                                        None,
+                                        None,
+                                        None,
+                                    ),
+                                );
+                            },
+                        ))
+                        .await
+                },
+            )
+            .await
         {
             Ok(completion) => {
                 emit_response_event(
-                    &app_handle,
-                    &LlmStreamEvent {
-                        request_id: request.request_id,
-                        kind: "completed".to_string(),
-                        delta: None,
-                        text: Some(completion.text),
-                        provider: completion.provider,
-                        model: completion.model,
-                        usage: completion.usage,
-                        error: None,
-                    },
+                    &completed_handle,
+                    &build_stream_event(
+                        completed_request_id,
+                        "completed",
+                        completion.provider,
+                        completion.model,
+                        None,
+                        None,
+                        Some(completion.text),
+                        completion.usage,
+                        None,
+                    ),
                 );
             }
-            Err(error) => {
+            Err(LlmRequestError::Failed(error)) => {
                 emit_response_event(
-                    &app_handle,
-                    &LlmStreamEvent {
-                        request_id: request.request_id,
-                        kind: "failed".to_string(),
-                        delta: None,
-                        text: None,
-                        provider: provider_name,
-                        model: effective_model,
-                        usage: None,
-                        error: Some(error),
-                    },
+                    &failed_handle,
+                    &build_stream_event(
+                        failed_request_id,
+                        "failed",
+                        failed_provider,
+                        failed_model,
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some(error),
+                    ),
+                );
+            }
+            Err(LlmRequestError::Cancelled) => {
+                emit_response_event(
+                    &cancelled_handle,
+                    &build_stream_event(
+                        cancelled_request_id,
+                        "cancelled",
+                        cancelled_provider,
+                        cancelled_model,
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some("Request cancelled.".to_string()),
+                    ),
                 );
             }
         }
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_llm_request(
+    state: tauri::State<'_, LlmSchedulerState>,
+    request_id: String,
+) -> AppResult<()> {
+    let request_id = request_id.trim().to_string();
+    if request_id.is_empty() {
+        return Err(AppError::validation("request_id cannot be empty"));
+    }
+
+    if state.cancel_request(&request_id).await {
+        Ok(())
+    } else {
+        Err(AppError::not_found(format!(
+            "LLM request '{request_id}' is no longer active"
+        )))
+    }
 }

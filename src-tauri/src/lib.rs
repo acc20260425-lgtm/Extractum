@@ -25,19 +25,19 @@ use sources::{
 
 mod llm;
 use llm::{
-    ask_llm_stream, get_llm_profiles, list_llm_provider_models, save_llm_profile,
-    set_active_llm_profile,
+    ask_llm_stream, cancel_llm_request, get_llm_profiles, list_llm_provider_models,
+    save_llm_profile, set_active_llm_profile, LlmSchedulerState,
 };
 
 mod analysis;
 use analysis::{
-    ask_analysis_run_question, clear_analysis_chat_messages, create_analysis_prompt_template,
-    create_analysis_source_group, delete_analysis_prompt_template, delete_analysis_source_group,
-    get_analysis_run, get_analysis_run_trace, list_active_analysis_runs,
-    list_analysis_chat_messages, list_analysis_prompt_templates, list_analysis_runs,
-    list_analysis_source_groups, list_analysis_sources, resolve_analysis_trace_refs,
-    start_analysis_report, update_analysis_prompt_template, update_analysis_source_group,
-    AnalysisState,
+    ask_analysis_run_question, cancel_analysis_run, cleanup_interrupted_analysis_runs,
+    clear_analysis_chat_messages, create_analysis_prompt_template, create_analysis_source_group,
+    delete_analysis_prompt_template, delete_analysis_source_group, get_analysis_run,
+    get_analysis_run_trace, list_active_analysis_runs, list_analysis_chat_messages,
+    list_analysis_prompt_templates, list_analysis_runs, list_analysis_source_groups,
+    list_analysis_sources, resolve_analysis_trace_refs, start_analysis_report,
+    update_analysis_prompt_template, update_analysis_source_group, AnalysisState,
 };
 
 #[tauri::command]
@@ -52,6 +52,7 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .manage(TelegramState::new())
         .manage(AnalysisState::new())
+        .manage(LlmSchedulerState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
@@ -68,6 +69,7 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                cleanup_interrupted_analysis_runs(handle.clone()).await;
                 restore_telegram_accounts(handle).await;
             });
             Ok(())
@@ -99,6 +101,7 @@ pub fn run() {
             set_active_llm_profile,
             list_llm_provider_models,
             ask_llm_stream,
+            cancel_llm_request,
             list_analysis_sources,
             list_analysis_prompt_templates,
             create_analysis_prompt_template,
@@ -116,7 +119,8 @@ pub fn run() {
             list_analysis_chat_messages,
             clear_analysis_chat_messages,
             ask_analysis_run_question,
-            start_analysis_report
+            start_analysis_report,
+            cancel_analysis_run
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

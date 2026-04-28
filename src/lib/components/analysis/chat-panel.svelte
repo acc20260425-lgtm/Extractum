@@ -7,11 +7,13 @@
     chatMessages,
     chatQuestion,
     chatting,
+    canCancelChat,
     clearingChat,
     selectedTraceRef,
     reportLines,
     onFocusTraceRef,
     onAskQuestion,
+    onCancelChat,
     onClearChat,
     onChangeChatQuestion,
   }: {
@@ -20,6 +22,7 @@
     chatMessages: AnalysisChatTurn[];
     chatQuestion: string;
     chatting: boolean;
+    canCancelChat: boolean;
     clearingChat: boolean;
     selectedTraceRef: string | null;
     reportLines: (text: string) => Array<{
@@ -28,6 +31,7 @@
     }>;
     onFocusTraceRef: (ref: string) => void | Promise<void>;
     onAskQuestion: () => void | Promise<void>;
+    onCancelChat: () => void | Promise<void>;
     onClearChat: () => void | Promise<void>;
     onChangeChatQuestion: (value: string) => void;
   } = $props();
@@ -55,9 +59,14 @@
       <p class="sub">Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.</p>
     </div>
     {#if currentRun && currentRun.status === "completed"}
-      <button class="secondary" onclick={onClearChat} disabled={chatting || clearingChat}>
-        {clearingChat ? "Clearing..." : "Clear chat"}
-      </button>
+      <div class="chat-actions">
+        {#if canCancelChat}
+          <button class="danger-soft" type="button" onclick={onCancelChat}>Cancel answer</button>
+        {/if}
+        <button class="secondary" onclick={onClearChat} disabled={chatting || clearingChat}>
+          {clearingChat ? "Clearing..." : "Clear chat"}
+        </button>
+      </div>
     {/if}
   </div>
 
@@ -202,6 +211,13 @@
     gap: 0.9rem;
   }
 
+  .chat-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
   label {
     display: flex;
     flex-direction: column;
@@ -250,5 +266,15 @@
   .ref-chip:hover,
   .ref-chip.active {
     background: color-mix(in srgb, var(--primary) 22%, var(--panel));
+  }
+
+  .danger-soft {
+    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  }
+
+  .danger-soft:hover {
+    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
   }
 </style>

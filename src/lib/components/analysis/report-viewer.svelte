@@ -7,18 +7,25 @@
     streamedOutput,
     traceRefCount,
     selectedTraceRef,
+    livePhase,
+    liveProgress,
+    canCancelCurrentRun,
     formatTimestamp,
     formatPeriod,
     runTargetLabel,
     statusTone,
     reportLines,
     onFocusTraceRef,
+    onCancelCurrentRun,
   }: {
     currentRun: AnalysisRunDetail | null;
     loadingRunDetail: boolean;
     streamedOutput: string;
     traceRefCount: number;
     selectedTraceRef: string | null;
+    livePhase: string;
+    liveProgress: string;
+    canCancelCurrentRun: boolean;
     formatTimestamp: (timestamp: number | null) => string;
     formatPeriod: (periodFromUnix: number, periodToUnix: number) => string;
     runTargetLabel: (
@@ -33,6 +40,7 @@
       segments: Array<{ type: "text" | "ref"; value: string; key: string }>;
     }>;
     onFocusTraceRef: (ref: string) => void | Promise<void>;
+    onCancelCurrentRun: () => void | Promise<void>;
   } = $props();
 </script>
 
@@ -46,6 +54,9 @@
         </p>
       {/if}
     </div>
+    {#if canCancelCurrentRun}
+      <button class="danger-soft" type="button" onclick={onCancelCurrentRun}>Cancel run</button>
+    {/if}
   </div>
 
   {#if currentRun}
@@ -88,6 +99,14 @@
         <div>
           <span class="meta-label">Trace refs</span>
           <strong>{traceRefCount}</strong>
+        </div>
+        <div>
+          <span class="meta-label">Live phase</span>
+          <strong>{livePhase || currentRun.status}</strong>
+        </div>
+        <div>
+          <span class="meta-label">Live progress</span>
+          <strong>{liveProgress || "n/a"}</strong>
         </div>
       </div>
 
@@ -272,6 +291,16 @@
   .badge-info {
     background: color-mix(in srgb, var(--primary) 16%, var(--panel));
     color: var(--primary);
+  }
+
+  .danger-soft {
+    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  }
+
+  .danger-soft:hover {
+    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
   }
 
   @media (max-width: 1080px) {

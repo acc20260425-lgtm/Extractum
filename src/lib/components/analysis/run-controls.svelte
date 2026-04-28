@@ -20,7 +20,7 @@
     loadingSources,
     loadingGroups,
     loadingTemplates,
-    running,
+    launching,
     activePhase,
     activeProgress,
     showRunMeta,
@@ -50,7 +50,7 @@
     loadingSources: boolean;
     loadingGroups: boolean;
     loadingTemplates: boolean;
-    running: boolean;
+    launching: boolean;
     activePhase: string;
     activeProgress: string;
     showRunMeta: boolean;
@@ -68,7 +68,7 @@
   } = $props();
 
   function canRunReport() {
-    if (running || !selectedTemplateId) return false;
+    if (launching || !selectedTemplateId) return false;
     return analysisScope === "single_source" ? !!selectedSourceId : !!selectedGroupId;
   }
 </script>
@@ -197,7 +197,7 @@
   </label>
 
   <button onclick={onRunReport} disabled={!canRunReport()}>
-    {running ? "Running..." : "Run report"}
+    {launching ? "Starting..." : "Run report"}
   </button>
 
   {#if showRunMeta}

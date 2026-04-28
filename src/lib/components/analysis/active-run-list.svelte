@@ -7,16 +7,23 @@
     activeRunId,
     formatTimestamp,
     formatPeriod,
+    phaseLabel,
+    livePhase,
+    liveProgress,
     runTargetLabel,
     statusTone,
     onRefresh,
     onOpenRun,
+    onCancelRun,
   }: {
     activeRuns: AnalysisRunSummary[];
     loadingActiveRuns: boolean;
     activeRunId: number | null;
     formatTimestamp: (timestamp: number | null) => string;
     formatPeriod: (periodFromUnix: number, periodToUnix: number) => string;
+    phaseLabel: (phase: string) => string;
+    livePhase: (runId: number) => string;
+    liveProgress: (runId: number) => string;
     runTargetLabel: (
       run: Pick<
         AnalysisRunSummary,
@@ -26,6 +33,7 @@
     statusTone: (status: string) => string;
     onRefresh: () => void | Promise<void>;
     onOpenRun: (runId: number) => void | Promise<void>;
+    onCancelRun: (runId: number) => void | Promise<void>;
   } = $props();
 </script>
 
@@ -55,8 +63,17 @@
               {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
             </p>
             <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
+            <p class="sub">
+              Phase: {phaseLabel(livePhase(run.id) || run.status)}
+              {#if liveProgress(run.id)}
+                - {liveProgress(run.id)}
+              {/if}
+            </p>
           </div>
-          <button class="secondary" onclick={() => onOpenRun(run.id)}>Open</button>
+          <div class="run-actions">
+            <button class="secondary" onclick={() => onOpenRun(run.id)}>Open</button>
+            <button class="danger-soft" onclick={() => onCancelRun(run.id)}>Cancel</button>
+          </div>
         </li>
       {/each}
     </ul>
@@ -122,6 +139,13 @@
     min-width: 0;
   }
 
+  .run-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
   .run-title {
     display: flex;
     gap: 0.6rem;
@@ -153,6 +177,16 @@
   .badge-info {
     background: color-mix(in srgb, var(--primary) 16%, var(--panel));
     color: var(--primary);
+  }
+
+  .danger-soft {
+    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  }
+
+  .danger-soft:hover {
+    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
   }
 
   @media (max-width: 720px) {

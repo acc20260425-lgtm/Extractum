@@ -36,7 +36,8 @@
 
   interface LlmStreamEvent {
     request_id: string;
-    kind: "started" | "delta" | "completed" | "failed";
+    kind: "queued" | "started" | "delta" | "completed" | "failed" | "cancelled";
+    queue_position: number | null;
     delta: string | null;
     text: string | null;
     provider: string;
@@ -360,7 +361,21 @@
       });
     } catch (error) {
       testing = false;
+      activeRequestId = null;
       testStatus = formatAppError("starting the provider test", error);
+    }
+  }
+
+  async function cancelTest() {
+    if (!activeRequestId) return;
+
+    testStatus = "Cancelling provider test...";
+    try {
+      await invoke("cancel_llm_request", { requestId: activeRequestId });
+    } catch (error) {
+      testing = false;
+      activeRequestId = null;
+      testStatus = formatAppError("cancelling the provider test", error);
     }
   }
 
@@ -399,6 +414,15 @@
         return;
       }
 
+      if (payload.kind === "queued") {
+        testing = true;
+        testStatus =
+          payload.queue_position !== null
+            ? `Waiting for an LLM slot from ${payload.provider}/${payload.model} (queue #${payload.queue_position})...`
+            : `Waiting for an LLM slot from ${payload.provider}/${payload.model}...`;
+        return;
+      }
+
       if (payload.kind === "delta") {
         testOutput += payload.delta ?? "";
         return;
@@ -406,6 +430,7 @@
 
       if (payload.kind === "completed") {
         testing = false;
+        activeRequestId = null;
         testOutput = payload.text ?? testOutput;
         testUsage = payload.usage;
         testStatus = `Response completed from ${payload.provider}/${payload.model}.`;
@@ -414,7 +439,15 @@
 
       if (payload.kind === "failed") {
         testing = false;
+        activeRequestId = null;
         testStatus = `Provider test failed: ${payload.error ?? "Unknown provider error"}`;
+        return;
+      }
+
+      if (payload.kind === "cancelled") {
+        testing = false;
+        activeRequestId = null;
+        testStatus = payload.error ?? "Provider test cancelled.";
       }
     }).then((unlisten) => {
       if (disposed) {
@@ -587,6 +620,9 @@
       {#if testUsage}
         <span class="summary-chip">{usageLine(testUsage)}</span>
       {/if}
+      {#if testing}
+        <button class="danger-soft" onclick={cancelTest}>Cancel test</button>
+      {/if}
       <button class="secondary" onclick={openTestDialog}>
         {testOutput || testing ? "Open test console" : "Open test"}
       </button>
@@ -631,6 +667,9 @@
       <button onclick={runTest} disabled={testing || !testPrompt.trim() || !canSaveProfile()}>
         {testing ? "Streaming..." : "Run test"}
       </button>
+      {#if testing}
+        <button class="danger-soft" type="button" onclick={cancelTest}>Cancel</button>
+      {/if}
       {#if provider || defaultModel}
         <span class="dialog-meta">{providerModelLine()}</span>
       {/if}
@@ -818,6 +857,16 @@
 
   .active-chip {
     color: var(--text);
+  }
+
+  .danger-soft {
+    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  }
+
+  .danger-soft:hover {
+    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
   }
 
   .hint {

@@ -1,10 +1,11 @@
 use sqlx::{Pool, Sqlite};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::llm::{
     resolve_profile_for_backend, run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
+    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
 };
 
 use super::corpus::load_run_corpus_messages;
@@ -131,6 +132,7 @@ fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
 
 fn build_chat_request(
     run: &AnalysisRunDetail,
+    profile_id: String,
     scope_label: &str,
     history: &[AnalysisChatTurn],
     question: &str,
@@ -171,10 +173,34 @@ fn build_chat_request(
 
     LlmChatRequest {
         request_id: format!("analysis-chat-{}-{}", run.id, now_secs()),
-        profile_id: Some(run.provider_profile.clone()),
+        profile_id: Some(profile_id),
         messages,
         model_override,
     }
+}
+
+fn emit_chat_event(
+    handle: &AppHandle,
+    request_id: String,
+    run_id: i64,
+    kind: &str,
+    queue_position: Option<usize>,
+    delta: Option<String>,
+    message: Option<String>,
+    error: Option<String>,
+) {
+    emit_analysis_chat_event(
+        handle,
+        &AnalysisChatEvent {
+            request_id,
+            run_id,
+            kind: kind.to_string(),
+            queue_position,
+            delta,
+            message,
+            error,
+        },
+    );
 }
 
 async fn load_chat_messages_from_pool(
@@ -310,6 +336,7 @@ pub async fn ask_analysis_run_question(
 
     let corpus = load_run_corpus_messages(&pool, &run).await?;
     let context_messages = find_chat_context_messages(&question, &corpus);
+    let effective_profile_id = profile_id.unwrap_or_else(|| run.provider_profile.clone());
     let history = load_chat_messages_from_pool(&pool, run_id)
         .await?
         .into_iter()
@@ -321,6 +348,7 @@ pub async fn ask_analysis_run_question(
     validate_chat_turns(&history)?;
     let request = build_chat_request(
         &run,
+        effective_profile_id.clone(),
         &scope_label,
         &history,
         &question,
@@ -334,78 +362,132 @@ pub async fn ask_analysis_run_question(
     let app_handle = handle.clone();
     tokio::spawn(async move {
         let resolved_profile =
-            match resolve_profile_for_backend(&app_handle, profile_id.as_deref()).await {
+            match resolve_profile_for_backend(&app_handle, Some(effective_profile_id.as_str())).await
+            {
                 Ok(profile) => profile,
                 Err(error) => {
-                    emit_analysis_chat_event(
+                    emit_chat_event(
                         &app_handle,
-                        &AnalysisChatEvent {
-                            request_id: emitted_request_id.clone(),
-                            run_id,
-                            kind: "failed".to_string(),
-                            delta: None,
-                            message: None,
-                            error: Some(error),
-                        },
+                        emitted_request_id.clone(),
+                        run_id,
+                        "failed",
+                        None,
+                        None,
+                        None,
+                        Some(error),
                     );
                     return;
                 }
             };
 
-        emit_analysis_chat_event(
-            &app_handle,
-            &AnalysisChatEvent {
-                request_id: emitted_request_id.clone(),
-                run_id,
-                kind: "started".to_string(),
-                delta: None,
-                message: Some("Preparing grounded answer...".to_string()),
-                error: None,
-            },
-        );
+        let scheduler = app_handle.state::<LlmSchedulerState>();
+        let request_meta = LlmRequestMetadata {
+            request_id: request.request_id.clone(),
+            profile_id: resolved_profile.profile_id.clone(),
+            provider: resolved_profile.provider.as_str().to_string(),
+            kind: LlmRequestKind::AnalysisChat,
+            priority: LlmRequestPriority::Interactive,
+            owner_run_id: None,
+        };
+        let queued_handle = app_handle.clone();
+        let started_handle = app_handle.clone();
+        let delta_handle = app_handle.clone();
+        let completed_handle = app_handle.clone();
+        let failed_handle = app_handle.clone();
+        let cancelled_handle = app_handle.clone();
+        let queued_request_id = emitted_request_id.clone();
+        let started_request_id = emitted_request_id.clone();
+        let delta_request_id = emitted_request_id.clone();
+        let completed_request_id = emitted_request_id.clone();
+        let failed_request_id = emitted_request_id.clone();
+        let cancelled_request_id = emitted_request_id.clone();
+        let scheduled_request = request.clone();
+        let scheduled_profile = resolved_profile.clone();
 
-        match run_llm_stream_with_profile(&request, &resolved_profile, |delta| {
-            emit_analysis_chat_event(
-                &app_handle,
-                &AnalysisChatEvent {
-                    request_id: emitted_request_id.clone(),
-                    run_id,
-                    kind: "delta".to_string(),
-                    delta: Some(delta.to_string()),
-                    message: None,
-                    error: None,
+        match scheduler
+            .run_request(
+                request_meta,
+                move |position| {
+                    emit_chat_event(
+                        &queued_handle,
+                        queued_request_id.clone(),
+                        run_id,
+                        "queued",
+                        Some(position),
+                        None,
+                        Some(format!("Answer queued at position {position}...")),
+                        None,
+                    );
                 },
-            );
-        })
-        .await
+                move |control| async move {
+                    emit_chat_event(
+                        &started_handle,
+                        started_request_id,
+                        run_id,
+                        "started",
+                        None,
+                        None,
+                        Some("Preparing grounded answer...".to_string()),
+                        None,
+                    );
+
+                    control
+                        .run_cancellable(run_llm_stream_with_profile(
+                            &scheduled_request,
+                            &scheduled_profile,
+                            |delta| {
+                                emit_chat_event(
+                                    &delta_handle,
+                                    delta_request_id.clone(),
+                                    run_id,
+                                    "delta",
+                                    None,
+                                    Some(delta.to_string()),
+                                    None,
+                                    None,
+                                );
+                            },
+                        ))
+                        .await
+                },
+            )
+            .await
         {
             Ok(completion) => {
                 if let Ok(pool) = get_pool(&app_handle).await {
                     let _ = persist_chat_exchange(&pool, run_id, &question, &completion.text).await;
                 }
 
-                emit_analysis_chat_event(
-                    &app_handle,
-                    &AnalysisChatEvent {
-                        request_id: emitted_request_id.clone(),
-                        run_id,
-                        kind: "completed".to_string(),
-                        delta: None,
-                        message: Some("Answer completed.".to_string()),
-                        error: None,
-                    },
-                )
-            }
-            Err(error) => emit_analysis_chat_event(
-                &app_handle,
-                &AnalysisChatEvent {
-                    request_id: emitted_request_id.clone(),
+                emit_chat_event(
+                    &completed_handle,
+                    completed_request_id,
                     run_id,
-                    kind: "failed".to_string(),
-                    delta: None,
-                    message: None,
-                    error: Some(error),
-                },
+                    "completed",
+                    None,
+                    None,
+                    Some("Answer completed.".to_string()),
+                    None,
+                );
+            }
+            Err(LlmRequestError::Failed(error)) => emit_chat_event(
+                &failed_handle,
+                failed_request_id,
+                run_id,
+                "failed",
+                None,
+                None,
+                None,
+                Some(error),
+            ),
+            Err(LlmRequestError::Cancelled) => emit_chat_event(
+                &cancelled_handle,
+                cancelled_request_id,
+                run_id,
+                "cancelled",
+                None,
+                None,
+                Some("Answer cancelled.".to_string()),
+                None,
             ),
         }
     });

@@ -146,8 +146,10 @@ pub(crate) struct AnalysisSourceGroupRow {
 #[derive(Serialize)]
 pub struct AnalysisRunEvent {
     pub run_id: i64,
+    pub request_id: Option<String>,
     pub kind: String,
     pub phase: String,
+    pub queue_position: Option<usize>,
     pub message: Option<String>,
     pub progress_current: Option<i64>,
     pub progress_total: Option<i64>,
@@ -172,6 +174,7 @@ pub struct AnalysisChatEvent {
     pub request_id: String,
     pub run_id: i64,
     pub kind: String,
+    pub queue_position: Option<usize>,
     pub delta: Option<String>,
     pub message: Option<String>,
     pub error: Option<String>,

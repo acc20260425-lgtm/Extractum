@@ -65,6 +65,8 @@ export function phaseLabel(phase: string) {
       return "Completed";
     case "failed":
       return "Failed";
+    case "cancelled":
+      return "Cancelled";
     case "running":
       return "Running";
     case "idle":
@@ -80,6 +82,8 @@ export function statusTone(status: string) {
       return "success";
     case "failed":
       return "danger";
+    case "cancelled":
+      return "neutral";
     case "running":
     case "queued":
       return "info";

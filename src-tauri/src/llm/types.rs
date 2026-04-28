@@ -27,6 +27,7 @@ pub struct LlmUsage {
 pub struct LlmStreamEvent {
     pub request_id: String,
     pub kind: String,
+    pub queue_position: Option<usize>,
     pub delta: Option<String>,
     pub text: Option<String>,
     pub provider: String,
