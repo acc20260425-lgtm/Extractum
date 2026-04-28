@@ -449,10 +449,18 @@ Goal: simplify analysis storage internals and improve run history discoverabilit
 
 #### 3.1. Split `analysis/store.rs`
 
-- [ ] move corpus-loading logic into `analysis/corpus.rs`
-- [ ] move chat-related storage helpers into `analysis/chat.rs` where appropriate
-- [ ] narrow `store.rs` to run CRUD, snapshots, and mapping responsibilities
-- [ ] update imports in `report.rs` and related modules
+- [x] move corpus-loading logic into `analysis/corpus.rs`
+- [x] move chat-related storage helpers into `analysis/chat.rs` where appropriate
+- [x] narrow `store.rs` to run CRUD, snapshots, and mapping responsibilities
+- [x] update imports in `report.rs` and related modules
+
+Notes:
+
+- corpus lookup and snapshot-read helpers now live in `src-tauri/src/analysis/corpus.rs`
+- `analysis/chat.rs` now owns its local chat message load/persist helpers instead of routing those writes through `store.rs`
+- `analysis/store.rs` is now focused on run/template/group lookup, run creation, snapshot persistence, and mapping helpers
+- verification completed with `cargo fmt` and `cargo test`
+- current Rust test count after this step: `54 passed`
 
 #### 3.2. Saved Runs Discoverability
 

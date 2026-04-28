@@ -7,13 +7,14 @@ use crate::llm::{
     run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
 };
 
+use super::corpus::load_corpus_messages;
 use super::models::{
     AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary,
     CorpusMessage,
 };
 use super::store::{
     fetch_prompt_template, fetch_source_group, find_active_duplicate_run, insert_analysis_run,
-    load_corpus_messages, persist_run_snapshot, set_run_status,
+    persist_run_snapshot, set_run_status,
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{

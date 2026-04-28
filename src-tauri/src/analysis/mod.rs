@@ -1,4 +1,5 @@
 mod chat;
+mod corpus;
 mod groups;
 mod models;
 mod report;
@@ -10,13 +11,13 @@ use std::collections::HashSet;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
+use self::corpus::load_run_corpus_messages;
 use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow,
     AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
-use self::store::{fetch_run_row, load_run_corpus_messages, map_run_detail, map_run_summary};
+use self::store::{fetch_run_row, map_run_detail, map_run_summary};
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
-use crate::compression::decompress_text;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 

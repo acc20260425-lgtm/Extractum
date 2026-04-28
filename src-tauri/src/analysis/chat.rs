@@ -1,3 +1,4 @@
+use sqlx::{Pool, Sqlite};
 use tauri::AppHandle;
 
 use crate::db::get_pool;
@@ -6,14 +7,15 @@ use crate::llm::{
     resolve_profile_for_backend, run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
 };
 
+use super::corpus::load_run_corpus_messages;
 use super::models::{
     AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage,
 };
-use super::store::{
-    fetch_run_row, load_chat_messages_from_pool, load_run_corpus_messages, map_run_detail,
-    persist_chat_exchange, resolve_run_scope_label,
+use super::store::{fetch_run_row, map_run_detail, resolve_run_scope_label};
+use super::{
+    emit_analysis_chat_event, now_secs, validate_chat_role, validate_chat_turns,
+    ANALYSIS_STATUS_COMPLETED,
 };
-use super::{emit_analysis_chat_event, now_secs, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
 
 fn chat_search_terms(question: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
@@ -173,6 +175,69 @@ fn build_chat_request(
         messages,
         model_override,
     }
+}
+
+async fn load_chat_messages_from_pool(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+) -> Result<Vec<AnalysisChatMessage>, String> {
+    sqlx::query_as(
+        r#"
+        SELECT id, run_id, role, content, created_at
+        FROM analysis_chat_messages
+        WHERE run_id = ?
+        ORDER BY created_at ASC, id ASC
+        "#,
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())
+}
+
+async fn persist_chat_exchange(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+    user_question: &str,
+    assistant_answer: &str,
+) -> Result<(), String> {
+    validate_chat_role("user")?;
+    validate_chat_role("assistant")?;
+
+    let now = now_secs();
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
+        VALUES (?, ?, ?, ?)
+        "#,
+    )
+    .bind(run_id)
+    .bind("user")
+    .bind(user_question)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
+        VALUES (?, ?, ?, ?)
+        "#,
+    )
+    .bind(run_id)
+    .bind("assistant")
+    .bind(assistant_answer)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]
