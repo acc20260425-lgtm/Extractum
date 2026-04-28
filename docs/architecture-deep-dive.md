@@ -58,6 +58,8 @@ Supported source refs are:
 - `t.me/name`
 - dialog-backed sources picked from the current account
 
+Unsupported manual private refs such as invite links and `t.me/c/...` links are rejected with guidance to re-add those sources from dialogs.
+
 Support boundaries by Telegram source kind:
 
 - `channel`: public usernames are supported; private channels are expected to work best when added from dialogs so the app can persist `access_hash`

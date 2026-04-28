@@ -285,6 +285,7 @@ Notes:
 - `channel` and `supergroup` can use stored `access_hash` identity when added from dialogs or otherwise resolved with enough metadata
 - legacy small `group` sources still remain dialog-dependent because access-hash-only identity is not treated as stable support for that kind
 - supported source refs are now documented as `@username`, `t.me/name`, and dialog-backed sources; numeric/manual refs remain dialog-constrained
+- manual add now rejects private invite links and internal `t.me/c/...` refs with explicit guidance to add those sources from dialogs
 
 Implementation plan:
 
@@ -373,14 +374,14 @@ Definition of done:
 
 Goal: prevent users from creating private-source records that cannot be synced predictably later.
 
-- [ ] keep `@username` and `t.me/name` as supported manual refs for public sources
-- [ ] keep dialog-picked private sources as the preferred supported private flow
-- [ ] reject or clearly discourage numeric/manual private adds when metadata is insufficient
-- [ ] return friendly errors when a numeric source cannot be found in dialogs
+- [x] keep `@username` and `t.me/name` as supported manual refs for public sources
+- [x] keep dialog-picked private sources as the preferred supported private flow
+- [x] reject or clearly discourage numeric/manual private adds when metadata is insufficient
+- [x] return friendly errors when a numeric source cannot be found in dialogs
 
 Definition of done:
 
-- [ ] manual add no longer suggests unsupported private-source flows are stable
+- [x] manual add no longer suggests unsupported private-source flows are stable
 
 ##### 2.3.8. Improve typed errors for private-source resolution
 
@@ -404,11 +405,11 @@ Goal: lock in the new behavior and reduce regressions around private-source hand
 - [x] test stored peer identity resolution for `channel` and `supergroup`
 - [x] test that `group` does not pretend to support unsupported identity-only resolution
 - [x] test friendly failure behavior for private sources that can no longer be resolved
-- [ ] test unsupported manual/private add cases
+- [x] test unsupported manual/private add cases
 
 Definition of done:
 
-- [ ] the new resolution contracts are covered by unit or storage-oriented tests where feasible
+- [x] the new resolution contracts are covered by unit or storage-oriented tests where feasible
 
 ##### 2.3.10. Refresh documentation
 
@@ -427,13 +428,13 @@ Recommended implementation sequence:
 
 - [x] Stage A: audit current behavior, design the metadata model, and land backward-compatible serialization
 - [x] Stage B: update add-time metadata capture and refactor the resolution pipeline
-- [ ] Stage C: tighten manual-add rules and add the remaining unsupported manual/private coverage
+- [x] Stage C: tighten manual-add rules and add the remaining unsupported manual/private coverage
 
 Phase completion gate:
 
 - [ ] private dialog-picked `channel` and `supergroup` sources resolve predictably through stored identity when Telegram provides sufficient data
 - [x] legacy sources remain functional through compatibility fallbacks
-- [ ] unsupported private-source flows are rejected or clearly explained instead of behaving unpredictably
+- [x] unsupported private-source flows are rejected or clearly explained instead of behaving unpredictably
 - [x] documentation reflects the new peer identity contract and the remaining limitations
 
 Expected outcome: ingest code becomes easier to change, and Telegram behavior is validated beyond static reading of the code.

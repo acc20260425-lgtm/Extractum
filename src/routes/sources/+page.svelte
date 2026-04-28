@@ -741,7 +741,7 @@
 <DesktopDialog
   open={addSourceDialogOpen && selectedAccountId !== null}
   title="Add Source"
-  description="Add a Telegram source manually or pick one from the selected account's available channels and groups."
+  description="Add a public Telegram source by username or link, or pick a dialog-backed source from the selected account."
   labelledBy="add-source-title"
   width="52rem"
   onClose={closeAddSourceDialog}
@@ -749,19 +749,23 @@
   <div class="add-source-dialog">
     <section class="dialog-section">
       <div class="section-header">
-        <h4>Add by Username or Link</h4>
+        <h4>Add Public Source by Username or Link</h4>
       </div>
       <div class="row">
         <input
           type="text"
           bind:value={manualRef}
-          placeholder="@channel, @group, or https://t.me/name"
+          placeholder="@username or https://t.me/name"
           onkeydown={(e) => e.key === "Enter" && addManual()}
         />
         <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim() || !selectedAccountReady()}>
           {addingId === "manual" ? "Adding..." : "Add"}
         </button>
       </div>
+      <p class="empty">
+        Supported manual refs: <code>@username</code> or <code>t.me/name</code>. For private or numeric-only sources,
+        add them from <strong>My Telegram Sources</strong> below.
+      </p>
       {#if !selectedAccountReady()}
         <p class="empty">Initialize and sign in the selected account before adding sources.</p>
       {/if}

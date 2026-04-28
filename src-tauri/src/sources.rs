@@ -1113,6 +1113,77 @@ fn parse_username(input: &str) -> String {
     s.trim_start_matches('@').to_string()
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ManualTelegramSourceRef {
+    Username(String),
+    NumericId(i64),
+}
+
+fn unsupported_manual_source_ref_message(source_ref: &str) -> String {
+    format!(
+        "Unsupported manual Telegram source reference '{}'. Use @username or t.me/name for public sources. For private Telegram sources, add them from the account's dialogs.",
+        source_ref
+    )
+}
+
+fn unsupported_private_manual_source_ref_message(source_ref: &str) -> String {
+    format!(
+        "Unsupported private Telegram source reference '{}'. Private invite links and internal t.me/c links are not supported for manual add. Add this source from the account's dialogs instead.",
+        source_ref
+    )
+}
+
+fn parse_supported_manual_telegram_source_ref(
+    source_ref: &str,
+) -> Result<ManualTelegramSourceRef, String> {
+    let trimmed = source_ref.trim();
+    if trimmed.is_empty() {
+        return Err("Telegram source reference cannot be empty".to_string());
+    }
+
+    if let Ok(source_id) = trimmed.parse::<i64>() {
+        return Ok(ManualTelegramSourceRef::NumericId(source_id));
+    }
+
+    if let Some(rest) = trimmed.strip_prefix('@') {
+        let username = rest.trim();
+        if username.is_empty() || username.contains('/') || username.starts_with('+') {
+            return Err(unsupported_manual_source_ref_message(source_ref));
+        }
+        return Ok(ManualTelegramSourceRef::Username(username.to_string()));
+    }
+
+    if let Some(rest) = trimmed
+        .strip_prefix("https://t.me/")
+        .or_else(|| trimmed.strip_prefix("http://t.me/"))
+        .or_else(|| trimmed.strip_prefix("t.me/"))
+    {
+        let path = rest.trim_matches('/');
+        let first_segment = path.split('/').next().unwrap_or(path).trim();
+        if first_segment.is_empty() {
+            return Err(unsupported_manual_source_ref_message(source_ref));
+        }
+        if first_segment.eq_ignore_ascii_case("joinchat")
+            || first_segment.eq_ignore_ascii_case("c")
+            || first_segment.starts_with('+')
+        {
+            return Err(unsupported_private_manual_source_ref_message(source_ref));
+        }
+        return Ok(ManualTelegramSourceRef::Username(first_segment.to_string()));
+    }
+
+    let username = parse_username(trimmed);
+    if !username.is_empty()
+        && !username.contains('/')
+        && !username.starts_with('+')
+        && !username.chars().all(|char| char.is_ascii_digit())
+    {
+        return Ok(ManualTelegramSourceRef::Username(username));
+    }
+
+    Err(unsupported_manual_source_ref_message(source_ref))
+}
+
 fn now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1250,32 +1321,45 @@ fn source_peer_resolution_failure(source: &SourceSyncTarget, metadata: &SourceMe
     }
 }
 
-async fn resolve_telegram_source(
+async fn resolve_telegram_source_by_username(
     client: &grammers_client::Client,
+    username: &str,
     source_ref: &str,
     expected_kind: Option<&str>,
 ) -> Result<ResolvedTelegramSource, String> {
-    let trimmed = source_ref.trim();
-    let username = parse_username(trimmed);
+    let peer = client
+        .resolve_username(username)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Telegram source '{}' not found", source_ref))?;
 
-    if !username.is_empty() && !username.chars().all(|char| char.is_ascii_digit()) {
-        let peer = client
-            .resolve_username(&username)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Telegram source '{}' not found", source_ref))?;
+    let mut source = resolved_telegram_source_from_peer(&peer)
+        .ok_or_else(|| "Not a Telegram channel, group, or supergroup".to_string())?;
+    validate_expected_telegram_source_kind(&source, expected_kind)?;
+    source.avatar_bytes = peer_photo_bytes_with_timeout(client, &peer).await;
+    Ok(source)
+}
 
-        let mut source = resolved_telegram_source_from_peer(&peer)
-            .ok_or_else(|| "Not a Telegram channel, group, or supergroup".to_string())?;
-        validate_expected_telegram_source_kind(&source, expected_kind)?;
-        source.avatar_bytes = peer_photo_bytes_with_timeout(client, &peer).await;
-        return Ok(source);
+fn dialog_lookup_not_found_message(source_ref: &str, expected_kind: Option<&str>) -> String {
+    if expected_kind.is_some() {
+        format!(
+            "Telegram source '{}' was not found in this account's dialogs",
+            source_ref
+        )
+    } else {
+        format!(
+            "Telegram source '{}' was not found in this account's dialogs. Numeric manual adds only work for sources that are still visible in that account's dialogs. For private Telegram sources, add them from the account's dialogs instead.",
+            source_ref
+        )
     }
+}
 
-    let Ok(source_id) = trimmed.parse::<i64>() else {
-        return Err(format!("Telegram source '{}' not found", source_ref));
-    };
-
+async fn resolve_telegram_source_from_dialogs(
+    client: &grammers_client::Client,
+    source_id: i64,
+    source_ref: &str,
+    expected_kind: Option<&str>,
+) -> Result<ResolvedTelegramSource, String> {
     let mut dialogs = client.iter_dialogs();
     let mut found_wrong_kind = false;
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
@@ -1299,10 +1383,49 @@ async fn resolve_telegram_source(
         ));
     }
 
-    Err(format!(
-        "Telegram source '{}' was not found in this account's dialogs",
-        source_ref
-    ))
+    Err(dialog_lookup_not_found_message(source_ref, expected_kind))
+}
+
+async fn resolve_telegram_source(
+    client: &grammers_client::Client,
+    source_ref: &str,
+    expected_kind: Option<&str>,
+) -> Result<ResolvedTelegramSource, String> {
+    let trimmed = source_ref.trim();
+    if expected_kind.is_none() {
+        match parse_supported_manual_telegram_source_ref(trimmed)? {
+            ManualTelegramSourceRef::Username(username) => {
+                return resolve_telegram_source_by_username(
+                    client,
+                    &username,
+                    source_ref,
+                    expected_kind,
+                )
+                .await
+            }
+            ManualTelegramSourceRef::NumericId(source_id) => {
+                return resolve_telegram_source_from_dialogs(
+                    client,
+                    source_id,
+                    source_ref,
+                    expected_kind,
+                )
+                .await
+            }
+        }
+    }
+
+    let username = parse_username(trimmed);
+    if !username.is_empty() && !username.chars().all(|char| char.is_ascii_digit()) {
+        return resolve_telegram_source_by_username(client, &username, source_ref, expected_kind)
+            .await;
+    }
+
+    let Ok(source_id) = trimmed.parse::<i64>() else {
+        return Err(format!("Telegram source '{}' not found", source_ref));
+    };
+
+    resolve_telegram_source_from_dialogs(client, source_id, source_ref, expected_kind).await
 }
 
 fn telegram_source_kind_matches(
@@ -1552,14 +1675,16 @@ fn build_raw_payload(
 mod tests {
     use super::{
         add_source_resolution_strategy, decode_media_metadata, decode_source_metadata,
-        default_sync_settings, determine_sync_policy, encode_media_metadata,
-        encode_source_metadata, finalize_sync, initial_sync_policy_label, load_source,
-        load_sync_settings_from_pool, parse_username, save_sync_settings_to_pool,
-        source_peer_ref_from_identity, source_peer_resolution_failure, source_peer_resolution_plan,
+        default_sync_settings, determine_sync_policy, dialog_lookup_not_found_message,
+        encode_media_metadata, encode_source_metadata, finalize_sync, initial_sync_policy_label,
+        load_source, load_sync_settings_from_pool, parse_supported_manual_telegram_source_ref,
+        parse_username, save_sync_settings_to_pool, source_peer_ref_from_identity,
+        source_peer_resolution_failure, source_peer_resolution_plan,
         validate_expected_telegram_source_kind, validate_sync_settings, InitialSyncMode,
-        ResolvedTelegramSource, SourceMetadata, SourcePeerIdentity, SourcePeerResolutionStep,
-        SourcePeerResolutionStrategy, SourceRecordRow, SourceSyncTarget, SyncSettingsRecord,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
+        ManualTelegramSourceRef, ResolvedTelegramSource, SourceMetadata, SourcePeerIdentity,
+        SourcePeerResolutionStep, SourcePeerResolutionStrategy, SourceRecordRow, SourceSyncTarget,
+        SyncSettingsRecord, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        TELEGRAM_SOURCE_TYPE,
     };
     use crate::compression::{compress_json_bytes, compress_text, decompress_text};
     use crate::error::AppErrorKind;
@@ -1694,6 +1819,48 @@ mod tests {
         assert_eq!(parse_username("@example"), "example");
         assert_eq!(parse_username("t.me/example"), "example");
         assert_eq!(parse_username("https://t.me/example/42"), "example");
+    }
+
+    #[test]
+    fn parse_supported_manual_telegram_source_ref_accepts_public_refs_and_numeric_ids() {
+        assert_eq!(
+            parse_supported_manual_telegram_source_ref("@example"),
+            Ok(ManualTelegramSourceRef::Username("example".to_string()))
+        );
+        assert_eq!(
+            parse_supported_manual_telegram_source_ref("t.me/example"),
+            Ok(ManualTelegramSourceRef::Username("example".to_string()))
+        );
+        assert_eq!(
+            parse_supported_manual_telegram_source_ref("https://t.me/example/42"),
+            Ok(ManualTelegramSourceRef::Username("example".to_string()))
+        );
+        assert_eq!(
+            parse_supported_manual_telegram_source_ref("12345"),
+            Ok(ManualTelegramSourceRef::NumericId(12345))
+        );
+    }
+
+    #[test]
+    fn parse_supported_manual_telegram_source_ref_rejects_private_links() {
+        for source_ref in [
+            "https://t.me/+AAAAAE-example",
+            "t.me/joinchat/AAAAAE-example",
+            "https://t.me/c/12345/67",
+        ] {
+            let error = parse_supported_manual_telegram_source_ref(source_ref)
+                .expect_err("private/manual ref should be rejected");
+            assert!(error.contains("not supported for manual add"));
+            assert!(error.contains("dialogs"));
+        }
+    }
+
+    #[test]
+    fn dialog_lookup_not_found_message_explains_numeric_manual_limit() {
+        let message = dialog_lookup_not_found_message("12345", None);
+        assert!(message.contains("not found in this account's dialogs"));
+        assert!(message.contains("Numeric manual adds only work"));
+        assert!(message.contains("private Telegram sources"));
     }
 
     #[test]
