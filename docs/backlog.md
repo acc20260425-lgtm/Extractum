@@ -327,33 +327,43 @@ Expected outcome: storage logic gets clearer, and saved reports become easier to
 
 ### Phase 4. LLM Configuration, Secret Storage, And Concurrency
 
-Status: open.
+Status: partial.
 
 Goal: make the LLM subsystem more extensible, safer, and more robust under load.
 
 #### 4.1. LLM Provider Configuration
 
-Status: open.
+Status: completed.
 
 Priority: high.
 
 Goal: turn Gemini and OmniRoute support into a provider configuration model that can grow beyond the current hard-coded default profile.
 
-Why it matters: the backend now has a modular LLM implementation, but the product still exposes only one active profile and hard-codes OmniRoute's OpenAI-compatible `base_url`.
+Why it matters: the backend now has a modular LLM implementation, but the product still exposed only one active profile and hard-coded OmniRoute's OpenAI-compatible `base_url`.
 
 Scope:
 
-- [ ] add provider profile management beyond the single `default` profile
-- [ ] decide whether `base_url` should be stored for OpenAI-compatible providers and exposed in `/settings`
-- [ ] validate model list and Test Provider flows for Gemini and OmniRoute
-- [ ] make provider labels, placeholders, and error messages provider-neutral where appropriate
-- [ ] update analysis run metadata if user-facing provider profile names become editable
+- [x] add provider profile management beyond the single `default` profile
+- [x] decide whether `base_url` should be stored for OpenAI-compatible providers and exposed in `/settings`
+- [x] validate model list and Test Provider flows for Gemini and OmniRoute
+- [x] make provider labels, placeholders, and error messages provider-neutral where appropriate
 
 Acceptance criteria:
 
-- [ ] users can configure Gemini and OmniRoute without code changes
-- [ ] OpenAI-compatible providers can reuse the same backend path with a configured `base_url`
-- [ ] Test Provider always uses the saved provider, model, and key the user sees in settings
+- [x] users can configure Gemini and OmniRoute without code changes
+- [x] OpenAI-compatible providers can reuse the same backend path with a configured `base_url`
+- [x] Test Provider always uses the saved provider, model, and key the user sees in settings
+
+Notes:
+
+- completed via multi-profile backend/frontend support in `src-tauri/src/llm/` and `src/routes/settings/+page.svelte`
+- `get_llm_profiles` now returns the full saved profile list plus the active profile instead of only a single `default_profile`
+- LLM profiles now persist provider-specific `base_url` settings, with OpenAI-compatible requests and model-list calls using the saved or currently edited `base_url`
+- `/settings` now supports selecting existing profiles, creating new profiles, saving without activation, saving and activating, and masked API key editing
+- provider copy and backend error labels now use provider-neutral OpenAI-compatible wording where appropriate instead of hard-coding OmniRoute-specific phrasing
+- analysis run metadata did not need a migration in this slice because profile ids remain the persisted user-facing identifier; editable display names were not introduced
+- verification completed with `cargo fmt`, `cargo test`, and `npm run check` on April 28, 2026
+- current Rust test count after this step: `57 passed`
 
 #### 4.2. Secure Secret Storage
 
@@ -560,7 +570,7 @@ If implementation starts directly from this file, the recommended opening sequen
 1. validate the remaining Telegram runtime cases on real accounts and dialogs
 2. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
 3. decide whether saved-run history now needs richer metadata/date filters before Phase 4
-4. begin Phase 4.1 provider configuration cleanup
+4. continue with Phase 4.2 secure secret storage once the team is ready to stay within Phase 4 work
 
 ### Session Handoff
 
@@ -570,11 +580,12 @@ Current implementation checkpoint:
 - `sync_source` and `analysis/store.rs` are already split into narrower analysis and ingest helpers
 - frontend `sources` and `accounts` types are centralized under `src/lib/types/`
 - Saved Runs now use global history by default and keep queued/running work in a separate `Active Runs` panel
+- Phase 4.1 provider configuration cleanup is complete: multi-profile LLM settings, configurable OpenAI-compatible `base_url`, and profile-aware provider test/model-list flows are now in place
 - current verification checkpoints include passing `cargo test` and `npm run check`
 
 Recommended next step:
 
-- continue with **Phase 2.2**, validating the remaining Telegram runtime cases on real accounts and dialogs
+- if the team is staying on the Phase 4 track, continue with **Phase 4.2**, moving LLM secrets out of SQLite-backed `app_settings`
 
 ---
 

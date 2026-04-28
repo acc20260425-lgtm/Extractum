@@ -10,11 +10,12 @@
     provider: string;
     default_model: string;
     api_key: string;
+    base_url: string;
   }
 
   interface LlmProfilesState {
     active_profile: string;
-    default_profile: LlmProfile;
+    profiles: LlmProfile[];
   }
 
   interface LlmProviderModel {
@@ -48,10 +49,46 @@
     payload: T;
   }
 
+  interface ProviderOption {
+    value: string;
+    label: string;
+    placeholder: string;
+    keyPlaceholder: string;
+    baseUrlPlaceholder: string;
+    supportsBaseUrl: boolean;
+  }
+
+  const NEW_PROFILE_OPTION = "__new_profile__";
+  const providerOptions: ProviderOption[] = [
+    {
+      value: "gemini",
+      label: "Gemini",
+      placeholder: "gemini-2.5-flash",
+      keyPlaceholder: "AIza...",
+      baseUrlPlaceholder: "",
+      supportsBaseUrl: false,
+    },
+    {
+      value: "omniroute",
+      label: "OpenAI-compatible",
+      placeholder: "if/kimi-k2-thinking",
+      keyPlaceholder: "sk_omniroute",
+      baseUrlPlaceholder: "http://localhost:20128/v1",
+      supportsBaseUrl: true,
+    },
+  ];
+
+  let profiles = $state<LlmProfile[]>([]);
   let activeProfile = $state("default");
+  let selectedProfileId = $state("default");
+  let creatingProfile = $state(false);
+  let draftProfileId = $state("default");
+
   let provider = $state("gemini");
   let defaultModel = $state("gemini-2.5-flash");
   let apiKey = $state("");
+  let baseUrl = $state("");
+
   let settingsStatus = $state("");
   let saving = $state(false);
   let availableModels = $state<LlmProviderModel[]>([]);
@@ -66,10 +103,42 @@
   let testDialogOpen = $state(false);
   let activeRequestId = $state<string | null>(null);
   let settingsStatusTimer: ReturnType<typeof setTimeout> | null = null;
-  const providerOptions = [
-    { value: "gemini", label: "Gemini", placeholder: "gemini-2.5-flash", keyPlaceholder: "AIza..." },
-    { value: "omniroute", label: "OmniRoute", placeholder: "if/kimi-k2-thinking", keyPlaceholder: "sk_omniroute" },
-  ];
+
+  function normalizeProfileId(value: string) {
+    return value.trim().toLowerCase();
+  }
+
+  function currentProviderOption(value = provider) {
+    return providerOptions.find((option) => option.value === value) ?? providerOptions[0];
+  }
+
+  function providerLabel(value = provider) {
+    return currentProviderOption(value)?.label ?? value;
+  }
+
+  function providerPlaceholder() {
+    return currentProviderOption().placeholder;
+  }
+
+  function apiKeyPlaceholder() {
+    return currentProviderOption().keyPlaceholder;
+  }
+
+  function providerSupportsBaseUrl(value = provider) {
+    return currentProviderOption(value).supportsBaseUrl;
+  }
+
+  function providerBaseUrlPlaceholder(value = provider) {
+    return currentProviderOption(value).baseUrlPlaceholder;
+  }
+
+  function effectiveDraftProfileId() {
+    return creatingProfile ? draftProfileId : selectedProfileId;
+  }
+
+  function canSaveProfile() {
+    return Boolean(defaultModel.trim() && normalizeProfileId(effectiveDraftProfileId()));
+  }
 
   function setSettingsStatus(message: string) {
     settingsStatus = message;
@@ -82,14 +151,63 @@
     }, 5000);
   }
 
+  function clearModelCatalog() {
+    availableModels = [];
+    modelsStatus = "";
+  }
+
+  function clearTestResult() {
+    testStatus = "";
+    testOutput = "";
+    testUsage = null;
+  }
+
+  function applyProfile(profile: LlmProfile) {
+    selectedProfileId = profile.profile_id;
+    creatingProfile = false;
+    draftProfileId = profile.profile_id;
+    provider = profile.provider;
+    defaultModel = profile.default_model;
+    apiKey = profile.api_key;
+    baseUrl = profile.base_url;
+    clearModelCatalog();
+    clearTestResult();
+  }
+
+  function syncProfilesState(state: LlmProfilesState, preferredProfileId?: string) {
+    profiles = state.profiles;
+    activeProfile = state.active_profile;
+
+    const normalizedPreferred = preferredProfileId ? normalizeProfileId(preferredProfileId) : "";
+    const nextProfile =
+      state.profiles.find((profile) => profile.profile_id === normalizedPreferred) ??
+      state.profiles.find((profile) => profile.profile_id === selectedProfileId) ??
+      state.profiles.find((profile) => profile.profile_id === state.active_profile) ??
+      state.profiles[0];
+
+    if (nextProfile) {
+      applyProfile(nextProfile);
+      return;
+    }
+
+    selectedProfileId = state.active_profile || "default";
+    creatingProfile = false;
+    draftProfileId = state.active_profile || "default";
+    provider = "gemini";
+    defaultModel = "gemini-2.5-flash";
+    apiKey = "";
+    baseUrl = "";
+    clearModelCatalog();
+    clearTestResult();
+  }
+
   async function loadProfiles() {
     try {
       const state = await invoke<LlmProfilesState>("get_llm_profiles");
-      activeProfile = state.active_profile;
-      provider = state.default_profile.provider;
-      defaultModel = state.default_profile.default_model;
-      apiKey = state.default_profile.api_key;
-      if (apiKey.trim()) {
+      syncProfilesState(state);
+
+      const currentProfile = state.profiles.find((profile) => profile.profile_id === state.active_profile);
+      if (currentProfile?.api_key.trim()) {
         void loadProviderModels(false);
       }
     } catch (error) {
@@ -104,8 +222,9 @@
     try {
       const models = await invoke<LlmProviderModel[]>("list_llm_provider_models", {
         provider,
-        profileId: activeProfile || "default",
+        profileId: creatingProfile ? null : selectedProfileId || activeProfile || "default",
         apiKey: apiKey.trim() ? apiKey : null,
+        baseUrl: providerSupportsBaseUrl() && baseUrl.trim() ? baseUrl : null,
       });
 
       availableModels = models;
@@ -119,25 +238,43 @@
     }
   }
 
-  function providerLabel(value = provider) {
-    return providerOptions.find((option) => option.value === value)?.label ?? value;
+  function beginNewProfile() {
+    creatingProfile = true;
+    draftProfileId = "";
+    clearModelCatalog();
+    clearTestResult();
+    if (providerSupportsBaseUrl() && !baseUrl.trim()) {
+      baseUrl = providerBaseUrlPlaceholder();
+    }
   }
 
-  function providerPlaceholder() {
-    return providerOptions.find((option) => option.value === provider)?.placeholder ?? "model-id";
-  }
+  function handleProfileSelectionChange() {
+    if (selectedProfileId === NEW_PROFILE_OPTION) {
+      beginNewProfile();
+      return;
+    }
 
-  function apiKeyPlaceholder() {
-    return providerOptions.find((option) => option.value === provider)?.keyPlaceholder ?? "API key";
+    const profile = profiles.find((candidate) => candidate.profile_id === selectedProfileId);
+    if (profile) {
+      applyProfile(profile);
+    }
   }
 
   function handleProviderChange() {
-    availableModels = [];
-    modelsStatus = "";
-    if (provider === "gemini" && defaultModel.startsWith("if/")) {
-      defaultModel = "gemini-2.5-flash";
+    clearModelCatalog();
+
+    if (provider === "gemini") {
+      baseUrl = "";
+      if (defaultModel.startsWith("if/")) {
+        defaultModel = "gemini-2.5-flash";
+      }
+      return;
     }
-    if (provider === "omniroute" && defaultModel.startsWith("gemini-")) {
+
+    if (!baseUrl.trim()) {
+      baseUrl = providerBaseUrlPlaceholder(provider);
+    }
+    if (defaultModel.startsWith("gemini-")) {
       defaultModel = "";
     }
   }
@@ -148,31 +285,40 @@
   }
 
   function providerModelLine() {
-    return `${provider}${provider && defaultModel ? " / " : ""}${defaultModel}`;
+    const profileId = normalizeProfileId(effectiveDraftProfileId());
+    return [profileId, provider, defaultModel].filter(Boolean).join(" / ");
   }
 
-  async function saveProfile(successMessage = "LLM settings saved.") {
+  async function saveProfile(setActive: boolean, successMessage?: string) {
     saving = true;
     settingsStatus = "";
 
+    const targetProfileId = normalizeProfileId(effectiveDraftProfileId());
+    const wasCreatingProfile = creatingProfile;
+
     try {
       const state = await invoke<LlmProfilesState>("save_llm_profile", {
-        profileId: "default",
+        profileId: targetProfileId,
         provider,
         defaultModel,
         apiKey,
-        setActive: true,
+        baseUrl: providerSupportsBaseUrl() ? baseUrl : null,
+        setActive,
       });
 
-      activeProfile = state.active_profile;
-      provider = state.default_profile.provider;
-      defaultModel = state.default_profile.default_model;
-      apiKey = state.default_profile.api_key;
-      setSettingsStatus(successMessage);
-      return true;
+      syncProfilesState(state, targetProfileId);
+      setSettingsStatus(
+        successMessage ??
+          (setActive
+            ? `Saved and activated profile '${targetProfileId}'.`
+            : wasCreatingProfile
+              ? `Created profile '${targetProfileId}'.`
+              : `Saved profile '${targetProfileId}'.`)
+      );
+      return targetProfileId;
     } catch (error) {
       setSettingsStatus(formatAppError("saving LLM settings", error));
-      return false;
+      return null;
     } finally {
       saving = false;
     }
@@ -188,8 +334,11 @@
       return;
     }
 
-    const saved = await saveProfile("LLM settings saved before test run.");
-    if (!saved) return;
+    const savedProfileId = await saveProfile(
+      false,
+      "Profile settings saved before the provider test run."
+    );
+    if (!savedProfileId) return;
 
     testOutput = "";
     testUsage = null;
@@ -200,7 +349,7 @@
     try {
       await invoke("ask_llm_stream", {
         requestId: activeRequestId,
-        profileId: activeProfile || "default",
+        profileId: savedProfileId,
         messages: [
           {
             role: "user",
@@ -211,7 +360,7 @@
       });
     } catch (error) {
       testing = false;
-      testStatus = formatAppError("starting the LLM test", error);
+      testStatus = formatAppError("starting the provider test", error);
     }
   }
 
@@ -265,7 +414,7 @@
 
       if (payload.kind === "failed") {
         testing = false;
-        testStatus = `LLM request failed: ${payload.error ?? "Unknown provider error"}`;
+        testStatus = `Provider test failed: ${payload.error ?? "Unknown provider error"}`;
       }
     }).then((unlisten) => {
       if (disposed) {
@@ -294,15 +443,49 @@
 {/if}
 
 <div class="card">
-  <h3>LLM Provider</h3>
+  <h3>LLM Profiles</h3>
   <p class="hint">
-    Gemini and OmniRoute are supported. OmniRoute uses its OpenAI-compatible endpoint at
-    http://localhost:20128/v1. The API key is temporarily stored in local SQLite for development convenience.
+    Manage reusable provider profiles for analysis and chat flows. The active profile is used by
+    default when a workflow does not pick a profile explicitly. API keys are still stored in local
+    SQLite until phase 4.2 replaces this with secure storage.
   </p>
 
   <div class="grid">
+    <label>Saved profile
+      <select bind:value={selectedProfileId} onchange={handleProfileSelectionChange}>
+        {#each profiles as profile (profile.profile_id)}
+          <option value={profile.profile_id}>
+            {profile.profile_id} - {providerLabel(profile.provider)}
+          </option>
+        {/each}
+        <option value={NEW_PROFILE_OPTION}>Create new profile...</option>
+      </select>
+    </label>
+
     <label>Active profile
       <input type="text" bind:value={activeProfile} disabled />
+    </label>
+  </div>
+
+  <div class="profile-strip">
+    <span class="summary-chip">
+      {creatingProfile ? "Creating new profile" : `Editing ${selectedProfileId}`}
+    </span>
+    {#if !creatingProfile && selectedProfileId === activeProfile}
+      <span class="summary-chip active-chip">Used by default in analysis</span>
+    {/if}
+  </div>
+
+  <div class="grid">
+    <label>Profile ID
+      <input
+        type="text"
+        bind:value={draftProfileId}
+        placeholder="default"
+        disabled={!creatingProfile}
+        spellcheck={false}
+      />
+      <span class="field-hint">Stored in lowercase and used in analysis run metadata.</span>
     </label>
 
     <label>Provider
@@ -329,13 +512,26 @@
     {/if}
   </label>
 
+  {#if providerSupportsBaseUrl()}
+    <label>Base URL
+      <input type="url" bind:value={baseUrl} placeholder={providerBaseUrlPlaceholder()} spellcheck={false} />
+      <span class="field-hint">
+        Use this for OmniRoute or any other OpenAI-compatible endpoint exposed through the same
+        backend path.
+      </span>
+    </label>
+  {/if}
+
   <label>API key
-    <input type="text" bind:value={apiKey} placeholder={apiKeyPlaceholder()} />
+    <input type="password" bind:value={apiKey} placeholder={apiKeyPlaceholder()} autocomplete="off" />
   </label>
 
   <div class="actions">
-    <button onclick={() => saveProfile()} disabled={saving || !defaultModel.trim()}>
-      {saving ? "Saving..." : "Save"}
+    <button onclick={() => saveProfile(true)} disabled={saving || !canSaveProfile()}>
+      {saving ? "Saving..." : "Save and set active"}
+    </button>
+    <button class="secondary" onclick={() => saveProfile(false)} disabled={saving || !canSaveProfile()}>
+      Save only
     </button>
     <button class="secondary" onclick={() => loadProviderModels()} disabled={loadingModels || !apiKey.trim()}>
       {loadingModels ? "Loading models..." : "Refresh models"}
@@ -376,7 +572,8 @@
 <div class="card">
   <h3>Test Provider</h3>
   <p class="hint">
-    Run a quick smoke test with the currently saved model and key before returning to analysis workflows.
+    Run a smoke test with the profile currently open in this form. The test always saves the form
+    first, then uses that saved provider, model, key, and base URL.
   </p>
   <div class="test-summary">
     <div class="summary-copy">
@@ -397,7 +594,7 @@
   </div>
 
   {#if testStatus}
-    <p class="status" class:error={testStatus.startsWith("LLM request failed") || testStatus.startsWith("Error")}>
+    <p class="status" class:error={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error")}>
       {testStatus}
     </p>
   {/if}
@@ -420,7 +617,7 @@
 <DesktopDialog
   open={testDialogOpen}
   title="Provider Test Console"
-  description="Run a live request with the active settings and inspect the streamed response before using it in reports."
+  description="Run a live request with the profile currently open in settings before using it in reports."
   labelledBy="provider-test-title"
   width="52rem"
   onClose={closeTestDialog}
@@ -431,7 +628,7 @@
     </label>
 
     <div class="actions modal-actions">
-      <button onclick={runTest} disabled={testing || !testPrompt.trim() || !defaultModel.trim()}>
+      <button onclick={runTest} disabled={testing || !testPrompt.trim() || !canSaveProfile()}>
         {testing ? "Streaming..." : "Run test"}
       </button>
       {#if provider || defaultModel}
@@ -482,24 +679,8 @@
     color: var(--muted);
   }
 
-  textarea {
-    width: 100%;
-    resize: vertical;
-    min-height: 8rem;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.8rem;
-    border-radius: 8px;
-    font: inherit;
-  }
-
-  textarea:focus {
-    border-color: var(--primary);
-    outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
-  }
-
+  input,
+  textarea,
   select {
     width: 100%;
     background: var(--panel-strong);
@@ -510,10 +691,30 @@
     font: inherit;
   }
 
+  textarea {
+    resize: vertical;
+    min-height: 8rem;
+  }
+
+  input:focus,
+  textarea:focus,
   select:focus {
     border-color: var(--primary);
     outline: none;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
+  .field-hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .profile-strip {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .actions {
@@ -613,6 +814,10 @@
     padding: 0.25rem 0.55rem;
     border-radius: 999px;
     background: color-mix(in srgb, var(--panel-hover) 80%, transparent);
+  }
+
+  .active-chip {
+    color: var(--text);
   }
 
   .hint {

@@ -1,8 +1,8 @@
 use tokio::time::{timeout, Duration};
 
 use super::gemini::stream_gemini_response;
-use super::openai_compat::stream_openai_compat_response;
-use super::{LlmChatRequest, LlmCompletion, ProviderKind, ResolvedLlmProfile, OMNIROUTE_CONFIG};
+use super::openai_compat::{stream_openai_compat_response, OpenAiCompatProviderConfig};
+use super::{LlmChatRequest, LlmCompletion, ProviderKind, ResolvedLlmProfile};
 
 const LLM_STREAM_TIMEOUT_SECS: u64 = 90;
 
@@ -53,7 +53,11 @@ where
     match profile.provider {
         ProviderKind::Gemini => stream_gemini_response(request, profile, on_delta).await,
         ProviderKind::OmniRoute => {
-            stream_openai_compat_response(request, profile, on_delta, OMNIROUTE_CONFIG).await
+            let config = OpenAiCompatProviderConfig {
+                provider: ProviderKind::OmniRoute,
+                base_url: profile.base_url.clone(),
+            };
+            stream_openai_compat_response(request, profile, on_delta, &config).await
         }
     }
 }

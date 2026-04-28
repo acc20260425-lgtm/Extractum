@@ -7,10 +7,10 @@ use super::{
     ProviderKind, ResolvedLlmProfile,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct OpenAiCompatProviderConfig {
     pub(super) provider: ProviderKind,
-    pub(super) base_url: &'static str,
+    pub(super) base_url: String,
 }
 
 #[derive(Serialize)]
@@ -155,7 +155,7 @@ fn map_openai_compat_usage(usage: &OpenAiCompatUsage) -> LlmUsage {
 }
 
 fn format_openai_compat_error(
-    config: OpenAiCompatProviderConfig,
+    config: &OpenAiCompatProviderConfig,
     status: reqwest::StatusCode,
     body: &str,
 ) -> String {
@@ -209,7 +209,7 @@ pub(in crate::llm) async fn stream_openai_compat_response<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,
-    config: OpenAiCompatProviderConfig,
+    config: &OpenAiCompatProviderConfig,
 ) -> Result<LlmCompletion, String>
 where
     F: FnMut(&str),
@@ -297,7 +297,7 @@ where
 
 pub(super) async fn list_openai_compat_models(
     api_key: &str,
-    config: OpenAiCompatProviderConfig,
+    config: &OpenAiCompatProviderConfig,
 ) -> Result<Vec<LlmProviderModel>, String> {
     if api_key.trim().is_empty() {
         return Err(format!(

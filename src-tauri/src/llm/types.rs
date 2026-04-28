@@ -41,12 +41,13 @@ pub struct LlmProfile {
     pub provider: String,
     pub default_model: String,
     pub api_key: String,
+    pub base_url: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct LlmProfilesState {
     pub active_profile: String,
-    pub default_profile: LlmProfile,
+    pub profiles: Vec<LlmProfile>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -66,6 +67,7 @@ pub(crate) struct ResolvedLlmProfile {
     pub(crate) provider: ProviderKind,
     pub(crate) default_model: String,
     pub(crate) api_key: String,
+    pub(crate) base_url: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
