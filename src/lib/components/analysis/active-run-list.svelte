@@ -1,33 +1,20 @@
 <script lang="ts">
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
-  type RunFilter = "all" | "completed" | "failed";
-  type HistoryScope = "all" | "current";
-
   let {
-    runs,
-    loadingRuns,
-    historyScope,
-    historyTargetReady,
-    runFilter,
+    activeRuns,
+    loadingActiveRuns,
     activeRunId,
-    filteredRuns,
     formatTimestamp,
     formatPeriod,
     runTargetLabel,
     statusTone,
     onRefresh,
     onOpenRun,
-    onChangeFilter,
-    onChangeHistoryScope,
   }: {
-    runs: AnalysisRunSummary[];
-    loadingRuns: boolean;
-    historyScope: HistoryScope;
-    historyTargetReady: boolean;
-    runFilter: RunFilter;
+    activeRuns: AnalysisRunSummary[];
+    loadingActiveRuns: boolean;
     activeRunId: number | null;
-    filteredRuns: AnalysisRunSummary[];
     formatTimestamp: (timestamp: number | null) => string;
     formatPeriod: (periodFromUnix: number, periodToUnix: number) => string;
     runTargetLabel: (
@@ -39,50 +26,25 @@
     statusTone: (status: string) => string;
     onRefresh: () => void | Promise<void>;
     onOpenRun: (runId: number) => void | Promise<void>;
-    onChangeFilter: (next: RunFilter) => void;
-    onChangeHistoryScope: (next: HistoryScope) => void;
   } = $props();
 </script>
 
-<section class="card history">
+<section class="card active-runs">
   <div class="panel-header">
     <div>
-      <h3>Saved Runs</h3>
-      <p class="sub">Immutable report runs with saved model, prompt version, and traceability data.</p>
+      <h3>Active Runs</h3>
+      <p class="sub">Queued and running reports stay separate from historical saved runs.</p>
     </div>
-    <div class="history-actions">
-      <div class="filter-group">
-        <button class:activeFilter={historyScope === "all"} class="secondary" onclick={() => onChangeHistoryScope("all")}>
-          All runs
-        </button>
-        <button
-          class:activeFilter={historyScope === "current"}
-          class="secondary"
-          onclick={() => onChangeHistoryScope("current")}
-        >
-          Current scope
-        </button>
-      </div>
-      <div class="filter-group">
-        <button class:activeFilter={runFilter === "all"} class="secondary" onclick={() => onChangeFilter("all")}>All</button>
-        <button class:activeFilter={runFilter === "completed"} class="secondary" onclick={() => onChangeFilter("completed")}>Completed</button>
-        <button class:activeFilter={runFilter === "failed"} class="secondary" onclick={() => onChangeFilter("failed")}>Failed</button>
-      </div>
-      <button class="secondary" onclick={onRefresh}>Refresh</button>
-    </div>
+    <button class="secondary" onclick={onRefresh}>Refresh</button>
   </div>
 
-  {#if loadingRuns}
-    <p class="empty">Loading analysis runs...</p>
-  {:else if historyScope === "current" && !historyTargetReady}
-    <p class="empty">Select a source or source group to browse current-scope history.</p>
-  {:else if runs.length === 0}
-    <p class="empty">{historyScope === "all" ? "No analysis runs yet." : "No saved runs for the current scope yet."}</p>
-  {:else if filteredRuns.length === 0}
-    <p class="empty">No runs match the current filter.</p>
+  {#if loadingActiveRuns}
+    <p class="empty">Loading active runs...</p>
+  {:else if activeRuns.length === 0}
+    <p class="empty">No queued or running analysis runs.</p>
   {:else}
     <ul class="run-list">
-      {#each filteredRuns as run (run.id)}
+      {#each activeRuns as run (run.id)}
         <li class:selected={run.id === activeRunId}>
           <div class="run-copy">
             <div class="run-title">
@@ -93,12 +55,6 @@
               {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
             </p>
             <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
-            {#if run.completed_at}
-              <p class="sub">Completed: {formatTimestamp(run.completed_at)}</p>
-            {/if}
-            {#if run.error}
-              <p class="run-list-error">{run.error}</p>
-            {/if}
           </div>
           <button class="secondary" onclick={() => onOpenRun(run.id)}>Open</button>
         </li>
@@ -116,7 +72,7 @@
     padding: 1.5rem;
   }
 
-  .history {
+  .active-runs {
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -197,28 +153,6 @@
   .badge-info {
     background: color-mix(in srgb, var(--primary) 16%, var(--panel));
     color: var(--primary);
-  }
-
-  .run-list-error {
-    margin: 0;
-    padding: 0.7rem 0.85rem;
-    border-radius: 8px;
-    background: var(--status-error-bg);
-    color: var(--status-error-text);
-    font-size: 0.88rem;
-  }
-
-  .history-actions,
-  .filter-group {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .activeFilter {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
-    border-color: var(--primary);
   }
 
   @media (max-width: 720px) {

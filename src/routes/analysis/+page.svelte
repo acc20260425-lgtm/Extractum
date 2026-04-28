@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import ActiveRunList from "$lib/components/analysis/active-run-list.svelte";
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import RunHistory from "$lib/components/analysis/run-history.svelte";
   import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
@@ -42,10 +43,12 @@
   let sources = $state<AnalysisSourceOption[]>([]);
   let templates = $state<AnalysisPromptTemplate[]>([]);
   let runs = $state<AnalysisRunSummary[]>([]);
+  let activeRuns = $state<AnalysisRunSummary[]>([]);
   let groups = $state<AnalysisSourceGroup[]>([]);
   let loadingSources = $state(false);
   let loadingTemplates = $state(false);
   let loadingRuns = $state(false);
+  let loadingActiveRuns = $state(false);
   let loadingGroups = $state(false);
   let loadingRunDetail = $state(false);
   let loadingChat = $state(false);
@@ -81,7 +84,7 @@
   let selectedTraceRef = $state<string | null>(null);
   let savedTraceRefs = $state<string[]>([]);
   let resolvedTraceRefs = $state<string[]>([]);
-  let runFilter = $state<"all" | "completed" | "failed" | "running">("all");
+  let runFilter = $state<"all" | "completed" | "failed">("all");
   let historyScope = $state<"all" | "current">("all");
   let chatQuestion = $state("");
   let chatMessages = $state<AnalysisChatTurn[]>([]);
@@ -101,9 +104,6 @@
 
   const filteredRuns = $derived.by(() => {
     if (runFilter === "all") return runs;
-    if (runFilter === "running") {
-      return runs.filter((run) => run.status === "running" || run.status === "queued");
-    }
     return runs.filter((run) => run.status === runFilter);
   });
 
@@ -308,11 +308,12 @@
 
     loadingRuns = true;
     try {
-      runs = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
+      const summaries = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
         sourceId: params.sourceId,
         sourceGroupId: params.sourceGroupId,
         limit: 50,
       });
+      runs = summaries.filter((run) => !isActiveRunStatus(run.status));
     } catch (error) {
       status = formatAppError("loading analysis runs", error);
     } finally {
@@ -320,9 +321,15 @@
     }
   }
 
-  function restoreActiveRunFromSummaries(summaries: AnalysisRunSummary[]) {
-    if (activeRunId !== null && summaries.some((run) => run.id === activeRunId && isActiveRunStatus(run.status))) {
+  function syncActiveRunState(summaries: AnalysisRunSummary[]) {
+    const currentActiveRun =
+      activeRunId !== null
+        ? summaries.find((run) => run.id === activeRunId && isActiveRunStatus(run.status))
+        : null;
+
+    if (currentActiveRun) {
       running = true;
+      activePhase = currentActiveRun.status;
       return;
     }
 
@@ -344,12 +351,16 @@
     status = `Resumed ${activeRun.status} analysis run ${activeRun.id}.`;
   }
 
-  async function restoreActiveRun() {
+  async function loadActiveRuns() {
+    loadingActiveRuns = true;
     try {
-      const activeRuns = await invoke<AnalysisRunSummary[]>("list_active_analysis_runs");
-      restoreActiveRunFromSummaries(activeRuns);
+      const summaries = await invoke<AnalysisRunSummary[]>("list_active_analysis_runs");
+      activeRuns = summaries;
+      syncActiveRunState(summaries);
     } catch (error) {
-      status = formatAppError("restoring active analysis run", error);
+      status = formatAppError("loading active analysis runs", error);
+    } finally {
+      loadingActiveRuns = false;
     }
   }
 
@@ -466,7 +477,7 @@
       });
 
       activeRunId = runId;
-      await loadRuns();
+      await loadActiveRuns();
     } catch (error) {
       running = false;
       status = formatAppError("starting the analysis report", error);
@@ -774,11 +785,15 @@
     void loadSources();
     void loadTemplates();
     void loadGroups();
-    void restoreActiveRun();
+    void loadActiveRuns();
 
     void listen<AnalysisRunEvent>("analysis://run", ({ payload }: EventEnvelope<AnalysisRunEvent>) => {
       if (disposed) {
         return;
+      }
+
+      if (payload.kind === "started") {
+        void loadActiveRuns();
       }
 
       if (activeRunId === null && (payload.kind === "started" || payload.kind === "progress" || payload.kind === "delta")) {
@@ -818,6 +833,7 @@
       if (payload.kind === "completed") {
         running = false;
         status = payload.message ?? "Report completed.";
+        void loadActiveRuns();
         void loadRuns();
         if (activeRunId !== null) {
           void openRun(activeRunId);
@@ -828,6 +844,7 @@
       if (payload.kind === "failed") {
         running = false;
         status = payload.error ? `Analysis failed: ${payload.error}` : "Analysis failed.";
+        void loadActiveRuns();
         void loadRuns();
         if (activeRunId !== null) {
           void openRun(activeRunId);
@@ -1035,6 +1052,18 @@
   onSaveGroupCopy={saveGroupCopy}
   onSaveGroupChanges={saveGroupChanges}
   onDeleteGroup={deleteGroup}
+/>
+
+<ActiveRunList
+  {activeRuns}
+  {loadingActiveRuns}
+  {activeRunId}
+  {formatTimestamp}
+  {formatPeriod}
+  {runTargetLabel}
+  {statusTone}
+  onRefresh={loadActiveRuns}
+  onOpenRun={openRun}
 />
 
 <RunHistory
