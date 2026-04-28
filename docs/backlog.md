@@ -1,6 +1,6 @@
 # Extractum Unified Backlog
 
-> **Updated:** 2026-04-27
+> **Updated:** 2026-04-28
 > **Sources merged:** legacy `docs/backlog.md` + `.kilo/plans/1777186648259-proud-star.md`
 > **Working rule:** this file is now the single source of truth for active technical and product follow-up work
 
@@ -37,9 +37,7 @@ From this point on, active planning should happen here.
 ### 2.2. Main technical bottlenecks
 
 - `src-tauri/src/sources.rs` is still oversized and owns too many responsibilities
-- `src-tauri/src/analysis/store.rs` is still too large for comfortable evolution
 - frontend types for `sources` and `accounts` still live in route files
-- deprecated `$app/stores` usage still exists in parts of the Svelte app
 - test coverage is still too thin for confidence around Telegram edge cases and request lifecycle behavior
 
 ### 2.3. Main open product and infrastructure gaps
@@ -48,7 +46,7 @@ From this point on, active planning should happen here.
 - private source identity and resolution are still fragile
 - secrets still live in SQLite-backed settings
 - provider configuration is still too rigid around a single default profile
-- saved analysis runs are not discoverable enough outside current scope
+- saved analysis run history still lacks richer search and metadata filters for larger archives
 - media-aware ingest exists, but binary media flow and media-aware analysis are still incomplete
 
 ---
@@ -75,7 +73,7 @@ From this point on, active planning should happen here.
 | Secret storage | SQLite-backed | secure storage |
 | LLM configuration | mostly single-profile and partially hard-coded | extensible provider/profile model |
 | LLM concurrency | no explicit policy | request-scoped parallel lifecycle |
-| Saved runs UX | too scope-bound | better discoverability and filtering |
+| Saved runs UX | global history and active/history separation landed, but deeper filtering is still limited | better discoverability and filtering |
 | Media support | metadata-first only | optional download/preview and analysis support |
 | Documentation | partly lagging implementation | aligned with code and current behavior |
 
@@ -115,26 +113,25 @@ These are not abstract cleanup for its own sake. They reduce risk before:
 Status: partial.
 
 Goal: confirm the exact technical baseline before larger work starts.
-
-- [x] repository and docs studied
-- [x] heavy modules and active risk areas identified
 - [ ] re-check the actual test count and current baseline commands before implementation
 - [ ] record current `cargo clippy` and `npm run check` status
+
+Notes:
+
+- repository and docs studied
+- heavy modules and active risk areas identified
 
 ---
 
 ### Phase 1. Low-Risk Core Refactoring
 
-Status: open.
+Status: partial.
 
 Goal: remove duplication and isolate pure logic before product-facing changes.
 
 #### 1.1. Extract `src-tauri/src/compression.rs`
 
-- [x] move `compress_text`, `decompress_text`, and `compress_json_bytes`
-- [x] remove duplicate compression logic from `analysis/mod.rs`
-- [x] update imports in `sources.rs` and analysis modules
-- [x] add unit tests for round-trips and boundary cases
+Status: completed.
 
 Notes:
 
@@ -145,9 +142,7 @@ Notes:
 
 #### 1.2. Extract `src-tauri/src/media.rs`
 
-- [x] move `ExtractedItemPayload`, `ExtractedMediaPayload`, `ItemMediaMetadata`, and `DocumentSignals`
-- [x] move `extract_item_payload`, `extract_media_payload`, `derive_content_kind`, and `media_label`
-- [x] add unit tests for media extraction branches
+Status: completed.
 
 Notes:
 
@@ -166,8 +161,7 @@ Notes:
 
 #### 1.4. Remove deprecated page store usage
 
-- [x] replace `$app/stores` with `$app/state` where required
-- [x] verify `+layout.svelte`, `sources/+page.svelte`, and `auth/[id]/+page.svelte`
+Status: completed.
 
 Notes:
 
@@ -181,20 +175,13 @@ Expected outcome: simpler base modules, lower follow-up risk, cleaner frontend r
 
 ### Phase 2. Ingest Refactor And Telegram Runtime Validation
 
-Status: open.
+Status: partial.
 
 Goal: improve ingest maintainability while validating Telegram behavior against reality.
 
 #### 2.1. Split `sync_source`
 
-- [x] extract `load_source`
-- [x] extract `get_authorized_client`
-- [x] extract `resolve_and_refresh_peer`
-- [x] extract `determine_sync_policy`
-- [x] extract `extract_items_from_messages`
-- [x] extract `persist_items`
-- [x] extract `finalize_sync`
-- [x] add characterization tests and storage-focused tests
+Status: completed.
 
 Notes:
 
@@ -205,7 +192,7 @@ Notes:
 
 #### 2.2. Telegram Runtime Validation
 
-Status: open.
+Status: partial.
 
 Priority: high.
 
@@ -216,9 +203,7 @@ Why it matters: compile-time checks cannot cover Telegram peer shapes. `grammers
 Scope:
 
 - [ ] verify that `list_telegram_sources` returns broadcast channels, supergroups, and regular small groups
-- [x] verify that source avatars load for channels and groups
 - [ ] verify that adding from the dialog list stores the expected `telegram_source_kind`
-- [x] verify that manual add by `@username` works for public channels and public groups
 - [ ] verify that sync works for `channel`, `supergroup`, and `group`
 - [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
@@ -228,7 +213,6 @@ Acceptance criteria:
 - [ ] the Add Source dialog shows channels, supergroups, and groups with correct labels
 - [ ] a source added from account A does not affect the same source added from account B
 - [ ] sync inserts messages for each supported kind without resolving to the wrong peer
-- [x] unsupported or inaccessible Telegram peers produce friendly typed errors
 
 Notes:
 
@@ -262,20 +246,13 @@ Goal: make private Telegram channels and groups predictable by storing enough pe
 
 Why it matters: public sources can be resolved by username, but private sources often cannot. Bare id plus kind helps, but Telegram access may need session peer cache, access hash, or dialog-derived identity.
 
-Scope:
+Remaining work:
 
-- [x] audit current `SourceMetadata` coverage for dialog-picked private sources
-- [x] store peer identity data when `grammers` exposes it
-- [x] keep manual numeric add constrained to dialogs unless metadata is sufficient
-- [x] improve errors for private sources that disappeared from dialogs
-- [x] document supported Telegram source refs: `@username`, `t.me/name`, and dialog-picked private source
+- [ ] validate on real accounts that dialog-picked private `channel` and `supergroup` sources continue syncing through stored identity when Telegram exposes sufficient peer data
 
 Acceptance criteria:
 
 - [ ] private sources added from dialogs continue syncing when Telegram session data can resolve them
-- [x] if a private source cannot be resolved, the app explains the likely reason and suggests re-adding from dialogs
-- [x] public username sources still sync through username resolution
-- [x] existing sources with older metadata continue to work through fallback dialog scanning
 
 Notes:
 
@@ -286,156 +263,11 @@ Notes:
 - legacy small `group` sources still remain dialog-dependent because access-hash-only identity is not treated as stable support for that kind
 - supported source refs are now documented as `@username`, `t.me/name`, and dialog-backed sources; numeric/manual refs remain dialog-constrained
 - manual add now rejects private invite links and internal `t.me/c/...` refs with explicit guidance to add those sources from dialogs
-
-Implementation plan:
-
-##### 2.3.1. Audit current peer identity behavior
-
-Goal: document what is stored today and where private-source fragility still comes from.
-
-- [x] describe the current resolution chain in `resolve_source_peer`: username -> metadata identity -> dialog scan
-- [x] record the current `SourceMetadata` contract and which fields are actually used during sync
-- [x] separate already-supported flows from fragile flows for public sources, dialog-picked private sources, and legacy sources
-- [x] document the main risk cases: private source without username, small `group`, and dialog-dependent resolution
-
-Definition of done:
-
-- [x] there is a short written summary in backlog notes or code comments that explains the current contract and its limitations
-
-##### 2.3.2. Design the new peer identity model
-
-Goal: replace loosely related metadata fields with an explicit peer identity model.
-
-- [x] define a nested metadata structure such as `peer_identity`
-- [x] include enough fields to distinguish `username`-resolved sources from dialog-picked private sources
-- [x] capture the intended resolution strategy explicitly rather than inferring it indirectly
-- [x] keep all new fields backward-compatible with existing rows by using optional fields where needed
-
-Definition of done:
-
-- [x] the target `SourceMetadata` shape is decided and maps cleanly to supported Telegram source flows
-
-##### 2.3.3. Implement backward-compatible metadata serialization
-
-Goal: introduce the new metadata model without breaking stored sources.
-
-- [x] update `SourceMetadata` in `src-tauri/src/sources.rs`
-- [x] update `encode_source_metadata`
-- [x] update `decode_source_metadata`
-- [x] keep existing legacy payloads decodable without a database migration
-- [x] add unit tests for old payload decode and new payload roundtrip
-
-Definition of done:
-
-- [x] old metadata payloads still decode successfully
-- [x] new metadata payloads roundtrip through compression and JSON encoding
-
-##### 2.3.4. Expand metadata captured by `add_telegram_source`
-
-Goal: store enough identity data at add time to make later sync more predictable.
-
-- [x] when adding from dialogs, persist explicit dialog-picked peer identity data
-- [x] when adding by username, persist explicit username-based resolution metadata
-- [x] preserve avatar cache handling while expanding metadata
-- [x] keep the persisted source record shape backward-compatible for the rest of the app
-
-Definition of done:
-
-- [x] newly added public and dialog-picked private sources store explicit identity strategy information
-
-##### 2.3.5. Refactor `resolve_source_peer` into an explicit resolution pipeline
-
-Goal: make peer resolution deterministic and understandable instead of relying on loosely ordered fallbacks.
-
-- [x] make resolution strategy selection explicit based on stored metadata
-- [x] prefer username resolution for username-based public sources
-- [x] prefer stored peer identity for dialog-picked private `channel` and `supergroup` sources
-- [x] keep dialog scanning only as a compatibility fallback where appropriate
-- [x] return clearer failure reasons when no resolution path succeeds
-
-Definition of done:
-
-- [x] `resolve_source_peer` reads as an explicit rules pipeline rather than a chain of opportunistic fallbacks
-
-##### 2.3.6. Define support boundaries by Telegram source kind
-
-Goal: avoid pretending that all source kinds support the same identity guarantees.
-
-- [x] define the expected private/public behavior for `channel`
-- [x] define the expected private/public behavior for `supergroup`
-- [x] define the practical limitations for `group`
-- [x] ensure the code and docs use the same support language for each kind
-
-Definition of done:
-
-- [x] supported and limited flows are explicitly documented for `channel`, `supergroup`, and `group`
-
-##### 2.3.7. Tighten manual add rules
-
-Goal: prevent users from creating private-source records that cannot be synced predictably later.
-
-- [x] keep `@username` and `t.me/name` as supported manual refs for public sources
-- [x] keep dialog-picked private sources as the preferred supported private flow
-- [x] reject or clearly discourage numeric/manual private adds when metadata is insufficient
-- [x] return friendly errors when a numeric source cannot be found in dialogs
-
-Definition of done:
-
-- [x] manual add no longer suggests unsupported private-source flows are stable
-
-##### 2.3.8. Improve typed errors for private-source resolution
-
-Goal: explain failure modes clearly enough that the user knows what to do next.
-
-- [x] add a clear private-source resolution failure message that recommends re-adding from dialogs
-- [x] distinguish username resolution failure from stored-identity failure where possible
-- [x] keep source-kind mismatch errors structured and user-facing
-- [x] avoid generic internal failures for expected private-source edge cases
-
-Definition of done:
-
-- [x] private-source sync failures return user-actionable typed errors
-
-##### 2.3.9. Add targeted tests for new resolution contracts
-
-Goal: lock in the new behavior and reduce regressions around private-source handling.
-
-- [x] test old metadata decode compatibility
-- [x] test new metadata roundtrip coverage
-- [x] test stored peer identity resolution for `channel` and `supergroup`
-- [x] test that `group` does not pretend to support unsupported identity-only resolution
-- [x] test friendly failure behavior for private sources that can no longer be resolved
-- [x] test unsupported manual/private add cases
-
-Definition of done:
-
-- [x] the new resolution contracts are covered by unit or storage-oriented tests where feasible
-
-##### 2.3.10. Refresh documentation
-
-Goal: align the docs with the new private-source contract.
-
-- [x] update `docs/architecture-deep-dive.md`
-- [x] update `docs/backlog.md`
-- [x] document the supported Telegram source refs: `@username`, `t.me/name`, and dialog-picked private source
-- [x] document the remaining limitations for small `group` sources and legacy fallback behavior
-
-Definition of done:
-
-- [x] a contributor can understand the new private-source rules from docs without re-deriving them from `sources.rs`
-
-Recommended implementation sequence:
-
-- [x] Stage A: audit current behavior, design the metadata model, and land backward-compatible serialization
-- [x] Stage B: update add-time metadata capture and refactor the resolution pipeline
-- [x] Stage C: tighten manual-add rules and add the remaining unsupported manual/private coverage
+- the metadata refactor, explicit resolution pipeline, manual-add tightening, targeted tests, and documentation refresh are complete
 
 Phase completion gate:
 
 - [ ] private dialog-picked `channel` and `supergroup` sources resolve predictably through stored identity when Telegram provides sufficient data
-- [x] legacy sources remain functional through compatibility fallbacks
-- [x] unsupported private-source flows are rejected or clearly explained instead of behaving unpredictably
-- [x] documentation reflects the new peer identity contract and the remaining limitations
 
 Expected outcome: ingest code becomes easier to change, and Telegram behavior is validated beyond static reading of the code.
 
@@ -443,16 +275,13 @@ Expected outcome: ingest code becomes easier to change, and Telegram behavior is
 
 ### Phase 3. Analysis Storage Refactor And Saved Runs UX
 
-Status: open.
+Status: partial.
 
 Goal: simplify analysis storage internals and improve run history discoverability.
 
 #### 3.1. Split `analysis/store.rs`
 
-- [x] move corpus-loading logic into `analysis/corpus.rs`
-- [x] move chat-related storage helpers into `analysis/chat.rs` where appropriate
-- [x] narrow `store.rs` to run CRUD, snapshots, and mapping responsibilities
-- [x] update imports in `report.rs` and related modules
+Status: completed.
 
 Notes:
 
@@ -464,27 +293,29 @@ Notes:
 
 #### 3.2. Saved Runs Discoverability
 
-Status: open.
+Status: partial.
 
 Priority: medium.
 
 Goal: make previous analysis runs easy to find even when the current analysis scope changes.
 
-Why it matters: the current Saved Runs panel is scoped to the selected source or source group. That can make older runs look missing when the user switches scope or opens Analysis without the original target selected.
+Why it matters: the original Saved Runs panel was scoped to the selected source or source group. Global history and active/history separation have landed, but larger archives still need richer narrowing tools.
 
 Scope:
 
-- [ ] decide whether Saved Runs should default to global history or scoped history
-- [ ] add explicit scope filters if both behaviors are useful
-- [ ] preserve the ability to open completed runs regardless of current composer scope
-- [ ] consider search/filter by source, source group, provider, model, template, status, and date
-- [ ] keep active-run restoration separate from historical run browsing
+- [ ] add richer historical search/filtering by source, source group, provider, model, template, and date
 
 Acceptance criteria:
 
-- [ ] users can find previous saved runs without reconstructing the original source/group selection
-- [ ] scoped filtering remains available when useful
-- [ ] running and queued runs remain visually distinct from completed and failed history
+- [ ] large saved-run histories can be narrowed quickly without reconstructing the original run context or scanning an unfiltered global list
+
+Notes:
+
+- Saved Runs now default to global history instead of inheriting the current composer scope
+- an explicit `Current scope` history filter remains available when scoped browsing is useful
+- completed runs can be opened regardless of the currently selected source or source group
+- queued and running runs now live in a dedicated `Active Runs` panel instead of mixing with saved history
+- historical run summaries now prefer frozen `scope_label` snapshots so renamed or deleted sources/groups remain identifiable
 
 Expected outcome: storage logic gets clearer, and saved reports become easier to revisit.
 
@@ -691,9 +522,9 @@ Expected outcome: code, behavior, and documentation converge again.
 
 ### Near-term priority
 
-1. Phase 1: extract shared utilities and shared types
-2. Phase 2: refactor ingest and validate Telegram runtime behavior
-3. Phase 3: refactor analysis storage and improve saved runs discoverability
+1. Phase 1: finish shared frontend type cleanup
+2. Phase 2: finish Telegram runtime and private-source validation on real accounts
+3. Phase 3: finish saved-run history filtering if current global history still feels too broad
 
 ### Next priority
 
@@ -723,19 +554,20 @@ Expected outcome: code, behavior, and documentation converge again.
 
 If implementation starts directly from this file, the recommended opening sequence is:
 
-1. extract `media.rs`
-2. create `src/lib/types/sources.ts` and `src/lib/types/accounts.ts`
-3. replace deprecated page store usage
-4. refactor `sync_source`
-5. validate real Telegram runtime behavior on actual accounts and dialogs
+1. create `src/lib/types/sources.ts` and `src/lib/types/accounts.ts`
+2. validate the remaining Telegram runtime cases on real accounts and dialogs
+3. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
+4. decide whether saved-run history now needs richer metadata/date filters before Phase 4
+5. begin Phase 4.1 provider configuration cleanup
 
 ### Session Handoff
 
 Current implementation checkpoint:
 
-- shared compression helpers extracted into `src-tauri/src/compression.rs`
-- `sources.rs`, `analysis/mod.rs`, and `analysis/store.rs` switched to the shared compression helpers
-- formatting and Rust tests passed after the change
+- shared compression and media helpers are extracted into `src-tauri/src/compression.rs` and `src-tauri/src/media.rs`
+- `sync_source` and `analysis/store.rs` are already split into narrower analysis and ingest helpers
+- Saved Runs now use global history by default and keep queued/running work in a separate `Active Runs` panel
+- current verification checkpoints include passing `cargo test` and `npm run check`
 
 Recommended next step:
 

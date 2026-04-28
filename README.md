@@ -63,6 +63,8 @@ Analysis currently works on already-synced local data only.
 - reports can be generated for a single source or a saved source group;
 - prompt templates are versioned and stored locally;
 - source groups are stored locally;
+- queued and running reports are surfaced in a dedicated Active Runs panel;
+- saved runs default to global history and can also be narrowed back to the current scope;
 - saved runs include result markdown, trace data, chat history, and a frozen corpus snapshot;
 - follow-up chat for new runs reads the saved snapshot rather than the live `items` table.
 
@@ -90,7 +92,7 @@ The backend is intentionally thin in UI concerns, while the frontend is intentio
 - `/auth/[id]`: Telegram sign-in and logout
 - `/sources`: add sources, browse synced items, configure initial sync policy
 - `/settings`: LLM provider settings and Gemini connectivity test
-- `/analysis`: reports, source groups, saved runs, follow-up chat, trace inspection
+- `/analysis`: reports, source groups, active runs, saved run history, follow-up chat, trace inspection
 
 ## Storage overview
 

@@ -57,6 +57,8 @@ Not implemented yet:
   - manage report templates
   - manage source groups
   - run reports
+  - monitor active queued/running reports separately from history
+  - browse saved runs through global history or the current analysis scope
   - inspect trace refs
   - ask follow-up questions against saved runs
 
@@ -85,7 +87,8 @@ Not implemented yet:
 ### Analysis
 
 - report generation
-- saved runs listing and detail loading
+- active runs listing and restoration
+- saved runs listing, scoped/global history browsing, and detail loading
 - trace resolution
 - follow-up chat
 - prompt template CRUD
