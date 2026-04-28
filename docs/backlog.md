@@ -33,11 +33,11 @@ From this point on, active planning should happen here.
 - media-aware ingest already stores metadata for text-bearing and media-only Telegram messages
 - new analysis runs already persist frozen corpus snapshots
 - source identity is already scoped by `account_id` and `telegram_source_kind`
+- frontend `sources` and `accounts` types are centralized under `src/lib/types/`
 
 ### 2.2. Main technical bottlenecks
 
 - `src-tauri/src/sources.rs` is still oversized and owns too many responsibilities
-- frontend types for `sources` and `accounts` still live in route files
 - test coverage is still too thin for confidence around Telegram edge cases and request lifecycle behavior
 
 ### 2.3. Main open product and infrastructure gaps
@@ -125,7 +125,7 @@ Notes:
 
 ### Phase 1. Low-Risk Core Refactoring
 
-Status: partial.
+Status: completed.
 
 Goal: remove duplication and isolate pure logic before product-facing changes.
 
@@ -154,10 +154,14 @@ Notes:
 
 #### 1.3. Centralize frontend types
 
-- [ ] create `src/lib/types/sources.ts`
-- [ ] create `src/lib/types/accounts.ts`
-- [ ] update route files to import shared types
-- [ ] remove local type duplication
+Status: completed.
+
+Notes:
+
+- completed via shared modules `src/lib/types/sources.ts` and `src/lib/types/accounts.ts`
+- `src/routes/accounts/+page.svelte`, `src/routes/auth/[id]/+page.svelte`, and `src/routes/sources/+page.svelte` now import shared source/account types instead of defining them locally
+- targeted route search confirms no local source/account type declarations remain under `src/routes/`
+- verification completed with `npm run check` on April 28, 2026
 
 #### 1.4. Remove deprecated page store usage
 
@@ -522,15 +526,14 @@ Expected outcome: code, behavior, and documentation converge again.
 
 ### Near-term priority
 
-1. Phase 1: finish shared frontend type cleanup
-2. Phase 2: finish Telegram runtime and private-source validation on real accounts
-3. Phase 3: finish saved-run history filtering if current global history still feels too broad
+1. Phase 2: finish Telegram runtime and private-source validation on real accounts
+2. Phase 3: finish saved-run history filtering if current global history still feels too broad
+3. Phase 4: provider configuration, secret storage, and LLM concurrency
 
 ### Next priority
 
-4. Phase 4: provider configuration, secret storage, and LLM concurrency
-5. Phase 5: media download/preview and media-aware analysis
-6. Phase 6: stabilization and documentation refresh
+4. Phase 5: media download/preview and media-aware analysis
+5. Phase 6: stabilization and documentation refresh
 
 ---
 
@@ -554,11 +557,10 @@ Expected outcome: code, behavior, and documentation converge again.
 
 If implementation starts directly from this file, the recommended opening sequence is:
 
-1. create `src/lib/types/sources.ts` and `src/lib/types/accounts.ts`
-2. validate the remaining Telegram runtime cases on real accounts and dialogs
-3. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
-4. decide whether saved-run history now needs richer metadata/date filters before Phase 4
-5. begin Phase 4.1 provider configuration cleanup
+1. validate the remaining Telegram runtime cases on real accounts and dialogs
+2. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
+3. decide whether saved-run history now needs richer metadata/date filters before Phase 4
+4. begin Phase 4.1 provider configuration cleanup
 
 ### Session Handoff
 
@@ -566,12 +568,13 @@ Current implementation checkpoint:
 
 - shared compression and media helpers are extracted into `src-tauri/src/compression.rs` and `src-tauri/src/media.rs`
 - `sync_source` and `analysis/store.rs` are already split into narrower analysis and ingest helpers
+- frontend `sources` and `accounts` types are centralized under `src/lib/types/`
 - Saved Runs now use global history by default and keep queued/running work in a separate `Active Runs` panel
 - current verification checkpoints include passing `cargo test` and `npm run check`
 
 Recommended next step:
 
-- continue with **Phase 1.3**, centralizing frontend `sources` and `accounts` types
+- continue with **Phase 2.2**, validating the remaining Telegram runtime cases on real accounts and dialogs
 
 ---
 
