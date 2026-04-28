@@ -39,7 +39,30 @@ Sources can be added:
 - by username / `t.me` reference;
 - from the current account's dialogs.
 
-If username-based resolution is unavailable, source resolution can still fall back to dialog scanning by bare source id and `telegram_source_kind`.
+Persisted Telegram source metadata now stores an explicit `peer_identity` contract:
+
+- `strategy = username` for public sources added by `@username` or `t.me/name`
+- `strategy = dialog` for dialog-backed sources, including private channels / groups and numeric refs resolved from dialogs
+- optional `username` for public fallback behavior
+- optional `access_hash` for stable `channel` / `supergroup` peer reconstruction when Telegram exposes it
+
+`resolve_source_peer` follows an explicit rules pipeline:
+
+1. username strategy -> resolve stored username -> fallback dialog scan for compatibility
+2. dialog strategy -> reconstruct from stored peer identity -> optional username fallback -> fallback dialog scan
+3. empty / older metadata -> compatibility dialog scan only
+
+Supported source refs are:
+
+- `@username`
+- `t.me/name`
+- dialog-backed sources picked from the current account
+
+Support boundaries by Telegram source kind:
+
+- `channel`: public usernames are supported; private channels are expected to work best when added from dialogs so the app can persist `access_hash`
+- `supergroup`: same contract as `channel`; stored peer identity is preferred for private sources
+- `group`: legacy small groups remain dialog-dependent; the app does not treat access-hash-only identity as stable support for this kind
 
 Supported Telegram source kinds are:
 

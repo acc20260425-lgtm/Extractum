@@ -152,13 +152,12 @@ fn classify_message(message: &str) -> AppError {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppErrorKind, classify_message};
+    use super::{classify_message, AppErrorKind};
 
     #[test]
     fn classify_message_treats_dialog_lookup_misses_as_not_found() {
-        let error = classify_message(
-            "Telegram source '123' was not found in this account's dialogs",
-        );
+        let error =
+            classify_message("Telegram source '123' was not found in this account's dialogs");
 
         assert_eq!(error.kind, AppErrorKind::NotFound);
     }
