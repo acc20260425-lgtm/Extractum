@@ -12,7 +12,7 @@ The current product slice is a local-first MVP for:
 - adding Telegram channels, supergroups, and groups as sources;
 - syncing source history into local SQLite storage;
 - browsing synced items in `/sources`;
-- generating Gemini-backed analysis reports in `/analysis`;
+- running provider-backed analysis reports in `/analysis`;
 - asking follow-up questions against saved analysis runs.
 
 ## Current capabilities
@@ -56,11 +56,22 @@ What is still not implemented:
 - media preview rendering;
 - media-aware analysis beyond the current text-first corpus.
 
+### LLM provider profiles
+
+The settings flow now manages reusable LLM provider profiles:
+
+- multiple profiles can be stored locally, with one active profile used by default;
+- each profile stores a `profile_id`, provider, default model, and provider-specific settings;
+- Gemini and OpenAI-compatible providers share the same backend profile-resolution path;
+- OpenAI-compatible profiles persist a configurable `base_url`, used both for model discovery and live requests;
+- `/settings` can save a profile without activating it, save and activate it, and run a live provider smoke test against the currently edited form.
+
 ### Analysis
 
 Analysis currently works on already-synced local data only.
 
 - reports can be generated for a single source or a saved source group;
+- analysis and follow-up chat resolve the active LLM profile by default unless a workflow passes an explicit profile id;
 - prompt templates are versioned and stored locally;
 - source groups are stored locally;
 - queued and running reports are surfaced in a dedicated Active Runs panel;
@@ -73,8 +84,7 @@ This means saved runs are now intended to be stable artifacts rather than live v
 ## Current constraints
 
 - analysis remains text-first: media-only items are visible in `/sources` but are not yet part of the analysis corpus;
-- the Gemini API key is still stored in `app_settings` in local SQLite as a temporary solution;
-- Telegram `api_hash` also remains in SQLite-backed app storage;
+- LLM API keys are still stored in `app_settings` and Telegram `api_hash` values still live in SQLite-backed account storage until secure storage lands;
 - peer resolution still falls back to dialog scanning when cached username metadata is insufficient.
 
 ## Architecture
@@ -91,13 +101,14 @@ The backend is intentionally thin in UI concerns, while the frontend is intentio
 - `/accounts`: create/delete accounts, inspect runtime status
 - `/auth/[id]`: Telegram sign-in and logout
 - `/sources`: add sources, browse synced items, configure initial sync policy
-- `/settings`: LLM provider settings and Gemini connectivity test
+- `/settings`: manage reusable LLM provider profiles, active profile selection, model refresh, and live provider smoke tests
 - `/analysis`: reports, source groups, active runs, saved run history, follow-up chat, trace inspection
 
 ## Storage overview
 
 Main tables:
 
+- `accounts`
 - `sources`
 - `items`
 - `app_settings`
@@ -144,6 +155,7 @@ The old backlog items for:
 - media-aware sync metadata;
 - immutable saved run snapshot semantics;
 - typed application errors;
-- configurable initial sync policy
+- configurable initial sync policy;
+- reusable LLM provider profiles and OpenAI-compatible `base_url` configuration
 
 are completed. The active open backlog now lives in `docs/backlog.md`.

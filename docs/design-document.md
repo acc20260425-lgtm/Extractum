@@ -119,7 +119,32 @@ The intended behavior is:
 
 Legacy runs without snapshot data can still fall back to live items.
 
-### 4.3 Why not full multimodal analysis yet
+### 4.3 LLM provider profiles
+
+The LLM layer now resolves requests through saved provider profiles rather than a single hard-coded provider configuration.
+
+Each profile currently stores:
+
+- `profile_id`
+- provider kind
+- default model
+- provider-specific `base_url` when relevant
+
+The current runtime contract is:
+
+- one profile is marked active and used by default when a workflow does not pass an explicit profile id;
+- Gemini and OpenAI-compatible providers share the same backend request-resolution path;
+- OpenAI-compatible model listing and live requests both use the saved or currently edited `base_url`;
+- analysis runs persist `provider_profile`, `provider`, and `model` metadata so later review can see which profile produced the result.
+
+`/settings` is intentionally profile-oriented:
+
+- existing profiles can be selected and edited;
+- new profiles can be saved without activation;
+- the same save flow can also activate a profile immediately;
+- the provider smoke test saves the visible form first and then runs through that saved profile state.
+
+### 4.4 Why not full multimodal analysis yet
 
 The current design stops at media-aware metadata because the next complexity jump would require:
 
@@ -160,8 +185,9 @@ This keeps SQLite reasonably small without introducing extra infrastructure.
 
 `app_settings` currently stores:
 
-- LLM provider profile settings
-- temporary Gemini `api_key`
+- active LLM profile selection
+- LLM provider profile metadata
+- temporary LLM `api_key` values
 - initial sync policy keys
 
 Secret storage is still a known follow-up.
@@ -182,6 +208,7 @@ Those items are now implemented and should no longer be treated as future milest
 The most meaningful remaining design questions are:
 
 - how to move secrets out of SQLite cleanly;
+- whether Telegram `api_hash` and session storage should move together or in separate steps;
 - whether private Telegram peer resolution should gain stronger cached identity data;
 - how to expand analysis beyond text-bearing corpus items;
 - whether Telegram session storage should remain JSON-based long term.

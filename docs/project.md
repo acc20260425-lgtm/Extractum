@@ -8,7 +8,7 @@ This document is the shortest current-state snapshot of the repository.
 - desktop shell: `Tauri 2`
 - backend: `Rust`
 - local storage: `SQLite`
-- LLM: Gemini provider flow
+- LLM: reusable Gemini and OpenAI-compatible provider profiles
 
 ## Product slice
 
@@ -25,6 +25,9 @@ Implemented:
 - source groups for analysis
 - saved reports
 - follow-up chat on saved runs
+- reusable LLM provider profiles with active-profile selection
+- configurable OpenAI-compatible `base_url` support in `/settings`
+- provider smoke testing from `/settings`
 - immutable saved run corpus snapshots
 - typed app errors across Tauri commands
 
@@ -51,8 +54,11 @@ Not implemented yet:
   - configure the first sync policy
   - browse synced items
 - `/settings`
-  - store active LLM provider profile
-  - run a Gemini connectivity test
+  - manage reusable LLM provider profiles
+  - set the active profile used by default
+  - edit provider-specific `base_url` settings for OpenAI-compatible providers
+  - refresh available models
+  - run a live provider smoke test with the currently edited form
 - `/analysis`
   - manage report templates
   - manage source groups
@@ -96,14 +102,17 @@ Not implemented yet:
 
 ### Settings / LLM
 
-- load and save LLM settings
-- test Gemini provider connectivity
+- load and save LLM profiles
+- switch the active LLM profile
+- list provider models for Gemini and OpenAI-compatible endpoints
+- stream provider test requests and analysis/chat requests through the resolved profile
 
 ## Important persistence
 
+- `accounts`: local Telegram accounts and their current SQLite-backed credentials
 - `sources`: registered Telegram sources
 - `items`: synced Telegram messages and media-aware metadata
-- `app_settings`: app-level key/value storage
+- `app_settings`: app-level key/value storage, including active LLM profile, per-profile provider metadata, sync policy, and the current temporary LLM API keys
 - `analysis_runs`: saved report runs
 - `analysis_run_messages`: frozen corpus snapshot for saved runs
 - `analysis_chat_messages`: follow-up chat history
@@ -112,16 +121,17 @@ Not implemented yet:
 
 - analysis corpus still requires text content;
 - media-only items are stored and visible, but not yet analyzed;
-- LLM `api_key` remains in `app_settings` for now;
+- LLM API keys still remain in `app_settings` for now;
+- Telegram `api_hash` still remains in SQLite-backed account storage for now;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
 
 ## Reading order for implementation work
 
 1. `src-tauri/src/sources.rs`
 2. `src-tauri/src/analysis/`
-3. `src/routes/sources/+page.svelte`
-4. `src/routes/analysis/+page.svelte`
-5. `src-tauri/src/error.rs`
-6. `src-tauri/src/migrations.rs`
-7. `src-tauri/migrations/11.sql`
-8. `src-tauri/migrations/12.sql`
+3. `src-tauri/src/llm/`
+4. `src/routes/sources/+page.svelte`
+5. `src/routes/analysis/+page.svelte`
+6. `src/routes/settings/+page.svelte`
+7. `src-tauri/src/error.rs`
+8. `src-tauri/src/migrations.rs`

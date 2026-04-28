@@ -81,14 +81,38 @@ Simple key/value storage for app-wide settings.
 
 Currently used for:
 
-- LLM provider settings
-- temporary Gemini API key storage
+- active LLM profile selection
+- LLM provider profile metadata
+- temporary LLM API key storage
 - initial sync policy settings
 
 Known active keys include:
 
+- `llm.active_provider_profile`
+- `llm.profile.<profile_id>.provider`
+- `llm.profile.<profile_id>.default_model`
+- `llm.profile.<profile_id>.base_url`
+- `llm.profile.<profile_id>.api_key`
 - `sync.initial.mode`
 - `sync.initial.value`
+
+### 1.4 `accounts`
+
+Stores configured Telegram accounts.
+
+Important fields:
+
+- `id`
+- `label`
+- `api_id`
+- `api_hash`
+- `phone`
+- `created_at`
+
+Notes:
+
+- `api_hash` is still stored in SQLite today, which remains part of the current secret-storage debt;
+- session restore state is not stored in this table and instead lives in the app's per-account session files.
 
 ## 2. Analysis tables
 
@@ -196,5 +220,6 @@ Purpose:
 
 - `/sources` can render media-bearing and media-only items from `items`;
 - `/analysis` still loads only text-bearing corpus rows;
+- `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
 - `app_settings` still contains secrets temporarily, which remains a security debt.

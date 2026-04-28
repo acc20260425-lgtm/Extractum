@@ -122,20 +122,44 @@ Frozen snapshot storage solves three drift problems:
 
 Older runs without snapshot rows can still fall back to live tables. This keeps upgrades non-breaking while making new runs more stable.
 
-## 5. Error boundary
+## 5. LLM provider architecture
+
+The `src-tauri/src/llm/` module is now profile-oriented.
+
+Runtime resolution works like this:
+
+1. load the requested profile id, or fall back to the active profile;
+2. normalize provider-specific settings such as OpenAI-compatible `base_url`;
+3. resolve the effective model from the profile default plus any per-request override;
+4. dispatch to the provider-specific runner.
+
+Current provider behavior:
+
+- Gemini uses the shared profile path with no `base_url`;
+- OpenAI-compatible providers use the same profile path but require a configured `base_url` for both `/models` and `/chat/completions`.
+
+The frontend `/settings` route mirrors that contract:
+
+- it can select existing profiles or create new ones;
+- it can save without activation or save and set active;
+- it runs provider smoke tests only after saving the currently visible form, so the test uses the same profile state the user sees.
+
+This keeps analysis runs, provider tests, and follow-up chat aligned on one backend profile-resolution model.
+
+## 6. Error boundary
 
 The backend now exposes structured `AppError` values. The frontend normalizes them through `src/lib/app-error.ts`.
 
 This is intentionally minimal: the app gets better UX than raw strings without introducing a large error framework.
 
-## 6. Known architectural debt
+## 7. Known architectural debt
 
-- secrets still live in SQLite-backed settings;
+- LLM API keys still live in SQLite-backed settings and Telegram `api_hash` still lives in SQLite-backed account storage;
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - the analysis layer has not yet become media-aware;
 - Telegram session storage may still deserve a more robust long-term format.
 
-## 7. Practical entry points
+## 8. Practical entry points
 
 If you are changing ingest:
 
@@ -146,6 +170,11 @@ If you are changing analysis:
 
 - `src-tauri/src/analysis/`
 - `src/routes/analysis/+page.svelte`
+
+If you are changing LLM settings or provider behavior:
+
+- `src-tauri/src/llm/`
+- `src/routes/settings/+page.svelte`
 
 If you are changing app-wide failure behavior:
 
