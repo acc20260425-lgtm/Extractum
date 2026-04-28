@@ -295,6 +295,19 @@ fn emit_run_event(
     );
 }
 
+fn finish_map_phase(
+    ordered_summaries: Vec<Option<ChunkSummary>>,
+    first_error: Option<ReportRunError>,
+) -> Result<Vec<ChunkSummary>, ReportRunError> {
+    if let Some(error) = first_error {
+        return Err(error);
+    }
+
+    ordered_summaries.into_iter().collect::<Option<Vec<_>>>().ok_or_else(|| {
+        ReportRunError::Failed("Some chunk summaries were not collected".to_string())
+    })
+}
+
 async fn ensure_report_not_cancelled(
     handle: &AppHandle,
     run_id: i64,
@@ -607,15 +620,8 @@ async fn run_report_pipeline(
         }
     }
 
-    if let Some(error) = first_error {
-        return Err(error);
-    }
+    let chunk_summaries = finish_map_phase(ordered_summaries, first_error)?;
     ensure_report_not_cancelled(&handle, run_id).await?;
-
-    let chunk_summaries = ordered_summaries
-        .into_iter()
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| ReportRunError::Failed("Some chunk summaries were not collected".to_string()))?;
 
     emit_run_event(
         &handle,
@@ -1118,10 +1124,48 @@ pub async fn start_analysis_report(
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_json_payload, parse_chunk_summary};
+    use super::{
+        build_map_request, build_reduce_request, extract_json_payload, finish_map_phase,
+        parse_chunk_summary, ReportRunError,
+    };
+    use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
 
     const SAMPLE_JSON: &str =
         r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-m2"]}"#;
+
+    fn sample_chunk_summary(label: &str) -> ChunkSummary {
+        ChunkSummary {
+            summary: label.to_string(),
+            topics: vec![format!("{label}-topic")],
+            notable_points: vec![format!("{label}-point")],
+            candidate_refs: vec![format!("{label}-ref")],
+        }
+    }
+
+    fn sample_prompt_template() -> AnalysisPromptTemplate {
+        AnalysisPromptTemplate {
+            id: 7,
+            name: "Report".to_string(),
+            template_kind: "report".to_string(),
+            body: "Write a concise report.".to_string(),
+            version: 3,
+            is_builtin: false,
+            created_at: 1,
+            updated_at: 1,
+        }
+    }
+
+    fn sample_corpus_message() -> CorpusMessage {
+        CorpusMessage {
+            item_id: 1,
+            source_id: 2,
+            external_id: "42".to_string(),
+            published_at: 1_700_000_000,
+            author: Some("analyst".to_string()),
+            content: "Important update from the source".to_string(),
+            r#ref: "s2-m42".to_string(),
+        }
+    }
 
     #[test]
     fn extracts_json_with_text_before_and_after() {
@@ -1158,5 +1202,78 @@ mod tests {
                 || error.contains("malformed JSON")
                 || error.contains("valid JSON object")
         );
+    }
+
+    #[test]
+    fn finish_map_phase_preserves_chunk_order_by_original_index() {
+        let ordered = vec![
+            Some(sample_chunk_summary("first")),
+            Some(sample_chunk_summary("second")),
+            Some(sample_chunk_summary("third")),
+        ];
+
+        let collected = finish_map_phase(ordered, None).expect("collect summaries");
+
+        assert_eq!(collected[0].summary, "first");
+        assert_eq!(collected[1].summary, "second");
+        assert_eq!(collected[2].summary, "third");
+    }
+
+    #[test]
+    fn finish_map_phase_rejects_missing_chunk_before_reduce() {
+        let ordered = vec![Some(sample_chunk_summary("first")), None];
+
+        let error = finish_map_phase(ordered, None).expect_err("missing chunk should fail");
+
+        assert_eq!(
+            error,
+            ReportRunError::Failed("Some chunk summaries were not collected".to_string())
+        );
+    }
+
+    #[test]
+    fn finish_map_phase_propagates_map_error_without_starting_reduce() {
+        let ordered = vec![Some(sample_chunk_summary("first"))];
+
+        let error = finish_map_phase(
+            ordered,
+            Some(ReportRunError::Cancelled("Analysis run cancelled.".to_string())),
+        )
+        .expect_err("map cancellation should stop reduce");
+
+        assert_eq!(
+            error,
+            ReportRunError::Cancelled("Analysis run cancelled.".to_string())
+        );
+    }
+
+    #[test]
+    fn build_map_request_keeps_run_scoped_request_and_profile() {
+        let request = build_map_request(55, "default".to_string(), 2, 4, &[sample_corpus_message()]);
+
+        assert!(request.request_id.starts_with("analysis-map-55-2-"));
+        assert_eq!(request.profile_id.as_deref(), Some("default"));
+        assert!(request.messages[1].content.contains("Chunk 2 of 4."));
+    }
+
+    #[test]
+    fn build_reduce_request_keeps_run_scoped_request_and_profile() {
+        let request = build_reduce_request(
+            77,
+            "profile-a".to_string(),
+            "My scope",
+            "Russian",
+            &sample_prompt_template(),
+            10,
+            20,
+            &[sample_chunk_summary("alpha"), sample_chunk_summary("beta")],
+            Some("model-x".to_string()),
+        );
+
+        assert!(request.request_id.starts_with("analysis-reduce-77-"));
+        assert_eq!(request.profile_id.as_deref(), Some("profile-a"));
+        assert_eq!(request.model_override.as_deref(), Some("model-x"));
+        assert!(request.messages[1].content.contains("Chunk 1 summary"));
+        assert!(request.messages[1].content.contains("Chunk 2 summary"));
     }
 }

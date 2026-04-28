@@ -108,6 +108,7 @@
   let activeChatRunId = $state<number | null>(null);
   let clearingChat = $state(false);
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
+  let openRunRequestToken = 0;
 
   function isErrorStatus(value: string) {
     return value.startsWith("Error") || value.startsWith("Analysis failed");
@@ -183,6 +184,10 @@
 
   function liveProgress(runId: number) {
     return liveRuns[runId]?.progress ?? "";
+  }
+
+  function isFocusedRun(runId: number) {
+    return activeRunId === runId || currentRun?.id === runId;
   }
 
   function formatRunProgress(payload: AnalysisRunEvent, currentProgress: string) {
@@ -397,13 +402,20 @@
     }
   }
 
-  async function loadTrace(runId: number) {
+  async function loadTrace(runId: number, requestToken?: number) {
     try {
-      traceData = await invoke<AnalysisTraceData>("get_analysis_run_trace", { runId });
+      const nextTraceData = await invoke<AnalysisTraceData>("get_analysis_run_trace", { runId });
+      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+        return;
+      }
+      traceData = nextTraceData;
       savedTraceRefs = traceData.refs.map((ref) => ref.ref);
       resolvedTraceRefs = [];
       selectedTraceRef = traceData.refs[0]?.ref ?? null;
     } catch (error) {
+      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+        return;
+      }
       clearTraceState();
       status = formatAppError("loading the analysis trace", error);
     }
@@ -547,6 +559,7 @@
   }
 
   async function openRun(runId: number) {
+    const requestToken = ++openRunRequestToken;
     if (activeChatRequestId !== null && activeChatRunId !== null && activeChatRunId !== runId) {
       await cancelChat({ silent: true });
       clearChatState();
@@ -556,6 +569,10 @@
     loadingRunDetail = true;
     try {
       const run = await invoke<AnalysisRunDetail | null>("get_analysis_run", { runId });
+      if (requestToken !== openRunRequestToken) {
+        return;
+      }
+
       if (!run) {
         status = `Analysis run ${runId} was not found.`;
         if (currentRun?.id === runId) {
@@ -566,32 +583,48 @@
 
       currentRun = run;
       syncRunSnapshot(run.id, run.status);
-      await loadChatMessages(run.id);
+      await loadChatMessages(run.id, requestToken);
+      if (requestToken !== openRunRequestToken) {
+        return;
+      }
       if (run.has_trace_data) {
-        await loadTrace(run.id);
+        await loadTrace(run.id, requestToken);
       } else {
         clearTraceState();
       }
     } catch (error) {
+      if (requestToken !== openRunRequestToken) {
+        return;
+      }
       status = formatAppError("loading the analysis run", error);
     } finally {
-      loadingRunDetail = false;
+      if (requestToken === openRunRequestToken) {
+        loadingRunDetail = false;
+      }
     }
   }
 
-  async function loadChatMessages(runId: number) {
+  async function loadChatMessages(runId: number, requestToken?: number) {
     loadingChat = true;
     try {
       const messages = await invoke<AnalysisChatMessage[]>("list_analysis_chat_messages", { runId });
+      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+        return;
+      }
       chatMessages = messages.map((message) => ({
         role: message.role,
         content: message.content,
       }));
     } catch (error) {
+      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+        return;
+      }
       chatMessages = [];
       status = formatAppError("loading analysis chat", error);
     } finally {
-      loadingChat = false;
+      if (requestToken === undefined || requestToken === openRunRequestToken) {
+        loadingChat = false;
+      }
     }
   }
 
@@ -996,7 +1029,7 @@
         payload.kind === "started" ||
         payload.kind === "progress"
       ) {
-        if (payload.message) {
+        if (payload.message && (activeRunId === null || isFocusedRun(payload.run_id))) {
           status = payload.message;
         }
       }
@@ -1006,9 +1039,9 @@
         payload.kind === "failed" ||
         payload.kind === "cancelled"
       ) {
-        if (payload.message) {
+        if (payload.message && (activeRunId === null || isFocusedRun(payload.run_id))) {
           status = payload.message;
-        } else if (payload.error) {
+        } else if (payload.error && (activeRunId === null || isFocusedRun(payload.run_id))) {
           status = `Analysis failed: ${payload.error}`;
         }
 

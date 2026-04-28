@@ -410,12 +410,15 @@
       }
 
       if (payload.kind === "started") {
+        testing = true;
+        testUsage = null;
         testStatus = `Streaming response from ${payload.provider}/${payload.model}...`;
         return;
       }
 
       if (payload.kind === "queued") {
         testing = true;
+        testUsage = null;
         testStatus =
           payload.queue_position !== null
             ? `Waiting for an LLM slot from ${payload.provider}/${payload.model} (queue #${payload.queue_position})...`
@@ -440,6 +443,7 @@
       if (payload.kind === "failed") {
         testing = false;
         activeRequestId = null;
+        testUsage = null;
         testStatus = `Provider test failed: ${payload.error ?? "Unknown provider error"}`;
         return;
       }
@@ -447,6 +451,7 @@
       if (payload.kind === "cancelled") {
         testing = false;
         activeRequestId = null;
+        testUsage = null;
         testStatus = payload.error ?? "Provider test cancelled.";
       }
     }).then((unlisten) => {

@@ -421,6 +421,12 @@ mod tests {
         }
     }
 
+    async fn assert_scheduler_empty(scheduler: &LlmSchedulerState) {
+        let inner = scheduler.inner.lock().await;
+        assert!(inner.requests.is_empty(), "requests should be cleaned up");
+        assert!(inner.keys.is_empty(), "key registry should be cleaned up");
+    }
+
     #[tokio::test]
     async fn requests_with_different_profiles_run_without_blocking_each_other() {
         let scheduler = Arc::new(LlmSchedulerState::new());
@@ -700,6 +706,8 @@ mod tests {
         for handle in running_handles {
             let _ = handle.await;
         }
+
+        assert_scheduler_empty(&scheduler).await;
     }
 
     #[tokio::test]
@@ -744,5 +752,228 @@ mod tests {
         .expect("owned request should register");
 
         assert_eq!(task.await.expect("join task"), Err(LlmRequestError::Cancelled));
+        assert_scheduler_empty(&scheduler).await;
+    }
+
+    #[tokio::test]
+    async fn queue_positions_are_recomputed_after_cancelling_a_queued_request() {
+        let scheduler = Arc::new(LlmSchedulerState::new());
+        let release = Arc::new(Notify::new());
+        let (queue_tx, mut queue_rx) = mpsc::unbounded_channel::<(String, usize)>();
+        let (started_tx, mut started_rx) = mpsc::unbounded_channel::<String>();
+
+        let mut running_handles = Vec::new();
+        for request_id in ["run-1", "run-2"] {
+            let scheduler = scheduler.clone();
+            let release_wait = release.clone();
+            running_handles.push(tokio::spawn(async move {
+                scheduler
+                    .run_request(
+                        metadata(
+                            request_id,
+                            "default",
+                            LlmRequestPriority::Background,
+                            LlmRequestKind::AnalysisReportMap,
+                        ),
+                        |_| {},
+                        move |control| async move {
+                            control
+                                .run_cancellable(async move {
+                                    release_wait.notified().await;
+                                    Ok::<_, String>("done")
+                                })
+                                .await
+                        },
+                    )
+                    .await
+            }));
+        }
+
+        let mut queued_handles = Vec::new();
+        for request_id in ["queued-1", "queued-2"] {
+            let scheduler = scheduler.clone();
+            let queue_tx = queue_tx.clone();
+            let started_tx = started_tx.clone();
+            queued_handles.push(tokio::spawn(async move {
+                scheduler
+                    .run_request(
+                        metadata(
+                            request_id,
+                            "default",
+                            LlmRequestPriority::Background,
+                            LlmRequestKind::AnalysisReportMap,
+                        ),
+                        move |position| {
+                            let _ = queue_tx.send((request_id.to_string(), position));
+                        },
+                        move |control| {
+                            let started_tx = started_tx.clone();
+                            async move {
+                                let _ = started_tx.send(request_id.to_string());
+                                control
+                                    .run_cancellable(async move { Ok::<_, String>(request_id) })
+                                    .await
+                            }
+                        },
+                    )
+                    .await
+            }));
+        }
+
+        let mut seen_positions = Vec::new();
+        timeout(Duration::from_secs(1), async {
+            while seen_positions.len() < 3 {
+                let entry = queue_rx.recv().await.expect("queue update");
+                seen_positions.push(entry);
+            }
+        })
+        .await
+        .expect("queue updates should arrive");
+
+        assert!(seen_positions.contains(&("queued-1".to_string(), 1)));
+        assert!(seen_positions.contains(&("queued-2".to_string(), 2)));
+
+        assert!(scheduler.cancel_request("queued-1").await);
+
+        let recomputed = timeout(Duration::from_secs(1), queue_rx.recv())
+            .await
+            .expect("recomputed position")
+            .expect("queue update");
+        assert_eq!(recomputed, ("queued-2".to_string(), 1));
+
+        release.notify_one();
+
+        assert_eq!(
+            timeout(Duration::from_secs(1), started_rx.recv())
+                .await
+                .expect("queued request should start")
+                .expect("request id"),
+            "queued-2".to_string()
+        );
+
+        release.notify_waiters();
+
+        assert_eq!(
+            queued_handles.remove(0).await.expect("join cancelled"),
+            Err(LlmRequestError::Cancelled)
+        );
+        assert_eq!(
+            queued_handles.remove(0).await.expect("join started"),
+            Ok("queued-2")
+        );
+        for handle in running_handles {
+            let _ = handle.await;
+        }
+
+        assert_scheduler_empty(&scheduler).await;
+    }
+
+    #[tokio::test]
+    async fn failed_requests_release_capacity_for_next_queued_request() {
+        let scheduler = Arc::new(LlmSchedulerState::new());
+        let release = Arc::new(Notify::new());
+        let (started_tx, mut started_rx) = mpsc::unbounded_channel::<String>();
+
+        let first_scheduler = scheduler.clone();
+        let first_release_wait = release.clone();
+        let first = tokio::spawn(async move {
+            first_scheduler
+                .run_request(
+                    metadata(
+                        "run-1",
+                        "default",
+                        LlmRequestPriority::Background,
+                        LlmRequestKind::AnalysisReportMap,
+                    ),
+                    |_| {},
+                    move |control| async move {
+                        control
+                            .run_cancellable(async move {
+                                first_release_wait.notified().await;
+                                Ok::<_, String>("done")
+                            })
+                            .await
+                    },
+                )
+                .await
+        });
+
+        let second_scheduler = scheduler.clone();
+        let second_started_tx = started_tx.clone();
+        let second = tokio::spawn(async move {
+            second_scheduler
+                .run_request(
+                    metadata(
+                        "run-2",
+                        "default",
+                        LlmRequestPriority::Background,
+                        LlmRequestKind::AnalysisReportMap,
+                    ),
+                    |_| {},
+                    move |control| {
+                        let started_tx = second_started_tx.clone();
+                        async move {
+                            let _ = started_tx.send("run-2".to_string());
+                            control
+                                .run_cancellable(async move {
+                                    Err::<&'static str, String>("boom".to_string())
+                                })
+                                .await
+                        }
+                    },
+                )
+                .await
+        });
+
+        let third_scheduler = scheduler.clone();
+        let third_started_tx = started_tx.clone();
+        let third = tokio::spawn(async move {
+            third_scheduler
+                .run_request(
+                    metadata(
+                        "run-3",
+                        "default",
+                        LlmRequestPriority::Background,
+                        LlmRequestKind::AnalysisReportMap,
+                    ),
+                    |_| {},
+                    move |control| {
+                        let started_tx = third_started_tx.clone();
+                        async move {
+                            let _ = started_tx.send("run-3".to_string());
+                            control
+                                .run_cancellable(async move { Ok::<_, String>("done") })
+                                .await
+                        }
+                    },
+                )
+                .await
+        });
+
+        assert_eq!(
+            timeout(Duration::from_secs(1), started_rx.recv())
+                .await
+                .expect("failing request should start")
+                .expect("request id"),
+            "run-2".to_string()
+        );
+        assert_eq!(
+            timeout(Duration::from_secs(1), started_rx.recv())
+                .await
+                .expect("queued request should start after failure")
+                .expect("request id"),
+            "run-3".to_string()
+        );
+
+        release.notify_waiters();
+
+        assert_eq!(first.await.expect("join first"), Ok("done"));
+        assert_eq!(
+            second.await.expect("join second"),
+            Err(LlmRequestError::Failed("boom".to_string()))
+        );
+        assert_eq!(third.await.expect("join third"), Ok("done"));
+
+        assert_scheduler_empty(&scheduler).await;
     }
 }
