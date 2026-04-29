@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { SourceRecord } from "$lib/types/sources";
 
@@ -67,38 +69,38 @@
       <span class="sub">{accountLabel(source.account_id)}</span>
     </button>
     <div class="channel-actions">
-      <span class="badge">{sourceKindLabel(source.telegram_source_kind)}</span>
+      <Badge>{sourceKindLabel(source.telegram_source_kind)}</Badge>
       {#if source.last_synced_at !== null}
-        <span class="badge">synced {formatDate(source.last_synced_at)}</span>
+        <Badge>synced {formatDate(source.last_synced_at)}</Badge>
       {/if}
       {#if source.account_id !== null}
         {#if runtimeBadgeLabel}
-          <span
-            class="badge warning"
+          <Badge
+            variant="warning"
             title={sourceRuntimeStatus?.status === "restore_failed" && sourceRuntimeStatus.message
               ? sourceRuntimeStatus.message
               : undefined}
           >
             {runtimeBadgeLabel}
-          </span>
+          </Badge>
         {/if}
       {/if}
       {#if source.is_member}
-        <span class="badge member">{membershipLabel(source.telegram_source_kind, source.is_member)}</span>
+        <Badge variant="member">{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
       {:else}
-        <span class="badge">{membershipLabel(source.telegram_source_kind, source.is_member)}</span>
+        <Badge>{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
       {/if}
-      <button
-        class="small"
+      <Button
+        size="sm"
         onclick={() => onSync(source.id)}
         disabled={syncing || deleting || syncReason !== null}
         title={syncReason ?? undefined}
       >
         {syncing ? "Syncing..." : "Sync"}
-      </button>
-      <button class="small danger secondary" onclick={() => onDelete(source.id)} disabled={deleting || syncing}>
+      </Button>
+      <Button size="sm" variant="danger-soft" onclick={() => onDelete(source.id)} disabled={deleting || syncing}>
         {deleting ? "Deleting..." : "Delete"}
-      </button>
+      </Button>
     </div>
     {#if syncReason}
       <p class="sync-reason">{syncReason}</p>
@@ -175,33 +177,6 @@
     word-break: break-word;
   }
   .sub { font-size: 0.75rem; color: var(--muted); }
-  .badge {
-    font-size: 0.7rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    background: var(--panel-hover);
-    color: var(--muted);
-    max-width: 100%;
-    white-space: normal;
-    line-height: 1.2;
-  }
-  .badge.member {
-    background: color-mix(in srgb, #22c55e 18%, var(--panel));
-    color: #15803d;
-  }
-  .badge.warning {
-    background: color-mix(in srgb, #f59e0b 22%, var(--panel));
-    color: #b45309;
-  }
-  button.danger.secondary {
-    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
-    background: color-mix(in srgb, var(--danger) 12%, var(--panel));
-    color: var(--danger);
-  }
-  button.danger.secondary:hover {
-    background: color-mix(in srgb, var(--danger) 18%, var(--panel-hover));
-  }
-  button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
   .sync-reason {
     margin: 0;
     width: 100%;

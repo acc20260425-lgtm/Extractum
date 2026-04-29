@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import type { ItemRecord } from "$lib/types/sources";
 
   let {
@@ -27,7 +29,7 @@
   }
 </script>
 
-<div class:embedded class="card">
+<Card as="div" {embedded}>
   <div class="card-header">
     <h3>Messages</h3>
     {#if loadingItems}
@@ -53,7 +55,7 @@
             <span>{formatDate(item.published_at)}</span>
             {#if item.author}<span>{item.author}</span>{/if}
             {#if item.has_media}
-              <span class="media-badge">{formatMediaKind(item.media_kind)}</span>
+              <Badge variant="info">{formatMediaKind(item.media_kind)}</Badge>
             {/if}
           </div>
           {#if item.content}
@@ -74,25 +76,9 @@
       {/each}
     </ul>
   {/if}
-</div>
+</Card>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-  .card.embedded {
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-    border-radius: 0;
-    padding: 0;
-    margin-bottom: 0;
-  }
   .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   .card-header h3 { margin: 0; }
   .message-list {
@@ -121,16 +107,6 @@
     color: var(--muted);
     font-size: 0.78rem;
     margin-bottom: 0.5rem;
-  }
-  .media-badge {
-    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
-    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-    border-radius: 999px;
-    color: var(--accent);
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 0.08rem 0.5rem;
-    text-transform: capitalize;
   }
   .media-block {
     display: flex;

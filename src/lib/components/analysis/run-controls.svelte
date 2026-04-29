@@ -1,4 +1,8 @@
 <script lang="ts">
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import type {
     AnalysisPromptTemplate,
     AnalysisSourceGroup,
@@ -73,152 +77,146 @@
   }
 </script>
 
-<section class="card controls">
-  <h3>Run Report</h3>
+<Card>
+  <div class="controls">
+    <h3>Run Report</h3>
 
-  <div class="scope-toggle">
-    <button
-      class:activeScope={analysisScope === "single_source"}
-      class="secondary"
-      type="button"
-      onclick={() => onChangeScope("single_source")}
-    >
-      Single source
-    </button>
-    <button
-      class:activeScope={analysisScope === "source_group"}
-      class="secondary"
-      type="button"
-      onclick={() => onChangeScope("source_group")}
-    >
-      Source group
-    </button>
-  </div>
-
-  {#if analysisScope === "single_source"}
-    <label>Source
-      <select
-        value={selectedSourceId}
-        disabled={loadingSources}
-        onchange={(event) => onChangeSelectedSourceId((event.currentTarget as HTMLSelectElement).value)}
+    <div class="scope-toggle">
+      <Button
+        selected={analysisScope === "single_source"}
+        variant="secondary"
+        type="button"
+        onclick={() => onChangeScope("single_source")}
       >
-        {#if loadingSources}
-          <option value="">Loading synced sources...</option>
-        {:else if sources.length === 0}
-          <option value="">No synced sources available</option>
-        {/if}
-        {#each sources as source (source.id)}
-          <option value={String(source.id)}>
-            {(source.title ?? `Source ${source.id}`)} - {source.item_count} messages
-          </option>
-        {/each}
-      </select>
-    </label>
-  {:else}
-    <label>Source group
-      <select
-        value={selectedGroupId}
-        disabled={loadingGroups}
-        onchange={(event) => onChangeSelectedGroupId((event.currentTarget as HTMLSelectElement).value)}
+        Single source
+      </Button>
+      <Button
+        selected={analysisScope === "source_group"}
+        variant="secondary"
+        type="button"
+        onclick={() => onChangeScope("source_group")}
       >
-        {#if loadingGroups}
-          <option value="">Loading source groups...</option>
-        {:else if groups.length === 0}
-          <option value="">No saved groups available</option>
-        {/if}
-        {#each groups as group (group.id)}
-          <option value={String(group.id)}>
-            {group.name} - {group.members.length} sources
-          </option>
-        {/each}
-      </select>
-    </label>
-
-    {#if selectedGroupSourceCount !== null}
-      <p class="sub">
-        {selectedGroupSourceCount} sources selected for this group report.
-      </p>
-    {/if}
-  {/if}
-
-  <div class="grid">
-    <label>From
-      <input
-        type="date"
-        value={periodFrom}
-        oninput={(event) => onChangePeriodFrom((event.currentTarget as HTMLInputElement).value)}
-      />
-    </label>
-
-    <label>To
-      <input
-        type="date"
-        value={periodTo}
-        oninput={(event) => onChangePeriodTo((event.currentTarget as HTMLInputElement).value)}
-      />
-    </label>
-  </div>
-
-  <label>Output language
-    <input
-      type="text"
-      value={outputLanguage}
-      placeholder="Russian"
-      oninput={(event) => onChangeOutputLanguage((event.currentTarget as HTMLInputElement).value)}
-    />
-  </label>
-
-  <label>Prompt template
-    <select
-      value={selectedTemplateId}
-      disabled={loadingTemplates}
-      onchange={(event) => onChangeSelectedTemplateId((event.currentTarget as HTMLSelectElement).value)}
-    >
-      {#if loadingTemplates}
-        <option value="">Loading report templates...</option>
-      {:else if templates.length === 0}
-        <option value="">No report templates available</option>
-      {/if}
-      {#each templates as template (template.id)}
-        <option value={String(template.id)}>
-          {template.name}{template.is_builtin ? " - builtin" : ""}
-        </option>
-      {/each}
-    </select>
-  </label>
-
-  <label>Model override
-    <input
-      type="text"
-      value={modelOverride}
-      placeholder="Use active profile default model"
-      oninput={(event) => onChangeModelOverride((event.currentTarget as HTMLInputElement).value)}
-    />
-  </label>
-
-  <button onclick={onRunReport} disabled={!canRunReport()}>
-    {launching ? "Starting..." : "Run report"}
-  </button>
-
-  {#if showRunMeta}
-    <div class="meta-panel">
-      <div><strong>Phase:</strong> {phaseLabel(activePhase)}</div>
-      {#if activeProgress}
-        <div><strong>Progress:</strong> {activeProgress}</div>
-      {/if}
+        Source group
+      </Button>
     </div>
-  {/if}
-</section>
+
+    {#if analysisScope === "single_source"}
+      <label>Source
+        <Select
+          value={selectedSourceId}
+          disabled={loadingSources}
+          onchange={(event) => onChangeSelectedSourceId((event.currentTarget as HTMLSelectElement).value)}
+        >
+          {#if loadingSources}
+            <option value="">Loading synced sources...</option>
+          {:else if sources.length === 0}
+            <option value="">No synced sources available</option>
+          {/if}
+          {#each sources as source (source.id)}
+            <option value={String(source.id)}>
+              {(source.title ?? `Source ${source.id}`)} - {source.item_count} messages
+            </option>
+          {/each}
+        </Select>
+      </label>
+    {:else}
+      <label>Source group
+        <Select
+          value={selectedGroupId}
+          disabled={loadingGroups}
+          onchange={(event) => onChangeSelectedGroupId((event.currentTarget as HTMLSelectElement).value)}
+        >
+          {#if loadingGroups}
+            <option value="">Loading source groups...</option>
+          {:else if groups.length === 0}
+            <option value="">No saved groups available</option>
+          {/if}
+          {#each groups as group (group.id)}
+            <option value={String(group.id)}>
+              {group.name} - {group.members.length} sources
+            </option>
+          {/each}
+        </Select>
+      </label>
+
+      {#if selectedGroupSourceCount !== null}
+        <p class="sub">
+          {selectedGroupSourceCount} sources selected for this group report.
+        </p>
+      {/if}
+    {/if}
+
+    <div class="grid">
+      <label>From
+        <Input
+          type="date"
+          value={periodFrom}
+          oninput={(event) => onChangePeriodFrom((event.currentTarget as HTMLInputElement).value)}
+        />
+      </label>
+
+      <label>To
+        <Input
+          type="date"
+          value={periodTo}
+          oninput={(event) => onChangePeriodTo((event.currentTarget as HTMLInputElement).value)}
+        />
+      </label>
+    </div>
+
+    <label>Output language
+      <Input
+        type="text"
+        value={outputLanguage}
+        placeholder="Russian"
+        oninput={(event) => onChangeOutputLanguage((event.currentTarget as HTMLInputElement).value)}
+      />
+    </label>
+
+    <label>Prompt template
+      <Select
+        value={selectedTemplateId}
+        disabled={loadingTemplates}
+        onchange={(event) => onChangeSelectedTemplateId((event.currentTarget as HTMLSelectElement).value)}
+      >
+        {#if loadingTemplates}
+          <option value="">Loading report templates...</option>
+        {:else if templates.length === 0}
+          <option value="">No report templates available</option>
+        {/if}
+        {#each templates as template (template.id)}
+          <option value={String(template.id)}>
+            {template.name}{template.is_builtin ? " - builtin" : ""}
+          </option>
+        {/each}
+      </Select>
+    </label>
+
+    <label>Model override
+      <Input
+        type="text"
+        value={modelOverride}
+        placeholder="Use active profile default model"
+        oninput={(event) => onChangeModelOverride((event.currentTarget as HTMLInputElement).value)}
+      />
+    </label>
+
+    <Button onclick={onRunReport} disabled={!canRunReport()}>
+      {launching ? "Starting..." : "Run report"}
+    </Button>
+
+    {#if showRunMeta}
+      <div class="meta-panel">
+        <div><strong>Phase:</strong> {phaseLabel(activePhase)}</div>
+        {#if activeProgress}
+          <div><strong>Progress:</strong> {activeProgress}</div>
+        {/if}
+      </div>
+    {/if}
+  </div>
+</Card>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
   .controls {
     display: flex;
     flex-direction: column;
@@ -247,14 +245,6 @@
     min-width: 0;
   }
 
-  select,
-  input {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
   .sub {
     margin: 0;
     color: var(--muted);
@@ -271,11 +261,6 @@
     border: 1px solid var(--border);
     color: var(--muted);
     font-size: 0.9rem;
-  }
-
-  .activeScope {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
-    border-color: var(--primary);
   }
 
   @media (max-width: 720px) {

@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import { cubicOut } from "svelte/easing";
   import { fade, scale } from "svelte/transition";
+  import Button from "$lib/components/ui/Button.svelte";
 
   let {
     open,
@@ -127,9 +128,14 @@
             <p id={`${labelledBy}-description`}>{description}</p>
           {/if}
         </div>
-        <button class="ghost close-button" type="button" onclick={onClose} aria-label="Close dialog">
+        <Button
+          variant="ghost"
+          type="button"
+          onclick={onClose}
+          ariaLabel="Close dialog"
+        >
           Close
-        </button>
+        </Button>
       </header>
 
       <div class="dialog-content">
@@ -205,10 +211,6 @@
     padding-top: 1rem;
     padding-bottom: 1rem;
     overflow: auto;
-  }
-
-  .close-button {
-    white-space: nowrap;
   }
 
   @media (max-width: 640px) {

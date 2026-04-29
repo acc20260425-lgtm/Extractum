@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import type { AnalysisRunDetail, AnalysisChatTurn } from "$lib/types/analysis";
 
   let {
@@ -52,91 +54,85 @@
   });
 </script>
 
-<section class="card chat">
-  <div class="panel-header">
-    <div>
-      <h3>Report Chat</h3>
-      <p class="sub">Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.</p>
-    </div>
-    {#if currentRun && currentRun.status === "completed"}
-      <div class="chat-actions">
-        {#if canCancelChat}
-          <button class="danger-soft" type="button" onclick={onCancelChat}>Cancel answer</button>
-        {/if}
-        <button class="secondary" onclick={onClearChat} disabled={chatting || clearingChat}>
-          {clearingChat ? "Clearing..." : "Clear chat"}
-        </button>
+<Card>
+  <div class="chat">
+    <div class="panel-header">
+      <div>
+        <h3>Report Chat</h3>
+        <p class="sub">Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.</p>
       </div>
-    {/if}
-  </div>
-
-  {#if !currentRun}
-    <p class="empty">Open a saved run to start a grounded chat.</p>
-  {:else if currentRun.status !== "completed"}
-    <p class="empty">Chat is available only for completed runs.</p>
-  {:else}
-    <div class="chat-thread" bind:this={chatThreadElement}>
-      {#if loadingChat}
-        <p class="empty">Loading saved chat history...</p>
-      {:else if chatMessages.length === 0}
-        <p class="empty">No saved chat turns yet. Ask a follow-up question about this report.</p>
-      {:else}
-        {#each chatMessages as message, index (`${message.role}-${index}`)}
-          <div class={`chat-bubble chat-${message.role}`}>
-            <div class="chat-role">{message.role === "user" ? "You" : "Assistant"}</div>
-            <div class="chat-content">
-              {#if message.role === "assistant" && message.content}
-                {#each reportLines(message.content) as line (line.key)}
-                  <div class="report-line">
-                    {#each line.segments as segment (segment.key)}
-                      {#if segment.type === "ref"}
-                        <button
-                          class="ref-chip"
-                          class:active={segment.value === selectedTraceRef}
-                          type="button"
-                          onclick={() => void onFocusTraceRef(segment.value)}
-                        >
-                          [{segment.value}]
-                        </button>
-                      {:else}
-                        <span>{segment.value}</span>
-                      {/if}
-                    {/each}
-                  </div>
-                {/each}
-              {:else}
-                {message.content || (chatting && message.role === "assistant" ? "..." : "")}
-              {/if}
-            </div>
-          </div>
-        {/each}
+      {#if currentRun && currentRun.status === "completed"}
+        <div class="chat-actions">
+          {#if canCancelChat}
+            <Button variant="danger-soft" type="button" onclick={onCancelChat}>Cancel answer</Button>
+          {/if}
+          <Button variant="secondary" onclick={onClearChat} disabled={chatting || clearingChat}>
+            {clearingChat ? "Clearing..." : "Clear chat"}
+          </Button>
+        </div>
       {/if}
     </div>
 
-    <div class="chat-compose">
-      <label>Question
-        <textarea
-          rows="4"
-          placeholder="Ask a grounded follow-up question about this report."
-          oninput={(event) => onChangeChatQuestion((event.currentTarget as HTMLTextAreaElement).value)}
-        >{chatQuestion}</textarea>
-      </label>
-      <button onclick={onAskQuestion} disabled={chatting || loadingChat || !chatQuestion.trim() || currentRun.status !== "completed"}>
-        {chatting ? "Answering..." : "Ask"}
-      </button>
-    </div>
-  {/if}
-</section>
+    {#if !currentRun}
+      <p class="empty">Open a saved run to start a grounded chat.</p>
+    {:else if currentRun.status !== "completed"}
+      <p class="empty">Chat is available only for completed runs.</p>
+    {:else}
+      <div class="chat-thread" bind:this={chatThreadElement}>
+        {#if loadingChat}
+          <p class="empty">Loading saved chat history...</p>
+        {:else if chatMessages.length === 0}
+          <p class="empty">No saved chat turns yet. Ask a follow-up question about this report.</p>
+        {:else}
+          {#each chatMessages as message, index (`${message.role}-${index}`)}
+            <div class={`chat-bubble chat-${message.role}`}>
+              <div class="chat-role">{message.role === "user" ? "You" : "Assistant"}</div>
+              <div class="chat-content">
+                {#if message.role === "assistant" && message.content}
+                  {#each reportLines(message.content) as line (line.key)}
+                    <div class="report-line">
+                      {#each line.segments as segment (segment.key)}
+                        {#if segment.type === "ref"}
+                          <button
+                            class="ref-chip"
+                            class:active={segment.value === selectedTraceRef}
+                            type="button"
+                            onclick={() => void onFocusTraceRef(segment.value)}
+                          >
+                            [{segment.value}]
+                          </button>
+                        {:else}
+                          <span>{segment.value}</span>
+                        {/if}
+                      {/each}
+                    </div>
+                  {/each}
+                {:else}
+                  {message.content || (chatting && message.role === "assistant" ? "..." : "")}
+                {/if}
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+      <div class="chat-compose">
+        <label>Question
+          <textarea
+            rows="4"
+            placeholder="Ask a grounded follow-up question about this report."
+            oninput={(event) => onChangeChatQuestion((event.currentTarget as HTMLTextAreaElement).value)}
+          >{chatQuestion}</textarea>
+        </label>
+        <Button onclick={onAskQuestion} disabled={chatting || loadingChat || !chatQuestion.trim() || currentRun.status !== "completed"}>
+          {chatting ? "Answering..." : "Ask"}
+        </Button>
+      </div>
+    {/if}
+  </div>
+</Card>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
   .chat {
     margin-top: 1.5rem;
     display: flex;
@@ -268,13 +264,4 @@
     background: color-mix(in srgb, var(--primary) 22%, var(--panel));
   }
 
-  .danger-soft {
-    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
-    color: var(--danger);
-    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
-  }
-
-  .danger-soft:hover {
-    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
-  }
 </style>
