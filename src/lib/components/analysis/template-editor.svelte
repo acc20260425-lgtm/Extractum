@@ -1,5 +1,8 @@
 <script lang="ts">
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import type { AnalysisPromptTemplate } from "$lib/types/analysis";
 
   let {
@@ -51,52 +54,58 @@
   }
 </script>
 
-<section class="card templates">
-  <div class="panel-header">
-    <div>
-      <h3>Prompt Template</h3>
-      {#if selectedTemplate}
-        <p class="sub">
-          {selectedTemplate.name} - v{selectedTemplate.version}
-          {selectedTemplate.is_builtin ? " - builtin (edit fields below, then save as copy)" : " - custom"}
-        </p>
-      {/if}
-    </div>
-    <div class="template-actions">
-      <button class="secondary" onclick={() => openEditor("new")} disabled={savingTemplate || deletingTemplate}>
-        New template
-      </button>
-      <button
-        class="secondary"
-        onclick={() => openEditor("edit")}
-        disabled={savingTemplate || deletingTemplate || (!selectedTemplate && !templateName.trim() && !templateBody.trim())}
-      >
-        {selectedTemplate ? "Edit template" : "Open editor"}
-      </button>
-      <button class="danger-soft" onclick={onDeleteTemplate} disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}>
-        {deletingTemplate ? "Deleting..." : "Delete"}
-      </button>
-    </div>
-  </div>
-
-  <div class="template-grid">
-    <label>Template name
-      <input type="text" value={templateName} placeholder="Custom report" readonly />
-    </label>
-
-    <div class="template-preview">
-      <div class="preview-header">
-        <h4>Template Body</h4>
-        <span>{templateBody.trim() ? `${templateBody.trim().split(/\s+/).length} words` : "Empty draft"}</span>
+<Card>
+  <div class="templates">
+    <div class="panel-header">
+      <div>
+        <h3>Prompt Template</h3>
+        {#if selectedTemplate}
+          <p class="sub">
+            {selectedTemplate.name} - v{selectedTemplate.version}
+            {selectedTemplate.is_builtin ? " - builtin (edit fields below, then save as copy)" : " - custom"}
+          </p>
+        {/if}
       </div>
-      {#if templateBody.trim()}
-        <p>{templateBody}</p>
-      {:else}
-        <p class="empty-copy">No template text yet. Open the editor to define the report instructions.</p>
-      {/if}
+      <div class="template-actions">
+        <Button variant="secondary" onclick={() => openEditor("new")} disabled={savingTemplate || deletingTemplate}>
+          New template
+        </Button>
+        <Button
+          variant="secondary"
+          onclick={() => openEditor("edit")}
+          disabled={savingTemplate || deletingTemplate || (!selectedTemplate && !templateName.trim() && !templateBody.trim())}
+        >
+          {selectedTemplate ? "Edit template" : "Open editor"}
+        </Button>
+        <Button
+          variant="danger-soft"
+          onclick={onDeleteTemplate}
+          disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
+        >
+          {deletingTemplate ? "Deleting..." : "Delete"}
+        </Button>
+      </div>
+    </div>
+
+    <div class="template-grid">
+      <label>Template name
+        <Input type="text" value={templateName} placeholder="Custom report" readonly />
+      </label>
+
+      <div class="template-preview">
+        <div class="preview-header">
+          <h4>Template Body</h4>
+          <span>{templateBody.trim() ? `${templateBody.trim().split(/\s+/).length} words` : "Empty draft"}</span>
+        </div>
+        {#if templateBody.trim()}
+          <p>{templateBody}</p>
+        {:else}
+          <p class="empty-copy">No template text yet. Open the editor to define the report instructions.</p>
+        {/if}
+      </div>
     </div>
   </div>
-</section>
+</Card>
 
 <DesktopDialog
   open={editorOpen}
@@ -108,7 +117,7 @@
 >
   <div class="editor-grid">
     <label>Template name
-      <input
+      <Input
         type="text"
         value={draftName}
         placeholder="Custom report"
@@ -125,34 +134,26 @@
     </label>
 
     <footer class="modal-actions">
-      <button class="secondary" type="button" onclick={closeEditor}>
+      <Button variant="secondary" type="button" onclick={closeEditor}>
         Cancel
-      </button>
-      <button class="secondary" type="button" onclick={saveCopy} disabled={savingTemplate || deletingTemplate}>
+      </Button>
+      <Button variant="secondary" type="button" onclick={saveCopy} disabled={savingTemplate || deletingTemplate}>
         {savingTemplate ? "Saving..." : editorMode === "new" ? "Create template" : "Save as copy"}
-      </button>
+      </Button>
       {#if editorMode === "edit"}
-        <button
+        <Button
           type="button"
           onclick={saveChanges}
           disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
         >
           {savingTemplate ? "Saving..." : "Save changes"}
-        </button>
+        </Button>
       {/if}
     </footer>
   </div>
 </DesktopDialog>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
   .templates {
     margin-top: 1.5rem;
     display: flex;
@@ -195,7 +196,7 @@
     color: var(--muted);
   }
 
-  .template-grid input[readonly] {
+  .template-grid :global(input[readonly]) {
     cursor: default;
     color: var(--text);
     background: var(--panel-strong);

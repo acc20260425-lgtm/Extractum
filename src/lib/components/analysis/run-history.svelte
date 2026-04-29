@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
   type RunFilter = "all" | "completed" | "failed";
@@ -44,78 +47,70 @@
   } = $props();
 </script>
 
-<section class="card history">
-  <div class="panel-header">
-    <div>
-      <h3>Saved Runs</h3>
-      <p class="sub">Immutable report runs with saved model, prompt version, and traceability data.</p>
-    </div>
-    <div class="history-actions">
-      <div class="filter-group">
-        <button class:activeFilter={historyScope === "all"} class="secondary" onclick={() => onChangeHistoryScope("all")}>
-          All runs
-        </button>
-        <button
-          class:activeFilter={historyScope === "current"}
-          class="secondary"
-          onclick={() => onChangeHistoryScope("current")}
-        >
-          Current scope
-        </button>
+<Card>
+  <div class="history">
+    <div class="panel-header">
+      <div>
+        <h3>Saved Runs</h3>
+        <p class="sub">Immutable report runs with saved model, prompt version, and traceability data.</p>
       </div>
-      <div class="filter-group">
-        <button class:activeFilter={runFilter === "all"} class="secondary" onclick={() => onChangeFilter("all")}>All</button>
-        <button class:activeFilter={runFilter === "completed"} class="secondary" onclick={() => onChangeFilter("completed")}>Completed</button>
-        <button class:activeFilter={runFilter === "failed"} class="secondary" onclick={() => onChangeFilter("failed")}>Failed</button>
+      <div class="history-actions">
+        <div class="filter-group">
+          <Button variant="secondary" selected={historyScope === "all"} onclick={() => onChangeHistoryScope("all")}>
+            All runs
+          </Button>
+          <Button variant="secondary" selected={historyScope === "current"} onclick={() => onChangeHistoryScope("current")}>
+            Current scope
+          </Button>
+        </div>
+        <div class="filter-group">
+          <Button variant="secondary" selected={runFilter === "all"} onclick={() => onChangeFilter("all")}>All</Button>
+          <Button variant="secondary" selected={runFilter === "completed"} onclick={() => onChangeFilter("completed")}>
+            Completed
+          </Button>
+          <Button variant="secondary" selected={runFilter === "failed"} onclick={() => onChangeFilter("failed")}>Failed</Button>
+        </div>
+        <Button variant="secondary" onclick={onRefresh}>Refresh</Button>
       </div>
-      <button class="secondary" onclick={onRefresh}>Refresh</button>
     </div>
-  </div>
 
-  {#if loadingRuns}
-    <p class="empty">Loading analysis runs...</p>
-  {:else if historyScope === "current" && !historyTargetReady}
-    <p class="empty">Select a source or source group to browse current-scope history.</p>
-  {:else if runs.length === 0}
-    <p class="empty">{historyScope === "all" ? "No analysis runs yet." : "No saved runs for the current scope yet."}</p>
-  {:else if filteredRuns.length === 0}
-    <p class="empty">No runs match the current filter.</p>
-  {:else}
-    <ul class="run-list">
-      {#each filteredRuns as run (run.id)}
-        <li class:selected={run.id === activeRunId}>
-          <div class="run-copy">
-            <div class="run-title">
-              <strong>{runTargetLabel(run)}</strong>
-              <span class={`badge badge-${statusTone(run.status)}`}>{run.status}</span>
+    {#if loadingRuns}
+      <p class="empty">Loading analysis runs...</p>
+    {:else if historyScope === "current" && !historyTargetReady}
+      <p class="empty">Select a source or source group to browse current-scope history.</p>
+    {:else if runs.length === 0}
+      <p class="empty">{historyScope === "all" ? "No analysis runs yet." : "No saved runs for the current scope yet."}</p>
+    {:else if filteredRuns.length === 0}
+      <p class="empty">No runs match the current filter.</p>
+    {:else}
+      <ul class="run-list">
+        {#each filteredRuns as run (run.id)}
+          <li class:selected={run.id === activeRunId}>
+            <div class="run-copy">
+              <div class="run-title">
+                <strong>{runTargetLabel(run)}</strong>
+                <Badge variant={statusTone(run.status)}>{run.status}</Badge>
+              </div>
+              <p class="sub">
+                {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
+              </p>
+              <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
+              {#if run.completed_at}
+                <p class="sub">Completed: {formatTimestamp(run.completed_at)}</p>
+              {/if}
+              {#if run.error}
+                <p class="run-list-error">{run.error}</p>
+              {/if}
             </div>
-            <p class="sub">
-              {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
-            </p>
-            <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
-            {#if run.completed_at}
-              <p class="sub">Completed: {formatTimestamp(run.completed_at)}</p>
-            {/if}
-            {#if run.error}
-              <p class="run-list-error">{run.error}</p>
-            {/if}
-          </div>
-          <button class="secondary" onclick={() => onOpenRun(run.id)}>Open</button>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</section>
+            <Button variant="secondary" onclick={() => onOpenRun(run.id)}>Open</Button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+</Card>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
   .history {
     display: flex;
     flex-direction: column;
@@ -174,31 +169,6 @@
     margin-bottom: 0.35rem;
   }
 
-  .badge {
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-    background: var(--panel-hover);
-    color: var(--muted);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .badge-success {
-    background: color-mix(in srgb, #1f8f5f 16%, var(--panel));
-    color: #1f8f5f;
-  }
-
-  .badge-danger {
-    background: color-mix(in srgb, var(--danger) 16%, var(--panel));
-    color: var(--danger);
-  }
-
-  .badge-info {
-    background: color-mix(in srgb, var(--primary) 16%, var(--panel));
-    color: var(--primary);
-  }
-
   .run-list-error {
     margin: 0;
     padding: 0.7rem 0.85rem;
@@ -214,11 +184,6 @@
     gap: 0.6rem;
     flex-wrap: wrap;
     align-items: center;
-  }
-
-  .activeFilter {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
-    border-color: var(--primary);
   }
 
   @media (max-width: 720px) {

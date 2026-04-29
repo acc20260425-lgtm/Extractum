@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
   let {
@@ -37,58 +40,52 @@
   } = $props();
 </script>
 
-<section class="card active-runs">
-  <div class="panel-header">
-    <div>
-      <h3>Active Runs</h3>
-      <p class="sub">Queued and running reports stay separate from historical saved runs.</p>
+<Card>
+  <div class="active-runs">
+    <div class="panel-header">
+      <div>
+        <h3>Active Runs</h3>
+        <p class="sub">Queued and running reports stay separate from historical saved runs.</p>
+      </div>
+      <Button variant="secondary" onclick={onRefresh}>Refresh</Button>
     </div>
-    <button class="secondary" onclick={onRefresh}>Refresh</button>
-  </div>
 
-  {#if loadingActiveRuns}
-    <p class="empty">Loading active runs...</p>
-  {:else if activeRuns.length === 0}
-    <p class="empty">No queued or running analysis runs.</p>
-  {:else}
-    <ul class="run-list">
-      {#each activeRuns as run (run.id)}
-        <li class:selected={run.id === activeRunId}>
-          <div class="run-copy">
-            <div class="run-title">
-              <strong>{runTargetLabel(run)}</strong>
-              <span class={`badge badge-${statusTone(run.status)}`}>{run.status}</span>
+    {#if loadingActiveRuns}
+      <p class="empty">Loading active runs...</p>
+    {:else if activeRuns.length === 0}
+      <p class="empty">No queued or running analysis runs.</p>
+    {:else}
+      <ul class="run-list">
+        {#each activeRuns as run (run.id)}
+          <li class:selected={run.id === activeRunId}>
+            <div class="run-copy">
+              <div class="run-title">
+                <strong>{runTargetLabel(run)}</strong>
+                <Badge variant={statusTone(run.status)}>{run.status}</Badge>
+              </div>
+              <p class="sub">
+                {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
+              </p>
+              <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
+              <p class="sub">
+                Phase: {phaseLabel(livePhase(run.id) || run.status)}
+                {#if liveProgress(run.id)}
+                  - {liveProgress(run.id)}
+                {/if}
+              </p>
             </div>
-            <p class="sub">
-              {formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}
-            </p>
-            <p class="sub">Period: {formatPeriod(run.period_from, run.period_to)}</p>
-            <p class="sub">
-              Phase: {phaseLabel(livePhase(run.id) || run.status)}
-              {#if liveProgress(run.id)}
-                - {liveProgress(run.id)}
-              {/if}
-            </p>
-          </div>
-          <div class="run-actions">
-            <button class="secondary" onclick={() => onOpenRun(run.id)}>Open</button>
-            <button class="danger-soft" onclick={() => onCancelRun(run.id)}>Cancel</button>
-          </div>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</section>
+            <div class="run-actions">
+              <Button variant="secondary" onclick={() => onOpenRun(run.id)}>Open</Button>
+              <Button variant="danger-soft" onclick={() => onCancelRun(run.id)}>Cancel</Button>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+</Card>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
   .active-runs {
     display: flex;
     flex-direction: column;
@@ -152,41 +149,6 @@
     align-items: center;
     flex-wrap: wrap;
     margin-bottom: 0.35rem;
-  }
-
-  .badge {
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-    background: var(--panel-hover);
-    color: var(--muted);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .badge-success {
-    background: color-mix(in srgb, #1f8f5f 16%, var(--panel));
-    color: #1f8f5f;
-  }
-
-  .badge-danger {
-    background: color-mix(in srgb, var(--danger) 16%, var(--panel));
-    color: var(--danger);
-  }
-
-  .badge-info {
-    background: color-mix(in srgb, var(--primary) 16%, var(--panel));
-    color: var(--primary);
-  }
-
-  .danger-soft {
-    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
-    color: var(--danger);
-    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
-  }
-
-  .danger-soft:hover {
-    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
   }
 
   @media (max-width: 720px) {

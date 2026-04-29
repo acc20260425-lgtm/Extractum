@@ -1,5 +1,8 @@
 <script lang="ts">
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
 
   let {
@@ -56,86 +59,88 @@
   }
 </script>
 
-<section class="card groups">
-  <div class="panel-header">
-    <div>
-      <h3>Source Groups</h3>
-      <p class="sub">Save reusable named sets of synced sources for future cross-source reports.</p>
-    </div>
-    <div class="group-actions">
-      <button class="secondary" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
-        New group
-      </button>
-      <button
-        class="secondary"
-        onclick={openSelectedGroupEditor}
-        disabled={savingGroup || deletingGroup || (!selectedGroup && !groupName.trim() && groupMemberSourceIds.length === 0)}
-      >
-        {selectedGroup ? "Edit group" : "Open editor"}
-      </button>
-      <button class="danger-soft" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
-        {deletingGroup ? "Deleting..." : "Delete"}
-      </button>
-    </div>
-  </div>
-
-  <div class="group-grid">
-    <div class="group-form">
-      <label>Saved groups
-        <select
-          value={selectedGroupId}
-          onchange={(event) => onChangeSelectedGroupId((event.currentTarget as HTMLSelectElement).value)}
+<Card>
+  <div class="groups">
+    <div class="panel-header">
+      <div>
+        <h3>Source Groups</h3>
+        <p class="sub">Save reusable named sets of synced sources for future cross-source reports.</p>
+      </div>
+      <div class="group-actions">
+        <Button variant="secondary" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
+          New group
+        </Button>
+        <Button
+          variant="secondary"
+          onclick={openSelectedGroupEditor}
+          disabled={savingGroup || deletingGroup || (!selectedGroup && !groupName.trim() && groupMemberSourceIds.length === 0)}
         >
-          <option value="">Create a new group</option>
-          {#each groups as group (group.id)}
-            <option value={String(group.id)}>
-              {group.name} - {group.members.length} sources
-            </option>
-          {/each}
-        </select>
-      </label>
-
-      <label>Group name
-        <input type="text" value={groupName} placeholder="Core channels" readonly />
-      </label>
-
-      {#if selectedGroup}
-        <p class="sub">
-          Updated {formatTimestamp(selectedGroup.updated_at)}
-        </p>
-      {:else if groupName || groupMemberSourceIds.length > 0}
-        <p class="sub">Unsaved draft group</p>
-      {/if}
+          {selectedGroup ? "Edit group" : "Open editor"}
+        </Button>
+        <Button variant="danger-soft" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
+          {deletingGroup ? "Deleting..." : "Delete"}
+        </Button>
+      </div>
     </div>
 
-    <div class="group-members">
-      <div class="members-header">
-        <h4>{selectedGroup ? "Saved Members" : "Draft Members"}</h4>
-        <span class="selected-count">{groupMemberSourceIds.length} selected</span>
+    <div class="group-grid">
+      <div class="group-form">
+        <label>Saved groups
+          <select
+            value={selectedGroupId}
+            onchange={(event) => onChangeSelectedGroupId((event.currentTarget as HTMLSelectElement).value)}
+          >
+            <option value="">Create a new group</option>
+            {#each groups as group (group.id)}
+              <option value={String(group.id)}>
+                {group.name} - {group.members.length} sources
+              </option>
+            {/each}
+          </select>
+        </label>
+
+        <label>Group name
+          <Input type="text" value={groupName} placeholder="Core channels" readonly />
+        </label>
+
+        {#if selectedGroup}
+          <p class="sub">
+            Updated {formatTimestamp(selectedGroup.updated_at)}
+          </p>
+        {:else if groupName || groupMemberSourceIds.length > 0}
+          <p class="sub">Unsaved draft group</p>
+        {/if}
       </div>
 
-      {#if sources.length === 0}
-        <p class="empty">No synced sources available for grouping yet.</p>
-      {:else}
-        <div class="member-list">
-          {#each sources as source (source.id)}
-            <label class="member-row">
-              <input
-                type="checkbox"
-                checked={isGroupSourceSelected(source.id)}
-                disabled
-              />
-              <div class="member-copy">
-                <strong>{source.title ?? `Source ${source.id}`}</strong>
-                <span>{source.item_count} messages</span>
-              </div>
-            </label>
-          {/each}
+      <div class="group-members">
+        <div class="members-header">
+          <h4>{selectedGroup ? "Saved Members" : "Draft Members"}</h4>
+          <span class="selected-count">{groupMemberSourceIds.length} selected</span>
         </div>
-      {/if}
+
+        {#if sources.length === 0}
+          <p class="empty">No synced sources available for grouping yet.</p>
+        {:else}
+          <div class="member-list">
+            {#each sources as source (source.id)}
+              <label class="member-row">
+                <input
+                  type="checkbox"
+                  checked={isGroupSourceSelected(source.id)}
+                  disabled
+                />
+                <div class="member-copy">
+                  <strong>{source.title ?? `Source ${source.id}`}</strong>
+                  <span>{source.item_count} messages</span>
+                </div>
+              </label>
+            {/each}
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
-</section>
+</Card>
 
 <DesktopDialog
   open={editorOpen}
@@ -147,7 +152,7 @@
 >
   <div class="editor-grid">
     <label>Group name
-      <input
+      <Input
         type="text"
         value={groupName}
         placeholder="Core channels"
@@ -183,32 +188,24 @@
     </div>
 
     <footer class="modal-actions">
-      <button class="secondary" type="button" onclick={closeEditor}>
+      <Button variant="secondary" type="button" onclick={closeEditor}>
         Cancel
-      </button>
-      <button class="secondary" type="button" onclick={onSaveGroupCopy} disabled={savingGroup || deletingGroup}>
+      </Button>
+      <Button variant="secondary" type="button" onclick={onSaveGroupCopy} disabled={savingGroup || deletingGroup}>
         {savingGroup ? "Saving..." : "Save as new"}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
         onclick={onSaveGroupChanges}
         disabled={savingGroup || deletingGroup || !selectedGroup}
       >
         {savingGroup ? "Saving..." : "Save changes"}
-      </button>
+      </Button>
     </footer>
   </div>
 </DesktopDialog>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
   .groups {
     margin-top: 1.5rem;
     display: flex;
@@ -303,7 +300,7 @@
     flex: 0 0 auto;
   }
 
-  .group-form input[readonly] {
+  .group-form :global(input[readonly]) {
     cursor: default;
     color: var(--text);
     background: var(--panel-strong);

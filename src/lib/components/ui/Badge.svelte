@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
-  type BadgeVariant = "default" | "warning" | "member" | "info" | "success" | "danger";
+  type BadgeVariant = "default" | "warning" | "member" | "info" | "success" | "danger" | "neutral";
 
   let {
     variant = "default",
@@ -51,6 +51,11 @@
   .ui-badge.info {
     background: color-mix(in srgb, var(--primary) 14%, var(--panel));
     color: var(--primary);
+  }
+
+  .ui-badge.neutral {
+    background: var(--panel-hover);
+    color: var(--muted);
   }
 
   .ui-badge.danger {
