@@ -1,6 +1,6 @@
 # Extractum Unified Backlog
 
-> **Updated:** 2026-04-28
+> **Updated:** 2026-04-29
 > **Working rule:** this file is the single source of truth for active follow-up work
 
 ---
@@ -26,7 +26,9 @@ Released and already-integrated work should stay in the codebase and documentati
 
 - `llm/` is modular and supports Gemini plus an OpenAI-compatible provider path
 - `/settings` supports multiple reusable LLM profiles and active-profile selection
+- request-scoped LLM scheduling, queueing, cancellation, and event correlation are in place for provider tests, analysis chat, and analysis reports
 - `analysis/` is decomposed into focused submodules
+- analysis live runs are separated from saved-run history in the UI
 - media-aware ingest stores metadata for text-bearing and media-only Telegram messages
 - new analysis runs persist frozen corpus snapshots
 - source identity is scoped by `account_id` and `telegram_source_kind`
@@ -37,7 +39,7 @@ Released and already-integrated work should stay in the codebase and documentati
 - Telegram runtime behavior still needs broader validation against real accounts and dialogs
 - private-source resolution is better defined but still needs more real-world validation
 - LLM API keys and Telegram credentials still live in SQLite-backed storage
-- concurrent LLM requests still do not have request-scoped isolation or cancellation
+- concurrent LLM requests now have request-scoped isolation and cancellation, but concurrency policy still needs refinement
 - saved-run history still lacks richer filtering for larger archives
 - media download, preview, and media-aware analysis are still incomplete
 
@@ -60,7 +62,7 @@ Released and already-integrated work should stay in the codebase and documentati
 | Telegram runtime correctness | partially validated | validated on real accounts and dialogs |
 | Private source resolution | explicit rules exist, but runtime coverage is incomplete | predictable behavior for dialog-picked private sources |
 | Secret storage | SQLite-backed | secure store with migration/import path |
-| LLM concurrency | no explicit lifecycle policy | request-scoped parallel execution with cancellation |
+| LLM concurrency | request-scoped scheduling and cancellation are in place, but limit policy is still coarse | request-scoped parallel execution with cancellation |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
 | Media support | metadata-first only | optional download/preview and media-aware analysis |
 | Stabilization | spot-checked after major changes | repeatable verification baseline and broader tests |
@@ -170,7 +172,7 @@ Acceptance criteria:
 
 #### 4.3. LLM Parallel Request Support
 
-Status: planned.
+Status: partial.
 
 Priority: medium.
 
@@ -178,18 +180,25 @@ Goal: support multiple LLM requests at the same time without mixing stream state
 
 Scope:
 
-- [ ] define concurrency limits per provider and profile
-- [ ] add active request tracking keyed by `request_id`
-- [ ] add cancellation support for long-running requests
-- [ ] keep stream buffers, usage, timeout, and callbacks request-local
-- [ ] decide how the frontend should display multiple active streams
-- [ ] ensure analysis progress and provider test output ignore unrelated request events
+- [ ] decide whether per-provider and per-profile concurrency limits need explicit configuration beyond the current shared default
+- [x] add active request tracking keyed by `request_id`
+- [x] add cancellation support for long-running requests
+- [x] keep stream buffers, usage, timeout, and callbacks request-local
+- [x] decide how the frontend should display multiple active streams
+- [x] ensure analysis progress and provider test output ignore unrelated request events
 
 Acceptance criteria:
 
-- [ ] concurrent LLM requests cannot overwrite each other's output
-- [ ] a user can cancel a long-running request
-- [ ] provider and analysis events remain traceable by `request_id`
+- [x] concurrent LLM requests cannot overwrite each other's output
+- [x] a user can cancel a long-running request
+- [x] provider and analysis events remain traceable by `request_id`
+
+Current notes:
+
+- request-scoped scheduling, queueing, and cancellation are implemented in the backend LLM scheduler
+- provider-test, analysis-chat, and analysis-report events now carry `request_id` and ignore unrelated events in the frontend
+- analysis UI now separates active runs and keeps live stream/progress state scoped to the selected run
+- the remaining open question is whether concurrency limits should become explicitly configurable or otherwise differentiated beyond the current per-`(provider, profile)` queue with a shared default limit
 
 ---
 
@@ -278,7 +287,7 @@ Goal: keep the verification baseline healthy as the remaining infrastructure wor
 1. finish the remaining Telegram runtime and private-source validation
 2. decide whether saved-run history now needs richer metadata/date filters before deeper Phase 4 work
 3. implement secure secret storage for LLM and Telegram credentials
-4. add request-scoped LLM concurrency and cancellation
+4. finish the remaining LLM concurrency policy work after the shipped request-scoped scheduling and cancellation baseline
 
 ### Next priority
 
@@ -302,12 +311,13 @@ Current implementation checkpoint:
 
 - reusable LLM provider profiles and configurable OpenAI-compatible `base_url` are already shipped
 - `/settings` already supports profile selection, profile creation, save-only vs save-and-activate, masked API-key editing, and provider smoke tests against the saved visible form
+- request-scoped LLM scheduling, cancellation, and `request_id`-scoped event handling are already in place for provider tests, analysis chat, and analysis reports
 - Saved Runs already use global history by default and keep queued/running work in a separate `Active Runs` panel
-- documentation was refreshed on April 28, 2026 to match the current LLM/settings behavior
+- documentation was refreshed again on April 29, 2026 to reflect the current Phase 4.3 status
 
 Recommended next step:
 
-- continue with secure secret storage if the team is staying on the Phase 4 track; otherwise finish the remaining Telegram runtime validation before more infrastructure work
+- continue with secure secret storage if the team is staying on the Phase 4 track; after that, decide whether the remaining LLM concurrency work should be limited to better limit policy/configuration or deferred behind Telegram validation
 
 ---
 
