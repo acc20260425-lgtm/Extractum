@@ -1,6 +1,7 @@
 <script lang="ts">
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { SourceRecord } from "$lib/types/sources";
 
@@ -103,7 +104,9 @@
       </Button>
     </div>
     {#if syncReason}
-      <p class="sync-reason">{syncReason}</p>
+      <StatusMessage tone="muted" size="sm" surface={false} className="sync-reason">
+        {syncReason}
+      </StatusMessage>
     {/if}
   </div>
 </li>
@@ -178,10 +181,7 @@
   }
   .sub { font-size: 0.75rem; color: var(--muted); }
   .sync-reason {
-    margin: 0;
     width: 100%;
-    font-size: 0.72rem;
-    color: var(--muted);
     line-height: 1.3;
   }
   @media (max-width: 1200px) {

@@ -10,8 +10,10 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
@@ -570,11 +572,13 @@
 <h1>Sources</h1>
 
 {#if status}
-  <p class="status" class:error={status.startsWith("Error")}>{status}</p>
+  <StatusMessage tone={status.startsWith("Error") ? "error" : "default"} className="page-status">
+    {status}
+  </StatusMessage>
 {/if}
 
 {#if syncStatus}
-  <p class="status">{syncStatus}</p>
+  <StatusMessage className="page-status">{syncStatus}</StatusMessage>
 {/if}
 
 <Card className="page-card">
@@ -638,7 +642,7 @@
     </span>
   </div>
   {#if initialSyncValidationMessage()}
-    <p class="validation-message">{initialSyncValidationMessage()}</p>
+    <StatusMessage tone="error" size="sm" surface={false}>{initialSyncValidationMessage()}</StatusMessage>
   {/if}
 </Card>
 
@@ -648,7 +652,7 @@
       <h3>Added Sources ({sources.length})</h3>
     </div>
     {#if sources.length === 0}
-      <p class="empty">No sources yet.</p>
+      <EmptyState description="No sources yet." />
     {:else}
       <ul class="source-list">
         {#each sources as src (src.id)}
@@ -750,10 +754,12 @@
         previewLimit={MESSAGES_PREVIEW_LIMIT}
       />
     {:else}
-      <div class="empty-detail">
-        <h3>No source selected</h3>
-        <p>Select a source on the left to view synced messages and run sync actions.</p>
-      </div>
+      <EmptyState
+        title="No source selected"
+        description="Select a source on the left to view synced messages and run sync actions."
+        centered={true}
+        className="detail-empty-state"
+      />
     {/if}
   </Card>
 </section>
@@ -783,12 +789,14 @@
           {addingId === "manual" ? "Adding..." : "Add"}
         </Button>
       </div>
-      <p class="empty">
+      <StatusMessage tone="muted" surface={false}>
         Supported manual refs: <code>@username</code> or <code>t.me/name</code>. For private or numeric-only sources,
         add them from <strong>My Telegram Sources</strong> below.
-      </p>
+      </StatusMessage>
       {#if !selectedAccountReady()}
-        <p class="empty">Initialize and sign in the selected account before adding sources.</p>
+        <StatusMessage tone="muted" surface={false}>
+          Initialize and sign in the selected account before adding sources.
+        </StatusMessage>
       {/if}
     </section>
 
@@ -839,9 +847,9 @@
       {/if}
 
       {#if loadingDialogs}
-        <p class="empty">Loading Telegram sources. The first load can take longer while profile pictures are fetched.</p>
+        <EmptyState description="Loading Telegram sources. The first load can take longer while profile pictures are fetched." />
       {:else if !selectedAccountReady()}
-        <p class="empty">Initialize and sign in the selected account before loading Telegram sources.</p>
+        <EmptyState description="Initialize and sign in the selected account before loading Telegram sources." />
       {:else if dialogs.length > 0 && filteredDialogs.length > 0}
         <ul class="source-list">
           {#each filteredDialogs as ch (dialogIdentity(ch))}
@@ -879,9 +887,9 @@
           {/each}
         </ul>
       {:else if dialogs.length > 0}
-        <p class="empty">No Telegram sources match the current search and filter.</p>
+        <EmptyState description="No Telegram sources match the current search and filter." />
       {:else if !loadingDialogs}
-        <p class="empty">Click "Load" to see your Telegram channels and groups.</p>
+        <EmptyState description='Click "Load" to see your Telegram channels and groups.' />
       {/if}
     </section>
   </div>
@@ -1032,11 +1040,6 @@
     color: var(--muted);
     font-size: 0.85rem;
   }
-  .validation-message {
-    margin: 0.75rem 0 0 0;
-    color: var(--status-error-text);
-    font-size: 0.85rem;
-  }
   .first-sync-note {
     margin: 0.5rem 0 0 0;
     color: var(--muted);
@@ -1115,26 +1118,12 @@
     gap: 0.4rem;
     flex-wrap: wrap;
   }
-  .empty-detail {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 18rem;
-    color: var(--muted);
-  }
-  .empty-detail h3 {
-    margin: 0 0 0.5rem 0;
-    color: var(--text);
-    font-size: 1.05rem;
-  }
-  .empty-detail p {
-    margin: 0;
+  .detail-empty-state :global(p) {
     max-width: 36rem;
-    line-height: 1.5;
   }
-  .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
-  .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
-  .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
+  .page-status {
+    margin-bottom: 1rem;
+  }
   .btn-link {
     padding: 0.6rem 1rem;
     border-radius: 6px;

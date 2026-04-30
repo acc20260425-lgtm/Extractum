@@ -1,6 +1,8 @@
 <script lang="ts">
   import Badge from "$lib/components/ui/Badge.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { ItemRecord } from "$lib/types/sources";
 
   let {
@@ -30,8 +32,7 @@
 </script>
 
 <Card as="div" {embedded}>
-  <div class="card-header">
-    <h3>Messages</h3>
+  <PanelHeader title="Messages">
     {#if loadingItems}
       <span class="subtle">Loading...</span>
     {:else if items.length > 0}
@@ -43,10 +44,10 @@
         message{items.length === 1 ? "" : "s"}
       </span>
     {/if}
-  </div>
+  </PanelHeader>
 
   {#if !loadingItems && items.length === 0}
-    <p class="empty">No synced messages yet for this source.</p>
+    <EmptyState description="No synced messages yet for this source." />
   {:else if items.length > 0}
     <ul class="message-list">
       {#each items as item (item.id)}
@@ -79,8 +80,6 @@
 </Card>
 
 <style>
-  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-  .card-header h3 { margin: 0; }
   .message-list {
     list-style: none;
     margin: 0;
@@ -123,5 +122,4 @@
     font-weight: 600;
   }
   .subtle { font-size: 0.75rem; color: var(--muted); }
-  .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
 </style>
