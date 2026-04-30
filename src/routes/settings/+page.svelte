@@ -5,6 +5,7 @@
   import { formatAppError } from "$lib/app-error";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import MetaPill from "$lib/components/ui/MetaPill.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
 
@@ -511,11 +512,11 @@
   </div>
 
   <div class="profile-strip">
-    <span class="summary-chip">
+    <MetaPill>
       {creatingProfile ? "Creating new profile" : `Editing ${selectedProfileId}`}
-    </span>
+    </MetaPill>
     {#if !creatingProfile && selectedProfileId === activeProfile}
-      <span class="summary-chip active-chip">Used by default in analysis</span>
+      <MetaPill tone="active">Used by default in analysis</MetaPill>
     {/if}
   </div>
 
@@ -630,10 +631,10 @@
     </div>
     <div class="summary-meta">
       {#if provider || defaultModel}
-        <span class="summary-chip">{providerModelLine()}</span>
+        <MetaPill>{providerModelLine()}</MetaPill>
       {/if}
       {#if testUsage}
-        <span class="summary-chip">{usageLine(testUsage)}</span>
+        <MetaPill>{usageLine(testUsage)}</MetaPill>
       {/if}
       {#if testing}
         <button class="danger-soft" onclick={cancelTest}>Cancel test</button>
@@ -693,7 +694,7 @@
         <button class="danger-soft" type="button" onclick={cancelTest}>Cancel</button>
       {/if}
       {#if provider || defaultModel}
-        <span class="dialog-meta">{providerModelLine()}</span>
+        <MetaPill>{providerModelLine()}</MetaPill>
       {/if}
     </div>
 
@@ -859,19 +860,6 @@
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
-  }
-
-  .summary-chip,
-  .dialog-meta {
-    color: var(--muted);
-    font-size: 0.82rem;
-    padding: 0.25rem 0.55rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--panel-hover) 80%, transparent);
-  }
-
-  .active-chip {
-    color: var(--text);
   }
 
   .danger-soft {
