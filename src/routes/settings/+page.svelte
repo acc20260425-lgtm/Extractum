@@ -4,9 +4,14 @@
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import MetaPill from "$lib/components/ui/MetaPill.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
 
   interface LlmProfile {
@@ -265,6 +270,11 @@
     }
   }
 
+  function onSelectedProfileChange(event: Event) {
+    selectedProfileId = (event.currentTarget as HTMLSelectElement).value;
+    handleProfileSelectionChange();
+  }
+
   function handleProviderChange() {
     clearModelCatalog();
 
@@ -282,6 +292,11 @@
     if (defaultModel.startsWith("gemini-")) {
       defaultModel = "";
     }
+  }
+
+  function onProviderChange(event: Event) {
+    provider = (event.currentTarget as HTMLSelectElement).value;
+    handleProviderChange();
   }
 
   function formatTokenLimit(value: number | null) {
@@ -486,7 +501,7 @@
   </StatusMessage>
 {/if}
 
-<div class="card">
+<Card className="settings-card">
   <h3>LLM Profiles</h3>
   <p class="hint">
     Manage reusable provider profiles for analysis and chat flows. The active profile is used by
@@ -496,18 +511,18 @@
 
   <div class="grid">
     <label>Saved profile
-      <select bind:value={selectedProfileId} onchange={handleProfileSelectionChange}>
+      <Select value={selectedProfileId} onchange={onSelectedProfileChange}>
         {#each profiles as profile (profile.profile_id)}
           <option value={profile.profile_id}>
             {profile.profile_id} - {providerLabel(profile.provider)}
           </option>
         {/each}
         <option value={NEW_PROFILE_OPTION}>Create new profile...</option>
-      </select>
+      </Select>
     </label>
 
     <label>Active profile
-      <input type="text" bind:value={activeProfile} disabled />
+      <Input type="text" value={activeProfile} disabled />
     </label>
   </div>
 
@@ -522,43 +537,58 @@
 
   <div class="grid">
     <label>Profile ID
-      <input
+      <Input
         type="text"
-        bind:value={draftProfileId}
+        value={draftProfileId}
         placeholder="default"
         disabled={!creatingProfile}
         spellcheck={false}
+        oninput={(event) => (draftProfileId = (event.currentTarget as HTMLInputElement).value)}
       />
       <span class="field-hint">Stored in lowercase and used in analysis run metadata.</span>
     </label>
 
     <label>Provider
-      <select bind:value={provider} onchange={handleProviderChange}>
+      <Select value={provider} onchange={onProviderChange}>
         {#each providerOptions as option (option.value)}
           <option value={option.value}>{option.label}</option>
         {/each}
-      </select>
+      </Select>
     </label>
   </div>
 
   <label>Default model
     {#if availableModels.length > 0}
-      <select bind:value={defaultModel}>
+      <Select
+        value={defaultModel}
+        onchange={(event) => (defaultModel = (event.currentTarget as HTMLSelectElement).value)}
+      >
         {#if !availableModels.some((model) => model.model === defaultModel)}
           <option value={defaultModel}>{defaultModel}</option>
         {/if}
         {#each availableModels as model (model.model)}
           <option value={model.model}>{model.display_name} - {model.model}</option>
         {/each}
-      </select>
+      </Select>
     {:else}
-      <input type="text" bind:value={defaultModel} placeholder={providerPlaceholder()} />
+      <Input
+        type="text"
+        value={defaultModel}
+        placeholder={providerPlaceholder()}
+        oninput={(event) => (defaultModel = (event.currentTarget as HTMLInputElement).value)}
+      />
     {/if}
   </label>
 
   {#if providerSupportsBaseUrl()}
     <label>Base URL
-      <input type="url" bind:value={baseUrl} placeholder={providerBaseUrlPlaceholder()} spellcheck={false} />
+      <Input
+        type="url"
+        value={baseUrl}
+        placeholder={providerBaseUrlPlaceholder()}
+        spellcheck={false}
+        oninput={(event) => (baseUrl = (event.currentTarget as HTMLInputElement).value)}
+      />
       <span class="field-hint">
         Use this for OmniRoute or any other OpenAI-compatible endpoint exposed through the same
         backend path.
@@ -567,19 +597,29 @@
   {/if}
 
   <label>API key
-    <input type="password" bind:value={apiKey} placeholder={apiKeyPlaceholder()} autocomplete="off" />
+    <Input
+      type="password"
+      value={apiKey}
+      placeholder={apiKeyPlaceholder()}
+      autocomplete="off"
+      oninput={(event) => (apiKey = (event.currentTarget as HTMLInputElement).value)}
+    />
   </label>
 
   <div class="actions">
-    <button onclick={() => saveProfile(true)} disabled={saving || !canSaveProfile()}>
+    <Button onclick={() => saveProfile(true)} disabled={saving || !canSaveProfile()}>
       {saving ? "Saving..." : "Save and set active"}
-    </button>
-    <button class="secondary" onclick={() => saveProfile(false)} disabled={saving || !canSaveProfile()}>
+    </Button>
+    <Button variant="secondary" onclick={() => saveProfile(false)} disabled={saving || !canSaveProfile()}>
       Save only
-    </button>
-    <button class="secondary" onclick={() => loadProviderModels()} disabled={loadingModels || !apiKey.trim()}>
+    </Button>
+    <Button
+      variant="secondary"
+      onclick={() => loadProviderModels()}
+      disabled={loadingModels || !apiKey.trim()}
+    >
       {loadingModels ? "Loading models..." : "Refresh models"}
-    </button>
+    </Button>
   </div>
 
   {#if modelsStatus}
@@ -594,8 +634,10 @@
   {#if availableModels.length > 0}
     <div class="model-list">
       {#each availableModels as model (model.model)}
-        <button
-          class:active={model.model === defaultModel}
+        <Button
+          variant="secondary"
+          selected={model.model === defaultModel}
+          className="catalog-option"
           type="button"
           onclick={() => (defaultModel = model.model)}
           title={model.description}
@@ -612,19 +654,19 @@
               {/if}
             </span>
           {/if}
-        </button>
+        </Button>
       {/each}
     </div>
   {/if}
-</div>
+</Card>
 
-<div class="card">
+<Card className="settings-card">
   <h3>Test Provider</h3>
   <p class="hint">
     Run a smoke test with the profile currently open in this form. The test always saves the form
     first, then uses that saved provider, model, key, and base URL.
   </p>
-  <div class="test-summary">
+  <SurfaceCard className="summary-strip">
     <div class="summary-copy">
       <span class="summary-label">Prompt draft</span>
       <p>{testPrompt}</p>
@@ -637,13 +679,13 @@
         <MetaPill>{usageLine(testUsage)}</MetaPill>
       {/if}
       {#if testing}
-        <button class="danger-soft" onclick={cancelTest}>Cancel test</button>
+        <Button variant="danger-soft" onclick={cancelTest}>Cancel test</Button>
       {/if}
-      <button class="secondary" onclick={openTestDialog}>
+      <Button variant="secondary" onclick={openTestDialog}>
         {testOutput || testing ? "Open test console" : "Open test"}
-      </button>
+      </Button>
     </div>
-  </div>
+  </SurfaceCard>
 
   {#if testStatus}
     <StatusMessage
@@ -653,20 +695,14 @@
     </StatusMessage>
   {/if}
 
-  <div class="output-card compact">
-    <div class="output-header">
-      <span class="output-label">Latest response</span>
-      {#if testing}
-        <span class="output-meta">streaming...</span>
-      {/if}
-    </div>
+  <SurfaceCard title="Latest response" meta={testing ? "streaming..." : ""} compact className="output-surface">
     {#if testOutput}
       <pre>{testOutput}</pre>
     {:else}
       <EmptyState description="No output yet. Open the test console to run a prompt." />
     {/if}
-  </div>
-</div>
+  </SurfaceCard>
+</Card>
 
 <DesktopDialog
   open={testDialogOpen}
@@ -687,40 +723,33 @@
     </label>
 
     <div class="actions modal-actions">
-      <button onclick={runTest} disabled={testing || !testPrompt.trim() || !canSaveProfile()}>
+      <Button onclick={runTest} disabled={testing || !testPrompt.trim() || !canSaveProfile()}>
         {testing ? "Streaming..." : "Run test"}
-      </button>
+      </Button>
       {#if testing}
-        <button class="danger-soft" type="button" onclick={cancelTest}>Cancel</button>
+        <Button variant="danger-soft" type="button" onclick={cancelTest}>Cancel</Button>
       {/if}
       {#if provider || defaultModel}
         <MetaPill>{providerModelLine()}</MetaPill>
       {/if}
     </div>
 
-    <div class="output-card">
-      <div class="output-header">
-        <span class="output-label">Streaming output</span>
-        {#if testUsage}
-          <span class="output-meta">{usageLine(testUsage)}</span>
-        {/if}
-      </div>
+    <SurfaceCard
+      title="Streaming output"
+      meta={testUsage ? usageLine(testUsage) : ""}
+      className="output-surface"
+    >
       {#if testOutput}
         <pre>{testOutput}</pre>
       {:else}
         <EmptyState description="No output yet." />
       {/if}
-    </div>
+    </SurfaceCard>
   </div>
 </DesktopDialog>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
+  :global(.ui-card.settings-card) {
     margin-bottom: 1.5rem;
     display: flex;
     flex-direction: column;
@@ -739,24 +768,6 @@
     gap: 0.35rem;
     font-size: 0.9rem;
     color: var(--muted);
-  }
-
-  input,
-  select {
-    width: 100%;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.8rem;
-    border-radius: 8px;
-    font: inherit;
-  }
-
-  input:focus,
-  select:focus {
-    border-color: var(--primary);
-    outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
   .field-hint {
@@ -787,24 +798,17 @@
     padding: 0.15rem;
   }
 
-  .model-list button {
+  :global(.ui-button.catalog-option) {
     align-items: flex-start;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
     display: flex;
     flex-direction: column;
     gap: 0.28rem;
+    height: 100%;
+    justify-content: flex-start;
     min-height: 6.5rem;
     padding: 0.85rem;
     text-align: left;
-  }
-
-  .model-list button:hover,
-  .model-list button.active {
-    border-color: var(--primary);
-    background: var(--panel-hover);
+    white-space: normal;
   }
 
   .model-name {
@@ -821,15 +825,12 @@
     overflow-wrap: anywhere;
   }
 
-  .test-summary {
+  :global(.ui-surface-card.summary-strip) {
     display: flex;
+    flex-direction: row;
     justify-content: space-between;
     gap: 1rem;
     align-items: flex-start;
-    padding: 0.95rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--panel-strong);
   }
 
   .summary-copy {
@@ -862,16 +863,6 @@
     flex-wrap: wrap;
   }
 
-  .danger-soft {
-    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
-    color: var(--danger);
-    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
-  }
-
-  .danger-soft:hover {
-    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
-  }
-
   .hint {
     margin: 0;
     color: var(--muted);
@@ -887,38 +878,8 @@
     margin-bottom: 0;
   }
 
-  .output-card {
-    border: 1px solid var(--border);
-    background: var(--panel-strong);
-    border-radius: 10px;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+  :global(.ui-surface-card.output-surface) {
     min-height: 14rem;
-  }
-
-  .output-card.compact {
-    min-height: 10rem;
-  }
-
-  .output-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .output-label {
-    font-size: 0.95rem;
-    font-weight: 600;
-  }
-
-  .output-meta {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
   }
 
   pre {
@@ -945,7 +906,7 @@
       grid-template-columns: 1fr;
     }
 
-    .test-summary,
+    :global(.ui-surface-card.summary-strip),
     .modal-actions {
       flex-direction: column;
       align-items: stretch;

@@ -5,6 +5,8 @@
     placeholder,
     disabled = false,
     readonly = false,
+    autocomplete,
+    spellcheck,
     min,
     max,
     step,
@@ -19,6 +21,8 @@
     placeholder?: string;
     disabled?: boolean;
     readonly?: boolean;
+    autocomplete?: string;
+    spellcheck?: boolean;
     min?: number | string;
     max?: number | string;
     step?: number | string;
@@ -36,6 +40,8 @@
   {placeholder}
   {disabled}
   {readonly}
+  {autocomplete}
+  {spellcheck}
   {min}
   {max}
   {step}
