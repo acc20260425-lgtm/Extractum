@@ -7,6 +7,11 @@
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import SourceRow from "$lib/components/source-row.svelte";
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
@@ -440,6 +445,15 @@
     return accounts.find((account) => account.id === id)?.label ?? `#${id}`;
   }
 
+  function accountSelectValue() {
+    return selectedAccountId === null ? "all" : String(selectedAccountId);
+  }
+
+  function onSelectedAccountChange(event: Event) {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    selectedAccountId = value === "all" ? null : parseInt(value, 10);
+  }
+
   function formatDate(timestamp: number) {
     return new Date(timestamp * 1000).toLocaleString();
   }
@@ -563,26 +577,26 @@
   <p class="status">{syncStatus}</p>
 {/if}
 
-<div class="card">
+<Card className="page-card">
   <h3>Account</h3>
   <div class="row">
-    <select bind:value={selectedAccountId}>
-      <option value={null}>All accounts</option>
+    <Select value={accountSelectValue()} onchange={onSelectedAccountChange}>
+      <option value="all">All accounts</option>
       {#each accounts as acc (acc.id)}
         <option value={acc.id}>{acc.label}{acc.phone ? ` (${acc.phone})` : " (not signed in)"}</option>
       {/each}
-    </select>
+    </Select>
     {#if accounts.length === 0}
       <a href="/accounts" class="btn-link">Add account</a>
     {:else if selectedAccountId !== null}
-      <button class="secondary" onclick={openAddSourceDialog}>
+      <Button variant="secondary" onclick={openAddSourceDialog}>
         Add source
-      </button>
+      </Button>
     {/if}
   </div>
-</div>
+</Card>
 
-<div class="card">
+<Card className="page-card">
   <div class="card-header">
     <h3>Initial Sync Policy</h3>
   </div>
@@ -592,28 +606,33 @@
   </p>
   <div class="policy-grid">
     <label>Mode
-      <select bind:value={initialSyncMode} disabled={loadingSyncSettings || savingSyncSettings}>
+      <Select
+        value={initialSyncMode}
+        disabled={loadingSyncSettings || savingSyncSettings}
+        onchange={(event) => (initialSyncMode = (event.currentTarget as HTMLSelectElement).value as SyncSettingsRecord["initial_sync_mode"])}
+      >
         <option value="recent_messages">Recent messages</option>
         <option value="recent_days">Recent days</option>
-      </select>
+      </Select>
     </label>
     <label>Value
-      <input
+      <Input
         type="number"
         min={initialSyncMode === "recent_days" ? 1 : 50}
         max={initialSyncMode === "recent_days" ? 365 : 5000}
-        bind:value={initialSyncValue}
+        value={initialSyncValue}
         disabled={loadingSyncSettings || savingSyncSettings}
+        oninput={(event) => (initialSyncValue = (event.currentTarget as HTMLInputElement).value)}
       />
     </label>
   </div>
   <div class="row policy-actions">
-    <button
+    <Button
       onclick={saveSyncSettings}
       disabled={loadingSyncSettings || savingSyncSettings || !!initialSyncValidationMessage()}
     >
       {savingSyncSettings ? "Saving..." : "Save policy"}
-    </button>
+    </Button>
     <span class="policy-summary">
       Current first sync window: {initialSyncPolicySummary()}
     </span>
@@ -621,10 +640,10 @@
   {#if initialSyncValidationMessage()}
     <p class="validation-message">{initialSyncValidationMessage()}</p>
   {/if}
-</div>
+</Card>
 
 <section class="workspace">
-  <div class="card pane pane-list">
+  <Card className="page-card pane pane-list">
     <div class="card-header">
       <h3>Added Sources ({sources.length})</h3>
     </div>
@@ -651,9 +670,9 @@
         {/each}
       </ul>
     {/if}
-  </div>
+  </Card>
 
-  <div class="card pane pane-content">
+  <Card className="page-card pane pane-content">
     {#if selectedSource()}
       {@const currentSource = selectedSource()!}
       {@const currentSyncReason = syncDisabledReason(currentSource)}
@@ -679,47 +698,48 @@
           </div>
         </div>
         <div class="detail-actions">
-          <span class="badge">{sourceKindLabel(currentSource.telegram_source_kind)}</span>
+          <Badge>{sourceKindLabel(currentSource.telegram_source_kind)}</Badge>
           {#if currentSource.last_synced_at !== null}
-            <span class="badge">synced {formatDate(currentSource.last_synced_at)}</span>
+            <Badge>synced {formatDate(currentSource.last_synced_at)}</Badge>
           {/if}
           {#if currentSource.account_id !== null}
             {@const runtimeBadgeLabel = runtimeBadge(currentRuntimeStatus)}
             {#if runtimeBadgeLabel}
-              <span
-                class="badge warning"
+              <Badge
+                variant="warning"
                 title={currentRuntimeStatus?.status === "restore_failed" && currentRuntimeStatus.message
                   ? currentRuntimeStatus.message
                   : undefined}
               >
                 {runtimeBadgeLabel}
-              </span>
+              </Badge>
             {/if}
           {/if}
           {#if currentSource.is_member}
-            <span class="badge member">
+            <Badge variant="member">
               {membershipLabel(currentSource.telegram_source_kind, currentSource.is_member)}
-            </span>
+            </Badge>
           {:else}
-            <span class="badge">
+            <Badge>
               {membershipLabel(currentSource.telegram_source_kind, currentSource.is_member)}
-            </span>
+            </Badge>
           {/if}
-          <button
-            class="small"
+          <Button
+            size="sm"
             onclick={() => syncSource(currentSource.id)}
             disabled={!!syncingIds[currentSource.id] || !!deletingIds[currentSource.id] || currentSyncReason !== null}
             title={currentSyncReason ?? undefined}
           >
             {syncingIds[currentSource.id] ? "Syncing..." : "Sync"}
-          </button>
-          <button
-            class="small danger secondary"
+          </Button>
+          <Button
+            size="sm"
+            variant="danger-soft"
             onclick={() => deleteSource(currentSource.id)}
             disabled={!!deletingIds[currentSource.id] || !!syncingIds[currentSource.id]}
           >
             {deletingIds[currentSource.id] ? "Deleting..." : "Delete"}
-          </button>
+          </Button>
         </div>
       </div>
       <SourceMessagesPanel
@@ -735,7 +755,7 @@
         <p>Select a source on the left to view synced messages and run sync actions.</p>
       </div>
     {/if}
-  </div>
+  </Card>
 </section>
 
 <DesktopDialog
@@ -752,15 +772,16 @@
         <h4>Add Public Source by Username or Link</h4>
       </div>
       <div class="row">
-        <input
+        <Input
           type="text"
-          bind:value={manualRef}
+          value={manualRef}
           placeholder="@username or https://t.me/name"
-          onkeydown={(e) => e.key === "Enter" && addManual()}
+          oninput={(event) => (manualRef = (event.currentTarget as HTMLInputElement).value)}
+          onkeydown={(event) => event.key === "Enter" && addManual()}
         />
-        <button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim() || !selectedAccountReady()}>
+        <Button onclick={addManual} disabled={addingId === "manual" || !manualRef.trim() || !selectedAccountReady()}>
           {addingId === "manual" ? "Adding..." : "Add"}
-        </button>
+        </Button>
       </div>
       <p class="empty">
         Supported manual refs: <code>@username</code> or <code>t.me/name</code>. For private or numeric-only sources,
@@ -778,32 +799,40 @@
           {#if dialogs.length > 0}
             <span class="counter">Showing {filteredDialogs.length} of {dialogs.length}</span>
           {/if}
-          <button class="secondary small" onclick={loadDialogs} disabled={loadingDialogs || !selectedAccountReady()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onclick={loadDialogs}
+            disabled={loadingDialogs || !selectedAccountReady()}
+          >
             {loadingDialogs ? "Loading..." : dialogs.length ? "Refresh" : "Load"}
-          </button>
+          </Button>
         </div>
       </div>
 
       {#if dialogs.length > 0}
         <div class="dialog-tools">
-          <input
+          <Input
             type="search"
-            bind:value={dialogSearch}
+            value={dialogSearch}
             placeholder="Search title or username"
-            aria-label="Search Telegram sources"
+            oninput={(event) => (dialogSearch = (event.currentTarget as HTMLInputElement).value)}
           />
           <div class="filter-group" aria-label="Filter Telegram sources by kind">
             {#each DIALOG_KIND_FILTERS as filter (filter.value)}
-              <button
+              <Button
                 type="button"
-                class="small secondary"
-                class:active-filter={dialogKindFilter === filter.value}
-                aria-pressed={dialogKindFilter === filter.value}
-                onclick={() => (dialogKindFilter = filter.value)}
+                variant="secondary"
+                size="sm"
+                selected={dialogKindFilter === filter.value}
+                className="filter-button"
+                onclick={() => {
+                  dialogKindFilter = filter.value;
+                }}
               >
                 {filter.label}
                 <span>{dialogKindCount(filter.value)}</span>
-              </button>
+              </Button>
             {/each}
           </div>
         </div>
@@ -830,16 +859,20 @@
                 {#if ch.username}<span class="sub">@{ch.username}</span>{/if}
               </div>
               <div class="channel-actions">
-                <span class="badge">{sourceKindLabel(ch.telegram_source_kind)}</span>
+                <Badge>{sourceKindLabel(ch.telegram_source_kind)}</Badge>
                 {#if !ch.is_member}
-                  <span class="badge">{membershipLabel(ch.telegram_source_kind, ch.is_member)}</span>
+                  <Badge>{membershipLabel(ch.telegram_source_kind, ch.is_member)}</Badge>
                 {/if}
                 {#if added}
-                  <span class="badge active">added</span>
+                  <Badge variant="info">added</Badge>
                 {:else}
-                  <button class="small" onclick={() => addFromDialog(ch)} disabled={addingId === dialogIdentity(ch)}>
+                  <Button
+                    size="sm"
+                    onclick={() => addFromDialog(ch)}
+                    disabled={addingId === dialogIdentity(ch)}
+                  >
                     {addingId === dialogIdentity(ch) ? "..." : "Add"}
-                  </button>
+                  </Button>
                 {/if}
               </div>
             </li>
@@ -855,12 +888,7 @@
 </DesktopDialog>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
+  .page-card {
     margin-bottom: 1.5rem;
   }
   .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -930,7 +958,10 @@
     min-width: 0;
   }
   .row { display: flex; gap: 0.5rem; align-items: center; }
-  .row input { flex: 1; }
+  .row :global(.ui-input),
+  .row :global(.ui-select) {
+    flex: 1;
+  }
   .add-source-dialog {
     display: flex;
     flex-direction: column;
@@ -973,7 +1004,7 @@
     gap: 0.75rem;
     align-items: center;
   }
-  .dialog-tools input {
+  .dialog-tools :global(.ui-input) {
     min-width: 0;
   }
   .filter-group {
@@ -983,19 +1014,9 @@
     gap: 0.35rem;
     flex-wrap: wrap;
   }
-  .filter-group button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-  }
-  .filter-group button span {
+  .filter-group :global(.ui-button.filter-button span) {
     color: var(--muted);
     font-size: 0.72rem;
-  }
-  .filter-group button.active-filter {
-    border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
-    background: color-mix(in srgb, var(--primary) 12%, var(--panel-hover));
-    color: var(--primary);
   }
   .policy-grid {
     display: grid;
@@ -1015,12 +1036,6 @@
     margin: 0.75rem 0 0 0;
     color: var(--status-error-text);
     font-size: 0.85rem;
-  }
-  select {
-    flex: 1;
-    padding: 0.6rem 0.8rem;
-    border-radius: 6px;
-    font-size: 0.95rem;
   }
   .first-sync-note {
     margin: 0.5rem 0 0 0;
@@ -1100,24 +1115,6 @@
     gap: 0.4rem;
     flex-wrap: wrap;
   }
-  .badge {
-    font-size: 0.7rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    background: var(--panel-hover);
-    color: var(--muted);
-    max-width: 100%;
-    white-space: normal;
-    line-height: 1.2;
-  }
-  .badge.member {
-    background: color-mix(in srgb, #22c55e 18%, var(--panel));
-    color: #15803d;
-  }
-  .badge.warning {
-    background: color-mix(in srgb, #f59e0b 22%, var(--panel));
-    color: #b45309;
-  }
   .empty-detail {
     display: flex;
     flex-direction: column;
@@ -1138,7 +1135,6 @@
   .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
   .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
   .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
-  button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
   .btn-link {
     padding: 0.6rem 1rem;
     border-radius: 6px;
@@ -1150,14 +1146,6 @@
     white-space: nowrap;
   }
   .btn-link:hover { background: var(--primary-hover); }
-  button.danger.secondary {
-    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
-    background: color-mix(in srgb, var(--danger) 12%, var(--panel));
-    color: var(--danger);
-  }
-  button.danger.secondary:hover {
-    background: color-mix(in srgb, var(--danger) 18%, var(--panel-hover));
-  }
   @media (max-width: 1180px) {
     .workspace {
       grid-template-columns: 1fr;
