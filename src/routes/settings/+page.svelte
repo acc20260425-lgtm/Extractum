@@ -4,6 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
+  import Textarea from "$lib/components/ui/Textarea.svelte";
 
   interface LlmProfile {
     profile_id: string;
@@ -665,7 +666,12 @@
 >
   <div class="test-dialog">
     <label>Prompt
-      <textarea bind:value={testPrompt} rows="8" placeholder={`Ask ${providerLabel()} something simple...`}></textarea>
+      <Textarea
+        value={testPrompt}
+        rows="8"
+        placeholder={`Ask ${providerLabel()} something simple...`}
+        oninput={(event) => (testPrompt = (event.currentTarget as HTMLTextAreaElement).value)}
+      />
     </label>
 
     <div class="actions modal-actions">
@@ -724,7 +730,6 @@
   }
 
   input,
-  textarea,
   select {
     width: 100%;
     background: var(--panel-strong);
@@ -735,13 +740,7 @@
     font: inherit;
   }
 
-  textarea {
-    resize: vertical;
-    min-height: 8rem;
-  }
-
   input:focus,
-  textarea:focus,
   select:focus {
     border-color: var(--primary);
     outline: none;
