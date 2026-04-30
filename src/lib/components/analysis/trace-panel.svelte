@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
+  import type { BadgeVariant } from "$lib/components/ui/types";
   import type { AnalysisTraceRef } from "$lib/types/analysis";
 
   let {
@@ -22,21 +25,26 @@
     if (origin === "resolved") return "Resolved from chat";
     return "Trace ref";
   }
+
+  function originVariant(origin: string): BadgeVariant {
+    if (origin === "saved") return "info";
+    if (origin === "resolved") return "success";
+    return "neutral";
+  }
 </script>
 
 <aside class="trace-panel">
-  <div class="trace-header">
-    <h4>Traceability</h4>
+  <PanelHeader title="Traceability" level="h4">
     {#if traceRefs.length > 0}
       <span class="trace-count">{traceRefs.length} refs</span>
     {/if}
-  </div>
+  </PanelHeader>
 
   {#if traceRefs.length === 0}
     <p class="empty">No saved trace data yet.</p>
   {:else}
     <div class="trace-list">
-      {#each traceRefs as ref}
+      {#each traceRefs as ref (ref.ref)}
         <button
           class="trace-link"
           class:selected={ref.ref === selectedTraceRef}
@@ -45,9 +53,9 @@
         >
           <div class="trace-link-top">
             <strong>{ref.ref}</strong>
-            <span class={`trace-origin trace-origin-${traceRefOrigin(ref.ref)}`}>
+            <Badge variant={originVariant(traceRefOrigin(ref.ref))}>
               {originLabel(traceRefOrigin(ref.ref))}
-            </span>
+            </Badge>
           </div>
           <span>{formatTimestamp(ref.published_at)}</span>
         </button>
@@ -78,18 +86,6 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     min-height: 22rem;
-  }
-
-  .trace-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .trace-header h4 {
-    margin: 0;
   }
 
   .trace-count,
@@ -126,28 +122,6 @@
     gap: 0.6rem;
     width: 100%;
     flex-wrap: wrap;
-  }
-
-  .trace-origin {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.45rem;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    letter-spacing: 0.02em;
-    border: 1px solid transparent;
-  }
-
-  .trace-origin-saved {
-    background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-    color: var(--primary);
-    border-color: color-mix(in srgb, var(--primary) 22%, transparent);
-  }
-
-  .trace-origin-resolved {
-    background: color-mix(in srgb, #1f8f5f 12%, var(--panel));
-    color: #1f8f5f;
-    border-color: color-mix(in srgb, #1f8f5f 22%, transparent);
   }
 
   .trace-link:hover,
