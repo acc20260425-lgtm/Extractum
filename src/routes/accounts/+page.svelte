@@ -3,8 +3,10 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
+  import Badge from "$lib/components/ui/Badge.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import type { BadgeVariant } from "$lib/components/ui/types";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
@@ -60,6 +62,14 @@
     if (runtime.status === "reauth_required") return "sign in required";
     if (runtime.status === "restore_failed") return "restore failed";
     return "account not connected";
+  }
+
+  function runtimeBadgeVariant(runtime: AccountRuntimeStatus | null): BadgeVariant {
+    if (!runtime) return "neutral";
+    if (runtime.status === "ready") return "success";
+    if (runtime.status === "restoring" || runtime.status === "reauth_required") return "warning";
+    if (runtime.status === "restore_failed") return "danger";
+    return "neutral";
   }
 
   function authActionLabel(account: AccountRecord) {
@@ -161,15 +171,12 @@
             <span class="label">{acc.label}</span>
             <div class="meta-row">
               <span class="sub">{acc.phone ?? "not signed in"} · API ID: {acc.api_id}</span>
-              <span
-                class="badge"
-                class:ready={runtime?.status === "ready"}
-                class:warning={runtime?.status === "restoring" || runtime?.status === "reauth_required"}
-                class:error={runtime?.status === "restore_failed"}
+              <Badge
+                variant={runtimeBadgeVariant(runtime)}
                 title={runtime?.status === "restore_failed" && runtime.message ? runtime.message : undefined}
               >
                 {runtimeBadge(runtime)}
-              </span>
+              </Badge>
             </div>
           </div>
           <div class="actions">
@@ -228,26 +235,6 @@
   .sub { font-size: 0.8rem; color: var(--muted); }
   .meta-row { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
   .actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
-  .badge {
-    font-size: 0.72rem;
-    padding: 0.15rem 0.45rem;
-    border-radius: 999px;
-    background: var(--panel-hover);
-    color: var(--muted);
-    line-height: 1.2;
-  }
-  .badge.ready {
-    background: color-mix(in srgb, #22c55e 18%, var(--panel));
-    color: #15803d;
-  }
-  .badge.warning {
-    background: color-mix(in srgb, #f59e0b 22%, var(--panel));
-    color: #b45309;
-  }
-  .badge.error {
-    background: color-mix(in srgb, #ef4444 16%, var(--panel));
-    color: #b91c1c;
-  }
   .btn-link {
     font-size: 0.8rem;
     padding: 0.3rem 0.7rem;
