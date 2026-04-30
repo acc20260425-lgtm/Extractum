@@ -904,11 +904,11 @@
     margin-bottom: 0;
     min-height: 18rem;
   }
-  .pane-list {
+  :global(.pane-list) {
     position: sticky;
     top: 1rem;
   }
-  .pane-content {
+  :global(.pane-content) {
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -1153,7 +1153,7 @@
     .policy-grid {
       grid-template-columns: 1fr;
     }
-    .pane-list {
+    :global(.pane-list) {
       position: static;
     }
     .detail-header {
