@@ -4,7 +4,13 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { formatAppError } from "$lib/app-error";
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
   import type { AccountRecord } from "$lib/types/accounts";
 
   const accountId = parseInt(page.params.id ?? "", 10);
@@ -85,7 +91,6 @@
     status = "";
     try {
       await invoke("tg_sign_in", { accountId, code });
-      // Save phone to DB
       await invoke("set_account_phone", { accountId, phone });
       step = "done";
       status = "Signed in successfully.";
@@ -117,7 +122,7 @@
 </script>
 
 <div class="back-row">
-  <a href="/accounts">&larr; Accounts</a>
+  <Button variant="ghost" size="sm" onclick={() => goto("/accounts")}>&larr; Accounts</Button>
 </div>
 
 <h1>{label || "Account"}</h1>
@@ -129,76 +134,137 @@
 {/if}
 
 {#if step === "connecting"}
-  <div class="card">
-    <p class="hint">Connecting to Telegram...</p>
-  </div>
+  <Card className="page-card">
+    <EmptyState description="Connecting to Telegram..." />
+  </Card>
 {/if}
 
 {#if step === "phone"}
-  <div class="card">
+  <Card className="page-card">
     <h3>Sign In</h3>
-    <p class="hint">API ID: {apiId}</p>
+    <SurfaceCard className="auth-summary">
+      <div class="summary-row">
+        <span class="hint">API ID: {apiId}</span>
+        <Badge variant="neutral">{label || "Account"}</Badge>
+      </div>
+    </SurfaceCard>
     <label>Phone number
-      <input type="tel" bind:value={phone} placeholder="+79991234567" />
+      <Input
+        type="tel"
+        value={phone}
+        placeholder="+79991234567"
+        oninput={(event) => (phone = (event.currentTarget as HTMLInputElement).value)}
+      />
     </label>
-    <button onclick={sendCode} disabled={loading || !phone}>
-      {loading ? "Sending..." : "Send Code"}
-    </button>
-  </div>
+    <div class="action-row">
+      <Button onclick={sendCode} disabled={loading || !phone}>
+        {loading ? "Sending..." : "Send Code"}
+      </Button>
+    </div>
+  </Card>
 {/if}
 
 {#if step === "code"}
-  <div class="card">
+  <Card className="page-card">
     <h3>Verification Code</h3>
-    <p class="hint">Check your Telegram app for the code.</p>
+    <SurfaceCard className="auth-summary">
+      <div class="summary-row">
+        <span class="hint">Check your Telegram app for the code.</span>
+        <Badge variant="warning">Verification pending</Badge>
+      </div>
+    </SurfaceCard>
     <label>Code
-      <input type="text" bind:value={code} placeholder="12345" />
+      <Input
+        type="text"
+        value={code}
+        placeholder="12345"
+        oninput={(event) => (code = (event.currentTarget as HTMLInputElement).value)}
+      />
     </label>
-    <button onclick={signIn} disabled={loading || !code}>
-      {loading ? "Signing in..." : "Sign In"}
-    </button>
-    <button class="secondary" onclick={() => (step = "phone")}>Back</button>
-  </div>
+    <div class="action-row">
+      <Button onclick={signIn} disabled={loading || !code}>
+        {loading ? "Signing in..." : "Sign In"}
+      </Button>
+      <Button variant="secondary" onclick={() => (step = "phone")}>Back</Button>
+    </div>
+  </Card>
 {/if}
 
 {#if step === "done"}
-  <div class="card">
-    <h3>&#10003; Authenticated</h3>
-    <p class="hint">Phone: {phone}</p>
-    <div class="row">
-      <a href="/sources?account={accountId}" class="btn-link">View Sources</a>
-      <button class="danger" onclick={logout} disabled={loading}>Logout</button>
+  <Card className="page-card">
+    <h3>Authenticated</h3>
+    <SurfaceCard className="auth-summary">
+      <div class="summary-stack">
+        <div class="summary-row">
+          <span class="hint">Phone: {phone}</span>
+          <Badge variant="success">Ready</Badge>
+        </div>
+        <StatusMessage tone="default" size="sm" surface={false}>
+          This account is authenticated and ready to load Telegram sources.
+        </StatusMessage>
+      </div>
+    </SurfaceCard>
+    <div class="action-row">
+      <Button onclick={() => goto(`/sources?account=${accountId}`)}>View Sources</Button>
+      <Button variant="danger-soft" onclick={logout} disabled={loading}>Logout</Button>
     </div>
-  </div>
+  </Card>
 {/if}
 
 <style>
-  .back-row { margin-bottom: 1rem; }
-  .back-row a { color: var(--muted); font-size: 0.9rem; text-decoration: none; }
-  .back-row a:hover { color: var(--text); }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
+  .back-row {
+    margin-bottom: 1rem;
+  }
+
+  :global(.ui-card.page-card) {
     margin-bottom: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
-  label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
-  .hint { font-size: 0.85rem; color: var(--muted); margin: 0; }
-  .row { display: flex; gap: 0.5rem; align-items: center; }
-  .btn-link {
-    padding: 0.6rem 1rem;
-    border-radius: 6px;
-    background: var(--primary);
-    color: white;
-    text-decoration: none;
-    font-size: 0.95rem;
-    font-weight: 600;
+
+  :global(.ui-surface-card.auth-summary) {
+    padding: 0.85rem 1rem;
   }
-  .btn-link:hover { background: var(--primary-hover); }
-  :global(.page-status) { margin-bottom: 1rem; }
+
+  .summary-row,
+  .summary-stack {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  .summary-row {
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .summary-stack {
+    flex-direction: column;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .hint {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .action-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  :global(.page-status) {
+    margin-bottom: 1rem;
+  }
 </style>

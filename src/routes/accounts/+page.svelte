@@ -1,11 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
@@ -88,7 +93,7 @@
     try {
       await invoke("create_account", {
         label: newLabel.trim(),
-        apiId: parseInt(newApiId),
+        apiId: parseInt(newApiId, 10),
         apiHash: newApiHash.trim(),
       });
       newLabel = "";
@@ -158,7 +163,7 @@
   </StatusMessage>
 {/if}
 
-<div class="card">
+<Card className="page-card">
   <h3>Configured Accounts ({accounts.length})</h3>
   {#if accounts.length === 0}
     <EmptyState description="No accounts yet. Add one below." />
@@ -167,97 +172,172 @@
       {#each accounts as acc (acc.id)}
         {@const runtime = runtimeStatus(acc.id)}
         <li>
-          <div class="info">
-            <span class="label">{acc.label}</span>
-            <div class="meta-row">
-              <span class="sub">{acc.phone ?? "not signed in"} · API ID: {acc.api_id}</span>
-              <Badge
-                variant={runtimeBadgeVariant(runtime)}
-                title={runtime?.status === "restore_failed" && runtime.message ? runtime.message : undefined}
-              >
-                {runtimeBadge(runtime)}
-              </Badge>
+          <SurfaceCard className="account-row">
+            <div class="row-main">
+              <div class="info">
+                <span class="label">{acc.label}</span>
+                <div class="meta-row">
+                  <span class="sub">{acc.phone ?? "not signed in"} | API ID: {acc.api_id}</span>
+                  <Badge
+                    variant={runtimeBadgeVariant(runtime)}
+                    title={runtime?.status === "restore_failed" && runtime.message ? runtime.message : undefined}
+                  >
+                    {runtimeBadge(runtime)}
+                  </Badge>
+                </div>
+              </div>
+              <div class="actions">
+                <Button variant="secondary" size="sm" onclick={() => goto(`/auth/${acc.id}`)}>
+                  {authActionLabel(acc)}
+                </Button>
+                <Button variant="danger-soft" size="sm" onclick={() => deleteAccount(acc)}>Delete</Button>
+              </div>
             </div>
-          </div>
-          <div class="actions">
-            <a href="/auth/{acc.id}" class="btn-link">
-              {authActionLabel(acc)}
-            </a>
-            <button class="danger small" onclick={() => deleteAccount(acc)}>Delete</button>
-          </div>
+          </SurfaceCard>
         </li>
       {/each}
     </ul>
   {/if}
-</div>
+</Card>
 
-<div class="card">
+<Card className="page-card">
   <h3>Add Account</h3>
-  <p class="hint">Get API credentials at <a href="https://my.telegram.org" target="_blank">my.telegram.org</a></p>
-  <label>Label (e.g. "Personal", "Work")
-    <input type="text" bind:value={newLabel} placeholder="Personal" />
-  </label>
-  <label>API ID
-    <input type="text" bind:value={newApiId} placeholder="1234567" />
-  </label>
-  <label>API Hash
-    <input type="text" bind:value={newApiHash} placeholder="abcdef..." />
-  </label>
-  <button onclick={createAccount} disabled={creating || !newLabel || !newApiId || !newApiHash}>
-    {creating ? "Creating..." : "Add Account"}
-  </button>
-</div>
+  <p class="hint">
+    Get API credentials at <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a>
+  </p>
+  <div class="form-stack">
+    <label>Label (e.g. "Personal", "Work")
+      <Input
+        type="text"
+        value={newLabel}
+        placeholder="Personal"
+        oninput={(event) => (newLabel = (event.currentTarget as HTMLInputElement).value)}
+      />
+    </label>
+    <label>API ID
+      <Input
+        type="text"
+        value={newApiId}
+        placeholder="1234567"
+        oninput={(event) => (newApiId = (event.currentTarget as HTMLInputElement).value)}
+      />
+    </label>
+    <label>API Hash
+      <Input
+        type="text"
+        value={newApiHash}
+        placeholder="abcdef..."
+        oninput={(event) => (newApiHash = (event.currentTarget as HTMLInputElement).value)}
+      />
+    </label>
+  </div>
+  <div class="action-row">
+    <Button onclick={createAccount} disabled={creating || !newLabel || !newApiId || !newApiHash}>
+      {creating ? "Creating..." : "Add Account"}
+    </Button>
+  </div>
+</Card>
 
 <style>
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
+  :global(.ui-card.page-card) {
     margin-bottom: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
-  .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-  .list li {
+
+  .list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  :global(.ui-surface-card.account-row) {
+    padding: 0.85rem 1rem;
+  }
+
+  .row-main {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.6rem 0.75rem;
-    background: var(--panel-strong);
-    border-radius: 8px;
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
-  .info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
-  .label { font-size: 0.95rem; font-weight: 600; }
-  .sub { font-size: 0.8rem; color: var(--muted); }
-  .meta-row { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
-  .actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
-  .btn-link {
-    font-size: 0.8rem;
-    padding: 0.3rem 0.7rem;
-    border-radius: 6px;
-    background: var(--primary);
-    color: white;
-    text-decoration: none;
+
+  .info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .label {
+    font-size: 0.95rem;
     font-weight: 600;
   }
-  .btn-link:hover { background: var(--primary-hover); }
-  button.small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
-  label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
-  .hint { font-size: 0.85rem; color: var(--muted); margin: 0; }
-  .hint a { color: var(--primary); }
-  :global(.page-status) { margin-bottom: 1rem; }
+
+  .sub {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+  }
+
+  .actions,
+  .action-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    flex-shrink: 0;
+  }
+
+  .form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .hint {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .hint a {
+    color: var(--primary);
+  }
+
+  :global(.page-status) {
+    margin-bottom: 1rem;
+  }
+
   @media (max-width: 800px) {
-    .list li {
+    .row-main {
       flex-direction: column;
       align-items: stretch;
     }
+
     .actions {
       justify-content: flex-start;
-      flex-wrap: wrap;
     }
   }
 </style>
