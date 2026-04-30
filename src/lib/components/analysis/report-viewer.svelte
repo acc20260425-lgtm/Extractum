@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import MetaCell from "$lib/components/ui/MetaCell.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
 
@@ -77,42 +78,17 @@
         </div>
 
         <div class="run-meta-grid">
-          <div>
-            <span class="meta-label">Period</span>
-            <strong>{formatPeriod(currentRun.period_from, currentRun.period_to)}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Scope</span>
-            <strong>{currentRun.scope_type === "source_group" ? "Source group" : "Single source"}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Output language</span>
-            <strong>{currentRun.output_language}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Created</span>
-            <strong>{formatTimestamp(currentRun.created_at)}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Completed</span>
-            <strong>{formatTimestamp(currentRun.completed_at)}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Provider profile</span>
-            <strong>{currentRun.provider_profile}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Trace refs</span>
-            <strong>{traceRefCount}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Live phase</span>
-            <strong>{livePhase || currentRun.status}</strong>
-          </div>
-          <div>
-            <span class="meta-label">Live progress</span>
-            <strong>{liveProgress || "n/a"}</strong>
-          </div>
+          <MetaCell label="Period">{formatPeriod(currentRun.period_from, currentRun.period_to)}</MetaCell>
+          <MetaCell label="Scope">
+            {currentRun.scope_type === "source_group" ? "Source group" : "Single source"}
+          </MetaCell>
+          <MetaCell label="Output language">{currentRun.output_language}</MetaCell>
+          <MetaCell label="Created">{formatTimestamp(currentRun.created_at)}</MetaCell>
+          <MetaCell label="Completed">{formatTimestamp(currentRun.completed_at)}</MetaCell>
+          <MetaCell label="Provider profile">{currentRun.provider_profile}</MetaCell>
+          <MetaCell label="Trace refs">{traceRefCount}</MetaCell>
+          <MetaCell label="Live phase">{livePhase || currentRun.status}</MetaCell>
+          <MetaCell label="Live progress">{liveProgress || "n/a"}</MetaCell>
         </div>
 
         {#if currentRun.error}
@@ -201,23 +177,6 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.8rem;
-  }
-
-  .run-meta-grid > div {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.75rem 0.85rem;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-  }
-
-  .meta-label {
-    color: var(--muted);
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
 
   .run-error {
