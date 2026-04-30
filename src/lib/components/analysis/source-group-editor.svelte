@@ -4,6 +4,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import CheckboxRow from "$lib/components/ui/CheckboxRow.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
 
   let {
@@ -62,11 +63,10 @@
 
 <Card>
   <div class="groups">
-    <div class="panel-header">
-      <div>
-        <h3>Source Groups</h3>
-        <p class="sub">Save reusable named sets of synced sources for future cross-source reports.</p>
-      </div>
+    <PanelHeader
+      title="Source Groups"
+      subtitle="Save reusable named sets of synced sources for future cross-source reports."
+    >
       <div class="group-actions">
         <Button variant="secondary" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
           New group
@@ -82,7 +82,7 @@
           {deletingGroup ? "Deleting..." : "Delete"}
         </Button>
       </div>
-    </div>
+    </PanelHeader>
 
     <div class="group-grid">
       <div class="group-form">
@@ -202,14 +202,6 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-  }
-
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
   }
 
   .sub,

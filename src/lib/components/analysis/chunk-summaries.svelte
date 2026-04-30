@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { AnalysisChunkSummaryEvent } from "$lib/types/analysis";
 
   let {
@@ -12,16 +13,12 @@
 
 {#if running || summaries.length > 0}
   <section class="card chunk-summaries">
-    <div class="panel-header">
-      <div>
-        <h3>Chunk Summaries</h3>
-        <p class="sub">
-          {summaries.length > 0
-            ? `${summaries.length}/${summaries[0]?.total ?? summaries.length} received`
-            : "Waiting for the first chunk summary..."}
-        </p>
-      </div>
-    </div>
+    <PanelHeader
+      title="Chunk Summaries"
+      subtitle={summaries.length > 0
+        ? `${summaries.length}/${summaries[0]?.total ?? summaries.length} received`
+        : "Waiting for the first chunk summary..."}
+    />
 
     {#if summaries.length === 0}
       <p class="empty">Intermediate LLM summaries will appear here during chunk analysis.</p>
@@ -90,18 +87,6 @@
     gap: 1rem;
   }
 
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-  }
-
-  .panel-header h3 {
-    margin: 0 0 0.25rem;
-  }
-
-  .sub,
   .empty {
     margin: 0;
     color: var(--muted);

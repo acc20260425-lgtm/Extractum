@@ -3,6 +3,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
   import type { AnalysisPromptTemplate } from "$lib/types/analysis";
 
@@ -57,16 +58,12 @@
 
 <Card>
   <div class="templates">
-    <div class="panel-header">
-      <div>
-        <h3>Prompt Template</h3>
-        {#if selectedTemplate}
-          <p class="sub">
-            {selectedTemplate.name} - v{selectedTemplate.version}
-            {selectedTemplate.is_builtin ? " - builtin (edit fields below, then save as copy)" : " - custom"}
-          </p>
-        {/if}
-      </div>
+    <PanelHeader
+      title="Prompt Template"
+      subtitle={selectedTemplate
+        ? `${selectedTemplate.name} - v${selectedTemplate.version}${selectedTemplate.is_builtin ? " - builtin (edit fields below, then save as copy)" : " - custom"}`
+        : ""}
+    >
       <div class="template-actions">
         <Button variant="secondary" onclick={() => openEditor("new")} disabled={savingTemplate || deletingTemplate}>
           New template
@@ -86,7 +83,7 @@
           {deletingTemplate ? "Deleting..." : "Delete"}
         </Button>
       </div>
-    </div>
+    </PanelHeader>
 
     <div class="template-grid">
       <label>Template name
@@ -162,20 +159,6 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-  }
-
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .sub {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
   }
 
   .template-actions {

@@ -3,6 +3,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import MetaCell from "$lib/components/ui/MetaCell.svelte";
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
 
@@ -51,19 +52,14 @@
 
 <Card>
   <div class="report-viewer">
-    <div class="panel-header">
-      <div>
-        <h3>Report Output</h3>
-        {#if currentRun}
-          <p class="sub">
-            {runTargetLabel(currentRun)} - {currentRun.provider}/{currentRun.model}
-          </p>
-        {/if}
-      </div>
+    <PanelHeader
+      title="Report Output"
+      subtitle={currentRun ? `${runTargetLabel(currentRun)} - ${currentRun.provider}/${currentRun.model}` : ""}
+    >
       {#if canCancelCurrentRun}
         <Button variant="danger-soft" type="button" onclick={onCancelCurrentRun}>Cancel run</Button>
       {/if}
-    </div>
+    </PanelHeader>
 
     {#if currentRun}
       <div class="run-summary-panel">
@@ -131,14 +127,6 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-  }
-
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
   }
 
   .sub,

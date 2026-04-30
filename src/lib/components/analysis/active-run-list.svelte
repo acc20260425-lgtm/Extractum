@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
   let {
@@ -42,13 +43,12 @@
 
 <Card>
   <div class="active-runs">
-    <div class="panel-header">
-      <div>
-        <h3>Active Runs</h3>
-        <p class="sub">Queued and running reports stay separate from historical saved runs.</p>
-      </div>
+    <PanelHeader
+      title="Active Runs"
+      subtitle="Queued and running reports stay separate from historical saved runs."
+    >
       <Button variant="secondary" onclick={onRefresh}>Refresh</Button>
-    </div>
+    </PanelHeader>
 
     {#if loadingActiveRuns}
       <p class="empty">Loading active runs...</p>
@@ -90,14 +90,6 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-  }
-
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
   }
 
   .sub,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
   import type { AnalysisRunDetail, AnalysisChatTurn } from "$lib/types/analysis";
@@ -58,11 +59,10 @@
 
 <Card>
   <div class="chat">
-    <div class="panel-header">
-      <div>
-        <h3>Report Chat</h3>
-        <p class="sub">Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.</p>
-      </div>
+    <PanelHeader
+      title="Report Chat"
+      subtitle="Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope."
+    >
       {#if currentRun && currentRun.status === "completed"}
         <div class="chat-actions">
           {#if canCancelChat}
@@ -73,7 +73,7 @@
           </Button>
         </div>
       {/if}
-    </div>
+    </PanelHeader>
 
     {#if !currentRun}
       <p class="empty">Open a saved run to start a grounded chat.</p>
@@ -141,15 +141,6 @@
     gap: 1rem;
   }
 
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .sub,
   .empty {
     margin: 0;
     color: var(--muted);
