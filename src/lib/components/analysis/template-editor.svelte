@@ -3,6 +3,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import Textarea from "$lib/components/ui/Textarea.svelte";
   import type { AnalysisPromptTemplate } from "$lib/types/analysis";
 
   let {
@@ -126,11 +127,13 @@
     </label>
 
     <label>Template body
-      <textarea
+      <Textarea
+        value={draftBody}
         rows="12"
         placeholder="Describe how the report should be structured and what it should emphasize."
         oninput={(event) => (draftBody = (event.currentTarget as HTMLTextAreaElement).value)}
-      >{draftBody}</textarea>
+        className="template-body-field"
+      />
     </label>
 
     <footer class="modal-actions">
@@ -240,22 +243,8 @@
     color: var(--text);
   }
 
-  textarea {
-    width: 100%;
-    resize: vertical;
+  .editor-grid :global(.ui-textarea.template-body-field) {
     min-height: 10rem;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.8rem;
-    border-radius: 8px;
-    font: inherit;
-  }
-
-  textarea:focus {
-    border-color: var(--primary);
-    outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
   .editor-grid {

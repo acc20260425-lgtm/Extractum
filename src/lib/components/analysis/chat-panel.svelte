@@ -2,6 +2,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
+  import Textarea from "$lib/components/ui/Textarea.svelte";
   import type { AnalysisRunDetail, AnalysisChatTurn } from "$lib/types/analysis";
 
   let {
@@ -116,11 +117,13 @@
 
       <div class="chat-compose">
         <label>Question
-          <textarea
+          <Textarea
+            value={chatQuestion}
             rows="4"
             placeholder="Ask a grounded follow-up question about this report."
             oninput={(event) => onChangeChatQuestion((event.currentTarget as HTMLTextAreaElement).value)}
-          >{chatQuestion}</textarea>
+            className="chat-question-field"
+          />
         </label>
         <Button onclick={onAskQuestion} disabled={chatting || loadingChat || !chatQuestion.trim() || currentRun.status !== "completed"}>
           {chatting ? "Answering..." : "Ask"}
@@ -220,22 +223,8 @@
     color: var(--muted);
   }
 
-  textarea {
-    width: 100%;
-    resize: vertical;
+  .chat-compose :global(.ui-textarea.chat-question-field) {
     min-height: 10rem;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.8rem;
-    border-radius: 8px;
-    font: inherit;
-  }
-
-  textarea:focus {
-    border-color: var(--primary);
-    outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
   .report-line {
