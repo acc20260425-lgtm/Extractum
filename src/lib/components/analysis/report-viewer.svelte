@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import RefChip from "$lib/components/ui/RefChip.svelte";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
 
   let {
@@ -129,14 +130,11 @@
             <div class="report-line">
               {#each line.segments as segment (segment.key)}
                 {#if segment.type === "ref"}
-                  <button
-                    class="ref-chip"
-                    class:active={segment.value === selectedTraceRef}
-                    type="button"
+                  <RefChip
+                    refValue={segment.value}
+                    active={segment.value === selectedTraceRef}
                     onclick={() => void onFocusTraceRef(segment.value)}
-                  >
-                    [{segment.value}]
-                  </button>
+                  />
                 {:else}
                   <span>{segment.value}</span>
                 {/if}
@@ -252,25 +250,6 @@
   .report-line {
     white-space: pre-wrap;
     word-break: break-word;
-  }
-
-  .ref-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.08rem 0.45rem;
-    margin: 0 0.08rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--primary) 14%, var(--panel));
-    color: var(--primary);
-    border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
-    font-size: 0.82rem;
-    font-weight: 600;
-  }
-
-  .ref-chip:hover,
-  .ref-chip.active {
-    background: color-mix(in srgb, var(--primary) 22%, var(--panel));
   }
 
   @media (max-width: 1080px) {
