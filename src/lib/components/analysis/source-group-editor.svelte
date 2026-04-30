@@ -2,6 +2,7 @@
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import CheckboxRow from "$lib/components/ui/CheckboxRow.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
 
@@ -123,17 +124,12 @@
         {:else}
           <div class="member-list">
             {#each sources as source (source.id)}
-              <label class="member-row">
-                <input
-                  type="checkbox"
-                  checked={isGroupSourceSelected(source.id)}
-                  disabled
-                />
-                <div class="member-copy">
-                  <strong>{source.title ?? `Source ${source.id}`}</strong>
-                  <span>{source.item_count} messages</span>
-                </div>
-              </label>
+              <CheckboxRow
+                checked={isGroupSourceSelected(source.id)}
+                disabled={true}
+                title={source.title ?? `Source ${source.id}`}
+                description={`${source.item_count} messages`}
+              />
             {/each}
           </div>
         {/if}
@@ -171,17 +167,12 @@
       {:else}
         <div class="member-list">
           {#each sources as source (source.id)}
-            <label class="member-row">
-              <input
-                type="checkbox"
-                checked={isGroupSourceSelected(source.id)}
-                onchange={() => onToggleSource(source.id)}
-              />
-              <div class="member-copy">
-                <strong>{source.title ?? `Source ${source.id}`}</strong>
-                <span>{source.item_count} messages</span>
-              </div>
-            </label>
+            <CheckboxRow
+              checked={isGroupSourceSelected(source.id)}
+              title={source.title ?? `Source ${source.id}`}
+              description={`${source.item_count} messages`}
+              onchange={() => onToggleSource(source.id)}
+            />
           {/each}
         </div>
       {/if}
@@ -278,44 +269,10 @@
     padding-right: 0.25rem;
   }
 
-  .member-row {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.85rem 0.95rem;
-    background: var(--panel-strong);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    cursor: pointer;
-  }
-
-  .member-row:hover {
-    background: var(--panel-hover);
-  }
-
-  .member-row input {
-    margin-top: 0.2rem;
-    width: auto;
-    flex: 0 0 auto;
-  }
-
   .group-form :global(input[readonly]) {
     cursor: default;
     color: var(--text);
     background: var(--panel-strong);
-  }
-
-  .member-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-
-  .member-copy span {
-    color: var(--muted);
-    font-size: 0.82rem;
   }
 
   .editor-grid {
