@@ -3,6 +3,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import CheckboxRow from "$lib/components/ui/CheckboxRow.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
@@ -120,7 +121,7 @@
         </div>
 
         {#if sources.length === 0}
-          <p class="empty">No synced sources available for grouping yet.</p>
+          <EmptyState description="No synced sources available for grouping yet." />
         {:else}
           <div class="member-list">
             {#each sources as source (source.id)}
@@ -163,7 +164,7 @@
       </div>
 
       {#if sources.length === 0}
-        <p class="empty">No synced sources available for grouping yet.</p>
+        <EmptyState description="No synced sources available for grouping yet." />
       {:else}
         <div class="member-list">
           {#each sources as source (source.id)}
@@ -205,7 +206,6 @@
   }
 
   .sub,
-  .empty,
   .selected-count {
     margin: 0;
     color: var(--muted);

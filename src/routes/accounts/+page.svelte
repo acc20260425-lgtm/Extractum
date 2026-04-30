@@ -3,6 +3,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
@@ -141,13 +143,15 @@
 <h1>Accounts</h1>
 
 {#if status}
-  <p class="status" class:error={status.startsWith("Error")}>{status}</p>
+  <StatusMessage tone={status.startsWith("Error") ? "error" : "default"} className="page-status">
+    {status}
+  </StatusMessage>
 {/if}
 
 <div class="card">
   <h3>Configured Accounts ({accounts.length})</h3>
   {#if accounts.length === 0}
-    <p class="empty">No accounts yet. Add one below.</p>
+    <EmptyState description="No accounts yet. Add one below." />
   {:else}
     <ul class="list">
       {#each accounts as acc (acc.id)}
@@ -258,9 +262,7 @@
   label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
   .hint { font-size: 0.85rem; color: var(--muted); margin: 0; }
   .hint a { color: var(--primary); }
-  .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
-  .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
-  .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
+  :global(.page-status) { margin-bottom: 1rem; }
   @media (max-width: 800px) {
     .list li {
       flex-direction: column;

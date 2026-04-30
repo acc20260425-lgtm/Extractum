@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
@@ -51,9 +52,9 @@
     </PanelHeader>
 
     {#if loadingActiveRuns}
-      <p class="empty">Loading active runs...</p>
+      <EmptyState description="Loading active runs..." />
     {:else if activeRuns.length === 0}
-      <p class="empty">No queued or running analysis runs.</p>
+      <EmptyState description="No queued or running analysis runs." />
     {:else}
       <ul class="run-list">
         {#each activeRuns as run (run.id)}
@@ -92,8 +93,7 @@
     gap: 1rem;
   }
 
-  .sub,
-  .empty {
+  .sub {
     margin: 0;
     color: var(--muted);
     font-size: 0.9rem;

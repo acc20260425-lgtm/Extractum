@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import MetaCell from "$lib/components/ui/MetaCell.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
@@ -95,7 +96,7 @@
 
     <div class="report-body">
       {#if loadingRunDetail}
-        <p class="empty">Loading saved run...</p>
+        <EmptyState description="Loading saved run..." />
       {:else if streamedOutput}
         <div class="report-output">
           {#each reportLines(streamedOutput) as line (line.key)}
@@ -115,7 +116,7 @@
           {/each}
         </div>
       {:else}
-        <p class="empty">No report output yet.</p>
+        <EmptyState description="No report output yet." />
       {/if}
     </div>
   </div>
@@ -129,8 +130,7 @@
     gap: 1rem;
   }
 
-  .sub,
-  .empty {
+  .sub {
     margin: 0;
     color: var(--muted);
     font-size: 0.9rem;

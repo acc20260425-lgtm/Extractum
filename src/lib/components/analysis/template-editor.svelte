@@ -2,6 +2,7 @@
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
@@ -98,7 +99,7 @@
         {#if templateBody.trim()}
           <p>{templateBody}</p>
         {:else}
-          <p class="empty-copy">No template text yet. Open the editor to define the report instructions.</p>
+          <EmptyState description="No template text yet. Open the editor to define the report instructions." />
         {/if}
       </div>
     </div>
@@ -213,8 +214,7 @@
     color: var(--text);
   }
 
-  .preview-header span,
-  .empty-copy {
+  .preview-header span {
     font-size: 0.85rem;
     color: var(--muted);
   }

@@ -4,6 +4,8 @@
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
 
   interface LlmProfile {
@@ -478,7 +480,9 @@
 <h1>Settings</h1>
 
 {#if settingsStatus}
-  <p class="status" class:error={settingsStatus.startsWith("Error")}>{settingsStatus}</p>
+  <StatusMessage tone={settingsStatus.startsWith("Error") ? "error" : "default"} className="page-status">
+    {settingsStatus}
+  </StatusMessage>
 {/if}
 
 <div class="card">
@@ -578,7 +582,12 @@
   </div>
 
   {#if modelsStatus}
-    <p class="status compact" class:error={modelsStatus.startsWith("Error")}>{modelsStatus}</p>
+    <StatusMessage
+      tone={modelsStatus.startsWith("Error") ? "error" : "default"}
+      className="compact-status"
+    >
+      {modelsStatus}
+    </StatusMessage>
   {/if}
 
   {#if availableModels.length > 0}
@@ -636,9 +645,11 @@
   </div>
 
   {#if testStatus}
-    <p class="status" class:error={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error")}>
+    <StatusMessage
+      tone={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error") ? "error" : "default"}
+    >
       {testStatus}
-    </p>
+    </StatusMessage>
   {/if}
 
   <div class="output-card compact">
@@ -651,7 +662,7 @@
     {#if testOutput}
       <pre>{testOutput}</pre>
     {:else}
-      <p class="empty">No output yet. Open the test console to run a prompt.</p>
+      <EmptyState description="No output yet. Open the test console to run a prompt." />
     {/if}
   </div>
 </div>
@@ -696,7 +707,7 @@
       {#if testOutput}
         <pre>{testOutput}</pre>
       {:else}
-        <p class="empty">No output yet.</p>
+        <EmptyState description="No output yet." />
       {/if}
     </div>
   </div>
@@ -880,21 +891,12 @@
     line-height: 1.5;
   }
 
-  .status {
-    padding: 0.6rem 1rem;
-    border-radius: 6px;
-    background: var(--status-bg);
-    font-size: 0.9rem;
+  :global(.page-status) {
     margin-bottom: 1rem;
   }
 
-  .status.compact {
+  :global(.compact-status) {
     margin-bottom: 0;
-  }
-
-  .status.error {
-    background: var(--status-error-bg);
-    color: var(--status-error-text);
   }
 
   .output-card {
@@ -925,8 +927,7 @@
     font-weight: 600;
   }
 
-  .output-meta,
-  .empty {
+  .output-meta {
     margin: 0;
     color: var(--muted);
     font-size: 0.9rem;

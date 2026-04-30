@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { AnalysisChunkSummaryEvent } from "$lib/types/analysis";
 
@@ -21,7 +22,7 @@
     />
 
     {#if summaries.length === 0}
-      <p class="empty">Intermediate LLM summaries will appear here during chunk analysis.</p>
+      <EmptyState description="Intermediate LLM summaries will appear here during chunk analysis." />
     {:else}
       <div class="chunk-list">
         {#each summaries as chunk (chunk.index)}
@@ -85,12 +86,6 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-  }
-
-  .empty {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
   }
 
   .chunk-list {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
@@ -76,15 +77,15 @@
     </PanelHeader>
 
     {#if !currentRun}
-      <p class="empty">Open a saved run to start a grounded chat.</p>
+      <EmptyState description="Open a saved run to start a grounded chat." />
     {:else if currentRun.status !== "completed"}
-      <p class="empty">Chat is available only for completed runs.</p>
+      <EmptyState description="Chat is available only for completed runs." />
     {:else}
       <div class="chat-thread" bind:this={chatThreadElement}>
         {#if loadingChat}
-          <p class="empty">Loading saved chat history...</p>
+          <EmptyState description="Loading saved chat history..." />
         {:else if chatMessages.length === 0}
-          <p class="empty">No saved chat turns yet. Ask a follow-up question about this report.</p>
+          <EmptyState description="No saved chat turns yet. Ask a follow-up question about this report." />
         {:else}
           {#each chatMessages as message, index (`${message.role}-${index}`)}
             <div class={`chat-bubble chat-${message.role}`}>
@@ -139,12 +140,6 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-  }
-
-  .empty {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
   }
 
   .chat-thread {

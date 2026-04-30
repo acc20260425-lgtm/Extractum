@@ -1,5 +1,6 @@
 <script lang="ts">
   import Badge from "$lib/components/ui/Badge.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type { AnalysisTraceRef } from "$lib/types/analysis";
@@ -41,7 +42,7 @@
   </PanelHeader>
 
   {#if traceRefs.length === 0}
-    <p class="empty">No saved trace data yet.</p>
+    <EmptyState description="No saved trace data yet." />
   {:else}
     <div class="trace-list">
       {#each traceRefs as ref (ref.ref)}
@@ -88,8 +89,7 @@
     min-height: 22rem;
   }
 
-  .trace-count,
-  .empty {
+  .trace-count {
     margin: 0;
     color: var(--muted);
     font-size: 0.85rem;

@@ -4,6 +4,7 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { formatAppError } from "$lib/app-error";
+  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import type { AccountRecord } from "$lib/types/accounts";
 
   const accountId = parseInt(page.params.id ?? "", 10);
@@ -122,7 +123,9 @@
 <h1>{label || "Account"}</h1>
 
 {#if status}
-  <p class="status" class:error={status.startsWith("Error")}>{status}</p>
+  <StatusMessage tone={status.startsWith("Error") ? "error" : "default"} className="page-status">
+    {status}
+  </StatusMessage>
 {/if}
 
 {#if step === "connecting"}
@@ -197,6 +200,5 @@
     font-weight: 600;
   }
   .btn-link:hover { background: var(--primary-hover); }
-  .status { padding: 0.6rem 1rem; border-radius: 6px; background: var(--status-bg); font-size: 0.9rem; margin-bottom: 1rem; }
-  .status.error { background: var(--status-error-bg); color: var(--status-error-text); }
+  :global(.page-status) { margin-bottom: 1rem; }
 </style>

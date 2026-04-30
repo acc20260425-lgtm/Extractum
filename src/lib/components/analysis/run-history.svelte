@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
@@ -75,13 +76,13 @@
     </PanelHeader>
 
     {#if loadingRuns}
-      <p class="empty">Loading analysis runs...</p>
+      <EmptyState description="Loading analysis runs..." />
     {:else if historyScope === "current" && !historyTargetReady}
-      <p class="empty">Select a source or source group to browse current-scope history.</p>
+      <EmptyState description="Select a source or source group to browse current-scope history." />
     {:else if runs.length === 0}
-      <p class="empty">{historyScope === "all" ? "No analysis runs yet." : "No saved runs for the current scope yet."}</p>
+      <EmptyState description={historyScope === "all" ? "No analysis runs yet." : "No saved runs for the current scope yet."} />
     {:else if filteredRuns.length === 0}
-      <p class="empty">No runs match the current filter.</p>
+      <EmptyState description="No runs match the current filter." />
     {:else}
       <ul class="run-list">
         {#each filteredRuns as run (run.id)}
@@ -117,8 +118,7 @@
     gap: 1rem;
   }
 
-  .sub,
-  .empty {
+  .sub {
     margin: 0;
     color: var(--muted);
     font-size: 0.9rem;
