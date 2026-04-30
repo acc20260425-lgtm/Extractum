@@ -1,3 +1,4 @@
+import type { BadgeVariant } from "$lib/components/ui/types";
 import type { AnalysisRunSummary, ReportSegment } from "$lib/types/analysis";
 
 export function defaultDateOffset(offsetDays: number) {
@@ -76,7 +77,7 @@ export function phaseLabel(phase: string) {
   }
 }
 
-export function statusTone(status: string) {
+export function statusTone(status: string): BadgeVariant {
   switch (status) {
     case "completed":
       return "success";

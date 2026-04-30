@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-
-  type BadgeVariant = "default" | "warning" | "member" | "info" | "success" | "danger" | "neutral";
+  import type { BadgeVariant } from "$lib/components/ui/types";
 
   let {
     variant = "default",
