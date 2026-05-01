@@ -115,6 +115,10 @@
             {/if}
           </strong>
         </div>
+        <div class="workspace-topbar-meta">
+          <span class="workspace-badge">Local-first desktop</span>
+          <span class="workspace-badge">Tauri + Svelte</span>
+        </div>
       </div>
       <div class="workspace-inner">
         {@render children()}
@@ -128,10 +132,12 @@
   :global(:root) {
     color-scheme: light;
     --bg: #eef1f5;
+    --bg-alt: #e8edf3;
     --panel: #fbfcfd;
     --panel-strong: #f2f4f7;
     --panel-hover: #e7ebf0;
     --border: #d7dde5;
+    --border-strong: #c6d0dc;
     --text: #17212b;
     --muted: #6e7c8a;
     --primary: #2f6dea;
@@ -142,14 +148,17 @@
     --status-error-bg: #fde9ea;
     --status-error-text: #a23535;
     --shadow: 0 18px 40px rgba(23, 33, 43, 0.06);
+    --shadow-soft: 0 8px 20px rgba(23, 33, 43, 0.05);
   }
   :global([data-theme="dark"]) {
     color-scheme: dark;
     --bg: #0f1419;
+    --bg-alt: #111820;
     --panel: #182028;
     --panel-strong: #111820;
     --panel-hover: #22303b;
     --border: #2d3a46;
+    --border-strong: #42515f;
     --text: #edf2f7;
     --muted: #90a1b2;
     --primary: #61a3ff;
@@ -160,13 +169,15 @@
     --status-error-bg: #472225;
     --status-error-text: #ffb4b8;
     --shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+    --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.18);
   }
   :global(body) {
     margin: 0;
     font-family: "Segoe UI", "Inter Tight", "IBM Plex Sans", sans-serif;
     background:
       radial-gradient(circle at top left, rgba(47, 109, 234, 0.14), transparent 28%),
-      linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 88%, white 12%));
+      radial-gradient(circle at 85% 20%, rgba(56, 189, 248, 0.08), transparent 22%),
+      linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg-alt) 84%, white 16%));
     color: var(--text);
   }
   :global(h1, h2, h3) { margin: 0 0 1rem; }
@@ -211,6 +222,108 @@
   :global(button.danger) { background: var(--danger); }
   :global(button.danger:hover) { background: var(--danger-hover); }
   :global(button:disabled) { opacity: 0.5; cursor: not-allowed; }
+  :global(.page-shell) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+    min-width: 0;
+  }
+  :global(.page-hero) {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 1.05rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 98%, white 2%), var(--panel));
+    box-shadow: var(--shadow);
+  }
+  :global(.page-hero-copy) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+  :global(.page-hero-copy h1) {
+    margin: 0;
+    font-size: 1.42rem;
+    line-height: 1.15;
+  }
+  :global(.page-hero-copy p) {
+    margin: 0;
+    max-width: 72ch;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  :global(.page-eyebrow) {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  :global(.page-hero-meta) {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  :global(.page-grid) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr);
+    gap: 0.95rem;
+    align-items: start;
+  }
+  :global(.page-stack) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+    min-width: 0;
+  }
+  :global(.desk-panel) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 1rem 1.05rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    min-width: 0;
+  }
+  :global(.desk-panel-subtle) {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 88%, transparent), var(--panel));
+  }
+  :global(.panel-header) {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: flex-start;
+  }
+  :global(.panel-header h2),
+  :global(.panel-header h3) {
+    margin: 0;
+  }
+  :global(.panel-header-copy) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  :global(.panel-header-copy p) {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+    font-size: 0.88rem;
+  }
+  :global(.desk-divider) {
+    height: 1px;
+    background: color-mix(in srgb, var(--border) 78%, transparent);
+  }
+  :global(.muted-copy) {
+    color: var(--muted);
+  }
 
   .app {
     min-height: 100vh;
@@ -395,6 +508,8 @@
     align-items: center;
     justify-content: space-between;
     min-height: 2.25rem;
+    padding: 0.15rem 0.15rem 0.35rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
   }
 
   .workspace-route {
@@ -405,6 +520,26 @@
 
   .workspace-route strong {
     font-size: 0.96rem;
+  }
+
+  .workspace-topbar-meta {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .workspace-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.8rem;
+    padding: 0 0.7rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    color: var(--muted);
+    font-size: 0.74rem;
+    letter-spacing: 0.02em;
   }
 
   .workspace-inner {
@@ -434,6 +569,16 @@
 
     .workspace {
       padding: 1rem;
+    }
+
+    .workspace-topbar,
+    :global(.page-hero) {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    :global(.page-grid) {
+      grid-template-columns: 1fr;
     }
   }
 </style>

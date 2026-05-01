@@ -6,7 +6,6 @@
   import { formatAppError } from "$lib/app-error";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
-  import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
@@ -155,97 +154,152 @@
   });
 </script>
 
-<h1>Accounts</h1>
+<section class="page-shell">
+  <header class="page-hero">
+    <div class="page-hero-copy">
+      <span class="page-eyebrow">Telegram accounts</span>
+      <h1>Accounts</h1>
+      <p>
+        Manage Telegram identities that power sync and analysis. Each account carries its own API
+        credentials, auth state, and linked source catalog inside the local workspace.
+      </p>
+    </div>
+    <div class="page-hero-meta">
+      <Badge variant="info">{accounts.length} configured</Badge>
+      <Badge>{Object.values(accountStatuses).filter((runtime) => runtime.status === "ready").length} ready</Badge>
+    </div>
+  </header>
 
-{#if status}
-  <StatusMessage tone={status.startsWith("Error") ? "error" : "default"} className="page-status">
-    {status}
-  </StatusMessage>
-{/if}
-
-<Card className="page-card">
-  <h3>Configured Accounts ({accounts.length})</h3>
-  {#if accounts.length === 0}
-    <EmptyState description="No accounts yet. Add one below." />
-  {:else}
-    <ul class="list">
-      {#each accounts as acc (acc.id)}
-        {@const runtime = runtimeStatus(acc.id)}
-        <li>
-          <SurfaceCard className="account-row">
-            <div class="row-main">
-              <div class="info">
-                <span class="label">{acc.label}</span>
-                <div class="meta-row">
-                  <span class="sub">{acc.phone ?? "not signed in"} | API ID: {acc.api_id}</span>
-                  <Badge
-                    variant={runtimeBadgeVariant(runtime)}
-                    title={runtime?.status === "restore_failed" && runtime.message ? runtime.message : undefined}
-                  >
-                    {runtimeBadge(runtime)}
-                  </Badge>
-                </div>
-              </div>
-              <div class="actions">
-                <Button variant="secondary" size="sm" onclick={() => goto(`/auth/${acc.id}`)}>
-                  {authActionLabel(acc)}
-                </Button>
-                <Button variant="danger-soft" size="sm" onclick={() => deleteAccount(acc)}>Delete</Button>
-              </div>
-            </div>
-          </SurfaceCard>
-        </li>
-      {/each}
-    </ul>
+  {#if status}
+    <StatusMessage tone={status.startsWith("Error") ? "error" : "default"} className="page-status">
+      {status}
+    </StatusMessage>
   {/if}
-</Card>
 
-<Card className="page-card">
-  <h3>Add Account</h3>
-  <p class="hint">
-    Get API credentials at <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a>
-  </p>
-  <div class="form-stack">
-    <label>Label (e.g. "Personal", "Work")
-      <Input
-        type="text"
-        value={newLabel}
-        placeholder="Personal"
-        oninput={(event) => (newLabel = (event.currentTarget as HTMLInputElement).value)}
-      />
-    </label>
-    <label>API ID
-      <Input
-        type="text"
-        value={newApiId}
-        placeholder="1234567"
-        oninput={(event) => (newApiId = (event.currentTarget as HTMLInputElement).value)}
-      />
-    </label>
-    <label>API Hash
-      <Input
-        type="text"
-        value={newApiHash}
-        placeholder="abcdef..."
-        oninput={(event) => (newApiHash = (event.currentTarget as HTMLInputElement).value)}
-      />
-    </label>
+  <div class="page-grid">
+    <div class="page-stack">
+      <section class="desk-panel account-catalog">
+        <div class="panel-header">
+          <div class="panel-header-copy">
+            <span class="page-eyebrow">Workspace access</span>
+            <h2>Configured accounts</h2>
+            <p>Open auth flow, check runtime state, and keep sync-capable accounts healthy.</p>
+          </div>
+          <Badge variant="neutral">{accounts.length} total</Badge>
+        </div>
+
+        {#if accounts.length === 0}
+          <EmptyState description="No accounts yet. Add one from the panel on the right." />
+        {:else}
+          <ul class="list">
+            {#each accounts as acc (acc.id)}
+              {@const runtime = runtimeStatus(acc.id)}
+              <li>
+                <SurfaceCard className="account-row">
+                  <div class="row-main">
+                    <div class="identity">
+                      <div class="identity-mark" aria-hidden="true">
+                        {acc.label.trim().charAt(0).toUpperCase() || "A"}
+                      </div>
+                      <div class="info">
+                        <div class="title-row">
+                          <span class="label">{acc.label}</span>
+                          <Badge
+                            variant={runtimeBadgeVariant(runtime)}
+                            title={runtime?.status === "restore_failed" && runtime.message ? runtime.message : undefined}
+                          >
+                            {runtimeBadge(runtime)}
+                          </Badge>
+                        </div>
+                        <div class="meta-row">
+                          <span class="sub">{acc.phone ?? "not signed in"}</span>
+                          <span class="sub">API ID {acc.api_id}</span>
+                        </div>
+                        {#if runtime?.message && runtime.status !== "ready"}
+                          <p class="runtime-note">{runtime.message}</p>
+                        {/if}
+                      </div>
+                    </div>
+                    <div class="actions">
+                      <Button variant="secondary" size="sm" onclick={() => goto(`/auth/${acc.id}`)}>
+                        {authActionLabel(acc)}
+                      </Button>
+                      <Button variant="danger-soft" size="sm" onclick={() => deleteAccount(acc)}>Delete</Button>
+                    </div>
+                  </div>
+                </SurfaceCard>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+    </div>
+
+    <div class="page-stack">
+      <section class="desk-panel desk-panel-subtle">
+        <div class="panel-header">
+          <div class="panel-header-copy">
+            <span class="page-eyebrow">Add account</span>
+            <h2>New Telegram account</h2>
+            <p>
+              Get API credentials at
+              <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a>
+              and add them here before starting sign-in.
+            </p>
+          </div>
+        </div>
+
+        <div class="form-stack">
+          <label>Label
+            <Input
+              type="text"
+              value={newLabel}
+              placeholder="Personal"
+              oninput={(event) => (newLabel = (event.currentTarget as HTMLInputElement).value)}
+            />
+          </label>
+          <label>API ID
+            <Input
+              type="text"
+              value={newApiId}
+              placeholder="1234567"
+              oninput={(event) => (newApiId = (event.currentTarget as HTMLInputElement).value)}
+            />
+          </label>
+          <label>API Hash
+            <Input
+              type="text"
+              value={newApiHash}
+              placeholder="abcdef..."
+              oninput={(event) => (newApiHash = (event.currentTarget as HTMLInputElement).value)}
+            />
+          </label>
+        </div>
+
+        <div class="desk-divider"></div>
+
+        <div class="action-row">
+          <Button onclick={createAccount} disabled={creating || !newLabel || !newApiId || !newApiHash}>
+            {creating ? "Creating..." : "Add account"}
+          </Button>
+        </div>
+      </section>
+
+      <section class="desk-panel desk-panel-subtle notes-panel">
+        <div class="panel-header-copy">
+          <span class="page-eyebrow">Flow notes</span>
+          <h3>How this fits the workspace</h3>
+          <p>
+            Accounts stay outside the main analysis canvas, but they follow the same compact desktop
+            language: catalog on the left, focused utility panel on the right.
+          </p>
+        </div>
+      </section>
+    </div>
   </div>
-  <div class="action-row">
-    <Button onclick={createAccount} disabled={creating || !newLabel || !newApiId || !newApiHash}>
-      {creating ? "Creating..." : "Add Account"}
-    </Button>
-  </div>
-</Card>
+</section>
 
 <style>
-  :global(.ui-card.page-card) {
-    margin-bottom: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
   .list {
     list-style: none;
     margin: 0;
@@ -256,7 +310,10 @@
   }
 
   :global(.ui-surface-card.account-row) {
-    padding: 0.85rem 1rem;
+    padding: 0.9rem 1rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 72%, transparent), transparent);
+    border-color: color-mix(in srgb, var(--border) 88%, transparent);
   }
 
   .row-main {
@@ -266,11 +323,39 @@
     gap: 0.75rem;
   }
 
+  .identity {
+    display: flex;
+    gap: 0.8rem;
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .identity-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+    color: var(--primary);
+    font-size: 0.95rem;
+    font-weight: 700;
+    flex: 0 0 2.35rem;
+  }
+
   .info {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.22rem;
     min-width: 0;
+  }
+
+  .title-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .label {
@@ -288,6 +373,13 @@
     flex-wrap: wrap;
     gap: 0.45rem;
     align-items: center;
+  }
+
+  .runtime-note {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--muted);
   }
 
   .actions,
@@ -316,24 +408,26 @@
     color: var(--muted);
   }
 
-  .hint {
-    font-size: 0.85rem;
-    color: var(--muted);
-    margin: 0;
-  }
-
-  .hint a {
+  .panel-header-copy a {
     color: var(--primary);
   }
 
   :global(.page-status) {
-    margin-bottom: 1rem;
+    margin-bottom: 0;
+  }
+
+  .notes-panel h3 {
+    margin: 0;
   }
 
   @media (max-width: 800px) {
     .row-main {
       flex-direction: column;
       align-items: stretch;
+    }
+
+    .identity {
+      width: 100%;
     }
 
     .actions {

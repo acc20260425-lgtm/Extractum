@@ -1499,6 +1499,33 @@
       </div>
     </div>
 
+    <div class="scope-facts">
+      <div class="scope-fact">
+        <span class="scope-fact-label">Scope</span>
+        <strong>{analysisScope === "source_group" ? "Group analysis" : "Single source"}</strong>
+      </div>
+      <div class="scope-fact">
+        <span class="scope-fact-label">Window</span>
+        <strong>{formatPeriod(startOfDayUnix(periodFrom), endOfDayUnix(periodTo))}</strong>
+      </div>
+      <div class="scope-fact">
+        <span class="scope-fact-label">Context</span>
+        <strong>
+          {#if analysisScope === "source_group" && currentGroup()}
+            {currentGroup()!.members.length} sources
+          {:else if currentSourceMetric()}
+            {currentSourceMetric()!.item_count} synced messages
+          {:else}
+            Awaiting synced context
+          {/if}
+        </strong>
+      </div>
+      <div class="scope-fact">
+        <span class="scope-fact-label">Output</span>
+        <strong>{outputLanguage || "Default language"}</strong>
+      </div>
+    </div>
+
     <div class="controls-panel">
       <div class="controls-grid">
         <label>Period from
@@ -1781,7 +1808,8 @@
     flex-direction: column;
     gap: 0.8rem;
     padding: 0.85rem;
-    background: color-mix(in srgb, var(--panel) 96%, white 4%);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, white 4%), var(--panel));
     border: 1px solid var(--border);
     border-radius: 16px;
     box-shadow: var(--shadow);
@@ -1837,6 +1865,12 @@
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+    padding-top: 0.1rem;
+  }
+
+  .rail-section + .rail-section {
+    padding-top: 0.85rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
   }
 
   .rail-section-title {
@@ -1877,6 +1911,7 @@
     border-radius: 14px;
     border: 1px solid transparent;
     background: var(--panel-strong);
+    transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
   }
 
   .rail-group-row {
@@ -1891,6 +1926,13 @@
     border-color: color-mix(in srgb, var(--primary) 45%, transparent);
     background: color-mix(in srgb, var(--primary) 8%, var(--panel-strong));
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .rail-row:hover,
+  .rail-group-row:hover {
+    border-color: color-mix(in srgb, var(--border-strong) 68%, transparent);
+    background: color-mix(in srgb, var(--panel-hover) 78%, var(--panel-strong));
+    transform: translateY(-1px);
   }
 
   .rail-row-main {
@@ -1978,6 +2020,11 @@
     padding: 1rem;
   }
 
+  .scope-hero {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 98%, white 2%), var(--panel));
+  }
+
   .scope-hero-copy p {
     margin: 0.35rem 0 0 0;
     color: var(--muted);
@@ -1992,10 +2039,43 @@
     justify-content: flex-end;
   }
 
+  .scope-facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+
+  .scope-fact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.85rem 0.95rem;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 72%, transparent), transparent);
+    box-shadow: var(--shadow-soft);
+    min-width: 0;
+  }
+
+  .scope-fact-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .scope-fact strong {
+    font-size: 0.88rem;
+    line-height: 1.35;
+  }
+
   .controls-panel {
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 54%, transparent), var(--panel));
   }
 
   .controls-grid {
@@ -2047,6 +2127,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 44%, transparent), var(--panel));
   }
 
   .utility-strip {
@@ -2061,6 +2143,8 @@
     gap: 0.9rem;
     max-height: calc(100vh - 6rem);
     overflow: auto;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 97%, white 3%), var(--panel));
   }
 
   .inspector-header {
@@ -2101,6 +2185,7 @@
       max-height: none;
     }
 
+    .scope-facts,
     .controls-grid,
     .utility-strip {
       grid-template-columns: 1fr;

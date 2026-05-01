@@ -4,8 +4,8 @@
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
+  import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
-  import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import MetaPill from "$lib/components/ui/MetaPill.svelte";
@@ -493,216 +493,264 @@
   });
 </script>
 
-<h1>Settings</h1>
+<section class="page-shell">
+  <header class="page-hero">
+    <div class="page-hero-copy">
+      <span class="page-eyebrow">LLM configuration</span>
+      <h1>Settings</h1>
+      <p>
+        Keep provider profiles, model defaults, and smoke testing in one compact operator surface.
+        The goal here is the same as in the analysis workspace: dense tools, clear status, no
+        dashboard clutter.
+      </p>
+    </div>
+    <div class="page-hero-meta">
+      <Badge variant="info">{profiles.length} profiles</Badge>
+      <Badge>{providerLabel()}</Badge>
+      {#if !creatingProfile && selectedProfileId === activeProfile}
+        <Badge variant="success">Active by default</Badge>
+      {/if}
+    </div>
+  </header>
 
-{#if settingsStatus}
-  <StatusMessage tone={settingsStatus.startsWith("Error") ? "error" : "default"} className="page-status">
-    {settingsStatus}
-  </StatusMessage>
-{/if}
-
-<Card className="settings-card">
-  <h3>LLM Profiles</h3>
-  <p class="hint">
-    Manage reusable provider profiles for analysis and chat flows. The active profile is used by
-    default when a workflow does not pick a profile explicitly. API keys are still stored in local
-    SQLite until phase 4.2 replaces this with secure storage.
-  </p>
-
-  <div class="grid">
-    <label>Saved profile
-      <Select value={selectedProfileId} onchange={onSelectedProfileChange}>
-        {#each profiles as profile (profile.profile_id)}
-          <option value={profile.profile_id}>
-            {profile.profile_id} - {providerLabel(profile.provider)}
-          </option>
-        {/each}
-        <option value={NEW_PROFILE_OPTION}>Create new profile...</option>
-      </Select>
-    </label>
-
-    <label>Active profile
-      <Input type="text" value={activeProfile} disabled />
-    </label>
-  </div>
-
-  <div class="profile-strip">
-    <MetaPill>
-      {creatingProfile ? "Creating new profile" : `Editing ${selectedProfileId}`}
-    </MetaPill>
-    {#if !creatingProfile && selectedProfileId === activeProfile}
-      <MetaPill tone="active">Used by default in analysis</MetaPill>
-    {/if}
-  </div>
-
-  <div class="grid">
-    <label>Profile ID
-      <Input
-        type="text"
-        value={draftProfileId}
-        placeholder="default"
-        disabled={!creatingProfile}
-        spellcheck={false}
-        oninput={(event) => (draftProfileId = (event.currentTarget as HTMLInputElement).value)}
-      />
-      <span class="field-hint">Stored in lowercase and used in analysis run metadata.</span>
-    </label>
-
-    <label>Provider
-      <Select value={provider} onchange={onProviderChange}>
-        {#each providerOptions as option (option.value)}
-          <option value={option.value}>{option.label}</option>
-        {/each}
-      </Select>
-    </label>
-  </div>
-
-  <label>Default model
-    {#if availableModels.length > 0}
-      <Select
-        value={defaultModel}
-        onchange={(event) => (defaultModel = (event.currentTarget as HTMLSelectElement).value)}
-      >
-        {#if !availableModels.some((model) => model.model === defaultModel)}
-          <option value={defaultModel}>{defaultModel}</option>
-        {/if}
-        {#each availableModels as model (model.model)}
-          <option value={model.model}>{model.display_name} - {model.model}</option>
-        {/each}
-      </Select>
-    {:else}
-      <Input
-        type="text"
-        value={defaultModel}
-        placeholder={providerPlaceholder()}
-        oninput={(event) => (defaultModel = (event.currentTarget as HTMLInputElement).value)}
-      />
-    {/if}
-  </label>
-
-  {#if providerSupportsBaseUrl()}
-    <label>Base URL
-      <Input
-        type="url"
-        value={baseUrl}
-        placeholder={providerBaseUrlPlaceholder()}
-        spellcheck={false}
-        oninput={(event) => (baseUrl = (event.currentTarget as HTMLInputElement).value)}
-      />
-      <span class="field-hint">
-        Use this for OmniRoute or any other OpenAI-compatible endpoint exposed through the same
-        backend path.
-      </span>
-    </label>
-  {/if}
-
-  <label>API key
-    <Input
-      type="password"
-      value={apiKey}
-      placeholder={apiKeyPlaceholder()}
-      autocomplete="off"
-      oninput={(event) => (apiKey = (event.currentTarget as HTMLInputElement).value)}
-    />
-  </label>
-
-  <div class="actions">
-    <Button onclick={() => saveProfile(true)} disabled={saving || !canSaveProfile()}>
-      {saving ? "Saving..." : "Save and set active"}
-    </Button>
-    <Button variant="secondary" onclick={() => saveProfile(false)} disabled={saving || !canSaveProfile()}>
-      Save only
-    </Button>
-    <Button
-      variant="secondary"
-      onclick={() => loadProviderModels()}
-      disabled={loadingModels || !apiKey.trim()}
-    >
-      {loadingModels ? "Loading models..." : "Refresh models"}
-    </Button>
-  </div>
-
-  {#if modelsStatus}
-    <StatusMessage
-      tone={modelsStatus.startsWith("Error") ? "error" : "default"}
-      className="compact-status"
-    >
-      {modelsStatus}
+  {#if settingsStatus}
+    <StatusMessage tone={settingsStatus.startsWith("Error") ? "error" : "default"} className="page-status">
+      {settingsStatus}
     </StatusMessage>
   {/if}
 
-  {#if availableModels.length > 0}
-    <div class="model-list">
-      {#each availableModels as model (model.model)}
-        <Button
-          variant="secondary"
-          selected={model.model === defaultModel}
-          className="catalog-option"
-          type="button"
-          onclick={() => (defaultModel = model.model)}
-          title={model.description}
-        >
-          <span class="model-name">{model.display_name}</span>
-          <span class="model-id">{model.model}</span>
-          {#if model.input_token_limit !== null || model.output_token_limit !== null}
-            <span class="model-limits">
-              {#if model.input_token_limit !== null}
-                in {formatTokenLimit(model.input_token_limit)}
-              {/if}
-              {#if model.output_token_limit !== null}
-                out {formatTokenLimit(model.output_token_limit)}
-              {/if}
-            </span>
+  <div class="page-grid settings-grid">
+    <div class="page-stack">
+      <section class="desk-panel">
+        <div class="panel-header">
+          <div class="panel-header-copy">
+            <span class="page-eyebrow">Profiles</span>
+            <h2>LLM profiles</h2>
+            <p>
+              Manage reusable provider profiles for analysis and chat flows. API keys are still
+              stored in local SQLite until secure storage replaces this path.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid">
+          <label>Saved profile
+            <Select value={selectedProfileId} onchange={onSelectedProfileChange}>
+              {#each profiles as profile (profile.profile_id)}
+                <option value={profile.profile_id}>
+                  {profile.profile_id} - {providerLabel(profile.provider)}
+                </option>
+              {/each}
+              <option value={NEW_PROFILE_OPTION}>Create new profile...</option>
+            </Select>
+          </label>
+
+          <label>Active profile
+            <Input type="text" value={activeProfile} disabled />
+          </label>
+        </div>
+
+        <div class="profile-strip">
+          <MetaPill>
+            {creatingProfile ? "Creating new profile" : `Editing ${selectedProfileId}`}
+          </MetaPill>
+          {#if !creatingProfile && selectedProfileId === activeProfile}
+            <MetaPill tone="active">Used by default in analysis</MetaPill>
           {/if}
-        </Button>
-      {/each}
-    </div>
-  {/if}
-</Card>
+        </div>
 
-<Card className="settings-card">
-  <h3>Test Provider</h3>
-  <p class="hint">
-    Run a smoke test with the profile currently open in this form. The test always saves the form
-    first, then uses that saved provider, model, key, and base URL.
-  </p>
-  <SurfaceCard className="summary-strip">
-    <div class="summary-copy">
-      <span class="summary-label">Prompt draft</span>
-      <p>{testPrompt}</p>
-    </div>
-    <div class="summary-meta">
-      {#if provider || defaultModel}
-        <MetaPill>{providerModelLine()}</MetaPill>
-      {/if}
-      {#if testUsage}
-        <MetaPill>{usageLine(testUsage)}</MetaPill>
-      {/if}
-      {#if testing}
-        <Button variant="danger-soft" onclick={cancelTest}>Cancel test</Button>
-      {/if}
-      <Button variant="secondary" onclick={openTestDialog}>
-        {testOutput || testing ? "Open test console" : "Open test"}
-      </Button>
-    </div>
-  </SurfaceCard>
+        <div class="desk-divider"></div>
 
-  {#if testStatus}
-    <StatusMessage
-      tone={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error") ? "error" : "default"}
-    >
-      {testStatus}
-    </StatusMessage>
-  {/if}
+        <div class="grid">
+          <label>Profile ID
+            <Input
+              type="text"
+              value={draftProfileId}
+              placeholder="default"
+              disabled={!creatingProfile}
+              spellcheck={false}
+              oninput={(event) => (draftProfileId = (event.currentTarget as HTMLInputElement).value)}
+            />
+            <span class="field-hint">Stored in lowercase and written into analysis run metadata.</span>
+          </label>
 
-  <SurfaceCard title="Latest response" meta={testing ? "streaming..." : ""} compact className="output-surface">
-    {#if testOutput}
-      <pre>{testOutput}</pre>
-    {:else}
-      <EmptyState description="No output yet. Open the test console to run a prompt." />
-    {/if}
-  </SurfaceCard>
-</Card>
+          <label>Provider
+            <Select value={provider} onchange={onProviderChange}>
+              {#each providerOptions as option (option.value)}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </Select>
+          </label>
+        </div>
+
+        <label>Default model
+          {#if availableModels.length > 0}
+            <Select
+              value={defaultModel}
+              onchange={(event) => (defaultModel = (event.currentTarget as HTMLSelectElement).value)}
+            >
+              {#if !availableModels.some((model) => model.model === defaultModel)}
+                <option value={defaultModel}>{defaultModel}</option>
+              {/if}
+              {#each availableModels as model (model.model)}
+                <option value={model.model}>{model.display_name} - {model.model}</option>
+              {/each}
+            </Select>
+          {:else}
+            <Input
+              type="text"
+              value={defaultModel}
+              placeholder={providerPlaceholder()}
+              oninput={(event) => (defaultModel = (event.currentTarget as HTMLInputElement).value)}
+            />
+          {/if}
+        </label>
+
+        {#if providerSupportsBaseUrl()}
+          <label>Base URL
+            <Input
+              type="url"
+              value={baseUrl}
+              placeholder={providerBaseUrlPlaceholder()}
+              spellcheck={false}
+              oninput={(event) => (baseUrl = (event.currentTarget as HTMLInputElement).value)}
+            />
+            <span class="field-hint">
+              Use this for OmniRoute or any other OpenAI-compatible endpoint exposed through the same
+              backend path.
+            </span>
+          </label>
+        {/if}
+
+        <label>API key
+          <Input
+            type="password"
+            value={apiKey}
+            placeholder={apiKeyPlaceholder()}
+            autocomplete="off"
+            oninput={(event) => (apiKey = (event.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+
+        <div class="actions">
+          <Button onclick={() => saveProfile(true)} disabled={saving || !canSaveProfile()}>
+            {saving ? "Saving..." : "Save and set active"}
+          </Button>
+          <Button variant="secondary" onclick={() => saveProfile(false)} disabled={saving || !canSaveProfile()}>
+            Save only
+          </Button>
+          <Button
+            variant="secondary"
+            onclick={() => loadProviderModels()}
+            disabled={loadingModels || !apiKey.trim()}
+          >
+            {loadingModels ? "Loading models..." : "Refresh models"}
+          </Button>
+        </div>
+
+        {#if modelsStatus}
+          <StatusMessage
+            tone={modelsStatus.startsWith("Error") ? "error" : "default"}
+            className="compact-status"
+          >
+            {modelsStatus}
+          </StatusMessage>
+        {/if}
+
+        {#if availableModels.length > 0}
+          <div class="model-list">
+            {#each availableModels as model (model.model)}
+              <Button
+                variant="secondary"
+                selected={model.model === defaultModel}
+                className="catalog-option"
+                type="button"
+                onclick={() => (defaultModel = model.model)}
+                title={model.description}
+              >
+                <span class="model-name">{model.display_name}</span>
+                <span class="model-id">{model.model}</span>
+                {#if model.input_token_limit !== null || model.output_token_limit !== null}
+                  <span class="model-limits">
+                    {#if model.input_token_limit !== null}
+                      in {formatTokenLimit(model.input_token_limit)}
+                    {/if}
+                    {#if model.output_token_limit !== null}
+                      out {formatTokenLimit(model.output_token_limit)}
+                    {/if}
+                  </span>
+                {/if}
+              </Button>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    </div>
+
+    <div class="page-stack">
+      <section class="desk-panel desk-panel-subtle">
+        <div class="panel-header">
+          <div class="panel-header-copy">
+            <span class="page-eyebrow">Provider test</span>
+            <h2>Smoke test</h2>
+            <p>
+              Run a real request with the profile currently open in the form. The test always saves
+              the draft first, then uses the stored provider, model, key, and base URL.
+            </p>
+          </div>
+        </div>
+
+        <SurfaceCard className="summary-strip">
+          <div class="summary-copy">
+            <span class="summary-label">Prompt draft</span>
+            <p>{testPrompt}</p>
+          </div>
+          <div class="summary-meta">
+            {#if provider || defaultModel}
+              <MetaPill>{providerModelLine()}</MetaPill>
+            {/if}
+            {#if testUsage}
+              <MetaPill>{usageLine(testUsage)}</MetaPill>
+            {/if}
+            {#if testing}
+              <Button variant="danger-soft" onclick={cancelTest}>Cancel test</Button>
+            {/if}
+            <Button variant="secondary" onclick={openTestDialog}>
+              {testOutput || testing ? "Open test console" : "Open test"}
+            </Button>
+          </div>
+        </SurfaceCard>
+
+        {#if testStatus}
+          <StatusMessage
+            tone={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error") ? "error" : "default"}
+          >
+            {testStatus}
+          </StatusMessage>
+        {/if}
+
+        <SurfaceCard title="Latest response" meta={testing ? "streaming..." : ""} compact className="output-surface">
+          {#if testOutput}
+            <pre>{testOutput}</pre>
+          {:else}
+            <EmptyState description="No output yet. Open the test console to run a prompt." />
+          {/if}
+        </SurfaceCard>
+      </section>
+
+      <section class="desk-panel desk-panel-subtle provider-notes">
+        <div class="panel-header-copy">
+          <span class="page-eyebrow">Operator note</span>
+          <h3>Settings now follow the workspace pattern</h3>
+          <p>
+            Main form on the left, focused utility surface on the right. That keeps settings dense,
+            inspectable, and visually aligned with the analysis and accounts screens.
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
 
 <DesktopDialog
   open={testDialogOpen}
@@ -749,13 +797,6 @@
 </DesktopDialog>
 
 <style>
-  :global(.ui-card.settings-card) {
-    margin-bottom: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-  }
-
   .grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -831,6 +872,8 @@
     justify-content: space-between;
     gap: 1rem;
     align-items: flex-start;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 72%, transparent), transparent);
   }
 
   .summary-copy {
@@ -863,15 +906,8 @@
     flex-wrap: wrap;
   }
 
-  .hint {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.9rem;
-    line-height: 1.5;
-  }
-
   :global(.page-status) {
-    margin-bottom: 1rem;
+    margin-bottom: 0;
   }
 
   :global(.compact-status) {
@@ -899,6 +935,10 @@
   .modal-actions {
     align-items: center;
     justify-content: space-between;
+  }
+
+  .provider-notes h3 {
+    margin: 0;
   }
 
   @media (max-width: 720px) {
