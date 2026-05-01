@@ -13,7 +13,7 @@
     onkeydown,
   }: {
     value?: string;
-    rows?: number | string;
+    rows?: number;
     placeholder?: string;
     disabled?: boolean;
     readonly?: boolean;

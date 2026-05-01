@@ -4,6 +4,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
+  import type { BadgeVariant } from "$lib/components/ui/types";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
 
   let {
@@ -35,7 +36,7 @@
         "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
       >
     ) => string;
-    statusTone: (status: string) => string;
+    statusTone: (status: string) => BadgeVariant;
     onRefresh: () => void | Promise<void>;
     onOpenRun: (runId: number) => void | Promise<void>;
     onCancelRun: (runId: number) => void | Promise<void>;

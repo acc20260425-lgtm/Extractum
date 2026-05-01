@@ -716,7 +716,7 @@
     <label>Prompt
       <Textarea
         value={testPrompt}
-        rows="8"
+        rows={8}
         placeholder={`Ask ${providerLabel()} something simple...`}
         oninput={(event) => (testPrompt = (event.currentTarget as HTMLTextAreaElement).value)}
       />

@@ -205,7 +205,7 @@
       </div>
     </SurfaceCard>
     <div class="action-row">
-      <Button onclick={() => goto(`/sources?account=${accountId}`)}>View Sources</Button>
+      <Button onclick={() => goto("/analysis")}>Open Workspace</Button>
       <Button variant="danger-soft" onclick={logout} disabled={loading}>Logout</Button>
     </div>
   </Card>

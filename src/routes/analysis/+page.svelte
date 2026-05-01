@@ -3,16 +3,20 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import ActiveRunList from "$lib/components/analysis/active-run-list.svelte";
-  import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
-  import RunHistory from "$lib/components/analysis/run-history.svelte";
   import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
   import ChunkSummaries from "$lib/components/analysis/chunk-summaries.svelte";
-  import RunControls from "$lib/components/analysis/run-controls.svelte";
+  import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
+  import RunHistory from "$lib/components/analysis/run-history.svelte";
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import TracePanel from "$lib/components/analysis/trace-panel.svelte";
+  import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
+  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import { formatAppError } from "$lib/app-error";
-  import { openConfirmModal } from "$lib/modals";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -24,6 +28,8 @@
     startOfDayUnix,
     statusTone,
   } from "$lib/analysis-utils";
+  import { openConfirmModal } from "$lib/modals";
+  import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
     AnalysisChatEvent,
     AnalysisChatMessage,
@@ -39,6 +45,7 @@
     AnalysisTraceRef,
     EventEnvelope,
   } from "$lib/types/analysis";
+  import type { ItemRecord, SourceRecord, SyncResult } from "$lib/types/sources";
 
   type LiveRunState = {
     phase: string;
@@ -47,6 +54,8 @@
     chunkSummaries: AnalysisChunkSummaryEvent[];
     streamedOutput: string;
   };
+
+  type InspectorMode = "active" | "history" | "trace" | "chunks";
 
   function createEmptyLiveRunState(): LiveRunState {
     return {
@@ -58,18 +67,27 @@
     };
   }
 
-  let sources = $state<AnalysisSourceOption[]>([]);
+  let sourceCatalog = $state<SourceRecord[]>([]);
+  let sourceMetrics = $state<Record<number, AnalysisSourceOption>>({});
+  let sourceItems = $state<ItemRecord[]>([]);
+  let accounts = $state<AccountRecord[]>([]);
+  let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
   let templates = $state<AnalysisPromptTemplate[]>([]);
   let runs = $state<AnalysisRunSummary[]>([]);
   let activeRuns = $state<AnalysisRunSummary[]>([]);
   let groups = $state<AnalysisSourceGroup[]>([]);
-  let loadingSources = $state(false);
+
+  let loadingSourceCatalog = $state(false);
+  let loadingItems = $state(false);
   let loadingTemplates = $state(false);
   let loadingRuns = $state(false);
   let loadingActiveRuns = $state(false);
   let loadingGroups = $state(false);
   let loadingRunDetail = $state(false);
   let loadingChat = $state(false);
+
+  let railQuery = $state("");
+  let inspectorMode = $state<InspectorMode>("history");
 
   let selectedSourceId = $state("");
   let selectedTemplateId = $state("");
@@ -107,6 +125,7 @@
   let activeChatRequestId = $state<string | null>(null);
   let activeChatRunId = $state<number | null>(null);
   let clearingChat = $state(false);
+  let syncingIds = $state<Record<number, boolean>>({});
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
   let openRunRequestToken = 0;
 
@@ -116,6 +135,105 @@
 
   function isActiveRunStatus(value: string) {
     return value === "queued" || value === "running";
+  }
+
+  function currentSource() {
+    if (!selectedSourceId) return null;
+    return sourceCatalog.find((source) => source.id === Number(selectedSourceId)) ?? null;
+  }
+
+  function currentSourceMetric() {
+    const source = currentSource();
+    return source ? sourceMetrics[source.id] ?? null : null;
+  }
+
+  function currentGroup() {
+    if (!selectedGroupId) return null;
+    return groups.find((group) => group.id === Number(selectedGroupId)) ?? null;
+  }
+
+  function currentScopeTitle() {
+    if (analysisScope === "source_group") {
+      return currentGroup()?.name ?? "Source group";
+    }
+    return currentSource()?.title ?? currentSource()?.external_id ?? "Source";
+  }
+
+  function currentScopeSummary() {
+    if (analysisScope === "source_group") {
+      const group = currentGroup();
+      if (!group) return "Select a saved source group to run a cross-source report.";
+      return `${group.members.length} sources in this group workspace.`;
+    }
+
+    const source = currentSource();
+    const metrics = currentSourceMetric();
+    if (!source) return "Select a synced source to inspect messages and launch a report.";
+    if (metrics) {
+      return `${metrics.item_count} synced messages available locally for analysis.`;
+    }
+    return "This source is available in the workspace but has no synced message count yet.";
+  }
+
+  function accountLabel(accountId: number | null) {
+    if (accountId === null) return "No account";
+    return accounts.find((account) => account.id === accountId)?.label ?? `Account #${accountId}`;
+  }
+
+  function runtimeStatus(accountId: number | null) {
+    if (accountId === null) return null;
+    return accountStatuses[accountId] ?? null;
+  }
+
+  function runtimeBadge(runtime: AccountRuntimeStatus | null) {
+    if (!runtime) return "";
+    if (runtime.status === "restoring") return "restoring";
+    if (runtime.status === "reauth_required") return "sign-in needed";
+    if (runtime.status === "restore_failed") return "restore failed";
+    if (runtime.status === "not_initialized") return "offline";
+    return "";
+  }
+
+  function sourceKindLabel(kind: string) {
+    switch (kind) {
+      case "channel":
+        return "channel";
+      case "supergroup":
+        return "supergroup";
+      case "group":
+        return "group";
+      default:
+        return "telegram";
+    }
+  }
+
+  function membershipLabel(kind: string, isMember: boolean) {
+    if (kind === "channel") {
+      return isMember ? "subscribed" : "not subscribed";
+    }
+    return isMember ? "member" : "not a member";
+  }
+
+  function sourceInitial(source: SourceRecord) {
+    return (source.title ?? source.external_id).trim().charAt(0).toUpperCase() || "#";
+  }
+
+  function sourceSyncDisabledReason(source: SourceRecord) {
+    const runtime = runtimeStatus(source.account_id);
+    if (source.account_id === null) return "Source is not linked to an account.";
+    if (!runtime || runtime.status === "not_initialized") {
+      return "Initialize this account before syncing.";
+    }
+    if (runtime.status === "restoring") {
+      return "This account is still restoring.";
+    }
+    if (runtime.status === "reauth_required") {
+      return "Sign in to this account again before syncing.";
+    }
+    if (runtime.status === "restore_failed") {
+      return runtime.message ?? "The saved Telegram session could not be restored.";
+    }
+    return null;
   }
 
   function clearTraceState() {
@@ -158,12 +276,12 @@
     };
   }
 
-  function syncRunSnapshot(runId: number, status: string) {
+  function syncRunSnapshot(runId: number, runStatus: string) {
     updateLiveRunState(runId, (current) => ({
       ...current,
-      phase: status,
-      progress: isActiveRunStatus(status) ? current.progress : "",
-      queuePosition: isActiveRunStatus(status) ? current.queuePosition : null,
+      phase: runStatus,
+      progress: isActiveRunStatus(runStatus) ? current.progress : "",
+      queuePosition: isActiveRunStatus(runStatus) ? current.queuePosition : null,
     }));
   }
 
@@ -191,10 +309,7 @@
   }
 
   function formatRunProgress(payload: AnalysisRunEvent, currentProgress: string) {
-    if (
-      payload.progress_current !== null &&
-      payload.progress_total !== null
-    ) {
+    if (payload.progress_current !== null && payload.progress_total !== null) {
       return `${payload.progress_current}/${payload.progress_total}`;
     }
 
@@ -216,9 +331,10 @@
   function applyRunEvent(payload: AnalysisRunEvent) {
     updateLiveRunState(payload.run_id, (current) => {
       const nextSummaries = payload.chunk_summary
-        ? [...current.chunkSummaries.filter((chunk) => chunk.index !== payload.chunk_summary?.index), payload.chunk_summary].sort(
-            (left, right) => left.index - right.index,
-          )
+        ? [
+            ...current.chunkSummaries.filter((chunk) => chunk.index !== payload.chunk_summary?.index),
+            payload.chunk_summary,
+          ].sort((left, right) => left.index - right.index)
         : current.chunkSummaries;
       const nextPhase =
         payload.kind === "completed" ||
@@ -239,9 +355,47 @@
     });
   }
 
-  const filteredRuns = $derived.by(() => {
-    if (runFilter === "all") return runs;
-    return runs.filter((run) => run.status === runFilter);
+  const activeRunIds = $derived.by(() => activeRuns.map((run) => run.id));
+
+  const focusedLiveRun = $derived.by(() => {
+    if (activeRunId === null) return null;
+    return liveRuns[activeRunId] ?? null;
+  });
+
+  const activePhase = $derived.by(() => focusedLiveRun?.phase || currentRun?.status || "");
+  const activeProgress = $derived.by(() => focusedLiveRun?.progress || "");
+  const focusedChunkSummaries = $derived.by(() => focusedLiveRun?.chunkSummaries ?? []);
+  const focusedStreamedOutput = $derived.by(() => {
+    if (focusedLiveRun?.streamedOutput) {
+      return focusedLiveRun.streamedOutput;
+    }
+
+    return currentRun?.result_markdown ?? "";
+  });
+
+  const selectedRunIsActive = $derived.by(
+    () => activeRunId !== null && activeRunIds.includes(activeRunId),
+  );
+
+  const canCancelCurrentRun = $derived.by(
+    () => activeRunId !== null && activeRunIds.includes(activeRunId),
+  );
+
+  const selectedTemplate = $derived.by(() => {
+    const templateId = selectedTemplateId ? Number(selectedTemplateId) : null;
+    if (templateId === null) return null;
+    return templates.find((template) => template.id === templateId) ?? null;
+  });
+
+  const selectedGroup = $derived.by(() => {
+    const groupId = selectedGroupId ? Number(selectedGroupId) : null;
+    if (groupId === null) return null;
+    return groups.find((group) => group.id === groupId) ?? null;
+  });
+
+  const selectedTrace = $derived.by(() => {
+    if (!selectedTraceRef) return null;
+    return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
   });
 
   const historyScopeParams = $derived.by(() => {
@@ -269,72 +423,28 @@
     return null;
   });
 
-  const focusedLiveRun = $derived.by(() => {
-    if (activeRunId === null) return null;
-    return liveRuns[activeRunId] ?? null;
+  const filteredRuns = $derived.by(() => {
+    if (runFilter === "all") return runs;
+    return runs.filter((run) => run.status === runFilter);
   });
 
-  const activeRunIds = $derived.by(() => activeRuns.map((run) => run.id));
-
-  const activePhase = $derived.by(
-    () => focusedLiveRun?.phase || currentRun?.status || "",
-  );
-
-  const activeProgress = $derived.by(() => focusedLiveRun?.progress || "");
-
-  const focusedChunkSummaries = $derived.by(
-    () => focusedLiveRun?.chunkSummaries ?? [],
-  );
-
-  const focusedStreamedOutput = $derived.by(() => {
-    if (focusedLiveRun?.streamedOutput) {
-      return focusedLiveRun.streamedOutput;
-    }
-
-    return currentRun?.result_markdown ?? "";
+  const filteredSourceCatalog = $derived.by(() => {
+    const query = railQuery.trim().toLocaleLowerCase();
+    return sourceCatalog.filter((source) => {
+      if (!query) return true;
+      return (
+        (source.title ?? source.external_id).toLocaleLowerCase().includes(query) ||
+        accountLabel(source.account_id).toLocaleLowerCase().includes(query)
+      );
+    });
   });
 
-  const selectedRunIsActive = $derived.by(
-    () => activeRunId !== null && activeRunIds.includes(activeRunId),
-  );
-
-  const canCancelCurrentRun = $derived.by(
-    () => activeRunId !== null && activeRunIds.includes(activeRunId),
-  );
-
-  function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
-    if (nextRefs.length === 0) return;
-    const merged = [...traceData.refs];
-    for (const nextRef of nextRefs) {
-      if (!merged.some((existing) => existing.ref === nextRef.ref)) {
-        merged.push(nextRef);
-      }
-    }
-    merged.sort((left, right) => left.published_at - right.published_at);
-    traceData = { refs: merged };
-  }
-
-  function traceRefOrigin(ref: string) {
-    if (savedTraceRefs.includes(ref)) return "saved";
-    if (resolvedTraceRefs.includes(ref)) return "resolved";
-    return "unknown";
-  }
-
-  const selectedTrace = $derived.by(() => {
-    if (!selectedTraceRef) return null;
-    return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
-  });
-
-  const selectedTemplate = $derived.by(() => {
-    const templateId = selectedTemplateId ? Number(selectedTemplateId) : null;
-    if (templateId === null) return null;
-    return templates.find((template) => template.id === templateId) ?? null;
-  });
-
-  const selectedGroup = $derived.by(() => {
-    const groupId = selectedGroupId ? Number(selectedGroupId) : null;
-    if (groupId === null) return null;
-    return groups.find((group) => group.id === groupId) ?? null;
+  const filteredGroups = $derived.by(() => {
+    const query = railQuery.trim().toLocaleLowerCase();
+    return groups.filter((group) => {
+      if (!query) return true;
+      return group.name.toLocaleLowerCase().includes(query);
+    });
   });
 
   function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
@@ -376,9 +486,28 @@
     groupMemberSourceIds = [...groupMemberSourceIds, sourceId].sort((a, b) => a - b);
   }
 
+  function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
+    if (nextRefs.length === 0) return;
+    const merged = [...traceData.refs];
+    for (const nextRef of nextRefs) {
+      if (!merged.some((existing) => existing.ref === nextRef.ref)) {
+        merged.push(nextRef);
+      }
+    }
+    merged.sort((left, right) => left.published_at - right.published_at);
+    traceData = { refs: merged };
+  }
+
+  function traceRefOrigin(ref: string) {
+    if (savedTraceRefs.includes(ref)) return "saved";
+    if (resolvedTraceRefs.includes(ref)) return "resolved";
+    return "unknown";
+  }
+
   async function focusTraceRef(ref: string) {
     if (!currentRun) return;
 
+    inspectorMode = "trace";
     selectedTraceRef = ref;
     if (traceData.refs.some((entry) => entry.ref === ref)) {
       return;
@@ -421,19 +550,79 @@
     }
   }
 
-  async function loadSources() {
-    loadingSources = true;
+  async function loadAccounts() {
     try {
-      const result = await invoke<AnalysisSourceOption[]>("list_analysis_sources");
-      sources = result.filter((source) => source.item_count > 0);
-      if (!selectedSourceId && sources.length > 0) {
-        selectedSourceId = String(sources[0].id);
+      accounts = await invoke<AccountRecord[]>("list_accounts");
+      if (accounts.length === 0) {
+        accountStatuses = {};
+        return;
+      }
+      const statuses = await invoke<AccountRuntimeStatus[]>("tg_get_account_statuses", {
+        accountIds: accounts.map((account) => account.id),
+      });
+      accountStatuses = Object.fromEntries(
+        statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus]),
+      );
+    } catch (error) {
+      status = formatAppError("loading workspace accounts", error);
+    }
+  }
+
+  async function loadSourceCatalog() {
+    loadingSourceCatalog = true;
+    try {
+      const [allSources, analysisSources] = await Promise.all([
+        invoke<SourceRecord[]>("list_sources", { accountId: null }),
+        invoke<AnalysisSourceOption[]>("list_analysis_sources"),
+      ]);
+      sourceCatalog = allSources;
+      sourceMetrics = Object.fromEntries(
+        analysisSources.map((source) => [source.id, source]),
+      );
+
+      if (!selectedSourceId && allSources.length > 0) {
+        const firstSynced = analysisSources[0]?.id ?? allSources[0].id;
+        selectedSourceId = String(firstSynced);
+      } else if (
+        selectedSourceId &&
+        !allSources.some((source) => source.id === Number(selectedSourceId))
+      ) {
+        selectedSourceId = allSources[0] ? String(allSources[0].id) : "";
       }
     } catch (error) {
-      status = formatAppError("loading analysis sources", error);
+      status = formatAppError("loading workspace sources", error);
     } finally {
-      loadingSources = false;
+      loadingSourceCatalog = false;
     }
+  }
+
+  async function loadItems(sourceId: number) {
+    loadingItems = true;
+    try {
+      sourceItems = await invoke<ItemRecord[]>("get_items", {
+        sourceId,
+        limit: 120,
+        beforePublishedAt: null,
+      });
+    } catch (error) {
+      sourceItems = [];
+      status = formatAppError("loading source messages", error);
+    } finally {
+      loadingItems = false;
+    }
+  }
+
+  async function selectSource(sourceId: number) {
+    analysisScope = "single_source";
+    selectedSourceId = String(sourceId);
+    inspectorMode = "history";
+    await loadItems(sourceId);
+  }
+
+  function selectGroup(groupId: number) {
+    analysisScope = "source_group";
+    selectedGroupId = String(groupId);
+    inspectorMode = "history";
   }
 
   async function loadTemplates() {
@@ -445,9 +634,9 @@
       if (!selectedTemplateId && templates.length > 0) {
         selectedTemplateId = String(templates[0].id);
       }
-      const selected = selectedTemplate;
-      if (selected && editorBoundTemplateId !== selected.id) {
-        bindEditorToTemplate(selected);
+      const current = selectedTemplate;
+      if (current && editorBoundTemplateId !== current.id) {
+        bindEditorToTemplate(current);
       }
     } catch (error) {
       status = formatAppError("loading report templates", error);
@@ -460,16 +649,12 @@
     loadingGroups = true;
     try {
       groups = await invoke<AnalysisSourceGroup[]>("list_analysis_source_groups");
-      const selected = selectedGroup;
       if (!selectedGroupId && groups.length > 0) {
         selectedGroupId = String(groups[0].id);
       }
-      if (!selected && groups.length > 0 && selectedGroupId) {
-        selectedGroupId = String(groups[0].id);
-      }
-      const bound = selectedGroup;
-      if (bound && editorBoundGroupId !== bound.id) {
-        bindEditorToGroup(bound);
+      const current = selectedGroup;
+      if (current && editorBoundGroupId !== current.id) {
+        bindEditorToGroup(current);
       }
     } catch (error) {
       status = formatAppError("loading source groups", error);
@@ -560,6 +745,8 @@
 
   async function openRun(runId: number) {
     const requestToken = ++openRunRequestToken;
+    inspectorMode = "history";
+
     if (activeChatRequestId !== null && activeChatRunId !== null && activeChatRunId !== runId) {
       await cancelChat({ silent: true });
       clearChatState();
@@ -645,8 +832,8 @@
       status = "Select both dates first.";
       return;
     }
-    if (periodFrom > periodTo) {
-      status = "The start date must be earlier than or equal to the end date.";
+    if (startOfDayUnix(periodFrom) > endOfDayUnix(periodTo)) {
+      status = "The start date must not be after the end date.";
       return;
     }
     if (!outputLanguage.trim()) {
@@ -655,8 +842,7 @@
     }
 
     startingReport = true;
-    status = "";
-
+    inspectorMode = "active";
     if (activeChatRequestId !== null) {
       await cancelChat({ silent: true });
     }
@@ -706,11 +892,7 @@
   }
 
   async function askRunQuestion() {
-    if (!currentRun) {
-      status = "Open a completed report first.";
-      return;
-    }
-    if (currentRun.status !== "completed") {
+    if (!currentRun || currentRun.status !== "completed") {
       status = "Open a completed report first.";
       return;
     }
@@ -774,13 +956,37 @@
     }
   }
 
+  async function syncSelectedSource(sourceId: number) {
+    syncingIds = { ...syncingIds, [sourceId]: true };
+    try {
+      const result = await invoke<SyncResult>("sync_source", { sourceId });
+      status =
+        `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}.` +
+        (result.initial_sync_policy_applied
+          ? ` First sync policy applied: ${result.initial_sync_policy_applied}.`
+          : "");
+
+      await Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
+
+      if (selectedSourceId === String(sourceId)) {
+        await loadItems(sourceId);
+      }
+    } catch (error) {
+      status = formatAppError("syncing the source", error);
+    } finally {
+      const next = { ...syncingIds };
+      delete next[sourceId];
+      syncingIds = next;
+    }
+  }
+
   async function saveTemplateChanges(nextName = templateName, nextBody = templateBody) {
-    const selected = selectedTemplate;
-    if (!selected) {
+    const current = selectedTemplate;
+    if (!current) {
       status = "Select a template first.";
       return;
     }
-    if (selected.is_builtin) {
+    if (current.is_builtin) {
       status = "Built-in templates cannot be edited directly. Save a copy instead.";
       return;
     }
@@ -792,7 +998,7 @@
     savingTemplate = true;
     try {
       const updated = await invoke<AnalysisPromptTemplate>("update_analysis_prompt_template", {
-        templateId: selected.id,
+        templateId: current.id,
         name: nextName.trim(),
         body: nextBody.trim(),
       });
@@ -832,18 +1038,18 @@
   }
 
   async function deleteTemplate() {
-    const selected = selectedTemplate;
-    if (!selected) {
+    const current = selectedTemplate;
+    if (!current) {
       status = "Select a template first.";
       return;
     }
-    if (selected.is_builtin) {
+    if (current.is_builtin) {
       status = "Built-in templates cannot be deleted.";
       return;
     }
     const confirmed = await openConfirmModal({
       title: "Delete template?",
-      message: `The template "${selected.name}" will be removed from the local app.`,
+      message: `The template "${current.name}" will be removed from the local app.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       tone: "danger",
@@ -854,8 +1060,8 @@
 
     deletingTemplate = true;
     try {
-      await invoke("delete_analysis_prompt_template", { templateId: selected.id });
-      status = `Template "${selected.name}" deleted.`;
+      await invoke("delete_analysis_prompt_template", { templateId: current.id });
+      status = `Template "${current.name}" deleted.`;
       await loadTemplates();
       const fallback = templates[0] ?? null;
       selectedTemplateId = fallback ? String(fallback.id) : "";
@@ -868,8 +1074,8 @@
   }
 
   async function saveGroupChanges() {
-    const selected = selectedGroup;
-    if (!selected) {
+    const current = selectedGroup;
+    if (!current) {
       status = "Select a source group first.";
       return;
     }
@@ -885,7 +1091,7 @@
     savingGroup = true;
     try {
       const updated = await invoke<AnalysisSourceGroup>("update_analysis_source_group", {
-        groupId: selected.id,
+        groupId: current.id,
         name: groupName.trim(),
         sourceIds: groupMemberSourceIds,
       });
@@ -928,14 +1134,14 @@
   }
 
   async function deleteGroup() {
-    const selected = selectedGroup;
-    if (!selected) {
+    const current = selectedGroup;
+    if (!current) {
       status = "Select a source group first.";
       return;
     }
     const confirmed = await openConfirmModal({
       title: "Delete source group?",
-      message: `The group "${selected.name}" will be removed, but its synced sources will stay available for analysis.`,
+      message: `The group "${current.name}" will be removed, but its synced sources will stay available for analysis.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       tone: "danger",
@@ -946,8 +1152,8 @@
 
     deletingGroup = true;
     try {
-      await invoke("delete_analysis_source_group", { groupId: selected.id });
-      status = `Source group "${selected.name}" deleted.`;
+      await invoke("delete_analysis_source_group", { groupId: current.id });
+      status = `Source group "${current.name}" deleted.`;
       await loadGroups();
       const fallback = groups[0] ?? null;
       selectedGroupId = fallback ? String(fallback.id) : "";
@@ -974,16 +1180,16 @@
   });
 
   $effect(() => {
-    const selected = selectedTemplate;
-    if (selected && editorBoundTemplateId !== selected.id) {
-      bindEditorToTemplate(selected);
+    const current = selectedTemplate;
+    if (current && editorBoundTemplateId !== current.id) {
+      bindEditorToTemplate(current);
     }
   });
 
   $effect(() => {
-    const selected = selectedGroup;
-    if (selected && editorBoundGroupId !== selected.id) {
-      bindEditorToGroup(selected);
+    const current = selectedGroup;
+    if (current && editorBoundGroupId !== current.id) {
+      bindEditorToGroup(current);
     }
   });
 
@@ -1007,7 +1213,12 @@
     let detachAnalysisListener: (() => void) | null = null;
     let detachChatListener: (() => void) | null = null;
 
-    void loadSources();
+    void loadAccounts();
+    void loadSourceCatalog().then(() => {
+      if (selectedSourceId) {
+        void loadItems(Number(selectedSourceId));
+      }
+    });
     void loadTemplates();
     void loadGroups();
     void loadActiveRuns();
@@ -1019,8 +1230,13 @@
 
       applyRunEvent(payload);
 
+      if (payload.chunk_summary) {
+        inspectorMode = "chunks";
+      }
+
       if (activeRunId === null) {
         activeRunId = payload.run_id;
+        inspectorMode = "active";
         void openRun(payload.run_id);
       }
 
@@ -1138,252 +1354,779 @@
   });
 </script>
 
-<h1>Analysis</h1>
-<p class="note">
-  Reports and follow-up chat currently use only synced items that still contain text or captions.
-  Media-only posts remain visible on <code>/sources</code> but are not included in analysis yet.
-</p>
-
 {#if status}
-  <p class="status" class:error={isErrorStatus(status)}>
+  <StatusMessage tone={isErrorStatus(status) ? "error" : "default"} className="workspace-status">
     {status}
-  </p>
+  </StatusMessage>
 {/if}
 
-<div class="workspace">
-  <div class="control-stack">
-    <RunControls
-      {analysisScope}
-      {selectedSourceId}
-      {selectedGroupId}
-      {selectedTemplateId}
-      {periodFrom}
-      {periodTo}
-      {outputLanguage}
-      {modelOverride}
-      {sources}
-      {groups}
-      {templates}
-      {loadingSources}
-      {loadingGroups}
-      {loadingTemplates}
-      launching={startingReport}
-      {activePhase}
-      {activeProgress}
-      showRunMeta={startingReport || activeRunId !== null || currentRun !== null}
-      selectedGroupSourceCount={selectedGroup?.members.length ?? null}
-      {phaseLabel}
-      onChangeScope={(scope) => (analysisScope = scope)}
-      onChangeSelectedSourceId={(value) => (selectedSourceId = value)}
-      onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
-      onChangePeriodFrom={(value) => (periodFrom = value)}
-      onChangePeriodTo={(value) => (periodTo = value)}
-      onChangeOutputLanguage={(value) => (outputLanguage = value)}
-      onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
-      onChangeModelOverride={(value) => (modelOverride = value)}
-      onRunReport={runReport}
+<section class="analysis-workspace">
+  <aside class="rail">
+    <div class="rail-header">
+      <div>
+        <span class="eyebrow">Research context</span>
+        <h1>Workspace</h1>
+      </div>
+      <Badge variant="info">{sourceCatalog.length + groups.length} items</Badge>
+    </div>
+
+    <Input
+      type="search"
+      value={railQuery}
+      placeholder="Search sources or groups"
+      oninput={(event) => (railQuery = (event.currentTarget as HTMLInputElement).value)}
+      className="rail-search"
     />
 
-    <ChunkSummaries summaries={focusedChunkSummaries} running={selectedRunIsActive} />
-  </div>
+    <div class="rail-section">
+      <div class="rail-section-title">
+        <span>Sources</span>
+        <small>{filteredSourceCatalog.length}</small>
+      </div>
+      <div class="rail-list">
+        {#if loadingSourceCatalog}
+          <div class="rail-empty">Loading sources...</div>
+        {:else if filteredSourceCatalog.length === 0}
+          <div class="rail-empty">No sources match the current search.</div>
+        {:else}
+          {#each filteredSourceCatalog as source (source.id)}
+            {@const metrics = sourceMetrics[source.id]}
+            {@const syncReason = sourceSyncDisabledReason(source)}
+            {@const runtime = runtimeStatus(source.account_id)}
+            {@const isSelected = analysisScope === "single_source" && selectedSourceId === String(source.id)}
+            <article class:selected={isSelected} class="rail-row">
+              <button class="rail-row-main" type="button" onclick={() => void selectSource(source.id)}>
+                <div class="rail-avatar" aria-hidden="true">
+                  {#if source.avatar_data_url}
+                    <img src={source.avatar_data_url} alt="" loading="lazy" />
+                  {:else}
+                    <span>{sourceInitial(source)}</span>
+                  {/if}
+                </div>
+                <div class="rail-copy">
+                  <div class="rail-copy-top">
+                    <strong>{source.title ?? source.external_id}</strong>
+                    {#if metrics?.last_synced_at}
+                      <span>{formatTimestamp(metrics.last_synced_at)}</span>
+                    {/if}
+                  </div>
+                  <div class="rail-copy-meta">
+                    <span>{accountLabel(source.account_id)}</span>
+                    <span>{sourceKindLabel(source.telegram_source_kind)}</span>
+                    {#if metrics}
+                      <span>{metrics.item_count} msgs</span>
+                    {/if}
+                  </div>
+                </div>
+              </button>
+              <div class="rail-row-actions">
+                <Badge>{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
+                {#if runtimeBadge(runtime)}
+                  <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeBadge(runtime)}</Badge>
+                {/if}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onclick={() => void syncSelectedSource(source.id)}
+                  disabled={!!syncingIds[source.id] || syncReason !== null}
+                  title={syncReason ?? undefined}
+                >
+                  {syncingIds[source.id] ? "Syncing..." : "Sync"}
+                </Button>
+              </div>
+            </article>
+          {/each}
+        {/if}
+      </div>
+    </div>
 
-  <section class="card report">
-    <div class="report-layout">
-      <ReportViewer
-        {currentRun}
-        {loadingRunDetail}
-        streamedOutput={focusedStreamedOutput}
-        traceRefCount={traceData.refs.length}
-        {selectedTraceRef}
-        livePhase={activePhase}
-        liveProgress={activeProgress}
-        {canCancelCurrentRun}
-        {formatTimestamp}
-        {formatPeriod}
-        {runTargetLabel}
-        {statusTone}
-        {reportLines}
-        onFocusTraceRef={focusTraceRef}
-        onCancelCurrentRun={() => {
-          if (activeRunId !== null) {
-            return cancelActiveRun(activeRunId);
-          }
-        }}
+    <div class="rail-section">
+      <div class="rail-section-title">
+        <span>Groups</span>
+        <small>{filteredGroups.length}</small>
+      </div>
+      <div class="rail-list">
+        {#if loadingGroups}
+          <div class="rail-empty">Loading groups...</div>
+        {:else if filteredGroups.length === 0}
+          <div class="rail-empty">No groups match the current search.</div>
+        {:else}
+          {#each filteredGroups as group (group.id)}
+            <button
+              class:selected={analysisScope === "source_group" && selectedGroupId === String(group.id)}
+              class="rail-row rail-group-row"
+              type="button"
+              onclick={() => selectGroup(group.id)}
+            >
+              <div class="rail-avatar group-avatar" aria-hidden="true">
+                <span>{group.name.trim().charAt(0).toUpperCase() || "G"}</span>
+              </div>
+              <div class="rail-copy">
+                <div class="rail-copy-top">
+                  <strong>{group.name}</strong>
+                  <span>{group.members.length} src</span>
+                </div>
+                <div class="rail-copy-meta">
+                  <span>Saved source group</span>
+                  <span>Updated {formatTimestamp(group.updated_at)}</span>
+                </div>
+              </div>
+            </button>
+          {/each}
+        {/if}
+      </div>
+    </div>
+  </aside>
+
+  <section class="center-pane">
+    <div class="scope-hero">
+      <div class="scope-hero-copy">
+        <span class="eyebrow">{analysisScope === "source_group" ? "Source group workspace" : "Source workspace"}</span>
+        <h2>{currentScopeTitle()}</h2>
+        <p>{currentScopeSummary()}</p>
+      </div>
+      <div class="scope-hero-meta">
+        {#if analysisScope === "single_source" && currentSource()}
+          <Badge variant="info">{sourceKindLabel(currentSource()!.telegram_source_kind)}</Badge>
+          <Badge>{accountLabel(currentSource()!.account_id)}</Badge>
+        {/if}
+        {#if analysisScope === "source_group" && currentGroup()}
+          <Badge variant="info">{currentGroup()!.members.length} sources</Badge>
+        {/if}
+        {#if currentRun}
+          <Badge variant={statusTone(currentRun.status)}>Run #{currentRun.id}</Badge>
+        {/if}
+      </div>
+    </div>
+
+    <div class="controls-panel">
+      <div class="controls-grid">
+        <label>Period from
+          <Input
+            type="date"
+            value={periodFrom}
+            oninput={(event) => (periodFrom = (event.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+        <label>Period to
+          <Input
+            type="date"
+            value={periodTo}
+            oninput={(event) => (periodTo = (event.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+        <label>Prompt template
+          <Select
+            value={selectedTemplateId}
+            disabled={loadingTemplates}
+            onchange={(event) => (selectedTemplateId = (event.currentTarget as HTMLSelectElement).value)}
+          >
+            {#if loadingTemplates}
+              <option value="">Loading templates...</option>
+            {:else if templates.length === 0}
+              <option value="">No report templates available</option>
+            {/if}
+            {#each templates as template (template.id)}
+              <option value={String(template.id)}>
+                {template.name}{template.is_builtin ? " - builtin" : ""}
+              </option>
+            {/each}
+          </Select>
+        </label>
+        <label>Output language
+          <Input
+            type="text"
+            value={outputLanguage}
+            placeholder="Russian"
+            oninput={(event) => (outputLanguage = (event.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+      </div>
+
+      <div class="controls-bottom">
+        <label class="model-field">Model override
+          <Input
+            type="text"
+            value={modelOverride}
+            placeholder="Use active profile default model"
+            oninput={(event) => (modelOverride = (event.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+        <div class="controls-actions">
+          <Button onclick={runReport} disabled={startingReport || !selectedTemplateId || (analysisScope === "single_source" ? !selectedSourceId : !selectedGroupId)}>
+            {startingReport ? "Starting..." : "Run report"}
+          </Button>
+          {#if analysisScope === "single_source" && currentSource()}
+            <Button
+              variant="secondary"
+              onclick={() => void syncSelectedSource(currentSource()!.id)}
+              disabled={!!syncingIds[currentSource()!.id] || sourceSyncDisabledReason(currentSource()!) !== null}
+              title={sourceSyncDisabledReason(currentSource()!) ?? undefined}
+            >
+              {syncingIds[currentSource()!.id] ? "Syncing..." : "Sync source"}
+            </Button>
+          {/if}
+        </div>
+      </div>
+
+      {#if selectedRunIsActive || currentRun}
+        <div class="live-strip">
+          <span><strong>Phase:</strong> {phaseLabel(activePhase)}</span>
+          {#if activeProgress}
+            <span><strong>Progress:</strong> {activeProgress}</span>
+          {/if}
+          {#if currentRun}
+            <span><strong>Provider:</strong> {currentRun.provider}/{currentRun.model}</span>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    {#if analysisScope === "single_source" && currentSource()}
+      <div class="context-panel">
+        <div class="context-panel-header">
+          <div>
+            <span class="eyebrow">Source context</span>
+            <h3>Recent synced messages</h3>
+          </div>
+          <Badge variant="neutral">
+            {currentSourceMetric()?.item_count ?? sourceItems.length} messages
+          </Badge>
+        </div>
+        <SourceMessagesPanel
+          {loadingItems}
+          items={sourceItems}
+          formatDate={formatTimestamp}
+          embedded={true}
+          previewLimit={120}
+        />
+      </div>
+    {/if}
+
+    <ReportViewer
+      {currentRun}
+      {loadingRunDetail}
+      streamedOutput={focusedStreamedOutput}
+      traceRefCount={traceData.refs.length}
+      {selectedTraceRef}
+      livePhase={activePhase}
+      liveProgress={activeProgress}
+      {canCancelCurrentRun}
+      {formatTimestamp}
+      {formatPeriod}
+      {runTargetLabel}
+      {statusTone}
+      {reportLines}
+      onFocusTraceRef={focusTraceRef}
+      onCancelCurrentRun={() => {
+        if (activeRunId !== null) {
+          return cancelActiveRun(activeRunId);
+        }
+      }}
+    />
+
+    <ChatPanel
+      {currentRun}
+      {loadingChat}
+      {chatMessages}
+      {chatQuestion}
+      {chatting}
+      canCancelChat={chatting && activeChatRequestId !== null}
+      {clearingChat}
+      {selectedTraceRef}
+      {reportLines}
+      onFocusTraceRef={focusTraceRef}
+      onAskQuestion={askRunQuestion}
+      onCancelChat={cancelChat}
+      onClearChat={clearChatMessages}
+      onChangeChatQuestion={(value) => (chatQuestion = value)}
+    />
+
+    <div class="utility-strip">
+      <TemplateEditor
+        compact={true}
+        {selectedTemplate}
+        {templateName}
+        {templateBody}
+        {savingTemplate}
+        {deletingTemplate}
+        onSaveTemplateCopy={saveTemplateCopy}
+        onSaveTemplateChanges={saveTemplateChanges}
+        onDeleteTemplate={deleteTemplate}
       />
 
-      <TracePanel
-        traceRefs={traceData.refs}
-        {selectedTraceRef}
-        {selectedTrace}
+      <SourceGroupEditor
+        compact={true}
+        {groups}
+        {selectedGroupId}
+        {selectedGroup}
+        {groupName}
+        {groupMemberSourceIds}
+        sources={Object.values(sourceMetrics)}
+        {savingGroup}
+        {deletingGroup}
         {formatTimestamp}
-        {traceRefOrigin}
-        onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
+        {isGroupSourceSelected}
+        onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
+        onChangeGroupName={(value) => (groupName = value)}
+        onToggleSource={toggleGroupSource}
+        onStartNewGroup={startNewGroup}
+        onSaveGroupCopy={saveGroupCopy}
+        onSaveGroupChanges={saveGroupChanges}
+        onDeleteGroup={deleteGroup}
       />
     </div>
   </section>
-</div>
 
-<ChatPanel
-  {currentRun}
-  {loadingChat}
-  {chatMessages}
-  {chatQuestion}
-  {chatting}
-  canCancelChat={chatting && activeChatRequestId !== null}
-  {clearingChat}
-  {selectedTraceRef}
-  {reportLines}
-  onFocusTraceRef={focusTraceRef}
-  onAskQuestion={askRunQuestion}
-  onCancelChat={cancelChat}
-  onClearChat={clearChatMessages}
-  onChangeChatQuestion={(value) => (chatQuestion = value)}
-/>
+  <aside class="inspector">
+    <div class="inspector-header">
+      <div>
+        <span class="eyebrow">Inspector</span>
+        <h3>Runs and evidence</h3>
+      </div>
+      <div class="inspector-tabs">
+        <Button variant="secondary" size="sm" selected={inspectorMode === "active"} onclick={() => (inspectorMode = "active")}>
+          Active
+        </Button>
+        <Button variant="secondary" size="sm" selected={inspectorMode === "history"} onclick={() => (inspectorMode = "history")}>
+          History
+        </Button>
+        <Button variant="secondary" size="sm" selected={inspectorMode === "trace"} onclick={() => (inspectorMode = "trace")}>
+          Trace
+        </Button>
+        <Button variant="secondary" size="sm" selected={inspectorMode === "chunks"} onclick={() => (inspectorMode = "chunks")}>
+          Chunks
+        </Button>
+      </div>
+    </div>
 
-<TemplateEditor
-  {selectedTemplate}
-  {templateName}
-  {templateBody}
-  {savingTemplate}
-  {deletingTemplate}
-  onSaveTemplateCopy={saveTemplateCopy}
-  onSaveTemplateChanges={saveTemplateChanges}
-  onDeleteTemplate={deleteTemplate}
-/>
-
-<SourceGroupEditor
-  {groups}
-  {selectedGroupId}
-  {selectedGroup}
-  {groupName}
-  {groupMemberSourceIds}
-  {sources}
-  {savingGroup}
-  {deletingGroup}
-  {formatTimestamp}
-  {isGroupSourceSelected}
-  onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
-  onChangeGroupName={(value) => (groupName = value)}
-  onToggleSource={toggleGroupSource}
-  onStartNewGroup={startNewGroup}
-  onSaveGroupCopy={saveGroupCopy}
-  onSaveGroupChanges={saveGroupChanges}
-  onDeleteGroup={deleteGroup}
-/>
-
-<ActiveRunList
-  {activeRuns}
-  {loadingActiveRuns}
-  {activeRunId}
-  {formatTimestamp}
-  {formatPeriod}
-  {phaseLabel}
-  {livePhase}
-  {liveProgress}
-  {runTargetLabel}
-  {statusTone}
-  onRefresh={loadActiveRuns}
-  onOpenRun={openRun}
-  onCancelRun={cancelActiveRun}
-/>
-
-<RunHistory
-  {runs}
-  {loadingRuns}
-  {historyScope}
-  historyTargetReady={historyScopeParams !== null}
-  {runFilter}
-  {activeRunId}
-  {filteredRuns}
-  {formatTimestamp}
-  {formatPeriod}
-  {runTargetLabel}
-  {statusTone}
-  onRefresh={loadRuns}
-  onOpenRun={openRun}
-  onChangeFilter={(next) => (runFilter = next)}
-  onChangeHistoryScope={(next) => (historyScope = next)}
-/>
+    <div class="inspector-body">
+      {#if inspectorMode === "active"}
+        <ActiveRunList
+          {activeRuns}
+          {loadingActiveRuns}
+          {activeRunId}
+          {formatTimestamp}
+          {formatPeriod}
+          {phaseLabel}
+          {livePhase}
+          {liveProgress}
+          {runTargetLabel}
+          {statusTone}
+          onRefresh={loadActiveRuns}
+          onOpenRun={openRun}
+          onCancelRun={cancelActiveRun}
+        />
+      {:else if inspectorMode === "history"}
+        <RunHistory
+          {runs}
+          {loadingRuns}
+          {historyScope}
+          historyTargetReady={historyScopeParams !== null}
+          {runFilter}
+          {activeRunId}
+          {filteredRuns}
+          {formatTimestamp}
+          {formatPeriod}
+          {runTargetLabel}
+          {statusTone}
+          onRefresh={loadRuns}
+          onOpenRun={openRun}
+          onChangeFilter={(next) => (runFilter = next)}
+          onChangeHistoryScope={(next) => (historyScope = next)}
+        />
+      {:else if inspectorMode === "trace"}
+        <TracePanel
+          traceRefs={traceData.refs}
+          {selectedTraceRef}
+          {selectedTrace}
+          {formatTimestamp}
+          {traceRefOrigin}
+          onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
+        />
+      {:else}
+        <ChunkSummaries summaries={focusedChunkSummaries} running={selectedRunIsActive} />
+      {/if}
+    </div>
+  </aside>
+</section>
 
 <style>
-  .workspace {
+  .analysis-workspace {
     display: grid;
-    grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1.6fr) minmax(320px, 430px);
+    gap: 0.9rem;
     align-items: start;
+    min-width: 0;
   }
 
-  .control-stack {
+  :global(.workspace-status) {
+    margin-bottom: 0.85rem;
+  }
+
+  .rail,
+  .center-pane,
+  .inspector {
+    min-width: 0;
+  }
+
+  .rail,
+  .inspector {
+    position: sticky;
+    top: 0;
+  }
+
+  .rail {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.8rem;
+    padding: 0.85rem;
+    background: color-mix(in srgb, var(--panel) 96%, white 4%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    max-height: calc(100vh - 6rem);
+    overflow: auto;
   }
 
-  .card {
+  .rail-header,
+  .scope-hero,
+  .controls-panel,
+  .context-panel,
+  .inspector {
     background: var(--panel);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
   }
 
-  .report {
+  .rail-header,
+  .scope-hero,
+  .controls-panel,
+  .context-panel,
+  .inspector {
+    border-radius: 16px;
+  }
+
+  .rail-header,
+  .context-panel-header,
+  .inspector-header,
+  .scope-hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.2rem;
+  }
+
+  .rail-header h1,
+  .scope-hero h2,
+  .context-panel-header h3,
+  .inspector-header h3 {
+    margin: 0;
+  }
+
+  .rail-section {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.55rem;
   }
 
-  .status {
-    padding: 0.6rem 1rem;
-    border-radius: 6px;
-    background: var(--status-bg);
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-  }
-
-  .note {
+  .rail-section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
     color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  :global(.rail-search) {
+    min-height: 2.5rem;
+  }
+
+  .rail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .rail-empty {
+    padding: 0.85rem 0.95rem;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    color: var(--muted);
+    font-size: 0.86rem;
+    background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+  }
+
+  .rail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.6rem;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: var(--panel-strong);
+  }
+
+  .rail-group-row {
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .rail-row.selected,
+  .rail-group-row.selected {
+    border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+    background: color-mix(in srgb, var(--primary) 8%, var(--panel-strong));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .rail-row-main {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .rail-avatar {
+    flex: 0 0 2.35rem;
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 0.9rem;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+    color: var(--primary);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .group-avatar {
+    border-radius: 0.8rem;
+  }
+
+  .rail-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .rail-copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.16rem;
+  }
+
+  .rail-copy-top,
+  .rail-copy-meta,
+  .rail-row-actions {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .rail-copy-top {
+    justify-content: space-between;
+  }
+
+  .rail-copy-top strong {
     font-size: 0.92rem;
-    margin-top: 0;
-    margin-bottom: 1rem;
-    max-width: 72ch;
+    line-height: 1.25;
   }
 
-  .status.error {
-    background: var(--status-error-bg);
-    color: var(--status-error-text);
+  .rail-copy-top span,
+  .rail-copy-meta span {
+    font-size: 0.75rem;
+    color: var(--muted);
   }
 
-  .report-layout {
+  .center-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    min-width: 0;
+  }
+
+  .scope-hero,
+  .controls-panel,
+  .context-panel,
+  .inspector {
+    padding: 1rem;
+  }
+
+  .scope-hero-copy p {
+    margin: 0.35rem 0 0 0;
+    color: var(--muted);
+    line-height: 1.55;
+    max-width: 64ch;
+  }
+
+  .scope-hero-meta {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .controls-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .controls-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
-    gap: 1rem;
-    align-items: start;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.8rem;
   }
 
-  :global(button.danger-soft) {
-    background: color-mix(in srgb, var(--danger) 14%, var(--panel));
-    color: var(--danger);
-    border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  .controls-bottom {
+    display: flex;
+    gap: 0.8rem;
+    align-items: end;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
-  :global(button.danger-soft:hover) {
-    background: color-mix(in srgb, var(--danger) 22%, var(--panel));
+  .controls-actions {
+    display: flex;
+    gap: 0.55rem;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
-  @media (max-width: 1080px) {
-    .workspace {
-      grid-template-columns: 1fr;
-    }
+  .model-field {
+    flex: 1 1 18rem;
+    min-width: 16rem;
+  }
 
-    .report-layout {
-      grid-template-columns: 1fr;
-    }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.83rem;
+    color: var(--muted);
+  }
+
+  .live-strip {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 0.2rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  .context-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .utility-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+  }
+
+  .inspector {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    max-height: calc(100vh - 6rem);
+    overflow: auto;
+  }
+
+  .inspector-header {
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  }
+
+  .inspector-tabs {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .inspector-body {
+    min-width: 0;
   }
 
   @media (max-width: 1500px) {
-    .report-layout {
+    .analysis-workspace {
+      grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+    }
+
+    .inspector {
+      grid-column: 1 / -1;
+      position: static;
+      max-height: none;
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .analysis-workspace {
       grid-template-columns: 1fr;
+    }
+
+    .rail {
+      position: static;
+      max-height: none;
+    }
+
+    .controls-grid,
+    .utility-strip {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .scope-hero,
+    .context-panel-header,
+    .inspector-header,
+    .controls-bottom {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .controls-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .model-field {
+      min-width: 0;
+    }
+
+    .scope-hero-meta,
+    .inspector-tabs {
+      justify-content: flex-start;
     }
   }
 </style>

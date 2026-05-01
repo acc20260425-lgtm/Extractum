@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { page } from "$app/state";
+  import Button from "$lib/components/ui/Button.svelte";
   import ModalHost from "$lib/components/modal-host.svelte";
   import ToastHost from "$lib/components/toast-host.svelte";
 
@@ -20,6 +21,12 @@
 
   const navItems = [
     {
+      href: "/analysis",
+      label: "Workspace",
+      caption: "Sources, reports, chat",
+      active: (pathname: string) => pathname.startsWith("/analysis") || pathname === "/",
+    },
+    {
       href: "/accounts",
       label: "Accounts",
       caption: "Telegram access",
@@ -31,12 +38,6 @@
       label: "Sources",
       caption: "Channels and sync",
       active: (pathname: string) => pathname.startsWith("/sources"),
-    },
-    {
-      href: "/analysis",
-      label: "Analysis",
-      caption: "Reports and chat",
-      active: (pathname: string) => pathname.startsWith("/analysis"),
     },
     {
       href: "/settings",
@@ -57,11 +58,11 @@
   <div class="shell">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <a class="brand" href="/accounts">
-          <span class="brand-mark" aria-hidden="true">E</span>
+        <a class="brand" href="/analysis">
+          <span class="brand-mark" aria-hidden="true">EX</span>
           <span class="brand-copy">
             <strong>Extractum</strong>
-            <small>Research workspace</small>
+            <small>Desktop research workspace</small>
           </span>
         </a>
       </div>
@@ -78,14 +79,43 @@
         {/each}
       </nav>
 
+      <div class="sidebar-utility">
+        <a href="/sources" class:active={page.url.pathname.startsWith("/sources")}>
+          <span class="nav-label">Sources</span>
+          <span class="nav-caption">Compatibility view</span>
+        </a>
+      </div>
+
       <div class="sidebar-footer">
-        <button class="theme-toggle secondary" type="button" onclick={toggleTheme}>
+        <div class="footer-copy">
+          <span class="footer-label">Workspace mode</span>
+          <strong>NotebookLM x Telegram</strong>
+        </div>
+        <Button className="theme-toggle" variant="secondary" type="button" onclick={toggleTheme}>
           {theme === "light" ? "Dark theme" : "Light theme"}
-        </button>
+        </Button>
       </div>
     </aside>
 
     <main class="workspace">
+      <div class="workspace-topbar">
+        <div class="workspace-route">
+          <span class="workspace-kicker">Current space</span>
+          <strong>
+            {#if page.url.pathname.startsWith("/analysis")}
+              Analysis workspace
+            {:else if page.url.pathname.startsWith("/accounts") || page.url.pathname.startsWith("/auth")}
+              Account management
+            {:else if page.url.pathname.startsWith("/settings")}
+              Settings
+            {:else if page.url.pathname.startsWith("/sources")}
+              Sources compatibility view
+            {:else}
+              Extractum
+            {/if}
+          </strong>
+        </div>
+      </div>
       <div class="workspace-inner">
         {@render children()}
       </div>
@@ -97,46 +127,46 @@
   :global(*, *::before, *::after) { box-sizing: border-box; }
   :global(:root) {
     color-scheme: light;
-    --bg: #f5f7fb;
-    --panel: #ffffff;
-    --panel-strong: #eef2f8;
-    --panel-hover: #e4eaf5;
-    --border: #d3dbea;
-    --text: #1b2430;
-    --muted: #657085;
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --danger: #dc3545;
-    --danger-hover: #b42330;
-    --status-bg: #e3efff;
-    --status-error-bg: #fde7ea;
-    --status-error-text: #b42330;
-    --shadow: 0 18px 45px rgba(37, 99, 235, 0.08);
+    --bg: #eef1f5;
+    --panel: #fbfcfd;
+    --panel-strong: #f2f4f7;
+    --panel-hover: #e7ebf0;
+    --border: #d7dde5;
+    --text: #17212b;
+    --muted: #6e7c8a;
+    --primary: #2f6dea;
+    --primary-hover: #2459c3;
+    --danger: #d94d4d;
+    --danger-hover: #b93f3f;
+    --status-bg: #e7f0ff;
+    --status-error-bg: #fde9ea;
+    --status-error-text: #a23535;
+    --shadow: 0 18px 40px rgba(23, 33, 43, 0.06);
   }
   :global([data-theme="dark"]) {
     color-scheme: dark;
-    --bg: #111827;
-    --panel: #1f2937;
-    --panel-strong: #111827;
-    --panel-hover: #1a2332;
-    --border: #374151;
-    --text: #f3f4f6;
-    --muted: #9ca3af;
-    --primary: #3b82f6;
-    --primary-hover: #2563eb;
-    --danger: #dc3545;
-    --danger-hover: #a71d2a;
-    --status-bg: #1e3a5f;
-    --status-error-bg: #4a1a1a;
-    --status-error-text: #fda4af;
-    --shadow: 0 22px 50px rgba(0, 0, 0, 0.32);
+    --bg: #0f1419;
+    --panel: #182028;
+    --panel-strong: #111820;
+    --panel-hover: #22303b;
+    --border: #2d3a46;
+    --text: #edf2f7;
+    --muted: #90a1b2;
+    --primary: #61a3ff;
+    --primary-hover: #3e88f2;
+    --danger: #ff6b6b;
+    --danger-hover: #db5656;
+    --status-bg: #1a2d47;
+    --status-error-bg: #472225;
+    --status-error-text: #ffb4b8;
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
   }
   :global(body) {
     margin: 0;
-    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+    font-family: "Segoe UI", "Inter Tight", "IBM Plex Sans", sans-serif;
     background:
-      radial-gradient(circle at top, rgba(37, 99, 235, 0.16), transparent 34%),
-      linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 82%, white 18%));
+      radial-gradient(circle at top left, rgba(47, 109, 234, 0.14), transparent 28%),
+      linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 88%, white 12%));
     color: var(--text);
   }
   :global(h1, h2, h3) { margin: 0 0 1rem; }
@@ -190,33 +220,34 @@
   .shell {
     display: flex;
     min-height: 100vh;
+    gap: 0;
   }
 
   .sidebar {
-    width: 248px;
-    flex: 0 0 248px;
+    width: 214px;
+    flex: 0 0 214px;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding: 1rem 0.85rem 1rem 1rem;
+    gap: 0.9rem;
+    padding: 0.85rem 0.7rem 0.85rem 0.85rem;
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, white 6%), var(--panel));
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, white 4%), var(--panel));
     border-right: 1px solid var(--border);
-    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.3);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.18);
   }
 
   .sidebar-header {
-    padding: 0.25rem 0.25rem 0;
+    padding: 0.2rem 0.2rem 0;
   }
 
   .brand {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.65rem;
     color: inherit;
     text-decoration: none;
-    padding: 0.45rem 0.55rem;
-    border-radius: 14px;
+    padding: 0.5rem 0.55rem;
+    border-radius: 12px;
   }
 
   .brand:hover {
@@ -227,14 +258,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 999px;
-    background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 75%, black));
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.8rem;
+    background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 74%, black));
     color: white;
-    font-size: 1rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.2);
+    letter-spacing: 0.04em;
+    box-shadow: 0 10px 24px rgba(47, 109, 234, 0.22);
   }
 
   .brand-copy {
@@ -245,41 +277,44 @@
   }
 
   .brand-copy strong {
-    font-size: 0.98rem;
+    font-size: 0.94rem;
     line-height: 1.1;
   }
 
   .brand-copy small {
     color: var(--muted);
-    font-size: 0.77rem;
+    font-size: 0.72rem;
     line-height: 1.1;
   }
 
   .sidebar-nav {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.15rem;
   }
 
-  .sidebar-nav a {
+  .sidebar-nav a,
+  .sidebar-utility a {
     display: flex;
     flex-direction: column;
     gap: 0.18rem;
-    padding: 0.72rem 0.85rem;
-    border-radius: 14px;
+    padding: 0.62rem 0.78rem;
+    border-radius: 12px;
     color: var(--muted);
     text-decoration: none;
     transition: background 0.2s, color 0.2s, border-color 0.2s;
     border: 1px solid transparent;
   }
 
-  .sidebar-nav a:hover {
+  .sidebar-nav a:hover,
+  .sidebar-utility a:hover {
     color: var(--text);
     background: color-mix(in srgb, var(--panel-hover) 72%, transparent);
     border-color: color-mix(in srgb, var(--border) 72%, transparent);
   }
 
-  .sidebar-nav a.active {
+  .sidebar-nav a.active,
+  .sidebar-utility a.active {
     color: var(--text);
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--primary) 12%, var(--panel)), color-mix(in srgb, var(--primary) 7%, var(--panel)));
@@ -288,41 +323,94 @@
   }
 
   .nav-label {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
     line-height: 1.15;
   }
 
   .nav-caption {
-    font-size: 0.76rem;
+    font-size: 0.72rem;
     line-height: 1.2;
     color: var(--muted);
   }
 
   .sidebar-nav a.active .nav-caption,
-  .sidebar-nav a:hover .nav-caption {
+  .sidebar-nav a:hover .nav-caption,
+  .sidebar-utility a.active .nav-caption,
+  .sidebar-utility a:hover .nav-caption {
     color: color-mix(in srgb, var(--muted) 72%, var(--text));
+  }
+
+  .sidebar-utility {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   }
 
   .sidebar-footer {
     margin-top: auto;
-    padding: 0.25rem;
+    padding: 0.25rem 0.2rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
   }
 
-  .theme-toggle {
+  .footer-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    color: var(--muted);
+  }
+
+  .footer-copy strong {
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+
+  .footer-label,
+  .workspace-kicker {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  :global(.theme-toggle) {
     width: 100%;
-    white-space: nowrap;
   }
 
   .workspace {
     flex: 1;
     min-width: 0;
-    padding: 1.25rem;
+    padding: 0.9rem 1rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .workspace-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 2.25rem;
+  }
+
+  .workspace-route {
+    display: flex;
+    flex-direction: column;
+    gap: 0.08rem;
+  }
+
+  .workspace-route strong {
+    font-size: 0.96rem;
   }
 
   .workspace-inner {
-    width: min(1480px, 100%);
+    width: min(1640px, 100%);
     margin: 0 auto;
+    min-width: 0;
   }
 
   @media (max-width: 820px) {
@@ -333,7 +421,7 @@
     .sidebar {
       width: auto;
       flex-basis: auto;
-      padding: 0.9rem;
+      padding: 0.8rem;
       border-right: none;
       border-bottom: 1px solid var(--border);
       box-shadow: none;

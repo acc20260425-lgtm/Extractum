@@ -120,7 +120,7 @@
         <label>Question
           <Textarea
             value={chatQuestion}
-            rows="4"
+            rows={4}
             placeholder="Ask a grounded follow-up question about this report."
             oninput={(event) => onChangeChatQuestion((event.currentTarget as HTMLTextAreaElement).value)}
             className="chat-question-field"

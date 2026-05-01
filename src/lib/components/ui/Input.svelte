@@ -1,4 +1,6 @@
 <script lang="ts">
+  type InputAutocomplete = HTMLInputElement["autocomplete"];
+
   let {
     type = "text",
     value = "",
@@ -21,7 +23,7 @@
     placeholder?: string;
     disabled?: boolean;
     readonly?: boolean;
-    autocomplete?: string;
+    autocomplete?: InputAutocomplete;
     spellcheck?: boolean;
     min?: number | string;
     max?: number | string;

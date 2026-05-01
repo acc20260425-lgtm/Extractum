@@ -30,7 +30,7 @@
     title?: string;
     ariaLabel?: string;
     className?: string;
-    onclick?: (event: MouseEvent) => void | Promise<void>;
+    onclick?: (event: MouseEvent) => unknown | Promise<unknown>;
     children?: Snippet;
   } = $props();
 </script>

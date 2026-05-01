@@ -9,6 +9,7 @@
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
 
   let {
+    compact = false,
     groups,
     selectedGroupId,
     selectedGroup,
@@ -27,6 +28,7 @@
     onSaveGroupChanges,
     onDeleteGroup,
   }: {
+    compact?: boolean;
     groups: AnalysisSourceGroup[];
     selectedGroupId: string;
     selectedGroup: AnalysisSourceGroup | null;
@@ -62,82 +64,116 @@
   }
 </script>
 
-<Card>
-  <div class="groups">
-    <PanelHeader
-      title="Source Groups"
-      subtitle="Save reusable named sets of synced sources for future cross-source reports."
-    >
+{#if compact}
+  <div class="utility-card compact">
+    <div class="compact-header">
+      <div class="compact-copy">
+        <span class="compact-kicker">Source groups</span>
+        <strong>{selectedGroup ? selectedGroup.name : "No group selected"}</strong>
+        <span class="compact-sub">
+          {selectedGroup
+            ? `${selectedGroup.members.length} sources in the selected group.`
+            : groupName || groupMemberSourceIds.length > 0
+              ? "Unsaved draft group."
+              : "Create reusable cross-source scopes for recurring reports."}
+        </span>
+      </div>
       <div class="group-actions">
-        <Button variant="secondary" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
-          New group
+        <Button variant="secondary" size="sm" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
+          New
         </Button>
         <Button
           variant="secondary"
+          size="sm"
           onclick={openSelectedGroupEditor}
           disabled={savingGroup || deletingGroup || (!selectedGroup && !groupName.trim() && groupMemberSourceIds.length === 0)}
         >
-          {selectedGroup ? "Edit group" : "Open editor"}
+          Edit
         </Button>
-        <Button variant="danger-soft" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
+        <Button variant="danger-soft" size="sm" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
           {deletingGroup ? "Deleting..." : "Delete"}
         </Button>
       </div>
-    </PanelHeader>
-
-    <div class="group-grid">
-      <div class="group-form">
-        <label>Saved groups
-          <select
-            value={selectedGroupId}
-            onchange={(event) => onChangeSelectedGroupId((event.currentTarget as HTMLSelectElement).value)}
-          >
-            <option value="">Create a new group</option>
-            {#each groups as group (group.id)}
-              <option value={String(group.id)}>
-                {group.name} - {group.members.length} sources
-              </option>
-            {/each}
-          </select>
-        </label>
-
-        <label>Group name
-          <Input type="text" value={groupName} placeholder="Core channels" readonly />
-        </label>
-
-        {#if selectedGroup}
-          <p class="sub">
-            Updated {formatTimestamp(selectedGroup.updated_at)}
-          </p>
-        {:else if groupName || groupMemberSourceIds.length > 0}
-          <p class="sub">Unsaved draft group</p>
-        {/if}
-      </div>
-
-      <div class="group-members">
-        <div class="members-header">
-          <h4>{selectedGroup ? "Saved Members" : "Draft Members"}</h4>
-          <span class="selected-count">{groupMemberSourceIds.length} selected</span>
-        </div>
-
-        {#if sources.length === 0}
-          <EmptyState description="No synced sources available for grouping yet." />
-        {:else}
-          <div class="member-list">
-            {#each sources as source (source.id)}
-              <CheckboxRow
-                checked={isGroupSourceSelected(source.id)}
-                disabled={true}
-                title={source.title ?? `Source ${source.id}`}
-                description={`${source.item_count} messages`}
-              />
-            {/each}
-          </div>
-        {/if}
-      </div>
     </div>
   </div>
-</Card>
+{:else}
+  <Card>
+    <div class="groups">
+      <PanelHeader
+        title="Source Groups"
+        subtitle="Save reusable named sets of synced sources for future cross-source reports."
+      >
+        <div class="group-actions">
+          <Button variant="secondary" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
+            New group
+          </Button>
+          <Button
+            variant="secondary"
+            onclick={openSelectedGroupEditor}
+            disabled={savingGroup || deletingGroup || (!selectedGroup && !groupName.trim() && groupMemberSourceIds.length === 0)}
+          >
+            {selectedGroup ? "Edit group" : "Open editor"}
+          </Button>
+          <Button variant="danger-soft" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
+            {deletingGroup ? "Deleting..." : "Delete"}
+          </Button>
+        </div>
+      </PanelHeader>
+
+      <div class="group-grid">
+        <div class="group-form">
+          <label>Saved groups
+            <select
+              value={selectedGroupId}
+              onchange={(event) => onChangeSelectedGroupId((event.currentTarget as HTMLSelectElement).value)}
+            >
+              <option value="">Create a new group</option>
+              {#each groups as group (group.id)}
+                <option value={String(group.id)}>
+                  {group.name} - {group.members.length} sources
+                </option>
+              {/each}
+            </select>
+          </label>
+
+          <label>Group name
+            <Input type="text" value={groupName} placeholder="Core channels" readonly />
+          </label>
+
+          {#if selectedGroup}
+            <p class="sub">
+              Updated {formatTimestamp(selectedGroup.updated_at)}
+            </p>
+          {:else if groupName || groupMemberSourceIds.length > 0}
+            <p class="sub">Unsaved draft group</p>
+          {/if}
+        </div>
+
+        <div class="group-members">
+          <div class="members-header">
+            <h4>{selectedGroup ? "Saved Members" : "Draft Members"}</h4>
+            <span class="selected-count">{groupMemberSourceIds.length} selected</span>
+          </div>
+
+          {#if sources.length === 0}
+            <EmptyState description="No synced sources available for grouping yet." />
+          {:else}
+            <div class="member-list">
+              {#each sources as source (source.id)}
+                <CheckboxRow
+                  checked={isGroupSourceSelected(source.id)}
+                  disabled={true}
+                  title={source.title ?? `Source ${source.id}`}
+                  description={`${source.item_count} messages`}
+                />
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  </Card>
+{/if}
 
 <DesktopDialog
   open={editorOpen}
@@ -218,6 +254,46 @@
     flex-wrap: wrap;
   }
 
+  .utility-card {
+    padding: 0.95rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+
+  .compact-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .compact-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .compact-kicker {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .compact-copy strong {
+    font-size: 0.92rem;
+  }
+
+  .compact-sub {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
   .group-grid {
     display: grid;
     grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
@@ -293,10 +369,12 @@
   }
 
   @media (max-width: 640px) {
+    .compact-header,
     .modal-actions {
       flex-direction: column-reverse;
     }
 
+    .compact-header .group-actions,
     .modal-actions :global(button) {
       width: 100%;
     }

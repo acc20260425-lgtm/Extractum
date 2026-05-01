@@ -6,6 +6,7 @@
   import MetaCell from "$lib/components/ui/MetaCell.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
+  import type { BadgeVariant } from "$lib/components/ui/types";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
 
   let {
@@ -41,7 +42,7 @@
         "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
       >
     ) => string;
-    statusTone: (status: string) => string;
+    statusTone: (status: string) => BadgeVariant;
     reportLines: (text: string) => Array<{
       key: string;
       segments: Array<{ type: "text" | "ref"; value: string; key: string }>;
