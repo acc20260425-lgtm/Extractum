@@ -18,6 +18,8 @@
     selected = false,
     title,
     ariaLabel,
+    ariaPressed,
+    ariaControls,
     className = "",
     onclick,
     children,
@@ -29,6 +31,8 @@
     selected?: boolean;
     title?: string;
     ariaLabel?: string;
+    ariaPressed?: boolean;
+    ariaControls?: string;
     className?: string;
     onclick?: (event: MouseEvent) => unknown | Promise<unknown>;
     children?: Snippet;
@@ -40,6 +44,8 @@
   {disabled}
   {title}
   aria-label={ariaLabel}
+  aria-pressed={ariaPressed}
+  aria-controls={ariaControls}
   class={`ui-button ${variant} ${size} ${selected ? "selected" : ""} ${className}`.trim()}
   onclick={onclick}
 >

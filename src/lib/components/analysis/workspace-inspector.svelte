@@ -79,23 +79,51 @@
       <span class="eyebrow">Inspector</span>
       <h3>Runs and evidence</h3>
     </div>
-    <div class="inspector-tabs">
-      <Button variant="secondary" size="sm" selected={inspectorMode === "active"} onclick={() => onChangeInspectorMode("active")}>
+    <div class="inspector-tabs" role="tablist" aria-label="Inspector sections">
+      <Button
+        variant="secondary"
+        size="sm"
+        selected={inspectorMode === "active"}
+        ariaPressed={inspectorMode === "active"}
+        ariaControls="inspector-panel"
+        onclick={() => onChangeInspectorMode("active")}
+      >
         Active
       </Button>
-      <Button variant="secondary" size="sm" selected={inspectorMode === "history"} onclick={() => onChangeInspectorMode("history")}>
+      <Button
+        variant="secondary"
+        size="sm"
+        selected={inspectorMode === "history"}
+        ariaPressed={inspectorMode === "history"}
+        ariaControls="inspector-panel"
+        onclick={() => onChangeInspectorMode("history")}
+      >
         History
       </Button>
-      <Button variant="secondary" size="sm" selected={inspectorMode === "trace"} onclick={() => onChangeInspectorMode("trace")}>
+      <Button
+        variant="secondary"
+        size="sm"
+        selected={inspectorMode === "trace"}
+        ariaPressed={inspectorMode === "trace"}
+        ariaControls="inspector-panel"
+        onclick={() => onChangeInspectorMode("trace")}
+      >
         Trace
       </Button>
-      <Button variant="secondary" size="sm" selected={inspectorMode === "chunks"} onclick={() => onChangeInspectorMode("chunks")}>
+      <Button
+        variant="secondary"
+        size="sm"
+        selected={inspectorMode === "chunks"}
+        ariaPressed={inspectorMode === "chunks"}
+        ariaControls="inspector-panel"
+        onclick={() => onChangeInspectorMode("chunks")}
+      >
         Chunks
       </Button>
     </div>
   </div>
 
-  <div class="inspector-body">
+  <div class="inspector-body" id="inspector-panel">
     {#if inspectorMode === "active"}
       <ActiveRunList
         {activeRuns}

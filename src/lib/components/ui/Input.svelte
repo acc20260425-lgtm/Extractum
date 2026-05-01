@@ -13,6 +13,7 @@
     max,
     step,
     name,
+    ariaLabel,
     className = "",
     oninput,
     onchange,
@@ -29,6 +30,7 @@
     max?: number | string;
     step?: number | string;
     name?: string;
+    ariaLabel?: string;
     className?: string;
     oninput?: (event: Event) => void;
     onchange?: (event: Event) => void;
@@ -48,6 +50,7 @@
   {max}
   {step}
   {name}
+  aria-label={ariaLabel}
   class={`ui-input ${className}`.trim()}
   {oninput}
   {onchange}

@@ -1466,39 +1466,41 @@
     onDeleteGroup={() => void deleteGroup()}
   />
 
-  <WorkspaceInspector
-    {inspectorMode}
-    {activeRuns}
-    {loadingActiveRuns}
-    {activeRunId}
-    {runs}
-    {loadingRuns}
-    {historyScope}
-    historyTargetReady={historyScopeParams !== null}
-    {runFilter}
-    {filteredRuns}
-    {traceData}
-    {selectedTraceRef}
-    {selectedTrace}
-    {focusedChunkSummaries}
-    {selectedRunIsActive}
-    {formatTimestamp}
-    {formatPeriod}
-    {phaseLabel}
-    {livePhase}
-    {liveProgress}
-    {runTargetLabel}
-    {statusTone}
-    {traceRefOrigin}
-    onChangeInspectorMode={(mode) => (inspectorMode = mode)}
-    onRefreshActiveRuns={() => void loadActiveRuns()}
-    onOpenRun={(runId) => void openRun(runId)}
-    onCancelRun={(runId) => void cancelActiveRun(runId)}
-    onRefreshRuns={() => void loadRuns()}
-    onChangeFilter={(next) => (runFilter = next)}
-    onChangeHistoryScope={(next) => (historyScope = next)}
-    onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
-  />
+  <div class="inspector-slot">
+    <WorkspaceInspector
+      {inspectorMode}
+      {activeRuns}
+      {loadingActiveRuns}
+      {activeRunId}
+      {runs}
+      {loadingRuns}
+      {historyScope}
+      historyTargetReady={historyScopeParams !== null}
+      {runFilter}
+      {filteredRuns}
+      {traceData}
+      {selectedTraceRef}
+      {selectedTrace}
+      {focusedChunkSummaries}
+      {selectedRunIsActive}
+      {formatTimestamp}
+      {formatPeriod}
+      {phaseLabel}
+      {livePhase}
+      {liveProgress}
+      {runTargetLabel}
+      {statusTone}
+      {traceRefOrigin}
+      onChangeInspectorMode={(mode) => (inspectorMode = mode)}
+      onRefreshActiveRuns={() => void loadActiveRuns()}
+      onOpenRun={(runId) => void openRun(runId)}
+      onCancelRun={(runId) => void cancelActiveRun(runId)}
+      onRefreshRuns={() => void loadRuns()}
+      onChangeFilter={(next) => (runFilter = next)}
+      onChangeHistoryScope={(next) => (historyScope = next)}
+      onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
+    />
+  </div>
 </section>
 
 <style>
@@ -1514,12 +1516,16 @@
     margin-bottom: 0.85rem;
   }
 
+  .inspector-slot {
+    min-width: 0;
+  }
+
   @media (max-width: 1500px) {
     .analysis-workspace {
       grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
     }
 
-    :global(.analysis-workspace > .inspector) {
+    .inspector-slot {
       grid-column: 1 / -1;
     }
   }

@@ -271,6 +271,7 @@
           type="text"
           value={outputLanguage}
           placeholder="Russian"
+          ariaLabel="Output language"
           oninput={(event) => onChangeOutputLanguage((event.currentTarget as HTMLInputElement).value)}
         />
       </label>
@@ -282,6 +283,7 @@
           type="text"
           value={modelOverride}
           placeholder="Use active profile default model"
+          ariaLabel="Model override"
           oninput={(event) => onChangeModelOverride((event.currentTarget as HTMLInputElement).value)}
         />
       </label>

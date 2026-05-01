@@ -57,6 +57,9 @@
     onSelectGroup: (groupId: number) => void;
     onSyncSource: (sourceId: number) => void;
   } = $props();
+
+  const totalItems = $derived(sourceCatalog.length + groups.length);
+  const visibleItems = $derived(filteredSourceCatalog.length + filteredGroups.length);
 </script>
 
 <aside class="rail">
@@ -65,16 +68,21 @@
       <span class="eyebrow">Research context</span>
       <h1>Workspace</h1>
     </div>
-    <Badge variant="info">{sourceCatalog.length + groups.length} items</Badge>
+    <Badge variant="info">
+      {railQuery.trim() ? `${visibleItems} visible` : `${totalItems} items`}
+    </Badge>
   </div>
 
-  <Input
-    type="search"
-    value={railQuery}
-    placeholder="Search sources or groups"
-    oninput={(event) => onChangeRailQuery((event.currentTarget as HTMLInputElement).value)}
-    className="rail-search"
-  />
+  <div class="rail-search-shell">
+    <Input
+      type="search"
+      value={railQuery}
+      placeholder="Search sources or groups"
+      ariaLabel="Search sources or groups"
+      oninput={(event) => onChangeRailQuery((event.currentTarget as HTMLInputElement).value)}
+      className="rail-search"
+    />
+  </div>
 
   <div class="rail-section">
     <div class="rail-section-title">
@@ -91,9 +99,15 @@
           {@const metrics = sourceMetrics[source.id]}
           {@const syncReason = sourceSyncDisabledReason(source)}
           {@const runtime = runtimeStatus(source.account_id)}
+          {@const runtimeStateBadge = runtimeBadge(runtime)}
           {@const isSelected = analysisScope === "single_source" && selectedSourceId === String(source.id)}
           <article class:selected={isSelected} class="rail-row">
-            <button class="rail-row-main" type="button" onclick={() => onSelectSource(source.id)}>
+            <button
+              class="rail-row-main"
+              type="button"
+              aria-pressed={isSelected}
+              onclick={() => onSelectSource(source.id)}
+            >
               <div class="rail-avatar" aria-hidden="true">
                 {#if source.avatar_data_url}
                   <img src={source.avatar_data_url} alt="" loading="lazy" />
@@ -119,8 +133,8 @@
             </button>
             <div class="rail-row-actions">
               <Badge>{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
-              {#if runtimeBadge(runtime)}
-                <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeBadge(runtime)}</Badge>
+              {#if runtimeStateBadge}
+                <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeStateBadge}</Badge>
               {/if}
               <Button
                 size="sm"
@@ -154,6 +168,7 @@
             class:selected={analysisScope === "source_group" && selectedGroupId === String(group.id)}
             class="rail-row rail-group-row"
             type="button"
+            aria-pressed={analysisScope === "source_group" && selectedGroupId === String(group.id)}
             onclick={() => onSelectGroup(group.id)}
           >
             <div class="rail-avatar group-avatar" aria-hidden="true">
@@ -241,7 +256,7 @@
     letter-spacing: 0.06em;
   }
 
-  :global(.rail-search) {
+  .rail-search-shell :global(.rail-search) {
     min-height: 2.5rem;
   }
 
