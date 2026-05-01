@@ -500,8 +500,7 @@
       <h1>Settings</h1>
       <p>
         Keep provider profiles, model defaults, and smoke testing in one compact operator surface.
-        The goal here is the same as in the analysis workspace: dense tools, clear status, no
-        dashboard clutter.
+        Dense tools, clear status, no dashboard clutter.
       </p>
     </div>
     <div class="page-hero-meta">
@@ -527,8 +526,8 @@
             <span class="page-eyebrow">Profiles</span>
             <h2>LLM profiles</h2>
             <p>
-              Manage reusable provider profiles for analysis and chat flows. API keys are still
-              stored in local SQLite until secure storage replaces this path.
+              Manage reusable provider profiles for analysis and chat. API keys are still stored in
+              local SQLite until secure storage replaces this path.
             </p>
           </div>
         </div>
@@ -694,8 +693,8 @@
             <span class="page-eyebrow">Provider test</span>
             <h2>Smoke test</h2>
             <p>
-              Run a real request with the profile currently open in the form. The test always saves
-              the draft first, then uses the stored provider, model, key, and base URL.
+              Run a real request with the profile open in the form. The test saves the draft first,
+              then uses the stored provider, model, key, and base URL.
             </p>
           </div>
         </div>
@@ -743,8 +742,8 @@
           <span class="page-eyebrow">Operator note</span>
           <h3>Settings now follow the workspace pattern</h3>
           <p>
-            Main form on the left, focused utility surface on the right. That keeps settings dense,
-            inspectable, and visually aligned with the analysis and accounts screens.
+            Main form on the left, utility surface on the right. That keeps settings dense and
+            aligned with analysis and accounts.
           </p>
         </div>
       </section>

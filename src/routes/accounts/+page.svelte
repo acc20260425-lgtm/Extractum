@@ -160,8 +160,8 @@
       <span class="page-eyebrow">Telegram accounts</span>
       <h1>Accounts</h1>
       <p>
-        Manage Telegram identities that power sync and analysis. Each account carries its own API
-        credentials, auth state, and linked source catalog inside the local workspace.
+        Manage Telegram identities used for sync and analysis. Each account keeps its own API
+        credentials, auth state, and linked sources.
       </p>
     </div>
     <div class="page-hero-meta">
@@ -183,7 +183,7 @@
           <div class="panel-header-copy">
             <span class="page-eyebrow">Workspace access</span>
             <h2>Configured accounts</h2>
-            <p>Open auth flow, check runtime state, and keep sync-capable accounts healthy.</p>
+            <p>Open auth, check runtime state, and keep sync-capable accounts healthy.</p>
           </div>
           <Badge variant="neutral">{accounts.length} total</Badge>
         </div>
@@ -290,8 +290,8 @@
           <span class="page-eyebrow">Flow notes</span>
           <h3>How this fits the workspace</h3>
           <p>
-            Accounts stay outside the main analysis canvas, but they follow the same compact desktop
-            language: catalog on the left, focused utility panel on the right.
+            Accounts stay outside the main analysis canvas, but keep the same compact split:
+            catalog on the left, utility panel on the right.
           </p>
         </div>
       </section>
