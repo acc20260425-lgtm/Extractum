@@ -19,6 +19,13 @@
     previewLimit?: number;
   } = $props();
 
+  const visibleItems = $derived.by(() => {
+    if (previewLimit <= 0) {
+      return [];
+    }
+    return items.slice(0, previewLimit);
+  });
+
   function formatMediaKind(kind: string | null) {
     if (!kind) return "media";
     return kind.replaceAll("_", " ");
@@ -37,10 +44,7 @@
       <span class="subtle">Loading...</span>
     {:else if items.length > 0}
       <span class="subtle">
-        Showing {items.length}
-        {#if items.length >= previewLimit}
-          latest
-        {/if}
+        Showing {visibleItems.length} of {items.length} latest
         message{items.length === 1 ? "" : "s"}
       </span>
     {/if}
@@ -48,9 +52,9 @@
 
   {#if !loadingItems && items.length === 0}
     <EmptyState description="No synced messages yet for this source." />
-  {:else if items.length > 0}
+  {:else if visibleItems.length > 0}
     <ul class="message-list">
-      {#each items as item (item.id)}
+      {#each visibleItems as item (item.id)}
         <li>
           <div class="message-meta">
             <span>{formatDate(item.published_at)}</span>

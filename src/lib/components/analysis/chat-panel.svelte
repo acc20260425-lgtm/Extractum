@@ -64,12 +64,12 @@
 
   function chatSubtitle() {
     if (!currentRun) {
-      return "Follow-up chat becomes available once a report run is opened.";
+      return "Follow-up chat unlocks after a completed report is open.";
     }
     if (currentRun.status !== "completed") {
-      return "Grounded chat unlocks after the selected run finishes successfully.";
+      return "Wait for the current run to finish before asking follow-up questions.";
     }
-    return "Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.";
+    return "Ask grounded follow-up questions against the saved report and synced source context.";
   }
 </script>
 
@@ -92,16 +92,16 @@
     </PanelHeader>
 
     {#if !currentRun}
-      <EmptyState description="Open a saved run to start a grounded chat." />
+      <EmptyState description="Open a completed run to start chat." />
     {:else if currentRun.status !== "completed"}
       <EmptyState description="Chat is available only for completed runs." />
     {:else}
       <div class="chat-thread" bind:this={chatThreadElement}>
         {#if loadingChat}
-          <EmptyState description="Loading saved chat history..." />
+          <EmptyState description="Loading chat history..." />
         {:else if chatMessages.length === 0}
           <div class="chat-empty-state">
-            <EmptyState description="No saved chat turns yet. Start with a focused question about this report." />
+            <EmptyState description="No chat turns yet. Start with a focused question about this report." />
             <div class="starter-list">
               {#each starterQuestions as question (question)}
                 <Button
@@ -170,10 +170,11 @@
 
 <style>
   .chat {
-    margin-top: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   }
 
   .chat-thread {

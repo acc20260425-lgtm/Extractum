@@ -61,23 +61,23 @@
 
   function reportSubtitle() {
     if (!currentRun) {
-      return "Pick a source or source group, choose a template, and start a run to build a grounded report.";
+      return "Choose a scope, set the window, and run the report.";
     }
     return `${runTargetLabel(currentRun)} - ${currentRun.provider}/${currentRun.model}`;
   }
 
   function emptyDescription() {
     if (!currentRun) {
-      return "No run is open yet. Start a report from the controls above and the live document will appear here.";
+      return "No report is open yet.";
     }
     if (loadingRunDetail) {
-      return "Loading saved run...";
+      return "Loading run...";
     }
     if (currentRun.status === "queued" || currentRun.status === "running") {
-      return "Analysis is in progress. Live output will appear here as the model streams the report.";
+      return "Analysis is in progress. Live output appears here as the report streams.";
     }
     if (currentRun.status === "failed") {
-      return "This run failed before producing a report body.";
+      return "This run failed before producing report output.";
     }
     if (currentRun.status === "cancelled") {
       return "This run was cancelled before a final report was saved.";
@@ -200,7 +200,7 @@
     gap: 0.9rem;
     padding: 1rem;
     background: var(--panel-strong);
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--border));
     border-radius: 10px;
   }
 
@@ -247,9 +247,9 @@
 
   .report-output {
     margin: 0;
-    padding: 1rem;
+    padding: 1.1rem 1rem;
     background: var(--panel-strong);
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--border));
     border-radius: 10px;
     min-height: 22rem;
     display: flex;
@@ -257,6 +257,7 @@
     gap: 0.25rem;
     font: inherit;
     line-height: 1.6;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
   }
 
   .report-output.streaming {

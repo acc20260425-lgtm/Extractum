@@ -4,6 +4,7 @@
   import RunHistory from "$lib/components/analysis/run-history.svelte";
   import TracePanel from "$lib/components/analysis/trace-panel.svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import type { BadgeVariant } from "$lib/components/ui/types";
   import type { AnalysisChunkSummaryEvent, AnalysisRunSummary, AnalysisTraceData, AnalysisTraceRef } from "$lib/types/analysis";
 
   let {
@@ -54,13 +55,18 @@
     selectedTrace: AnalysisTraceRef | null;
     focusedChunkSummaries: AnalysisChunkSummaryEvent[];
     selectedRunIsActive: boolean;
-    formatTimestamp: (value: number) => string;
+    formatTimestamp: (value: number | null) => string;
     formatPeriod: (from: number, to: number) => string;
     phaseLabel: (value: string) => string;
     livePhase: (runId: number) => string;
     liveProgress: (runId: number) => string;
-    runTargetLabel: (...args: unknown[]) => string;
-    statusTone: (value: string) => "neutral" | "info" | "success" | "warning" | "danger";
+    runTargetLabel: (
+      run: Pick<
+        AnalysisRunSummary,
+        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
+      >
+    ) => string;
+    statusTone: (value: string) => BadgeVariant;
     traceRefOrigin: (ref: string) => string;
     onChangeInspectorMode: (mode: "active" | "history" | "trace" | "chunks") => void;
     onRefreshActiveRuns: () => void;
@@ -83,6 +89,7 @@
       <Button
         variant="secondary"
         size="sm"
+        className="inspector-tab"
         selected={inspectorMode === "active"}
         ariaPressed={inspectorMode === "active"}
         ariaControls="inspector-panel"
@@ -93,6 +100,7 @@
       <Button
         variant="secondary"
         size="sm"
+        className="inspector-tab"
         selected={inspectorMode === "history"}
         ariaPressed={inspectorMode === "history"}
         ariaControls="inspector-panel"
@@ -103,6 +111,7 @@
       <Button
         variant="secondary"
         size="sm"
+        className="inspector-tab"
         selected={inspectorMode === "trace"}
         ariaPressed={inspectorMode === "trace"}
         ariaControls="inspector-panel"
@@ -113,6 +122,7 @@
       <Button
         variant="secondary"
         size="sm"
+        className="inspector-tab"
         selected={inspectorMode === "chunks"}
         ariaPressed={inspectorMode === "chunks"}
         ariaControls="inspector-panel"
@@ -218,10 +228,27 @@
     gap: 0.35rem;
     flex-wrap: wrap;
     justify-content: flex-end;
+    padding: 0.2rem;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--panel-strong) 65%, transparent);
   }
 
   .inspector-body {
     min-width: 0;
+    min-height: 18rem;
+  }
+
+  .inspector :global(.ui-button.inspector-tab) {
+    border-radius: 999px;
+  }
+
+  .inspector :global(.ui-button.inspector-tab.selected) {
+    background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--primary) 46%, transparent);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
   }
 
   @media (max-width: 1500px) {

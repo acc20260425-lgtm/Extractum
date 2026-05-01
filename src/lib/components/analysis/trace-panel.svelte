@@ -42,7 +42,10 @@
   </PanelHeader>
 
   {#if traceRefs.length === 0}
-    <EmptyState description="No saved trace data yet." />
+    <EmptyState
+      title="Trace will appear here"
+      description="Open a report with cited evidence, or follow a trace ref from the report or chat."
+    />
   {:else}
     <div class="trace-list">
       {#each traceRefs as ref (ref.ref)}
@@ -128,6 +131,7 @@
   .trace-link.selected {
     background: var(--panel-hover);
     border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
   }
 
   .trace-link span,

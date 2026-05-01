@@ -8,12 +8,15 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
     AnalysisChatTurn,
     AnalysisPromptTemplate,
     AnalysisRunDetail,
+    AnalysisRunSummary,
     AnalysisSourceGroup,
     AnalysisSourceOption,
+    ReportSegment,
   } from "$lib/types/analysis";
   import type { ItemRecord, SourceRecord } from "$lib/types/sources";
 
@@ -146,11 +149,19 @@
     deletingGroup: boolean;
     sourceMetricsList: AnalysisSourceOption[];
     syncingIds: Record<number, boolean>;
-    formatTimestamp: (value: number) => string;
+    formatTimestamp: (value: number | null) => string;
     formatPeriod: (from: number, to: number) => string;
-    runTargetLabel: (...args: unknown[]) => string;
-    statusTone: (value: string) => "neutral" | "info" | "success" | "warning" | "danger";
-    reportLines: (value: string | null | undefined) => string[];
+    runTargetLabel: (
+      run: Pick<
+        AnalysisRunSummary,
+        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
+      >
+    ) => string;
+    statusTone: (value: string) => BadgeVariant;
+    reportLines: (value: string) => Array<{
+      key: string;
+      segments: ReportSegment[];
+    }>;
     phaseLabel: (value: string) => string;
     accountLabel: (accountId: number | null) => string;
     sourceKindLabel: (kind: string) => string;
@@ -182,6 +193,33 @@
     onSaveGroupChanges: () => void;
     onDeleteGroup: () => void;
   } = $props();
+
+  let contextExpanded = $state(false);
+  let fullContextPreview = $state(false);
+  let contextStateKey = $state("");
+
+  const compactContextPreviewLimit = 8;
+  const expandedContextPreviewLimit = 24;
+
+  $effect(() => {
+    const nextKey = `${analysisScope}:${currentSource?.id ?? "none"}:${currentGroup?.id ?? "none"}:${currentRun?.id ?? "idle"}`;
+    if (contextStateKey === nextKey) return;
+
+    contextStateKey = nextKey;
+    contextExpanded = currentRun === null;
+    fullContextPreview = false;
+  });
+
+  function toggleContextPanel() {
+    contextExpanded = !contextExpanded;
+    if (!contextExpanded) {
+      fullContextPreview = false;
+    }
+  }
+
+  function toggleContextDepth() {
+    fullContextPreview = !fullContextPreview;
+  }
 </script>
 
 <section class="center-pane">
@@ -345,33 +383,77 @@
   {/if}
 
   {#if analysisScope === "single_source" && currentSource}
-    <div class="context-panel">
+    <div class="context-panel" class:compact={!contextExpanded}>
       <div class="context-panel-header">
         <div>
           <span class="eyebrow">Source context</span>
           <h3>Recent synced messages</h3>
+          <p class="context-summary">
+            {#if currentRun}
+              Report is in focus. Open the message preview only when you need to verify source-level context.
+            {:else}
+              Scan the latest synced messages before you launch a run.
+            {/if}
+          </p>
         </div>
-        <Badge variant="neutral">
-          {currentSourceMetric?.item_count ?? sourceItems.length} messages
-        </Badge>
+        <div class="context-panel-actions">
+          <Badge variant="neutral">
+            {currentSourceMetric?.item_count ?? sourceItems.length} messages
+          </Badge>
+          <Button variant="ghost" size="sm" onclick={toggleContextPanel}>
+            {contextExpanded ? "Hide preview" : "Peek at messages"}
+          </Button>
+        </div>
       </div>
-      <SourceMessagesPanel
-        {loadingItems}
-        items={sourceItems}
-        formatDate={formatTimestamp}
-        embedded={true}
-        previewLimit={120}
-      />
+
+      {#if contextExpanded}
+        <SourceMessagesPanel
+          {loadingItems}
+          items={sourceItems}
+          formatDate={formatTimestamp}
+          embedded={true}
+          previewLimit={fullContextPreview ? expandedContextPreviewLimit : compactContextPreviewLimit}
+        />
+
+        {#if sourceItems.length > compactContextPreviewLimit}
+          <div class="context-panel-footer">
+            <span class="context-footnote">
+              {fullContextPreview
+                ? `Showing a wider slice of the latest ${Math.min(sourceItems.length, expandedContextPreviewLimit)} messages.`
+                : `Showing the latest ${Math.min(sourceItems.length, compactContextPreviewLimit)} messages to keep the report area light.`}
+            </span>
+            <Button variant="secondary" size="sm" onclick={toggleContextDepth}>
+              {fullContextPreview ? "Show fewer" : "Show more"}
+            </Button>
+          </div>
+        {/if}
+      {/if}
     </div>
   {/if}
 
-  <div class="conversation-shell">
+  <div class="conversation-shell" class:run-open={!!currentRun}>
     <div class="conversation-shell-header">
       <div>
         <span class="eyebrow">Analysis flow</span>
         <h3>Report and follow-up</h3>
+        {#if currentRun}
+          <p class="conversation-note">
+            {#if selectedRunIsActive}
+              Live run is open. The report stays primary while chat catches up after completion.
+            {:else if currentRun.status === "completed"}
+              Opened saved run. Report is ready, and grounded follow-up chat is available below.
+            {:else}
+              Opened saved run context. Review the report state here before returning to history or trace.
+            {/if}
+          </p>
+        {/if}
       </div>
       <div class="conversation-status">
+        {#if currentRun}
+          <Badge variant={selectedRunIsActive ? "info" : "neutral"}>
+            {selectedRunIsActive ? "Live run open" : "Opened saved run"}
+          </Badge>
+        {/if}
         <Badge variant={currentRun?.status === "completed" ? "success" : "neutral"}>
           {currentRun?.status === "completed" ? "Ready for chat" : "Chat follows report completion"}
         </Badge>
@@ -601,6 +683,42 @@
       linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 44%, transparent), var(--panel));
   }
 
+  .context-panel.compact {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 24%, transparent), var(--panel));
+  }
+
+  .context-summary {
+    margin: 0.3rem 0 0 0;
+    color: var(--muted);
+    line-height: 1.45;
+    max-width: 56ch;
+  }
+
+  .context-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .context-panel-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    padding-top: 0.1rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  }
+
+  .context-footnote {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
   .preflight-panel,
   .conversation-shell {
     display: flex;
@@ -661,6 +779,13 @@
       linear-gradient(180deg, color-mix(in srgb, var(--panel) 98%, white 2%), var(--panel));
   }
 
+  .conversation-shell.run-open {
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+    box-shadow:
+      var(--shadow),
+      0 0 0 1px color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
   .conversation-shell-header {
     display: flex;
     justify-content: space-between;
@@ -672,6 +797,14 @@
     display: flex;
     justify-content: flex-end;
     flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .conversation-note {
+    margin: 0.3rem 0 0 0;
+    color: var(--muted);
+    line-height: 1.45;
+    max-width: 58ch;
   }
 
   .utility-strip {
@@ -696,6 +829,11 @@
     .controls-bottom {
       flex-direction: column;
       align-items: stretch;
+    }
+
+    .context-panel-actions,
+    .conversation-status {
+      justify-content: flex-start;
     }
 
     .controls-grid {
