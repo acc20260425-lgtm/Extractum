@@ -172,6 +172,19 @@
     testUsage = null;
   }
 
+  function dedupeProviderModels(models: LlmProviderModel[]) {
+    const unique: LlmProviderModel[] = [];
+
+    for (const model of models) {
+      const key = `${model.model}::${model.display_name}`;
+      if (!unique.some((entry) => `${entry.model}::${entry.display_name}` === key)) {
+        unique.push(model);
+      }
+    }
+
+    return unique;
+  }
+
   function applyProfile(profile: LlmProfile) {
     selectedProfileId = profile.profile_id;
     creatingProfile = false;
@@ -237,9 +250,13 @@
         baseUrl: providerSupportsBaseUrl() && baseUrl.trim() ? baseUrl : null,
       });
 
-      availableModels = models;
+      availableModels = dedupeProviderModels(models);
       if (showSuccess) {
-        modelsStatus = `Loaded ${models.length} ${providerLabel()} models.`;
+        const duplicateCount = models.length - availableModels.length;
+        modelsStatus =
+          duplicateCount > 0
+            ? `Loaded ${availableModels.length} ${providerLabel()} models (${duplicateCount} duplicates hidden).`
+            : `Loaded ${availableModels.length} ${providerLabel()} models.`;
       }
     } catch (error) {
       modelsStatus = formatAppError(`loading ${providerLabel()} models`, error);
