@@ -2,20 +2,10 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import ActiveRunList from "$lib/components/analysis/active-run-list.svelte";
-  import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
-  import ChunkSummaries from "$lib/components/analysis/chunk-summaries.svelte";
-  import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
-  import RunHistory from "$lib/components/analysis/run-history.svelte";
-  import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
-  import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
-  import TracePanel from "$lib/components/analysis/trace-panel.svelte";
-  import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
-  import Badge from "$lib/components/ui/Badge.svelte";
-  import Button from "$lib/components/ui/Button.svelte";
-  import Input from "$lib/components/ui/Input.svelte";
-  import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
+  import WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";
+  import WorkspaceRail from "$lib/components/analysis/workspace-rail.svelte";
   import { formatAppError } from "$lib/app-error";
   import {
     defaultDateOffset,
@@ -1361,421 +1351,154 @@
 {/if}
 
 <section class="analysis-workspace">
-  <aside class="rail">
-    <div class="rail-header">
-      <div>
-        <span class="eyebrow">Research context</span>
-        <h1>Workspace</h1>
-      </div>
-      <Badge variant="info">{sourceCatalog.length + groups.length} items</Badge>
-    </div>
+  <WorkspaceRail
+    {sourceCatalog}
+    {groups}
+    {sourceMetrics}
+    {loadingSourceCatalog}
+    {loadingGroups}
+    {railQuery}
+    {filteredSourceCatalog}
+    {filteredGroups}
+    {analysisScope}
+    {selectedSourceId}
+    {selectedGroupId}
+    {syncingIds}
+    {formatTimestamp}
+    {accountLabel}
+    {sourceKindLabel}
+    {membershipLabel}
+    {sourceInitial}
+    {runtimeStatus}
+    {runtimeBadge}
+    {sourceSyncDisabledReason}
+    onChangeRailQuery={(value) => (railQuery = value)}
+    onSelectSource={(sourceId) => void selectSource(sourceId)}
+    onSelectGroup={selectGroup}
+    onSyncSource={(sourceId) => void syncSelectedSource(sourceId)}
+  />
 
-    <Input
-      type="search"
-      value={railQuery}
-      placeholder="Search sources or groups"
-      oninput={(event) => (railQuery = (event.currentTarget as HTMLInputElement).value)}
-      className="rail-search"
-    />
+  <WorkspaceMain
+    {analysisScope}
+    currentSource={currentSource()}
+    currentGroup={currentGroup()}
+    currentSourceMetric={currentSourceMetric()}
+    currentScopeTitle={currentScopeTitle()}
+    currentScopeSummary={currentScopeSummary()}
+    {periodFrom}
+    {periodTo}
+    {selectedTemplateId}
+    {loadingTemplates}
+    {templates}
+    {outputLanguage}
+    {modelOverride}
+    {startingReport}
+    {selectedSourceId}
+    {selectedGroupId}
+    {currentRun}
+    {loadingRunDetail}
+    {selectedRunIsActive}
+    {activeProgress}
+    {activePhase}
+    {focusedStreamedOutput}
+    {canCancelCurrentRun}
+    {sourceItems}
+    {loadingItems}
+    {selectedTraceRef}
+    traceRefCount={traceData.refs.length}
+    {chatMessages}
+    {chatQuestion}
+    {chatting}
+    canCancelChat={chatting && activeChatRequestId !== null}
+    {clearingChat}
+    {loadingChat}
+    {selectedTemplate}
+    {templateName}
+    {templateBody}
+    {savingTemplate}
+    {deletingTemplate}
+    {groups}
+    {groupName}
+    {groupMemberSourceIds}
+    {selectedGroup}
+    {savingGroup}
+    {deletingGroup}
+    sourceMetricsList={Object.values(sourceMetrics)}
+    {syncingIds}
+    {formatTimestamp}
+    {formatPeriod}
+    {runTargetLabel}
+    {statusTone}
+    {reportLines}
+    {phaseLabel}
+    {accountLabel}
+    {sourceKindLabel}
+    {sourceSyncDisabledReason}
+    {startOfDayUnix}
+    {endOfDayUnix}
+    {isGroupSourceSelected}
+    onChangePeriodFrom={(value) => (periodFrom = value)}
+    onChangePeriodTo={(value) => (periodTo = value)}
+    onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
+    onChangeOutputLanguage={(value) => (outputLanguage = value)}
+    onChangeModelOverride={(value) => (modelOverride = value)}
+    onRunReport={() => void runReport()}
+    onSyncCurrentSource={(sourceId) => void syncSelectedSource(sourceId)}
+    onFocusTraceRef={focusTraceRef}
+    onCancelCurrentRun={() => {
+      if (activeRunId !== null) {
+        void cancelActiveRun(activeRunId);
+      }
+    }}
+    onAskRunQuestion={() => void askRunQuestion()}
+    onCancelChat={() => void cancelChat()}
+    onClearChat={() => void clearChatMessages()}
+    onChangeChatQuestion={(value) => (chatQuestion = value)}
+    onSaveTemplateCopy={() => void saveTemplateCopy()}
+    onSaveTemplateChanges={() => void saveTemplateChanges()}
+    onDeleteTemplate={() => void deleteTemplate()}
+    onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
+    onChangeGroupName={(value) => (groupName = value)}
+    onToggleGroupSource={toggleGroupSource}
+    onStartNewGroup={startNewGroup}
+    onSaveGroupCopy={() => void saveGroupCopy()}
+    onSaveGroupChanges={() => void saveGroupChanges()}
+    onDeleteGroup={() => void deleteGroup()}
+  />
 
-    <div class="rail-section">
-      <div class="rail-section-title">
-        <span>Sources</span>
-        <small>{filteredSourceCatalog.length}</small>
-      </div>
-      <div class="rail-list">
-        {#if loadingSourceCatalog}
-          <div class="rail-empty">Loading sources...</div>
-        {:else if filteredSourceCatalog.length === 0}
-          <div class="rail-empty">No sources match the current search.</div>
-        {:else}
-          {#each filteredSourceCatalog as source (source.id)}
-            {@const metrics = sourceMetrics[source.id]}
-            {@const syncReason = sourceSyncDisabledReason(source)}
-            {@const runtime = runtimeStatus(source.account_id)}
-            {@const isSelected = analysisScope === "single_source" && selectedSourceId === String(source.id)}
-            <article class:selected={isSelected} class="rail-row">
-              <button class="rail-row-main" type="button" onclick={() => void selectSource(source.id)}>
-                <div class="rail-avatar" aria-hidden="true">
-                  {#if source.avatar_data_url}
-                    <img src={source.avatar_data_url} alt="" loading="lazy" />
-                  {:else}
-                    <span>{sourceInitial(source)}</span>
-                  {/if}
-                </div>
-                <div class="rail-copy">
-                  <div class="rail-copy-top">
-                    <strong>{source.title ?? source.external_id}</strong>
-                    {#if metrics?.last_synced_at}
-                      <span>{formatTimestamp(metrics.last_synced_at)}</span>
-                    {/if}
-                  </div>
-                  <div class="rail-copy-meta">
-                    <span>{accountLabel(source.account_id)}</span>
-                    <span>{sourceKindLabel(source.telegram_source_kind)}</span>
-                    {#if metrics}
-                      <span>{metrics.item_count} msgs</span>
-                    {/if}
-                  </div>
-                </div>
-              </button>
-              <div class="rail-row-actions">
-                <Badge>{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
-                {#if runtimeBadge(runtime)}
-                  <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeBadge(runtime)}</Badge>
-                {/if}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onclick={() => void syncSelectedSource(source.id)}
-                  disabled={!!syncingIds[source.id] || syncReason !== null}
-                  title={syncReason ?? undefined}
-                >
-                  {syncingIds[source.id] ? "Syncing..." : "Sync"}
-                </Button>
-              </div>
-            </article>
-          {/each}
-        {/if}
-      </div>
-    </div>
-
-    <div class="rail-section">
-      <div class="rail-section-title">
-        <span>Groups</span>
-        <small>{filteredGroups.length}</small>
-      </div>
-      <div class="rail-list">
-        {#if loadingGroups}
-          <div class="rail-empty">Loading groups...</div>
-        {:else if filteredGroups.length === 0}
-          <div class="rail-empty">No groups match the current search.</div>
-        {:else}
-          {#each filteredGroups as group (group.id)}
-            <button
-              class:selected={analysisScope === "source_group" && selectedGroupId === String(group.id)}
-              class="rail-row rail-group-row"
-              type="button"
-              onclick={() => selectGroup(group.id)}
-            >
-              <div class="rail-avatar group-avatar" aria-hidden="true">
-                <span>{group.name.trim().charAt(0).toUpperCase() || "G"}</span>
-              </div>
-              <div class="rail-copy">
-                <div class="rail-copy-top">
-                  <strong>{group.name}</strong>
-                  <span>{group.members.length} src</span>
-                </div>
-                <div class="rail-copy-meta">
-                  <span>Saved source group</span>
-                  <span>Updated {formatTimestamp(group.updated_at)}</span>
-                </div>
-              </div>
-            </button>
-          {/each}
-        {/if}
-      </div>
-    </div>
-  </aside>
-
-  <section class="center-pane">
-    <div class="scope-hero">
-      <div class="scope-hero-copy">
-        <span class="eyebrow">{analysisScope === "source_group" ? "Source group workspace" : "Source workspace"}</span>
-        <h2>{currentScopeTitle()}</h2>
-        <p>{currentScopeSummary()}</p>
-      </div>
-      <div class="scope-hero-meta">
-        {#if analysisScope === "single_source" && currentSource()}
-          <Badge variant="info">{sourceKindLabel(currentSource()!.telegram_source_kind)}</Badge>
-          <Badge>{accountLabel(currentSource()!.account_id)}</Badge>
-        {/if}
-        {#if analysisScope === "source_group" && currentGroup()}
-          <Badge variant="info">{currentGroup()!.members.length} sources</Badge>
-        {/if}
-        {#if currentRun}
-          <Badge variant={statusTone(currentRun.status)}>Run #{currentRun.id}</Badge>
-        {/if}
-      </div>
-    </div>
-
-    <div class="scope-facts">
-      <div class="scope-fact">
-        <span class="scope-fact-label">Scope</span>
-        <strong>{analysisScope === "source_group" ? "Group analysis" : "Single source"}</strong>
-      </div>
-      <div class="scope-fact">
-        <span class="scope-fact-label">Window</span>
-        <strong>{formatPeriod(startOfDayUnix(periodFrom), endOfDayUnix(periodTo))}</strong>
-      </div>
-      <div class="scope-fact">
-        <span class="scope-fact-label">Context</span>
-        <strong>
-          {#if analysisScope === "source_group" && currentGroup()}
-            {currentGroup()!.members.length} sources
-          {:else if currentSourceMetric()}
-            {currentSourceMetric()!.item_count} synced messages
-          {:else}
-            Awaiting synced context
-          {/if}
-        </strong>
-      </div>
-      <div class="scope-fact">
-        <span class="scope-fact-label">Output</span>
-        <strong>{outputLanguage || "Default language"}</strong>
-      </div>
-    </div>
-
-    <div class="controls-panel">
-      <div class="controls-grid">
-        <label>Period from
-          <Input
-            type="date"
-            value={periodFrom}
-            oninput={(event) => (periodFrom = (event.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-        <label>Period to
-          <Input
-            type="date"
-            value={periodTo}
-            oninput={(event) => (periodTo = (event.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-        <label>Prompt template
-          <Select
-            value={selectedTemplateId}
-            disabled={loadingTemplates}
-            onchange={(event) => (selectedTemplateId = (event.currentTarget as HTMLSelectElement).value)}
-          >
-            {#if loadingTemplates}
-              <option value="">Loading templates...</option>
-            {:else if templates.length === 0}
-              <option value="">No report templates available</option>
-            {/if}
-            {#each templates as template (template.id)}
-              <option value={String(template.id)}>
-                {template.name}{template.is_builtin ? " - builtin" : ""}
-              </option>
-            {/each}
-          </Select>
-        </label>
-        <label>Output language
-          <Input
-            type="text"
-            value={outputLanguage}
-            placeholder="Russian"
-            oninput={(event) => (outputLanguage = (event.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-      </div>
-
-      <div class="controls-bottom">
-        <label class="model-field">Model override
-          <Input
-            type="text"
-            value={modelOverride}
-            placeholder="Use active profile default model"
-            oninput={(event) => (modelOverride = (event.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-        <div class="controls-actions">
-          <Button onclick={runReport} disabled={startingReport || !selectedTemplateId || (analysisScope === "single_source" ? !selectedSourceId : !selectedGroupId)}>
-            {startingReport ? "Starting..." : "Run report"}
-          </Button>
-          {#if analysisScope === "single_source" && currentSource()}
-            <Button
-              variant="secondary"
-              onclick={() => void syncSelectedSource(currentSource()!.id)}
-              disabled={!!syncingIds[currentSource()!.id] || sourceSyncDisabledReason(currentSource()!) !== null}
-              title={sourceSyncDisabledReason(currentSource()!) ?? undefined}
-            >
-              {syncingIds[currentSource()!.id] ? "Syncing..." : "Sync source"}
-            </Button>
-          {/if}
-        </div>
-      </div>
-
-      {#if selectedRunIsActive || currentRun}
-        <div class="live-strip">
-          <span><strong>Phase:</strong> {phaseLabel(activePhase)}</span>
-          {#if activeProgress}
-            <span><strong>Progress:</strong> {activeProgress}</span>
-          {/if}
-          {#if currentRun}
-            <span><strong>Provider:</strong> {currentRun.provider}/{currentRun.model}</span>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    {#if analysisScope === "single_source" && currentSource()}
-      <div class="context-panel">
-        <div class="context-panel-header">
-          <div>
-            <span class="eyebrow">Source context</span>
-            <h3>Recent synced messages</h3>
-          </div>
-          <Badge variant="neutral">
-            {currentSourceMetric()?.item_count ?? sourceItems.length} messages
-          </Badge>
-        </div>
-        <SourceMessagesPanel
-          {loadingItems}
-          items={sourceItems}
-          formatDate={formatTimestamp}
-          embedded={true}
-          previewLimit={120}
-        />
-      </div>
-    {/if}
-
-    <ReportViewer
-      {currentRun}
-      {loadingRunDetail}
-      streamedOutput={focusedStreamedOutput}
-      traceRefCount={traceData.refs.length}
-      {selectedTraceRef}
-      livePhase={activePhase}
-      liveProgress={activeProgress}
-      {canCancelCurrentRun}
-      {formatTimestamp}
-      {formatPeriod}
-      {runTargetLabel}
-      {statusTone}
-      {reportLines}
-      onFocusTraceRef={focusTraceRef}
-      onCancelCurrentRun={() => {
-        if (activeRunId !== null) {
-          return cancelActiveRun(activeRunId);
-        }
-      }}
-    />
-
-    <ChatPanel
-      {currentRun}
-      {loadingChat}
-      {chatMessages}
-      {chatQuestion}
-      {chatting}
-      canCancelChat={chatting && activeChatRequestId !== null}
-      {clearingChat}
-      {selectedTraceRef}
-      {reportLines}
-      onFocusTraceRef={focusTraceRef}
-      onAskQuestion={askRunQuestion}
-      onCancelChat={cancelChat}
-      onClearChat={clearChatMessages}
-      onChangeChatQuestion={(value) => (chatQuestion = value)}
-    />
-
-    <div class="utility-strip">
-      <TemplateEditor
-        compact={true}
-        {selectedTemplate}
-        {templateName}
-        {templateBody}
-        {savingTemplate}
-        {deletingTemplate}
-        onSaveTemplateCopy={saveTemplateCopy}
-        onSaveTemplateChanges={saveTemplateChanges}
-        onDeleteTemplate={deleteTemplate}
-      />
-
-      <SourceGroupEditor
-        compact={true}
-        {groups}
-        {selectedGroupId}
-        {selectedGroup}
-        {groupName}
-        {groupMemberSourceIds}
-        sources={Object.values(sourceMetrics)}
-        {savingGroup}
-        {deletingGroup}
-        {formatTimestamp}
-        {isGroupSourceSelected}
-        onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
-        onChangeGroupName={(value) => (groupName = value)}
-        onToggleSource={toggleGroupSource}
-        onStartNewGroup={startNewGroup}
-        onSaveGroupCopy={saveGroupCopy}
-        onSaveGroupChanges={saveGroupChanges}
-        onDeleteGroup={deleteGroup}
-      />
-    </div>
-  </section>
-
-  <aside class="inspector">
-    <div class="inspector-header">
-      <div>
-        <span class="eyebrow">Inspector</span>
-        <h3>Runs and evidence</h3>
-      </div>
-      <div class="inspector-tabs">
-        <Button variant="secondary" size="sm" selected={inspectorMode === "active"} onclick={() => (inspectorMode = "active")}>
-          Active
-        </Button>
-        <Button variant="secondary" size="sm" selected={inspectorMode === "history"} onclick={() => (inspectorMode = "history")}>
-          History
-        </Button>
-        <Button variant="secondary" size="sm" selected={inspectorMode === "trace"} onclick={() => (inspectorMode = "trace")}>
-          Trace
-        </Button>
-        <Button variant="secondary" size="sm" selected={inspectorMode === "chunks"} onclick={() => (inspectorMode = "chunks")}>
-          Chunks
-        </Button>
-      </div>
-    </div>
-
-    <div class="inspector-body">
-      {#if inspectorMode === "active"}
-        <ActiveRunList
-          {activeRuns}
-          {loadingActiveRuns}
-          {activeRunId}
-          {formatTimestamp}
-          {formatPeriod}
-          {phaseLabel}
-          {livePhase}
-          {liveProgress}
-          {runTargetLabel}
-          {statusTone}
-          onRefresh={loadActiveRuns}
-          onOpenRun={openRun}
-          onCancelRun={cancelActiveRun}
-        />
-      {:else if inspectorMode === "history"}
-        <RunHistory
-          {runs}
-          {loadingRuns}
-          {historyScope}
-          historyTargetReady={historyScopeParams !== null}
-          {runFilter}
-          {activeRunId}
-          {filteredRuns}
-          {formatTimestamp}
-          {formatPeriod}
-          {runTargetLabel}
-          {statusTone}
-          onRefresh={loadRuns}
-          onOpenRun={openRun}
-          onChangeFilter={(next) => (runFilter = next)}
-          onChangeHistoryScope={(next) => (historyScope = next)}
-        />
-      {:else if inspectorMode === "trace"}
-        <TracePanel
-          traceRefs={traceData.refs}
-          {selectedTraceRef}
-          {selectedTrace}
-          {formatTimestamp}
-          {traceRefOrigin}
-          onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
-        />
-      {:else}
-        <ChunkSummaries summaries={focusedChunkSummaries} running={selectedRunIsActive} />
-      {/if}
-    </div>
-  </aside>
+  <WorkspaceInspector
+    {inspectorMode}
+    {activeRuns}
+    {loadingActiveRuns}
+    {activeRunId}
+    {runs}
+    {loadingRuns}
+    {historyScope}
+    historyTargetReady={historyScopeParams !== null}
+    {runFilter}
+    {filteredRuns}
+    {traceData}
+    {selectedTraceRef}
+    {selectedTrace}
+    {focusedChunkSummaries}
+    {selectedRunIsActive}
+    {formatTimestamp}
+    {formatPeriod}
+    {phaseLabel}
+    {livePhase}
+    {liveProgress}
+    {runTargetLabel}
+    {statusTone}
+    {traceRefOrigin}
+    onChangeInspectorMode={(mode) => (inspectorMode = mode)}
+    onRefreshActiveRuns={() => void loadActiveRuns()}
+    onOpenRun={(runId) => void openRun(runId)}
+    onCancelRun={(runId) => void cancelActiveRun(runId)}
+    onRefreshRuns={() => void loadRuns()}
+    onChangeFilter={(next) => (runFilter = next)}
+    onChangeHistoryScope={(next) => (historyScope = next)}
+    onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
+  />
 </section>
 
 <style>
@@ -1791,427 +1514,19 @@
     margin-bottom: 0.85rem;
   }
 
-  .rail,
-  .center-pane,
-  .inspector {
-    min-width: 0;
-  }
-
-  .rail,
-  .inspector {
-    position: sticky;
-    top: 0;
-  }
-
-  .rail {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    padding: 0.85rem;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, white 4%), var(--panel));
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    box-shadow: var(--shadow);
-    max-height: calc(100vh - 6rem);
-    overflow: auto;
-  }
-
-  .rail-header,
-  .scope-hero,
-  .controls-panel,
-  .context-panel,
-  .inspector {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-  }
-
-  .rail-header,
-  .scope-hero,
-  .controls-panel,
-  .context-panel,
-  .inspector {
-    border-radius: 16px;
-  }
-
-  .rail-header,
-  .context-panel-header,
-  .inspector-header,
-  .scope-hero {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    align-items: flex-start;
-  }
-
-  .eyebrow {
-    display: inline-block;
-    font-size: 0.68rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 0.2rem;
-  }
-
-  .rail-header h1,
-  .scope-hero h2,
-  .context-panel-header h3,
-  .inspector-header h3 {
-    margin: 0;
-  }
-
-  .rail-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    padding-top: 0.1rem;
-  }
-
-  .rail-section + .rail-section {
-    padding-top: 0.85rem;
-    border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-  }
-
-  .rail-section-title {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.78rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  :global(.rail-search) {
-    min-height: 2.5rem;
-  }
-
-  .rail-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .rail-empty {
-    padding: 0.85rem 0.95rem;
-    border: 1px dashed var(--border);
-    border-radius: 12px;
-    color: var(--muted);
-    font-size: 0.86rem;
-    background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
-  }
-
-  .rail-row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    width: 100%;
-    padding: 0.6rem;
-    border-radius: 14px;
-    border: 1px solid transparent;
-    background: var(--panel-strong);
-    transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
-  }
-
-  .rail-group-row {
-    flex-direction: row;
-    align-items: center;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .rail-row.selected,
-  .rail-group-row.selected {
-    border-color: color-mix(in srgb, var(--primary) 45%, transparent);
-    background: color-mix(in srgb, var(--primary) 8%, var(--panel-strong));
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
-  }
-
-  .rail-row:hover,
-  .rail-group-row:hover {
-    border-color: color-mix(in srgb, var(--border-strong) 68%, transparent);
-    background: color-mix(in srgb, var(--panel-hover) 78%, var(--panel-strong));
-    transform: translateY(-1px);
-  }
-
-  .rail-row-main {
-    display: flex;
-    gap: 0.6rem;
-    align-items: flex-start;
-    width: 100%;
-    background: transparent;
-    border: 0;
-    color: inherit;
-    padding: 0;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .rail-avatar {
-    flex: 0 0 2.35rem;
-    width: 2.35rem;
-    height: 2.35rem;
-    border-radius: 0.9rem;
-    overflow: hidden;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-    color: var(--primary);
-    font-size: 0.9rem;
-    font-weight: 700;
-  }
-
-  .group-avatar {
-    border-radius: 0.8rem;
-  }
-
-  .rail-avatar img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .rail-copy {
-    min-width: 0;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.16rem;
-  }
-
-  .rail-copy-top,
-  .rail-copy-meta,
-  .rail-row-actions {
-    display: flex;
-    gap: 0.45rem;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .rail-copy-top {
-    justify-content: space-between;
-  }
-
-  .rail-copy-top strong {
-    font-size: 0.92rem;
-    line-height: 1.25;
-  }
-
-  .rail-copy-top span,
-  .rail-copy-meta span {
-    font-size: 0.75rem;
-    color: var(--muted);
-  }
-
-  .center-pane {
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-    min-width: 0;
-  }
-
-  .scope-hero,
-  .controls-panel,
-  .context-panel,
-  .inspector {
-    padding: 1rem;
-  }
-
-  .scope-hero {
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel) 98%, white 2%), var(--panel));
-  }
-
-  .scope-hero-copy p {
-    margin: 0.35rem 0 0 0;
-    color: var(--muted);
-    line-height: 1.55;
-    max-width: 64ch;
-  }
-
-  .scope-hero-meta {
-    display: flex;
-    gap: 0.45rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .scope-facts {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.7rem;
-  }
-
-  .scope-fact {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.85rem 0.95rem;
-    border-radius: 14px;
-    border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 72%, transparent), transparent);
-    box-shadow: var(--shadow-soft);
-    min-width: 0;
-  }
-
-  .scope-fact-label {
-    font-size: 0.68rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  .scope-fact strong {
-    font-size: 0.88rem;
-    line-height: 1.35;
-  }
-
-  .controls-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 54%, transparent), var(--panel));
-  }
-
-  .controls-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.8rem;
-  }
-
-  .controls-bottom {
-    display: flex;
-    gap: 0.8rem;
-    align-items: end;
-    justify-content: space-between;
-    flex-wrap: wrap;
-  }
-
-  .controls-actions {
-    display: flex;
-    gap: 0.55rem;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .model-field {
-    flex: 1 1 18rem;
-    min-width: 16rem;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    font-size: 0.83rem;
-    color: var(--muted);
-  }
-
-  .live-strip {
-    display: flex;
-    gap: 0.8rem;
-    flex-wrap: wrap;
-    align-items: center;
-    padding-top: 0.2rem;
-    border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-    color: var(--muted);
-    font-size: 0.84rem;
-  }
-
-  .context-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 44%, transparent), var(--panel));
-  }
-
-  .utility-strip {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.8rem;
-  }
-
-  .inspector {
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-    max-height: calc(100vh - 6rem);
-    overflow: auto;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel) 97%, white 3%), var(--panel));
-  }
-
-  .inspector-header {
-    padding-bottom: 0.2rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-  }
-
-  .inspector-tabs {
-    display: flex;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .inspector-body {
-    min-width: 0;
-  }
-
   @media (max-width: 1500px) {
     .analysis-workspace {
       grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
     }
 
-    .inspector {
+    :global(.analysis-workspace > .inspector) {
       grid-column: 1 / -1;
-      position: static;
-      max-height: none;
     }
   }
 
   @media (max-width: 1180px) {
     .analysis-workspace {
       grid-template-columns: 1fr;
-    }
-
-    .rail {
-      position: static;
-      max-height: none;
-    }
-
-    .scope-facts,
-    .controls-grid,
-    .utility-strip {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  @media (max-width: 720px) {
-    .scope-hero,
-    .context-panel-header,
-    .inspector-header,
-    .controls-bottom {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .controls-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .model-field {
-      min-width: 0;
-    }
-
-    .scope-hero-meta,
-    .inspector-tabs {
-      justify-content: flex-start;
     }
   }
 </style>
