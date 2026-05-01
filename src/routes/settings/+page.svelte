@@ -142,6 +142,22 @@
     return currentProviderOption(value).baseUrlPlaceholder;
   }
 
+  function suggestNewProfileId() {
+    const existingIds = new Set(profiles.map((profile) => profile.profile_id));
+    const base = provider === "omniroute" ? "omniroute_profile" : "gemini_profile";
+
+    if (!existingIds.has(base)) {
+      return base;
+    }
+
+    let index = 2;
+    while (existingIds.has(`${base}_${index}`)) {
+      index += 1;
+    }
+
+    return `${base}_${index}`;
+  }
+
   function effectiveDraftProfileId() {
     return creatingProfile ? draftProfileId : selectedProfileId;
   }
@@ -267,9 +283,10 @@
 
   function beginNewProfile() {
     creatingProfile = true;
-    draftProfileId = "";
+    draftProfileId = suggestNewProfileId();
     clearModelCatalog();
     clearTestResult();
+    settingsStatus = "Review the generated profile ID, then save the new profile.";
     if (providerSupportsBaseUrl() && !baseUrl.trim()) {
       baseUrl = providerBaseUrlPlaceholder();
     }
