@@ -6,7 +6,6 @@
   import { formatAppError } from "$lib/app-error";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
-  import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
@@ -125,106 +124,171 @@
   <Button variant="ghost" size="sm" onclick={() => goto("/accounts")}>&larr; Accounts</Button>
 </div>
 
-<h1>{label || "Account"}</h1>
-
-{#if status}
-  <StatusMessage tone={status.startsWith("Error") ? "error" : "default"} className="page-status">
-    {status}
-  </StatusMessage>
-{/if}
-
-{#if step === "connecting"}
-  <Card className="page-card">
-    <EmptyState description="Connecting to Telegram..." />
-  </Card>
-{/if}
-
-{#if step === "phone"}
-  <Card className="page-card">
-    <h3>Sign In</h3>
-    <SurfaceCard className="auth-summary">
-      <div class="summary-row">
-        <span class="hint">API ID: {apiId}</span>
-        <Badge variant="neutral">{label || "Account"}</Badge>
-      </div>
-    </SurfaceCard>
-    <label>Phone number
-      <Input
-        type="tel"
-        value={phone}
-        placeholder="+79991234567"
-        oninput={(event) => (phone = (event.currentTarget as HTMLInputElement).value)}
-      />
-    </label>
-    <div class="action-row">
-      <Button onclick={sendCode} disabled={loading || !phone}>
-        {loading ? "Sending..." : "Send Code"}
-      </Button>
+<section class="page-shell">
+  <header class="page-hero">
+    <div class="page-hero-copy">
+      <span class="page-eyebrow">Telegram authentication</span>
+      <h1>{label || "Account"}</h1>
+      <p>
+        Connect this Telegram identity to the local workspace. The flow stays intentionally compact:
+        initialize client, confirm phone, verify code, then return to analysis.
+      </p>
     </div>
-  </Card>
-{/if}
-
-{#if step === "code"}
-  <Card className="page-card">
-    <h3>Verification Code</h3>
-    <SurfaceCard className="auth-summary">
-      <div class="summary-row">
-        <span class="hint">Check your Telegram app for the code.</span>
-        <Badge variant="warning">Verification pending</Badge>
-      </div>
-    </SurfaceCard>
-    <label>Code
-      <Input
-        type="text"
-        value={code}
-        placeholder="12345"
-        oninput={(event) => (code = (event.currentTarget as HTMLInputElement).value)}
-      />
-    </label>
-    <div class="action-row">
-      <Button onclick={signIn} disabled={loading || !code}>
-        {loading ? "Signing in..." : "Sign In"}
-      </Button>
-      <Button variant="secondary" onclick={() => (step = "phone")}>Back</Button>
+    <div class="page-hero-meta">
+      <Badge variant="info">{label || "Account"}</Badge>
+      <Badge variant={step === "done" ? "success" : step === "code" ? "warning" : "neutral"}>
+        {step === "connecting"
+          ? "Connecting"
+          : step === "phone"
+            ? "Phone step"
+            : step === "code"
+              ? "Verification"
+              : "Authenticated"}
+      </Badge>
     </div>
-  </Card>
-{/if}
+  </header>
 
-{#if step === "done"}
-  <Card className="page-card">
-    <h3>Authenticated</h3>
-    <SurfaceCard className="auth-summary">
-      <div class="summary-stack">
-        <div class="summary-row">
-          <span class="hint">Phone: {phone}</span>
-          <Badge variant="success">Ready</Badge>
+  {#if status}
+    <StatusMessage tone={status.startsWith("Error") ? "error" : "default"} className="page-status">
+      {status}
+    </StatusMessage>
+  {/if}
+
+  <div class="page-grid auth-grid">
+    <div class="page-stack">
+      <section class="desk-panel auth-panel">
+        <div class="panel-header">
+          <div class="panel-header-copy">
+            <span class="page-eyebrow">Authentication flow</span>
+            <h2>
+              {#if step === "connecting"}
+                Connecting to Telegram
+              {:else if step === "phone"}
+                Sign in with phone
+              {:else if step === "code"}
+                Enter verification code
+              {:else}
+                Account ready
+              {/if}
+            </h2>
+            <p>
+              {#if step === "connecting"}
+                Restoring or initializing the Telegram client for this account.
+              {:else if step === "phone"}
+                Send a login code to the phone number linked with this Telegram identity.
+              {:else if step === "code"}
+                Confirm the verification code from Telegram to finish sign-in.
+              {:else}
+                This account is authenticated and ready to sync sources into the workspace.
+              {/if}
+            </p>
+          </div>
         </div>
-        <StatusMessage tone="default" size="sm" surface={false}>
-          This account is authenticated and ready to load Telegram sources.
-        </StatusMessage>
-      </div>
-    </SurfaceCard>
-    <div class="action-row">
-      <Button onclick={() => goto("/analysis")}>Open Workspace</Button>
-      <Button variant="danger-soft" onclick={logout} disabled={loading}>Logout</Button>
+
+        {#if step === "connecting"}
+          <EmptyState description="Connecting to Telegram..." />
+        {:else if step === "phone"}
+          <div class="form-stack">
+            <label>Phone number
+              <Input
+                type="tel"
+                value={phone}
+                placeholder="+79991234567"
+                oninput={(event) => (phone = (event.currentTarget as HTMLInputElement).value)}
+              />
+            </label>
+          </div>
+          <div class="action-row">
+            <Button onclick={sendCode} disabled={loading || !phone}>
+              {loading ? "Sending..." : "Send code"}
+            </Button>
+          </div>
+        {:else if step === "code"}
+          <div class="form-stack">
+            <label>Code
+              <Input
+                type="text"
+                value={code}
+                placeholder="12345"
+                oninput={(event) => (code = (event.currentTarget as HTMLInputElement).value)}
+              />
+            </label>
+          </div>
+          <div class="action-row">
+            <Button onclick={signIn} disabled={loading || !code}>
+              {loading ? "Signing in..." : "Sign in"}
+            </Button>
+            <Button variant="secondary" onclick={() => (step = "phone")}>Back</Button>
+          </div>
+        {:else}
+          <SurfaceCard className="auth-success">
+            <div class="summary-stack">
+              <div class="summary-row">
+                <span class="hint">Phone: {phone}</span>
+                <Badge variant="success">Ready</Badge>
+              </div>
+              <StatusMessage tone="default" size="sm" surface={false}>
+                This account is authenticated and ready to load Telegram sources.
+              </StatusMessage>
+            </div>
+          </SurfaceCard>
+          <div class="action-row">
+            <Button onclick={() => goto("/analysis")}>Open workspace</Button>
+            <Button variant="danger-soft" onclick={logout} disabled={loading}>Logout</Button>
+          </div>
+        {/if}
+      </section>
     </div>
-  </Card>
-{/if}
+
+    <div class="page-stack">
+      <section class="desk-panel desk-panel-subtle">
+        <div class="panel-header-copy">
+          <span class="page-eyebrow">Account context</span>
+          <h3>Workspace identity</h3>
+        </div>
+
+        <SurfaceCard className="auth-summary">
+          <div class="summary-row">
+            <span class="hint">Account label</span>
+            <Badge variant="neutral">{label || "Account"}</Badge>
+          </div>
+          <div class="summary-row">
+            <span class="hint">API ID</span>
+            <strong class="summary-value">{apiId || "Unknown"}</strong>
+          </div>
+          <div class="summary-row">
+            <span class="hint">Phone</span>
+            <strong class="summary-value">{phone || "Not set yet"}</strong>
+          </div>
+        </SurfaceCard>
+      </section>
+
+      <section class="desk-panel desk-panel-subtle">
+        <div class="panel-header-copy">
+          <span class="page-eyebrow">What happens next</span>
+          <h3>After sign-in</h3>
+          <p>
+            Return to `Analysis` to open the left rail, sync Telegram sources, inspect recent
+            messages, and launch your first grounded report.
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
 
 <style>
   .back-row {
-    margin-bottom: 1rem;
-  }
-
-  :global(.ui-card.page-card) {
-    margin-bottom: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    margin-bottom: 0.9rem;
   }
 
   :global(.ui-surface-card.auth-summary) {
     padding: 0.85rem 1rem;
+  }
+
+  :global(.ui-surface-card.auth-success) {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 72%, transparent), transparent);
   }
 
   .summary-row,
@@ -243,12 +307,24 @@
     flex-direction: column;
   }
 
+  .summary-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
   label {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
     font-size: 0.85rem;
     color: var(--muted);
+  }
+
+  .form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
   }
 
   .hint {
@@ -265,6 +341,14 @@
   }
 
   :global(.page-status) {
-    margin-bottom: 1rem;
+    margin-bottom: 0;
+  }
+
+  .auth-grid {
+    align-items: start;
+  }
+
+  .auth-panel {
+    gap: 0.95rem;
   }
 </style>

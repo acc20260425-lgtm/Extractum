@@ -84,6 +84,18 @@
     }
     return "No report output yet.";
   }
+
+  function toolbarStatus() {
+    if (currentRun?.status) return currentRun.status;
+    if (livePhase) return livePhase;
+    return "queued";
+  }
+
+  function toolbarStatusLabel() {
+    if (currentRun) return currentRun.status;
+    if (livePhase) return livePhase;
+    return "idle";
+  }
 </script>
 
 <Card>
@@ -98,8 +110,8 @@
     </PanelHeader>
 
     <div class="report-toolbar">
-      <Badge variant={statusTone(currentRun?.status ?? livePhase || "queued")}>
-        {currentRun ? currentRun.status : livePhase || "idle"}
+      <Badge variant={statusTone(toolbarStatus())}>
+        {toolbarStatusLabel()}
       </Badge>
       <Badge variant="neutral">{traceRefCount} trace refs</Badge>
       <Badge variant={currentRun?.status === "completed" ? "success" : "neutral"}>
