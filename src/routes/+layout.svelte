@@ -59,10 +59,10 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <a class="brand" href="/analysis">
-          <span class="brand-mark" aria-hidden="true">EX</span>
+          <span class="brand-mark" aria-hidden="true">E</span>
           <span class="brand-copy">
             <strong>Extractum</strong>
-            <small>Desktop research workspace</small>
+            <small>Research workspace</small>
           </span>
         </a>
       </div>
