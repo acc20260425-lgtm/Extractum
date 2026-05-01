@@ -317,6 +317,33 @@
     {/if}
   </div>
 
+  {#if !currentRun && !startingReport}
+    <div class="preflight-panel">
+      <div class="preflight-copy">
+        <span class="eyebrow">Next step</span>
+        <h3>Build the first report for this workspace</h3>
+        <p>
+          Set the date window, choose a prompt template, and start a run. Once the report is ready,
+          this area will turn into a live document and follow-up conversation workspace.
+        </p>
+      </div>
+      <div class="preflight-points">
+        <div class="preflight-point">
+          <strong>1. Scope</strong>
+          <span>{analysisScope === "source_group" ? "Run across the saved group." : "Run against the selected source."}</span>
+        </div>
+        <div class="preflight-point">
+          <strong>2. Template</strong>
+          <span>{selectedTemplate ? selectedTemplate.name : "Pick a report template to continue."}</span>
+        </div>
+        <div class="preflight-point">
+          <strong>3. Result</strong>
+          <span>Inspect trace-backed output here, then continue with grounded chat.</span>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   {#if analysisScope === "single_source" && currentSource}
     <div class="context-panel">
       <div class="context-panel-header">
@@ -337,6 +364,19 @@
       />
     </div>
   {/if}
+
+  <div class="conversation-shell">
+    <div class="conversation-shell-header">
+      <div>
+        <span class="eyebrow">Analysis flow</span>
+        <h3>Report and follow-up</h3>
+      </div>
+      <div class="conversation-status">
+        <Badge variant={currentRun?.status === "completed" ? "success" : "neutral"}>
+          {currentRun?.status === "completed" ? "Ready for chat" : "Chat follows report completion"}
+        </Badge>
+      </div>
+    </div>
 
   <ReportViewer
     {currentRun}
@@ -372,6 +412,7 @@
     onClearChat={onClearChat}
     onChangeChatQuestion={onChangeChatQuestion}
   />
+  </div>
 
   <div class="utility-strip">
     <TemplateEditor
@@ -560,6 +601,79 @@
       linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 44%, transparent), var(--panel));
   }
 
+  .preflight-panel,
+  .conversation-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+
+  .preflight-panel {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 54%, transparent), var(--panel));
+  }
+
+  .preflight-copy h3,
+  .conversation-shell-header h3 {
+    margin: 0;
+  }
+
+  .preflight-copy p {
+    margin: 0.35rem 0 0 0;
+    color: var(--muted);
+    line-height: 1.55;
+    max-width: 62ch;
+  }
+
+  .preflight-points {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .preflight-point {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.85rem 0.9rem;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+  }
+
+  .preflight-point strong {
+    font-size: 0.84rem;
+  }
+
+  .preflight-point span {
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+
+  .conversation-shell {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 98%, white 2%), var(--panel));
+  }
+
+  .conversation-shell-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+
+  .conversation-status {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
   .utility-strip {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -567,6 +681,7 @@
   }
 
   @media (max-width: 1180px) {
+    .preflight-points,
     .scope-facts,
     .controls-grid,
     .utility-strip {
@@ -575,6 +690,7 @@
   }
 
   @media (max-width: 720px) {
+    .conversation-shell-header,
     .scope-hero,
     .context-panel-header,
     .controls-bottom {

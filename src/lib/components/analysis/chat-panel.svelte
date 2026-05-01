@@ -43,6 +43,11 @@
   } = $props();
 
   let chatThreadElement = $state<HTMLDivElement | null>(null);
+  const starterQuestions = [
+    "What are the three most important takeaways from this report?",
+    "Which claims in the report are best supported by the source evidence?",
+    "What changed over this period compared with the start of the window?",
+  ];
 
   $effect(() => {
     const scrollKey = chatMessages.map((message) => `${message.role}:${message.content.length}`).join("|");
@@ -56,13 +61,23 @@
       });
     });
   });
+
+  function chatSubtitle() {
+    if (!currentRun) {
+      return "Follow-up chat becomes available once a report run is opened.";
+    }
+    if (currentRun.status !== "completed") {
+      return "Grounded chat unlocks after the selected run finishes successfully.";
+    }
+    return "Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope.";
+  }
 </script>
 
 <Card>
   <div class="chat">
     <PanelHeader
-      title="Report Chat"
-      subtitle="Ask follow-up questions grounded in the saved report and matching synced messages from the same analysis scope."
+      title="Follow-up chat"
+      subtitle={chatSubtitle()}
     >
       {#if currentRun && currentRun.status === "completed"}
         <div class="chat-actions">
@@ -85,7 +100,21 @@
         {#if loadingChat}
           <EmptyState description="Loading saved chat history..." />
         {:else if chatMessages.length === 0}
-          <EmptyState description="No saved chat turns yet. Ask a follow-up question about this report." />
+          <div class="chat-empty-state">
+            <EmptyState description="No saved chat turns yet. Start with a focused question about this report." />
+            <div class="starter-list">
+              {#each starterQuestions as question (question)}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  onclick={() => onChangeChatQuestion(question)}
+                >
+                  {question}
+                </Button>
+              {/each}
+            </div>
+          </div>
         {:else}
           {#each chatMessages as message, index (`${message.role}-${index}`)}
             <div class={`chat-bubble chat-${message.role}`}>
@@ -126,9 +155,14 @@
             className="chat-question-field"
           />
         </label>
-        <Button onclick={onAskQuestion} disabled={chatting || loadingChat || !chatQuestion.trim() || currentRun.status !== "completed"}>
-          {chatting ? "Answering..." : "Ask"}
-        </Button>
+        <div class="compose-footer">
+          <span class="compose-hint">
+            Ask for clarification, prioritization, contradictions, or evidence-backed summaries.
+          </span>
+          <Button onclick={onAskQuestion} disabled={chatting || loadingChat || !chatQuestion.trim() || currentRun.status !== "completed"}>
+            {chatting ? "Answering..." : "Ask"}
+          </Button>
+        </div>
       </div>
     {/if}
   </div>
@@ -151,6 +185,8 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     min-height: 10rem;
+    max-height: 32rem;
+    overflow: auto;
   }
 
   .chat-bubble {
@@ -194,6 +230,12 @@
     gap: 0.9rem;
   }
 
+  .chat-empty-state {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
   .chat-actions {
     display: flex;
     gap: 0.5rem;
@@ -213,9 +255,35 @@
     min-height: 10rem;
   }
 
+  .starter-list {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .compose-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .compose-hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
   .report-line {
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  @media (max-width: 720px) {
+    .compose-footer {
+      align-items: stretch;
+    }
   }
 
 </style>

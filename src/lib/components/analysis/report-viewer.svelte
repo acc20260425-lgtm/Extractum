@@ -50,18 +50,65 @@
     onFocusTraceRef: (ref: string) => void | Promise<void>;
     onCancelCurrentRun: () => void | Promise<void>;
   } = $props();
+
+  function reportTitle() {
+    if (!currentRun) return "Report workspace";
+    if (currentRun.status === "completed") return "Report output";
+    if (currentRun.status === "failed") return "Run failed";
+    if (currentRun.status === "cancelled") return "Run cancelled";
+    return "Live report";
+  }
+
+  function reportSubtitle() {
+    if (!currentRun) {
+      return "Pick a source or source group, choose a template, and start a run to build a grounded report.";
+    }
+    return `${runTargetLabel(currentRun)} - ${currentRun.provider}/${currentRun.model}`;
+  }
+
+  function emptyDescription() {
+    if (!currentRun) {
+      return "No run is open yet. Start a report from the controls above and the live document will appear here.";
+    }
+    if (loadingRunDetail) {
+      return "Loading saved run...";
+    }
+    if (currentRun.status === "queued" || currentRun.status === "running") {
+      return "Analysis is in progress. Live output will appear here as the model streams the report.";
+    }
+    if (currentRun.status === "failed") {
+      return "This run failed before producing a report body.";
+    }
+    if (currentRun.status === "cancelled") {
+      return "This run was cancelled before a final report was saved.";
+    }
+    return "No report output yet.";
+  }
 </script>
 
 <Card>
   <div class="report-viewer">
     <PanelHeader
-      title="Report Output"
-      subtitle={currentRun ? `${runTargetLabel(currentRun)} - ${currentRun.provider}/${currentRun.model}` : ""}
+      title={reportTitle()}
+      subtitle={reportSubtitle()}
     >
       {#if canCancelCurrentRun}
         <Button variant="danger-soft" type="button" onclick={onCancelCurrentRun}>Cancel run</Button>
       {/if}
     </PanelHeader>
+
+    <div class="report-toolbar">
+      <Badge variant={statusTone(currentRun?.status ?? livePhase || "queued")}>
+        {currentRun ? currentRun.status : livePhase || "idle"}
+      </Badge>
+      <Badge variant="neutral">{traceRefCount} trace refs</Badge>
+      <Badge variant={currentRun?.status === "completed" ? "success" : "neutral"}>
+        {currentRun?.status === "completed" ? "Chat ready" : "Chat unlocks after completion"}
+      </Badge>
+      {#if liveProgress}
+        <Badge variant="info">Progress {liveProgress}</Badge>
+      {/if}
+    </div>
 
     {#if currentRun}
       <div class="run-summary-panel">
@@ -96,10 +143,8 @@
     {/if}
 
     <div class="report-body">
-      {#if loadingRunDetail}
-        <EmptyState description="Loading saved run..." />
-      {:else if streamedOutput}
-        <div class="report-output">
+      {#if !loadingRunDetail && streamedOutput}
+        <div class:streaming={canCancelCurrentRun} class="report-output">
           {#each reportLines(streamedOutput) as line (line.key)}
             <div class="report-line">
               {#each line.segments as segment (segment.key)}
@@ -117,7 +162,7 @@
           {/each}
         </div>
       {:else}
-        <EmptyState description="No report output yet." />
+        <EmptyState description={emptyDescription()} />
       {/if}
     </div>
   </div>
@@ -145,6 +190,13 @@
     background: var(--panel-strong);
     border: 1px solid var(--border);
     border-radius: 10px;
+  }
+
+  .report-toolbar {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .run-summary-header {
@@ -193,6 +245,19 @@
     gap: 0.25rem;
     font: inherit;
     line-height: 1.6;
+  }
+
+  .report-output.streaming {
+    position: relative;
+  }
+
+  .report-output.streaming::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    opacity: 0.85;
   }
 
   .report-line {
