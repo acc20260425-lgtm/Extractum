@@ -47,35 +47,39 @@
       description="Open a report with cited evidence, or follow a trace ref from the report or chat."
     />
   {:else}
-    <div class="trace-list">
-      {#each traceRefs as ref (ref.ref)}
-        <button
-          class="trace-link"
-          class:selected={ref.ref === selectedTraceRef}
-          type="button"
-          onclick={() => onSelectTraceRef(ref.ref)}
-        >
-          <div class="trace-link-top">
-            <strong>{ref.ref}</strong>
-            <Badge variant={originVariant(traceRefOrigin(ref.ref))}>
-              {originLabel(traceRefOrigin(ref.ref))}
-            </Badge>
-          </div>
-          <span>{formatTimestamp(ref.published_at)}</span>
-        </button>
-      {/each}
-    </div>
-
-    {#if selectedTrace}
-      <div class="trace-detail">
-        <div class="trace-meta">
-          <strong>{selectedTrace.ref}</strong>
-          <span>Source {selectedTrace.source_id} / message {selectedTrace.external_id}</span>
-          <span>{formatTimestamp(selectedTrace.published_at)}</span>
-        </div>
-        <blockquote>{selectedTrace.excerpt}</blockquote>
+    <div class="trace-layout">
+      <div class="trace-list">
+        {#each traceRefs as ref (ref.ref)}
+          <button
+            class="trace-link"
+            class:selected={ref.ref === selectedTraceRef}
+            type="button"
+            onclick={() => onSelectTraceRef(ref.ref)}
+          >
+            <div class="trace-link-top">
+              <strong>{ref.ref}</strong>
+              <Badge variant={originVariant(traceRefOrigin(ref.ref))}>
+                {originLabel(traceRefOrigin(ref.ref))}
+              </Badge>
+            </div>
+            <span>{formatTimestamp(ref.published_at)}</span>
+          </button>
+        {/each}
       </div>
-    {/if}
+
+      {#if selectedTrace}
+        <div class="trace-detail">
+          <div class="trace-meta">
+            <strong>{selectedTrace.ref}</strong>
+            <span>Source {selectedTrace.source_id} / message {selectedTrace.external_id}</span>
+            <span>{formatTimestamp(selectedTrace.published_at)}</span>
+          </div>
+          <blockquote>{selectedTrace.excerpt}</blockquote>
+        </div>
+      {:else}
+        <EmptyState description="Select a trace ref to inspect the saved excerpt." />
+      {/if}
+    </div>
   {/if}
 </aside>
 
@@ -102,6 +106,15 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    max-height: 18rem;
+    overflow: auto;
+    padding-right: 0.2rem;
+  }
+
+  .trace-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
   }
 
   .trace-link {
@@ -163,5 +176,20 @@
     color: var(--text);
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  @media (min-width: 1280px) {
+    .trace-layout {
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      align-items: start;
+    }
+
+    .trace-detail {
+      padding-top: 0;
+      padding-left: 0.9rem;
+      border-top: 0;
+      border-left: 1px solid var(--border);
+      min-height: 100%;
+    }
   }
 </style>

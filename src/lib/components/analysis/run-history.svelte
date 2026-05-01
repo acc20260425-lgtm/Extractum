@@ -54,7 +54,7 @@
   <div class="history">
     <PanelHeader
       title="Saved Runs"
-      subtitle="Immutable report runs with saved model, prompt version, and traceability data."
+      subtitle="Saved reports with model, prompt version, and trace data."
     >
       <div class="history-actions">
         <div class="filter-group">
@@ -77,11 +77,11 @@
     </PanelHeader>
 
     {#if loadingRuns}
-      <EmptyState description="Loading analysis runs..." />
+      <EmptyState description="Loading saved runs..." />
     {:else if historyScope === "current" && !historyTargetReady}
-      <EmptyState description="Select a source or source group to browse current-scope history." />
+      <EmptyState description="Select a source or source group to browse scope history." />
     {:else if runs.length === 0}
-      <EmptyState description={historyScope === "all" ? "No analysis runs yet." : "No saved runs for the current scope yet."} />
+      <EmptyState description={historyScope === "all" ? "No saved runs yet." : "No saved runs for this scope yet."} />
     {:else if filteredRuns.length === 0}
       <EmptyState description="No runs match the current filter." />
     {:else}

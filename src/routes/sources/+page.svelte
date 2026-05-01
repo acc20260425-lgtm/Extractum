@@ -12,8 +12,8 @@
       <span class="page-eyebrow">Compatibility route</span>
       <h1>Sources</h1>
       <p>
-        Source browsing and sync now live inside the main analysis workspace. This route remains as
-        a transition screen while the migration settles and old entry points are still in use.
+        Source browsing and sync now live inside the analysis workspace. This route stays as a
+        lightweight fallback while older entry points are still in use.
       </p>
     </div>
     <div class="page-hero-meta">
@@ -23,8 +23,7 @@
   </header>
 
   <StatusMessage className="page-status">
-    Use the left rail in `Analysis` to switch between sources and groups, sync current sources, and
-    inspect locally synced messages before launching a report.
+    Use the left rail in `Analysis` to switch sources, sync them, and inspect recent messages.
   </StatusMessage>
 
   <div class="page-grid">
@@ -35,8 +34,8 @@
             <span class="page-eyebrow">Recommended path</span>
             <h2>Main workspace</h2>
             <p>
-              Open the three-pane workspace to browse synced sources, inspect recent messages, run
-              reports, and continue report chat in one place.
+              Open the three-pane workspace to browse sources, inspect recent messages, run reports,
+              and continue grounded chat in one place.
             </p>
           </div>
         </div>
@@ -53,8 +52,7 @@
             <span class="page-eyebrow">Access management</span>
             <h2>Accounts and auth</h2>
             <p>
-              If you need to add or reconnect Telegram accounts before syncing, go to account
-              management.
+              Need to add or reconnect Telegram accounts before syncing? Open account management.
             </p>
           </div>
         </div>
@@ -68,7 +66,7 @@
   <section class="desk-panel desk-panel-subtle">
     <EmptyState
       title="Sources moved into the workspace"
-      description="This route is intentionally lightweight now. The real source workflow lives in Analysis, where sync, source context, reports, trace, and chat share the same desktop surface."
+      description="This route is intentionally lightweight now. The full source workflow lives in Analysis."
     />
   </section>
 </section>

@@ -130,8 +130,8 @@
       <span class="page-eyebrow">Telegram authentication</span>
       <h1>{label || "Account"}</h1>
       <p>
-        Connect this Telegram identity to the local workspace. The flow stays intentionally compact:
-        initialize client, confirm phone, verify code, then return to analysis.
+        Connect this Telegram identity to the local workspace: initialize, confirm phone, verify
+        code, then return to analysis.
       </p>
     </div>
     <div class="page-hero-meta">
@@ -175,11 +175,11 @@
               {#if step === "connecting"}
                 Restoring or initializing the Telegram client for this account.
               {:else if step === "phone"}
-                Send a login code to the phone number linked with this Telegram identity.
+                Send a login code to the phone linked with this Telegram identity.
               {:else if step === "code"}
-                Confirm the verification code from Telegram to finish sign-in.
+                Enter the Telegram code to finish sign-in.
               {:else}
-                This account is authenticated and ready to sync sources into the workspace.
+                This account is ready to sync sources.
               {/if}
             </p>
           </div>
@@ -228,7 +228,7 @@
                 <Badge variant="success">Ready</Badge>
               </div>
               <StatusMessage tone="default" size="sm" surface={false}>
-                This account is authenticated and ready to load Telegram sources.
+                This account is authenticated and ready to load sources.
               </StatusMessage>
             </div>
           </SurfaceCard>
@@ -268,8 +268,7 @@
           <span class="page-eyebrow">What happens next</span>
           <h3>After sign-in</h3>
           <p>
-            Return to `Analysis` to open the left rail, sync Telegram sources, inspect recent
-            messages, and launch your first grounded report.
+            Return to `Analysis` to sync sources, inspect recent messages, and launch a report.
           </p>
         </div>
       </section>

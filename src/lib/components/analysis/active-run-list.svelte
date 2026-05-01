@@ -47,7 +47,7 @@
   <div class="active-runs">
     <PanelHeader
       title="Active Runs"
-      subtitle="Queued and running reports stay separate from historical saved runs."
+      subtitle="Queued and running reports stay separate from saved history."
     >
       <Button variant="secondary" onclick={onRefresh}>Refresh</Button>
     </PanelHeader>
@@ -55,7 +55,7 @@
     {#if loadingActiveRuns}
       <EmptyState description="Loading active runs..." />
     {:else if activeRuns.length === 0}
-      <EmptyState description="No queued or running analysis runs." />
+      <EmptyState description="No queued or running runs." />
     {:else}
       <ul class="run-list">
         {#each activeRuns as run (run.id)}

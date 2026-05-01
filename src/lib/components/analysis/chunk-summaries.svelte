@@ -18,11 +18,11 @@
       title="Chunk Summaries"
       subtitle={summaries.length > 0
         ? `${summaries.length}/${summaries[0]?.total ?? summaries.length} received`
-        : "Waiting for the first chunk summary..."}
+        : "Waiting for the first chunk..."}
     />
 
     {#if summaries.length === 0}
-      <EmptyState description="Intermediate LLM summaries will appear here during chunk analysis." />
+      <EmptyState description="Intermediate summaries appear here during chunk analysis." />
     {:else}
       <div class="chunk-list">
         {#each summaries as chunk (chunk.index)}
