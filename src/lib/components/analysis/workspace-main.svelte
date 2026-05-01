@@ -1,9 +1,9 @@
 <script lang="ts">
   import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
+  import SourceContextPanel from "$lib/components/analysis/source-context-panel.svelte";
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
-  import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -194,32 +194,9 @@
     onDeleteGroup: () => void;
   } = $props();
 
-  let contextExpanded = $state(false);
-  let fullContextPreview = $state(false);
-  let contextStateKey = $state("");
-
-  const compactContextPreviewLimit = 8;
-  const expandedContextPreviewLimit = 24;
-
-  $effect(() => {
-    const nextKey = `${analysisScope}:${currentSource?.id ?? "none"}:${currentGroup?.id ?? "none"}:${currentRun?.id ?? "idle"}`;
-    if (contextStateKey === nextKey) return;
-
-    contextStateKey = nextKey;
-    contextExpanded = currentRun === null;
-    fullContextPreview = false;
-  });
-
-  function toggleContextPanel() {
-    contextExpanded = !contextExpanded;
-    if (!contextExpanded) {
-      fullContextPreview = false;
-    }
-  }
-
-  function toggleContextDepth() {
-    fullContextPreview = !fullContextPreview;
-  }
+  const sourceContextKey = $derived(
+    `${analysisScope}:${currentSource?.id ?? "none"}:${currentGroup?.id ?? "none"}:${currentRun?.id ?? "idle"}`,
+  );
 </script>
 
 <section class="center-pane">
@@ -383,52 +360,15 @@
   {/if}
 
   {#if analysisScope === "single_source" && currentSource}
-    <div class="context-panel" class:compact={!contextExpanded}>
-      <div class="context-panel-header">
-        <div>
-          <span class="eyebrow">Source context</span>
-          <h3>Recent synced messages</h3>
-          <p class="context-summary">
-            {#if currentRun}
-              Report is in focus. Open the message preview only when you need to verify source-level context.
-            {:else}
-              Scan the latest synced messages before you launch a run.
-            {/if}
-          </p>
-        </div>
-        <div class="context-panel-actions">
-          <Badge variant="neutral">
-            {currentSourceMetric?.item_count ?? sourceItems.length} messages
-          </Badge>
-          <Button variant="ghost" size="sm" onclick={toggleContextPanel}>
-            {contextExpanded ? "Hide preview" : "Peek at messages"}
-          </Button>
-        </div>
-      </div>
-
-      {#if contextExpanded}
-        <SourceMessagesPanel
-          {loadingItems}
-          items={sourceItems}
-          formatDate={formatTimestamp}
-          embedded={true}
-          previewLimit={fullContextPreview ? expandedContextPreviewLimit : compactContextPreviewLimit}
-        />
-
-        {#if sourceItems.length > compactContextPreviewLimit}
-          <div class="context-panel-footer">
-            <span class="context-footnote">
-              {fullContextPreview
-                ? `Showing a wider slice of the latest ${Math.min(sourceItems.length, expandedContextPreviewLimit)} messages.`
-                : `Showing the latest ${Math.min(sourceItems.length, compactContextPreviewLimit)} messages to keep the report area light.`}
-            </span>
-            <Button variant="secondary" size="sm" onclick={toggleContextDepth}>
-              {fullContextPreview ? "Show fewer" : "Show more"}
-            </Button>
-          </div>
-        {/if}
-      {/if}
-    </div>
+    {#key sourceContextKey}
+      <SourceContextPanel
+        currentRunOpen={!!currentRun}
+        {currentSourceMetric}
+        {sourceItems}
+        {loadingItems}
+        {formatTimestamp}
+      />
+    {/key}
   {/if}
 
   <div class="conversation-shell" class:run-open={!!currentRun}>
@@ -541,8 +481,7 @@
   }
 
   .scope-hero,
-  .controls-panel,
-  .context-panel {
+  .controls-panel {
     background: var(--panel);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
@@ -550,8 +489,7 @@
     padding: 1rem;
   }
 
-  .scope-hero,
-  .context-panel-header {
+  .scope-hero {
     display: flex;
     justify-content: space-between;
     gap: 0.75rem;
@@ -567,8 +505,7 @@
     margin-bottom: 0.2rem;
   }
 
-  .scope-hero h2,
-  .context-panel-header h3 {
+  .scope-hero h2 {
     margin: 0;
   }
 
@@ -673,50 +610,6 @@
     border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
     color: var(--muted);
     font-size: 0.84rem;
-  }
-
-  .context-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 44%, transparent), var(--panel));
-  }
-
-  .context-panel.compact {
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 24%, transparent), var(--panel));
-  }
-
-  .context-summary {
-    margin: 0.3rem 0 0 0;
-    color: var(--muted);
-    line-height: 1.45;
-    max-width: 56ch;
-  }
-
-  .context-panel-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .context-panel-footer {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    align-items: center;
-    flex-wrap: wrap;
-    padding-top: 0.1rem;
-    border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  }
-
-  .context-footnote {
-    color: var(--muted);
-    font-size: 0.8rem;
-    line-height: 1.45;
   }
 
   .preflight-panel,
@@ -825,13 +718,11 @@
   @media (max-width: 720px) {
     .conversation-shell-header,
     .scope-hero,
-    .context-panel-header,
     .controls-bottom {
       flex-direction: column;
       align-items: stretch;
     }
 
-    .context-panel-actions,
     .conversation-status {
       justify-content: flex-start;
     }
