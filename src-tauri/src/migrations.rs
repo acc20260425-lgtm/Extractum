@@ -164,6 +164,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/13.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 14,
+            description: "add telegram forum topics",
+            sql: include_str!("../migrations/14.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -187,6 +193,30 @@ mod tests {
             "reaction_count",
         ] {
             assert!(migration.sql.contains(column), "missing column {column}");
+        }
+    }
+
+    #[test]
+    fn includes_telegram_forum_topics_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 14)
+            .expect("version 14 migration is registered");
+
+        for fragment in [
+            "CREATE TABLE IF NOT EXISTS telegram_forum_topics",
+            "topic_id INTEGER NOT NULL",
+            "top_message_id INTEGER NOT NULL",
+            "FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE CASCADE",
+            "idx_telegram_forum_topics_source_topic",
+            "idx_telegram_forum_topics_source_top_message",
+            "idx_items_source_reply_to_top",
+        ] {
+            assert!(
+                migration.sql.contains(fragment),
+                "missing migration fragment {fragment}"
+            );
         }
     }
 }

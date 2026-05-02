@@ -105,7 +105,41 @@ Known active keys include:
 - `sync.initial.mode`
 - `sync.initial.value`
 
-### 1.4 `accounts`
+### 1.4 `telegram_forum_topics`
+
+Stores the local catalog of Telegram forum topics for `supergroup` sources.
+
+Important fields:
+
+- `id`
+- `source_id`
+- `topic_id`
+- `top_message_id`
+- `title`
+- `icon_color`
+- `icon_emoji_id`
+- `is_closed`
+- `is_pinned`
+- `is_hidden`
+- `is_deleted`
+- `sort_order`
+- `last_seen_at`
+- `updated_at`
+
+Important constraints / indexes:
+
+- unique topic by `(source_id, topic_id)`
+- join index on `(source_id, top_message_id)`
+- topic join/filter index on `items(source_id, reply_to_top_id)`
+- `source_id` foreign key to `sources(id)` with `ON DELETE CASCADE`
+
+Notes:
+
+- `topic_id` is the stable Telegram topic identifier used by API/DTO layers;
+- `top_message_id` is the local join key used to match topics to `items.reply_to_top_id`;
+- topic records are retained locally even if a later catalog refresh omits them, so historical message-to-topic matches can survive.
+
+### 1.5 `accounts`
 
 Stores configured Telegram accounts.
 
@@ -225,6 +259,7 @@ Purpose:
 | 11 | `11.sql` | Add `telegram_source_kind` and migrate Telegram channels to generic Telegram sources |
 | 12 | `12.sql` | Scope source uniqueness by `account_id` |
 | 13 | `13.sql` | Add Telegram reply/thread/reaction context metadata to `items` |
+| 14 | `14.sql` | Add local `telegram_forum_topics` catalog and topic join indexes |
 
 ## 4. Current behavior implications
 
