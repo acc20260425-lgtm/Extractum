@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
-use crate::sources::load_source;
+use crate::sources::{finalize_sync, insert_source_item, load_source, resolve_and_refresh_peer};
 use crate::telegram::{get_authorized_runtime, TelegramState};
 
 #[allow(dead_code)]
@@ -28,10 +28,19 @@ const STATUS_RUNNING: &str = "running";
 const STATUS_CANCEL_REQUESTED: &str = "cancel_requested";
 const STATUS_FAILED: &str = "failed";
 const STATUS_CANCELLED: &str = "cancelled";
+const STATUS_COMPLETED: &str = "completed";
 const PHASE_QUEUED: &str = "queued";
 const PHASE_RESOLVING_SOURCE: &str = "resolving_source";
+const PHASE_STARTING_TAKEOUT: &str = "starting_takeout";
+const PHASE_VALIDATING_PEER: &str = "validating_peer";
+const PHASE_LOADING_SPLITS: &str = "loading_splits";
+const PHASE_COUNTING: &str = "counting";
+const PHASE_IMPORTING_HISTORY: &str = "importing_history";
+const PHASE_FINISHING_TAKEOUT: &str = "finishing_takeout";
+const PHASE_COMPLETED: &str = "completed";
 const PHASE_FAILED: &str = "failed";
 const PHASE_CANCELLED: &str = "cancelled";
+const TAKEOUT_HISTORY_PAGE_LIMIT: i32 = 100;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct StartTakeoutImportResponse {
@@ -210,7 +219,7 @@ pub async fn start_takeout_source_import(
     let job_id = record.job_id.clone();
     let task_handle = handle.clone();
     tauri::async_runtime::spawn(async move {
-        run_noop_takeout_import_job(task_handle, job_id).await;
+        run_takeout_import_job(task_handle, job_id).await;
     });
 
     Ok(StartTakeoutImportResponse {
@@ -329,7 +338,7 @@ async fn run_export_dc_spike_for_runtime(
     })
 }
 
-async fn run_noop_takeout_import_job(handle: AppHandle, job_id: String) {
+async fn run_takeout_import_job(handle: AppHandle, job_id: String) {
     let takeout_state = handle.state::<TakeoutImportState>();
     let ingest_locks = handle.state::<SourceIngestLocks>();
 
@@ -381,18 +390,442 @@ async fn run_noop_takeout_import_job(handle: AppHandle, job_id: String) {
         return;
     }
 
-    if let Some(record) = takeout_state
-        .finish_job(&job_id, |job| {
-            job.status = STATUS_FAILED.to_string();
-            job.phase = PHASE_FAILED.to_string();
-            job.message = None;
-            job.error = Some("Takeout import is not implemented yet.".to_string());
-        })
-        .await
-    {
-        emit_takeout_import_event(&handle, &record);
+    match run_channel_takeout_import(&handle, &job_id).await {
+        Ok(outcome) => {
+            if let Some(record) = takeout_state
+                .finish_job(&job_id, |job| {
+                    job.status = STATUS_COMPLETED.to_string();
+                    job.phase = PHASE_COMPLETED.to_string();
+                    job.message = Some(format!(
+                        "Takeout import completed. Inserted {}, skipped {}.",
+                        outcome.inserted, outcome.skipped
+                    ));
+                    job.inserted = outcome.inserted;
+                    job.skipped = outcome.skipped;
+                    job.progress_current = outcome.progress_total;
+                    job.progress_total = outcome.progress_total;
+                    job.warnings = outcome.warnings;
+                })
+                .await
+            {
+                emit_takeout_import_event(&handle, &record);
+            }
+        }
+        Err(error) => {
+            if takeout_state.is_cancel_requested(&job_id).await {
+                if let Some(record) = takeout_state
+                    .finish_job(&job_id, |job| {
+                        job.status = STATUS_CANCELLED.to_string();
+                        job.phase = PHASE_CANCELLED.to_string();
+                        job.message = Some("Takeout import cancelled.".to_string());
+                    })
+                    .await
+                {
+                    emit_takeout_import_event(&handle, &record);
+                }
+            } else if let Some(record) = takeout_state
+                .finish_job(&job_id, |job| {
+                    job.status = STATUS_FAILED.to_string();
+                    job.phase = PHASE_FAILED.to_string();
+                    job.message = None;
+                    job.error = Some(error.to_string());
+                })
+                .await
+            {
+                emit_takeout_import_event(&handle, &record);
+            }
+        }
     }
     drop(ingest_guard);
+}
+
+struct TakeoutImportOutcome {
+    inserted: i64,
+    skipped: i64,
+    progress_total: Option<i64>,
+    warnings: Vec<String>,
+}
+
+async fn run_channel_takeout_import(
+    handle: &AppHandle,
+    job_id: &str,
+) -> AppResult<TakeoutImportOutcome> {
+    let takeout_state = handle.state::<TakeoutImportState>();
+    let telegram_state = handle.state::<TelegramState>();
+    let pool = get_pool(handle).await?;
+    let source_id = takeout_state
+        .update_job(job_id, |_| {})
+        .await
+        .ok_or_else(|| AppError::internal(format!("Takeout job {job_id} not found")))?
+        .source_id;
+    let source = load_source(&pool, source_id).await?;
+    if source.telegram_source_kind != TELEGRAM_KIND_CHANNEL {
+        return Err(AppError::validation(format!(
+            "Minimal Takeout import currently supports only public channels; source {} is '{}'",
+            source.id, source.telegram_source_kind
+        )));
+    }
+
+    let account_id = source.account_id.ok_or_else(|| {
+        AppError::validation(format!("Source {} is not linked to an account", source.id))
+    })?;
+    let runtime = get_authorized_runtime(&telegram_state, account_id).await?;
+    let client = runtime.client;
+    let session = runtime.session;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_RESOLVING_SOURCE.to_string();
+        job.message = Some("Resolving Telegram source.".to_string());
+    })
+    .await;
+    let resolved_peer = resolve_and_refresh_peer(handle, &client, &source, account_id).await?;
+    let input_peer: tl::enums::InputPeer = resolved_peer.peer.into();
+    let input_channel: tl::enums::InputChannel = resolved_peer.peer.into();
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_STARTING_TAKEOUT.to_string();
+        job.message = Some("Starting Takeout session.".to_string());
+    })
+    .await;
+    client
+        .invoke(&tl::functions::users::GetUsers {
+            id: vec![tl::enums::InputUser::UserSelf],
+        })
+        .await
+        .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))?;
+    let alias = prepare_export_dc_alias(&session).await?;
+    let init_request = takeout_init_request_for_source_kind(&source.telegram_source_kind)?;
+    let mut warnings = Vec::new();
+    let mut fallback_used = false;
+    let takeout = export_dc_invoke(
+        &client,
+        &alias,
+        &init_request,
+        &mut warnings,
+        &mut fallback_used,
+    )
+    .await?;
+    let tl::enums::account::Takeout::Takeout(takeout) = takeout;
+    let takeout_id = takeout.id;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_VALIDATING_PEER.to_string();
+        job.message = Some("Validating channel.".to_string());
+        job.warnings.extend(warnings.clone());
+    })
+    .await;
+    export_dc_invoke(
+        &client,
+        &alias,
+        &tl::functions::InvokeWithTakeout {
+            takeout_id,
+            query: tl::functions::channels::GetChannels {
+                id: vec![input_channel],
+            },
+        },
+        &mut warnings,
+        &mut fallback_used,
+    )
+    .await?;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_LOADING_SPLITS.to_string();
+        job.message = Some("Loading Takeout message ranges.".to_string());
+        job.warnings = warnings.clone();
+    })
+    .await;
+    let split_ranges = export_dc_invoke(
+        &client,
+        &alias,
+        &tl::functions::InvokeWithTakeout {
+            takeout_id,
+            query: tl::functions::messages::GetSplitRanges {},
+        },
+        &mut warnings,
+        &mut fallback_used,
+    )
+    .await?;
+    let selected_range = select_channel_split(split_ranges);
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_COUNTING.to_string();
+        job.message = Some("Counting channel messages.".to_string());
+        job.warnings = warnings.clone();
+    })
+    .await;
+    let total = takeout_history_count_probe(
+        &client,
+        &alias,
+        takeout_id,
+        input_peer.clone(),
+        selected_range.clone(),
+        &mut warnings,
+        &mut fallback_used,
+    )
+    .await?;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_IMPORTING_HISTORY.to_string();
+        job.message = Some("Importing channel history.".to_string());
+        job.progress_current = Some(0);
+        job.progress_total = Some(total);
+        job.warnings = warnings.clone();
+    })
+    .await;
+    let import = import_takeout_history_pages(
+        handle,
+        job_id,
+        &client,
+        &alias,
+        takeout_id,
+        input_peer,
+        selected_range,
+        &source,
+        total,
+        &mut warnings,
+        &mut fallback_used,
+    )
+    .await?;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_FINISHING_TAKEOUT.to_string();
+        job.message = Some("Finishing Takeout session.".to_string());
+        job.warnings = warnings.clone();
+    })
+    .await;
+    export_dc_invoke(
+        &client,
+        &alias,
+        &tl::functions::InvokeWithTakeout {
+            takeout_id,
+            query: tl::functions::account::FinishTakeoutSession { success: true },
+        },
+        &mut warnings,
+        &mut fallback_used,
+    )
+    .await?;
+    finalize_sync(
+        &pool,
+        &source,
+        source.last_sync_state.unwrap_or(0),
+        import.max_message_id,
+        resolved_peer.refreshed_metadata_zstd,
+    )
+    .await?;
+
+    Ok(TakeoutImportOutcome {
+        inserted: import.inserted,
+        skipped: import.skipped,
+        progress_total: Some(total),
+        warnings,
+    })
+}
+
+struct TakeoutHistoryImport {
+    inserted: i64,
+    skipped: i64,
+    max_message_id: i64,
+}
+
+async fn update_and_emit<F>(handle: &AppHandle, state: &TakeoutImportState, job_id: &str, update: F)
+where
+    F: FnOnce(&mut TakeoutImportJobRecord),
+{
+    if let Some(record) = state.update_job(job_id, update).await {
+        emit_takeout_import_event(handle, &record);
+    }
+}
+
+fn select_channel_split(split_ranges: Vec<tl::enums::MessageRange>) -> tl::enums::MessageRange {
+    split_ranges.into_iter().last().unwrap_or_else(|| {
+        tl::types::MessageRange {
+            min_id: 1,
+            max_id: i32::MAX,
+        }
+        .into()
+    })
+}
+
+async fn takeout_history_count_probe(
+    client: &Client,
+    alias: &ExportDcAlias,
+    takeout_id: i64,
+    input_peer: tl::enums::InputPeer,
+    range: tl::enums::MessageRange,
+    warnings: &mut Vec<String>,
+    fallback_used: &mut bool,
+) -> AppResult<i64> {
+    let response = export_dc_invoke(
+        client,
+        alias,
+        &tl::functions::InvokeWithTakeout {
+            takeout_id,
+            query: tl::functions::InvokeWithMessagesRange {
+                range,
+                query: tl::functions::messages::GetHistory {
+                    peer: input_peer,
+                    offset_id: 0,
+                    offset_date: 0,
+                    add_offset: 0,
+                    limit: 1,
+                    max_id: 0,
+                    min_id: 0,
+                    hash: 0,
+                },
+            },
+        },
+        warnings,
+        fallback_used,
+    )
+    .await?;
+
+    messages_response_count(response)
+}
+
+async fn import_takeout_history_pages(
+    handle: &AppHandle,
+    job_id: &str,
+    client: &Client,
+    alias: &ExportDcAlias,
+    takeout_id: i64,
+    input_peer: tl::enums::InputPeer,
+    range: tl::enums::MessageRange,
+    source: &crate::sources::SourceSyncTarget,
+    total: i64,
+    warnings: &mut Vec<String>,
+    fallback_used: &mut bool,
+) -> AppResult<TakeoutHistoryImport> {
+    let takeout_state = handle.state::<TakeoutImportState>();
+    let pool = get_pool(handle).await?;
+    let mut offset_id = message_range_max_id(&range);
+    let mut inserted = 0_i64;
+    let mut skipped = 0_i64;
+    let mut max_message_id = source.last_sync_state.unwrap_or(0);
+
+    loop {
+        if takeout_state.is_cancel_requested(job_id).await {
+            return Err(AppError::validation("Takeout import cancelled"));
+        }
+
+        let response = export_dc_invoke(
+            client,
+            alias,
+            &tl::functions::InvokeWithTakeout {
+                takeout_id,
+                query: tl::functions::InvokeWithMessagesRange {
+                    range: range.clone(),
+                    query: tl::functions::messages::GetHistory {
+                        peer: input_peer.clone(),
+                        offset_id,
+                        offset_date: 0,
+                        add_offset: -TAKEOUT_HISTORY_PAGE_LIMIT,
+                        limit: TAKEOUT_HISTORY_PAGE_LIMIT,
+                        max_id: 0,
+                        min_id: 0,
+                        hash: 0,
+                    },
+                },
+            },
+            warnings,
+            fallback_used,
+        )
+        .await?;
+        let messages = raw_messages_from_response(response)?;
+        if messages.is_empty() {
+            break;
+        }
+
+        let mut next_offset_id = offset_id;
+        for message in messages {
+            let message_id = message.id;
+            if message_id <= message_range_min_id(&range) {
+                continue;
+            }
+            max_message_id = max_message_id.max(i64::from(message_id));
+            match raw_parse::parse_raw_message(&source.title, message) {
+                Ok(Some(item)) => {
+                    if insert_source_item(&pool, source.id, item).await? {
+                        inserted += 1;
+                    } else {
+                        skipped += 1;
+                    }
+                }
+                Ok(None) => skipped += 1,
+                Err(error) => return Err(AppError::internal(error)),
+            }
+            next_offset_id = next_offset_id.min(message_id);
+        }
+
+        update_and_emit(handle, &takeout_state, job_id, |job| {
+            job.inserted = inserted;
+            job.skipped = skipped;
+            job.progress_current = Some((inserted + skipped).min(total));
+            job.progress_total = Some(total);
+            job.warnings = warnings.clone();
+        })
+        .await;
+
+        if takeout_state.is_cancel_requested(job_id).await {
+            return Err(AppError::validation("Takeout import cancelled"));
+        }
+
+        if next_offset_id == offset_id || next_offset_id <= message_range_min_id(&range) {
+            break;
+        }
+        offset_id = next_offset_id;
+    }
+
+    Ok(TakeoutHistoryImport {
+        inserted,
+        skipped,
+        max_message_id,
+    })
+}
+
+fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult<i64> {
+    match response {
+        tl::enums::messages::Messages::Messages(messages) => Ok(messages.messages.len() as i64),
+        tl::enums::messages::Messages::Slice(messages) => Ok(i64::from(messages.count)),
+        tl::enums::messages::Messages::ChannelMessages(messages) => Ok(i64::from(messages.count)),
+        tl::enums::messages::Messages::NotModified(_) => Err(AppError::network(
+            "Telegram returned messagesNotModified for Takeout history count probe",
+        )),
+    }
+}
+
+fn raw_messages_from_response(
+    response: tl::enums::messages::Messages,
+) -> AppResult<Vec<tl::types::Message>> {
+    let messages = match response {
+        tl::enums::messages::Messages::Messages(messages) => messages.messages,
+        tl::enums::messages::Messages::Slice(messages) => messages.messages,
+        tl::enums::messages::Messages::ChannelMessages(messages) => messages.messages,
+        tl::enums::messages::Messages::NotModified(_) => {
+            return Err(AppError::network(
+                "Telegram returned messagesNotModified for Takeout history page",
+            ));
+        }
+    };
+
+    Ok(messages
+        .into_iter()
+        .filter_map(|message| match message {
+            tl::enums::Message::Message(message) => Some(message),
+            _ => None,
+        })
+        .collect())
+}
+
+fn message_range_min_id(range: &tl::enums::MessageRange) -> i32 {
+    match range {
+        tl::enums::MessageRange::Range(range) => range.min_id,
+    }
+}
+
+fn message_range_max_id(range: &tl::enums::MessageRange) -> i32 {
+    match range {
+        tl::enums::MessageRange::Range(range) => range.max_id,
+    }
 }
 
 fn emit_takeout_import_event(handle: &AppHandle, record: &TakeoutImportJobRecord) {

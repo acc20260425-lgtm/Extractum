@@ -274,9 +274,9 @@ struct ResolvedTelegramSource {
     avatar_bytes: Option<Vec<u8>>,
 }
 
-struct ResolvedSyncPeer {
-    peer: PeerRef,
-    refreshed_metadata_zstd: Option<Vec<u8>>,
+pub(crate) struct ResolvedSyncPeer {
+    pub(crate) peer: PeerRef,
+    pub(crate) refreshed_metadata_zstd: Option<Vec<u8>>,
 }
 
 struct SyncPolicy {
@@ -686,7 +686,7 @@ pub(crate) async fn load_source(
     .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))
 }
 
-async fn resolve_and_refresh_peer(
+pub(crate) async fn resolve_and_refresh_peer(
     handle: &AppHandle,
     client: &grammers_client::Client,
     source: &SourceSyncTarget,
@@ -810,7 +810,7 @@ async fn persist_items(
     })
 }
 
-async fn finalize_sync(
+pub(crate) async fn finalize_sync(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source: &SourceSyncTarget,
     previous_last_sync: i64,
