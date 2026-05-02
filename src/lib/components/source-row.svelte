@@ -104,7 +104,7 @@
       </Button>
     </div>
     {#if syncReason}
-      <StatusMessage tone="muted" size="sm" surface={false} className="sync-reason">
+      <StatusMessage tone="muted" size="sm" surface={false}>
         {syncReason}
       </StatusMessage>
     {/if}
@@ -180,10 +180,6 @@
     word-break: break-word;
   }
   .sub { font-size: 0.75rem; color: var(--muted); }
-  .sync-reason {
-    width: 100%;
-    line-height: 1.3;
-  }
   @media (max-width: 1200px) {
     li {
       align-items: flex-start;
