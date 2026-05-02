@@ -241,6 +241,15 @@ struct IngestOutcome {
     max_message_id: i64,
 }
 
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+struct TelegramItemContext {
+    reply_to_msg_id: Option<i64>,
+    reply_to_peer_kind: Option<String>,
+    reply_to_peer_id: Option<String>,
+    reply_to_top_id: Option<i64>,
+    reaction_count: Option<i64>,
+}
+
 fn default_sync_settings() -> SyncSettingsRecord {
     SyncSettingsRecord {
         initial_sync_mode: InitialSyncMode::RecentMessages,
@@ -727,6 +736,7 @@ async fn persist_items(
         }
 
         let author = message_author(&message);
+        let telegram_context = extract_telegram_context(&message);
         let raw_data_zstd = compress_json_bytes(&build_raw_payload(
             &message,
             &source.title,
@@ -747,9 +757,14 @@ async fn persist_items(
                 content_kind,
                 has_media,
                 media_kind,
-                media_metadata_zstd
+                media_metadata_zstd,
+                reply_to_msg_id,
+                reply_to_peer_kind,
+                reply_to_peer_id,
+                reply_to_top_id,
+                reaction_count
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(source_id, external_id) DO NOTHING
             "#,
         )
@@ -764,6 +779,11 @@ async fn persist_items(
         .bind(item_payload.media.is_some())
         .bind(&media_kind)
         .bind(media_metadata_zstd)
+        .bind(telegram_context.reply_to_msg_id)
+        .bind(&telegram_context.reply_to_peer_kind)
+        .bind(&telegram_context.reply_to_peer_id)
+        .bind(telegram_context.reply_to_top_id)
+        .bind(telegram_context.reaction_count)
         .execute(pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -1637,6 +1657,33 @@ fn message_author(message: &grammers_client::message::Message) -> Option<String>
     })
 }
 
+fn extract_telegram_context(message: &grammers_client::message::Message) -> TelegramItemContext {
+    let mut context = TelegramItemContext {
+        reply_to_msg_id: message.reply_to_message_id().map(i64::from),
+        reaction_count: message.reaction_count().map(i64::from),
+        ..TelegramItemContext::default()
+    };
+
+    if let Some(tl::enums::MessageReplyHeader::Header(header)) = message.reply_header() {
+        context.reply_to_msg_id = header.reply_to_msg_id.map(i64::from);
+        context.reply_to_top_id = header.reply_to_top_id.map(i64::from);
+        if let Some((kind, id)) = reply_peer_context(header.reply_to_peer_id.as_ref()) {
+            context.reply_to_peer_kind = Some(kind.to_string());
+            context.reply_to_peer_id = Some(id);
+        }
+    }
+
+    context
+}
+
+fn reply_peer_context(peer: Option<&tl::enums::Peer>) -> Option<(&'static str, String)> {
+    match peer? {
+        tl::enums::Peer::User(peer) => Some(("user", peer.user_id.to_string())),
+        tl::enums::Peer::Chat(peer) => Some(("chat", peer.chat_id.to_string())),
+        tl::enums::Peer::Channel(peer) => Some(("channel", peer.channel_id.to_string())),
+    }
+}
+
 fn build_raw_payload(
     message: &grammers_client::message::Message,
     source_title: &Option<String>,
@@ -1667,8 +1714,8 @@ mod tests {
         default_sync_settings, determine_sync_policy, dialog_lookup_not_found_message,
         encode_media_metadata, encode_source_metadata, finalize_sync, initial_sync_policy_label,
         load_source, load_sync_settings_from_pool, parse_supported_manual_telegram_source_ref,
-        parse_username, save_sync_settings_to_pool, source_peer_ref_from_identity,
-        source_peer_resolution_failure, source_peer_resolution_plan,
+        parse_username, reply_peer_context, save_sync_settings_to_pool,
+        source_peer_ref_from_identity, source_peer_resolution_failure, source_peer_resolution_plan,
         validate_expected_telegram_source_kind, validate_sync_settings, InitialSyncMode,
         ManualTelegramSourceRef, ResolvedTelegramSource, SourceMetadata, SourcePeerIdentity,
         SourcePeerResolutionStep, SourcePeerResolutionStrategy, SourceRecordRow, SourceSyncTarget,
@@ -1926,6 +1973,29 @@ mod tests {
         assert!(error.contains("requested source kind"));
         assert!(error.contains(TELEGRAM_KIND_CHANNEL));
         assert!(error.contains(TELEGRAM_KIND_SUPERGROUP));
+    }
+
+    #[test]
+    fn reply_peer_context_uses_telegram_peer_kinds() {
+        assert_eq!(
+            reply_peer_context(Some(&super::tl::enums::Peer::User(
+                super::tl::types::PeerUser { user_id: 11 }
+            ))),
+            Some(("user", "11".to_string()))
+        );
+        assert_eq!(
+            reply_peer_context(Some(&super::tl::enums::Peer::Chat(
+                super::tl::types::PeerChat { chat_id: 22 }
+            ))),
+            Some(("chat", "22".to_string()))
+        );
+        assert_eq!(
+            reply_peer_context(Some(&super::tl::enums::Peer::Channel(
+                super::tl::types::PeerChannel { channel_id: 33 }
+            ))),
+            Some(("channel", "33".to_string()))
+        );
+        assert_eq!(reply_peer_context(None), None);
     }
 
     #[test]
