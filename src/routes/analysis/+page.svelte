@@ -45,7 +45,11 @@
     NotebookLmExportResult,
     SourceForumTopicRecord,
     SourceRecord,
+    CancelTakeoutImportResponse,
+    StartTakeoutImportResponse,
     SyncResult,
+    TakeoutImportEvent,
+    TakeoutImportJobRecord,
   } from "$lib/types/sources";
   import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
 
@@ -146,6 +150,8 @@
   let clearingChat = $state(false);
   let syncingIds = $state<Record<number, boolean>>({});
   let deletingSourceIds = $state<Record<number, boolean>>({});
+  let startingTakeoutSourceIds = $state<Record<number, boolean>>({});
+  let takeoutJobsBySource = $state<Record<number, TakeoutImportJobRecord>>({});
   let deletingRunIds = $state<Record<number, boolean>>({});
   let sourceManagerOpen = $state(false);
   let exportDialogOpen = $state(false);
@@ -172,6 +178,61 @@
 
   function isActiveRunStatus(value: string) {
     return value === "queued" || value === "running";
+  }
+
+  function upsertTakeoutJob(job: TakeoutImportJobRecord) {
+    const current = takeoutJobsBySource[job.source_id];
+    if (
+      current &&
+      current.job_id !== job.job_id &&
+      current.started_at > job.started_at
+    ) {
+      return;
+    }
+    takeoutJobsBySource = {
+      ...takeoutJobsBySource,
+      [job.source_id]: job,
+    };
+  }
+
+  function applyTakeoutJobs(jobs: TakeoutImportJobRecord[]) {
+    const next: Record<number, TakeoutImportJobRecord> = {};
+    for (const job of jobs) {
+      const current = next[job.source_id];
+      if (!current || current.started_at <= job.started_at) {
+        next[job.source_id] = job;
+      }
+    }
+    takeoutJobsBySource = next;
+  }
+
+  function applyTakeoutImportEvent(job: TakeoutImportEvent) {
+    upsertTakeoutJob(job);
+
+    if (job.status === "completed") {
+      status = `Takeout import complete: inserted ${job.inserted}, skipped ${job.skipped}.`;
+      void Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
+      if (selectedSourceId === String(job.source_id)) {
+        void loadSourceTopics(job.source_id, { preserveSelection: true }).then(() =>
+          loadItems(job.source_id),
+        );
+      }
+      return;
+    }
+
+    if (job.status === "failed") {
+      status = job.error ? `Takeout import failed: ${job.error}` : "Takeout import failed.";
+      return;
+    }
+
+    if (job.status === "cancelled") {
+      status = job.message ?? "Takeout import cancelled.";
+      return;
+    }
+
+    if (job.message && selectedSourceId === String(job.source_id)) {
+      status = job.message;
+    }
   }
 
   function currentSource() {
@@ -723,6 +784,15 @@
     }
   }
 
+  async function loadTakeoutImportJobs() {
+    try {
+      const jobs = await invoke<TakeoutImportJobRecord[]>("list_takeout_source_import_jobs");
+      applyTakeoutJobs(jobs);
+    } catch (error) {
+      status = formatAppError("loading Takeout import jobs", error);
+    }
+  }
+
   async function loadSourceTopics(
     sourceId: number,
     { preserveSelection = false }: { preserveSelection?: boolean } = {},
@@ -1186,6 +1256,32 @@
     }
   }
 
+  async function startTakeoutImport(sourceId: number) {
+    startingTakeoutSourceIds = { ...startingTakeoutSourceIds, [sourceId]: true };
+    try {
+      await invoke<StartTakeoutImportResponse>("start_takeout_source_import", { sourceId });
+      status = "Takeout import started.";
+    } catch (error) {
+      status = formatAppError("starting Takeout import", error);
+    } finally {
+      const next = { ...startingTakeoutSourceIds };
+      delete next[sourceId];
+      startingTakeoutSourceIds = next;
+    }
+  }
+
+  async function cancelTakeoutImport(jobId: string) {
+    try {
+      const result = await invoke<CancelTakeoutImportResponse>(
+        "cancel_takeout_source_import",
+        { jobId },
+      );
+      status = result.cancelled ? "Takeout import cancel requested." : "No active Takeout import to cancel.";
+    } catch (error) {
+      status = formatAppError("cancelling Takeout import", error);
+    }
+  }
+
   async function refreshSourcesAfterManagement(sourceId?: number) {
     await Promise.all([loadSourceCatalog(), loadGroups(), loadActiveRuns()]);
     await loadRuns();
@@ -1560,6 +1656,7 @@
     let detachAnalysisListener: (() => void) | null = null;
     let detachChatListener: (() => void) | null = null;
     let detachNotebookLmExportListener: (() => void) | null = null;
+    let detachTakeoutImportListener: (() => void) | null = null;
 
     void loadAccounts();
     void loadSourceCatalog().then(() => {
@@ -1572,6 +1669,7 @@
     void loadTemplates();
     void loadGroups();
     void loadActiveRuns();
+    void loadTakeoutImportJobs();
 
     void listen<AnalysisRunEvent>("analysis://run", ({ payload }: EventEnvelope<AnalysisRunEvent>) => {
       if (disposed) {
@@ -1702,6 +1800,20 @@
       detachNotebookLmExportListener = unlisten;
     });
 
+    void listen<TakeoutImportEvent>("sources://takeout-import", ({ payload }: EventEnvelope<TakeoutImportEvent>) => {
+      if (disposed) {
+        return;
+      }
+
+      applyTakeoutImportEvent(payload);
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+        return;
+      }
+      detachTakeoutImportListener = unlisten;
+    });
+
     return () => {
       disposed = true;
       if (statusTimer) {
@@ -1716,6 +1828,9 @@
       }
       if (detachNotebookLmExportListener !== null) {
         detachNotebookLmExportListener();
+      }
+      if (detachTakeoutImportListener !== null) {
+        detachTakeoutImportListener();
       }
     };
   });
@@ -1742,6 +1857,8 @@
     {selectedGroupId}
     {syncingIds}
     {deletingSourceIds}
+    {startingTakeoutSourceIds}
+    {takeoutJobsBySource}
     {formatTimestamp}
     {accountLabel}
     {sourceKindLabel}
@@ -1754,6 +1871,8 @@
     onSelectSource={(sourceId) => void selectSource(sourceId)}
     onSelectGroup={selectGroup}
     onSyncSource={(sourceId) => void syncSelectedSource(sourceId)}
+    onStartTakeoutImport={(sourceId) => void startTakeoutImport(sourceId)}
+    onCancelTakeoutImport={(jobId) => void cancelTakeoutImport(jobId)}
     onOpenSourceManager={() => (sourceManagerOpen = true)}
     onDeleteSource={(source) => void deleteSource(source)}
   />
