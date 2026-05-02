@@ -76,6 +76,13 @@ pub(crate) struct NotebookLmExportMessage {
     pub(crate) media_metadata: ItemMediaMetadata,
     pub(crate) media_placeholders: Vec<String>,
     pub(crate) urls: Vec<String>,
+    pub(crate) reply_to_msg_id: Option<i64>,
+    pub(crate) reply_to_author: Option<String>,
+    pub(crate) reply_to_snippet: Option<String>,
+    pub(crate) reply_to_peer_kind: Option<String>,
+    pub(crate) reply_to_peer_id: Option<String>,
+    pub(crate) reply_to_top_id: Option<i64>,
+    pub(crate) reaction_count: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

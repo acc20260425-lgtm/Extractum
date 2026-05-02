@@ -51,11 +51,35 @@ pub(crate) fn render_message_block(message: &NotebookLmExportMessage) -> Rendere
     ));
     markdown.push_str(&format!("author: {author}\n"));
     markdown.push_str(&format!("type: {}\n", yaml_string(message_type)));
-    markdown.push_str("reply_to_id: null\n");
-    markdown.push_str("reply_to_author: null\n");
-    markdown.push_str("reply_to_snippet: null\n");
+    markdown.push_str(&format!(
+        "reply_to_id: {}\n",
+        yaml_optional_i64(message.reply_to_msg_id)
+    ));
+    markdown.push_str(&format!(
+        "reply_to_author: {}\n",
+        yaml_optional_string(message.reply_to_author.as_deref())
+    ));
+    markdown.push_str(&format!(
+        "reply_to_snippet: {}\n",
+        yaml_optional_string(message.reply_to_snippet.as_deref())
+    ));
+    markdown.push_str(&format!(
+        "reply_to_peer_kind: {}\n",
+        yaml_optional_string(message.reply_to_peer_kind.as_deref())
+    ));
+    markdown.push_str(&format!(
+        "reply_to_peer_id: {}\n",
+        yaml_optional_string(message.reply_to_peer_id.as_deref())
+    ));
     markdown.push_str("forwarded_from: null\n");
-    markdown.push_str("thread_id: null\n");
+    markdown.push_str(&format!(
+        "thread_id: {}\n",
+        yaml_optional_i64(message.reply_to_top_id)
+    ));
+    markdown.push_str(&format!(
+        "reaction_count: {}\n",
+        yaml_optional_i64(message.reaction_count)
+    ));
     markdown.push_str(&format!(
         "content_kind: {}\n",
         yaml_string(&message.content_kind)
@@ -87,6 +111,11 @@ pub(crate) fn render_message_block(message: &NotebookLmExportMessage) -> Rendere
             markdown.push_str(&format!("- {placeholder}\n"));
         }
         markdown.push('\n');
+    }
+
+    if let Some(reaction_count) = message.reaction_count.filter(|count| *count > 0) {
+        markdown.push_str("**Reactions:**\n");
+        markdown.push_str(&format!("- Total: {reaction_count}\n\n"));
     }
 
     let byte_size = markdown.len();
@@ -208,6 +237,16 @@ fn yaml_string(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
+fn yaml_optional_string(value: Option<&str>) -> String {
+    value.map(yaml_string).unwrap_or_else(|| "null".to_string())
+}
+
+fn yaml_optional_i64(value: Option<i64>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{format_unix_rfc3339, render_message_block};
@@ -234,10 +273,49 @@ mod tests {
             media_metadata: ItemMediaMetadata::default(),
             media_placeholders: Vec::new(),
             urls: vec!["https://example.com".to_string()],
+            reply_to_msg_id: None,
+            reply_to_author: None,
+            reply_to_snippet: None,
+            reply_to_peer_kind: None,
+            reply_to_peer_id: None,
+            reply_to_top_id: None,
+            reaction_count: None,
         });
 
         assert!(block.markdown.contains("source_id: 2"));
         assert!(block.markdown.contains("**Text:**"));
         assert!(block.markdown.contains("**Links:**"));
+    }
+
+    #[test]
+    fn renders_reply_thread_and_reaction_metadata() {
+        let block = render_message_block(&NotebookLmExportMessage {
+            item_id: 1,
+            source_id: 2,
+            external_id: "4".to_string(),
+            author: Some("Ada".to_string()),
+            published_at: 0,
+            text: Some("Reply".to_string()),
+            content_kind: "text_only".to_string(),
+            has_media: false,
+            media_kind: None,
+            media_metadata: ItemMediaMetadata::default(),
+            media_placeholders: Vec::new(),
+            urls: Vec::new(),
+            reply_to_msg_id: Some(3),
+            reply_to_author: Some("Bob".to_string()),
+            reply_to_snippet: Some("Original text".to_string()),
+            reply_to_peer_kind: Some("channel".to_string()),
+            reply_to_peer_id: Some("42".to_string()),
+            reply_to_top_id: Some(3),
+            reaction_count: Some(2),
+        });
+
+        assert!(block.markdown.contains("reply_to_id: 3"));
+        assert!(block.markdown.contains("reply_to_author: \"Bob\""));
+        assert!(block.markdown.contains("reply_to_peer_kind: \"channel\""));
+        assert!(block.markdown.contains("thread_id: 3"));
+        assert!(block.markdown.contains("reaction_count: 2"));
+        assert!(block.markdown.contains("**Reactions:**"));
     }
 }
