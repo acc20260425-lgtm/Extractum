@@ -21,7 +21,7 @@ Released work should stay in the codebase and in current-state documentation, no
 - LLM concurrency policy still needs refinement beyond the current request-scoped scheduling baseline
 - saved-run history still lacks richer filtering for larger archives
 - media download, preview, and media-aware analysis are still incomplete
-- NotebookLM export MVP is shipped for single synced sources; progress events and richer Telegram context remain follow-up work
+- NotebookLM export MVP is shipped for single synced sources; richer Telegram context remains follow-up work
 
 ---
 
@@ -45,7 +45,7 @@ Released work should stay in the codebase and in current-state documentation, no
 | LLM concurrency | request isolation is in place, but limit policy is still coarse | predictable request scheduling with clearer limits |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
 | Media support | metadata-first only | optional download/preview and media-aware analysis |
-| NotebookLM export | single-source local Markdown export is shipped | progress events and optional context/link enrichment |
+| NotebookLM export | single-source local Markdown export with progress events is shipped | optional context/link enrichment |
 | Stabilization | partially recorded | repeatable verification baseline and broader tests |
 
 ---
@@ -83,11 +83,11 @@ Current state:
 - [x] output includes Markdown conversation files and `glossary.md`
 - [x] files use safe generated folders and an Extractum marker file
 - [x] native folder picker is wired through the Tauri dialog plugin
+- [x] progress events are emitted for long exports and shown in the export dialog
 - [x] backend tests cover filename, URL, filtering, media placeholder, chunking, glossary, and renderer helpers
 
 Open follow-ups:
 
-- [ ] add progress events for long exports
 - [ ] add optional link enrichment with explicit user opt-in and cache
 - [ ] add export for source groups if the analysis group workflow needs it
 - [ ] render reply/thread/reaction/forward context after sync starts persisting those fields

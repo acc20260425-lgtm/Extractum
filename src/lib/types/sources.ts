@@ -55,6 +55,7 @@ export interface SyncSettingsRecord {
 }
 
 export interface NotebookLmExportRequest {
+  export_id: string | null;
   source_id: number;
   output_dir: string;
   period_from: number | null;
@@ -81,4 +82,28 @@ export interface NotebookLmExportResult {
   skipped_message_count: number;
   warning_count: number;
   warnings: string[];
+}
+
+export type NotebookLmExportEventKind = "started" | "progress" | "completed" | "failed";
+
+export type NotebookLmExportPhase =
+  | "loading"
+  | "filtering"
+  | "chunking"
+  | "preparing_output"
+  | "writing"
+  | "manifest"
+  | "completed"
+  | "failed";
+
+export interface NotebookLmExportEvent {
+  export_id: string;
+  source_id: number;
+  kind: NotebookLmExportEventKind;
+  phase: NotebookLmExportPhase;
+  message: string | null;
+  progress_current: number | null;
+  progress_total: number | null;
+  file_path: string | null;
+  error: string | null;
 }

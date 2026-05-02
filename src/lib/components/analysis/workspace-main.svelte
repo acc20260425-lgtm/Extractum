@@ -21,7 +21,19 @@
     AnalysisSourceOption,
     ReportSegment,
   } from "$lib/types/analysis";
-  import type { ItemRecord, NotebookLmExportResult, SourceRecord } from "$lib/types/sources";
+  import type {
+    ItemRecord,
+    NotebookLmExportEvent,
+    NotebookLmExportResult,
+    SourceRecord,
+  } from "$lib/types/sources";
+
+  export type NotebookLmExportProgressState = {
+    phase: NotebookLmExportEvent["phase"];
+    message: string;
+    current: number | null;
+    total: number | null;
+  };
 
   let {
     analysisScope,
@@ -92,6 +104,7 @@
     exportDialogOpen,
     notebookLmExportForm,
     notebookLmExportResult,
+    notebookLmExportProgress,
     exportingNotebookLm,
     onOpenNotebookLmExport,
     onCloseNotebookLmExport,
@@ -191,6 +204,7 @@
     exportDialogOpen: boolean;
     notebookLmExportForm: NotebookLmExportForm;
     notebookLmExportResult: NotebookLmExportResult | null;
+    notebookLmExportProgress: NotebookLmExportProgressState | null;
     exportingNotebookLm: boolean;
     onOpenNotebookLmExport: () => void;
     onCloseNotebookLmExport: () => void;
@@ -505,6 +519,7 @@
     form={notebookLmExportForm}
     exporting={exportingNotebookLm}
     result={notebookLmExportResult}
+    progress={notebookLmExportProgress}
     onClose={onCloseNotebookLmExport}
     onChooseFolder={onChooseNotebookLmOutputDir}
     onExport={onExportNotebookLm}

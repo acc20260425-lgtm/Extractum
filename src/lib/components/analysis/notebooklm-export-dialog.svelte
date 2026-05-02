@@ -3,7 +3,11 @@
   import Button from "$lib/components/ui/Button.svelte";
   import CheckboxRow from "$lib/components/ui/CheckboxRow.svelte";
   import Input from "$lib/components/ui/Input.svelte";
-  import type { NotebookLmExportResult, SourceRecord } from "$lib/types/sources";
+  import type {
+    NotebookLmExportEvent,
+    NotebookLmExportResult,
+    SourceRecord,
+  } from "$lib/types/sources";
 
   export type NotebookLmExportForm = {
     outputDir: string;
@@ -16,11 +20,19 @@
     overwriteExisting: boolean;
   };
 
+  export type NotebookLmExportProgressState = {
+    phase: NotebookLmExportEvent["phase"];
+    message: string;
+    current: number | null;
+    total: number | null;
+  };
+
   let {
     open,
     source,
     form,
     exporting,
+    progress,
     result,
     onClose,
     onChooseFolder,
@@ -31,6 +43,7 @@
     source: SourceRecord | null;
     form: NotebookLmExportForm;
     exporting: boolean;
+    progress: NotebookLmExportProgressState | null;
     result: NotebookLmExportResult | null;
     onClose: () => void;
     onChooseFolder: () => void | Promise<void>;
@@ -40,6 +53,40 @@
 
   function updateForm(patch: Partial<NotebookLmExportForm>) {
     onChangeForm({ ...form, ...patch });
+  }
+
+  function progressValue(current: number | null, total: number | null) {
+    if (current === null || total === null || total <= 0) {
+      return 0;
+    }
+    return Math.min(100, Math.round((current / total) * 100));
+  }
+
+  function hasKnownProgressTotal(current: number | null, total: number | null) {
+    return current !== null && total !== null && total > 0;
+  }
+
+  function phaseLabel(phase: NotebookLmExportEvent["phase"]) {
+    switch (phase) {
+      case "loading":
+        return "Loading";
+      case "filtering":
+        return "Filtering";
+      case "chunking":
+        return "Chunking";
+      case "preparing_output":
+        return "Preparing";
+      case "writing":
+        return "Writing";
+      case "manifest":
+        return "Manifest";
+      case "completed":
+        return "Completed";
+      case "failed":
+        return "Failed";
+      default:
+        return "Exporting";
+    }
   }
 </script>
 
@@ -128,6 +175,27 @@
       />
     </div>
 
+    {#if exporting && progress}
+      <div class="progress-box">
+        <div class="progress-head">
+          <strong>{phaseLabel(progress.phase)}</strong>
+          {#if hasKnownProgressTotal(progress.current, progress.total)}
+            <span>{progress.current} / {progress.total}</span>
+          {/if}
+        </div>
+        {#if progress.message}
+          <span class="progress-message">{progress.message}</span>
+        {/if}
+        {#if hasKnownProgressTotal(progress.current, progress.total)}
+          <progress max="100" value={progressValue(progress.current, progress.total)}>
+            {progressValue(progress.current, progress.total)}%
+          </progress>
+        {:else}
+          <progress></progress>
+        {/if}
+      </div>
+    {/if}
+
     {#if result}
       <div class="result-box">
         <strong>Export complete</strong>
@@ -179,6 +247,35 @@
   .checks {
     display: grid;
     gap: 0.65rem;
+  }
+
+  .progress-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--primary) 7%, var(--panel));
+    font-size: 0.86rem;
+  }
+
+  .progress-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .progress-head span,
+  .progress-message {
+    color: var(--muted);
+  }
+
+  progress {
+    width: 100%;
+    height: 0.55rem;
+    accent-color: var(--primary);
   }
 
   .result-box {

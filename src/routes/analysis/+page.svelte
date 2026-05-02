@@ -38,6 +38,7 @@
   } from "$lib/types/analysis";
   import type {
     ItemRecord,
+    NotebookLmExportEvent,
     NotebookLmExportRequest,
     NotebookLmExportResult,
     SourceRecord,
@@ -55,6 +56,13 @@
 
   type InspectorMode = "active" | "history" | "trace" | "chunks";
 
+  type NotebookLmExportProgressState = {
+    phase: NotebookLmExportEvent["phase"];
+    message: string;
+    current: number | null;
+    total: number | null;
+  };
+
   function createEmptyLiveRunState(): LiveRunState {
     return {
       phase: "",
@@ -63,6 +71,13 @@
       chunkSummaries: [],
       streamedOutput: "",
     };
+  }
+
+  function createNotebookLmExportId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `notebooklm-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
   let sourceCatalog = $state<SourceRecord[]>([]);
@@ -126,6 +141,8 @@
   let syncingIds = $state<Record<number, boolean>>({});
   let exportDialogOpen = $state(false);
   let exportingNotebookLm = $state(false);
+  let activeNotebookLmExportId = $state<string | null>(null);
+  let notebookLmExportProgress = $state<NotebookLmExportProgressState | null>(null);
   let notebookLmExportResult = $state<NotebookLmExportResult | null>(null);
   let notebookLmExportForm = $state<NotebookLmExportForm>({
     outputDir: "",
@@ -337,6 +354,25 @@
     }
 
     return currentProgress;
+  }
+
+  function applyNotebookLmExportEvent(payload: NotebookLmExportEvent) {
+    if (payload.export_id !== activeNotebookLmExportId) {
+      return;
+    }
+
+    notebookLmExportProgress = {
+      phase: payload.phase,
+      message: payload.message ?? payload.error ?? "",
+      current: payload.progress_current,
+      total: payload.progress_total,
+    };
+
+    if (payload.kind === "failed") {
+      status = payload.error
+        ? `NotebookLM export failed: ${payload.error}`
+        : "NotebookLM export failed.";
+    }
   }
 
   function applyRunEvent(payload: AnalysisRunEvent) {
@@ -1034,8 +1070,17 @@
 
     exportingNotebookLm = true;
     notebookLmExportResult = null;
+    const exportId = createNotebookLmExportId();
+    activeNotebookLmExportId = exportId;
+    notebookLmExportProgress = {
+      phase: "loading",
+      message: "Preparing NotebookLM export.",
+      current: null,
+      total: null,
+    };
     try {
       const request: NotebookLmExportRequest = {
+        export_id: exportId,
         source_id: source.id,
         output_dir: notebookLmExportForm.outputDir.trim(),
         period_from: notebookLmExportForm.fromDate
@@ -1060,6 +1105,10 @@
       status = formatAppError("exporting for NotebookLM", error);
     } finally {
       exportingNotebookLm = false;
+      if (activeNotebookLmExportId === exportId) {
+        activeNotebookLmExportId = null;
+        notebookLmExportProgress = null;
+      }
     }
   }
 
@@ -1295,6 +1344,7 @@
     let disposed = false;
     let detachAnalysisListener: (() => void) | null = null;
     let detachChatListener: (() => void) | null = null;
+    let detachNotebookLmExportListener: (() => void) | null = null;
 
     void loadAccounts();
     void loadSourceCatalog().then(() => {
@@ -1421,6 +1471,20 @@
       detachChatListener = unlisten;
     });
 
+    void listen<NotebookLmExportEvent>("notebooklm://export", ({ payload }: EventEnvelope<NotebookLmExportEvent>) => {
+      if (disposed) {
+        return;
+      }
+
+      applyNotebookLmExportEvent(payload);
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+        return;
+      }
+      detachNotebookLmExportListener = unlisten;
+    });
+
     return () => {
       disposed = true;
       if (statusTimer) {
@@ -1432,6 +1496,9 @@
       }
       if (detachChatListener !== null) {
         detachChatListener();
+      }
+      if (detachNotebookLmExportListener !== null) {
+        detachNotebookLmExportListener();
       }
     };
   });
@@ -1540,6 +1607,7 @@
     {exportDialogOpen}
     {notebookLmExportForm}
     notebookLmExportResult={notebookLmExportResult}
+    notebookLmExportProgress={notebookLmExportProgress}
     {exportingNotebookLm}
     onOpenNotebookLmExport={openNotebookLmExportDialog}
     onCloseNotebookLmExport={() => (exportDialogOpen = false)}

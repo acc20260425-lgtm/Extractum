@@ -8,6 +8,7 @@ pub(crate) const DEFAULT_MIN_MESSAGE_LENGTH: usize = 3;
 
 #[derive(Deserialize)]
 pub struct NotebookLmExportRequest {
+    pub export_id: Option<String>,
     pub source_id: i64,
     pub output_dir: String,
     pub period_from: Option<i64>,
@@ -21,6 +22,7 @@ pub struct NotebookLmExportRequest {
 
 #[derive(Clone)]
 pub(crate) struct NotebookLmExportConfig {
+    pub(crate) export_id: Option<String>,
     pub(crate) source_id: i64,
     pub(crate) output_dir: String,
     pub(crate) period_from: Option<i64>,
