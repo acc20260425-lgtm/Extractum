@@ -21,6 +21,9 @@ use telegram::{
 mod source_ingest;
 use source_ingest::SourceIngestLocks;
 
+mod takeout_import;
+use takeout_import::run_takeout_export_dc_spike;
+
 mod sources;
 use sources::{
     add_telegram_source, delete_source, get_items, get_sync_settings, list_source_forum_topics,
@@ -105,6 +108,7 @@ pub fn run() {
             get_sync_settings,
             save_sync_settings,
             sync_source,
+            run_takeout_export_dc_spike,
             get_items,
             list_source_forum_topics,
             export_source_to_notebooklm,

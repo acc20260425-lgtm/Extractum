@@ -147,15 +147,15 @@ pub struct SourceForumTopicRecord {
 }
 
 #[derive(sqlx::FromRow)]
-struct SourceSyncTarget {
-    id: i64,
-    source_type: String,
-    telegram_source_kind: String,
-    account_id: Option<i64>,
-    external_id: String,
-    title: Option<String>,
-    metadata_zstd: Option<Vec<u8>>,
-    last_sync_state: Option<i64>,
+pub(crate) struct SourceSyncTarget {
+    pub(crate) id: i64,
+    pub(crate) source_type: String,
+    pub(crate) telegram_source_kind: String,
+    pub(crate) account_id: Option<i64>,
+    pub(crate) external_id: String,
+    pub(crate) title: Option<String>,
+    pub(crate) metadata_zstd: Option<Vec<u8>>,
+    pub(crate) last_sync_state: Option<i64>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -663,7 +663,7 @@ fn read_source_avatar_data_url(handle: &AppHandle, cache_key: &str) -> Option<St
     Some(photo_bytes_data_url(bytes))
 }
 
-async fn load_source(
+pub(crate) async fn load_source(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
 ) -> AppResult<SourceSyncTarget> {
