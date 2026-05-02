@@ -254,7 +254,7 @@ fn render_document_header(context: &DocumentRenderContext<'_>) -> String {
 }
 
 fn yaml_string(value: &str) -> String {
-    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+    serde_json::to_string(value).expect("serializing a string scalar cannot fail")
 }
 
 fn yaml_optional_string(value: Option<&str>) -> String {
@@ -349,6 +349,44 @@ mod tests {
         assert!(block.markdown.contains("thread_id: 3"));
         assert!(block.markdown.contains("reaction_count: 2"));
         assert!(block.markdown.contains("**Reactions:**"));
+    }
+
+    #[test]
+    fn renders_json_compatible_yaml_string_scalars() {
+        let block = render_message_block(&NotebookLmExportMessage {
+            item_id: 1,
+            source_id: 2,
+            external_id: "4".to_string(),
+            author: Some("Ada \"The Analyst\" \\ Team".to_string()),
+            published_at: 0,
+            text: Some("Reply".to_string()),
+            content_kind: "text_only".to_string(),
+            has_media: false,
+            media_kind: None,
+            media_metadata: ItemMediaMetadata::default(),
+            media_placeholders: Vec::new(),
+            urls: Vec::new(),
+            reply_to_msg_id: Some(3),
+            reply_to_author: Some("Bob".to_string()),
+            reply_to_snippet: Some("First line\nSecond line".to_string()),
+            reply_to_peer_kind: Some("channel".to_string()),
+            reply_to_peer_id: Some("42".to_string()),
+            reply_to_top_id: Some(3),
+            reaction_count: Some(2),
+            forum_topic_id: Some(200),
+            forum_topic_title: Some("Дорожная карта \"Q2\"".to_string()),
+            forum_topic_top_message_id: Some(700),
+        });
+
+        assert!(block
+            .markdown
+            .contains(r#"author: "Ada \"The Analyst\" \\ Team""#));
+        assert!(block
+            .markdown
+            .contains(r#"reply_to_snippet: "First line\nSecond line""#));
+        assert!(block
+            .markdown
+            .contains(r#"topic_title: "Дорожная карта \"Q2\"""#));
     }
 
     #[test]
