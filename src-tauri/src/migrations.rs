@@ -158,5 +158,35 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/12.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "add telegram item context metadata",
+            sql: include_str!("../migrations/13.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_migrations;
+
+    #[test]
+    fn includes_telegram_item_context_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 13)
+            .expect("version 13 migration is registered");
+
+        for column in [
+            "reply_to_msg_id",
+            "reply_to_peer_kind",
+            "reply_to_peer_id",
+            "reply_to_top_id",
+            "reaction_count",
+        ] {
+            assert!(migration.sql.contains(column), "missing column {column}");
+        }
+    }
 }
