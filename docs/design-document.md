@@ -35,6 +35,8 @@ Svelte owns:
 - forms and filters
 - workflow composition
 
+The current frontend workflow is workspace-first: source browsing, sync actions, reports, trace inspection, and follow-up chat are centered in `/analysis`, while `/sources` remains a lightweight compatibility route.
+
 ### 2.3 Text-first analysis, media-aware ingest
 
 The sync layer already preserves lightweight media metadata, but the analysis layer still uses a text-only corpus. This intentionally separates:

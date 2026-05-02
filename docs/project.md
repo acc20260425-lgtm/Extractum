@@ -48,11 +48,8 @@ Not implemented yet:
   - sign in
   - log out
 - `/sources`
-  - list Telegram dialogs
-  - add sources manually or from dialogs
-  - sync source history
-  - configure the first sync policy
-  - browse synced items
+  - lightweight compatibility route
+  - points older entry paths to the main analysis workspace
 - `/settings`
   - manage reusable LLM provider profiles
   - set the active profile used by default
@@ -60,6 +57,10 @@ Not implemented yet:
   - refresh available models
   - run a live provider smoke test with the currently edited form
 - `/analysis`
+  - browse sources and inspect synced items
+  - add sources manually or from dialogs
+  - sync source history
+  - configure the first sync policy
   - manage report templates
   - manage source groups
   - run reports
@@ -130,8 +131,9 @@ Not implemented yet:
 1. `src-tauri/src/sources.rs`
 2. `src-tauri/src/analysis/`
 3. `src-tauri/src/llm/`
-4. `src/routes/sources/+page.svelte`
-5. `src/routes/analysis/+page.svelte`
+4. `src/routes/analysis/+page.svelte`
+5. `src/lib/components/analysis/`
 6. `src/routes/settings/+page.svelte`
-7. `src-tauri/src/error.rs`
-8. `src-tauri/src/migrations.rs`
+7. `src/routes/sources/+page.svelte`
+8. `src-tauri/src/error.rs`
+9. `src-tauri/src/migrations.rs`

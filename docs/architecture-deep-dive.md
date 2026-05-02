@@ -93,7 +93,7 @@ Stored dimensions include:
 - `media_kind`;
 - compressed media metadata.
 
-This allows `/sources` to present a more faithful archive even though `/analysis` still stays text-first.
+This allows the main analysis workspace to present a more faithful archive even though analysis still stays text-first.
 
 ## 4. Analysis architecture
 
@@ -164,6 +164,11 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 If you are changing ingest:
 
 - `src-tauri/src/sources.rs`
+- `src/routes/analysis/+page.svelte`
+- `src/lib/components/analysis/`
+
+If you are only changing the legacy compatibility route:
+
 - `src/routes/sources/+page.svelte`
 
 If you are changing analysis:

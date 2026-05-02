@@ -11,7 +11,7 @@ The current product slice is a local-first MVP for:
 - managing Telegram accounts and sessions;
 - adding Telegram channels, supergroups, and groups as sources;
 - syncing source history into local SQLite storage;
-- browsing synced items in `/sources`;
+- browsing synced items in the `/analysis` workspace;
 - running provider-backed analysis reports in `/analysis`;
 - asking follow-up questions against saved analysis runs.
 
@@ -21,7 +21,7 @@ The current product slice is a local-first MVP for:
 
 - multiple Telegram accounts can be stored locally;
 - sessions are restored on startup when possible;
-- `/accounts` and `/sources` receive runtime account status updates through Tauri events;
+- `/accounts` and `/analysis` receive runtime account status updates through Tauri events;
 - `/auth/[id]` supports `tg_init -> send code -> sign in -> logout`.
 
 ### Source ingest
@@ -44,7 +44,7 @@ Sync is now media-aware without downloading binary media files:
 - media-only messages are also stored if they have useful media metadata;
 - lightweight media metadata is persisted in `items.media_metadata_zstd`.
 
-The UI in `/sources` can show:
+The analysis workspace can show:
 
 - content kind (`text_only`, `text_with_media`, `media_only`);
 - media badges;
@@ -83,7 +83,7 @@ This means saved runs are now intended to be stable artifacts rather than live v
 
 ## Current constraints
 
-- analysis remains text-first: media-only items are visible in `/sources` but are not yet part of the analysis corpus;
+- analysis remains text-first: media-only items are visible in the analysis workspace but are not yet part of the analysis corpus;
 - LLM API keys are still stored in `app_settings` and Telegram `api_hash` values still live in SQLite-backed account storage until secure storage lands;
 - peer resolution still falls back to dialog scanning when cached username metadata is insufficient.
 
@@ -100,9 +100,9 @@ The backend is intentionally thin in UI concerns, while the frontend is intentio
 
 - `/accounts`: create/delete accounts, inspect runtime status
 - `/auth/[id]`: Telegram sign-in and logout
-- `/sources`: add sources, browse synced items, configure initial sync policy
+- `/sources`: lightweight compatibility route that points people to the main workspace
 - `/settings`: manage reusable LLM provider profiles, active profile selection, model refresh, and live provider smoke tests
-- `/analysis`: reports, source groups, active runs, saved run history, follow-up chat, trace inspection
+- `/analysis`: source browsing and sync, reports, source groups, active runs, saved run history, follow-up chat, trace inspection
 
 ## Storage overview
 

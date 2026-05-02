@@ -1,7 +1,7 @@
 # Extractum Unified Backlog
 
-> **Updated:** 2026-04-29
-> **Working rule:** this file is the single source of truth for active follow-up work
+> **Updated:** 2026-05-02
+> **Working rule:** this file tracks open follow-up work only
 
 ---
 
@@ -9,37 +9,16 @@
 
 This backlog tracks open technical and product work only.
 
-Released and already-integrated work should stay in the codebase and documentation, not as active backlog scope. In particular, the current backlog starts after these shipped changes:
-
-- media-aware ingest metadata
-- typed Tauri application errors
-- frozen analysis run snapshots
-- reusable LLM provider profiles
-- configurable OpenAI-compatible `base_url`
-- active/global saved-run separation
+Released work should stay in the codebase and in current-state documentation, not in the active backlog.
 
 ---
 
-## 2. Current State
-
-### 2.1. Already in place
-
-- `llm/` is modular and supports Gemini plus an OpenAI-compatible provider path
-- `/settings` supports multiple reusable LLM profiles and active-profile selection
-- request-scoped LLM scheduling, queueing, cancellation, and event correlation are in place for provider tests, analysis chat, and analysis reports
-- `analysis/` is decomposed into focused submodules
-- analysis live runs are separated from saved-run history in the UI
-- media-aware ingest stores metadata for text-bearing and media-only Telegram messages
-- new analysis runs persist frozen corpus snapshots
-- source identity is scoped by `account_id` and `telegram_source_kind`
-- typed Tauri application errors are normalized in the frontend
-
-### 2.2. Main open gaps
+## 2. Main Open Gaps
 
 - Telegram runtime behavior still needs broader validation against real accounts and dialogs
 - private-source resolution is better defined but still needs more real-world validation
 - LLM API keys and Telegram credentials still live in SQLite-backed storage
-- concurrent LLM requests now have request-scoped isolation and cancellation, but concurrency policy still needs refinement
+- LLM concurrency policy still needs refinement beyond the current request-scoped scheduling baseline
 - saved-run history still lacks richer filtering for larger archives
 - media download, preview, and media-aware analysis are still incomplete
 
@@ -62,10 +41,10 @@ Released and already-integrated work should stay in the codebase and documentati
 | Telegram runtime correctness | partially validated | validated on real accounts and dialogs |
 | Private source resolution | explicit rules exist, but runtime coverage is incomplete | predictable behavior for dialog-picked private sources |
 | Secret storage | SQLite-backed | secure store with migration/import path |
-| LLM concurrency | request-scoped scheduling and cancellation are in place, but limit policy is still coarse | request-scoped parallel execution with cancellation |
+| LLM concurrency | request isolation is in place, but limit policy is still coarse | predictable request scheduling with clearer limits |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
 | Media support | metadata-first only | optional download/preview and media-aware analysis |
-| Stabilization | spot-checked after major changes | repeatable verification baseline and broader tests |
+| Stabilization | partially recorded | repeatable verification baseline and broader tests |
 
 ---
 
@@ -77,9 +56,15 @@ Status: partial.
 
 Goal: confirm the exact current verification baseline before broader implementation continues.
 
-- [ ] re-check the actual Rust test count after the latest LLM/settings changes
+- [x] re-check the actual Rust test count after the latest LLM/settings changes
 - [ ] record current `cargo clippy` status
-- [ ] record current `npm run check` status
+- [x] record current `cargo test` status
+- [ ] record current `npm run check` status in an environment where `svelte-check` preprocessing is allowed to spawn `esbuild`
+
+Current notes:
+
+- `cargo test` passes locally with `68 passed; 0 failed`
+- `npm run check` in the current sandbox fails during Svelte preprocessing with `spawn EPERM`, so it still needs a clean non-sandbox verification pass
 
 ---
 
@@ -181,23 +166,14 @@ Goal: support multiple LLM requests at the same time without mixing stream state
 Scope:
 
 - [ ] decide whether per-provider and per-profile concurrency limits need explicit configuration beyond the current shared default
-- [x] add active request tracking keyed by `request_id`
-- [x] add cancellation support for long-running requests
-- [x] keep stream buffers, usage, timeout, and callbacks request-local
-- [x] decide how the frontend should display multiple active streams
-- [x] ensure analysis progress and provider test output ignore unrelated request events
 
 Acceptance criteria:
 
-- [x] concurrent LLM requests cannot overwrite each other's output
-- [x] a user can cancel a long-running request
-- [x] provider and analysis events remain traceable by `request_id`
+- [ ] concurrency limits are intentional and documented
+- [ ] request scheduling remains predictable under mixed interactive and background load
 
 Current notes:
 
-- request-scoped scheduling, queueing, and cancellation are implemented in the backend LLM scheduler
-- provider-test, analysis-chat, and analysis-report events now carry `request_id` and ignore unrelated events in the frontend
-- analysis UI now separates active runs and keeps live stream/progress state scoped to the selected run
 - the remaining open question is whether concurrency limits should become explicitly configurable or otherwise differentiated beyond the current per-`(provider, profile)` queue with a shared default limit
 
 ---
@@ -228,7 +204,7 @@ Acceptance criteria:
 
 - [ ] users can opt into downloading media for selected sources or items
 - [ ] downloaded media is stored outside SQLite with stable metadata references
-- [ ] `/sources` can preview common downloaded media types
+- [ ] the analysis workspace can preview common downloaded media types
 
 #### 5.2. Media-Aware Analysis
 
@@ -260,9 +236,8 @@ Status: open.
 
 Goal: keep the verification baseline healthy as the remaining infrastructure work lands.
 
-- [ ] run `cargo test`
 - [ ] run `cargo clippy`
-- [ ] run `npm run check`
+- [ ] run `npm run check` outside the current sandbox restriction
 - [ ] add frontend tests for `analysis-utils.ts` and `app-error.ts`
 - [ ] verify that Telegram and LLM event-driven UI flows still behave correctly after the next major backend changes
 
@@ -309,11 +284,7 @@ If implementation resumes directly from this file, the recommended opening seque
 
 Current implementation checkpoint:
 
-- reusable LLM provider profiles and configurable OpenAI-compatible `base_url` are already shipped
-- `/settings` already supports profile selection, profile creation, save-only vs save-and-activate, masked API-key editing, and provider smoke tests against the saved visible form
-- request-scoped LLM scheduling, cancellation, and `request_id`-scoped event handling are already in place for provider tests, analysis chat, and analysis reports
-- Saved Runs already use global history by default and keep queued/running work in a separate `Active Runs` panel
-- documentation was refreshed again on April 29, 2026 to reflect the current Phase 4.3 status
+- current work should start from the open items above, not from already-shipped profile, snapshot, or UI-separation work
 
 Recommended next step:
 

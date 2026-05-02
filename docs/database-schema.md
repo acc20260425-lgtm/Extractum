@@ -218,7 +218,7 @@ Purpose:
 
 ## 4. Current behavior implications
 
-- `/sources` can render media-bearing and media-only items from `items`;
+- the analysis workspace can render media-bearing and media-only items from `items`;
 - `/analysis` still loads only text-bearing corpus rows;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
