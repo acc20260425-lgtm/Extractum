@@ -1,6 +1,7 @@
 mod compression;
 mod db;
 mod error;
+mod forum_topics;
 mod media;
 mod migrations;
 use migrations::{build_migrations, prepare_database};

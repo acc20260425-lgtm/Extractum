@@ -10,6 +10,10 @@ use tokio::time::{timeout, Duration, Instant};
 use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, decompress_text};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::forum_topics::{
+    resolved_topic_join, resolved_topic_predicate, ResolvedTopicAliases,
+    FORUM_TOPIC_UNCATEGORIZED_KEY, FORUM_TOPIC_UNCATEGORIZED_TITLE,
+};
 use crate::media::{
     decode_media_metadata, encode_media_metadata, extract_item_payload, ExtractedItemPayload,
 };
@@ -31,8 +35,6 @@ const TELEGRAM_KIND_GROUP: &str = "group";
 const TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS: u64 = 750;
 const TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS: u64 = 4_000;
 const TELEGRAM_SOURCE_AVATAR_CACHE_DIR: &str = "source_avatars";
-const FORUM_TOPIC_UNCATEGORIZED_KEY: &str = "unrecognized_topic";
-const FORUM_TOPIC_UNCATEGORIZED_TITLE: &str = "Unrecognized topic";
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -1375,7 +1377,12 @@ async fn load_item_rows_from_pool(
     before_published_at: Option<i64>,
     topic_filter: Option<ForumTopicFilter>,
 ) -> AppResult<Vec<StoredItemRow>> {
-    let mut sql = String::from(
+    let topic_join = resolved_topic_join(&ResolvedTopicAliases {
+        item: "items",
+        topic: "forum_topics",
+        matched_topic: "matched_topics",
+    });
+    let mut sql = format!(
         r#"
         SELECT
             items.id,
@@ -1393,38 +1400,7 @@ async fn load_item_rows_from_pool(
             forum_topics.title AS forum_topic_title,
             forum_topics.top_message_id AS forum_topic_top_message_id
         FROM items
-        LEFT JOIN telegram_forum_topics AS forum_topics
-          ON forum_topics.source_id = items.source_id
-         AND (
-                items.reply_to_top_id = forum_topics.topic_id
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND items.external_id <> ''
-                    AND items.external_id NOT GLOB '*[^0-9]*'
-                    AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
-                )
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND items.reply_to_msg_id = forum_topics.topic_id
-                )
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND forum_topics.topic_id = 1
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM telegram_forum_topics AS matched_topics
-                        WHERE matched_topics.source_id = items.source_id
-                          AND (
-                                (
-                                    items.external_id <> ''
-                                    AND items.external_id NOT GLOB '*[^0-9]*'
-                                    AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
-                                )
-                                OR items.reply_to_msg_id = matched_topics.topic_id
-                          )
-                    )
-                )
-            )
+        {topic_join}
         WHERE items.source_id = ?
         "#,
     );
@@ -1464,7 +1440,12 @@ async fn list_source_forum_topics_from_pool(
     pool: &sqlx::SqlitePool,
     source_id: i64,
 ) -> AppResult<Vec<SourceForumTopicRecord>> {
-    let rows: Vec<SourceForumTopicRow> = sqlx::query_as(
+    let topic_match = resolved_topic_predicate(&ResolvedTopicAliases {
+        item: "items",
+        topic: "topics",
+        matched_topic: "matched_topics",
+    });
+    let rows_sql = format!(
         r#"
         SELECT
             topics.topic_id,
@@ -1480,37 +1461,7 @@ async fn list_source_forum_topics_from_pool(
             COUNT(items.id) AS message_count
         FROM telegram_forum_topics AS topics
         LEFT JOIN items
-          ON items.source_id = topics.source_id
-         AND (
-                items.reply_to_top_id = topics.topic_id
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND items.external_id <> ''
-                    AND items.external_id NOT GLOB '*[^0-9]*'
-                    AND CAST(items.external_id AS INTEGER) = topics.top_message_id
-                )
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND items.reply_to_msg_id = topics.topic_id
-                )
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND topics.topic_id = 1
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM telegram_forum_topics AS matched_topics
-                        WHERE matched_topics.source_id = items.source_id
-                          AND (
-                                (
-                                    items.external_id <> ''
-                                    AND items.external_id NOT GLOB '*[^0-9]*'
-                                    AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
-                                )
-                                OR items.reply_to_msg_id = matched_topics.topic_id
-                          )
-                    )
-                )
-            )
+          ON {topic_match}
         WHERE topics.source_id = ?
         GROUP BY
             topics.topic_id,
@@ -1529,56 +1480,32 @@ async fn list_source_forum_topics_from_pool(
             topics.title COLLATE NOCASE ASC,
             topics.topic_id ASC
         "#,
-    )
-    .bind(source_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| AppError::from(e.to_string()))?;
+    );
+    let rows: Vec<SourceForumTopicRow> = sqlx::query_as(&rows_sql)
+        .bind(source_id)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::from(e.to_string()))?;
 
-    let uncategorized_count: i64 = sqlx::query_scalar(
+    let topic_join = resolved_topic_join(&ResolvedTopicAliases {
+        item: "items",
+        topic: "forum_topics",
+        matched_topic: "matched_topics",
+    });
+    let uncategorized_sql = format!(
         r#"
         SELECT COUNT(*)
         FROM items
-        LEFT JOIN telegram_forum_topics AS forum_topics
-          ON forum_topics.source_id = items.source_id
-         AND (
-                items.reply_to_top_id = forum_topics.topic_id
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND items.external_id <> ''
-                    AND items.external_id NOT GLOB '*[^0-9]*'
-                    AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
-                )
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND items.reply_to_msg_id = forum_topics.topic_id
-                )
-                OR (
-                    items.reply_to_top_id IS NULL
-                    AND forum_topics.topic_id = 1
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM telegram_forum_topics AS matched_topics
-                        WHERE matched_topics.source_id = items.source_id
-                          AND (
-                                (
-                                    items.external_id <> ''
-                                    AND items.external_id NOT GLOB '*[^0-9]*'
-                                    AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
-                                )
-                                OR items.reply_to_msg_id = matched_topics.topic_id
-                          )
-                    )
-                )
-            )
+        {topic_join}
         WHERE items.source_id = ?
           AND forum_topics.topic_id IS NULL
         "#,
-    )
-    .bind(source_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| AppError::from(e.to_string()))?;
+    );
+    let uncategorized_count: i64 = sqlx::query_scalar(&uncategorized_sql)
+        .bind(source_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| AppError::from(e.to_string()))?;
 
     let mut records = rows
         .into_iter()

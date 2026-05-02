@@ -4,6 +4,7 @@ use sqlx::FromRow;
 
 use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
+use crate::forum_topics::{resolved_topic_join, ResolvedTopicAliases};
 use crate::media::decode_media_metadata;
 use crate::notebooklm_export::links::detect_urls;
 use crate::notebooklm_export::media::render_media_placeholders;
@@ -104,7 +105,10 @@ pub(crate) async fn load_export_messages(
 ) -> AppResult<Vec<NotebookLmExportMessage>> {
     let rows: Vec<ItemRow> = match (period_from, period_to) {
         (Some(from), Some(to)) => {
-            sqlx::query_as(BASE_QUERY_WITH_FROM_TO)
+            let sql = base_query(
+                "items.source_id = ? AND items.published_at >= ? AND items.published_at <= ?",
+            );
+            sqlx::query_as(&sql)
                 .bind(source_id)
                 .bind(from)
                 .bind(to)
@@ -112,24 +116,24 @@ pub(crate) async fn load_export_messages(
                 .await
         }
         (Some(from), None) => {
-            sqlx::query_as(BASE_QUERY_WITH_FROM)
+            let sql = base_query("items.source_id = ? AND items.published_at >= ?");
+            sqlx::query_as(&sql)
                 .bind(source_id)
                 .bind(from)
                 .fetch_all(pool)
                 .await
         }
         (None, Some(to)) => {
-            sqlx::query_as(BASE_QUERY_WITH_TO)
+            let sql = base_query("items.source_id = ? AND items.published_at <= ?");
+            sqlx::query_as(&sql)
                 .bind(source_id)
                 .bind(to)
                 .fetch_all(pool)
                 .await
         }
         (None, None) => {
-            sqlx::query_as(BASE_QUERY)
-                .bind(source_id)
-                .fetch_all(pool)
-                .await
+            let sql = base_query("items.source_id = ?");
+            sqlx::query_as(&sql).bind(source_id).fetch_all(pool).await
         }
     }
     .map_err(|e| e.to_string())?;
@@ -277,7 +281,15 @@ fn truncate_snippet(value: &str, max_chars: usize) -> String {
     }
 }
 
-const BASE_QUERY: &str = r#"
+fn base_query(where_clause: &str) -> String {
+    let topic_join = resolved_topic_join(&ResolvedTopicAliases {
+        item: "items",
+        topic: "forum_topics",
+        matched_topic: "matched_topics",
+    });
+
+    format!(
+        r#"
     SELECT
         items.id,
         items.source_id,
@@ -298,209 +310,12 @@ const BASE_QUERY: &str = r#"
         forum_topics.title AS forum_topic_title,
         forum_topics.top_message_id AS forum_topic_top_message_id
     FROM items
-    LEFT JOIN telegram_forum_topics AS forum_topics
-      ON forum_topics.source_id = items.source_id
-     AND (
-            items.reply_to_top_id = forum_topics.topic_id
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.external_id <> ''
-                AND items.external_id NOT GLOB '*[^0-9]*'
-                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.reply_to_msg_id = forum_topics.topic_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND forum_topics.topic_id = 1
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM telegram_forum_topics AS matched_topics
-                    WHERE matched_topics.source_id = items.source_id
-                      AND (
-                            (
-                                items.external_id <> ''
-                                AND items.external_id NOT GLOB '*[^0-9]*'
-                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
-                            )
-                            OR items.reply_to_msg_id = matched_topics.topic_id
-                      )
-                )
-            )
-        )
-    WHERE items.source_id = ?
+    {topic_join}
+    WHERE {where_clause}
     ORDER BY items.published_at ASC, items.id ASC
-"#;
-const BASE_QUERY_WITH_FROM: &str = r#"
-    SELECT
-        items.id,
-        items.source_id,
-        items.external_id,
-        items.author,
-        items.published_at,
-        items.content_zstd,
-        items.content_kind,
-        items.has_media,
-        items.media_kind,
-        items.media_metadata_zstd,
-        items.reply_to_msg_id,
-        items.reply_to_peer_kind,
-        items.reply_to_peer_id,
-        items.reply_to_top_id,
-        items.reaction_count,
-        forum_topics.topic_id AS forum_topic_id,
-        forum_topics.title AS forum_topic_title,
-        forum_topics.top_message_id AS forum_topic_top_message_id
-    FROM items
-    LEFT JOIN telegram_forum_topics AS forum_topics
-      ON forum_topics.source_id = items.source_id
-     AND (
-            items.reply_to_top_id = forum_topics.topic_id
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.external_id <> ''
-                AND items.external_id NOT GLOB '*[^0-9]*'
-                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.reply_to_msg_id = forum_topics.topic_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND forum_topics.topic_id = 1
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM telegram_forum_topics AS matched_topics
-                    WHERE matched_topics.source_id = items.source_id
-                      AND (
-                            (
-                                items.external_id <> ''
-                                AND items.external_id NOT GLOB '*[^0-9]*'
-                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
-                            )
-                            OR items.reply_to_msg_id = matched_topics.topic_id
-                      )
-                )
-            )
-        )
-    WHERE items.source_id = ? AND items.published_at >= ?
-    ORDER BY items.published_at ASC, items.id ASC
-"#;
-const BASE_QUERY_WITH_TO: &str = r#"
-    SELECT
-        items.id,
-        items.source_id,
-        items.external_id,
-        items.author,
-        items.published_at,
-        items.content_zstd,
-        items.content_kind,
-        items.has_media,
-        items.media_kind,
-        items.media_metadata_zstd,
-        items.reply_to_msg_id,
-        items.reply_to_peer_kind,
-        items.reply_to_peer_id,
-        items.reply_to_top_id,
-        items.reaction_count,
-        forum_topics.topic_id AS forum_topic_id,
-        forum_topics.title AS forum_topic_title,
-        forum_topics.top_message_id AS forum_topic_top_message_id
-    FROM items
-    LEFT JOIN telegram_forum_topics AS forum_topics
-      ON forum_topics.source_id = items.source_id
-     AND (
-            items.reply_to_top_id = forum_topics.topic_id
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.external_id <> ''
-                AND items.external_id NOT GLOB '*[^0-9]*'
-                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.reply_to_msg_id = forum_topics.topic_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND forum_topics.topic_id = 1
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM telegram_forum_topics AS matched_topics
-                    WHERE matched_topics.source_id = items.source_id
-                      AND (
-                            (
-                                items.external_id <> ''
-                                AND items.external_id NOT GLOB '*[^0-9]*'
-                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
-                            )
-                            OR items.reply_to_msg_id = matched_topics.topic_id
-                      )
-                )
-            )
-        )
-    WHERE items.source_id = ? AND items.published_at <= ?
-    ORDER BY items.published_at ASC, items.id ASC
-"#;
-const BASE_QUERY_WITH_FROM_TO: &str = r#"
-    SELECT
-        items.id,
-        items.source_id,
-        items.external_id,
-        items.author,
-        items.published_at,
-        items.content_zstd,
-        items.content_kind,
-        items.has_media,
-        items.media_kind,
-        items.media_metadata_zstd,
-        items.reply_to_msg_id,
-        items.reply_to_peer_kind,
-        items.reply_to_peer_id,
-        items.reply_to_top_id,
-        items.reaction_count,
-        forum_topics.topic_id AS forum_topic_id,
-        forum_topics.title AS forum_topic_title,
-        forum_topics.top_message_id AS forum_topic_top_message_id
-    FROM items
-    LEFT JOIN telegram_forum_topics AS forum_topics
-      ON forum_topics.source_id = items.source_id
-     AND (
-            items.reply_to_top_id = forum_topics.topic_id
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.external_id <> ''
-                AND items.external_id NOT GLOB '*[^0-9]*'
-                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND items.reply_to_msg_id = forum_topics.topic_id
-            )
-            OR (
-                items.reply_to_top_id IS NULL
-                AND forum_topics.topic_id = 1
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM telegram_forum_topics AS matched_topics
-                    WHERE matched_topics.source_id = items.source_id
-                      AND (
-                            (
-                                items.external_id <> ''
-                                AND items.external_id NOT GLOB '*[^0-9]*'
-                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
-                            )
-                            OR items.reply_to_msg_id = matched_topics.topic_id
-                      )
-                )
-            )
-        )
-    WHERE items.source_id = ? AND items.published_at >= ? AND items.published_at <= ?
-    ORDER BY items.published_at ASC, items.id ASC
-"#;
+"#
+    )
+}
 
 #[cfg(test)]
 mod tests {
