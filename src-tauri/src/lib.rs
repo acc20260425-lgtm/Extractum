@@ -22,7 +22,10 @@ mod source_ingest;
 use source_ingest::SourceIngestLocks;
 
 mod takeout_import;
-use takeout_import::run_takeout_export_dc_spike;
+use takeout_import::{
+    cancel_takeout_source_import, list_takeout_source_import_jobs, run_takeout_export_dc_spike,
+    start_takeout_source_import, TakeoutImportState,
+};
 
 mod sources;
 use sources::{
@@ -63,6 +66,7 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .manage(TelegramState::new())
         .manage(SourceIngestLocks::new())
+        .manage(TakeoutImportState::new())
         .manage(AnalysisState::new())
         .manage(LlmSchedulerState::new())
         .plugin(tauri_plugin_dialog::init())
@@ -108,6 +112,9 @@ pub fn run() {
             get_sync_settings,
             save_sync_settings,
             sync_source,
+            start_takeout_source_import,
+            cancel_takeout_source_import,
+            list_takeout_source_import_jobs,
             run_takeout_export_dc_spike,
             get_items,
             list_source_forum_topics,

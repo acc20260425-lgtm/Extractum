@@ -78,6 +78,55 @@ export interface SyncSettingsRecord {
   initial_sync_value: number;
 }
 
+export type TakeoutImportStatus =
+  | "queued"
+  | "running"
+  | "cancel_requested"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type TakeoutImportPhase =
+  | "queued"
+  | "resolving_source"
+  | "starting_takeout"
+  | "validating_peer"
+  | "loading_splits"
+  | "counting"
+  | "importing_history"
+  | "finishing_takeout"
+  | "refreshing_aux"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface TakeoutImportJobRecord {
+  job_id: string;
+  source_id: number;
+  account_id: number;
+  status: TakeoutImportStatus;
+  phase: TakeoutImportPhase;
+  message: string | null;
+  inserted: number;
+  skipped: number;
+  progress_current: number | null;
+  progress_total: number | null;
+  started_at: number;
+  finished_at: number | null;
+  warnings: string[];
+  error: string | null;
+}
+
+export type TakeoutImportEvent = TakeoutImportJobRecord;
+
+export interface StartTakeoutImportResponse {
+  job_id: string;
+}
+
+export interface CancelTakeoutImportResponse {
+  cancelled: boolean;
+}
+
 export interface NotebookLmExportRequest {
   export_id: string | null;
   source_id: number;
