@@ -12,10 +12,8 @@ pub(crate) fn sanitize_path_component(input: &str, fallback: &str) -> String {
     for ch in input.trim().chars() {
         let normalized = if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
             Some(ch.to_ascii_lowercase())
-        } else if ch.is_ascii() {
-            Some('_')
         } else {
-            Some(ch)
+            Some('_')
         };
 
         if let Some(ch) = normalized {
@@ -82,6 +80,10 @@ mod tests {
         );
         assert_eq!(sanitize_path_component("..", "source"), "source");
         assert_eq!(sanitize_path_component("CON", "source"), "source");
+        assert_eq!(
+            sanitize_path_component("Тестовый источник", "source"),
+            "source"
+        );
     }
 
     #[test]

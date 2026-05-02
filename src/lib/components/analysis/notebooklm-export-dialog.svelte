@@ -55,6 +55,11 @@
     onChangeForm({ ...form, ...patch });
   }
 
+  function positiveNumberInput(event: Event, fallback: number) {
+    const value = Number((event.currentTarget as HTMLInputElement).value);
+    return Number.isFinite(value) && value >= 1 ? value : fallback;
+  }
+
   function progressValue(current: number | null, total: number | null) {
     if (current === null || total === null || total <= 0) {
       return 0;
@@ -132,9 +137,9 @@
       <label>Minimum length
         <Input
           type="number"
-          min="0"
+          min="1"
           value={form.minMessageLength}
-          oninput={(event) => updateForm({ minMessageLength: Number((event.currentTarget as HTMLInputElement).value) })}
+          oninput={(event) => updateForm({ minMessageLength: positiveNumberInput(event, 1) })}
           disabled={exporting}
         />
       </label>
@@ -143,7 +148,7 @@
           type="number"
           min="1"
           value={form.maxWordsPerFile}
-          oninput={(event) => updateForm({ maxWordsPerFile: Number((event.currentTarget as HTMLInputElement).value) })}
+          oninput={(event) => updateForm({ maxWordsPerFile: positiveNumberInput(event, 1) })}
           disabled={exporting}
         />
       </label>
@@ -152,7 +157,7 @@
           type="number"
           min="1"
           value={form.maxBytesPerFile}
-          oninput={(event) => updateForm({ maxBytesPerFile: Number((event.currentTarget as HTMLInputElement).value) })}
+          oninput={(event) => updateForm({ maxBytesPerFile: positiveNumberInput(event, 1) })}
           disabled={exporting}
         />
       </label>
@@ -307,7 +312,7 @@
     }
 
     .actions {
-      justify-content: stretch;
+      justify-content: flex-end;
     }
   }
 </style>

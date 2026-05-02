@@ -55,7 +55,7 @@
     {#if loadingActiveRuns}
       <EmptyState description="Loading active runs..." />
     {:else if activeRuns.length === 0}
-      <EmptyState description="No queued or running runs." />
+      <EmptyState description="No queued or running reports." />
     {:else}
       <ul class="run-list">
         {#each activeRuns as run (run.id)}

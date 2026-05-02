@@ -8,6 +8,10 @@ pub(crate) fn render_media_placeholders(
         && metadata.summary.is_none()
         && metadata.file_name.is_none()
         && metadata.mime_type.is_none()
+        && metadata.duration_seconds.is_none()
+        && metadata.width.is_none()
+        && metadata.height.is_none()
+        && metadata.size_bytes.is_none()
     {
         return Vec::new();
     }
@@ -71,6 +75,21 @@ mod tests {
         assert_eq!(
             render_media_placeholders(Some("video"), &metadata),
             vec!["[Attachment: Video - clip.mp4 - video/mp4 - duration 12s]"]
+        );
+    }
+
+    #[test]
+    fn renders_numeric_only_media_metadata() {
+        let metadata = ItemMediaMetadata {
+            width: Some(1280),
+            height: Some(720),
+            size_bytes: Some(42_000),
+            ..ItemMediaMetadata::default()
+        };
+
+        assert_eq!(
+            render_media_placeholders(None, &metadata),
+            vec!["[Attachment: Document - 1280x720 - 42000 bytes]"]
         );
     }
 }

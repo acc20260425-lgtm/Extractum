@@ -2088,7 +2088,10 @@ fn extract_telegram_context(message: &grammers_client::message::Message) -> Tele
     };
 
     if let Some(tl::enums::MessageReplyHeader::Header(header)) = message.reply_header() {
-        context.reply_to_msg_id = header.reply_to_msg_id.map(i64::from);
+        context.reply_to_msg_id = header
+            .reply_to_msg_id
+            .map(i64::from)
+            .or(context.reply_to_msg_id);
         context.reply_to_top_id = header.reply_to_top_id.map(i64::from);
         if let Some((kind, id)) = reply_peer_context(header.reply_to_peer_id.as_ref()) {
             context.reply_to_peer_kind = Some(kind.to_string());
