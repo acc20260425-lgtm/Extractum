@@ -3,12 +3,14 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use serde::Serialize;
 use tokio::sync::{Mutex, Notify};
 
 const DEFAULT_CONCURRENCY_LIMIT: usize = 2;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LlmRequestPriority {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmRequestPriority {
     Interactive,
     Background,
 }
@@ -22,8 +24,9 @@ impl LlmRequestPriority {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LlmRequestKind {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmRequestKind {
     ProviderTest,
     AnalysisChat,
     AnalysisReportMap,
@@ -43,6 +46,25 @@ pub(crate) struct LlmRequestMetadata {
     pub provider: String,
     pub kind: LlmRequestKind,
     pub priority: LlmRequestPriority,
+    pub owner_run_id: Option<i64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmRequestSnapshotState {
+    Queued,
+    Running,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct LlmRequestSnapshot {
+    pub request_id: String,
+    pub kind: LlmRequestKind,
+    pub provider: String,
+    pub profile_id: String,
+    pub priority: LlmRequestPriority,
+    pub state: LlmRequestSnapshotState,
+    pub queue_position: Option<usize>,
     pub owner_run_id: Option<i64>,
 }
 
@@ -108,6 +130,15 @@ enum RequestState {
     Running,
 }
 
+impl RequestState {
+    fn snapshot_state(self) -> LlmRequestSnapshotState {
+        match self {
+            Self::Queued => LlmRequestSnapshotState::Queued,
+            Self::Running => LlmRequestSnapshotState::Running,
+        }
+    }
+}
+
 struct RequestEntry {
     meta: LlmRequestMetadata,
     state: RequestState,
@@ -128,6 +159,54 @@ struct SchedulerInner {
 }
 
 impl SchedulerInner {
+    fn queue_position(&self, key: &SchedulerKey, request_id: &str) -> Option<usize> {
+        self.keys.get(key).and_then(|key_state| {
+            key_state
+                .queue
+                .iter()
+                .position(|queued_request_id| queued_request_id == request_id)
+                .map(|index| index + 1)
+        })
+    }
+
+    fn snapshots(&self) -> Vec<LlmRequestSnapshot> {
+        let mut snapshots = self
+            .requests
+            .iter()
+            .map(|(request_id, entry)| {
+                let key = entry.meta.scheduler_key();
+                LlmRequestSnapshot {
+                    request_id: request_id.clone(),
+                    kind: entry.meta.kind,
+                    provider: entry.meta.provider.clone(),
+                    profile_id: entry.meta.profile_id.clone(),
+                    priority: entry.meta.priority,
+                    state: entry.state.snapshot_state(),
+                    queue_position: (entry.state == RequestState::Queued)
+                        .then(|| self.queue_position(&key, request_id))
+                        .flatten(),
+                    owner_run_id: entry.meta.owner_run_id,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        snapshots.sort_by(|left, right| {
+            left.provider
+                .cmp(&right.provider)
+                .then_with(|| left.profile_id.cmp(&right.profile_id))
+                .then_with(|| {
+                    snapshot_state_rank(left.state).cmp(&snapshot_state_rank(right.state))
+                })
+                .then_with(|| {
+                    left.queue_position
+                        .unwrap_or(0)
+                        .cmp(&right.queue_position.unwrap_or(0))
+                })
+                .then_with(|| left.request_id.cmp(&right.request_id))
+        });
+        snapshots
+    }
+
     fn queue_updates_for_key(&self, key: &SchedulerKey) -> Vec<(QueueCallback, usize)> {
         let Some(key_state) = self.keys.get(key) else {
             return Vec::new();
@@ -207,6 +286,13 @@ impl SchedulerInner {
             self.keys.remove(&key);
         }
         updates
+    }
+}
+
+fn snapshot_state_rank(state: LlmRequestSnapshotState) -> u8 {
+    match state {
+        LlmRequestSnapshotState::Running => 0,
+        LlmRequestSnapshotState::Queued => 1,
     }
 }
 
@@ -377,6 +463,10 @@ impl LlmSchedulerState {
         controls.len()
     }
 
+    pub(crate) async fn request_snapshots(&self) -> Vec<LlmRequestSnapshot> {
+        self.inner.lock().await.snapshots()
+    }
+
     pub async fn run_request<T, Q, F, Fut>(
         &self,
         meta: LlmRequestMetadata,
@@ -411,7 +501,8 @@ mod tests {
     use tokio::time::{timeout, Duration};
 
     use super::{
-        LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
+        LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority,
+        LlmRequestSnapshotState, LlmSchedulerState,
     };
 
     fn metadata(
@@ -765,6 +856,103 @@ mod tests {
             Err(LlmRequestError::Cancelled)
         );
         assert_scheduler_empty(&scheduler).await;
+    }
+
+    #[tokio::test]
+    async fn request_snapshots_report_running_and_queued_requests() {
+        let scheduler = Arc::new(LlmSchedulerState::new());
+        let release = Arc::new(Notify::new());
+
+        let mut handles = Vec::new();
+        for request_id in ["run-1", "run-2"] {
+            let scheduler = scheduler.clone();
+            let release_wait = release.clone();
+            handles.push(tokio::spawn(async move {
+                scheduler
+                    .run_request(
+                        LlmRequestMetadata {
+                            owner_run_id: Some(77),
+                            ..metadata(
+                                request_id,
+                                "default",
+                                LlmRequestPriority::Background,
+                                LlmRequestKind::AnalysisReportMap,
+                            )
+                        },
+                        |_| {},
+                        move |control| async move {
+                            control
+                                .run_cancellable(async move {
+                                    release_wait.notified().await;
+                                    Ok::<_, String>("done")
+                                })
+                                .await
+                        },
+                    )
+                    .await
+            }));
+        }
+
+        let queued_scheduler = scheduler.clone();
+        let queued = tokio::spawn(async move {
+            queued_scheduler
+                .run_request(
+                    LlmRequestMetadata {
+                        owner_run_id: Some(77),
+                        ..metadata(
+                            "queued",
+                            "default",
+                            LlmRequestPriority::Interactive,
+                            LlmRequestKind::AnalysisChat,
+                        )
+                    },
+                    |_| {},
+                    move |control| async move {
+                        control
+                            .run_cancellable(async move { Ok::<_, String>("queued") })
+                            .await
+                    },
+                )
+                .await
+        });
+
+        let snapshots = timeout(Duration::from_secs(1), async {
+            loop {
+                let snapshots = scheduler.request_snapshots().await;
+                if snapshots.len() == 3
+                    && snapshots
+                        .iter()
+                        .filter(|snapshot| snapshot.state == LlmRequestSnapshotState::Running)
+                        .count()
+                        == 2
+                    && snapshots
+                        .iter()
+                        .any(|snapshot| snapshot.state == LlmRequestSnapshotState::Queued)
+                {
+                    break snapshots;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("snapshots should include active requests");
+
+        let queued_snapshot = snapshots
+            .iter()
+            .find(|snapshot| snapshot.request_id == "queued")
+            .expect("queued snapshot");
+        assert_eq!(queued_snapshot.kind, LlmRequestKind::AnalysisChat);
+        assert_eq!(queued_snapshot.priority, LlmRequestPriority::Interactive);
+        assert_eq!(queued_snapshot.state, LlmRequestSnapshotState::Queued);
+        assert_eq!(queued_snapshot.queue_position, Some(1));
+        assert_eq!(queued_snapshot.owner_run_id, Some(77));
+
+        release.notify_waiters();
+        for handle in handles {
+            assert_eq!(handle.await.expect("join running"), Ok("done"));
+        }
+        assert_eq!(queued.await.expect("join queued"), Ok("queued"));
+        assert!(scheduler.request_snapshots().await.is_empty());
     }
 
     #[tokio::test]

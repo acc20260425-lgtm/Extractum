@@ -24,7 +24,8 @@ pub(crate) use runner::{
     validate_request,
 };
 pub(crate) use scheduler::{
-    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
+    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshot,
+    LlmSchedulerState,
 };
 pub use types::{
     LlmChatRequest, LlmMessage, LlmProfile, LlmProfilesState, LlmProviderModel, LlmStreamEvent,
@@ -164,6 +165,13 @@ pub(crate) async fn resolve_profile_for_backend(
 ) -> Result<ResolvedLlmProfile, String> {
     let pool = get_pool(handle).await?;
     resolve_profile_from_pool(&pool, requested_profile_id).await
+}
+
+#[tauri::command]
+pub async fn get_llm_request_snapshots(
+    state: tauri::State<'_, LlmSchedulerState>,
+) -> AppResult<Vec<LlmRequestSnapshot>> {
+    Ok(state.request_snapshots().await)
 }
 
 #[tauri::command]

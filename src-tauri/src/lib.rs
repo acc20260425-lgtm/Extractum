@@ -29,8 +29,8 @@ use notebooklm_export::export_source_to_notebooklm;
 
 mod llm;
 use llm::{
-    ask_llm_stream, cancel_llm_request, get_llm_profiles, list_llm_provider_models,
-    save_llm_profile, set_active_llm_profile, LlmSchedulerState,
+    ask_llm_stream, cancel_llm_request, get_llm_profiles, get_llm_request_snapshots,
+    list_llm_provider_models, save_llm_profile, set_active_llm_profile, LlmSchedulerState,
 };
 
 mod analysis;
@@ -104,6 +104,7 @@ pub fn run() {
             list_source_forum_topics,
             export_source_to_notebooklm,
             get_llm_profiles,
+            get_llm_request_snapshots,
             save_llm_profile,
             set_active_llm_profile,
             list_llm_provider_models,
