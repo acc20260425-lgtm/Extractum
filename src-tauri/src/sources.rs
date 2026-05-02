@@ -1052,16 +1052,9 @@ pub async fn sync_source(
     let client = get_authorized_client(state, account_id).await?;
     let resolved_peer = resolve_and_refresh_peer(&handle, &client, &source, account_id).await?;
     let forum_topic_warnings =
-        refresh_forum_topics(&pool, &client, resolved_peer.peer.clone(), &source).await;
+        refresh_forum_topics(&pool, &client, resolved_peer.peer, &source).await;
     let sync_policy = determine_sync_policy(&pool, &source).await?;
-    let ingest = persist_items(
-        &pool,
-        &client,
-        resolved_peer.peer.clone(),
-        &source,
-        &sync_policy,
-    )
-    .await?;
+    let ingest = persist_items(&pool, &client, resolved_peer.peer, &source, &sync_policy).await?;
     let last_sync_state = finalize_sync(
         &pool,
         &source,
@@ -1165,9 +1158,7 @@ async fn fetch_all_forum_topics(
             .await
             .map_err(|e| e.to_string())?;
 
-        let forum_topics = match response {
-            tl::enums::messages::ForumTopics::Topics(topics) => topics,
-        };
+        let tl::enums::messages::ForumTopics::Topics(forum_topics) = response;
 
         if forum_topics.topics.is_empty() {
             break;

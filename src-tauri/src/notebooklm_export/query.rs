@@ -203,8 +203,7 @@ async fn load_reply_contexts(
             continue;
         }
 
-        let placeholders = std::iter::repeat("?")
-            .take(chunk.len())
+        let placeholders = std::iter::repeat_n("?", chunk.len())
             .collect::<Vec<_>>()
             .join(", ");
         let sql = format!(

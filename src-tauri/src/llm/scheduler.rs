@@ -41,7 +41,6 @@ pub(crate) struct LlmRequestMetadata {
     pub request_id: String,
     pub profile_id: String,
     pub provider: String,
-    #[allow(dead_code)]
     pub kind: LlmRequestKind,
     pub priority: LlmRequestPriority,
     pub owner_run_id: Option<i64>,
@@ -242,12 +241,13 @@ impl LlmSchedulerState {
         let control = LlmRequestControl::new();
         let key = meta.scheduler_key();
         let request_id = meta.request_id.clone();
+        let request_kind = meta.kind;
         let updates = {
             let mut inner = self.inner.lock().await;
             if inner.requests.contains_key(&request_id) {
                 return Err(format!(
-                    "LLM request '{}' is already registered",
-                    request_id
+                    "LLM request '{}' ({request_kind:?}) is already registered",
+                    request_id,
                 ));
             }
 

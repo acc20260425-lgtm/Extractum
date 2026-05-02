@@ -404,10 +404,10 @@ pub async fn tg_logout(
 
 /// Returns the Client for a given account_id (for use in other modules).
 /// Caller must hold the lock.
-pub async fn get_client<'a>(
-    accounts: &'a HashMap<i64, AccountClient>,
+pub async fn get_client(
+    accounts: &HashMap<i64, AccountClient>,
     account_id: i64,
-) -> AppResult<&'a Client> {
+) -> AppResult<&Client> {
     accounts
         .get(&account_id)
         .map(|ac| &ac.client)

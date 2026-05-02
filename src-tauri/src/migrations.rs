@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha384};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 const APP_IDENTIFIER: &str = "org.ai.extractum";
@@ -7,7 +7,7 @@ const DB_FILENAME: &str = "extractum.db";
 
 /// Before the sql plugin runs, remove stale migration records whose SQL has changed.
 /// This allows us to update migration files without deleting the database.
-async fn patch_migrations(db_path: &PathBuf) {
+async fn patch_migrations(db_path: &Path) {
     use sqlx::SqlitePool;
 
     if !db_path.exists() {

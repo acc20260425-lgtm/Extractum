@@ -330,7 +330,7 @@ pub async fn list_active_analysis_runs(
         state.remove_active_report_run(run_id).await;
     }
 
-    active_runs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    active_runs.sort_by_key(|run| std::cmp::Reverse(run.created_at));
     Ok(active_runs)
 }
 

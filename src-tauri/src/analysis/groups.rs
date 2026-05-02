@@ -98,11 +98,11 @@ pub async fn create_analysis_source_group(
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    Ok(fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
+    fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
         AppError::not_found(format!(
             "Analysis source group {group_id} not found after creation"
         ))
-    })?)
+    })
 }
 
 #[tauri::command]
@@ -169,11 +169,11 @@ pub async fn update_analysis_source_group(
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    Ok(fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
+    fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
         AppError::not_found(format!(
             "Analysis source group {group_id} not found after update"
         ))
-    })?)
+    })
 }
 
 #[tauri::command]

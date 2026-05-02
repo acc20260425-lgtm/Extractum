@@ -12,8 +12,6 @@ pub(crate) fn sanitize_path_component(input: &str, fallback: &str) -> String {
     for ch in input.trim().chars() {
         let normalized = if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
             Some(ch.to_ascii_lowercase())
-        } else if ch.is_whitespace() || matches!(ch, '.' | '(' | ')' | '[' | ']' | ':' | '/') {
-            Some('_')
         } else if ch.is_ascii() {
             Some('_')
         } else {

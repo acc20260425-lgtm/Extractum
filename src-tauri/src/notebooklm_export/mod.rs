@@ -445,7 +445,7 @@ fn progress_step(total: usize) -> usize {
 }
 
 fn should_emit_progress(current: usize, total: usize, step: usize) -> bool {
-    current == total || current % step == 0
+    current == total || current.is_multiple_of(step)
 }
 
 fn prepare_output_root(

@@ -72,7 +72,6 @@ pub(crate) fn render_message_block(message: &NotebookLmExportMessage) -> Rendere
         "reply_to_peer_id: {}\n",
         yaml_optional_string(message.reply_to_peer_id.as_deref())
     ));
-    markdown.push_str("forwarded_from: null\n");
     markdown.push_str(&format!(
         "thread_id: {}\n",
         yaml_optional_i64(message.reply_to_top_id)
