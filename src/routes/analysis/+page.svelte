@@ -7,6 +7,7 @@
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
   import WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";
   import WorkspaceRail from "$lib/components/analysis/workspace-rail.svelte";
+  import SourceManagementDialog from "$lib/components/analysis/source-management-dialog.svelte";
   import { formatAppError } from "$lib/app-error";
   import {
     defaultDateOffset,
@@ -139,6 +140,8 @@
   let activeChatRunId = $state<number | null>(null);
   let clearingChat = $state(false);
   let syncingIds = $state<Record<number, boolean>>({});
+  let deletingSourceIds = $state<Record<number, boolean>>({});
+  let sourceManagerOpen = $state(false);
   let exportDialogOpen = $state(false);
   let exportingNotebookLm = $state(false);
   let activeNotebookLmExportId = $state<string | null>(null);
@@ -1027,6 +1030,61 @@
     }
   }
 
+  async function refreshSourcesAfterManagement(sourceId?: number) {
+    await Promise.all([loadSourceCatalog(), loadGroups(), loadActiveRuns()]);
+    await loadRuns();
+
+    if (sourceId !== undefined) {
+      await selectSource(sourceId);
+      return;
+    }
+
+    if (selectedSourceId) {
+      await loadItems(Number(selectedSourceId));
+      return;
+    }
+
+    sourceItems = [];
+  }
+
+  async function deleteSource(source: SourceRecord) {
+    const sourceName = source.title ?? source.external_id;
+    const confirmed = await openConfirmModal({
+      title: "Delete source?",
+      message:
+        `The source "${sourceName}" and its synced local items will be removed from Extractum.\n\n` +
+        "Saved analysis snapshots remain available as frozen run artifacts.",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    deletingSourceIds = { ...deletingSourceIds, [source.id]: true };
+    try {
+      await invoke("delete_source", { sourceId: source.id });
+      status = `Source "${sourceName}" deleted.`;
+
+      if (selectedSourceId === String(source.id)) {
+        sourceItems = [];
+        currentRun = null;
+        activeRunId = null;
+        clearTraceState();
+        clearChatState();
+      }
+
+      await refreshSourcesAfterManagement();
+    } catch (error) {
+      status = formatAppError("deleting the source", error);
+    } finally {
+      const next = { ...deletingSourceIds };
+      delete next[source.id];
+      deletingSourceIds = next;
+    }
+  }
+
   function openNotebookLmExportDialog() {
     if (analysisScope !== "single_source" || !currentSource()) {
       status = "Select a single synced source before exporting.";
@@ -1524,6 +1582,7 @@
     {selectedSourceId}
     {selectedGroupId}
     {syncingIds}
+    {deletingSourceIds}
     {formatTimestamp}
     {accountLabel}
     {sourceKindLabel}
@@ -1536,6 +1595,8 @@
     onSelectSource={(sourceId) => void selectSource(sourceId)}
     onSelectGroup={selectGroup}
     onSyncSource={(sourceId) => void syncSelectedSource(sourceId)}
+    onOpenSourceManager={() => (sourceManagerOpen = true)}
+    onDeleteSource={(source) => void deleteSource(source)}
   />
 
   <WorkspaceMain
@@ -1671,6 +1732,16 @@
       onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
     />
   </div>
+
+  <SourceManagementDialog
+    open={sourceManagerOpen}
+    {accounts}
+    {accountStatuses}
+    existingSources={sourceCatalog}
+    onClose={() => (sourceManagerOpen = false)}
+    onSourcesChanged={(sourceId) => void refreshSourcesAfterManagement(sourceId)}
+    onStatus={(message) => (status = message)}
+  />
 </section>
 
 <style>

@@ -19,6 +19,7 @@
     selectedSourceId,
     selectedGroupId,
     syncingIds,
+    deletingSourceIds,
     formatTimestamp,
     accountLabel,
     sourceKindLabel,
@@ -31,6 +32,8 @@
     onSelectSource,
     onSelectGroup,
     onSyncSource,
+    onOpenSourceManager,
+    onDeleteSource,
   }: {
     sourceCatalog: SourceRecord[];
     groups: AnalysisSourceGroup[];
@@ -44,6 +47,7 @@
     selectedSourceId: string;
     selectedGroupId: string;
     syncingIds: Record<number, boolean>;
+    deletingSourceIds: Record<number, boolean>;
     formatTimestamp: (value: number) => string;
     accountLabel: (accountId: number | null) => string;
     sourceKindLabel: (kind: string) => string;
@@ -56,6 +60,8 @@
     onSelectSource: (sourceId: number) => void;
     onSelectGroup: (groupId: number) => void;
     onSyncSource: (sourceId: number) => void;
+    onOpenSourceManager: () => void;
+    onDeleteSource: (source: SourceRecord) => void;
   } = $props();
 
   const totalItems = $derived(sourceCatalog.length + groups.length);
@@ -85,9 +91,12 @@
   </div>
 
   <div class="rail-section">
-    <div class="rail-section-title">
-      <span>Sources</span>
-      <small>{filteredSourceCatalog.length}</small>
+    <div class="rail-section-heading">
+      <div class="rail-section-title">
+        <span>Sources</span>
+        <small>{filteredSourceCatalog.length}</small>
+      </div>
+      <Button size="sm" variant="secondary" onclick={onOpenSourceManager}>Add</Button>
     </div>
     <div class="rail-list">
       {#if loadingSourceCatalog}
@@ -101,6 +110,7 @@
           {@const runtime = runtimeStatus(source.account_id)}
           {@const runtimeStateBadge = runtimeBadge(runtime)}
           {@const isSelected = analysisScope === "single_source" && selectedSourceId === String(source.id)}
+          {@const deleting = !!deletingSourceIds[source.id]}
           <article class:selected={isSelected} class="rail-row">
             <button
               class="rail-row-main"
@@ -140,10 +150,18 @@
                 size="sm"
                 variant="secondary"
                 onclick={() => onSyncSource(source.id)}
-                disabled={!!syncingIds[source.id] || syncReason !== null}
+                disabled={!!syncingIds[source.id] || deleting || syncReason !== null}
                 title={syncReason ?? undefined}
               >
                 {syncingIds[source.id] ? "Syncing..." : "Sync"}
+              </Button>
+              <Button
+                size="sm"
+                variant="danger-soft"
+                onclick={() => onDeleteSource(source)}
+                disabled={deleting || !!syncingIds[source.id]}
+              >
+                {deleting ? "Deleting..." : "Delete"}
               </Button>
             </div>
           </article>
@@ -241,6 +259,13 @@
     padding-top: 0.1rem;
   }
 
+  .rail-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+
   .rail-section + .rail-section {
     padding-top: 0.85rem;
     border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
@@ -250,6 +275,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex: 1;
+    min-width: 0;
     font-size: 0.78rem;
     color: var(--muted);
     text-transform: uppercase;
