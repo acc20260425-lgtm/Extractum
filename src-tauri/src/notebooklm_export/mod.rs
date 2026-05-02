@@ -10,7 +10,7 @@ mod renderer;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use time::{format_description, OffsetDateTime, UtcOffset};
 
@@ -25,7 +25,9 @@ use model::{
     DEFAULT_MAX_BYTES_PER_FILE, DEFAULT_MAX_WORDS_PER_FILE, DEFAULT_MIN_MESSAGE_LENGTH,
 };
 use query::{load_export_messages, load_export_source};
-use renderer::{approx_word_count, render_document, render_message_block};
+use renderer::{
+    approx_word_count, render_document, render_document_overhead, render_message_block,
+};
 
 const EXPORT_MARKER_FILE: &str = ".extractum-notebooklm-export.json";
 
@@ -79,10 +81,23 @@ pub async fn export_source_to_notebooklm(
             &blocks,
             config.max_words_per_file,
             config.max_bytes_per_file,
+            |title_period, period_start, period_end, is_continuation, message_count| {
+                render_document_overhead(
+                    &source,
+                    generated_at,
+                    title_period,
+                    period_start,
+                    period_end,
+                    &participants,
+                    message_count,
+                    is_continuation,
+                )
+            },
         );
         warnings.extend(chunk_warnings);
 
         let output_root = prepare_output_root(&config, &source, generated_at)?;
+        let mut generated_file_names = vec!["glossary.md".to_string()];
         let glossary_markdown = render_glossary(
             generated_at,
             source.title.as_deref().unwrap_or(&source.external_id),
@@ -92,6 +107,7 @@ pub async fn export_source_to_notebooklm(
 
         let mut files = Vec::new();
         for chunk in chunks {
+            generated_file_names.push(chunk.filename.clone());
             let markdown = render_document(
                 &source,
                 generated_at,
@@ -120,6 +136,7 @@ pub async fn export_source_to_notebooklm(
                 source_title: source.title.clone(),
                 file_count: files.len(),
                 exported_message_count: blocks.len(),
+                generated_files: generated_file_names,
             },
         )?;
 
@@ -232,6 +249,7 @@ fn prepare_output_root(
                 "Timestamped NotebookLM export folder already exists",
             ));
         }
+        let output_root = validate_existing_export_root(&base, &output_root)?;
         let marker = output_root.join(EXPORT_MARKER_FILE);
         if !marker.exists() {
             return Err(AppError::conflict(
@@ -239,27 +257,73 @@ fn prepare_output_root(
             ));
         }
         remove_generated_files(&output_root)?;
+        return Ok(output_root);
     } else {
         fs::create_dir(&output_root).map_err(map_create_dir_error)?;
+    }
+
+    let output_root = output_root
+        .canonicalize()
+        .map_err(|e| AppError::validation(format!("Could not resolve export folder: {e}")))?;
+    if !output_root.starts_with(&base) {
+        return Err(AppError::conflict(
+            "Export folder resolves outside the selected output directory",
+        ));
     }
 
     Ok(output_root)
 }
 
 fn remove_generated_files(output_root: &Path) -> AppResult<()> {
-    for entry in fs::read_dir(output_root)
-        .map_err(|e| AppError::internal(format!("Could not read export folder: {e}")))?
-    {
-        let entry = entry.map_err(|e| AppError::internal(format!("Could not read file: {e}")))?;
-        let path = entry.path();
-        let is_generated_markdown = path.extension().and_then(|ext| ext.to_str()) == Some("md");
-        let is_marker = path.file_name().and_then(|name| name.to_str()) == Some(EXPORT_MARKER_FILE);
-        if is_generated_markdown || is_marker {
-            fs::remove_file(&path)
-                .map_err(|e| AppError::conflict(format!("Could not replace export file: {e}")))?;
+    let manifest = read_manifest(output_root)?;
+    if manifest.generated_files.is_empty() {
+        return Err(AppError::conflict(
+            "Existing export manifest does not list generated files",
+        ));
+    }
+
+    for file_name in manifest.generated_files {
+        let path = ensure_child_path(output_root, &file_name).ok_or_else(|| {
+            AppError::conflict("Existing export manifest contains an invalid file path")
+        })?;
+        if !path.exists() {
+            continue;
         }
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|e| AppError::conflict(format!("Could not inspect export file: {e}")))?;
+        if !metadata.is_file() {
+            return Err(AppError::conflict(
+                "Existing export manifest references a non-file path",
+            ));
+        }
+        fs::remove_file(&path)
+            .map_err(|e| AppError::conflict(format!("Could not replace export file: {e}")))?;
     }
     Ok(())
+}
+
+fn validate_existing_export_root(base: &Path, output_root: &Path) -> AppResult<PathBuf> {
+    let metadata = fs::symlink_metadata(output_root)
+        .map_err(|e| AppError::validation(format!("Could not inspect export folder: {e}")))?;
+    if metadata.file_type().is_symlink() {
+        return Err(AppError::conflict(
+            "Export folder cannot be a symbolic link",
+        ));
+    }
+    if !metadata.is_dir() {
+        return Err(AppError::validation("Export path is not a directory"));
+    }
+
+    let output_root = output_root
+        .canonicalize()
+        .map_err(|e| AppError::validation(format!("Could not resolve export folder: {e}")))?;
+    if !output_root.starts_with(base) {
+        return Err(AppError::conflict(
+            "Export folder resolves outside the selected output directory",
+        ));
+    }
+
+    Ok(output_root)
 }
 
 fn write_export_file(output_root: &Path, filename: &str, content: &str) -> AppResult<PathBuf> {
@@ -277,6 +341,15 @@ fn write_marker(output_root: &Path, manifest: &NotebookLmExportManifest) -> AppR
         .map_err(|e| AppError::internal(format!("Could not serialize export manifest: {e}")))?;
     fs::write(path, json)
         .map_err(|e| AppError::internal(format!("Could not write export manifest: {e}")))
+}
+
+fn read_manifest(output_root: &Path) -> AppResult<NotebookLmExportManifest> {
+    let path = ensure_child_path(output_root, EXPORT_MARKER_FILE)
+        .ok_or_else(|| AppError::validation("Export marker filename is invalid"))?;
+    let json = fs::read_to_string(path)
+        .map_err(|e| AppError::conflict(format!("Could not read export manifest: {e}")))?;
+    serde_json::from_str(&json)
+        .map_err(|e| AppError::conflict(format!("Could not parse export manifest: {e}")))
 }
 
 fn map_create_dir_error(error: std::io::Error) -> AppError {
@@ -307,7 +380,7 @@ fn path_to_string(path: PathBuf) -> String {
     path.to_string_lossy().into_owned()
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 struct NotebookLmExportManifest {
     generated_at: i64,
     source_id: i64,
@@ -315,6 +388,7 @@ struct NotebookLmExportManifest {
     source_title: Option<String>,
     file_count: usize,
     exported_message_count: usize,
+    generated_files: Vec<String>,
 }
 
 #[cfg(test)]

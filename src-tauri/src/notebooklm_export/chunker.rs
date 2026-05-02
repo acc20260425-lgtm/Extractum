@@ -34,6 +34,7 @@ pub(crate) fn build_chunks(
     blocks: &[RenderedMessageBlock],
     max_words: usize,
     max_bytes: usize,
+    document_overhead: impl Fn(&str, i64, i64, bool, usize) -> (usize, usize),
 ) -> (Vec<ChunkFile>, Vec<String>) {
     let mut warnings = Vec::new();
     let yearly_groups = group_by_period(blocks, PeriodKind::Year);
@@ -46,7 +47,9 @@ pub(crate) fn build_chunks(
     for yearly in yearly_groups {
         let yearly_words = block_words(&yearly.blocks);
         let yearly_bytes = block_bytes(&yearly.blocks);
-        if yearly_words <= max_words && yearly_bytes <= max_bytes {
+        let (overhead_words, overhead_bytes) = period_overhead(&yearly, false, &document_overhead);
+        if yearly_words + overhead_words <= max_words && yearly_bytes + overhead_bytes <= max_bytes
+        {
             chunks.extend(split_period(
                 &source_slug,
                 yearly.label,
@@ -54,6 +57,7 @@ pub(crate) fn build_chunks(
                 yearly.blocks,
                 max_words,
                 max_bytes,
+                &document_overhead,
                 &mut warnings,
             ));
             continue;
@@ -67,6 +71,7 @@ pub(crate) fn build_chunks(
                 monthly.blocks,
                 max_words,
                 max_bytes,
+                &document_overhead,
                 &mut warnings,
             ));
         }
@@ -123,6 +128,7 @@ fn split_period(
     blocks: Vec<RenderedMessageBlock>,
     max_words: usize,
     max_bytes: usize,
+    document_overhead: &impl Fn(&str, i64, i64, bool, usize) -> (usize, usize),
     warnings: &mut Vec<String>,
 ) -> Vec<ChunkFile> {
     let mut chunks = Vec::new();
@@ -131,7 +137,16 @@ fn split_period(
     let mut current_bytes = 0;
 
     for block in blocks {
-        let exceeds_alone = block.approximate_word_count > max_words || block.byte_size > max_bytes;
+        let is_next_continuation = !chunks.is_empty();
+        let (single_overhead_words, single_overhead_bytes) = document_overhead(
+            &title_period,
+            block.message.published_at,
+            block.message.published_at,
+            is_next_continuation,
+            1,
+        );
+        let exceeds_alone = block.approximate_word_count + single_overhead_words > max_words
+            || block.byte_size + single_overhead_bytes > max_bytes;
         if exceeds_alone {
             warnings.push(format!(
                 "Message {} exceeds configured NotebookLM file limits and was written alone.",
@@ -139,9 +154,25 @@ fn split_period(
             ));
         }
 
-        let would_exceed = !current.is_empty()
-            && (current_words + block.approximate_word_count > max_words
-                || current_bytes + block.byte_size > max_bytes);
+        let would_exceed = if current.is_empty() {
+            false
+        } else {
+            let period_start = current
+                .first()
+                .map(|block: &RenderedMessageBlock| block.message.published_at)
+                .unwrap_or(block.message.published_at);
+            let period_end = block.message.published_at;
+            let (overhead_words, overhead_bytes) = document_overhead(
+                &title_period,
+                period_start,
+                period_end,
+                !chunks.is_empty(),
+                current.len() + 1,
+            );
+
+            current_words + block.approximate_word_count + overhead_words > max_words
+                || current_bytes + block.byte_size + overhead_bytes > max_bytes
+        };
 
         if would_exceed {
             chunks.push(make_chunk(
@@ -209,6 +240,30 @@ fn block_bytes(blocks: &[RenderedMessageBlock]) -> usize {
     blocks.iter().map(|block| block.byte_size).sum()
 }
 
+fn period_overhead(
+    group: &PeriodGroup,
+    is_continuation: bool,
+    document_overhead: &impl Fn(&str, i64, i64, bool, usize) -> (usize, usize),
+) -> (usize, usize) {
+    let period_start = group
+        .blocks
+        .first()
+        .map(|block| block.message.published_at)
+        .unwrap_or(0);
+    let period_end = group
+        .blocks
+        .last()
+        .map(|block| block.message.published_at)
+        .unwrap_or(0);
+    document_overhead(
+        &group.label,
+        period_start,
+        period_end,
+        is_continuation,
+        group.blocks.len(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{build_chunks, should_export_message};
@@ -265,6 +320,7 @@ mod tests {
             &[block(1, 0, 10, 10), block(2, 10, 10, 10)],
             100,
             100,
+            |_, _, _, _, _| (0, 0),
         )
         .0;
         assert_eq!(chunks.len(), 1);
@@ -279,6 +335,7 @@ mod tests {
             &[block(1, 0, 60, 10), block(2, feb_1970, 60, 10)],
             100,
             100,
+            |_, _, _, _, _| (0, 0),
         )
         .0;
         assert_eq!(chunks.len(), 2);
@@ -293,6 +350,7 @@ mod tests {
             &[block(1, 0, 60, 10), block(2, 1, 60, 10)],
             100,
             100,
+            |_, _, _, _, _| (0, 0),
         )
         .0;
         assert_eq!(chunks.len(), 2);
@@ -302,8 +360,23 @@ mod tests {
             &[block(1, 0, 10, 60), block(2, 1, 10, 60)],
             100,
             100,
+            |_, _, _, _, _| (0, 0),
         )
         .0;
+        assert_eq!(chunks.len(), 2);
+    }
+
+    #[test]
+    fn accounts_for_document_overhead_when_splitting() {
+        let chunks = build_chunks(
+            &source(),
+            &[block(1, 0, 40, 10), block(2, 1, 40, 10)],
+            100,
+            100,
+            |_, _, _, _, _| (30, 0),
+        )
+        .0;
+
         assert_eq!(chunks.len(), 2);
     }
 }

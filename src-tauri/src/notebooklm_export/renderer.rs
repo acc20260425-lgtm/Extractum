@@ -109,6 +109,58 @@ pub(crate) fn render_document(
     blocks: &[RenderedMessageBlock],
     is_continuation: bool,
 ) -> String {
+    let mut output = render_document_header(
+        source,
+        generated_at,
+        title_period,
+        period_start,
+        period_end,
+        participants,
+        blocks.len(),
+        is_continuation,
+    );
+
+    for block in blocks {
+        output.push_str(&block.markdown);
+    }
+
+    output
+}
+
+pub(crate) fn render_document_overhead(
+    source: &NotebookLmExportSource,
+    generated_at: i64,
+    title_period: &str,
+    period_start: i64,
+    period_end: i64,
+    participants: &[ParticipantSummary],
+    message_count: usize,
+    is_continuation: bool,
+) -> (usize, usize) {
+    let markdown = render_document_header(
+        source,
+        generated_at,
+        title_period,
+        period_start,
+        period_end,
+        participants,
+        message_count,
+        is_continuation,
+    );
+
+    (approx_word_count(&markdown), markdown.len())
+}
+
+fn render_document_header(
+    source: &NotebookLmExportSource,
+    generated_at: i64,
+    title_period: &str,
+    period_start: i64,
+    period_end: i64,
+    participants: &[ParticipantSummary],
+    message_count: usize,
+    is_continuation: bool,
+) -> String {
     let source_name = source.title.as_deref().unwrap_or(&source.external_id);
     let mut output = String::new();
 
@@ -126,7 +178,7 @@ pub(crate) fn render_document(
         "- Generated at: {}\n",
         format_unix_rfc3339(generated_at)
     ));
-    output.push_str(&format!("- Message count: {}\n", blocks.len()));
+    output.push_str(&format!("- Message count: {message_count}\n"));
     output.push_str(&format!("- Active participants: {}\n", participants.len()));
     output.push_str("- Source system: Extractum local SQLite\n");
     output.push_str("- Intended use: Google NotebookLM analysis\n");
@@ -147,9 +199,6 @@ pub(crate) fn render_document(
     output.push_str("## Conversation\n\n");
     if is_continuation {
         output.push_str("> This file continues the export from the previous part.\n\n");
-    }
-    for block in blocks {
-        output.push_str(&block.markdown);
     }
 
     output
