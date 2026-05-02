@@ -36,6 +36,30 @@
   const compactContextPreviewLimit = 8;
   const expandedContextPreviewLimit = 24;
   const contextExpanded = $derived(contextExpandedOverride ?? !currentRunOpen);
+  const sortedSourceTopics = $derived([...sourceTopics].sort(compareTopics));
+
+  function compareTopics(left: SourceForumTopicRecord, right: SourceForumTopicRecord) {
+    if (left.kind !== right.kind) {
+      return left.kind === "topic" ? -1 : 1;
+    }
+
+    if (left.is_deleted !== right.is_deleted) {
+      return left.is_deleted ? 1 : -1;
+    }
+
+    const titleOrder = left.title.localeCompare(right.title, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+    if (titleOrder !== 0) {
+      return titleOrder;
+    }
+
+    return left.key.localeCompare(right.key, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+  }
 
   function toggleContextPanel() {
     contextExpandedOverride = !contextExpanded;
@@ -78,7 +102,7 @@
             {#if loadingSourceTopics && sourceTopics.length === 0}
               <option value="__loading_topics__" disabled>Loading topics...</option>
             {:else}
-              {#each sourceTopics as topic (topic.key)}
+              {#each sortedSourceTopics as topic (topic.key)}
                 <option value={topic.key}>
                   {topic.title} ({topic.message_count})
                 </option>
