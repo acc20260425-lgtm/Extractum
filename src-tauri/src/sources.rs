@@ -96,6 +96,7 @@ pub struct SyncResult {
     pub skipped: i64,
     pub last_message_id: Option<i64>,
     pub initial_sync_policy_applied: Option<String>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -286,6 +287,19 @@ struct IngestOutcome {
     inserted: i64,
     skipped: i64,
     max_message_id: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ForumTopicSnapshot {
+    topic_id: i64,
+    top_message_id: i64,
+    title: String,
+    icon_color: i64,
+    icon_emoji_id: Option<i64>,
+    is_closed: bool,
+    is_pinned: bool,
+    is_hidden: bool,
+    sort_order: i64,
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
@@ -1037,8 +1051,11 @@ pub async fn sync_source(
 
     let client = get_authorized_client(state, account_id).await?;
     let resolved_peer = resolve_and_refresh_peer(&handle, &client, &source, account_id).await?;
+    let forum_topic_warnings =
+        refresh_forum_topics(&pool, &client, resolved_peer.peer.clone(), &source).await;
     let sync_policy = determine_sync_policy(&pool, &source).await?;
-    let ingest = persist_items(&pool, &client, resolved_peer.peer, &source, &sync_policy).await?;
+    let ingest =
+        persist_items(&pool, &client, resolved_peer.peer.clone(), &source, &sync_policy).await?;
     let last_sync_state = finalize_sync(
         &pool,
         &source,
@@ -1053,6 +1070,7 @@ pub async fn sync_source(
         skipped: ingest.skipped,
         last_message_id: last_sync_state,
         initial_sync_policy_applied: sync_policy.initial_sync_policy_applied,
+        warnings: forum_topic_warnings,
     })
 }
 
@@ -1078,6 +1096,217 @@ async fn refresh_source_avatar_cache(
     let mut metadata = decode_source_metadata(source.metadata_zstd.as_deref()).ok()?;
     metadata.avatar_cache_key = Some(cache_key);
     encode_source_metadata(&metadata).ok()
+}
+
+async fn refresh_forum_topics(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    client: &grammers_client::Client,
+    peer: PeerRef,
+    source: &SourceSyncTarget,
+) -> Vec<String> {
+    if source.telegram_source_kind != TELEGRAM_KIND_SUPERGROUP {
+        return Vec::new();
+    }
+
+    match fetch_all_forum_topics(client, peer).await {
+        Ok((topics, deleted_topic_ids)) => {
+            if let Err(error) =
+                upsert_forum_topics_from_refresh(pool, source.id, &topics, &deleted_topic_ids, now_secs()).await
+            {
+                vec![format!(
+                    "Forum topic refresh failed for source {}: {error}",
+                    source.id
+                )]
+            } else {
+                Vec::new()
+            }
+        }
+        Err(error) if is_non_forum_topic_refresh_error(&error) => Vec::new(),
+        Err(error) => vec![format!(
+            "Forum topic refresh failed for source {}: {error}",
+            source.id
+        )],
+    }
+}
+
+async fn fetch_all_forum_topics(
+    client: &grammers_client::Client,
+    peer: PeerRef,
+) -> Result<(Vec<ForumTopicSnapshot>, Vec<i64>), String> {
+    let mut topics = Vec::new();
+    let mut deleted_topic_ids = Vec::new();
+    let mut offset_date = 0_i32;
+    let mut offset_id = 0_i32;
+    let mut offset_topic = 0_i32;
+    let mut sort_order = 0_i64;
+
+    loop {
+        let response = client
+            .invoke(&tl::functions::messages::GetForumTopics {
+                peer: peer.into(),
+                q: None,
+                offset_date,
+                offset_id,
+                offset_topic,
+                limit: 100,
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let forum_topics = match response {
+            tl::enums::messages::ForumTopics::Topics(topics) => topics,
+        };
+
+        if forum_topics.topics.is_empty() {
+            break;
+        }
+
+        let last_cursor = forum_topic_page_cursor(&forum_topics);
+        let page_topics = forum_topics.topics;
+        for topic in page_topics {
+            match topic {
+                tl::enums::ForumTopic::Topic(topic) => {
+                    topics.push(ForumTopicSnapshot {
+                        topic_id: i64::from(topic.id),
+                        top_message_id: i64::from(topic.top_message),
+                        title: topic.title,
+                        icon_color: i64::from(topic.icon_color),
+                        icon_emoji_id: topic.icon_emoji_id,
+                        is_closed: topic.closed,
+                        is_pinned: topic.pinned,
+                        is_hidden: topic.hidden,
+                        sort_order,
+                    });
+                    sort_order += 1;
+                }
+                tl::enums::ForumTopic::Deleted(topic) => {
+                    deleted_topic_ids.push(i64::from(topic.id));
+                }
+            }
+        }
+
+        let Some((next_offset_date, next_offset_id, next_offset_topic)) = last_cursor else {
+            break;
+        };
+        if next_offset_date == offset_date
+            && next_offset_id == offset_id
+            && next_offset_topic == offset_topic
+        {
+            break;
+        }
+
+        offset_date = next_offset_date;
+        offset_id = next_offset_id;
+        offset_topic = next_offset_topic;
+    }
+
+    Ok((topics, deleted_topic_ids))
+}
+
+fn forum_topic_page_cursor(
+    forum_topics: &tl::types::messages::ForumTopics,
+) -> Option<(i32, i32, i32)> {
+    let last_topic = forum_topics.topics.iter().rev().find_map(|topic| match topic {
+        tl::enums::ForumTopic::Topic(topic) => Some(topic),
+        tl::enums::ForumTopic::Deleted(_) => None,
+    })?;
+    let offset_date = forum_topics
+        .messages
+        .iter()
+        .find(|message| message.id() == last_topic.top_message)
+        .and_then(forum_topic_message_date)
+        .unwrap_or(last_topic.date);
+
+    Some((offset_date, last_topic.top_message, last_topic.id))
+}
+
+fn forum_topic_message_date(message: &tl::enums::Message) -> Option<i32> {
+    match message {
+        tl::enums::Message::Empty(_) => None,
+        tl::enums::Message::Message(message) => Some(message.date),
+        tl::enums::Message::Service(message) => Some(message.date),
+    }
+}
+
+async fn upsert_forum_topics_from_refresh(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    topics: &[ForumTopicSnapshot],
+    deleted_topic_ids: &[i64],
+    refreshed_at: i64,
+) -> Result<(), String> {
+    for topic in topics {
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_forum_topics (
+                source_id,
+                topic_id,
+                top_message_id,
+                title,
+                icon_color,
+                icon_emoji_id,
+                is_closed,
+                is_pinned,
+                is_hidden,
+                is_deleted,
+                sort_order,
+                last_seen_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            ON CONFLICT(source_id, topic_id) DO UPDATE SET
+                top_message_id = excluded.top_message_id,
+                title = excluded.title,
+                icon_color = excluded.icon_color,
+                icon_emoji_id = excluded.icon_emoji_id,
+                is_closed = excluded.is_closed,
+                is_pinned = excluded.is_pinned,
+                is_hidden = excluded.is_hidden,
+                is_deleted = 0,
+                sort_order = excluded.sort_order,
+                last_seen_at = excluded.last_seen_at,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(source_id)
+        .bind(topic.topic_id)
+        .bind(topic.top_message_id)
+        .bind(&topic.title)
+        .bind(topic.icon_color)
+        .bind(topic.icon_emoji_id)
+        .bind(topic.is_closed)
+        .bind(topic.is_pinned)
+        .bind(topic.is_hidden)
+        .bind(topic.sort_order)
+        .bind(refreshed_at)
+        .bind(refreshed_at)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    for topic_id in deleted_topic_ids {
+        sqlx::query(
+            r#"
+            UPDATE telegram_forum_topics
+            SET is_deleted = 1, last_seen_at = ?, updated_at = ?
+            WHERE source_id = ? AND topic_id = ?
+            "#,
+        )
+        .bind(refreshed_at)
+        .bind(refreshed_at)
+        .bind(source_id)
+        .bind(topic_id)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn is_non_forum_topic_refresh_error(error: &str) -> bool {
+    error.contains("CHANNEL_FORUM_MISSING") || error.contains("CHANNEL_MONOFORUM_UNSUPPORTED")
 }
 
 #[tauri::command]
@@ -1910,15 +2139,17 @@ mod tests {
         add_source_resolution_strategy, decode_media_metadata, decode_source_metadata,
         default_sync_settings, determine_sync_policy, dialog_lookup_not_found_message,
         encode_media_metadata, encode_source_metadata, finalize_sync, initial_sync_policy_label,
-        list_source_forum_topics_from_pool, load_item_rows_from_pool, load_source,
-        load_sync_settings_from_pool, parse_supported_manual_telegram_source_ref, parse_username,
-        reply_peer_context, save_sync_settings_to_pool,
+        is_non_forum_topic_refresh_error, list_source_forum_topics_from_pool,
+        load_item_rows_from_pool, load_source, load_sync_settings_from_pool,
+        parse_supported_manual_telegram_source_ref, parse_username, reply_peer_context,
+        save_sync_settings_to_pool, upsert_forum_topics_from_refresh,
         source_peer_ref_from_identity, source_peer_resolution_failure, source_peer_resolution_plan,
         validate_expected_telegram_source_kind, validate_sync_settings, ForumTopicFilter,
-        InitialSyncMode, ManualTelegramSourceRef, ResolvedTelegramSource, SourceMetadata,
-        SourcePeerIdentity, SourcePeerResolutionStep, SourcePeerResolutionStrategy,
-        SourceRecordRow, SourceSyncTarget, SyncSettingsRecord, TELEGRAM_KIND_CHANNEL,
-        TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
+        ForumTopicSnapshot, InitialSyncMode, ManualTelegramSourceRef, ResolvedTelegramSource,
+        SourceMetadata, SourcePeerIdentity, SourcePeerResolutionStep,
+        SourcePeerResolutionStrategy, SourceRecordRow, SourceSyncTarget, SyncSettingsRecord,
+        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        TELEGRAM_SOURCE_TYPE,
     };
     use crate::compression::{compress_json_bytes, compress_text, decompress_text};
     use crate::error::AppErrorKind;
@@ -2012,6 +2243,15 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create telegram_forum_topics");
+        sqlx::query(
+            r#"
+            CREATE UNIQUE INDEX idx_telegram_forum_topics_source_topic
+            ON telegram_forum_topics(source_id, topic_id)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create telegram_forum_topics unique index");
         pool
     }
 
@@ -2738,5 +2978,113 @@ mod tests {
         assert_eq!(records[2].kind, "uncategorized");
         assert_eq!(records[2].key, "general_uncategorized");
         assert_eq!(records[2].message_count, 1);
+    }
+
+    #[tokio::test]
+    async fn upsert_forum_topics_refresh_preserves_missing_topics_and_marks_deleted() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_forum_topics (
+                id, source_id, topic_id, top_message_id, title, icon_color, icon_emoji_id,
+                is_closed, is_pinned, is_hidden, is_deleted, sort_order, last_seen_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind(10_i64)
+        .bind(500_i64)
+        .bind("Keep me")
+        .bind(1_i64)
+        .bind(None::<i64>)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(10_i64)
+        .bind(10_i64)
+        .execute(&pool)
+        .await
+        .expect("insert preserved topic");
+
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_forum_topics (
+                id, source_id, topic_id, top_message_id, title, icon_color, icon_emoji_id,
+                is_closed, is_pinned, is_hidden, is_deleted, sort_order, last_seen_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(2_i64)
+        .bind(1_i64)
+        .bind(20_i64)
+        .bind(600_i64)
+        .bind("Delete me")
+        .bind(1_i64)
+        .bind(None::<i64>)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(1_i64)
+        .bind(10_i64)
+        .bind(10_i64)
+        .execute(&pool)
+        .await
+        .expect("insert deleted topic");
+
+        upsert_forum_topics_from_refresh(
+            &pool,
+            1,
+            &[ForumTopicSnapshot {
+                topic_id: 30,
+                top_message_id: 700,
+                title: "Fresh".to_string(),
+                icon_color: 7,
+                icon_emoji_id: Some(999),
+                is_closed: true,
+                is_pinned: true,
+                is_hidden: false,
+                sort_order: 2,
+            }],
+            &[20],
+            1234,
+        )
+        .await
+        .expect("upsert forum topics");
+
+        let rows: Vec<(i64, String, i64, i64)> = sqlx::query_as(
+            r#"
+            SELECT topic_id, title, is_deleted, last_seen_at
+            FROM telegram_forum_topics
+            WHERE source_id = ?
+            ORDER BY topic_id ASC
+            "#,
+        )
+        .bind(1_i64)
+        .fetch_all(&pool)
+        .await
+        .expect("reload topics");
+
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0], (10, "Keep me".to_string(), 0, 10));
+        assert_eq!(rows[1], (20, "Delete me".to_string(), 1, 1234));
+        assert_eq!(rows[2], (30, "Fresh".to_string(), 0, 1234));
+    }
+
+    #[test]
+    fn non_forum_topic_refresh_errors_are_detected() {
+        assert!(is_non_forum_topic_refresh_error(
+            "Rpc error 400: CHANNEL_FORUM_MISSING"
+        ));
+        assert!(is_non_forum_topic_refresh_error(
+            "Rpc error 400: CHANNEL_MONOFORUM_UNSUPPORTED"
+        ));
+        assert!(!is_non_forum_topic_refresh_error(
+            "Rpc error 400: CHANNEL_PRIVATE"
+        ));
     }
 }

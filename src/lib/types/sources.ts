@@ -70,6 +70,7 @@ export interface SyncResult {
   skipped: number;
   last_message_id: number | null;
   initial_sync_policy_applied: string | null;
+  warnings: string[];
 }
 
 export interface SyncSettingsRecord {
