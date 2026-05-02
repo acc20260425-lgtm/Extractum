@@ -21,7 +21,8 @@ Released work should stay in the codebase and in current-state documentation, no
 - LLM concurrency policy still needs refinement beyond the current request-scoped scheduling baseline
 - saved-run history still lacks richer filtering for larger archives
 - media download, preview, and media-aware analysis are still incomplete
-- NotebookLM export MVP is shipped for single synced sources; richer Telegram context remains follow-up work
+- NotebookLM export is shipped for single synced sources; optional link enrichment and source-group export remain follow-up work
+- full Telegram Forum Topics browsing/export and forward metadata are not modeled yet
 
 ---
 
@@ -45,7 +46,7 @@ Released work should stay in the codebase and in current-state documentation, no
 | LLM concurrency | request isolation is in place, but limit policy is still coarse | predictable request scheduling with clearer limits |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
 | Media support | metadata-first only | optional download/preview and media-aware analysis |
-| NotebookLM export | single-source local Markdown export with progress events is shipped | optional context/link enrichment |
+| NotebookLM export | single-source local Markdown export with progress events and local reply/thread/reaction metadata is shipped | optional link enrichment and source-group export |
 | Stabilization | partially recorded | repeatable verification baseline and broader tests |
 
 ---
@@ -54,19 +55,16 @@ Released work should stay in the codebase and in current-state documentation, no
 
 ### Phase 0. Baseline And Sanity Check
 
-Status: partial.
+Status: open.
 
 Goal: confirm the exact current verification baseline before broader implementation continues.
 
-- [x] re-check the actual Rust test count after the latest LLM/settings changes
 - [ ] record current `cargo clippy` status
-- [x] record current `cargo test` status
-- [ ] record current `npm run check` status in an environment where `svelte-check` preprocessing is allowed to spawn `esbuild`
 
 Current notes:
 
-- `cargo test` passes locally with `83 passed; 0 failed`
-- `npm run check` passes when Svelte preprocessing is allowed to spawn `esbuild`
+- 2026-05-02: `cargo test` passes locally with `90 passed; 0 failed`
+- 2026-05-02: `npm.cmd run check` passes with `0 errors and 0 warnings` when Svelte preprocessing is allowed to spawn `esbuild`
 
 ---
 
@@ -76,21 +74,14 @@ Status: MVP shipped.
 
 Priority: medium.
 
-Current state:
-
-- [x] single synced Telegram source can be exported from `/analysis`
-- [x] exporter reads local SQLite only
-- [x] output includes Markdown conversation files and `glossary.md`
-- [x] files use safe generated folders and an Extractum marker file
-- [x] native folder picker is wired through the Tauri dialog plugin
-- [x] progress events are emitted for long exports and shown in the export dialog
-- [x] backend tests cover filename, URL, filtering, media placeholder, chunking, glossary, and renderer helpers
+Current state is documented in `README.md`, `docs/design-document.md`, and `docs/architecture-deep-dive.md`.
 
 Open follow-ups:
 
 - [ ] add optional link enrichment with explicit user opt-in and cache
 - [ ] add export for source groups if the analysis group workflow needs it
-- [ ] render reply/thread/reaction/forward context after sync starts persisting those fields
+- [ ] render forward context after sync starts persisting forward metadata
+- [ ] decide whether NotebookLM export needs full Forum Topics names/grouping beyond the stored `reply_to_top_id`
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
 ---
@@ -264,7 +255,6 @@ Status: open.
 Goal: keep the verification baseline healthy as the remaining infrastructure work lands.
 
 - [ ] run `cargo clippy`
-- [ ] run `npm run check` outside the current sandbox restriction
 - [ ] add frontend tests for `analysis-utils.ts` and `app-error.ts`
 - [ ] verify that Telegram and LLM event-driven UI flows still behave correctly after the next major backend changes
 

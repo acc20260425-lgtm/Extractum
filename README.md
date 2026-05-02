@@ -30,6 +30,11 @@ The current product slice is a local-first MVP for:
 - Telegram sources carry a `telegram_source_kind` of `channel`, `supergroup`, or `group`;
 - source uniqueness is scoped by account, source type, kind, and external id;
 - synced Telegram messages are stored in `items`;
+- new synced Telegram messages store minimal local context when Telegram exposes it:
+  - reply target message id;
+  - reply target peer kind/id;
+  - thread/topic root message id;
+  - aggregate reaction count;
 - the first sync window is configurable:
   - `recent_messages(N)`
   - `recent_days(N)`
@@ -90,12 +95,15 @@ The `/analysis` source workspace can export one synced Telegram source to Notebo
 - output is written under the selected folder as a generated `notebooklm_export_*` directory;
 - `glossary.md` summarizes participants by stored author string;
 - conversation files include source summary, chronology, per-message YAML metadata, plain text, detected `http://` / `https://` links, and stored media placeholders from `items.media_metadata_zstd`;
+- when new Telegram context fields are present, export metadata includes local reply snippets, reply target ids, reply peer ids, thread ids, and reaction counts;
+- reply snippets are resolved from local SQLite only and can point to messages outside the selected export period without adding those original messages to the export corpus;
 - files are grouped by year when they fit the configured limits, fall back to month when needed, and split into numbered parts by word and byte limits.
 
 Current limitations:
 
 - export works only for data already synced into Extractum;
-- existing rows may not contain reply, forward, reaction, thread, or rich Telegram formatting metadata;
+- existing rows synced before migration `13.sql` may not contain reply, reaction, or thread metadata;
+- forward metadata and rich Telegram formatting metadata are not exported yet;
 - media binaries are not downloaded, so media-only rows are represented only through lightweight stored metadata;
 - URL titles and descriptions are not enriched in the MVP.
 
@@ -145,6 +153,7 @@ Recent schema additions:
 - migration `10.sql`: immutable saved run snapshots
 - migration `11.sql`: Telegram source kind
 - migration `12.sql`: account-scoped source uniqueness
+- migration `13.sql`: Telegram reply/thread/reaction context metadata on `items`
 
 ## Error model
 
@@ -176,6 +185,8 @@ The old backlog items for:
 - immutable saved run snapshot semantics;
 - typed application errors;
 - configurable initial sync policy;
-- reusable LLM provider profiles and OpenAI-compatible `base_url` configuration
+- reusable LLM provider profiles and OpenAI-compatible `base_url` configuration;
+- Telegram item context metadata for new sync rows;
+- NotebookLM rendering of local reply/thread/reaction metadata
 
 are completed. The active open backlog now lives in `docs/backlog.md`.

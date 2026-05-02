@@ -21,10 +21,12 @@ Implemented:
 - source management for Telegram channels, supergroups, and groups
 - history sync into local SQLite
 - media-aware sync metadata for text-bearing and media-only items
+- Telegram reply/thread/reaction context metadata for newly synced items
 - configurable initial sync window
 - source groups for analysis
 - saved reports
 - follow-up chat on saved runs
+- single-source NotebookLM export with local reply/thread/reaction metadata
 - reusable LLM provider profiles with active-profile selection
 - configurable OpenAI-compatible `base_url` support in `/settings`
 - provider smoke testing from `/settings`
@@ -36,6 +38,8 @@ Not implemented yet:
 - secure storage for all secrets
 - full media download / previews
 - media-aware analysis beyond the current text-first corpus
+- full Telegram Forum Topics browsing/export model
+- Telegram forward metadata enrichment
 
 ## Main routes
 
@@ -112,7 +116,7 @@ Not implemented yet:
 
 - `accounts`: local Telegram accounts and their current SQLite-backed credentials
 - `sources`: registered Telegram sources
-- `items`: synced Telegram messages and media-aware metadata
+- `items`: synced Telegram messages, media-aware metadata, and nullable Telegram context metadata for new rows
 - `app_settings`: app-level key/value storage, including active LLM profile, per-profile provider metadata, sync policy, and the current temporary LLM API keys
 - `analysis_runs`: saved report runs
 - `analysis_run_messages`: frozen corpus snapshot for saved runs
@@ -122,6 +126,7 @@ Not implemented yet:
 
 - analysis corpus still requires text content;
 - media-only items are stored and visible, but not yet analyzed;
+- older item rows may have `NULL` Telegram context metadata because there is no background backfill;
 - LLM API keys still remain in `app_settings` for now;
 - Telegram `api_hash` still remains in SQLite-backed account storage for now;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.

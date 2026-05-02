@@ -57,6 +57,11 @@ Important fields:
 - `has_media`
 - `media_kind`
 - `media_metadata_zstd`
+- `reply_to_msg_id`
+- `reply_to_peer_kind`
+- `reply_to_peer_id`
+- `reply_to_top_id`
+- `reaction_count`
 
 `content_kind` values:
 
@@ -68,6 +73,10 @@ Notes:
 
 - rows may have text, media metadata, or both;
 - rows without both text and useful media metadata are skipped during ingest.
+- Telegram context fields are nullable and are populated only for rows inserted after migration `13.sql` and the updated sync code;
+- `NULL` in Telegram context fields means metadata is unavailable, the row predates the migration, or Telegram did not expose that value;
+- `reply_to_peer_kind` uses Telegram peer values (`user`, `chat`, `channel`), not Extractum source-kind values (`channel`, `supergroup`, `group`);
+- `reaction_count = 0` means Telegram explicitly exposed zero aggregate reactions; `NULL` means the app cannot distinguish zero from unavailable metadata.
 
 Important constraints / indexes:
 
@@ -215,11 +224,13 @@ Purpose:
 | 10 | `10.sql` | Add saved run snapshot storage |
 | 11 | `11.sql` | Add `telegram_source_kind` and migrate Telegram channels to generic Telegram sources |
 | 12 | `12.sql` | Scope source uniqueness by `account_id` |
+| 13 | `13.sql` | Add Telegram reply/thread/reaction context metadata to `items` |
 
 ## 4. Current behavior implications
 
 - the analysis workspace can render media-bearing and media-only items from `items`;
 - `/analysis` still loads only text-bearing corpus rows;
+- NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
 - `app_settings` still contains secrets temporarily, which remains a security debt.

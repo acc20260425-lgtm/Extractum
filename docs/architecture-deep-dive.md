@@ -79,6 +79,7 @@ Sync operates per source:
 - first sync uses a configurable policy window;
 - later sync resumes incrementally;
 - duplicate items are ignored by `(source_id, external_id)` uniqueness.
+- newly inserted rows persist minimal Telegram context when available: reply target, reply target peer, thread/topic root id, and aggregate reaction count.
 
 ## 3. Item model
 
@@ -92,12 +93,34 @@ Stored dimensions include:
 - `has_media`;
 - `media_kind`;
 - compressed media metadata.
+- nullable Telegram context metadata:
+  - `reply_to_msg_id`;
+  - `reply_to_peer_kind`;
+  - `reply_to_peer_id`;
+  - `reply_to_top_id`;
+  - `reaction_count`.
 
 This allows the main analysis workspace to present a more faithful archive even though analysis still stays text-first.
 
-## 4. Analysis architecture
+Context metadata is not backfilled. Older rows and rows where Telegram did not expose the relevant fields keep `NULL` values.
 
-### 4.1 Report generation
+## 4. NotebookLM export architecture
+
+NotebookLM export reads only local SQLite state. It does not call Telegram, LLM providers, link preview services, or media download paths.
+
+For rows with `reply_to_msg_id`, export resolves original messages in batches from the same `source_id` by matching `items.external_id` to the Telegram reply message id. Original messages can be outside the selected period, but they are only used as YAML snippet metadata.
+
+Exported message metadata can include:
+
+- local reply id;
+- local reply author/snippet;
+- reply peer kind/id;
+- thread id;
+- aggregate reaction count.
+
+## 5. Analysis architecture
+
+### 5.1 Report generation
 
 The report flow:
 
@@ -108,7 +131,7 @@ The report flow:
 5. persist result + trace data
 6. persist frozen snapshot
 
-### 4.2 Saved run semantics
+### 5.2 Saved run semantics
 
 The saved run model is snapshot-first for new runs.
 
@@ -118,11 +141,11 @@ Frozen snapshot storage solves three drift problems:
 - source-group membership drift;
 - evidence drift during follow-up chat / trace resolution.
 
-### 4.3 Legacy compatibility
+### 5.3 Legacy compatibility
 
 Older runs without snapshot rows can still fall back to live tables. This keeps upgrades non-breaking while making new runs more stable.
 
-## 5. LLM provider architecture
+## 6. LLM provider architecture
 
 The `src-tauri/src/llm/` module is now profile-oriented.
 
@@ -146,20 +169,21 @@ The frontend `/settings` route mirrors that contract:
 
 This keeps analysis runs, provider tests, and follow-up chat aligned on one backend profile-resolution model.
 
-## 6. Error boundary
+## 7. Error boundary
 
 The backend now exposes structured `AppError` values. The frontend normalizes them through `src/lib/app-error.ts`.
 
 This is intentionally minimal: the app gets better UX than raw strings without introducing a large error framework.
 
-## 7. Known architectural debt
+## 8. Known architectural debt
 
 - LLM API keys still live in SQLite-backed settings and Telegram `api_hash` still lives in SQLite-backed account storage;
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - the analysis layer has not yet become media-aware;
+- full Telegram Forum Topics and forward metadata are not modeled yet;
 - Telegram session storage may still deserve a more robust long-term format.
 
-## 8. Practical entry points
+## 9. Practical entry points
 
 If you are changing ingest:
 

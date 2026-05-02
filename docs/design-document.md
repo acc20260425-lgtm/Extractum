@@ -83,8 +83,15 @@ The backend stores:
 - compressed text when text exists;
 - compressed raw JSON payload;
 - lightweight media metadata when media exists.
+- nullable Telegram context metadata for newly synced rows:
+  - reply target message id;
+  - reply target Telegram peer kind/id;
+  - thread/topic root message id;
+  - aggregate reaction count.
 
 This keeps the storage model useful for browsing and future expansion without committing to binary media ingestion yet.
+
+Older rows are not backfilled. A `NULL` Telegram context value means the metadata is unavailable, predates the migration, or was not exposed by Telegram.
 
 ## 4. Current analysis design
 
@@ -156,6 +163,20 @@ The current design stops at media-aware metadata because the next complexity jum
 
 That work is deliberately postponed.
 
+### 4.5 NotebookLM export context
+
+NotebookLM export remains local-only. It does not make live Telegram requests, LLM calls, link fetches, or media downloads.
+
+When reply metadata is present, the export layer resolves original reply messages from local SQLite in the same source by `(source_id, external_id)`. Original messages may be outside the selected export period, but they are used only as snippet metadata and are not added to the exported corpus.
+
+The current export uses stored nullable metadata for:
+
+- reply target id;
+- reply author and snippet when the original message is available locally;
+- reply target peer kind/id;
+- thread id;
+- aggregate reaction count.
+
 ## 5. Error design
 
 The backend now uses a minimal typed error model:
@@ -202,6 +223,8 @@ Earlier planning documents treated the following as future work:
 - immutable saved run snapshots
 - typed app errors
 - configurable initial sync policy
+- Telegram item context metadata
+- NotebookLM reply/thread/reaction metadata rendering
 
 Those items are now implemented and should no longer be treated as future milestones.
 
@@ -213,4 +236,6 @@ The most meaningful remaining design questions are:
 - whether Telegram `api_hash` and session storage should move together or in separate steps;
 - whether private Telegram peer resolution should gain stronger cached identity data;
 - how to expand analysis beyond text-bearing corpus items;
+- whether a full Telegram Forum Topics model is needed beyond stored `reply_to_top_id`;
+- how and when to persist forward metadata;
 - whether Telegram session storage should remain JSON-based long term.
