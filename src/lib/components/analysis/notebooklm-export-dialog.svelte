@@ -9,8 +9,11 @@
     SourceRecord,
   } from "$lib/types/sources";
 
+  export type NotebookLmExportRange = "entire_history" | "analysis_period";
+
   export type NotebookLmExportForm = {
     outputDir: string;
+    range: NotebookLmExportRange;
     fromDate: string;
     toDate: string;
     includeMediaPlaceholders: boolean;
@@ -58,6 +61,10 @@
   function positiveNumberInput(event: Event, fallback: number) {
     const value = Number((event.currentTarget as HTMLInputElement).value);
     return Number.isFinite(value) && value >= 1 ? value : fallback;
+  }
+
+  function setRange(range: NotebookLmExportRange) {
+    updateForm({ range });
   }
 
   function progressValue(current: number | null, total: number | null) {
@@ -117,13 +124,37 @@
       </Button>
     </div>
 
+    <div class="range-field">
+      <span>Export range</span>
+      <div class="segmented" role="group" aria-label="NotebookLM export range">
+        <button
+          type="button"
+          class:active={form.range === "entire_history"}
+          aria-pressed={form.range === "entire_history"}
+          disabled={exporting}
+          onclick={() => setRange("entire_history")}
+        >
+          Entire history
+        </button>
+        <button
+          type="button"
+          class:active={form.range === "analysis_period"}
+          aria-pressed={form.range === "analysis_period"}
+          disabled={exporting}
+          onclick={() => setRange("analysis_period")}
+        >
+          Current period
+        </button>
+      </div>
+    </div>
+
     <div class="field-grid">
       <label>From
         <Input
           type="date"
           value={form.fromDate}
           oninput={(event) => updateForm({ fromDate: (event.currentTarget as HTMLInputElement).value })}
-          disabled={exporting}
+          disabled={exporting || form.range === "entire_history"}
         />
       </label>
       <label>To
@@ -131,7 +162,7 @@
           type="date"
           value={form.toDate}
           oninput={(event) => updateForm({ toDate: (event.currentTarget as HTMLInputElement).value })}
-          disabled={exporting}
+          disabled={exporting || form.range === "entire_history"}
         />
       </label>
       <label>Minimum length
@@ -249,6 +280,48 @@
     gap: 0.75rem;
   }
 
+  .range-field {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .range-field > span {
+    color: var(--muted);
+    font-size: 0.83rem;
+  }
+
+  .segmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--text) 4%, var(--panel));
+  }
+
+  .segmented button {
+    min-height: 2.25rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.86rem;
+    cursor: pointer;
+  }
+
+  .segmented button.active {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 35%, var(--border));
+  }
+
+  .segmented button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
   .checks {
     display: grid;
     gap: 0.65rem;
@@ -307,7 +380,8 @@
 
   @media (max-width: 680px) {
     .folder-row,
-    .field-grid {
+    .field-grid,
+    .segmented {
       grid-template-columns: 1fr;
     }
 

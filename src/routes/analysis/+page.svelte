@@ -161,6 +161,7 @@
   let notebookLmExportResult = $state<NotebookLmExportResult | null>(null);
   let notebookLmExportForm = $state<NotebookLmExportForm>({
     outputDir: "",
+    range: "entire_history",
     fromDate: "",
     toDate: "",
     includeMediaPlaceholders: true,
@@ -1394,10 +1395,10 @@
         export_id: exportId,
         source_id: source.id,
         output_dir: notebookLmExportForm.outputDir.trim(),
-        period_from: notebookLmExportForm.fromDate
+        period_from: notebookLmExportForm.range === "analysis_period" && notebookLmExportForm.fromDate
           ? startOfDayUnix(notebookLmExportForm.fromDate)
           : null,
-        period_to: notebookLmExportForm.toDate
+        period_to: notebookLmExportForm.range === "analysis_period" && notebookLmExportForm.toDate
           ? endOfDayUnix(notebookLmExportForm.toDate)
           : null,
         include_media_placeholders: notebookLmExportForm.includeMediaPlaceholders,
