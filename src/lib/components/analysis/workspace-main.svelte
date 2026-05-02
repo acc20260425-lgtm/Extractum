@@ -1,5 +1,8 @@
 <script lang="ts">
   import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
+  import NotebookLmExportDialog, {
+    type NotebookLmExportForm,
+  } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import SourceContextPanel from "$lib/components/analysis/source-context-panel.svelte";
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
@@ -18,7 +21,7 @@
     AnalysisSourceOption,
     ReportSegment,
   } from "$lib/types/analysis";
-  import type { ItemRecord, SourceRecord } from "$lib/types/sources";
+  import type { ItemRecord, NotebookLmExportResult, SourceRecord } from "$lib/types/sources";
 
   let {
     analysisScope,
@@ -86,6 +89,15 @@
     onChangeModelOverride,
     onRunReport,
     onSyncCurrentSource,
+    exportDialogOpen,
+    notebookLmExportForm,
+    notebookLmExportResult,
+    exportingNotebookLm,
+    onOpenNotebookLmExport,
+    onCloseNotebookLmExport,
+    onChooseNotebookLmOutputDir,
+    onChangeNotebookLmExportForm,
+    onExportNotebookLm,
     onFocusTraceRef,
     onCancelCurrentRun,
     onAskRunQuestion,
@@ -176,6 +188,15 @@
     onChangeModelOverride: (value: string) => void;
     onRunReport: () => void;
     onSyncCurrentSource: (sourceId: number) => void;
+    exportDialogOpen: boolean;
+    notebookLmExportForm: NotebookLmExportForm;
+    notebookLmExportResult: NotebookLmExportResult | null;
+    exportingNotebookLm: boolean;
+    onOpenNotebookLmExport: () => void;
+    onCloseNotebookLmExport: () => void;
+    onChooseNotebookLmOutputDir: () => void | Promise<void>;
+    onChangeNotebookLmExportForm: (form: NotebookLmExportForm) => void;
+    onExportNotebookLm: () => void | Promise<void>;
     onFocusTraceRef: (ref: string) => void | Promise<void>;
     onCancelCurrentRun: () => void;
     onAskRunQuestion: () => void;
@@ -307,6 +328,13 @@
           {startingReport ? "Starting..." : "Run report"}
         </Button>
         {#if analysisScope === "single_source" && currentSource}
+          <Button
+            variant="secondary"
+            onclick={onOpenNotebookLmExport}
+            disabled={exportingNotebookLm}
+          >
+            {exportingNotebookLm ? "Exporting..." : "Export for NotebookLM"}
+          </Button>
           <Button
             variant="secondary"
             onclick={() => onSyncCurrentSource(currentSource.id)}
@@ -470,6 +498,18 @@
       onDeleteGroup={onDeleteGroup}
     />
   </div>
+
+  <NotebookLmExportDialog
+    open={exportDialogOpen}
+    source={currentSource}
+    form={notebookLmExportForm}
+    exporting={exportingNotebookLm}
+    result={notebookLmExportResult}
+    onClose={onCloseNotebookLmExport}
+    onChooseFolder={onChooseNotebookLmOutputDir}
+    onExport={onExportNotebookLm}
+    onChangeForm={onChangeNotebookLmExportForm}
+  />
 </section>
 
 <style>

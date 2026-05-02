@@ -21,6 +21,7 @@ Released work should stay in the codebase and in current-state documentation, no
 - LLM concurrency policy still needs refinement beyond the current request-scoped scheduling baseline
 - saved-run history still lacks richer filtering for larger archives
 - media download, preview, and media-aware analysis are still incomplete
+- NotebookLM export MVP is shipped for single synced sources; progress events and richer Telegram context remain follow-up work
 
 ---
 
@@ -44,6 +45,7 @@ Released work should stay in the codebase and in current-state documentation, no
 | LLM concurrency | request isolation is in place, but limit policy is still coarse | predictable request scheduling with clearer limits |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
 | Media support | metadata-first only | optional download/preview and media-aware analysis |
+| NotebookLM export | single-source local Markdown export is shipped | progress events and optional context/link enrichment |
 | Stabilization | partially recorded | repeatable verification baseline and broader tests |
 
 ---
@@ -63,8 +65,33 @@ Goal: confirm the exact current verification baseline before broader implementat
 
 Current notes:
 
-- `cargo test` passes locally with `68 passed; 0 failed`
-- `npm run check` in the current sandbox fails during Svelte preprocessing with `spawn EPERM`, so it still needs a clean non-sandbox verification pass
+- `cargo test` passes locally with `83 passed; 0 failed`
+- `npm run check` passes when Svelte preprocessing is allowed to spawn `esbuild`
+
+---
+
+### Phase 1. NotebookLM Export Follow-Ups
+
+Status: MVP shipped.
+
+Priority: medium.
+
+Current state:
+
+- [x] single synced Telegram source can be exported from `/analysis`
+- [x] exporter reads local SQLite only
+- [x] output includes Markdown conversation files and `glossary.md`
+- [x] files use safe generated folders and an Extractum marker file
+- [x] native folder picker is wired through the Tauri dialog plugin
+- [x] backend tests cover filename, URL, filtering, media placeholder, chunking, glossary, and renderer helpers
+
+Open follow-ups:
+
+- [ ] add progress events for long exports
+- [ ] add optional link enrichment with explicit user opt-in and cache
+- [ ] add export for source groups if the analysis group workflow needs it
+- [ ] render reply/thread/reaction/forward context after sync starts persisting those fields
+- [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
 ---
 

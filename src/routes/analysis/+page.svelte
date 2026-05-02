@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
   import WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";
@@ -35,7 +36,14 @@
     AnalysisTraceRef,
     EventEnvelope,
   } from "$lib/types/analysis";
-  import type { ItemRecord, SourceRecord, SyncResult } from "$lib/types/sources";
+  import type {
+    ItemRecord,
+    NotebookLmExportRequest,
+    NotebookLmExportResult,
+    SourceRecord,
+    SyncResult,
+  } from "$lib/types/sources";
+  import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
 
   type LiveRunState = {
     phase: string;
@@ -116,6 +124,19 @@
   let activeChatRunId = $state<number | null>(null);
   let clearingChat = $state(false);
   let syncingIds = $state<Record<number, boolean>>({});
+  let exportDialogOpen = $state(false);
+  let exportingNotebookLm = $state(false);
+  let notebookLmExportResult = $state<NotebookLmExportResult | null>(null);
+  let notebookLmExportForm = $state<NotebookLmExportForm>({
+    outputDir: "",
+    fromDate: "",
+    toDate: "",
+    includeMediaPlaceholders: true,
+    minMessageLength: 3,
+    maxWordsPerFile: 300000,
+    maxBytesPerFile: 50000000,
+    overwriteExisting: false,
+  });
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
   let openRunRequestToken = 0;
 
@@ -970,6 +991,78 @@
     }
   }
 
+  function openNotebookLmExportDialog() {
+    if (analysisScope !== "single_source" || !currentSource()) {
+      status = "Select a single synced source before exporting.";
+      return;
+    }
+
+    notebookLmExportResult = null;
+    notebookLmExportForm = {
+      ...notebookLmExportForm,
+      fromDate: periodFrom,
+      toDate: periodTo,
+    };
+    exportDialogOpen = true;
+  }
+
+  async function chooseNotebookLmOutputDir() {
+    const selected = await openDialog({
+      directory: true,
+      multiple: false,
+    });
+    if (typeof selected !== "string") {
+      return;
+    }
+
+    notebookLmExportForm = {
+      ...notebookLmExportForm,
+      outputDir: selected,
+    };
+  }
+
+  async function exportNotebookLm() {
+    const source = currentSource();
+    if (!source) {
+      status = "Select a source before exporting.";
+      return;
+    }
+    if (!notebookLmExportForm.outputDir.trim()) {
+      status = "Choose an output folder before exporting.";
+      return;
+    }
+
+    exportingNotebookLm = true;
+    notebookLmExportResult = null;
+    try {
+      const request: NotebookLmExportRequest = {
+        source_id: source.id,
+        output_dir: notebookLmExportForm.outputDir.trim(),
+        period_from: notebookLmExportForm.fromDate
+          ? startOfDayUnix(notebookLmExportForm.fromDate)
+          : null,
+        period_to: notebookLmExportForm.toDate
+          ? endOfDayUnix(notebookLmExportForm.toDate)
+          : null,
+        include_media_placeholders: notebookLmExportForm.includeMediaPlaceholders,
+        min_message_length: notebookLmExportForm.minMessageLength,
+        max_words_per_file: notebookLmExportForm.maxWordsPerFile,
+        max_bytes_per_file: notebookLmExportForm.maxBytesPerFile,
+        overwrite_existing: notebookLmExportForm.overwriteExisting,
+      };
+
+      const result = await invoke<NotebookLmExportResult>("export_source_to_notebooklm", {
+        request,
+      });
+      notebookLmExportResult = result;
+      status = `NotebookLM export complete: ${result.files.length} files, ${result.exported_message_count} messages.`;
+    } catch (error) {
+      status = formatAppError("exporting for NotebookLM", error);
+    } finally {
+      exportingNotebookLm = false;
+    }
+  }
+
   async function saveTemplateChanges(nextName = templateName, nextBody = templateBody) {
     const current = selectedTemplate;
     if (!current) {
@@ -1444,6 +1537,15 @@
     onChangeModelOverride={(value) => (modelOverride = value)}
     onRunReport={() => void runReport()}
     onSyncCurrentSource={(sourceId) => void syncSelectedSource(sourceId)}
+    {exportDialogOpen}
+    {notebookLmExportForm}
+    notebookLmExportResult={notebookLmExportResult}
+    {exportingNotebookLm}
+    onOpenNotebookLmExport={openNotebookLmExportDialog}
+    onCloseNotebookLmExport={() => (exportDialogOpen = false)}
+    onChooseNotebookLmOutputDir={() => void chooseNotebookLmOutputDir()}
+    onChangeNotebookLmExportForm={(form) => (notebookLmExportForm = form)}
+    onExportNotebookLm={() => void exportNotebookLm()}
     onFocusTraceRef={focusTraceRef}
     onCancelCurrentRun={() => {
       if (activeRunId !== null) {

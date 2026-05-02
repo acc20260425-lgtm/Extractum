@@ -23,6 +23,9 @@ use sources::{
     list_telegram_sources, save_sync_settings, sync_source,
 };
 
+mod notebooklm_export;
+use notebooklm_export::export_source_to_notebooklm;
+
 mod llm;
 use llm::{
     ask_llm_stream, cancel_llm_request, get_llm_profiles, list_llm_provider_models,
@@ -53,6 +56,7 @@ pub fn run() {
         .manage(TelegramState::new())
         .manage(AnalysisState::new())
         .manage(LlmSchedulerState::new())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
@@ -96,6 +100,7 @@ pub fn run() {
             save_sync_settings,
             sync_source,
             get_items,
+            export_source_to_notebooklm,
             get_llm_profiles,
             save_llm_profile,
             set_active_llm_profile,

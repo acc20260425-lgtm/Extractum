@@ -1,6 +1,8 @@
 use grammers_client::{media::Media, tl};
 use serde::{Deserialize, Serialize};
 
+use crate::compression::{compress_json_bytes, decompress_bytes};
+
 pub(crate) const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
 pub(crate) const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
 pub(crate) const CONTENT_KIND_MEDIA_ONLY: &str = "media_only";
@@ -25,6 +27,19 @@ pub(crate) struct ExtractedItemPayload {
     pub(crate) content: Option<String>,
     pub(crate) content_kind: &'static str,
     pub(crate) media: Option<ExtractedMediaPayload>,
+}
+
+pub(crate) fn encode_media_metadata(metadata: &ItemMediaMetadata) -> Result<Vec<u8>, String> {
+    let json = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
+    compress_json_bytes(&json)
+}
+
+pub(crate) fn decode_media_metadata(bytes: Option<&[u8]>) -> Result<ItemMediaMetadata, String> {
+    let Some(bytes) = bytes else {
+        return Ok(ItemMediaMetadata::default());
+    };
+    let decoded = decompress_bytes(bytes)?;
+    serde_json::from_slice(&decoded).map_err(|e| e.to_string())
 }
 
 #[derive(Default)]
@@ -263,7 +278,8 @@ pub(crate) fn extract_item_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        derive_content_kind, derive_document_media_kind, media_label, DocumentSignals,
+        decode_media_metadata, derive_content_kind, derive_document_media_kind,
+        encode_media_metadata, media_label, DocumentSignals, ItemMediaMetadata,
         CONTENT_KIND_MEDIA_ONLY, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
     };
 
@@ -306,5 +322,23 @@ mod tests {
         assert_eq!(media_label("photo"), "Photo");
         assert_eq!(media_label("live_location"), "Live location");
         assert_eq!(media_label("unknown"), "Document");
+    }
+
+    #[test]
+    fn media_metadata_roundtrip_through_zstd() {
+        let original = ItemMediaMetadata {
+            summary: Some("Video".to_string()),
+            file_name: Some("clip.mp4".to_string()),
+            mime_type: Some("video/mp4".to_string()),
+            size_bytes: Some(42),
+            width: Some(1920),
+            height: Some(1080),
+            duration_seconds: Some(12.5),
+        };
+
+        let encoded = encode_media_metadata(&original).expect("encode");
+        let decoded = decode_media_metadata(Some(&encoded)).expect("decode");
+
+        assert_eq!(decoded, original);
     }
 }

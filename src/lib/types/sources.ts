@@ -53,3 +53,32 @@ export interface SyncSettingsRecord {
   initial_sync_mode: "recent_messages" | "recent_days";
   initial_sync_value: number;
 }
+
+export interface NotebookLmExportRequest {
+  source_id: number;
+  output_dir: string;
+  period_from: number | null;
+  period_to: number | null;
+  include_media_placeholders: boolean;
+  min_message_length: number;
+  max_words_per_file: number;
+  max_bytes_per_file: number;
+  overwrite_existing: boolean;
+}
+
+export interface NotebookLmExportFile {
+  path: string;
+  message_count: number;
+  byte_size: number;
+  approximate_word_count: number;
+}
+
+export interface NotebookLmExportResult {
+  output_dir: string;
+  files: NotebookLmExportFile[];
+  glossary_file: string | null;
+  exported_message_count: number;
+  skipped_message_count: number;
+  warning_count: number;
+  warnings: string[];
+}

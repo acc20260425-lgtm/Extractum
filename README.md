@@ -81,6 +81,26 @@ Analysis currently works on already-synced local data only.
 
 This means saved runs are now intended to be stable artifacts rather than live views over changing data.
 
+### Exporting sources for Google NotebookLM
+
+The `/analysis` source workspace can export one synced Telegram source to NotebookLM-friendly Markdown.
+
+- export reads from the local `sources` and `items` tables only;
+- no live Telegram requests, LLM calls, link fetching, or binary media downloads happen during export;
+- output is written under the selected folder as a generated `notebooklm_export_*` directory;
+- `glossary.md` summarizes participants by stored author string;
+- conversation files include source summary, chronology, per-message YAML metadata, plain text, detected `http://` / `https://` links, and stored media placeholders from `items.media_metadata_zstd`;
+- files are grouped by year when they fit the configured limits, fall back to month when needed, and split into numbered parts by word and byte limits.
+
+Current limitations:
+
+- export works only for data already synced into Extractum;
+- existing rows may not contain reply, forward, reaction, thread, or rich Telegram formatting metadata;
+- media binaries are not downloaded, so media-only rows are represented only through lightweight stored metadata;
+- URL titles and descriptions are not enriched in the MVP.
+
+Privacy warning: Only export chats and channels you are authorized to access. Be careful with private data, personal information, and confidential conversations before uploading exports to third-party tools such as Google NotebookLM.
+
 ## Current constraints
 
 - analysis remains text-first: media-only items are visible in the analysis workspace but are not yet part of the analysis corpus;

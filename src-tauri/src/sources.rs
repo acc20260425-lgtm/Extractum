@@ -10,7 +10,9 @@ use tokio::time::{timeout, Duration, Instant};
 use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, decompress_text};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
-use crate::media::{extract_item_payload, ExtractedItemPayload, ItemMediaMetadata};
+use crate::media::{
+    decode_media_metadata, encode_media_metadata, extract_item_payload, ExtractedItemPayload,
+};
 use crate::telegram::TelegramState;
 
 const DEFAULT_INITIAL_SYNC_MESSAGE_LIMIT: i64 = 500;
@@ -1493,11 +1495,6 @@ fn encode_source_metadata(metadata: &SourceMetadata) -> Result<Vec<u8>, String> 
     compress_json_bytes(&json)
 }
 
-fn encode_media_metadata(metadata: &ItemMediaMetadata) -> Result<Vec<u8>, String> {
-    let json = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
-    compress_json_bytes(&json)
-}
-
 fn decode_source_metadata(bytes: Option<&[u8]>) -> Result<SourceMetadata, String> {
     let Some(bytes) = bytes else {
         return Ok(SourceMetadata::default());
@@ -1506,14 +1503,6 @@ fn decode_source_metadata(bytes: Option<&[u8]>) -> Result<SourceMetadata, String
     serde_json::from_slice::<SourceMetadata>(&decoded)
         .map(|metadata| metadata.normalized())
         .map_err(|e| e.to_string())
-}
-
-fn decode_media_metadata(bytes: Option<&[u8]>) -> Result<ItemMediaMetadata, String> {
-    let Some(bytes) = bytes else {
-        return Ok(ItemMediaMetadata::default());
-    };
-    let decoded = decompress_bytes(bytes)?;
-    serde_json::from_slice(&decoded).map_err(|e| e.to_string())
 }
 
 async fn resolve_source_peer(
