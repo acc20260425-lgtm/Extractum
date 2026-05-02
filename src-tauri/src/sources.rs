@@ -1389,7 +1389,7 @@ async fn load_item_rows_from_pool(
         LEFT JOIN telegram_forum_topics AS forum_topics
           ON forum_topics.source_id = items.source_id
          AND (
-                items.reply_to_top_id = forum_topics.top_message_id
+                items.reply_to_top_id = forum_topics.topic_id
                 OR (
                     items.reply_to_top_id IS NULL
                     AND items.external_id <> ''
@@ -1454,7 +1454,7 @@ async fn list_source_forum_topics_from_pool(
         LEFT JOIN items
           ON items.source_id = topics.source_id
          AND (
-                items.reply_to_top_id = topics.top_message_id
+                items.reply_to_top_id = topics.topic_id
                 OR (
                     items.reply_to_top_id IS NULL
                     AND items.external_id <> ''
@@ -1493,7 +1493,7 @@ async fn list_source_forum_topics_from_pool(
         LEFT JOIN telegram_forum_topics AS forum_topics
           ON forum_topics.source_id = items.source_id
          AND (
-                items.reply_to_top_id = forum_topics.top_message_id
+                items.reply_to_top_id = forum_topics.topic_id
                 OR (
                     items.reply_to_top_id IS NULL
                     AND items.external_id <> ''
@@ -2825,7 +2825,7 @@ mod tests {
 
         for (id, external_id, published_at, reply_to_top_id) in [
             (1_i64, "700", 300_i64, None),
-            (2_i64, "701", 200_i64, Some(700_i64)),
+            (2_i64, "701", 200_i64, Some(200_i64)),
             (3_i64, "999", 100_i64, None),
         ] {
             sqlx::query(
@@ -2929,9 +2929,9 @@ mod tests {
 
         for (id, external_id, published_at, reply_to_top_id) in [
             (1_i64, "800", 400_i64, None),
-            (2_i64, "801", 300_i64, Some(800_i64)),
+            (2_i64, "801", 300_i64, Some(11_i64)),
             (3_i64, "950", 200_i64, None),
-            (4_i64, "901", 100_i64, Some(900_i64)),
+            (4_i64, "901", 100_i64, Some(22_i64)),
         ] {
             sqlx::query(
                 r#"

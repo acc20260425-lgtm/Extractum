@@ -302,7 +302,7 @@ const BASE_QUERY: &str = r#"
     LEFT JOIN telegram_forum_topics AS forum_topics
       ON forum_topics.source_id = items.source_id
      AND (
-            items.reply_to_top_id = forum_topics.top_message_id
+            items.reply_to_top_id = forum_topics.topic_id
             OR (
                 items.reply_to_top_id IS NULL
                 AND items.external_id <> ''
@@ -337,7 +337,7 @@ const BASE_QUERY_WITH_FROM: &str = r#"
     LEFT JOIN telegram_forum_topics AS forum_topics
       ON forum_topics.source_id = items.source_id
      AND (
-            items.reply_to_top_id = forum_topics.top_message_id
+            items.reply_to_top_id = forum_topics.topic_id
             OR (
                 items.reply_to_top_id IS NULL
                 AND items.external_id <> ''
@@ -372,7 +372,7 @@ const BASE_QUERY_WITH_TO: &str = r#"
     LEFT JOIN telegram_forum_topics AS forum_topics
       ON forum_topics.source_id = items.source_id
      AND (
-            items.reply_to_top_id = forum_topics.top_message_id
+            items.reply_to_top_id = forum_topics.topic_id
             OR (
                 items.reply_to_top_id IS NULL
                 AND items.external_id <> ''
@@ -407,7 +407,7 @@ const BASE_QUERY_WITH_FROM_TO: &str = r#"
     LEFT JOIN telegram_forum_topics AS forum_topics
       ON forum_topics.source_id = items.source_id
      AND (
-            items.reply_to_top_id = forum_topics.top_message_id
+            items.reply_to_top_id = forum_topics.topic_id
             OR (
                 items.reply_to_top_id IS NULL
                 AND items.external_id <> ''
@@ -599,7 +599,7 @@ mod tests {
         .bind(compress_text("Reply in topic").expect("compress reply"))
         .bind("text_only")
         .bind(0_i64)
-        .bind(700_i64)
+        .bind(200_i64)
         .execute(&pool)
         .await
         .expect("insert topic reply");

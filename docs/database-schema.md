@@ -136,7 +136,10 @@ Important constraints / indexes:
 Notes:
 
 - `topic_id` is the stable Telegram topic identifier used by API/DTO layers;
-- `top_message_id` is the local join key used to match topics to `items.reply_to_top_id`;
+- `top_message_id` is the Telegram root message id for the topic and is still useful metadata, but it is not the primary join key for ordinary topic messages;
+- `items.reply_to_top_id` must be interpreted as the forum topic identifier for ordinary topic messages, so the primary local join is `items.reply_to_top_id -> telegram_forum_topics.topic_id`;
+- `top_message_id` is only needed as a root-message fallback when the stored message itself is the topic root and therefore has no `reply_to_top_id`; in that case the local match is `CAST(items.external_id AS INTEGER) = telegram_forum_topics.top_message_id`;
+- this distinction matters in production data: many Telegram forum messages carry `reply_to_top_id = topic_id`, not `reply_to_top_id = top_message_id`, so treating `top_message_id` as the normal join key collapses most topic traffic into `General / Uncategorized`;
 - topic records are retained locally even if a later catalog refresh omits them, so historical message-to-topic matches can survive.
 
 ### 1.5 `accounts`
