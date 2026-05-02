@@ -5,6 +5,7 @@
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
   import type { SourceRecord, TakeoutImportJobRecord } from "$lib/types/sources";
+  import type { BadgeVariant } from "$lib/components/ui/types";
 
   let {
     sourceCatalog,
@@ -88,7 +89,74 @@
     if (job.status === "completed") return "Takeout complete";
     if (job.status === "cancelled") return "Takeout cancelled";
     if (job.status === "cancel_requested") return "Cancelling Takeout";
-    return `Takeout ${job.phase.replaceAll("_", " ")}`;
+    return `Takeout ${takeoutPhaseName(job.phase)}`;
+  }
+
+  function takeoutPhaseName(phase: TakeoutImportJobRecord["phase"]) {
+    switch (phase) {
+      case "queued":
+        return "queued";
+      case "resolving_source":
+        return "resolving source";
+      case "starting_takeout":
+        return "starting session";
+      case "validating_peer":
+        return "validating peer";
+      case "loading_splits":
+        return "loading ranges";
+      case "counting":
+        return "counting history";
+      case "importing_history":
+        return "importing history";
+      case "finishing_takeout":
+        return "finishing session";
+      case "refreshing_aux":
+        return "refreshing metadata";
+      case "completed":
+        return "complete";
+      case "failed":
+        return "failed";
+      case "cancelled":
+        return "cancelled";
+      default:
+        return String(phase).replaceAll("_", " ");
+    }
+  }
+
+  function takeoutBadgeVariant(job: TakeoutImportJobRecord): BadgeVariant {
+    if (job.status === "completed") return "success";
+    if (job.status === "failed") return "danger";
+    if (job.status === "cancelled") return "neutral";
+    if (job.warnings.length > 0) return "warning";
+    return "info";
+  }
+
+  function takeoutProgressLabel(job: TakeoutImportJobRecord) {
+    if (job.progress_current !== null && job.progress_total !== null) {
+      return `${job.progress_current}/${job.progress_total}`;
+    }
+    if (job.status === "completed") {
+      return "done";
+    }
+    if (job.status === "failed" || job.status === "cancelled") {
+      return job.status;
+    }
+    return "pending";
+  }
+
+  function takeoutProgressValue(job: TakeoutImportJobRecord) {
+    if (
+      job.progress_current === null ||
+      job.progress_total === null ||
+      job.progress_total <= 0
+    ) {
+      return null;
+    }
+    return Math.min(100, Math.max(0, Math.round((job.progress_current / job.progress_total) * 100)));
+  }
+
+  function takeoutSummary(job: TakeoutImportJobRecord) {
+    return `${job.inserted} inserted, ${job.skipped} skipped`;
   }
 </script>
 
@@ -174,7 +242,7 @@
                 <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeStateBadge}</Badge>
               {/if}
               {#if takeoutJob}
-                <Badge variant={takeoutJob.status === "failed" ? "warning" : "info"} title={takeoutJob.error ?? takeoutJob.message ?? undefined}>
+                <Badge variant={takeoutBadgeVariant(takeoutJob)} title={takeoutJob.error ?? takeoutJob.message ?? undefined}>
                   {takeoutPhaseLabel(takeoutJob)}
                 </Badge>
               {/if}
@@ -212,10 +280,41 @@
                 variant="danger-soft"
                 onclick={() => onDeleteSource(source)}
                 disabled={deleting || !!syncingIds[source.id] || takeoutActive}
+                title={takeoutActive ? "Takeout import is active." : undefined}
               >
                 {deleting ? "Deleting..." : "Delete"}
               </Button>
             </div>
+            {#if takeoutJob}
+              {@const progressValue = takeoutProgressValue(takeoutJob)}
+              <div class="takeout-status" class:terminal={!takeoutActive}>
+                <div class="takeout-status-line">
+                  <span>{takeoutPhaseName(takeoutJob.phase)}</span>
+                  <span>{takeoutProgressLabel(takeoutJob)}</span>
+                </div>
+                {#if progressValue !== null}
+                  <progress max="100" value={progressValue}>{progressValue}%</progress>
+                {:else if takeoutActive}
+                  <progress></progress>
+                {/if}
+                <div class="takeout-status-meta">
+                  <span>{takeoutSummary(takeoutJob)}</span>
+                  {#if takeoutJob.message}
+                    <span>{takeoutJob.message}</span>
+                  {/if}
+                </div>
+                {#if takeoutJob.error}
+                  <div class="takeout-issue error">{takeoutJob.error}</div>
+                {/if}
+                {#if takeoutJob.warnings.length > 0}
+                  <div class="takeout-issue">
+                    {takeoutJob.warnings.length === 1
+                      ? takeoutJob.warnings[0]
+                      : `${takeoutJob.warnings.length} warnings. First: ${takeoutJob.warnings[0]}`}
+                  </div>
+                {/if}
+              </div>
+            {/if}
           </article>
         {/each}
       {/if}
@@ -456,6 +555,63 @@
   .rail-copy-meta span {
     font-size: 0.75rem;
     color: var(--muted);
+  }
+
+  .takeout-status {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.55rem;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+    background: color-mix(in srgb, var(--primary) 7%, var(--panel));
+  }
+
+  .takeout-status.terminal {
+    border-color: color-mix(in srgb, var(--border) 84%, transparent);
+    background: color-mix(in srgb, var(--panel-hover) 60%, var(--panel));
+  }
+
+  .takeout-status-line,
+  .takeout-status-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .takeout-status-line span {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text);
+    text-transform: capitalize;
+  }
+
+  .takeout-status-meta {
+    flex-wrap: wrap;
+  }
+
+  .takeout-status-meta span,
+  .takeout-issue {
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: var(--muted);
+  }
+
+  .takeout-status progress {
+    width: 100%;
+    height: 0.45rem;
+    accent-color: var(--primary);
+  }
+
+  .takeout-issue {
+    padding-top: 0.2rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    color: #b45309;
+  }
+
+  .takeout-issue.error {
+    color: var(--danger);
   }
 
   @media (max-width: 1180px) {
