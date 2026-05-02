@@ -677,26 +677,6 @@ async fn load_source(
     .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))
 }
 
-async fn get_authorized_client(
-    state: tauri::State<'_, TelegramState>,
-    account_id: i64,
-) -> AppResult<grammers_client::Client> {
-    let client = {
-        let accounts = state.accounts.lock().await;
-        crate::telegram::get_client(&accounts, account_id)
-            .await?
-            .clone()
-    };
-
-    if !client.is_authorized().await.map_err(|e| e.to_string())? {
-        return Err(AppError::auth(format!(
-            "Account {account_id} is not authenticated"
-        )));
-    }
-
-    Ok(client)
-}
-
 async fn resolve_and_refresh_peer(
     handle: &AppHandle,
     client: &grammers_client::Client,
@@ -1063,7 +1043,8 @@ pub async fn sync_source(
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
 
-    let client = get_authorized_client(state, account_id).await?;
+    let runtime = crate::telegram::get_authorized_runtime(&state, account_id).await?;
+    let client = runtime.client;
     let resolved_peer = resolve_and_refresh_peer(&handle, &client, &source, account_id).await?;
     let forum_topic_warnings =
         refresh_forum_topics(&pool, &client, resolved_peer.peer, &source).await;

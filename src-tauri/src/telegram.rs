@@ -42,6 +42,13 @@ pub struct AccountClient {
     pub phone: Option<String>,
 }
 
+#[derive(Clone)]
+pub(crate) struct AuthorizedTelegramRuntime {
+    pub(crate) client: Client,
+    #[allow(dead_code)]
+    pub(crate) session: Arc<MemorySession>,
+}
+
 #[derive(Clone, serde::Serialize)]
 pub struct AccountRuntimeStatus {
     pub account_id: i64,
@@ -412,4 +419,34 @@ pub async fn get_client(
         .get(&account_id)
         .map(|ac| &ac.client)
         .ok_or_else(|| AppError::auth(format!("Account {account_id} not initialized")))
+}
+
+pub(crate) async fn get_authorized_runtime(
+    state: &TelegramState,
+    account_id: i64,
+) -> AppResult<AuthorizedTelegramRuntime> {
+    let runtime = {
+        let accounts = state.accounts.lock().await;
+        let account = accounts
+            .get(&account_id)
+            .ok_or_else(|| AppError::auth(format!("Account {account_id} not initialized")))?;
+
+        AuthorizedTelegramRuntime {
+            client: account.client.clone(),
+            session: Arc::clone(&account.session),
+        }
+    };
+
+    if !runtime
+        .client
+        .is_authorized()
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        return Err(AppError::auth(format!(
+            "Account {account_id} is not authenticated"
+        )));
+    }
+
+    Ok(runtime)
 }
