@@ -31,6 +31,8 @@ const TELEGRAM_KIND_GROUP: &str = "group";
 const TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS: u64 = 750;
 const TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS: u64 = 4_000;
 const TELEGRAM_SOURCE_AVATAR_CACHE_DIR: &str = "source_avatars";
+const FORUM_TOPIC_UNCATEGORIZED_KEY: &str = "general_uncategorized";
+const FORUM_TOPIC_UNCATEGORIZED_TITLE: &str = "General / Uncategorized";
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -111,6 +113,33 @@ pub struct ItemRecord {
     pub media_file_name: Option<String>,
     pub media_mime_type: Option<String>,
     pub has_raw_data: bool,
+    pub forum_topic_id: Option<i64>,
+    pub forum_topic_title: Option<String>,
+    pub forum_topic_top_message_id: Option<i64>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ForumTopicFilter {
+    Topic { topic_id: i64 },
+    Uncategorized,
+}
+
+#[derive(Serialize)]
+pub struct SourceForumTopicRecord {
+    pub kind: String,
+    pub key: String,
+    pub title: String,
+    pub message_count: i64,
+    pub topic_id: Option<i64>,
+    pub top_message_id: Option<i64>,
+    pub icon_color: Option<i64>,
+    pub icon_emoji_id: Option<i64>,
+    pub is_closed: bool,
+    pub is_pinned: bool,
+    pub is_hidden: bool,
+    pub is_deleted: bool,
+    pub sort_order: Option<i64>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -154,6 +183,24 @@ struct StoredItemRow {
     content_zstd: Option<Vec<u8>>,
     media_metadata_zstd: Option<Vec<u8>>,
     raw_data_zstd: Option<Vec<u8>>,
+    forum_topic_id: Option<i64>,
+    forum_topic_title: Option<String>,
+    forum_topic_top_message_id: Option<i64>,
+}
+
+#[derive(sqlx::FromRow)]
+struct SourceForumTopicRow {
+    topic_id: i64,
+    top_message_id: i64,
+    title: String,
+    icon_color: Option<i64>,
+    icon_emoji_id: Option<i64>,
+    is_closed: bool,
+    is_pinned: bool,
+    is_hidden: bool,
+    is_deleted: bool,
+    sort_order: Option<i64>,
+    message_count: i64,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -1039,63 +1086,12 @@ pub async fn get_items(
     source_id: i64,
     limit: i64,
     before_published_at: Option<i64>,
+    topic_filter: Option<ForumTopicFilter>,
 ) -> AppResult<Vec<ItemRecord>> {
     let pool = get_pool(&handle).await?;
     let limit = limit.clamp(1, 200);
-    let rows: Vec<StoredItemRow> = if let Some(before) = before_published_at {
-        sqlx::query_as(
-            r#"
-            SELECT
-                id,
-                source_id,
-                external_id,
-                author,
-                published_at,
-                content_kind,
-                has_media,
-                media_kind,
-                content_zstd,
-                media_metadata_zstd,
-                raw_data_zstd
-            FROM items
-            WHERE source_id = ? AND published_at < ?
-            ORDER BY published_at DESC
-            LIMIT ?
-            "#,
-        )
-        .bind(source_id)
-        .bind(before)
-        .bind(limit)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?
-    } else {
-        sqlx::query_as(
-            r#"
-            SELECT
-                id,
-                source_id,
-                external_id,
-                author,
-                published_at,
-                content_kind,
-                has_media,
-                media_kind,
-                content_zstd,
-                media_metadata_zstd,
-                raw_data_zstd
-            FROM items
-            WHERE source_id = ?
-            ORDER BY published_at DESC
-            LIMIT ?
-            "#,
-        )
-        .bind(source_id)
-        .bind(limit)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?
-    };
+    let rows = load_item_rows_from_pool(&pool, source_id, limit, before_published_at, topic_filter)
+        .await?;
 
     Ok(rows
         .into_iter()
@@ -1119,9 +1115,210 @@ pub async fn get_items(
                 media_file_name: media_metadata.file_name,
                 media_mime_type: media_metadata.mime_type,
                 has_raw_data: row.raw_data_zstd.is_some(),
+                forum_topic_id: row.forum_topic_id,
+                forum_topic_title: row.forum_topic_title,
+                forum_topic_top_message_id: row.forum_topic_top_message_id,
             })
         })
         .collect::<Result<Vec<_>, String>>()?)
+}
+
+#[tauri::command]
+pub async fn list_source_forum_topics(
+    handle: AppHandle,
+    source_id: i64,
+) -> AppResult<Vec<SourceForumTopicRecord>> {
+    let pool = get_pool(&handle).await?;
+    list_source_forum_topics_from_pool(&pool, source_id).await
+}
+
+async fn load_item_rows_from_pool(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+    limit: i64,
+    before_published_at: Option<i64>,
+    topic_filter: Option<ForumTopicFilter>,
+) -> AppResult<Vec<StoredItemRow>> {
+    let mut sql = String::from(
+        r#"
+        SELECT
+            items.id,
+            items.source_id,
+            items.external_id,
+            items.author,
+            items.published_at,
+            items.content_kind,
+            items.has_media,
+            items.media_kind,
+            items.content_zstd,
+            items.media_metadata_zstd,
+            items.raw_data_zstd,
+            forum_topics.topic_id AS forum_topic_id,
+            forum_topics.title AS forum_topic_title,
+            forum_topics.top_message_id AS forum_topic_top_message_id
+        FROM items
+        LEFT JOIN telegram_forum_topics AS forum_topics
+          ON forum_topics.source_id = items.source_id
+         AND (
+                items.reply_to_top_id = forum_topics.top_message_id
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND items.external_id <> ''
+                    AND items.external_id NOT GLOB '*[^0-9]*'
+                    AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+                )
+            )
+        WHERE items.source_id = ?
+        "#,
+    );
+
+    if before_published_at.is_some() {
+        sql.push_str(" AND items.published_at < ?");
+    }
+
+    match topic_filter {
+        Some(ForumTopicFilter::Topic { .. }) => {
+            sql.push_str(" AND forum_topics.topic_id = ?");
+        }
+        Some(ForumTopicFilter::Uncategorized) => {
+            sql.push_str(" AND forum_topics.topic_id IS NULL");
+        }
+        None => {}
+    }
+
+    sql.push_str(" ORDER BY items.published_at DESC LIMIT ?");
+
+    let mut query = sqlx::query_as::<_, StoredItemRow>(&sql).bind(source_id);
+    if let Some(before) = before_published_at {
+        query = query.bind(before);
+    }
+    if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter {
+        query = query.bind(topic_id);
+    }
+
+    query
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::from(e.to_string()))
+}
+
+async fn list_source_forum_topics_from_pool(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+) -> AppResult<Vec<SourceForumTopicRecord>> {
+    let rows: Vec<SourceForumTopicRow> = sqlx::query_as(
+        r#"
+        SELECT
+            topics.topic_id,
+            topics.top_message_id,
+            topics.title,
+            topics.icon_color,
+            topics.icon_emoji_id,
+            topics.is_closed,
+            topics.is_pinned,
+            topics.is_hidden,
+            topics.is_deleted,
+            topics.sort_order,
+            COUNT(items.id) AS message_count
+        FROM telegram_forum_topics AS topics
+        LEFT JOIN items
+          ON items.source_id = topics.source_id
+         AND (
+                items.reply_to_top_id = topics.top_message_id
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND items.external_id <> ''
+                    AND items.external_id NOT GLOB '*[^0-9]*'
+                    AND CAST(items.external_id AS INTEGER) = topics.top_message_id
+                )
+            )
+        WHERE topics.source_id = ?
+        GROUP BY
+            topics.topic_id,
+            topics.top_message_id,
+            topics.title,
+            topics.icon_color,
+            topics.icon_emoji_id,
+            topics.is_closed,
+            topics.is_pinned,
+            topics.is_hidden,
+            topics.is_deleted,
+            topics.sort_order
+        ORDER BY
+            topics.is_pinned DESC,
+            topics.sort_order ASC NULLS LAST,
+            topics.title COLLATE NOCASE ASC,
+            topics.topic_id ASC
+        "#,
+    )
+    .bind(source_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| AppError::from(e.to_string()))?;
+
+    let uncategorized_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM items
+        LEFT JOIN telegram_forum_topics AS forum_topics
+          ON forum_topics.source_id = items.source_id
+         AND (
+                items.reply_to_top_id = forum_topics.top_message_id
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND items.external_id <> ''
+                    AND items.external_id NOT GLOB '*[^0-9]*'
+                    AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+                )
+            )
+        WHERE items.source_id = ?
+          AND forum_topics.topic_id IS NULL
+        "#,
+    )
+    .bind(source_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| AppError::from(e.to_string()))?;
+
+    let mut records = rows
+        .into_iter()
+        .map(|row| SourceForumTopicRecord {
+            kind: "topic".to_string(),
+            key: format!("topic:{}", row.topic_id),
+            title: row.title,
+            message_count: row.message_count,
+            topic_id: Some(row.topic_id),
+            top_message_id: Some(row.top_message_id),
+            icon_color: row.icon_color,
+            icon_emoji_id: row.icon_emoji_id,
+            is_closed: row.is_closed,
+            is_pinned: row.is_pinned,
+            is_hidden: row.is_hidden,
+            is_deleted: row.is_deleted,
+            sort_order: row.sort_order,
+        })
+        .collect::<Vec<_>>();
+
+    if uncategorized_count > 0 {
+        records.push(SourceForumTopicRecord {
+            kind: "uncategorized".to_string(),
+            key: FORUM_TOPIC_UNCATEGORIZED_KEY.to_string(),
+            title: FORUM_TOPIC_UNCATEGORIZED_TITLE.to_string(),
+            message_count: uncategorized_count,
+            topic_id: None,
+            top_message_id: None,
+            icon_color: None,
+            icon_emoji_id: None,
+            is_closed: false,
+            is_pinned: false,
+            is_hidden: false,
+            is_deleted: false,
+            sort_order: None,
+        });
+    }
+
+    Ok(records)
 }
 
 fn parse_username(input: &str) -> String {
@@ -1713,14 +1910,15 @@ mod tests {
         add_source_resolution_strategy, decode_media_metadata, decode_source_metadata,
         default_sync_settings, determine_sync_policy, dialog_lookup_not_found_message,
         encode_media_metadata, encode_source_metadata, finalize_sync, initial_sync_policy_label,
-        load_source, load_sync_settings_from_pool, parse_supported_manual_telegram_source_ref,
-        parse_username, reply_peer_context, save_sync_settings_to_pool,
+        list_source_forum_topics_from_pool, load_item_rows_from_pool, load_source,
+        load_sync_settings_from_pool, parse_supported_manual_telegram_source_ref, parse_username,
+        reply_peer_context, save_sync_settings_to_pool,
         source_peer_ref_from_identity, source_peer_resolution_failure, source_peer_resolution_plan,
-        validate_expected_telegram_source_kind, validate_sync_settings, InitialSyncMode,
-        ManualTelegramSourceRef, ResolvedTelegramSource, SourceMetadata, SourcePeerIdentity,
-        SourcePeerResolutionStep, SourcePeerResolutionStrategy, SourceRecordRow, SourceSyncTarget,
-        SyncSettingsRecord, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
-        TELEGRAM_SOURCE_TYPE,
+        validate_expected_telegram_source_kind, validate_sync_settings, ForumTopicFilter,
+        InitialSyncMode, ManualTelegramSourceRef, ResolvedTelegramSource, SourceMetadata,
+        SourcePeerIdentity, SourcePeerResolutionStep, SourcePeerResolutionStrategy,
+        SourceRecordRow, SourceSyncTarget, SyncSettingsRecord, TELEGRAM_KIND_CHANNEL,
+        TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
     };
     use crate::compression::{compress_json_bytes, compress_text, decompress_text};
     use crate::error::AppErrorKind;
@@ -1760,6 +1958,60 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create sources");
+        pool
+    }
+
+    async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePool {
+        let pool = memory_pool_with_sources().await;
+        sqlx::query(
+            r#"
+            CREATE TABLE items (
+                id INTEGER PRIMARY KEY,
+                source_id INTEGER NOT NULL,
+                external_id TEXT NOT NULL,
+                author TEXT,
+                published_at INTEGER NOT NULL,
+                ingested_at INTEGER NOT NULL,
+                content_zstd BLOB,
+                raw_data_zstd BLOB,
+                content_kind TEXT NOT NULL,
+                has_media INTEGER NOT NULL DEFAULT 0,
+                media_kind TEXT,
+                media_metadata_zstd BLOB,
+                reply_to_msg_id INTEGER,
+                reply_to_peer_kind TEXT,
+                reply_to_peer_id TEXT,
+                reply_to_top_id INTEGER,
+                reaction_count INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create items");
+        sqlx::query(
+            r#"
+            CREATE TABLE telegram_forum_topics (
+                id INTEGER PRIMARY KEY,
+                source_id INTEGER NOT NULL,
+                topic_id INTEGER NOT NULL,
+                top_message_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                icon_color INTEGER,
+                icon_emoji_id INTEGER,
+                is_closed INTEGER NOT NULL DEFAULT 0,
+                is_pinned INTEGER NOT NULL DEFAULT 0,
+                is_hidden INTEGER NOT NULL DEFAULT 0,
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER,
+                last_seen_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create telegram_forum_topics");
         pool
     }
 
@@ -2302,5 +2554,189 @@ mod tests {
             decoded_metadata.avatar_cache_key.as_deref(),
             Some("1_channel_12345.jpg")
         );
+    }
+
+    #[tokio::test]
+    async fn load_item_rows_attaches_topic_metadata_and_root_matches() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_forum_topics (
+                id, source_id, topic_id, top_message_id, title, is_closed, is_pinned, is_hidden,
+                is_deleted, sort_order, last_seen_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind(200_i64)
+        .bind(700_i64)
+        .bind("Announcements")
+        .bind(0_i64)
+        .bind(1_i64)
+        .bind(0_i64)
+        .bind(0_i64)
+        .bind(1_i64)
+        .bind(100_i64)
+        .bind(100_i64)
+        .execute(&pool)
+        .await
+        .expect("insert forum topic");
+
+        for (id, external_id, published_at, reply_to_top_id) in [
+            (1_i64, "700", 300_i64, None),
+            (2_i64, "701", 200_i64, Some(700_i64)),
+            (3_i64, "999", 100_i64, None),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO items (
+                    id, source_id, external_id, author, published_at, ingested_at, content_zstd,
+                    raw_data_zstd, content_kind, has_media, media_kind, media_metadata_zstd,
+                    reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
+                    reaction_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(id)
+            .bind(1_i64)
+            .bind(external_id)
+            .bind("alice")
+            .bind(published_at)
+            .bind(published_at)
+            .bind(None::<Vec<u8>>)
+            .bind(None::<Vec<u8>>)
+            .bind("text_only")
+            .bind(0_i64)
+            .bind(None::<String>)
+            .bind(None::<Vec<u8>>)
+            .bind(None::<i64>)
+            .bind(None::<String>)
+            .bind(None::<String>)
+            .bind(reply_to_top_id)
+            .bind(None::<i64>)
+            .execute(&pool)
+            .await
+            .expect("insert item");
+        }
+
+        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None)
+            .await
+            .expect("load all rows");
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].forum_topic_id, Some(200));
+        assert_eq!(rows[0].forum_topic_top_message_id, Some(700));
+        assert_eq!(rows[1].forum_topic_id, Some(200));
+        assert_eq!(rows[2].forum_topic_id, None);
+
+        let topic_rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            20,
+            None,
+            Some(ForumTopicFilter::Topic { topic_id: 200 }),
+        )
+        .await
+        .expect("load topic rows");
+        assert_eq!(topic_rows.len(), 2);
+        assert!(topic_rows.iter().all(|row| row.forum_topic_id == Some(200)));
+
+        let uncategorized_rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            20,
+            None,
+            Some(ForumTopicFilter::Uncategorized),
+        )
+        .await
+        .expect("load uncategorized rows");
+        assert_eq!(uncategorized_rows.len(), 1);
+        assert_eq!(uncategorized_rows[0].external_id, "999");
+    }
+
+    #[tokio::test]
+    async fn list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+
+        for (id, topic_id, top_message_id, title, is_pinned, sort_order) in [
+            (1_i64, 22_i64, 900_i64, "beta", 0_i64, 2_i64),
+            (2_i64, 11_i64, 800_i64, "Alpha", 1_i64, 5_i64),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO telegram_forum_topics (
+                    id, source_id, topic_id, top_message_id, title, is_closed, is_pinned, is_hidden,
+                    is_deleted, sort_order, last_seen_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(id)
+            .bind(1_i64)
+            .bind(topic_id)
+            .bind(top_message_id)
+            .bind(title)
+            .bind(0_i64)
+            .bind(is_pinned)
+            .bind(0_i64)
+            .bind(0_i64)
+            .bind(sort_order)
+            .bind(100_i64)
+            .bind(100_i64)
+            .execute(&pool)
+            .await
+            .expect("insert topic");
+        }
+
+        for (id, external_id, published_at, reply_to_top_id) in [
+            (1_i64, "800", 400_i64, None),
+            (2_i64, "801", 300_i64, Some(800_i64)),
+            (3_i64, "950", 200_i64, None),
+            (4_i64, "901", 100_i64, Some(900_i64)),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO items (
+                    id, source_id, external_id, author, published_at, ingested_at, content_zstd,
+                    raw_data_zstd, content_kind, has_media, media_kind, media_metadata_zstd,
+                    reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
+                    reaction_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(id)
+            .bind(1_i64)
+            .bind(external_id)
+            .bind("bob")
+            .bind(published_at)
+            .bind(published_at)
+            .bind(None::<Vec<u8>>)
+            .bind(None::<Vec<u8>>)
+            .bind("text_only")
+            .bind(0_i64)
+            .bind(None::<String>)
+            .bind(None::<Vec<u8>>)
+            .bind(None::<i64>)
+            .bind(None::<String>)
+            .bind(None::<String>)
+            .bind(reply_to_top_id)
+            .bind(None::<i64>)
+            .execute(&pool)
+            .await
+            .expect("insert item");
+        }
+
+        let records = list_source_forum_topics_from_pool(&pool, 1)
+            .await
+            .expect("list source forum topics");
+
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0].kind, "topic");
+        assert_eq!(records[0].topic_id, Some(11));
+        assert_eq!(records[0].message_count, 2);
+        assert_eq!(records[1].topic_id, Some(22));
+        assert_eq!(records[1].message_count, 1);
+        assert_eq!(records[2].kind, "uncategorized");
+        assert_eq!(records[2].key, "general_uncategorized");
+        assert_eq!(records[2].message_count, 1);
     }
 }

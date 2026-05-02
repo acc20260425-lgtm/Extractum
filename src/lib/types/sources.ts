@@ -40,6 +40,29 @@ export interface ItemRecord {
   media_file_name: string | null;
   media_mime_type: string | null;
   has_raw_data: boolean;
+  forum_topic_id: number | null;
+  forum_topic_title: string | null;
+  forum_topic_top_message_id: number | null;
+}
+
+export type ForumTopicFilter =
+  | { kind: "topic"; topic_id: number }
+  | { kind: "uncategorized" };
+
+export interface SourceForumTopicRecord {
+  kind: "topic" | "uncategorized";
+  key: string;
+  title: string;
+  message_count: number;
+  topic_id: number | null;
+  top_message_id: number | null;
+  icon_color: number | null;
+  icon_emoji_id: number | null;
+  is_closed: boolean;
+  is_pinned: boolean;
+  is_hidden: boolean;
+  is_deleted: boolean;
+  sort_order: number | null;
 }
 
 export interface SyncResult {

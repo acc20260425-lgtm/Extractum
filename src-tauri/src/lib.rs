@@ -19,8 +19,8 @@ use telegram::{
 
 mod sources;
 use sources::{
-    add_telegram_source, delete_source, get_items, get_sync_settings, list_sources,
-    list_telegram_sources, save_sync_settings, sync_source,
+    add_telegram_source, delete_source, get_items, get_sync_settings, list_source_forum_topics,
+    list_sources, list_telegram_sources, save_sync_settings, sync_source,
 };
 
 mod notebooklm_export;
@@ -100,6 +100,7 @@ pub fn run() {
             save_sync_settings,
             sync_source,
             get_items,
+            list_source_forum_topics,
             export_source_to_notebooklm,
             get_llm_profiles,
             save_llm_profile,

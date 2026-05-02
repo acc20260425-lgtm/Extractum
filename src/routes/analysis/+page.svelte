@@ -653,6 +653,7 @@
         sourceId,
         limit: 120,
         beforePublishedAt: null,
+        topicFilter: null,
       });
     } catch (error) {
       sourceItems = [];
