@@ -1877,13 +1877,17 @@
     }
 
     .inspector-slot {
-      grid-column: 1 / -1;
+      grid-column: 2;
     }
   }
 
   @media (max-width: 1180px) {
     .analysis-workspace {
       grid-template-columns: 1fr;
+    }
+
+    .inspector-slot {
+      grid-column: 1;
     }
   }
 </style>
