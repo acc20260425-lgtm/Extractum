@@ -2,21 +2,32 @@
   import SourceMessagesPanel from "$lib/components/source-messages-panel.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import type { AnalysisSourceOption } from "$lib/types/analysis";
-  import type { ItemRecord } from "$lib/types/sources";
+  import type { ItemRecord, SourceForumTopicRecord } from "$lib/types/sources";
 
   let {
     currentRunOpen,
     currentSourceMetric,
     sourceItems,
     loadingItems,
+    sourceTopics,
+    loadingSourceTopics,
+    selectedTopicKey,
+    showTopicSelector,
     formatTimestamp,
+    onChangeSelectedTopicKey,
   }: {
     currentRunOpen: boolean;
     currentSourceMetric: AnalysisSourceOption | null;
     sourceItems: ItemRecord[];
     loadingItems: boolean;
+    sourceTopics: SourceForumTopicRecord[];
+    loadingSourceTopics: boolean;
+    selectedTopicKey: string;
+    showTopicSelector: boolean;
     formatTimestamp: (value: number | null) => string;
+    onChangeSelectedTopicKey: (value: string) => void | Promise<void>;
   } = $props();
 
   let contextExpandedOverride = $state<boolean | null>(null);
@@ -52,6 +63,30 @@
       </p>
     </div>
     <div class="context-panel-actions">
+      {#if showTopicSelector}
+        <label class="topic-filter">
+          <span>Topic view</span>
+          <Select
+            value={selectedTopicKey}
+            disabled={loadingSourceTopics}
+            onchange={(event) =>
+              onChangeSelectedTopicKey(
+                (event.currentTarget as HTMLSelectElement).value,
+              )}
+          >
+            <option value="__all_topics__">All topics</option>
+            {#if loadingSourceTopics && sourceTopics.length === 0}
+              <option value="__loading_topics__" disabled>Loading topics...</option>
+            {:else}
+              {#each sourceTopics as topic (topic.key)}
+                <option value={topic.key}>
+                  {topic.title} ({topic.message_count})
+                </option>
+              {/each}
+            {/if}
+          </Select>
+        </label>
+      {/if}
       <Badge variant="neutral">
         {currentSourceMetric?.item_count ?? sourceItems.length} messages
       </Badge>
@@ -136,6 +171,25 @@
     gap: 0.5rem;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .topic-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: min(17rem, 100%);
+    color: var(--muted);
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .topic-filter :global(select) {
+    min-width: 14rem;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.9rem;
+    color: var(--text);
   }
 
   .context-panel-footer {

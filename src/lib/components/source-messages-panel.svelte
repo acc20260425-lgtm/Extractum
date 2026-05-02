@@ -59,6 +59,9 @@
           <div class="message-meta">
             <span>{formatDate(item.published_at)}</span>
             {#if item.author}<span>{item.author}</span>{/if}
+            {#if item.forum_topic_title}
+              <Badge variant="neutral">{item.forum_topic_title}</Badge>
+            {/if}
             {#if item.has_media}
               <Badge variant="info">{formatMediaKind(item.media_kind)}</Badge>
             {/if}

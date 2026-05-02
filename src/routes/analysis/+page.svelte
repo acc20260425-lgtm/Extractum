@@ -38,10 +38,12 @@
     EventEnvelope,
   } from "$lib/types/analysis";
   import type {
+    ForumTopicFilter,
     ItemRecord,
     NotebookLmExportEvent,
     NotebookLmExportRequest,
     NotebookLmExportResult,
+    SourceForumTopicRecord,
     SourceRecord,
     SyncResult,
   } from "$lib/types/sources";
@@ -84,6 +86,7 @@
   let sourceCatalog = $state<SourceRecord[]>([]);
   let sourceMetrics = $state<Record<number, AnalysisSourceOption>>({});
   let sourceItems = $state<ItemRecord[]>([]);
+  let sourceTopics = $state<SourceForumTopicRecord[]>([]);
   let accounts = $state<AccountRecord[]>([]);
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
   let templates = $state<AnalysisPromptTemplate[]>([]);
@@ -93,6 +96,7 @@
 
   let loadingSourceCatalog = $state(false);
   let loadingItems = $state(false);
+  let loadingSourceTopics = $state(false);
   let loadingTemplates = $state(false);
   let loadingRuns = $state(false);
   let loadingActiveRuns = $state(false);
@@ -104,6 +108,7 @@
   let inspectorMode = $state<InspectorMode>("history");
 
   let selectedSourceId = $state("");
+  let selectedTopicKey = $state("__all_topics__");
   let selectedTemplateId = $state("");
   let selectedGroupId = $state("");
   let analysisScope = $state<"single_source" | "source_group">("single_source");
@@ -357,6 +362,62 @@
     }
 
     return currentProgress;
+  }
+
+  function currentTopicFilter(): ForumTopicFilter | null {
+    if (selectedTopicKey === "__all_topics__") {
+      return null;
+    }
+
+    const topic = sourceTopics.find((entry) => entry.key === selectedTopicKey);
+    if (!topic) {
+      return null;
+    }
+
+    if (topic.kind === "topic" && topic.topic_id !== null) {
+      return {
+        kind: "topic",
+        topic_id: topic.topic_id,
+      };
+    }
+
+    return {
+      kind: "uncategorized",
+    };
+  }
+
+  function hasRealForumTopics(topics: SourceForumTopicRecord[] = sourceTopics) {
+    return topics.some((topic) => topic.kind === "topic");
+  }
+
+  function shouldShowTopicSelector() {
+    const source = currentSource();
+    if (!source || analysisScope !== "single_source") {
+      return false;
+    }
+
+    if (loadingSourceTopics) {
+      return source.telegram_source_kind === "supergroup";
+    }
+
+    return hasRealForumTopics();
+  }
+
+  function normalizeSelectedTopicKey(
+    topics: SourceForumTopicRecord[],
+    preferredKey: string,
+  ) {
+    if (!hasRealForumTopics(topics)) {
+      return "__all_topics__";
+    }
+
+    if (preferredKey === "__all_topics__") {
+      return preferredKey;
+    }
+
+    return topics.some((topic) => topic.key === preferredKey)
+      ? preferredKey
+      : "__all_topics__";
   }
 
   function applyNotebookLmExportEvent(payload: NotebookLmExportEvent) {
@@ -646,6 +707,27 @@
     }
   }
 
+  async function loadSourceTopics(
+    sourceId: number,
+    { preserveSelection = false }: { preserveSelection?: boolean } = {},
+  ) {
+    const preferredKey = preserveSelection ? selectedTopicKey : "__all_topics__";
+    loadingSourceTopics = true;
+    try {
+      const topics = await invoke<SourceForumTopicRecord[]>("list_source_forum_topics", {
+        sourceId,
+      });
+      sourceTopics = topics;
+      selectedTopicKey = normalizeSelectedTopicKey(topics, preferredKey);
+    } catch (error) {
+      sourceTopics = [];
+      selectedTopicKey = "__all_topics__";
+      status = formatAppError("loading source topics", error);
+    } finally {
+      loadingSourceTopics = false;
+    }
+  }
+
   async function loadItems(sourceId: number) {
     loadingItems = true;
     try {
@@ -653,7 +735,7 @@
         sourceId,
         limit: 120,
         beforePublishedAt: null,
-        topicFilter: null,
+        topicFilter: currentTopicFilter(),
       });
     } catch (error) {
       sourceItems = [];
@@ -666,14 +748,29 @@
   async function selectSource(sourceId: number) {
     analysisScope = "single_source";
     selectedSourceId = String(sourceId);
+    selectedTopicKey = "__all_topics__";
     inspectorMode = "history";
+    await loadSourceTopics(sourceId);
     await loadItems(sourceId);
   }
 
   function selectGroup(groupId: number) {
     analysisScope = "source_group";
     selectedGroupId = String(groupId);
+    sourceTopics = [];
+    selectedTopicKey = "__all_topics__";
     inspectorMode = "history";
+  }
+
+  async function changeSelectedTopicKey(nextKey: string) {
+    if (selectedTopicKey === nextKey) {
+      return;
+    }
+
+    selectedTopicKey = nextKey;
+    if (selectedSourceId) {
+      await loadItems(Number(selectedSourceId));
+    }
   }
 
   async function loadTemplates() {
@@ -1015,11 +1112,15 @@
         `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}.` +
         (result.initial_sync_policy_applied
           ? ` First sync policy applied: ${result.initial_sync_policy_applied}.`
+          : "") +
+        (result.warnings.length > 0
+          ? ` Warnings: ${result.warnings.join(" ")}`
           : "");
 
       await Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
 
       if (selectedSourceId === String(sourceId)) {
+        await loadSourceTopics(sourceId, { preserveSelection: true });
         await loadItems(sourceId);
       }
     } catch (error) {
@@ -1041,6 +1142,7 @@
     }
 
     if (selectedSourceId) {
+      await loadSourceTopics(Number(selectedSourceId), { preserveSelection: true });
       await loadItems(Number(selectedSourceId));
       return;
     }
@@ -1408,7 +1510,9 @@
     void loadAccounts();
     void loadSourceCatalog().then(() => {
       if (selectedSourceId) {
-        void loadItems(Number(selectedSourceId));
+        void loadSourceTopics(Number(selectedSourceId)).then(() =>
+          loadItems(Number(selectedSourceId)),
+        );
       }
     });
     void loadTemplates();
@@ -1626,6 +1730,10 @@
     {canCancelCurrentRun}
     {sourceItems}
     {loadingItems}
+    {sourceTopics}
+    {loadingSourceTopics}
+    {selectedTopicKey}
+    showTopicSelector={shouldShowTopicSelector()}
     {selectedTraceRef}
     traceRefCount={traceData.refs.length}
     {chatMessages}
@@ -1659,6 +1767,7 @@
     {startOfDayUnix}
     {endOfDayUnix}
     {isGroupSourceSelected}
+    onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}
     onChangePeriodFrom={(value) => (periodFrom = value)}
     onChangePeriodTo={(value) => (periodTo = value)}
     onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}

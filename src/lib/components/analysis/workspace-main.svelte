@@ -22,6 +22,7 @@
     ReportSegment,
   } from "$lib/types/analysis";
   import type {
+    SourceForumTopicRecord,
     ItemRecord,
     NotebookLmExportEvent,
     NotebookLmExportResult,
@@ -61,6 +62,10 @@
     canCancelCurrentRun,
     sourceItems,
     loadingItems,
+    sourceTopics,
+    loadingSourceTopics,
+    selectedTopicKey,
+    showTopicSelector,
     selectedTraceRef,
     traceRefCount,
     chatMessages,
@@ -94,6 +99,7 @@
     startOfDayUnix,
     endOfDayUnix,
     isGroupSourceSelected,
+    onChangeSelectedTopicKey,
     onChangePeriodFrom,
     onChangePeriodTo,
     onChangeSelectedTemplateId,
@@ -153,6 +159,10 @@
     canCancelCurrentRun: boolean;
     sourceItems: ItemRecord[];
     loadingItems: boolean;
+    sourceTopics: SourceForumTopicRecord[];
+    loadingSourceTopics: boolean;
+    selectedTopicKey: string;
+    showTopicSelector: boolean;
     selectedTraceRef: string | null;
     traceRefCount: number;
     chatMessages: AnalysisChatTurn[];
@@ -194,6 +204,7 @@
     startOfDayUnix: (value: string) => number;
     endOfDayUnix: (value: string) => number;
     isGroupSourceSelected: (sourceId: number) => boolean;
+    onChangeSelectedTopicKey: (value: string) => void | Promise<void>;
     onChangePeriodFrom: (value: string) => void;
     onChangePeriodTo: (value: string) => void;
     onChangeSelectedTemplateId: (value: string) => void;
@@ -408,7 +419,12 @@
         {currentSourceMetric}
         {sourceItems}
         {loadingItems}
+        {sourceTopics}
+        {loadingSourceTopics}
+        {selectedTopicKey}
+        {showTopicSelector}
         {formatTimestamp}
+        onChangeSelectedTopicKey={onChangeSelectedTopicKey}
       />
     {/key}
   {/if}
