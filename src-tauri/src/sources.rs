@@ -305,13 +305,22 @@ struct ForumTopicSnapshot {
     sort_order: i64,
 }
 
+pub(crate) struct SourceItemInsert {
+    pub(crate) external_id: String,
+    pub(crate) author: Option<String>,
+    pub(crate) published_at: i64,
+    pub(crate) payload: ExtractedItemPayload,
+    pub(crate) raw_data: Vec<u8>,
+    pub(crate) telegram_context: TelegramItemContext,
+}
+
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
-struct TelegramItemContext {
-    reply_to_msg_id: Option<i64>,
-    reply_to_peer_kind: Option<String>,
-    reply_to_peer_id: Option<String>,
-    reply_to_top_id: Option<i64>,
-    reaction_count: Option<i64>,
+pub(crate) struct TelegramItemContext {
+    pub(crate) reply_to_msg_id: Option<i64>,
+    pub(crate) reply_to_peer_kind: Option<String>,
+    pub(crate) reply_to_peer_id: Option<String>,
+    pub(crate) reply_to_top_id: Option<i64>,
+    pub(crate) reaction_count: Option<i64>,
 }
 
 fn default_sync_settings() -> SyncSettingsRecord {
@@ -769,77 +778,25 @@ async fn persist_items(
             }
         };
 
-        let content_zstd = item_payload
-            .content
-            .as_deref()
-            .map(compress_text)
-            .transpose()?;
-        let media_kind = item_payload.media.as_ref().map(|media| media.kind.clone());
-        let media_metadata_zstd = item_payload
-            .media
-            .as_ref()
-            .map(|media| encode_media_metadata(&media.metadata))
-            .transpose()?;
-
-        if content_zstd.is_none() && media_metadata_zstd.is_none() {
-            skipped += 1;
-            continue;
-        }
-
         let author = message_author(&message);
         let telegram_context = extract_telegram_context(&message);
-        let raw_data_zstd = compress_json_bytes(&build_raw_payload(
-            &message,
-            &source.title,
-            &author,
-            &item_payload,
-        )?)?;
+        let raw_data = build_raw_payload(&message, &source.title, &author, &item_payload)?;
 
-        let result = sqlx::query(
-            r#"
-            INSERT INTO items (
-                source_id,
-                external_id,
+        let inserted_item = insert_source_item(
+            pool,
+            source.id,
+            SourceItemInsert {
+                external_id: message_id.to_string(),
                 author,
                 published_at,
-                ingested_at,
-                content_zstd,
-                raw_data_zstd,
-                content_kind,
-                has_media,
-                media_kind,
-                media_metadata_zstd,
-                reply_to_msg_id,
-                reply_to_peer_kind,
-                reply_to_peer_id,
-                reply_to_top_id,
-                reaction_count
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(source_id, external_id) DO NOTHING
-            "#,
+                payload: item_payload,
+                raw_data,
+                telegram_context,
+            },
         )
-        .bind(source.id)
-        .bind(message_id.to_string())
-        .bind(&author)
-        .bind(published_at)
-        .bind(now_secs())
-        .bind(content_zstd)
-        .bind(raw_data_zstd)
-        .bind(item_payload.content_kind)
-        .bind(item_payload.media.is_some())
-        .bind(&media_kind)
-        .bind(media_metadata_zstd)
-        .bind(telegram_context.reply_to_msg_id)
-        .bind(&telegram_context.reply_to_peer_kind)
-        .bind(&telegram_context.reply_to_peer_id)
-        .bind(telegram_context.reply_to_top_id)
-        .bind(telegram_context.reaction_count)
-        .execute(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
-        if result.rows_affected() == 1 {
+        if inserted_item {
             inserted += 1;
         } else {
             skipped += 1;
@@ -889,6 +846,77 @@ async fn finalize_sync(
     }
 
     Ok(last_sync_state)
+}
+
+pub(crate) async fn insert_source_item(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    item: SourceItemInsert,
+) -> Result<bool, String> {
+    let content_zstd = item
+        .payload
+        .content
+        .as_deref()
+        .map(compress_text)
+        .transpose()?;
+    let media_kind = item.payload.media.as_ref().map(|media| media.kind.clone());
+    let media_metadata_zstd = item
+        .payload
+        .media
+        .as_ref()
+        .map(|media| encode_media_metadata(&media.metadata))
+        .transpose()?;
+
+    if content_zstd.is_none() && media_metadata_zstd.is_none() {
+        return Ok(false);
+    }
+
+    let raw_data_zstd = compress_json_bytes(&item.raw_data)?;
+    let result = sqlx::query(
+        r#"
+        INSERT INTO items (
+            source_id,
+            external_id,
+            author,
+            published_at,
+            ingested_at,
+            content_zstd,
+            raw_data_zstd,
+            content_kind,
+            has_media,
+            media_kind,
+            media_metadata_zstd,
+            reply_to_msg_id,
+            reply_to_peer_kind,
+            reply_to_peer_id,
+            reply_to_top_id,
+            reaction_count
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_id, external_id) DO NOTHING
+        "#,
+    )
+    .bind(source_id)
+    .bind(&item.external_id)
+    .bind(&item.author)
+    .bind(item.published_at)
+    .bind(now_secs())
+    .bind(content_zstd)
+    .bind(raw_data_zstd)
+    .bind(item.payload.content_kind)
+    .bind(item.payload.media.is_some())
+    .bind(&media_kind)
+    .bind(media_metadata_zstd)
+    .bind(item.telegram_context.reply_to_msg_id)
+    .bind(&item.telegram_context.reply_to_peer_kind)
+    .bind(&item.telegram_context.reply_to_peer_id)
+    .bind(item.telegram_context.reply_to_top_id)
+    .bind(item.telegram_context.reaction_count)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(result.rows_affected() == 1)
 }
 
 #[tauri::command]
@@ -2132,20 +2160,26 @@ mod tests {
         add_source_resolution_strategy, decode_media_metadata, decode_source_metadata,
         default_sync_settings, determine_sync_policy, dialog_lookup_not_found_message,
         encode_media_metadata, encode_source_metadata, finalize_sync, initial_sync_policy_label,
-        is_non_forum_topic_refresh_error, list_source_forum_topics_from_pool,
+        insert_source_item, is_non_forum_topic_refresh_error, list_source_forum_topics_from_pool,
         load_item_rows_from_pool, load_source, load_sync_settings_from_pool,
         parse_supported_manual_telegram_source_ref, parse_username, reply_peer_context,
         save_sync_settings_to_pool, source_peer_ref_from_identity, source_peer_resolution_failure,
         source_peer_resolution_plan, upsert_forum_topics_from_refresh,
         validate_expected_telegram_source_kind, validate_sync_settings, ForumTopicFilter,
         ForumTopicSnapshot, InitialSyncMode, ManualTelegramSourceRef, ResolvedTelegramSource,
-        SourceMetadata, SourcePeerIdentity, SourcePeerResolutionStep, SourcePeerResolutionStrategy,
-        SourceRecordRow, SourceSyncTarget, SyncSettingsRecord, TELEGRAM_KIND_CHANNEL,
-        TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
+        SourceItemInsert, SourceMetadata, SourcePeerIdentity, SourcePeerResolutionStep,
+        SourcePeerResolutionStrategy, SourceRecordRow, SourceSyncTarget, StoredItemRow,
+        SyncSettingsRecord, TelegramItemContext, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+        TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
     };
-    use crate::compression::{compress_json_bytes, compress_text, decompress_text};
+    use crate::compression::{
+        compress_json_bytes, compress_text, decompress_bytes, decompress_text,
+    };
     use crate::error::AppErrorKind;
-    use crate::media::ItemMediaMetadata;
+    use crate::media::{
+        ExtractedItemPayload, ExtractedMediaPayload, ItemMediaMetadata, CONTENT_KIND_TEXT_ONLY,
+        CONTENT_KIND_TEXT_WITH_MEDIA,
+    };
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -2214,6 +2248,15 @@ mod tests {
         .expect("create items");
         sqlx::query(
             r#"
+            CREATE UNIQUE INDEX idx_items_source_external
+            ON items(source_id, external_id)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create items unique index");
+        sqlx::query(
+            r#"
             CREATE TABLE telegram_forum_topics (
                 id INTEGER PRIMARY KEY,
                 source_id INTEGER NOT NULL,
@@ -2270,6 +2313,103 @@ mod tests {
         let encoded = encode_media_metadata(&original).expect("encode");
         let decoded = decode_media_metadata(Some(&encoded)).expect("decode");
         assert_eq!(decoded, original);
+    }
+
+    #[tokio::test]
+    async fn insert_source_item_writes_payload_and_skips_duplicates() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        let media_metadata = ItemMediaMetadata {
+            summary: Some("Photo".to_string()),
+            file_name: Some("photo.jpg".to_string()),
+            mime_type: Some("image/jpeg".to_string()),
+            width: Some(640),
+            height: Some(480),
+            ..ItemMediaMetadata::default()
+        };
+
+        let inserted = insert_source_item(
+            &pool,
+            1,
+            SourceItemInsert {
+                external_id: "42".to_string(),
+                author: Some("alice".to_string()),
+                published_at: 1234,
+                payload: ExtractedItemPayload {
+                    content: Some("hello".to_string()),
+                    content_kind: CONTENT_KIND_TEXT_WITH_MEDIA,
+                    media: Some(ExtractedMediaPayload {
+                        kind: "photo".to_string(),
+                        metadata: media_metadata.clone(),
+                    }),
+                },
+                raw_data: br#"{"id":42}"#.to_vec(),
+                telegram_context: TelegramItemContext {
+                    reply_to_msg_id: Some(7),
+                    reply_to_peer_kind: Some("channel".to_string()),
+                    reply_to_peer_id: Some("99".to_string()),
+                    reply_to_top_id: Some(5),
+                    reaction_count: Some(3),
+                },
+            },
+        )
+        .await
+        .expect("insert item");
+        assert!(inserted);
+
+        let duplicate = insert_source_item(
+            &pool,
+            1,
+            SourceItemInsert {
+                external_id: "42".to_string(),
+                author: None,
+                published_at: 9999,
+                payload: ExtractedItemPayload {
+                    content: Some("duplicate".to_string()),
+                    content_kind: CONTENT_KIND_TEXT_ONLY,
+                    media: None,
+                },
+                raw_data: br#"{"id":42,"duplicate":true}"#.to_vec(),
+                telegram_context: TelegramItemContext::default(),
+            },
+        )
+        .await
+        .expect("skip duplicate");
+        assert!(!duplicate);
+
+        let row: StoredItemRow = sqlx::query_as(
+            r#"
+            SELECT
+                id, source_id, external_id, author, published_at, content_kind, has_media,
+                media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
+            FROM items
+            WHERE source_id = ? AND external_id = ?
+            "#,
+        )
+        .bind(1_i64)
+        .bind("42")
+        .fetch_one(&pool)
+        .await
+        .expect("load inserted item");
+
+        assert_eq!(row.source_id, 1);
+        assert_eq!(row.author.as_deref(), Some("alice"));
+        assert_eq!(row.published_at, 1234);
+        assert_eq!(row.content_kind, CONTENT_KIND_TEXT_WITH_MEDIA);
+        assert!(row.has_media);
+        assert_eq!(row.media_kind.as_deref(), Some("photo"));
+        assert_eq!(
+            decompress_text(&row.content_zstd.expect("content")).expect("decode content"),
+            "hello"
+        );
+        assert_eq!(
+            decode_media_metadata(row.media_metadata_zstd.as_deref()).expect("decode media"),
+            media_metadata
+        );
+        assert_eq!(
+            decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
+            br#"{"id":42}"#.to_vec()
+        );
     }
 
     #[test]
