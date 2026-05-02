@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use sqlx::{Pool, Sqlite};
 use tauri::{AppHandle, Manager};
 use tokio::task::JoinSet;
 
@@ -8,8 +9,8 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::llm::{
     resolve_effective_model, resolve_profile_for_backend, run_llm_collect_with_profile,
-    run_llm_stream_with_profile, LlmChatRequest, LlmMessage, LlmRequestError, LlmRequestKind,
-    LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
+    run_llm_stream_with_profile, LlmChatRequest, LlmCompletion, LlmMessage, LlmRequestError,
+    LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
 };
 
 use super::corpus::load_corpus_messages;
@@ -351,28 +352,6 @@ fn finish_map_phase(
         })
 }
 
-async fn ensure_report_not_cancelled(
-    handle: &AppHandle,
-    run_id: i64,
-) -> Result<(), ReportRunError> {
-    if handle
-        .state::<AnalysisState>()
-        .is_report_run_cancelled(run_id)
-        .await
-    {
-        return Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()));
-    }
-
-    Ok(())
-}
-
-async fn cancel_report_children(handle: &AppHandle, run_id: i64) {
-    handle
-        .state::<LlmSchedulerState>()
-        .cancel_run_requests(run_id)
-        .await;
-}
-
 struct ReportRunInput {
     run_id: i64,
     scope_label: String,
@@ -385,88 +364,72 @@ struct ReportRunInput {
     profile_id: Option<String>,
 }
 
-async fn run_report_pipeline(
+struct ReportPipelineContext {
     handle: AppHandle,
-    input: ReportRunInput,
-) -> Result<(), ReportRunError> {
-    let ReportRunInput {
-        run_id,
-        scope_label,
-        source_ids,
-        period_from,
-        period_to,
-        output_language,
-        prompt_template,
-        model_override,
-        profile_id,
-    } = input;
+    pool: Pool<Sqlite>,
+    resolved_profile: ResolvedLlmProfile,
+    run_id: i64,
+}
 
-    ensure_report_not_cancelled(&handle, run_id).await?;
+impl ReportPipelineContext {
+    async fn ensure_not_cancelled(&self) -> Result<(), ReportRunError> {
+        if self
+            .handle
+            .state::<AnalysisState>()
+            .is_report_run_cancelled(self.run_id)
+            .await
+        {
+            return Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()));
+        }
 
-    let pool = get_pool(&handle)
-        .await
-        .map_err(|error| ReportRunError::Failed(error.to_string()))?;
-    set_run_status(
-        &pool,
-        run_id,
-        ANALYSIS_STATUS_RUNNING,
-        None,
-        None,
-        None,
-        None,
-    )
-    .await
-    .map_err(ReportRunError::Failed)?;
-
-    RunEvent::new(run_id, "started", "load_items")
-        .message("Loading synced messages from local storage...".to_string())
-        .emit(&handle);
-
-    let corpus = load_corpus_messages(&pool, &source_ids, period_from, period_to)
-        .await
-        .map_err(ReportRunError::Failed)?;
-    if corpus.is_empty() {
-        return Err(ReportRunError::Failed(
-            "No synced messages were found for the selected analysis scope and period".to_string(),
-        ));
+        Ok(())
     }
-    ensure_report_not_cancelled(&handle, run_id).await?;
 
-    RunEvent::new(run_id, "progress", "chunking")
-        .message(format!(
-            "Loaded {} messages. Preparing chunks...",
-            corpus.len()
-        ))
-        .emit(&handle);
+    async fn cancel_children(&self) {
+        self.handle
+            .state::<LlmSchedulerState>()
+            .cancel_run_requests(self.run_id)
+            .await;
+    }
 
-    let chunks = chunk_messages(&corpus, ANALYSIS_CHUNK_TARGET_CHARS);
-    let resolved_profile = resolve_profile_for_backend(&handle, profile_id.as_deref())
-        .await
-        .map_err(ReportRunError::Failed)?;
-    ensure_report_not_cancelled(&handle, run_id).await?;
+    fn emit(&self, event: RunEvent) {
+        event.emit(&self.handle);
+    }
+}
 
-    RunEvent::new(run_id, "progress", "map")
-        .message(format!(
-            "Dispatching {} chunk analysis request{}...",
-            chunks.len(),
-            if chunks.len() == 1 { "" } else { "s" }
-        ))
-        .progress(0, chunks.len() as i64)
-        .emit(&handle);
+struct ReducePhaseResult {
+    request_id: String,
+    completion: LlmCompletion,
+}
+
+async fn run_map_phase(
+    ctx: &ReportPipelineContext,
+    chunks: Vec<Vec<CorpusMessage>>,
+) -> Result<Vec<ChunkSummary>, ReportRunError> {
+    ctx.emit(
+        RunEvent::new(ctx.run_id, "progress", "map")
+            .message(format!(
+                "Dispatching {} chunk analysis request{}...",
+                chunks.len(),
+                if chunks.len() == 1 { "" } else { "s" }
+            ))
+            .progress(0, chunks.len() as i64),
+    );
 
     let completed_chunks = Arc::new(AtomicUsize::new(0));
     let mut join_set = JoinSet::new();
     let total_chunks = chunks.len();
     for (index, chunk) in chunks.into_iter().enumerate() {
-        let task_handle = handle.clone();
-        let task_profile = resolved_profile.clone();
-        let task_profile_id = resolved_profile.profile_id.clone();
+        let task_handle = ctx.handle.clone();
+        let task_profile = ctx.resolved_profile.clone();
+        let task_profile_id = ctx.resolved_profile.profile_id.clone();
         let chunk_request =
-            build_map_request(run_id, task_profile_id, index + 1, total_chunks, &chunk);
+            build_map_request(ctx.run_id, task_profile_id, index + 1, total_chunks, &chunk);
         let chunk_request_id = chunk_request.request_id.clone();
         let chunk_provider = task_profile.provider.as_str().to_string();
         let chunk_counter = completed_chunks.clone();
         let chunk_message_count = chunk.len() as i64;
+        let run_id = ctx.run_id;
 
         join_set.spawn(async move {
             let scheduler = task_handle.state::<LlmSchedulerState>();
@@ -599,7 +562,7 @@ async fn run_report_pipeline(
             Ok(Err(error)) => {
                 if first_error.is_none() {
                     first_error = Some(error.clone());
-                    cancel_report_children(&handle, run_id).await;
+                    ctx.cancel_children().await;
                 }
             }
             Err(error) => {
@@ -607,54 +570,61 @@ async fn run_report_pipeline(
                     first_error = Some(ReportRunError::Failed(format!(
                         "Chunk worker crashed: {error}"
                     )));
-                    cancel_report_children(&handle, run_id).await;
+                    ctx.cancel_children().await;
                 }
             }
         }
     }
 
-    let chunk_summaries = finish_map_phase(ordered_summaries, first_error)?;
-    ensure_report_not_cancelled(&handle, run_id).await?;
+    finish_map_phase(ordered_summaries, first_error)
+}
 
-    RunEvent::new(run_id, "progress", "reduce")
-        .message("Writing final report...".to_string())
-        .emit(&handle);
+async fn run_reduce_phase(
+    ctx: &ReportPipelineContext,
+    input: &ReportRunInput,
+    chunk_summaries: &[ChunkSummary],
+) -> Result<ReducePhaseResult, ReportRunError> {
+    ctx.emit(
+        RunEvent::new(ctx.run_id, "progress", "reduce")
+            .message("Writing final report...".to_string()),
+    );
 
     let reduce_request = build_reduce_request(ReduceRequestParams {
-        run_id,
-        profile_id: resolved_profile.profile_id.clone(),
-        scope_label: &scope_label,
-        output_language: &output_language,
-        prompt_template: &prompt_template,
-        period_from,
-        period_to,
-        chunk_summaries: &chunk_summaries,
-        model_override: model_override.clone(),
+        run_id: ctx.run_id,
+        profile_id: ctx.resolved_profile.profile_id.clone(),
+        scope_label: &input.scope_label,
+        output_language: &input.output_language,
+        prompt_template: &input.prompt_template,
+        period_from: input.period_from,
+        period_to: input.period_to,
+        chunk_summaries,
+        model_override: input.model_override.clone(),
     });
     let reduce_request_id = reduce_request.request_id.clone();
-    let reduce_provider = resolved_profile.provider.as_str().to_string();
-    let scheduler = handle.state::<LlmSchedulerState>();
-    let queued_handle = handle.clone();
-    let started_handle = handle.clone();
-    let delta_handle = handle.clone();
-    let failed_handle = handle.clone();
-    let cancelled_handle = handle.clone();
+    let reduce_provider = ctx.resolved_profile.provider.as_str().to_string();
+    let scheduler = ctx.handle.state::<LlmSchedulerState>();
+    let queued_handle = ctx.handle.clone();
+    let started_handle = ctx.handle.clone();
+    let delta_handle = ctx.handle.clone();
+    let failed_handle = ctx.handle.clone();
+    let cancelled_handle = ctx.handle.clone();
     let queued_request_id = reduce_request_id.clone();
     let started_request_id = reduce_request_id.clone();
     let delta_request_id = reduce_request_id.clone();
     let failed_request_id = reduce_request_id.clone();
     let cancelled_request_id = reduce_request_id.clone();
     let reduce_request_for_stream = reduce_request.clone();
-    let reduce_profile = resolved_profile.clone();
+    let reduce_profile = ctx.resolved_profile.clone();
+    let run_id = ctx.run_id;
     let completion = match scheduler
         .run_request(
             LlmRequestMetadata {
                 request_id: reduce_request.request_id.clone(),
-                profile_id: resolved_profile.profile_id.clone(),
+                profile_id: ctx.resolved_profile.profile_id.clone(),
                 provider: reduce_provider.clone(),
                 kind: LlmRequestKind::AnalysisReportReduce,
                 priority: LlmRequestPriority::Background,
-                owner_run_id: Some(run_id),
+                owner_run_id: Some(ctx.run_id),
             },
             move |position| {
                 RunEvent::new(run_id, "queued", "reduce")
@@ -703,24 +673,103 @@ async fn run_report_pipeline(
         }
     };
 
-    ensure_report_not_cancelled(&handle, run_id).await?;
-    let trace_data = build_trace_data(&completion.text, &corpus);
-    let compressed_trace = compress_trace_data(&trace_data).map_err(ReportRunError::Failed)?;
+    Ok(ReducePhaseResult {
+        request_id: reduce_request_id,
+        completion,
+    })
+}
 
-    RunEvent::new(run_id, "progress", "persist")
-        .request_id(reduce_request_id.clone())
-        .message("Saving report...".to_string())
+async fn run_report_pipeline(
+    handle: AppHandle,
+    input: ReportRunInput,
+) -> Result<(), ReportRunError> {
+    let run_id = input.run_id;
+
+    if handle
+        .state::<AnalysisState>()
+        .is_report_run_cancelled(run_id)
+        .await
+    {
+        return Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()));
+    }
+
+    let pool = get_pool(&handle)
+        .await
+        .map_err(|error| ReportRunError::Failed(error.to_string()))?;
+    set_run_status(
+        &pool,
+        run_id,
+        ANALYSIS_STATUS_RUNNING,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .map_err(ReportRunError::Failed)?;
+
+    RunEvent::new(run_id, "started", "load_items")
+        .message("Loading synced messages from local storage...".to_string())
         .emit(&handle);
 
-    persist_run_snapshot(&pool, run_id, &scope_label, &corpus)
+    let corpus = load_corpus_messages(&pool, &input.source_ids, input.period_from, input.period_to)
+        .await
+        .map_err(ReportRunError::Failed)?;
+    if corpus.is_empty() {
+        return Err(ReportRunError::Failed(
+            "No synced messages were found for the selected analysis scope and period".to_string(),
+        ));
+    }
+    if handle
+        .state::<AnalysisState>()
+        .is_report_run_cancelled(run_id)
+        .await
+    {
+        return Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()));
+    }
+
+    RunEvent::new(run_id, "progress", "chunking")
+        .message(format!(
+            "Loaded {} messages. Preparing chunks...",
+            corpus.len()
+        ))
+        .emit(&handle);
+
+    let chunks = chunk_messages(&corpus, ANALYSIS_CHUNK_TARGET_CHARS);
+    let resolved_profile = resolve_profile_for_backend(&handle, input.profile_id.as_deref())
+        .await
+        .map_err(ReportRunError::Failed)?;
+    let ctx = ReportPipelineContext {
+        handle,
+        pool,
+        resolved_profile,
+        run_id,
+    };
+
+    ctx.ensure_not_cancelled().await?;
+    let chunk_summaries = run_map_phase(&ctx, chunks).await?;
+    ctx.ensure_not_cancelled().await?;
+
+    let reduce_result = run_reduce_phase(&ctx, &input, &chunk_summaries).await?;
+    ctx.ensure_not_cancelled().await?;
+    let trace_data = build_trace_data(&reduce_result.completion.text, &corpus);
+    let compressed_trace = compress_trace_data(&trace_data).map_err(ReportRunError::Failed)?;
+
+    ctx.emit(
+        RunEvent::new(run_id, "progress", "persist")
+            .request_id(reduce_result.request_id.clone())
+            .message("Saving report...".to_string()),
+    );
+
+    persist_run_snapshot(&ctx.pool, run_id, &input.scope_label, &corpus)
         .await
         .map_err(ReportRunError::Failed)?;
 
     set_run_status(
-        &pool,
+        &ctx.pool,
         run_id,
         ANALYSIS_STATUS_COMPLETED,
-        Some(&completion.text),
+        Some(&reduce_result.completion.text),
         Some(&compressed_trace),
         None,
         Some(now_secs()),
@@ -728,13 +777,14 @@ async fn run_report_pipeline(
     .await
     .map_err(ReportRunError::Failed)?;
 
-    RunEvent::new(run_id, "completed", "persist")
-        .request_id(reduce_request_id)
-        .message(format!(
-            "Report completed with {} cited references.",
-            trace_data.refs.len()
-        ))
-        .emit(&handle);
+    ctx.emit(
+        RunEvent::new(run_id, "completed", "persist")
+            .request_id(reduce_result.request_id)
+            .message(format!(
+                "Report completed with {} cited references.",
+                trace_data.refs.len()
+            )),
+    );
 
     Ok(())
 }
