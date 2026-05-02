@@ -309,6 +309,10 @@ const BASE_QUERY: &str = r#"
                 AND items.external_id NOT GLOB '*[^0-9]*'
                 AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
             )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.reply_to_msg_id = forum_topics.topic_id
+            )
         )
     WHERE items.source_id = ?
     ORDER BY items.published_at ASC, items.id ASC
@@ -343,6 +347,10 @@ const BASE_QUERY_WITH_FROM: &str = r#"
                 AND items.external_id <> ''
                 AND items.external_id NOT GLOB '*[^0-9]*'
                 AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+            )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.reply_to_msg_id = forum_topics.topic_id
             )
         )
     WHERE items.source_id = ? AND items.published_at >= ?
@@ -379,6 +387,10 @@ const BASE_QUERY_WITH_TO: &str = r#"
                 AND items.external_id NOT GLOB '*[^0-9]*'
                 AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
             )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.reply_to_msg_id = forum_topics.topic_id
+            )
         )
     WHERE items.source_id = ? AND items.published_at <= ?
     ORDER BY items.published_at ASC, items.id ASC
@@ -413,6 +425,10 @@ const BASE_QUERY_WITH_FROM_TO: &str = r#"
                 AND items.external_id <> ''
                 AND items.external_id NOT GLOB '*[^0-9]*'
                 AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+            )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.reply_to_msg_id = forum_topics.topic_id
             )
         )
     WHERE items.source_id = ? AND items.published_at >= ? AND items.published_at <= ?
@@ -613,6 +629,33 @@ mod tests {
                 published_at,
                 content_zstd,
                 content_kind,
+                has_media,
+                reply_to_msg_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind("702")
+        .bind("Edsger")
+        .bind(101_i64)
+        .bind(compress_text("Top-level topic message").expect("compress topic fallback"))
+        .bind("text_only")
+        .bind(0_i64)
+        .bind(200_i64)
+        .execute(&pool)
+        .await
+        .expect("insert topic reply header fallback");
+
+        sqlx::query(
+            r#"
+            INSERT INTO items (
+                source_id,
+                external_id,
+                author,
+                published_at,
+                content_zstd,
+                content_kind,
                 has_media
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -621,7 +664,7 @@ mod tests {
         .bind(1_i64)
         .bind("700")
         .bind("Bob")
-        .bind(101_i64)
+        .bind(102_i64)
         .bind(compress_text("Root topic message").expect("compress root"))
         .bind("text_only")
         .bind(0_i64)
@@ -633,7 +676,7 @@ mod tests {
             .await
             .expect("load export messages");
 
-        assert_eq!(messages.len(), 2);
+        assert_eq!(messages.len(), 3);
         assert!(messages.iter().all(|message| message.forum_topic_id == Some(200)));
         assert!(messages
             .iter()

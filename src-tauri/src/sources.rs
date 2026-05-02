@@ -1396,6 +1396,10 @@ async fn load_item_rows_from_pool(
                     AND items.external_id NOT GLOB '*[^0-9]*'
                     AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
                 )
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND items.reply_to_msg_id = forum_topics.topic_id
+                )
             )
         WHERE items.source_id = ?
         "#,
@@ -1461,6 +1465,10 @@ async fn list_source_forum_topics_from_pool(
                     AND items.external_id NOT GLOB '*[^0-9]*'
                     AND CAST(items.external_id AS INTEGER) = topics.top_message_id
                 )
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND items.reply_to_msg_id = topics.topic_id
+                )
             )
         WHERE topics.source_id = ?
         GROUP BY
@@ -1499,6 +1507,10 @@ async fn list_source_forum_topics_from_pool(
                     AND items.external_id <> ''
                     AND items.external_id NOT GLOB '*[^0-9]*'
                     AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+                )
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND items.reply_to_msg_id = forum_topics.topic_id
                 )
             )
         WHERE items.source_id = ?
@@ -2823,10 +2835,11 @@ mod tests {
         .await
         .expect("insert forum topic");
 
-        for (id, external_id, published_at, reply_to_top_id) in [
-            (1_i64, "700", 300_i64, None),
-            (2_i64, "701", 200_i64, Some(200_i64)),
-            (3_i64, "999", 100_i64, None),
+        for (id, external_id, published_at, reply_to_msg_id, reply_to_top_id) in [
+            (1_i64, "700", 300_i64, None, None),
+            (2_i64, "701", 200_i64, None, Some(200_i64)),
+            (3_i64, "702", 150_i64, Some(200_i64), None),
+            (4_i64, "999", 100_i64, None, None),
         ] {
             sqlx::query(
                 r#"
@@ -2850,7 +2863,7 @@ mod tests {
             .bind(0_i64)
             .bind(None::<String>)
             .bind(None::<Vec<u8>>)
-            .bind(None::<i64>)
+            .bind(reply_to_msg_id)
             .bind(None::<String>)
             .bind(None::<String>)
             .bind(reply_to_top_id)
@@ -2863,11 +2876,12 @@ mod tests {
         let rows = load_item_rows_from_pool(&pool, 1, 20, None, None)
             .await
             .expect("load all rows");
-        assert_eq!(rows.len(), 3);
+        assert_eq!(rows.len(), 4);
         assert_eq!(rows[0].forum_topic_id, Some(200));
         assert_eq!(rows[0].forum_topic_top_message_id, Some(700));
         assert_eq!(rows[1].forum_topic_id, Some(200));
-        assert_eq!(rows[2].forum_topic_id, None);
+        assert_eq!(rows[2].forum_topic_id, Some(200));
+        assert_eq!(rows[3].forum_topic_id, None);
 
         let topic_rows = load_item_rows_from_pool(
             &pool,
@@ -2878,7 +2892,7 @@ mod tests {
         )
         .await
         .expect("load topic rows");
-        assert_eq!(topic_rows.len(), 2);
+        assert_eq!(topic_rows.len(), 3);
         assert!(topic_rows.iter().all(|row| row.forum_topic_id == Some(200)));
 
         let uncategorized_rows = load_item_rows_from_pool(
@@ -2927,11 +2941,12 @@ mod tests {
             .expect("insert topic");
         }
 
-        for (id, external_id, published_at, reply_to_top_id) in [
-            (1_i64, "800", 400_i64, None),
-            (2_i64, "801", 300_i64, Some(11_i64)),
-            (3_i64, "950", 200_i64, None),
-            (4_i64, "901", 100_i64, Some(22_i64)),
+        for (id, external_id, published_at, reply_to_msg_id, reply_to_top_id) in [
+            (1_i64, "800", 400_i64, None, None),
+            (2_i64, "801", 300_i64, None, Some(11_i64)),
+            (3_i64, "950", 200_i64, None, None),
+            (4_i64, "901", 100_i64, None, Some(22_i64)),
+            (5_i64, "902", 50_i64, Some(22_i64), None),
         ] {
             sqlx::query(
                 r#"
@@ -2955,7 +2970,7 @@ mod tests {
             .bind(0_i64)
             .bind(None::<String>)
             .bind(None::<Vec<u8>>)
-            .bind(None::<i64>)
+            .bind(reply_to_msg_id)
             .bind(None::<String>)
             .bind(None::<String>)
             .bind(reply_to_top_id)
@@ -2974,7 +2989,7 @@ mod tests {
         assert_eq!(records[0].topic_id, Some(11));
         assert_eq!(records[0].message_count, 2);
         assert_eq!(records[1].topic_id, Some(22));
-        assert_eq!(records[1].message_count, 1);
+        assert_eq!(records[1].message_count, 2);
         assert_eq!(records[2].kind, "uncategorized");
         assert_eq!(records[2].key, "general_uncategorized");
         assert_eq!(records[2].message_count, 1);
