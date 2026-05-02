@@ -5,6 +5,34 @@ use crate::notebooklm_export::model::{
     RenderedMessageBlock,
 };
 
+pub(crate) struct DocumentRenderContext<'a> {
+    pub(crate) source: &'a NotebookLmExportSource,
+    pub(crate) topic: &'a ExportTopicDescriptor,
+    pub(crate) generated_at: i64,
+    pub(crate) title_period: &'a str,
+    pub(crate) period_start: i64,
+    pub(crate) period_end: i64,
+    pub(crate) participants: &'a [ParticipantSummary],
+    pub(crate) message_count: usize,
+    pub(crate) is_continuation: bool,
+}
+
+impl<'a> DocumentRenderContext<'a> {
+    fn with_message_count(&self, message_count: usize) -> Self {
+        Self {
+            source: self.source,
+            topic: self.topic,
+            generated_at: self.generated_at,
+            title_period: self.title_period,
+            period_start: self.period_start,
+            period_end: self.period_end,
+            participants: self.participants,
+            message_count,
+            is_continuation: self.is_continuation,
+        }
+    }
+}
+
 pub(crate) fn format_unix_rfc3339(value: i64) -> String {
     OffsetDateTime::from_unix_timestamp(value)
         .unwrap_or(OffsetDateTime::UNIX_EPOCH)
@@ -141,27 +169,11 @@ pub(crate) fn render_message_block(message: &NotebookLmExportMessage) -> Rendere
 }
 
 pub(crate) fn render_document(
-    source: &NotebookLmExportSource,
-    topic: &ExportTopicDescriptor,
-    generated_at: i64,
-    title_period: &str,
-    period_start: i64,
-    period_end: i64,
-    participants: &[ParticipantSummary],
+    context: &DocumentRenderContext<'_>,
     blocks: &[RenderedMessageBlock],
-    is_continuation: bool,
 ) -> String {
-    let mut output = render_document_header(
-        source,
-        topic,
-        generated_at,
-        title_period,
-        period_start,
-        period_end,
-        participants,
-        blocks.len(),
-        is_continuation,
-    );
+    let context = context.with_message_count(blocks.len());
+    let mut output = render_document_header(&context);
 
     for block in blocks {
         output.push_str(&block.markdown);
@@ -170,91 +182,71 @@ pub(crate) fn render_document(
     output
 }
 
-pub(crate) fn render_document_overhead(
-    source: &NotebookLmExportSource,
-    topic: &ExportTopicDescriptor,
-    generated_at: i64,
-    title_period: &str,
-    period_start: i64,
-    period_end: i64,
-    participants: &[ParticipantSummary],
-    message_count: usize,
-    is_continuation: bool,
-) -> (usize, usize) {
-    let markdown = render_document_header(
-        source,
-        topic,
-        generated_at,
-        title_period,
-        period_start,
-        period_end,
-        participants,
-        message_count,
-        is_continuation,
-    );
+pub(crate) fn render_document_overhead(context: &DocumentRenderContext<'_>) -> (usize, usize) {
+    let markdown = render_document_header(context);
 
     (approx_word_count(&markdown), markdown.len())
 }
 
-fn render_document_header(
-    source: &NotebookLmExportSource,
-    topic: &ExportTopicDescriptor,
-    generated_at: i64,
-    title_period: &str,
-    period_start: i64,
-    period_end: i64,
-    participants: &[ParticipantSummary],
-    message_count: usize,
-    is_continuation: bool,
-) -> String {
-    let source_name = source.title.as_deref().unwrap_or(&source.external_id);
+fn render_document_header(context: &DocumentRenderContext<'_>) -> String {
+    let source_name = context
+        .source
+        .title
+        .as_deref()
+        .unwrap_or(&context.source.external_id);
     let mut output = String::new();
 
     output.push_str(&format!(
         "# Telegram Export: {source_name} / {}\n\n",
-        topic.title
+        context.topic.title
     ));
     output.push_str("## Document Summary\n\n");
     output.push_str(&format!("- Source: {source_name}\n"));
-    output.push_str(&format!("- Source kind: {}\n", source.telegram_source_kind));
-    output.push_str(&format!("- Topic: {}\n", topic.title));
+    output.push_str(&format!(
+        "- Source kind: {}\n",
+        context.source.telegram_source_kind
+    ));
+    output.push_str(&format!("- Topic: {}\n", context.topic.title));
     output.push_str(&format!(
         "- Topic id: {}\n",
-        yaml_optional_i64(topic.topic_id)
+        yaml_optional_i64(context.topic.topic_id)
     ));
     output.push_str(&format!(
         "- Topic top message id: {}\n",
-        yaml_optional_i64(topic.top_message_id)
+        yaml_optional_i64(context.topic.top_message_id)
     ));
     output.push_str(&format!(
         "- Export period: {} - {}\n",
-        format_unix_rfc3339(period_start),
-        format_unix_rfc3339(period_end)
+        format_unix_rfc3339(context.period_start),
+        format_unix_rfc3339(context.period_end)
     ));
     output.push_str(&format!(
         "- Generated at: {}\n",
-        format_unix_rfc3339(generated_at)
+        format_unix_rfc3339(context.generated_at)
     ));
-    output.push_str(&format!("- Message count: {message_count}\n"));
-    output.push_str(&format!("- Active participants: {}\n", participants.len()));
+    output.push_str(&format!("- Message count: {}\n", context.message_count));
+    output.push_str(&format!(
+        "- Active participants: {}\n",
+        context.participants.len()
+    ));
     output.push_str("- Source system: Extractum local SQLite\n");
     output.push_str("- Intended use: Google NotebookLM analysis\n");
-    output.push_str(&format!("- Chunk period: {title_period}\n\n"));
+    output.push_str(&format!("- Chunk period: {}\n\n", context.title_period));
 
     output.push_str("## Participants\n\n");
-    for participant in participants.iter().take(50) {
+    for participant in context.participants.iter().take(50) {
         output.push_str(&format!(
             "- {} - {} messages\n",
             participant.author, participant.message_count
         ));
     }
-    if participants.is_empty() {
+    if context.participants.is_empty() {
         output.push_str("- Unknown - 0 messages\n");
     }
     output.push('\n');
 
     output.push_str("## Conversation\n\n");
-    if is_continuation {
+    if context.is_continuation {
         output.push_str("> This file continues the export from the previous part.\n\n");
     }
 
@@ -277,7 +269,9 @@ fn yaml_optional_i64(value: Option<i64>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_unix_rfc3339, render_document, render_message_block};
+    use super::{
+        format_unix_rfc3339, render_document, render_message_block, DocumentRenderContext,
+    };
     use crate::media::ItemMediaMetadata;
     use crate::notebooklm_export::model::{
         ExportTopicDescriptor, NotebookLmExportMessage, NotebookLmExportSource,
@@ -373,7 +367,18 @@ mod tests {
             topic_id: Some(200),
             top_message_id: Some(700),
         };
-        let markdown = render_document(&source, &topic, 100, "2024-01", 0, 100, &[], &[], false);
+        let context = DocumentRenderContext {
+            source: &source,
+            topic: &topic,
+            generated_at: 100,
+            title_period: "2024-01",
+            period_start: 0,
+            period_end: 100,
+            participants: &[],
+            message_count: 0,
+            is_continuation: false,
+        };
+        let markdown = render_document(&context, &[]);
 
         assert!(markdown.contains("# Telegram Export: Forum / Roadmap"));
         assert!(markdown.contains("- Topic: Roadmap"));

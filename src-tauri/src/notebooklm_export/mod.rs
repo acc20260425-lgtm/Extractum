@@ -27,6 +27,7 @@ use model::{
 use query::{load_export_messages, load_export_source};
 use renderer::{
     approx_word_count, render_document, render_document_overhead, render_message_block,
+    DocumentRenderContext,
 };
 
 const EXPORT_MARKER_FILE: &str = ".extractum-notebooklm-export.json";
@@ -249,17 +250,18 @@ pub async fn export_source_to_notebooklm(
             config.max_words_per_file,
             config.max_bytes_per_file,
             |topic, title_period, period_start, period_end, is_continuation, message_count| {
-                render_document_overhead(
-                    &source,
+                let context = DocumentRenderContext {
+                    source: &source,
                     topic,
                     generated_at,
                     title_period,
                     period_start,
                     period_end,
-                    &participants,
+                    participants: &participants,
                     message_count,
                     is_continuation,
-                )
+                };
+                render_document_overhead(&context)
             },
         );
         warnings.extend(chunk_warnings);
@@ -298,17 +300,18 @@ pub async fn export_source_to_notebooklm(
         let mut files = Vec::new();
         for (index, chunk) in chunks.into_iter().enumerate() {
             generated_file_names.push(chunk.filename.clone());
-            let markdown = render_document(
-                &source,
-                &chunk.topic,
+            let context = DocumentRenderContext {
+                source: &source,
+                topic: &chunk.topic,
                 generated_at,
-                &chunk.title_period,
-                chunk.period_start,
-                chunk.period_end,
-                &participants,
-                &chunk.blocks,
-                chunk.part_number > 1,
-            );
+                title_period: &chunk.title_period,
+                period_start: chunk.period_start,
+                period_end: chunk.period_end,
+                participants: &participants,
+                message_count: chunk.blocks.len(),
+                is_continuation: chunk.part_number > 1,
+            };
+            let markdown = render_document(&context, &chunk.blocks);
             task_progress.emit_progress(
                 "writing",
                 &format!("Writing {}.", chunk.filename),

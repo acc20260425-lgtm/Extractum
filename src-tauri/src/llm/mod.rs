@@ -107,27 +107,54 @@ fn emit_response_event(handle: &AppHandle, event: &LlmStreamEvent) {
     let _ = handle.emit(LLM_RESPONSE_EVENT, event);
 }
 
-fn build_stream_event(
-    request_id: String,
-    kind: &str,
-    provider: String,
-    model: String,
-    queue_position: Option<usize>,
-    delta: Option<String>,
-    text: Option<String>,
-    usage: Option<LlmUsage>,
-    error: Option<String>,
-) -> LlmStreamEvent {
-    LlmStreamEvent {
-        request_id,
-        kind: kind.to_string(),
-        queue_position,
-        delta,
-        text,
-        provider,
-        model,
-        usage,
-        error,
+struct StreamEvent {
+    event: LlmStreamEvent,
+}
+
+impl StreamEvent {
+    fn new(request_id: String, kind: &str, provider: String, model: String) -> Self {
+        Self {
+            event: LlmStreamEvent {
+                request_id,
+                kind: kind.to_string(),
+                queue_position: None,
+                delta: None,
+                text: None,
+                provider,
+                model,
+                usage: None,
+                error: None,
+            },
+        }
+    }
+
+    fn queue_position(mut self, queue_position: usize) -> Self {
+        self.event.queue_position = Some(queue_position);
+        self
+    }
+
+    fn delta(mut self, delta: String) -> Self {
+        self.event.delta = Some(delta);
+        self
+    }
+
+    fn text(mut self, text: String) -> Self {
+        self.event.text = Some(text);
+        self
+    }
+
+    fn usage(mut self, usage: Option<LlmUsage>) -> Self {
+        self.event.usage = usage;
+        self
+    }
+
+    fn error(mut self, error: String) -> Self {
+        self.event.error = Some(error);
+        self
+    }
+
+    fn build(self) -> LlmStreamEvent {
+        self.event
     }
 }
 
@@ -323,33 +350,26 @@ pub async fn ask_llm_stream(
                 move |position| {
                     emit_response_event(
                         &queued_handle,
-                        &build_stream_event(
+                        &StreamEvent::new(
                             queued_request_id.clone(),
                             "queued",
                             queued_provider.clone(),
                             queued_model.clone(),
-                            Some(position),
-                            None,
-                            None,
-                            None,
-                            None,
-                        ),
+                        )
+                        .queue_position(position)
+                        .build(),
                     );
                 },
                 move |control| async move {
                     emit_response_event(
                         &started_handle,
-                        &build_stream_event(
+                        &StreamEvent::new(
                             started_request_id,
                             "started",
                             started_provider,
                             started_model,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                        ),
+                        )
+                        .build(),
                     );
 
                     control
@@ -359,17 +379,14 @@ pub async fn ask_llm_stream(
                             |delta| {
                                 emit_response_event(
                                     &delta_handle,
-                                    &build_stream_event(
+                                    &StreamEvent::new(
                                         delta_request_id.clone(),
                                         "delta",
                                         delta_provider.clone(),
                                         delta_model.clone(),
-                                        None,
-                                        Some(delta.to_string()),
-                                        None,
-                                        None,
-                                        None,
-                                    ),
+                                    )
+                                    .delta(delta.to_string())
+                                    .build(),
                                 );
                             },
                         ))
@@ -381,49 +398,36 @@ pub async fn ask_llm_stream(
             Ok(completion) => {
                 emit_response_event(
                     &completed_handle,
-                    &build_stream_event(
+                    &StreamEvent::new(
                         completed_request_id,
                         "completed",
                         completion.provider,
                         completion.model,
-                        None,
-                        None,
-                        Some(completion.text),
-                        completion.usage,
-                        None,
-                    ),
+                    )
+                    .text(completion.text)
+                    .usage(completion.usage)
+                    .build(),
                 );
             }
             Err(LlmRequestError::Failed(error)) => {
                 emit_response_event(
                     &failed_handle,
-                    &build_stream_event(
-                        failed_request_id,
-                        "failed",
-                        failed_provider,
-                        failed_model,
-                        None,
-                        None,
-                        None,
-                        None,
-                        Some(error),
-                    ),
+                    &StreamEvent::new(failed_request_id, "failed", failed_provider, failed_model)
+                        .error(error)
+                        .build(),
                 );
             }
             Err(LlmRequestError::Cancelled) => {
                 emit_response_event(
                     &cancelled_handle,
-                    &build_stream_event(
+                    &StreamEvent::new(
                         cancelled_request_id,
                         "cancelled",
                         cancelled_provider,
                         cancelled_model,
-                        None,
-                        None,
-                        None,
-                        None,
-                        Some("Request cancelled.".to_string()),
-                    ),
+                    )
+                    .error("Request cancelled.".to_string())
+                    .build(),
                 );
             }
         }

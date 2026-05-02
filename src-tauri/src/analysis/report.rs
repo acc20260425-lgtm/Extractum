@@ -19,7 +19,8 @@ use super::models::{
 };
 use super::store::{
     fetch_prompt_template, fetch_run_row, fetch_source_group, find_active_duplicate_run,
-    insert_analysis_run, persist_run_snapshot, set_run_status,
+    insert_analysis_run, persist_run_snapshot, set_run_status, AnalysisRunInsert,
+    DuplicateRunLookup,
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
@@ -217,18 +218,21 @@ fn summarize_chunk_for_reduce(summary: &ChunkSummary) -> String {
     )
 }
 
-fn build_reduce_request(
+struct ReduceRequestParams<'a> {
     run_id: i64,
     profile_id: String,
-    scope_label: &str,
-    output_language: &str,
-    prompt_template: &AnalysisPromptTemplate,
+    scope_label: &'a str,
+    output_language: &'a str,
+    prompt_template: &'a AnalysisPromptTemplate,
     period_from: i64,
     period_to: i64,
-    chunk_summaries: &[ChunkSummary],
+    chunk_summaries: &'a [ChunkSummary],
     model_override: Option<String>,
-) -> LlmChatRequest {
-    let combined = chunk_summaries
+}
+
+fn build_reduce_request(params: ReduceRequestParams<'_>) -> LlmChatRequest {
+    let combined = params
+        .chunk_summaries
         .iter()
         .enumerate()
         .map(|(index, summary)| {
@@ -242,57 +246,93 @@ fn build_reduce_request(
         .join("\n---\n\n");
 
     LlmChatRequest {
-        request_id: format!("analysis-reduce-{run_id}-{}", now_secs()),
-        profile_id: Some(profile_id),
-        model_override,
+        request_id: format!("analysis-reduce-{}-{}", params.run_id, now_secs()),
+        profile_id: Some(params.profile_id),
+        model_override: params.model_override,
         messages: vec![
             LlmMessage {
                 role: "system".to_string(),
                 content: format!(
-                    "You write grounded markdown reports over already-summarized Telegram messages.\nAnswer in {output_language}.\nUse markdown only.\nEvery important conclusion must cite one or more refs like [s12-m845].\nDo not invent facts beyond the provided chunk summaries."
+                    "You write grounded markdown reports over already-summarized Telegram messages.\nAnswer in {}.\nUse markdown only.\nEvery important conclusion must cite one or more refs like [s12-m845].\nDo not invent facts beyond the provided chunk summaries.",
+                    params.output_language
                 ),
             },
             LlmMessage {
                 role: "user".to_string(),
                 content: format!(
                     "Analysis scope: {scope_label}\nPeriod: {period_from} to {period_to}\n\nUser report template:\n{template}\n\nChunk summaries:\n\n{combined}",
-                    template = prompt_template.body
+                    scope_label = params.scope_label,
+                    period_from = params.period_from,
+                    period_to = params.period_to,
+                    template = params.prompt_template.body
                 ),
             },
         ],
     }
 }
 
-fn emit_run_event(
-    handle: &AppHandle,
-    run_id: i64,
-    request_id: Option<String>,
-    kind: &str,
-    phase: &str,
-    queue_position: Option<usize>,
-    message: Option<String>,
-    progress_current: Option<i64>,
-    progress_total: Option<i64>,
-    delta: Option<String>,
-    chunk_summary: Option<AnalysisChunkSummaryEvent>,
-    error: Option<String>,
-) {
-    emit_analysis_event(
-        handle,
-        &AnalysisRunEvent {
-            run_id,
-            request_id,
-            kind: kind.to_string(),
-            phase: phase.to_string(),
-            queue_position,
-            message,
-            progress_current,
-            progress_total,
-            delta,
-            chunk_summary,
-            error,
-        },
-    );
+struct RunEvent {
+    event: AnalysisRunEvent,
+}
+
+impl RunEvent {
+    fn new(run_id: i64, kind: &str, phase: &str) -> Self {
+        Self {
+            event: AnalysisRunEvent {
+                run_id,
+                request_id: None,
+                kind: kind.to_string(),
+                phase: phase.to_string(),
+                queue_position: None,
+                message: None,
+                progress_current: None,
+                progress_total: None,
+                delta: None,
+                chunk_summary: None,
+                error: None,
+            },
+        }
+    }
+
+    fn request_id(mut self, request_id: String) -> Self {
+        self.event.request_id = Some(request_id);
+        self
+    }
+
+    fn queue_position(mut self, queue_position: usize) -> Self {
+        self.event.queue_position = Some(queue_position);
+        self
+    }
+
+    fn message(mut self, message: String) -> Self {
+        self.event.message = Some(message);
+        self
+    }
+
+    fn progress(mut self, current: i64, total: i64) -> Self {
+        self.event.progress_current = Some(current);
+        self.event.progress_total = Some(total);
+        self
+    }
+
+    fn delta(mut self, delta: String) -> Self {
+        self.event.delta = Some(delta);
+        self
+    }
+
+    fn chunk_summary(mut self, chunk_summary: AnalysisChunkSummaryEvent) -> Self {
+        self.event.chunk_summary = Some(chunk_summary);
+        self
+    }
+
+    fn error(mut self, error: String) -> Self {
+        self.event.error = Some(error);
+        self
+    }
+
+    fn emit(self, handle: &AppHandle) {
+        emit_analysis_event(handle, &self.event);
+    }
 }
 
 fn finish_map_phase(
@@ -333,8 +373,7 @@ async fn cancel_report_children(handle: &AppHandle, run_id: i64) {
         .await;
 }
 
-async fn run_report_pipeline(
-    handle: AppHandle,
+struct ReportRunInput {
     run_id: i64,
     scope_label: String,
     source_ids: Vec<i64>,
@@ -344,7 +383,24 @@ async fn run_report_pipeline(
     prompt_template: AnalysisPromptTemplate,
     model_override: Option<String>,
     profile_id: Option<String>,
+}
+
+async fn run_report_pipeline(
+    handle: AppHandle,
+    input: ReportRunInput,
 ) -> Result<(), ReportRunError> {
+    let ReportRunInput {
+        run_id,
+        scope_label,
+        source_ids,
+        period_from,
+        period_to,
+        output_language,
+        prompt_template,
+        model_override,
+        profile_id,
+    } = input;
+
     ensure_report_not_cancelled(&handle, run_id).await?;
 
     let pool = get_pool(&handle)
@@ -362,20 +418,9 @@ async fn run_report_pipeline(
     .await
     .map_err(ReportRunError::Failed)?;
 
-    emit_run_event(
-        &handle,
-        run_id,
-        None,
-        "started",
-        "load_items",
-        None,
-        Some("Loading synced messages from local storage...".to_string()),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    RunEvent::new(run_id, "started", "load_items")
+        .message("Loading synced messages from local storage...".to_string())
+        .emit(&handle);
 
     let corpus = load_corpus_messages(&pool, &source_ids, period_from, period_to)
         .await
@@ -387,23 +432,12 @@ async fn run_report_pipeline(
     }
     ensure_report_not_cancelled(&handle, run_id).await?;
 
-    emit_run_event(
-        &handle,
-        run_id,
-        None,
-        "progress",
-        "chunking",
-        None,
-        Some(format!(
+    RunEvent::new(run_id, "progress", "chunking")
+        .message(format!(
             "Loaded {} messages. Preparing chunks...",
             corpus.len()
-        )),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+        ))
+        .emit(&handle);
 
     let chunks = chunk_messages(&corpus, ANALYSIS_CHUNK_TARGET_CHARS);
     let resolved_profile = resolve_profile_for_backend(&handle, profile_id.as_deref())
@@ -411,24 +445,14 @@ async fn run_report_pipeline(
         .map_err(ReportRunError::Failed)?;
     ensure_report_not_cancelled(&handle, run_id).await?;
 
-    emit_run_event(
-        &handle,
-        run_id,
-        None,
-        "progress",
-        "map",
-        None,
-        Some(format!(
+    RunEvent::new(run_id, "progress", "map")
+        .message(format!(
             "Dispatching {} chunk analysis request{}...",
             chunks.len(),
             if chunks.len() == 1 { "" } else { "s" }
-        )),
-        Some(0),
-        Some(chunks.len() as i64),
-        None,
-        None,
-        None,
-    );
+        ))
+        .progress(0, chunks.len() as i64)
+        .emit(&handle);
 
     let completed_chunks = Arc::new(AtomicUsize::new(0));
     let mut join_set = JoinSet::new();
@@ -471,45 +495,34 @@ async fn run_report_pipeline(
                 .run_request(
                     request_meta,
                     move |position| {
-                        emit_run_event(
-                            &queued_handle,
-                            run_id,
-                            Some(queued_request_id.clone()),
-                            "queued",
-                            "map",
-                            Some(position),
-                            Some(format!(
+                        RunEvent::new(run_id, "queued", "map")
+                            .request_id(queued_request_id.clone())
+                            .queue_position(position)
+                            .message(format!(
                                 "Chunk {} of {} queued at position {}...",
                                 index + 1,
                                 total_chunks,
                                 position
-                            )),
-                            Some(queued_counter.load(Ordering::SeqCst) as i64),
-                            Some(total_chunks as i64),
-                            None,
-                            None,
-                            None,
-                        );
+                            ))
+                            .progress(
+                                queued_counter.load(Ordering::SeqCst) as i64,
+                                total_chunks as i64,
+                            )
+                            .emit(&queued_handle);
                     },
                     move |control| async move {
-                        emit_run_event(
-                            &started_handle,
-                            run_id,
-                            Some(started_request_id),
-                            "started",
-                            "map",
-                            None,
-                            Some(format!(
+                        RunEvent::new(run_id, "started", "map")
+                            .request_id(started_request_id)
+                            .message(format!(
                                 "Analyzing chunk {} of {}...",
                                 index + 1,
                                 total_chunks
-                            )),
-                            Some(started_counter.load(Ordering::SeqCst) as i64),
-                            Some(total_chunks as i64),
-                            None,
-                            None,
-                            None,
-                        );
+                            ))
+                            .progress(
+                                started_counter.load(Ordering::SeqCst) as i64,
+                                total_chunks as i64,
+                            )
+                            .emit(&started_handle);
 
                         control
                             .run_cancellable(run_llm_collect_with_profile(
@@ -525,22 +538,15 @@ async fn run_report_pipeline(
                     let summary =
                         parse_chunk_summary(&completion.text).map_err(ReportRunError::Failed)?;
                     let completed = chunk_counter.fetch_add(1, Ordering::SeqCst) + 1;
-                    emit_run_event(
-                        &task_handle,
-                        run_id,
-                        Some(chunk_request_id.clone()),
-                        "progress",
-                        "map",
-                        None,
-                        Some(format!(
+                    RunEvent::new(run_id, "progress", "map")
+                        .request_id(chunk_request_id.clone())
+                        .message(format!(
                             "Chunk {} of {} summarized.",
                             index + 1,
                             total_chunks
-                        )),
-                        Some(completed as i64),
-                        Some(total_chunks as i64),
-                        None,
-                        Some(AnalysisChunkSummaryEvent {
+                        ))
+                        .progress(completed as i64, total_chunks as i64)
+                        .chunk_summary(AnalysisChunkSummaryEvent {
                             index: (index + 1) as i64,
                             total: total_chunks as i64,
                             message_count: chunk_message_count,
@@ -548,47 +554,35 @@ async fn run_report_pipeline(
                             topics: summary.topics.clone(),
                             notable_points: summary.notable_points.clone(),
                             candidate_refs: summary.candidate_refs.clone(),
-                        }),
-                        None,
-                    );
+                        })
+                        .emit(&task_handle);
                     Ok::<(usize, ChunkSummary), ReportRunError>((index, summary))
                 }
                 Err(LlmRequestError::Failed(error)) => {
-                    emit_run_event(
-                        &failed_handle,
-                        run_id,
-                        Some(failed_request_id),
-                        "failed",
-                        "map",
-                        None,
-                        Some(format!("Chunk {} of {} failed.", index + 1, total_chunks)),
-                        Some(chunk_counter.load(Ordering::SeqCst) as i64),
-                        Some(total_chunks as i64),
-                        None,
-                        None,
-                        Some(error.clone()),
-                    );
+                    RunEvent::new(run_id, "failed", "map")
+                        .request_id(failed_request_id)
+                        .message(format!("Chunk {} of {} failed.", index + 1, total_chunks))
+                        .progress(
+                            chunk_counter.load(Ordering::SeqCst) as i64,
+                            total_chunks as i64,
+                        )
+                        .error(error.clone())
+                        .emit(&failed_handle);
                     Err(ReportRunError::Failed(error))
                 }
                 Err(LlmRequestError::Cancelled) => {
-                    emit_run_event(
-                        &cancelled_handle,
-                        run_id,
-                        Some(cancelled_request_id),
-                        "cancelled",
-                        "map",
-                        None,
-                        Some(format!(
+                    RunEvent::new(run_id, "cancelled", "map")
+                        .request_id(cancelled_request_id)
+                        .message(format!(
                             "Chunk {} of {} cancelled.",
                             index + 1,
                             total_chunks
-                        )),
-                        Some(chunk_counter.load(Ordering::SeqCst) as i64),
-                        Some(total_chunks as i64),
-                        None,
-                        None,
-                        None,
-                    );
+                        ))
+                        .progress(
+                            chunk_counter.load(Ordering::SeqCst) as i64,
+                            total_chunks as i64,
+                        )
+                        .emit(&cancelled_handle);
                     Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()))
                 }
             }
@@ -622,32 +616,21 @@ async fn run_report_pipeline(
     let chunk_summaries = finish_map_phase(ordered_summaries, first_error)?;
     ensure_report_not_cancelled(&handle, run_id).await?;
 
-    emit_run_event(
-        &handle,
-        run_id,
-        None,
-        "progress",
-        "reduce",
-        None,
-        Some("Writing final report...".to_string()),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    RunEvent::new(run_id, "progress", "reduce")
+        .message("Writing final report...".to_string())
+        .emit(&handle);
 
-    let reduce_request = build_reduce_request(
+    let reduce_request = build_reduce_request(ReduceRequestParams {
         run_id,
-        resolved_profile.profile_id.clone(),
-        &scope_label,
-        &output_language,
-        &prompt_template,
+        profile_id: resolved_profile.profile_id.clone(),
+        scope_label: &scope_label,
+        output_language: &output_language,
+        prompt_template: &prompt_template,
         period_from,
         period_to,
-        &chunk_summaries,
-        model_override.clone(),
-    );
+        chunk_summaries: &chunk_summaries,
+        model_override: model_override.clone(),
+    });
     let reduce_request_id = reduce_request.request_id.clone();
     let reduce_provider = resolved_profile.provider.as_str().to_string();
     let scheduler = handle.state::<LlmSchedulerState>();
@@ -674,56 +657,27 @@ async fn run_report_pipeline(
                 owner_run_id: Some(run_id),
             },
             move |position| {
-                emit_run_event(
-                    &queued_handle,
-                    run_id,
-                    Some(queued_request_id.clone()),
-                    "queued",
-                    "reduce",
-                    Some(position),
-                    Some(format!("Final report queued at position {}...", position)),
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                );
+                RunEvent::new(run_id, "queued", "reduce")
+                    .request_id(queued_request_id.clone())
+                    .queue_position(position)
+                    .message(format!("Final report queued at position {}...", position))
+                    .emit(&queued_handle);
             },
             move |control| async move {
-                emit_run_event(
-                    &started_handle,
-                    run_id,
-                    Some(started_request_id),
-                    "started",
-                    "reduce",
-                    None,
-                    Some("Writing final report...".to_string()),
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                );
+                RunEvent::new(run_id, "started", "reduce")
+                    .request_id(started_request_id)
+                    .message("Writing final report...".to_string())
+                    .emit(&started_handle);
 
                 control
                     .run_cancellable(run_llm_stream_with_profile(
                         &reduce_request_for_stream,
                         &reduce_profile,
                         |delta| {
-                            emit_run_event(
-                                &delta_handle,
-                                run_id,
-                                Some(delta_request_id.clone()),
-                                "delta",
-                                "reduce",
-                                None,
-                                None,
-                                None,
-                                None,
-                                Some(delta.to_string()),
-                                None,
-                                None,
-                            );
+                            RunEvent::new(run_id, "delta", "reduce")
+                                .request_id(delta_request_id.clone())
+                                .delta(delta.to_string())
+                                .emit(&delta_handle);
                         },
                     ))
                     .await
@@ -733,37 +687,18 @@ async fn run_report_pipeline(
     {
         Ok(completion) => completion,
         Err(LlmRequestError::Failed(error)) => {
-            emit_run_event(
-                &failed_handle,
-                run_id,
-                Some(failed_request_id),
-                "failed",
-                "reduce",
-                None,
-                Some("Final report generation failed.".to_string()),
-                None,
-                None,
-                None,
-                None,
-                Some(error.clone()),
-            );
+            RunEvent::new(run_id, "failed", "reduce")
+                .request_id(failed_request_id)
+                .message("Final report generation failed.".to_string())
+                .error(error.clone())
+                .emit(&failed_handle);
             return Err(ReportRunError::Failed(error));
         }
         Err(LlmRequestError::Cancelled) => {
-            emit_run_event(
-                &cancelled_handle,
-                run_id,
-                Some(cancelled_request_id),
-                "cancelled",
-                "reduce",
-                None,
-                Some("Final report generation cancelled.".to_string()),
-                None,
-                None,
-                None,
-                None,
-                None,
-            );
+            RunEvent::new(run_id, "cancelled", "reduce")
+                .request_id(cancelled_request_id)
+                .message("Final report generation cancelled.".to_string())
+                .emit(&cancelled_handle);
             return Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()));
         }
     };
@@ -772,20 +707,10 @@ async fn run_report_pipeline(
     let trace_data = build_trace_data(&completion.text, &corpus);
     let compressed_trace = compress_trace_data(&trace_data).map_err(ReportRunError::Failed)?;
 
-    emit_run_event(
-        &handle,
-        run_id,
-        Some(reduce_request_id.clone()),
-        "progress",
-        "persist",
-        None,
-        Some("Saving report...".to_string()),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    RunEvent::new(run_id, "progress", "persist")
+        .request_id(reduce_request_id.clone())
+        .message("Saving report...".to_string())
+        .emit(&handle);
 
     persist_run_snapshot(&pool, run_id, &scope_label, &corpus)
         .await
@@ -803,23 +728,13 @@ async fn run_report_pipeline(
     .await
     .map_err(ReportRunError::Failed)?;
 
-    emit_run_event(
-        &handle,
-        run_id,
-        Some(reduce_request_id),
-        "completed",
-        "persist",
-        None,
-        Some(format!(
+    RunEvent::new(run_id, "completed", "persist")
+        .request_id(reduce_request_id)
+        .message(format!(
             "Report completed with {} cited references.",
             trace_data.refs.len()
-        )),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+        ))
+        .emit(&handle);
 
     Ok(())
 }
@@ -838,20 +753,10 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
         .await;
     }
 
-    emit_run_event(
-        handle,
-        run_id,
-        None,
-        "failed",
-        "persist",
-        None,
-        Some("Report run failed.".to_string()),
-        None,
-        None,
-        None,
-        None,
-        Some(error),
-    );
+    RunEvent::new(run_id, "failed", "persist")
+        .message("Report run failed.".to_string())
+        .error(error)
+        .emit(handle);
 }
 
 async fn cancel_run(handle: &AppHandle, run_id: i64, message: String) {
@@ -868,20 +773,9 @@ async fn cancel_run(handle: &AppHandle, run_id: i64, message: String) {
         .await;
     }
 
-    emit_run_event(
-        handle,
-        run_id,
-        None,
-        "cancelled",
-        "persist",
-        None,
-        Some(message),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    RunEvent::new(run_id, "cancelled", "persist")
+        .message(message)
+        .emit(handle);
 }
 
 pub async fn cleanup_interrupted_analysis_runs(handle: AppHandle) {
@@ -929,25 +823,18 @@ pub async fn cancel_analysis_run(
         )));
     }
 
-    emit_run_event(
-        &handle,
-        run_id,
-        None,
-        "progress",
-        &run.status,
-        None,
-        Some("Cancelling analysis run...".to_string()),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    RunEvent::new(run_id, "progress", &run.status)
+        .message("Cancelling analysis run...".to_string())
+        .emit(&handle);
 
     Ok(())
 }
 
 #[tauri::command]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command signature is the frontend IPC contract; inputs are normalized into internal structs immediately."
+)]
 pub async fn start_analysis_report(
     handle: AppHandle,
     state: tauri::State<'_, AnalysisState>,
@@ -1044,15 +931,17 @@ pub async fn start_analysis_report(
 
     if let Some(existing_run_id) = find_active_duplicate_run(
         &pool,
-        scope_type,
-        resolved_source_id,
-        resolved_group_id,
-        period_from,
-        period_to,
-        &output_language,
-        prompt_template.id,
-        &resolved_profile.profile_id,
-        &effective_model,
+        &DuplicateRunLookup {
+            scope_type,
+            source_id: resolved_source_id,
+            source_group_id: resolved_group_id,
+            period_from,
+            period_to,
+            output_language: &output_language,
+            prompt_template_id: prompt_template.id,
+            provider_profile: &resolved_profile.profile_id,
+            model: &effective_model,
+        },
     )
     .await?
     {
@@ -1077,16 +966,18 @@ pub async fn start_analysis_report(
 
     let run_id = insert_analysis_run(
         &pool,
-        scope_type,
-        resolved_source_id,
-        resolved_group_id,
-        period_from,
-        period_to,
-        &output_language,
-        &prompt_template,
-        &resolved_profile.profile_id,
-        resolved_profile.provider.as_str(),
-        &effective_model,
+        &AnalysisRunInsert {
+            scope_type,
+            source_id: resolved_source_id,
+            source_group_id: resolved_group_id,
+            period_from,
+            period_to,
+            output_language: &output_language,
+            prompt_template: &prompt_template,
+            provider_profile: &resolved_profile.profile_id,
+            provider: resolved_profile.provider.as_str(),
+            model: &effective_model,
+        },
     )
     .await?;
 
@@ -1096,15 +987,17 @@ pub async fn start_analysis_report(
     tokio::spawn(async move {
         match run_report_pipeline(
             app_handle.clone(),
-            run_id,
-            scope_label,
-            source_ids,
-            period_from,
-            period_to,
-            output_language,
-            prompt_template,
-            model_override,
-            profile_id,
+            ReportRunInput {
+                run_id,
+                scope_label,
+                source_ids,
+                period_from,
+                period_to,
+                output_language,
+                prompt_template,
+                model_override,
+                profile_id,
+            },
         )
         .await
         {
@@ -1127,7 +1020,7 @@ pub async fn start_analysis_report(
 mod tests {
     use super::{
         build_map_request, build_reduce_request, extract_json_payload, finish_map_phase,
-        parse_chunk_summary, ReportRunError,
+        parse_chunk_summary, ReduceRequestParams, ReportRunError,
     };
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
 
@@ -1261,17 +1154,19 @@ mod tests {
 
     #[test]
     fn build_reduce_request_keeps_run_scoped_request_and_profile() {
-        let request = build_reduce_request(
-            77,
-            "profile-a".to_string(),
-            "My scope",
-            "Russian",
-            &sample_prompt_template(),
-            10,
-            20,
-            &[sample_chunk_summary("alpha"), sample_chunk_summary("beta")],
-            Some("model-x".to_string()),
-        );
+        let prompt_template = sample_prompt_template();
+        let chunk_summaries = vec![sample_chunk_summary("alpha"), sample_chunk_summary("beta")];
+        let request = build_reduce_request(ReduceRequestParams {
+            run_id: 77,
+            profile_id: "profile-a".to_string(),
+            scope_label: "My scope",
+            output_language: "Russian",
+            prompt_template: &prompt_template,
+            period_from: 10,
+            period_to: 20,
+            chunk_summaries: &chunk_summaries,
+            model_override: Some("model-x".to_string()),
+        });
 
         assert!(request.request_id.starts_with("analysis-reduce-77-"));
         assert_eq!(request.profile_id.as_deref(), Some("profile-a"));

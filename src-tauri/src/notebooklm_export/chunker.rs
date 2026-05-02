@@ -57,32 +57,30 @@ pub(crate) fn build_chunks(
             if yearly_words + overhead_words <= max_words
                 && yearly_bytes + overhead_bytes <= max_bytes
             {
-                chunks.extend(split_period(
-                    &source_slug,
-                    &topic_group.topic,
-                    yearly.label,
-                    yearly.filename_prefix,
-                    yearly.blocks,
+                let context = SplitPeriodContext {
+                    source_slug: &source_slug,
+                    topic: &topic_group.topic,
+                    title_period: &yearly.label,
+                    filename_prefix: &yearly.filename_prefix,
                     max_words,
                     max_bytes,
-                    &document_overhead,
-                    &mut warnings,
-                ));
+                    document_overhead: &document_overhead,
+                };
+                chunks.extend(split_period(context, yearly.blocks, &mut warnings));
                 continue;
             }
 
             for monthly in group_by_period(&yearly.blocks, PeriodKind::Month) {
-                chunks.extend(split_period(
-                    &source_slug,
-                    &topic_group.topic,
-                    monthly.label,
-                    monthly.filename_prefix,
-                    monthly.blocks,
+                let context = SplitPeriodContext {
+                    source_slug: &source_slug,
+                    topic: &topic_group.topic,
+                    title_period: &monthly.label,
+                    filename_prefix: &monthly.filename_prefix,
                     max_words,
                     max_bytes,
-                    &document_overhead,
-                    &mut warnings,
-                ));
+                    document_overhead: &document_overhead,
+                };
+                chunks.extend(split_period(context, monthly.blocks, &mut warnings));
             }
         }
     }
@@ -105,6 +103,19 @@ struct PeriodGroup {
     label: String,
     filename_prefix: String,
     blocks: Vec<RenderedMessageBlock>,
+}
+
+struct SplitPeriodContext<'a, F>
+where
+    F: Fn(&ExportTopicDescriptor, &str, i64, i64, bool, usize) -> (usize, usize),
+{
+    source_slug: &'a str,
+    topic: &'a ExportTopicDescriptor,
+    title_period: &'a str,
+    filename_prefix: &'a str,
+    max_words: usize,
+    max_bytes: usize,
+    document_overhead: &'a F,
 }
 
 fn group_by_topic(blocks: &[RenderedMessageBlock]) -> Vec<TopicGroup> {
@@ -183,17 +194,14 @@ fn period_key(unix: i64, kind: PeriodKind) -> String {
     }
 }
 
-fn split_period(
-    source_slug: &str,
-    topic: &ExportTopicDescriptor,
-    title_period: String,
-    filename_prefix: String,
+fn split_period<F>(
+    context: SplitPeriodContext<'_, F>,
     blocks: Vec<RenderedMessageBlock>,
-    max_words: usize,
-    max_bytes: usize,
-    document_overhead: &impl Fn(&ExportTopicDescriptor, &str, i64, i64, bool, usize) -> (usize, usize),
     warnings: &mut Vec<String>,
-) -> Vec<ChunkFile> {
+) -> Vec<ChunkFile>
+where
+    F: Fn(&ExportTopicDescriptor, &str, i64, i64, bool, usize) -> (usize, usize),
+{
     let mut chunks = Vec::new();
     let mut current = Vec::new();
     let mut current_words = 0;
@@ -201,16 +209,17 @@ fn split_period(
 
     for block in blocks {
         let is_next_continuation = !chunks.is_empty();
-        let (single_overhead_words, single_overhead_bytes) = document_overhead(
-            topic,
-            &title_period,
+        let (single_overhead_words, single_overhead_bytes) = (context.document_overhead)(
+            context.topic,
+            context.title_period,
             block.message.published_at,
             block.message.published_at,
             is_next_continuation,
             1,
         );
-        let exceeds_alone = block.approximate_word_count + single_overhead_words > max_words
-            || block.byte_size + single_overhead_bytes > max_bytes;
+        let exceeds_alone = block.approximate_word_count + single_overhead_words
+            > context.max_words
+            || block.byte_size + single_overhead_bytes > context.max_bytes;
         if exceeds_alone {
             warnings.push(format!(
                 "Message {} exceeds configured NotebookLM file limits and was written alone.",
@@ -226,25 +235,25 @@ fn split_period(
                 .map(|block: &RenderedMessageBlock| block.message.published_at)
                 .unwrap_or(block.message.published_at);
             let period_end = block.message.published_at;
-            let (overhead_words, overhead_bytes) = document_overhead(
-                topic,
-                &title_period,
+            let (overhead_words, overhead_bytes) = (context.document_overhead)(
+                context.topic,
+                context.title_period,
                 period_start,
                 period_end,
                 !chunks.is_empty(),
                 current.len() + 1,
             );
 
-            current_words + block.approximate_word_count + overhead_words > max_words
-                || current_bytes + block.byte_size + overhead_bytes > max_bytes
+            current_words + block.approximate_word_count + overhead_words > context.max_words
+                || current_bytes + block.byte_size + overhead_bytes > context.max_bytes
         };
 
         if would_exceed {
             chunks.push(make_chunk(
-                source_slug,
-                topic,
-                &title_period,
-                &filename_prefix,
+                context.source_slug,
+                context.topic,
+                context.title_period,
+                context.filename_prefix,
                 chunks.len() + 1,
                 std::mem::take(&mut current),
             ));
@@ -259,10 +268,10 @@ fn split_period(
 
     if !current.is_empty() {
         chunks.push(make_chunk(
-            source_slug,
-            topic,
-            &title_period,
-            &filename_prefix,
+            context.source_slug,
+            context.topic,
+            context.title_period,
+            context.filename_prefix,
             chunks.len() + 1,
             current,
         ));

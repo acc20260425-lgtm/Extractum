@@ -130,77 +130,99 @@ fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
         .join("\n\n---\n\n")
 }
 
-fn build_chat_request(
-    run: &AnalysisRunDetail,
+struct ChatRequestParams<'a> {
+    run: &'a AnalysisRunDetail,
     profile_id: String,
-    scope_label: &str,
-    history: &[AnalysisChatTurn],
-    question: &str,
-    report_markdown: &str,
-    context_messages: &[&CorpusMessage],
+    scope_label: &'a str,
+    history: &'a [AnalysisChatTurn],
+    question: &'a str,
+    report_markdown: &'a str,
+    context_messages: &'a [&'a CorpusMessage],
     model_override: Option<String>,
-) -> LlmChatRequest {
+}
+
+fn build_chat_request(params: ChatRequestParams<'_>) -> LlmChatRequest {
     let mut messages = vec![
         LlmMessage {
             role: "system".to_string(),
             content: format!(
                 "You answer follow-up questions about a saved Telegram analysis report.\nAnswer in {}.\nUse markdown only.\nGround every important claim in the saved report or the provided message excerpts.\nWhen referring to message evidence, cite refs like [s12-m845].\nDo not invent facts beyond the saved report and provided excerpts.",
-                run.output_language
+                params.run.output_language
             ),
         },
         LlmMessage {
             role: "user".to_string(),
             content: format!(
                 "Saved report scope: {}\nSaved report period: {} to {}\n\nSaved report markdown:\n\n{}\n\nAdditional local message matches for the current question:\n\n{}",
-                scope_label,
-                run.period_from,
-                run.period_to,
-                report_markdown,
-                format_chat_context_messages(context_messages)
+                params.scope_label,
+                params.run.period_from,
+                params.run.period_to,
+                params.report_markdown,
+                format_chat_context_messages(params.context_messages)
             ),
         },
     ];
 
-    messages.extend(history.iter().map(|turn| LlmMessage {
+    messages.extend(params.history.iter().map(|turn| LlmMessage {
         role: turn.role.clone(),
         content: turn.content.clone(),
     }));
 
     messages.push(LlmMessage {
         role: "user".to_string(),
-        content: question.trim().to_string(),
+        content: params.question.trim().to_string(),
     });
 
     LlmChatRequest {
-        request_id: format!("analysis-chat-{}-{}", run.id, now_secs()),
-        profile_id: Some(profile_id),
+        request_id: format!("analysis-chat-{}-{}", params.run.id, now_secs()),
+        profile_id: Some(params.profile_id),
         messages,
-        model_override,
+        model_override: params.model_override,
     }
 }
 
-fn emit_chat_event(
-    handle: &AppHandle,
-    request_id: String,
-    run_id: i64,
-    kind: &str,
-    queue_position: Option<usize>,
-    delta: Option<String>,
-    message: Option<String>,
-    error: Option<String>,
-) {
-    emit_analysis_chat_event(
-        handle,
-        &AnalysisChatEvent {
-            request_id,
-            run_id,
-            kind: kind.to_string(),
-            queue_position,
-            delta,
-            message,
-            error,
-        },
-    );
+struct ChatEvent {
+    event: AnalysisChatEvent,
+}
+
+impl ChatEvent {
+    fn new(request_id: String, run_id: i64, kind: &str) -> Self {
+        Self {
+            event: AnalysisChatEvent {
+                request_id,
+                run_id,
+                kind: kind.to_string(),
+                queue_position: None,
+                delta: None,
+                message: None,
+                error: None,
+            },
+        }
+    }
+
+    fn queue_position(mut self, queue_position: usize) -> Self {
+        self.event.queue_position = Some(queue_position);
+        self
+    }
+
+    fn delta(mut self, delta: String) -> Self {
+        self.event.delta = Some(delta);
+        self
+    }
+
+    fn message(mut self, message: String) -> Self {
+        self.event.message = Some(message);
+        self
+    }
+
+    fn error(mut self, error: String) -> Self {
+        self.event.error = Some(error);
+        self
+    }
+
+    fn emit(self, handle: &AppHandle) {
+        emit_analysis_chat_event(handle, &self.event);
+    }
 }
 
 async fn load_chat_messages_from_pool(
@@ -346,16 +368,16 @@ pub async fn ask_analysis_run_question(
         })
         .collect::<Vec<_>>();
     validate_chat_turns(&history)?;
-    let request = build_chat_request(
-        &run,
-        effective_profile_id.clone(),
-        &scope_label,
-        &history,
-        &question,
-        &report_markdown,
-        &context_messages,
-        model_override.clone(),
-    );
+    let request = build_chat_request(ChatRequestParams {
+        run: &run,
+        profile_id: effective_profile_id.clone(),
+        scope_label: &scope_label,
+        history: &history,
+        question: &question,
+        report_markdown: &report_markdown,
+        context_messages: &context_messages,
+        model_override: model_override.clone(),
+    });
 
     let request_id = request.request_id.clone();
     let emitted_request_id = request_id.clone();
@@ -367,16 +389,9 @@ pub async fn ask_analysis_run_question(
             {
                 Ok(profile) => profile,
                 Err(error) => {
-                    emit_chat_event(
-                        &app_handle,
-                        emitted_request_id.clone(),
-                        run_id,
-                        "failed",
-                        None,
-                        None,
-                        None,
-                        Some(error),
-                    );
+                    ChatEvent::new(emitted_request_id.clone(), run_id, "failed")
+                        .error(error)
+                        .emit(&app_handle);
                     return;
                 }
             };
@@ -409,44 +424,24 @@ pub async fn ask_analysis_run_question(
             .run_request(
                 request_meta,
                 move |position| {
-                    emit_chat_event(
-                        &queued_handle,
-                        queued_request_id.clone(),
-                        run_id,
-                        "queued",
-                        Some(position),
-                        None,
-                        Some(format!("Answer queued at position {position}...")),
-                        None,
-                    );
+                    ChatEvent::new(queued_request_id.clone(), run_id, "queued")
+                        .queue_position(position)
+                        .message(format!("Answer queued at position {position}..."))
+                        .emit(&queued_handle);
                 },
                 move |control| async move {
-                    emit_chat_event(
-                        &started_handle,
-                        started_request_id,
-                        run_id,
-                        "started",
-                        None,
-                        None,
-                        Some("Preparing grounded answer...".to_string()),
-                        None,
-                    );
+                    ChatEvent::new(started_request_id, run_id, "started")
+                        .message("Preparing grounded answer...".to_string())
+                        .emit(&started_handle);
 
                     control
                         .run_cancellable(run_llm_stream_with_profile(
                             &scheduled_request,
                             &scheduled_profile,
                             |delta| {
-                                emit_chat_event(
-                                    &delta_handle,
-                                    delta_request_id.clone(),
-                                    run_id,
-                                    "delta",
-                                    None,
-                                    Some(delta.to_string()),
-                                    None,
-                                    None,
-                                );
+                                ChatEvent::new(delta_request_id.clone(), run_id, "delta")
+                                    .delta(delta.to_string())
+                                    .emit(&delta_handle);
                             },
                         ))
                         .await
@@ -459,37 +454,20 @@ pub async fn ask_analysis_run_question(
                     let _ = persist_chat_exchange(&pool, run_id, &question, &completion.text).await;
                 }
 
-                emit_chat_event(
-                    &completed_handle,
-                    completed_request_id,
-                    run_id,
-                    "completed",
-                    None,
-                    None,
-                    Some("Answer completed.".to_string()),
-                    None,
-                );
+                ChatEvent::new(completed_request_id, run_id, "completed")
+                    .message("Answer completed.".to_string())
+                    .emit(&completed_handle);
             }
-            Err(LlmRequestError::Failed(error)) => emit_chat_event(
-                &failed_handle,
-                failed_request_id,
-                run_id,
-                "failed",
-                None,
-                None,
-                None,
-                Some(error),
-            ),
-            Err(LlmRequestError::Cancelled) => emit_chat_event(
-                &cancelled_handle,
-                cancelled_request_id,
-                run_id,
-                "cancelled",
-                None,
-                None,
-                Some("Answer cancelled.".to_string()),
-                None,
-            ),
+            Err(LlmRequestError::Failed(error)) => {
+                ChatEvent::new(failed_request_id, run_id, "failed")
+                    .error(error)
+                    .emit(&failed_handle);
+            }
+            Err(LlmRequestError::Cancelled) => {
+                ChatEvent::new(cancelled_request_id, run_id, "cancelled")
+                    .message("Answer cancelled.".to_string())
+                    .emit(&cancelled_handle);
+            }
         }
     });
 

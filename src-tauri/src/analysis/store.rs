@@ -303,17 +303,21 @@ pub(crate) fn resolve_run_scope_label(run: &AnalysisRunDetail) -> String {
     )
 }
 
+pub(crate) struct DuplicateRunLookup<'a> {
+    pub(crate) scope_type: &'a str,
+    pub(crate) source_id: Option<i64>,
+    pub(crate) source_group_id: Option<i64>,
+    pub(crate) period_from: i64,
+    pub(crate) period_to: i64,
+    pub(crate) output_language: &'a str,
+    pub(crate) prompt_template_id: i64,
+    pub(crate) provider_profile: &'a str,
+    pub(crate) model: &'a str,
+}
+
 pub(crate) async fn find_active_duplicate_run(
     pool: &Pool<Sqlite>,
-    scope_type: &str,
-    source_id: Option<i64>,
-    source_group_id: Option<i64>,
-    period_from: i64,
-    period_to: i64,
-    output_language: &str,
-    prompt_template_id: i64,
-    provider_profile: &str,
-    model: &str,
+    lookup: &DuplicateRunLookup<'_>,
 ) -> Result<Option<i64>, String> {
     sqlx::query_scalar::<_, i64>(
         r#"
@@ -335,17 +339,17 @@ pub(crate) async fn find_active_duplicate_run(
         "#,
     )
     .bind(ANALYSIS_RUN_TYPE_REPORT)
-    .bind(scope_type)
-    .bind(source_id)
-    .bind(source_id)
-    .bind(source_group_id)
-    .bind(source_group_id)
-    .bind(period_from)
-    .bind(period_to)
-    .bind(output_language)
-    .bind(prompt_template_id)
-    .bind(provider_profile)
-    .bind(model)
+    .bind(lookup.scope_type)
+    .bind(lookup.source_id)
+    .bind(lookup.source_id)
+    .bind(lookup.source_group_id)
+    .bind(lookup.source_group_id)
+    .bind(lookup.period_from)
+    .bind(lookup.period_to)
+    .bind(lookup.output_language)
+    .bind(lookup.prompt_template_id)
+    .bind(lookup.provider_profile)
+    .bind(lookup.model)
     .bind(ANALYSIS_STATUS_QUEUED)
     .bind(ANALYSIS_STATUS_RUNNING)
     .fetch_optional(pool)
@@ -353,18 +357,22 @@ pub(crate) async fn find_active_duplicate_run(
     .map_err(|e| e.to_string())
 }
 
+pub(crate) struct AnalysisRunInsert<'a> {
+    pub(crate) scope_type: &'a str,
+    pub(crate) source_id: Option<i64>,
+    pub(crate) source_group_id: Option<i64>,
+    pub(crate) period_from: i64,
+    pub(crate) period_to: i64,
+    pub(crate) output_language: &'a str,
+    pub(crate) prompt_template: &'a AnalysisPromptTemplate,
+    pub(crate) provider_profile: &'a str,
+    pub(crate) provider: &'a str,
+    pub(crate) model: &'a str,
+}
+
 pub(crate) async fn insert_analysis_run(
     pool: &Pool<Sqlite>,
-    scope_type: &str,
-    source_id: Option<i64>,
-    source_group_id: Option<i64>,
-    period_from: i64,
-    period_to: i64,
-    output_language: &str,
-    prompt_template: &AnalysisPromptTemplate,
-    provider_profile: &str,
-    provider: &str,
-    model: &str,
+    insert: &AnalysisRunInsert<'_>,
 ) -> Result<i64, String> {
     let created_at = now_secs();
     sqlx::query_scalar(
@@ -391,17 +399,17 @@ pub(crate) async fn insert_analysis_run(
         "#,
     )
     .bind(ANALYSIS_RUN_TYPE_REPORT)
-    .bind(scope_type)
-    .bind(source_id)
-    .bind(source_group_id)
-    .bind(period_from)
-    .bind(period_to)
-    .bind(output_language)
-    .bind(prompt_template.id)
-    .bind(prompt_template.version)
-    .bind(provider_profile)
-    .bind(provider)
-    .bind(model)
+    .bind(insert.scope_type)
+    .bind(insert.source_id)
+    .bind(insert.source_group_id)
+    .bind(insert.period_from)
+    .bind(insert.period_to)
+    .bind(insert.output_language)
+    .bind(insert.prompt_template.id)
+    .bind(insert.prompt_template.version)
+    .bind(insert.provider_profile)
+    .bind(insert.provider)
+    .bind(insert.model)
     .bind(ANALYSIS_STATUS_QUEUED)
     .bind(created_at)
     .fetch_one(pool)
