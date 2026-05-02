@@ -390,7 +390,7 @@ async fn run_takeout_import_job(handle: AppHandle, job_id: String) {
         return;
     }
 
-    match run_channel_takeout_import(&handle, &job_id).await {
+    match run_takeout_source_import(&handle, &job_id).await {
         Ok(outcome) => {
             if let Some(record) = takeout_state
                 .finish_job(&job_id, |job| {
@@ -446,7 +446,7 @@ struct TakeoutImportOutcome {
     warnings: Vec<String>,
 }
 
-async fn run_channel_takeout_import(
+async fn run_takeout_source_import(
     handle: &AppHandle,
     job_id: &str,
 ) -> AppResult<TakeoutImportOutcome> {
@@ -459,12 +459,7 @@ async fn run_channel_takeout_import(
         .ok_or_else(|| AppError::internal(format!("Takeout job {job_id} not found")))?
         .source_id;
     let source = load_source(&pool, source_id).await?;
-    if source.telegram_source_kind != TELEGRAM_KIND_CHANNEL {
-        return Err(AppError::validation(format!(
-            "Minimal Takeout import currently supports only public channels; source {} is '{}'",
-            source.id, source.telegram_source_kind
-        )));
-    }
+    ensure_supported_takeout_source_kind(&source.telegram_source_kind)?;
 
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {} is not linked to an account", source.id))
@@ -480,7 +475,6 @@ async fn run_channel_takeout_import(
     .await;
     let resolved_peer = resolve_and_refresh_peer(handle, &client, &source, account_id).await?;
     let input_peer: tl::enums::InputPeer = resolved_peer.peer.into();
-    let input_channel: tl::enums::InputChannel = resolved_peer.peer.into();
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_STARTING_TAKEOUT.to_string();
@@ -510,19 +504,16 @@ async fn run_channel_takeout_import(
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_VALIDATING_PEER.to_string();
-        job.message = Some("Validating channel.".to_string());
+        job.message = Some("Validating Telegram source.".to_string());
         job.warnings.extend(warnings.clone());
     })
     .await;
-    export_dc_invoke(
+    validate_takeout_peer(
         &client,
         &alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::channels::GetChannels {
-                id: vec![input_channel],
-            },
-        },
+        takeout_id,
+        &source.telegram_source_kind,
+        resolved_peer.peer,
         &mut warnings,
         &mut fallback_used,
     )
@@ -545,41 +536,47 @@ async fn run_channel_takeout_import(
         &mut fallback_used,
     )
     .await?;
-    let selected_range = select_channel_split(split_ranges);
+    let selected_ranges = select_history_splits(&source.telegram_source_kind, split_ranges)?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_COUNTING.to_string();
-        job.message = Some("Counting channel messages.".to_string());
+        job.message = Some("Counting messages.".to_string());
         job.warnings = warnings.clone();
     })
     .await;
-    let total = takeout_history_count_probe(
-        &client,
-        &alias,
-        takeout_id,
-        input_peer.clone(),
-        selected_range.clone(),
-        &mut warnings,
-        &mut fallback_used,
-    )
-    .await?;
+    let mut counted_ranges = Vec::new();
+    let mut total = 0_i64;
+    for range in selected_ranges {
+        let count = takeout_history_count_probe(
+            &client,
+            &alias,
+            takeout_id,
+            input_peer.clone(),
+            range.clone(),
+            &mut warnings,
+            &mut fallback_used,
+        )
+        .await?;
+        total += count;
+        counted_ranges.push(CountedMessageRange { range });
+    }
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_IMPORTING_HISTORY.to_string();
-        job.message = Some("Importing channel history.".to_string());
+        job.message = Some("Importing history.".to_string());
         job.progress_current = Some(0);
         job.progress_total = Some(total);
         job.warnings = warnings.clone();
     })
     .await;
-    let import = import_takeout_history_pages(
+    let import = import_takeout_history_ranges(
         handle,
         job_id,
         &client,
         &alias,
         takeout_id,
         input_peer,
-        selected_range,
+        counted_ranges,
         &source,
         total,
         &mut warnings,
@@ -627,6 +624,10 @@ struct TakeoutHistoryImport {
     max_message_id: i64,
 }
 
+struct CountedMessageRange {
+    range: tl::enums::MessageRange,
+}
+
 async fn update_and_emit<F>(handle: &AppHandle, state: &TakeoutImportState, job_id: &str, update: F)
 where
     F: FnOnce(&mut TakeoutImportJobRecord),
@@ -636,14 +637,93 @@ where
     }
 }
 
-fn select_channel_split(split_ranges: Vec<tl::enums::MessageRange>) -> tl::enums::MessageRange {
-    split_ranges.into_iter().last().unwrap_or_else(|| {
-        tl::types::MessageRange {
-            min_id: 1,
-            max_id: i32::MAX,
+fn ensure_supported_takeout_source_kind(telegram_source_kind: &str) -> AppResult<()> {
+    match telegram_source_kind {
+        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP => Ok(()),
+        other => Err(AppError::validation(format!(
+            "Unsupported telegram_source_kind '{other}'"
+        ))),
+    }
+}
+
+async fn validate_takeout_peer(
+    client: &Client,
+    alias: &ExportDcAlias,
+    takeout_id: i64,
+    telegram_source_kind: &str,
+    peer: grammers_session::types::PeerRef,
+    warnings: &mut Vec<String>,
+    fallback_used: &mut bool,
+) -> AppResult<()> {
+    match telegram_source_kind {
+        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
+            let input_channel: tl::enums::InputChannel = peer.into();
+            export_dc_invoke(
+                client,
+                alias,
+                &tl::functions::InvokeWithTakeout {
+                    takeout_id,
+                    query: tl::functions::channels::GetChannels {
+                        id: vec![input_channel],
+                    },
+                },
+                warnings,
+                fallback_used,
+            )
+            .await?;
         }
-        .into()
-    })
+        TELEGRAM_KIND_GROUP => {
+            export_dc_invoke(
+                client,
+                alias,
+                &tl::functions::InvokeWithTakeout {
+                    takeout_id,
+                    query: tl::functions::messages::GetChats {
+                        id: vec![peer.id.bare_id()],
+                    },
+                },
+                warnings,
+                fallback_used,
+            )
+            .await?;
+        }
+        other => {
+            return Err(AppError::validation(format!(
+                "Unsupported telegram_source_kind '{other}'"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn select_history_splits(
+    telegram_source_kind: &str,
+    split_ranges: Vec<tl::enums::MessageRange>,
+) -> AppResult<Vec<tl::enums::MessageRange>> {
+    let mut ranges = if split_ranges.is_empty() {
+        vec![fallback_message_range()]
+    } else {
+        split_ranges
+    };
+
+    match telegram_source_kind {
+        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
+            Ok(vec![ranges.pop().unwrap_or_else(fallback_message_range)])
+        }
+        TELEGRAM_KIND_GROUP => Ok(ranges),
+        other => Err(AppError::validation(format!(
+            "Unsupported telegram_source_kind '{other}'"
+        ))),
+    }
+}
+
+fn fallback_message_range() -> tl::enums::MessageRange {
+    tl::types::MessageRange {
+        min_id: 1,
+        max_id: i32::MAX,
+    }
+    .into()
 }
 
 async fn takeout_history_count_probe(
@@ -682,6 +762,46 @@ async fn takeout_history_count_probe(
     messages_response_count(response)
 }
 
+async fn import_takeout_history_ranges(
+    handle: &AppHandle,
+    job_id: &str,
+    client: &Client,
+    alias: &ExportDcAlias,
+    takeout_id: i64,
+    input_peer: tl::enums::InputPeer,
+    ranges: Vec<CountedMessageRange>,
+    source: &crate::sources::SourceSyncTarget,
+    total: i64,
+    warnings: &mut Vec<String>,
+    fallback_used: &mut bool,
+) -> AppResult<TakeoutHistoryImport> {
+    let mut imported = TakeoutHistoryImport {
+        inserted: 0,
+        skipped: 0,
+        max_message_id: source.last_sync_state.unwrap_or(0),
+    };
+
+    for counted_range in ranges {
+        imported = import_takeout_history_pages(
+            handle,
+            job_id,
+            client,
+            alias,
+            takeout_id,
+            input_peer.clone(),
+            counted_range.range,
+            source,
+            total,
+            imported,
+            warnings,
+            fallback_used,
+        )
+        .await?;
+    }
+
+    Ok(imported)
+}
+
 async fn import_takeout_history_pages(
     handle: &AppHandle,
     job_id: &str,
@@ -692,15 +812,13 @@ async fn import_takeout_history_pages(
     range: tl::enums::MessageRange,
     source: &crate::sources::SourceSyncTarget,
     total: i64,
+    mut imported: TakeoutHistoryImport,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
 ) -> AppResult<TakeoutHistoryImport> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let pool = get_pool(handle).await?;
     let mut offset_id = message_range_max_id(&range);
-    let mut inserted = 0_i64;
-    let mut skipped = 0_i64;
-    let mut max_message_id = source.last_sync_state.unwrap_or(0);
 
     loop {
         if takeout_state.is_cancel_requested(job_id).await {
@@ -741,25 +859,25 @@ async fn import_takeout_history_pages(
             if message_id <= message_range_min_id(&range) {
                 continue;
             }
-            max_message_id = max_message_id.max(i64::from(message_id));
+            imported.max_message_id = imported.max_message_id.max(i64::from(message_id));
             match raw_parse::parse_raw_message(&source.title, message) {
                 Ok(Some(item)) => {
                     if insert_source_item(&pool, source.id, item).await? {
-                        inserted += 1;
+                        imported.inserted += 1;
                     } else {
-                        skipped += 1;
+                        imported.skipped += 1;
                     }
                 }
-                Ok(None) => skipped += 1,
+                Ok(None) => imported.skipped += 1,
                 Err(error) => return Err(AppError::internal(error)),
             }
             next_offset_id = next_offset_id.min(message_id);
         }
 
         update_and_emit(handle, &takeout_state, job_id, |job| {
-            job.inserted = inserted;
-            job.skipped = skipped;
-            job.progress_current = Some((inserted + skipped).min(total));
+            job.inserted = imported.inserted;
+            job.skipped = imported.skipped;
+            job.progress_current = Some((imported.inserted + imported.skipped).min(total));
             job.progress_total = Some(total);
             job.warnings = warnings.clone();
         })
@@ -775,11 +893,7 @@ async fn import_takeout_history_pages(
         offset_id = next_offset_id;
     }
 
-    Ok(TakeoutHistoryImport {
-        inserted,
-        skipped,
-        max_message_id,
-    })
+    Ok(imported)
 }
 
 fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult<i64> {
@@ -930,12 +1044,14 @@ fn now_secs() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        export_dc_id_for_home_dc, should_fallback_export_dc_error,
+        export_dc_id_for_home_dc, message_range_max_id, message_range_min_id,
+        select_history_splits, should_fallback_export_dc_error,
         takeout_init_request_for_source_kind, TakeoutImportState, STATUS_CANCEL_REQUESTED,
         STATUS_FAILED, TAKEOUT_FILE_MAX_SIZE, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
         TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::AppErrorKind;
+    use grammers_client::tl;
     use grammers_mtsender::{InvocationError, RpcError};
 
     #[test]
@@ -979,6 +1095,46 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn split_selection_uses_last_range_for_channel_and_supergroup() {
+        let ranges = vec![message_range(1, 10), message_range(11, 20)];
+
+        let channel =
+            select_history_splits(TELEGRAM_KIND_CHANNEL, ranges.clone()).expect("channel splits");
+        let supergroup =
+            select_history_splits(TELEGRAM_KIND_SUPERGROUP, ranges).expect("supergroup splits");
+
+        assert_eq!(channel.len(), 1);
+        assert_eq!(message_range_min_id(&channel[0]), 11);
+        assert_eq!(message_range_max_id(&channel[0]), 20);
+        assert_eq!(supergroup.len(), 1);
+        assert_eq!(message_range_min_id(&supergroup[0]), 11);
+        assert_eq!(message_range_max_id(&supergroup[0]), 20);
+    }
+
+    #[test]
+    fn split_selection_uses_all_ranges_for_small_group() {
+        let ranges = vec![message_range(1, 10), message_range(11, 20)];
+
+        let selected = select_history_splits(TELEGRAM_KIND_GROUP, ranges).expect("group splits");
+
+        assert_eq!(selected.len(), 2);
+        assert_eq!(message_range_min_id(&selected[0]), 1);
+        assert_eq!(message_range_max_id(&selected[0]), 10);
+        assert_eq!(message_range_min_id(&selected[1]), 11);
+        assert_eq!(message_range_max_id(&selected[1]), 20);
+    }
+
+    #[test]
+    fn split_selection_falls_back_when_telegram_returns_no_ranges() {
+        let selected =
+            select_history_splits(TELEGRAM_KIND_GROUP, Vec::new()).expect("fallback split");
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(message_range_min_id(&selected[0]), 1);
+        assert_eq!(message_range_max_id(&selected[0]), i32::MAX);
+    }
+
     #[tokio::test]
     async fn job_state_rejects_duplicate_active_source_jobs() {
         let state = TakeoutImportState::new();
@@ -1018,5 +1174,9 @@ mod tests {
 
         let next = state.create_job(7, 1).await.expect("source released");
         assert_eq!(next.job_id, "takeout-2");
+    }
+
+    fn message_range(min_id: i32, max_id: i32) -> tl::enums::MessageRange {
+        tl::types::MessageRange { min_id, max_id }.into()
     }
 }
