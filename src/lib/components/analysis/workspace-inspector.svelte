@@ -17,6 +17,7 @@
     historyScope,
     historyTargetReady,
     runFilter,
+    deletingRunIds,
     filteredRuns,
     traceData,
     selectedTraceRef,
@@ -38,6 +39,7 @@
     onRefreshRuns,
     onChangeFilter,
     onChangeHistoryScope,
+    onDeleteRun,
     onSelectTraceRef,
   }: {
     inspectorMode: "active" | "history" | "trace" | "chunks";
@@ -49,6 +51,7 @@
     historyScope: "all" | "current";
     historyTargetReady: boolean;
     runFilter: "all" | "completed" | "failed";
+    deletingRunIds: Record<number, boolean>;
     filteredRuns: AnalysisRunSummary[];
     traceData: AnalysisTraceData;
     selectedTraceRef: string | null;
@@ -75,6 +78,7 @@
     onRefreshRuns: () => void;
     onChangeFilter: (mode: "all" | "completed" | "failed") => void;
     onChangeHistoryScope: (mode: "all" | "current") => void;
+    onDeleteRun: (run: AnalysisRunSummary) => void;
     onSelectTraceRef: (ref: string) => void;
   } = $props();
 
@@ -188,6 +192,7 @@
         {historyTargetReady}
         {runFilter}
         {activeRunId}
+        {deletingRunIds}
         {filteredRuns}
         {formatTimestamp}
         {formatPeriod}
@@ -195,6 +200,7 @@
         {statusTone}
         onRefresh={onRefreshRuns}
         onOpenRun={onOpenRun}
+        onDeleteRun={onDeleteRun}
         onChangeFilter={onChangeFilter}
         onChangeHistoryScope={onChangeHistoryScope}
       />

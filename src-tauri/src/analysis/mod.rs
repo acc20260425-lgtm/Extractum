@@ -16,7 +16,7 @@ use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow,
     AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
-use self::store::{fetch_run_row, map_run_detail, map_run_summary};
+use self::store::{delete_saved_run, fetch_run_row, map_run_detail, map_run_summary};
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -354,6 +354,28 @@ pub async fn get_analysis_run_trace(
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
     Ok(decode_trace_data(row.trace_data_zstd.as_deref())?)
+}
+
+#[tauri::command]
+pub async fn delete_analysis_run(
+    handle: AppHandle,
+    state: tauri::State<'_, AnalysisState>,
+    run_id: i64,
+) -> AppResult<()> {
+    let pool = get_pool(&handle).await?;
+    let row = fetch_run_row(&pool, run_id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
+
+    if row.status == ANALYSIS_STATUS_QUEUED || row.status == ANALYSIS_STATUS_RUNNING {
+        return Err(AppError::conflict(
+            "Queued or running analysis runs cannot be deleted",
+        ));
+    }
+
+    delete_saved_run(&pool, run_id).await?;
+    state.remove_active_report_run(run_id).await;
+    Ok(())
 }
 
 #[tauri::command]

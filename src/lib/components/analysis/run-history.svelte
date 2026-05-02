@@ -17,6 +17,7 @@
     historyTargetReady,
     runFilter,
     activeRunId,
+    deletingRunIds,
     filteredRuns,
     formatTimestamp,
     formatPeriod,
@@ -24,6 +25,7 @@
     statusTone,
     onRefresh,
     onOpenRun,
+    onDeleteRun,
     onChangeFilter,
     onChangeHistoryScope,
   }: {
@@ -33,6 +35,7 @@
     historyTargetReady: boolean;
     runFilter: RunFilter;
     activeRunId: number | null;
+    deletingRunIds: Record<number, boolean>;
     filteredRuns: AnalysisRunSummary[];
     formatTimestamp: (timestamp: number | null) => string;
     formatPeriod: (periodFromUnix: number, periodToUnix: number) => string;
@@ -45,6 +48,7 @@
     statusTone: (status: string) => BadgeVariant;
     onRefresh: () => void | Promise<void>;
     onOpenRun: (runId: number) => void | Promise<void>;
+    onDeleteRun: (run: AnalysisRunSummary) => void | Promise<void>;
     onChangeFilter: (next: RunFilter) => void;
     onChangeHistoryScope: (next: HistoryScope) => void;
   } = $props();
@@ -104,7 +108,14 @@
                 <p class="run-list-error">{run.error}</p>
               {/if}
             </div>
-            <Button variant="secondary" onclick={() => onOpenRun(run.id)}>Open</Button>
+            <div class="run-actions">
+              <Button variant="secondary" onclick={() => onOpenRun(run.id)} disabled={deletingRunIds[run.id]}>
+                Open
+              </Button>
+              <Button variant="danger-soft" onclick={() => onDeleteRun(run)} disabled={deletingRunIds[run.id]}>
+                {deletingRunIds[run.id] ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
           </li>
         {/each}
       </ul>
@@ -172,17 +183,26 @@
   }
 
   .history-actions,
-  .filter-group {
+  .filter-group,
+  .run-actions {
     display: flex;
     gap: 0.6rem;
     flex-wrap: wrap;
     align-items: center;
   }
 
+  .run-actions {
+    justify-content: flex-end;
+  }
+
   @media (max-width: 720px) {
     .run-list li {
       flex-direction: column;
       align-items: stretch;
+    }
+
+    .run-actions {
+      justify-content: flex-start;
     }
   }
 </style>

@@ -511,9 +511,39 @@ pub(crate) async fn set_run_status(
     Ok(())
 }
 
+pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> Result<(), String> {
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query("DELETE FROM analysis_chat_messages WHERE run_id = ?")
+        .bind(run_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    sqlx::query("DELETE FROM analysis_run_messages WHERE run_id = ?")
+        .bind(run_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let deleted = sqlx::query("DELETE FROM analysis_runs WHERE id = ?")
+        .bind(run_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?
+        .rows_affected();
+
+    if deleted == 0 {
+        return Err(format!("Analysis run {run_id} not found"));
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{map_run_detail, map_run_summary, resolve_run_scope_label};
+    use super::{delete_saved_run, map_run_detail, map_run_summary, resolve_run_scope_label};
     use crate::analysis::models::{AnalysisRunDetail, AnalysisRunRow};
 
     fn sample_run_row() -> AnalysisRunRow {
@@ -558,5 +588,62 @@ mod tests {
     fn map_run_summary_exposes_frozen_scope_label() {
         let summary = map_run_summary(sample_run_row());
         assert_eq!(summary.scope_label, "Frozen group");
+    }
+
+    #[tokio::test]
+    async fn delete_saved_run_removes_run_and_saved_children() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query("CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY)")
+            .execute(&pool)
+            .await
+            .expect("create runs");
+        sqlx::query(
+            "CREATE TABLE analysis_chat_messages (id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL)",
+        )
+        .execute(&pool)
+        .await
+        .expect("create chat messages");
+        sqlx::query(
+            "CREATE TABLE analysis_run_messages (run_id INTEGER NOT NULL, ref TEXT NOT NULL)",
+        )
+        .execute(&pool)
+        .await
+        .expect("create run messages");
+
+        sqlx::query("INSERT INTO analysis_runs (id) VALUES (42)")
+            .execute(&pool)
+            .await
+            .expect("insert run");
+        sqlx::query("INSERT INTO analysis_chat_messages (run_id) VALUES (42)")
+            .execute(&pool)
+            .await
+            .expect("insert chat");
+        sqlx::query("INSERT INTO analysis_run_messages (run_id, ref) VALUES (42, 's1-m1')")
+            .execute(&pool)
+            .await
+            .expect("insert saved corpus");
+
+        delete_saved_run(&pool, 42).await.expect("delete saved run");
+
+        let runs = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM analysis_runs")
+            .fetch_one(&pool)
+            .await
+            .expect("count runs");
+        let chat_messages =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM analysis_chat_messages")
+                .fetch_one(&pool)
+                .await
+                .expect("count chat messages");
+        let saved_messages =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM analysis_run_messages")
+                .fetch_one(&pool)
+                .await
+                .expect("count saved messages");
+
+        assert_eq!(runs, 0);
+        assert_eq!(chat_messages, 0);
+        assert_eq!(saved_messages, 0);
     }
 }

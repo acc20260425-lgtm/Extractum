@@ -146,6 +146,7 @@
   let clearingChat = $state(false);
   let syncingIds = $state<Record<number, boolean>>({});
   let deletingSourceIds = $state<Record<number, boolean>>({});
+  let deletingRunIds = $state<Record<number, boolean>>({});
   let sourceManagerOpen = $state(false);
   let exportDialogOpen = $state(false);
   let exportingNotebookLm = $state(false);
@@ -285,6 +286,21 @@
     chatting = false;
     activeChatRequestId = null;
     activeChatRunId = null;
+  }
+
+  function clearOpenedRunState(runId: number) {
+    if (activeRunId !== runId && currentRun?.id !== runId) {
+      return;
+    }
+
+    openRunRequestToken += 1;
+    activeRunId = null;
+    currentRun = null;
+    clearTraceState();
+    clearChatState();
+    const nextLiveRuns = { ...liveRuns };
+    delete nextLiveRuns[runId];
+    liveRuns = nextLiveRuns;
   }
 
   function dropPendingChatExchange() {
@@ -1036,6 +1052,44 @@
       status = `Cancelling analysis run ${runId}...`;
     } catch (error) {
       status = formatAppError("cancelling the analysis run", error);
+    }
+  }
+
+  async function deleteSavedRun(run: AnalysisRunSummary) {
+    if (isActiveRunStatus(run.status)) {
+      status = "Cancel or wait for this run before deleting it.";
+      return;
+    }
+
+    const confirmed = await openConfirmModal({
+      title: "Delete saved run?",
+      message: `The saved report for "${runTargetLabel(run)}" and its follow-up chat history will be removed from this device.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    deletingRunIds = { ...deletingRunIds, [run.id]: true };
+    try {
+      if (activeChatRequestId !== null && activeChatRunId === run.id) {
+        await cancelChat({ silent: true });
+      }
+      await invoke("delete_analysis_run", { runId: run.id });
+      runs = runs.filter((entry) => entry.id !== run.id);
+      activeRuns = activeRuns.filter((entry) => entry.id !== run.id);
+      clearOpenedRunState(run.id);
+      inspectorMode = "history";
+      status = `Saved run ${run.id} deleted.`;
+      await loadRuns();
+    } catch (error) {
+      status = formatAppError("deleting the saved run", error);
+    } finally {
+      const next = { ...deletingRunIds };
+      delete next[run.id];
+      deletingRunIds = next;
     }
   }
 
@@ -1818,6 +1872,7 @@
       {historyScope}
       historyTargetReady={historyScopeParams !== null}
       {runFilter}
+      {deletingRunIds}
       {filteredRuns}
       {traceData}
       {selectedTraceRef}
@@ -1837,6 +1892,7 @@
       onOpenRun={(runId) => void openRun(runId)}
       onCancelRun={(runId) => void cancelActiveRun(runId)}
       onRefreshRuns={() => void loadRuns()}
+      onDeleteRun={(run) => void deleteSavedRun(run)}
       onChangeFilter={(next) => (runFilter = next)}
       onChangeHistoryScope={(next) => (historyScope = next)}
       onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
