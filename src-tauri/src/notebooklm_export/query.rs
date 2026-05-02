@@ -35,6 +35,9 @@ struct ItemRow {
     reply_to_peer_id: Option<String>,
     reply_to_top_id: Option<i64>,
     reaction_count: Option<i64>,
+    forum_topic_id: Option<i64>,
+    forum_topic_title: Option<String>,
+    forum_topic_top_message_id: Option<i64>,
 }
 
 #[derive(FromRow)]
@@ -172,6 +175,9 @@ pub(crate) async fn load_export_messages(
                 reply_to_peer_id: row.reply_to_peer_id,
                 reply_to_top_id: row.reply_to_top_id,
                 reaction_count: row.reaction_count,
+                forum_topic_id: row.forum_topic_id,
+                forum_topic_title: row.forum_topic_title,
+                forum_topic_top_message_id: row.forum_topic_top_message_id,
             })
         })
         .collect::<Result<Vec<_>, String>>()
@@ -274,87 +280,143 @@ fn truncate_snippet(value: &str, max_chars: usize) -> String {
 
 const BASE_QUERY: &str = r#"
     SELECT
-        id,
-        source_id,
-        external_id,
-        author,
-        published_at,
-        content_zstd,
-        content_kind,
-        has_media,
-        media_kind,
-        media_metadata_zstd,
-        reply_to_msg_id,
-        reply_to_peer_kind,
-        reply_to_peer_id,
-        reply_to_top_id,
-        reaction_count
+        items.id,
+        items.source_id,
+        items.external_id,
+        items.author,
+        items.published_at,
+        items.content_zstd,
+        items.content_kind,
+        items.has_media,
+        items.media_kind,
+        items.media_metadata_zstd,
+        items.reply_to_msg_id,
+        items.reply_to_peer_kind,
+        items.reply_to_peer_id,
+        items.reply_to_top_id,
+        items.reaction_count,
+        forum_topics.topic_id AS forum_topic_id,
+        forum_topics.title AS forum_topic_title,
+        forum_topics.top_message_id AS forum_topic_top_message_id
     FROM items
-    WHERE source_id = ?
-    ORDER BY published_at ASC, id ASC
+    LEFT JOIN telegram_forum_topics AS forum_topics
+      ON forum_topics.source_id = items.source_id
+     AND (
+            items.reply_to_top_id = forum_topics.top_message_id
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.external_id <> ''
+                AND items.external_id NOT GLOB '*[^0-9]*'
+                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+            )
+        )
+    WHERE items.source_id = ?
+    ORDER BY items.published_at ASC, items.id ASC
 "#;
 const BASE_QUERY_WITH_FROM: &str = r#"
     SELECT
-        id,
-        source_id,
-        external_id,
-        author,
-        published_at,
-        content_zstd,
-        content_kind,
-        has_media,
-        media_kind,
-        media_metadata_zstd,
-        reply_to_msg_id,
-        reply_to_peer_kind,
-        reply_to_peer_id,
-        reply_to_top_id,
-        reaction_count
+        items.id,
+        items.source_id,
+        items.external_id,
+        items.author,
+        items.published_at,
+        items.content_zstd,
+        items.content_kind,
+        items.has_media,
+        items.media_kind,
+        items.media_metadata_zstd,
+        items.reply_to_msg_id,
+        items.reply_to_peer_kind,
+        items.reply_to_peer_id,
+        items.reply_to_top_id,
+        items.reaction_count,
+        forum_topics.topic_id AS forum_topic_id,
+        forum_topics.title AS forum_topic_title,
+        forum_topics.top_message_id AS forum_topic_top_message_id
     FROM items
-    WHERE source_id = ? AND published_at >= ?
-    ORDER BY published_at ASC, id ASC
+    LEFT JOIN telegram_forum_topics AS forum_topics
+      ON forum_topics.source_id = items.source_id
+     AND (
+            items.reply_to_top_id = forum_topics.top_message_id
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.external_id <> ''
+                AND items.external_id NOT GLOB '*[^0-9]*'
+                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+            )
+        )
+    WHERE items.source_id = ? AND items.published_at >= ?
+    ORDER BY items.published_at ASC, items.id ASC
 "#;
 const BASE_QUERY_WITH_TO: &str = r#"
     SELECT
-        id,
-        source_id,
-        external_id,
-        author,
-        published_at,
-        content_zstd,
-        content_kind,
-        has_media,
-        media_kind,
-        media_metadata_zstd,
-        reply_to_msg_id,
-        reply_to_peer_kind,
-        reply_to_peer_id,
-        reply_to_top_id,
-        reaction_count
+        items.id,
+        items.source_id,
+        items.external_id,
+        items.author,
+        items.published_at,
+        items.content_zstd,
+        items.content_kind,
+        items.has_media,
+        items.media_kind,
+        items.media_metadata_zstd,
+        items.reply_to_msg_id,
+        items.reply_to_peer_kind,
+        items.reply_to_peer_id,
+        items.reply_to_top_id,
+        items.reaction_count,
+        forum_topics.topic_id AS forum_topic_id,
+        forum_topics.title AS forum_topic_title,
+        forum_topics.top_message_id AS forum_topic_top_message_id
     FROM items
-    WHERE source_id = ? AND published_at <= ?
-    ORDER BY published_at ASC, id ASC
+    LEFT JOIN telegram_forum_topics AS forum_topics
+      ON forum_topics.source_id = items.source_id
+     AND (
+            items.reply_to_top_id = forum_topics.top_message_id
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.external_id <> ''
+                AND items.external_id NOT GLOB '*[^0-9]*'
+                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+            )
+        )
+    WHERE items.source_id = ? AND items.published_at <= ?
+    ORDER BY items.published_at ASC, items.id ASC
 "#;
 const BASE_QUERY_WITH_FROM_TO: &str = r#"
     SELECT
-        id,
-        source_id,
-        external_id,
-        author,
-        published_at,
-        content_zstd,
-        content_kind,
-        has_media,
-        media_kind,
-        media_metadata_zstd,
-        reply_to_msg_id,
-        reply_to_peer_kind,
-        reply_to_peer_id,
-        reply_to_top_id,
-        reaction_count
+        items.id,
+        items.source_id,
+        items.external_id,
+        items.author,
+        items.published_at,
+        items.content_zstd,
+        items.content_kind,
+        items.has_media,
+        items.media_kind,
+        items.media_metadata_zstd,
+        items.reply_to_msg_id,
+        items.reply_to_peer_kind,
+        items.reply_to_peer_id,
+        items.reply_to_top_id,
+        items.reaction_count,
+        forum_topics.topic_id AS forum_topic_id,
+        forum_topics.title AS forum_topic_title,
+        forum_topics.top_message_id AS forum_topic_top_message_id
     FROM items
-    WHERE source_id = ? AND published_at >= ? AND published_at <= ?
-    ORDER BY published_at ASC, id ASC
+    LEFT JOIN telegram_forum_topics AS forum_topics
+      ON forum_topics.source_id = items.source_id
+     AND (
+            items.reply_to_top_id = forum_topics.top_message_id
+            OR (
+                items.reply_to_top_id IS NULL
+                AND items.external_id <> ''
+                AND items.external_id NOT GLOB '*[^0-9]*'
+                AND CAST(items.external_id AS INTEGER) = forum_topics.top_message_id
+            )
+        )
+    WHERE items.source_id = ? AND items.published_at >= ? AND items.published_at <= ?
+    ORDER BY items.published_at ASC, items.id ASC
 "#;
 
 #[cfg(test)]
@@ -390,6 +452,21 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create items");
+        sqlx::query(
+            r#"
+            CREATE TABLE telegram_forum_topics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_id INTEGER NOT NULL,
+                topic_id INTEGER NOT NULL,
+                top_message_id INTEGER NOT NULL,
+                title TEXT,
+                is_deleted INTEGER NOT NULL DEFAULT 0
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create telegram_forum_topics");
         pool
     }
 
@@ -473,5 +550,96 @@ mod tests {
         assert_eq!(message.reply_to_peer_id.as_deref(), Some("42"));
         assert_eq!(message.reply_to_top_id, Some(10));
         assert_eq!(message.reaction_count, Some(3));
+    }
+
+    #[tokio::test]
+    async fn load_export_messages_attaches_topic_metadata_for_reply_and_root_messages() {
+        let pool = export_pool().await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_forum_topics (
+                source_id,
+                topic_id,
+                top_message_id,
+                title,
+                is_deleted
+            )
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind(200_i64)
+        .bind(700_i64)
+        .bind("Roadmap")
+        .bind(0_i64)
+        .execute(&pool)
+        .await
+        .expect("insert forum topic");
+
+        sqlx::query(
+            r#"
+            INSERT INTO items (
+                source_id,
+                external_id,
+                author,
+                published_at,
+                content_zstd,
+                content_kind,
+                has_media,
+                reply_to_top_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind("701")
+        .bind("Ada")
+        .bind(100_i64)
+        .bind(compress_text("Reply in topic").expect("compress reply"))
+        .bind("text_only")
+        .bind(0_i64)
+        .bind(700_i64)
+        .execute(&pool)
+        .await
+        .expect("insert topic reply");
+
+        sqlx::query(
+            r#"
+            INSERT INTO items (
+                source_id,
+                external_id,
+                author,
+                published_at,
+                content_zstd,
+                content_kind,
+                has_media
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind("700")
+        .bind("Bob")
+        .bind(101_i64)
+        .bind(compress_text("Root topic message").expect("compress root"))
+        .bind("text_only")
+        .bind(0_i64)
+        .execute(&pool)
+        .await
+        .expect("insert topic root");
+
+        let messages = load_export_messages(&pool, 1, None, None)
+            .await
+            .expect("load export messages");
+
+        assert_eq!(messages.len(), 2);
+        assert!(messages.iter().all(|message| message.forum_topic_id == Some(200)));
+        assert!(messages
+            .iter()
+            .all(|message| message.forum_topic_title.as_deref() == Some("Roadmap")));
+        assert!(messages
+            .iter()
+            .all(|message| message.forum_topic_top_message_id == Some(700)));
     }
 }

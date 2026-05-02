@@ -1,7 +1,8 @@
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::notebooklm_export::model::{
-    NotebookLmExportMessage, NotebookLmExportSource, ParticipantSummary, RenderedMessageBlock,
+    ExportTopicDescriptor, NotebookLmExportMessage, NotebookLmExportSource, ParticipantSummary,
+    RenderedMessageBlock,
 };
 
 pub(crate) fn format_unix_rfc3339(value: i64) -> String {
@@ -77,6 +78,18 @@ pub(crate) fn render_message_block(message: &NotebookLmExportMessage) -> Rendere
         yaml_optional_i64(message.reply_to_top_id)
     ));
     markdown.push_str(&format!(
+        "topic_id: {}\n",
+        yaml_optional_i64(message.forum_topic_id)
+    ));
+    markdown.push_str(&format!(
+        "topic_title: {}\n",
+        yaml_optional_string(message.forum_topic_title.as_deref())
+    ));
+    markdown.push_str(&format!(
+        "topic_top_message_id: {}\n",
+        yaml_optional_i64(message.forum_topic_top_message_id)
+    ));
+    markdown.push_str(&format!(
         "reaction_count: {}\n",
         yaml_optional_i64(message.reaction_count)
     ));
@@ -130,6 +143,7 @@ pub(crate) fn render_message_block(message: &NotebookLmExportMessage) -> Rendere
 
 pub(crate) fn render_document(
     source: &NotebookLmExportSource,
+    topic: &ExportTopicDescriptor,
     generated_at: i64,
     title_period: &str,
     period_start: i64,
@@ -140,6 +154,7 @@ pub(crate) fn render_document(
 ) -> String {
     let mut output = render_document_header(
         source,
+        topic,
         generated_at,
         title_period,
         period_start,
@@ -158,6 +173,7 @@ pub(crate) fn render_document(
 
 pub(crate) fn render_document_overhead(
     source: &NotebookLmExportSource,
+    topic: &ExportTopicDescriptor,
     generated_at: i64,
     title_period: &str,
     period_start: i64,
@@ -168,6 +184,7 @@ pub(crate) fn render_document_overhead(
 ) -> (usize, usize) {
     let markdown = render_document_header(
         source,
+        topic,
         generated_at,
         title_period,
         period_start,
@@ -182,6 +199,7 @@ pub(crate) fn render_document_overhead(
 
 fn render_document_header(
     source: &NotebookLmExportSource,
+    topic: &ExportTopicDescriptor,
     generated_at: i64,
     title_period: &str,
     period_start: i64,
@@ -193,11 +211,19 @@ fn render_document_header(
     let source_name = source.title.as_deref().unwrap_or(&source.external_id);
     let mut output = String::new();
 
-    output.push_str(&format!("# Telegram Export: {source_name} / general\n\n"));
+    output.push_str(&format!(
+        "# Telegram Export: {source_name} / {}\n\n",
+        topic.title
+    ));
     output.push_str("## Document Summary\n\n");
     output.push_str(&format!("- Source: {source_name}\n"));
     output.push_str(&format!("- Source kind: {}\n", source.telegram_source_kind));
-    output.push_str("- Topic: general\n");
+    output.push_str(&format!("- Topic: {}\n", topic.title));
+    output.push_str(&format!("- Topic id: {}\n", yaml_optional_i64(topic.topic_id)));
+    output.push_str(&format!(
+        "- Topic top message id: {}\n",
+        yaml_optional_i64(topic.top_message_id)
+    ));
     output.push_str(&format!(
         "- Export period: {} - {}\n",
         format_unix_rfc3339(period_start),
@@ -249,9 +275,11 @@ fn yaml_optional_i64(value: Option<i64>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_unix_rfc3339, render_message_block};
+    use super::{format_unix_rfc3339, render_document, render_message_block};
     use crate::media::ItemMediaMetadata;
-    use crate::notebooklm_export::model::NotebookLmExportMessage;
+    use crate::notebooklm_export::model::{
+        ExportTopicDescriptor, NotebookLmExportMessage, NotebookLmExportSource,
+    };
 
     #[test]
     fn formats_metadata_as_rfc3339() {
@@ -280,11 +308,16 @@ mod tests {
             reply_to_peer_id: None,
             reply_to_top_id: None,
             reaction_count: None,
+            forum_topic_id: Some(200),
+            forum_topic_title: Some("Roadmap".to_string()),
+            forum_topic_top_message_id: Some(700),
         });
 
         assert!(block.markdown.contains("source_id: 2"));
         assert!(block.markdown.contains("**Text:**"));
         assert!(block.markdown.contains("**Links:**"));
+        assert!(block.markdown.contains("topic_id: 200"));
+        assert!(block.markdown.contains("topic_title: \"Roadmap\""));
     }
 
     #[test]
@@ -309,6 +342,9 @@ mod tests {
             reply_to_peer_id: Some("42".to_string()),
             reply_to_top_id: Some(3),
             reaction_count: Some(2),
+            forum_topic_id: Some(200),
+            forum_topic_title: Some("Roadmap".to_string()),
+            forum_topic_top_message_id: Some(700),
         });
 
         assert!(block.markdown.contains("reply_to_id: 3"));
@@ -317,5 +353,29 @@ mod tests {
         assert!(block.markdown.contains("thread_id: 3"));
         assert!(block.markdown.contains("reaction_count: 2"));
         assert!(block.markdown.contains("**Reactions:**"));
+    }
+
+    #[test]
+    fn renders_topic_aware_document_header() {
+        let source = NotebookLmExportSource {
+            id: 1,
+            source_type: "telegram".to_string(),
+            telegram_source_kind: "supergroup".to_string(),
+            external_id: "123".to_string(),
+            title: Some("Forum".to_string()),
+        };
+        let topic = ExportTopicDescriptor {
+            key: "topic_200".to_string(),
+            slug: "roadmap".to_string(),
+            title: "Roadmap".to_string(),
+            topic_id: Some(200),
+            top_message_id: Some(700),
+        };
+        let markdown = render_document(&source, &topic, 100, "2024-01", 0, 100, &[], &[], false);
+
+        assert!(markdown.contains("# Telegram Export: Forum / Roadmap"));
+        assert!(markdown.contains("- Topic: Roadmap"));
+        assert!(markdown.contains("- Topic id: 200"));
+        assert!(markdown.contains("- Topic top message id: 700"));
     }
 }

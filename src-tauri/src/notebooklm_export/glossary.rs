@@ -111,6 +111,9 @@ mod tests {
             reply_to_peer_id: None,
             reply_to_top_id: None,
             reaction_count: None,
+            forum_topic_id: None,
+            forum_topic_title: None,
+            forum_topic_top_message_id: None,
         }
     }
 

@@ -248,9 +248,10 @@ pub async fn export_source_to_notebooklm(
             &blocks,
             config.max_words_per_file,
             config.max_bytes_per_file,
-            |title_period, period_start, period_end, is_continuation, message_count| {
+            |topic, title_period, period_start, period_end, is_continuation, message_count| {
                 render_document_overhead(
                     &source,
+                    topic,
                     generated_at,
                     title_period,
                     period_start,
@@ -299,6 +300,7 @@ pub async fn export_source_to_notebooklm(
             generated_file_names.push(chunk.filename.clone());
             let markdown = render_document(
                 &source,
+                &chunk.topic,
                 generated_at,
                 &chunk.title_period,
                 chunk.period_start,

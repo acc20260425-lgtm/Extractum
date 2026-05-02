@@ -83,6 +83,9 @@ pub(crate) struct NotebookLmExportMessage {
     pub(crate) reply_to_peer_id: Option<String>,
     pub(crate) reply_to_top_id: Option<i64>,
     pub(crate) reaction_count: Option<i64>,
+    pub(crate) forum_topic_id: Option<i64>,
+    pub(crate) forum_topic_title: Option<String>,
+    pub(crate) forum_topic_top_message_id: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,6 +104,15 @@ pub(crate) struct RenderedMessageBlock {
     pub(crate) byte_size: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ExportTopicDescriptor {
+    pub(crate) key: String,
+    pub(crate) slug: String,
+    pub(crate) title: String,
+    pub(crate) topic_id: Option<i64>,
+    pub(crate) top_message_id: Option<i64>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ChunkFile {
     pub(crate) filename: String,
@@ -108,5 +120,6 @@ pub(crate) struct ChunkFile {
     pub(crate) period_start: i64,
     pub(crate) period_end: i64,
     pub(crate) part_number: usize,
+    pub(crate) topic: ExportTopicDescriptor,
     pub(crate) blocks: Vec<RenderedMessageBlock>,
 }

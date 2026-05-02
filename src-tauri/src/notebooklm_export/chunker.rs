@@ -4,8 +4,12 @@ use time::{OffsetDateTime, UtcOffset};
 
 use crate::notebooklm_export::filename::sanitize_path_component;
 use crate::notebooklm_export::model::{
-    ChunkFile, NotebookLmExportMessage, NotebookLmExportSource, RenderedMessageBlock,
+    ChunkFile, ExportTopicDescriptor, NotebookLmExportMessage, NotebookLmExportSource,
+    RenderedMessageBlock,
 };
+
+const GENERAL_UNCATEGORIZED_SLUG: &str = "general_uncategorized";
+const GENERAL_UNCATEGORIZED_TITLE: &str = "General / Uncategorized";
 
 pub(crate) fn should_export_message(
     message: &NotebookLmExportMessage,
@@ -34,46 +38,52 @@ pub(crate) fn build_chunks(
     blocks: &[RenderedMessageBlock],
     max_words: usize,
     max_bytes: usize,
-    document_overhead: impl Fn(&str, i64, i64, bool, usize) -> (usize, usize),
+    document_overhead: impl Fn(&ExportTopicDescriptor, &str, i64, i64, bool, usize) -> (usize, usize),
 ) -> (Vec<ChunkFile>, Vec<String>) {
     let mut warnings = Vec::new();
-    let yearly_groups = group_by_period(blocks, PeriodKind::Year);
     let mut chunks = Vec::new();
     let source_slug = sanitize_path_component(
         source.title.as_deref().unwrap_or(&source.external_id),
         "source",
     );
 
-    for yearly in yearly_groups {
-        let yearly_words = block_words(&yearly.blocks);
-        let yearly_bytes = block_bytes(&yearly.blocks);
-        let (overhead_words, overhead_bytes) = period_overhead(&yearly, false, &document_overhead);
-        if yearly_words + overhead_words <= max_words && yearly_bytes + overhead_bytes <= max_bytes
-        {
-            chunks.extend(split_period(
-                &source_slug,
-                yearly.label,
-                yearly.filename_prefix,
-                yearly.blocks,
-                max_words,
-                max_bytes,
-                &document_overhead,
-                &mut warnings,
-            ));
-            continue;
-        }
+    for topic_group in group_by_topic(blocks) {
+        let yearly_groups = group_by_period(&topic_group.blocks, PeriodKind::Year);
+        for yearly in yearly_groups {
+            let yearly_words = block_words(&yearly.blocks);
+            let yearly_bytes = block_bytes(&yearly.blocks);
+            let (overhead_words, overhead_bytes) =
+                period_overhead(&topic_group.topic, &yearly, false, &document_overhead);
+            if yearly_words + overhead_words <= max_words
+                && yearly_bytes + overhead_bytes <= max_bytes
+            {
+                chunks.extend(split_period(
+                    &source_slug,
+                    &topic_group.topic,
+                    yearly.label,
+                    yearly.filename_prefix,
+                    yearly.blocks,
+                    max_words,
+                    max_bytes,
+                    &document_overhead,
+                    &mut warnings,
+                ));
+                continue;
+            }
 
-        for monthly in group_by_period(&yearly.blocks, PeriodKind::Month) {
-            chunks.extend(split_period(
-                &source_slug,
-                monthly.label,
-                monthly.filename_prefix,
-                monthly.blocks,
-                max_words,
-                max_bytes,
-                &document_overhead,
-                &mut warnings,
-            ));
+            for monthly in group_by_period(&yearly.blocks, PeriodKind::Month) {
+                chunks.extend(split_period(
+                    &source_slug,
+                    &topic_group.topic,
+                    monthly.label,
+                    monthly.filename_prefix,
+                    monthly.blocks,
+                    max_words,
+                    max_bytes,
+                    &document_overhead,
+                    &mut warnings,
+                ));
+            }
         }
     }
 
@@ -86,10 +96,62 @@ enum PeriodKind {
     Month,
 }
 
+struct TopicGroup {
+    topic: ExportTopicDescriptor,
+    blocks: Vec<RenderedMessageBlock>,
+}
+
 struct PeriodGroup {
     label: String,
     filename_prefix: String,
     blocks: Vec<RenderedMessageBlock>,
+}
+
+fn group_by_topic(blocks: &[RenderedMessageBlock]) -> Vec<TopicGroup> {
+    let mut grouped: BTreeMap<String, (ExportTopicDescriptor, Vec<RenderedMessageBlock>)> =
+        BTreeMap::new();
+
+    for block in blocks {
+        let topic = topic_descriptor(&block.message);
+        grouped
+            .entry(topic.key.clone())
+            .or_insert_with(|| (topic.clone(), Vec::new()))
+            .1
+            .push(block.clone());
+    }
+
+    grouped
+        .into_iter()
+        .map(|(_, (topic, blocks))| TopicGroup { topic, blocks })
+        .collect()
+}
+
+fn topic_descriptor(message: &NotebookLmExportMessage) -> ExportTopicDescriptor {
+    if let Some(topic_id) = message.forum_topic_id {
+        let title = message
+            .forum_topic_title
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("Untitled Topic")
+            .to_string();
+        let slug = sanitize_path_component(&title, &format!("topic_{topic_id}"));
+        return ExportTopicDescriptor {
+            key: format!("topic_{topic_id}"),
+            slug,
+            title,
+            topic_id: Some(topic_id),
+            top_message_id: message.forum_topic_top_message_id,
+        };
+    }
+
+    ExportTopicDescriptor {
+        key: GENERAL_UNCATEGORIZED_SLUG.to_string(),
+        slug: GENERAL_UNCATEGORIZED_SLUG.to_string(),
+        title: GENERAL_UNCATEGORIZED_TITLE.to_string(),
+        topic_id: None,
+        top_message_id: None,
+    }
 }
 
 fn group_by_period(blocks: &[RenderedMessageBlock], kind: PeriodKind) -> Vec<PeriodGroup> {
@@ -123,12 +185,13 @@ fn period_key(unix: i64, kind: PeriodKind) -> String {
 
 fn split_period(
     source_slug: &str,
+    topic: &ExportTopicDescriptor,
     title_period: String,
     filename_prefix: String,
     blocks: Vec<RenderedMessageBlock>,
     max_words: usize,
     max_bytes: usize,
-    document_overhead: &impl Fn(&str, i64, i64, bool, usize) -> (usize, usize),
+    document_overhead: &impl Fn(&ExportTopicDescriptor, &str, i64, i64, bool, usize) -> (usize, usize),
     warnings: &mut Vec<String>,
 ) -> Vec<ChunkFile> {
     let mut chunks = Vec::new();
@@ -139,6 +202,7 @@ fn split_period(
     for block in blocks {
         let is_next_continuation = !chunks.is_empty();
         let (single_overhead_words, single_overhead_bytes) = document_overhead(
+            topic,
             &title_period,
             block.message.published_at,
             block.message.published_at,
@@ -163,6 +227,7 @@ fn split_period(
                 .unwrap_or(block.message.published_at);
             let period_end = block.message.published_at;
             let (overhead_words, overhead_bytes) = document_overhead(
+                topic,
                 &title_period,
                 period_start,
                 period_end,
@@ -177,6 +242,7 @@ fn split_period(
         if would_exceed {
             chunks.push(make_chunk(
                 source_slug,
+                topic,
                 &title_period,
                 &filename_prefix,
                 chunks.len() + 1,
@@ -194,6 +260,7 @@ fn split_period(
     if !current.is_empty() {
         chunks.push(make_chunk(
             source_slug,
+            topic,
             &title_period,
             &filename_prefix,
             chunks.len() + 1,
@@ -206,6 +273,7 @@ fn split_period(
 
 fn make_chunk(
     source_slug: &str,
+    topic: &ExportTopicDescriptor,
     title_period: &str,
     filename_prefix: &str,
     part_number: usize,
@@ -220,11 +288,15 @@ fn make_chunk(
         .map(|block| block.message.published_at)
         .unwrap_or(0);
     ChunkFile {
-        filename: format!("{filename_prefix}_{source_slug}_general_part-{part_number:03}.md"),
+        filename: format!(
+            "{filename_prefix}_{source_slug}_{}_part-{part_number:03}.md",
+            topic.slug
+        ),
         title_period: title_period.to_string(),
         period_start,
         period_end,
         part_number,
+        topic: topic.clone(),
         blocks,
     }
 }
@@ -241,9 +313,10 @@ fn block_bytes(blocks: &[RenderedMessageBlock]) -> usize {
 }
 
 fn period_overhead(
+    topic: &ExportTopicDescriptor,
     group: &PeriodGroup,
     is_continuation: bool,
-    document_overhead: &impl Fn(&str, i64, i64, bool, usize) -> (usize, usize),
+    document_overhead: &impl Fn(&ExportTopicDescriptor, &str, i64, i64, bool, usize) -> (usize, usize),
 ) -> (usize, usize) {
     let period_start = group
         .blocks
@@ -256,6 +329,7 @@ fn period_overhead(
         .map(|block| block.message.published_at)
         .unwrap_or(0);
     document_overhead(
+        topic,
         &group.label,
         period_start,
         period_end,
@@ -266,7 +340,7 @@ fn period_overhead(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_chunks, should_export_message};
+    use super::{build_chunks, should_export_message, GENERAL_UNCATEGORIZED_SLUG};
     use crate::media::ItemMediaMetadata;
     use crate::notebooklm_export::model::{
         NotebookLmExportMessage, NotebookLmExportSource, RenderedMessageBlock,
@@ -294,6 +368,9 @@ mod tests {
                 reply_to_peer_id: None,
                 reply_to_top_id: None,
                 reaction_count: None,
+                forum_topic_id: None,
+                forum_topic_title: None,
+                forum_topic_top_message_id: None,
             },
             markdown: "hello".to_string(),
             approximate_word_count: words,
@@ -327,11 +404,12 @@ mod tests {
             &[block(1, 0, 10, 10), block(2, 10, 10, 10)],
             100,
             100,
-            |_, _, _, _, _| (0, 0),
+            |_, _, _, _, _, _| (0, 0),
         )
         .0;
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].filename.starts_with("1970_"));
+        assert!(chunks[0].filename.contains(GENERAL_UNCATEGORIZED_SLUG));
     }
 
     #[test]
@@ -342,7 +420,7 @@ mod tests {
             &[block(1, 0, 60, 10), block(2, feb_1970, 60, 10)],
             100,
             100,
-            |_, _, _, _, _| (0, 0),
+            |_, _, _, _, _, _| (0, 0),
         )
         .0;
         assert_eq!(chunks.len(), 2);
@@ -357,7 +435,7 @@ mod tests {
             &[block(1, 0, 60, 10), block(2, 1, 60, 10)],
             100,
             100,
-            |_, _, _, _, _| (0, 0),
+            |_, _, _, _, _, _| (0, 0),
         )
         .0;
         assert_eq!(chunks.len(), 2);
@@ -367,7 +445,7 @@ mod tests {
             &[block(1, 0, 10, 60), block(2, 1, 10, 60)],
             100,
             100,
-            |_, _, _, _, _| (0, 0),
+            |_, _, _, _, _, _| (0, 0),
         )
         .0;
         assert_eq!(chunks.len(), 2);
@@ -380,10 +458,41 @@ mod tests {
             &[block(1, 0, 40, 10), block(2, 1, 40, 10)],
             100,
             100,
-            |_, _, _, _, _| (30, 0),
+            |_, _, _, _, _, _| (30, 0),
         )
         .0;
 
         assert_eq!(chunks.len(), 2);
+    }
+
+    #[test]
+    fn groups_chunks_by_topic_slug() {
+        let mut topic_a = block(1, 0, 10, 10);
+        topic_a.message.forum_topic_id = Some(200);
+        topic_a.message.forum_topic_title = Some("Roadmap".to_string());
+        topic_a.message.forum_topic_top_message_id = Some(700);
+
+        let mut topic_b = block(2, 10, 10, 10);
+        topic_b.message.forum_topic_id = Some(201);
+        topic_b.message.forum_topic_title = Some("Bugs".to_string());
+        topic_b.message.forum_topic_top_message_id = Some(701);
+
+        let uncategorized = block(3, 20, 10, 10);
+
+        let chunks = build_chunks(
+            &source(),
+            &[topic_a, topic_b, uncategorized],
+            100,
+            100,
+            |_, _, _, _, _, _| (0, 0),
+        )
+        .0;
+
+        assert_eq!(chunks.len(), 3);
+        assert!(chunks.iter().any(|chunk| chunk.filename.contains("_roadmap_")));
+        assert!(chunks.iter().any(|chunk| chunk.filename.contains("_bugs_")));
+        assert!(chunks
+            .iter()
+            .any(|chunk| chunk.filename.contains(GENERAL_UNCATEGORIZED_SLUG)));
     }
 }
