@@ -14,6 +14,9 @@ use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::sources::load_source;
 use crate::telegram::{get_authorized_runtime, TelegramState};
 
+#[allow(dead_code)]
+mod raw_parse;
+
 const TAKEOUT_IMPORT_EVENT: &str = "sources://takeout-import";
 const EXPORT_DC_SHIFT: i32 = 4 * 10_000;
 const TAKEOUT_FILE_MAX_SIZE: i64 = 8 * 1024 * 1024;
