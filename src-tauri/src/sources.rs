@@ -31,8 +31,8 @@ const TELEGRAM_KIND_GROUP: &str = "group";
 const TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS: u64 = 750;
 const TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS: u64 = 4_000;
 const TELEGRAM_SOURCE_AVATAR_CACHE_DIR: &str = "source_avatars";
-const FORUM_TOPIC_UNCATEGORIZED_KEY: &str = "general_uncategorized";
-const FORUM_TOPIC_UNCATEGORIZED_TITLE: &str = "General / Uncategorized";
+const FORUM_TOPIC_UNCATEGORIZED_KEY: &str = "unrecognized_topic";
+const FORUM_TOPIC_UNCATEGORIZED_TITLE: &str = "Unrecognized topic";
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -1054,8 +1054,14 @@ pub async fn sync_source(
     let forum_topic_warnings =
         refresh_forum_topics(&pool, &client, resolved_peer.peer.clone(), &source).await;
     let sync_policy = determine_sync_policy(&pool, &source).await?;
-    let ingest =
-        persist_items(&pool, &client, resolved_peer.peer.clone(), &source, &sync_policy).await?;
+    let ingest = persist_items(
+        &pool,
+        &client,
+        resolved_peer.peer.clone(),
+        &source,
+        &sync_policy,
+    )
+    .await?;
     let last_sync_state = finalize_sync(
         &pool,
         &source,
@@ -1110,8 +1116,14 @@ async fn refresh_forum_topics(
 
     match fetch_all_forum_topics(client, peer).await {
         Ok((topics, deleted_topic_ids)) => {
-            if let Err(error) =
-                upsert_forum_topics_from_refresh(pool, source.id, &topics, &deleted_topic_ids, now_secs()).await
+            if let Err(error) = upsert_forum_topics_from_refresh(
+                pool,
+                source.id,
+                &topics,
+                &deleted_topic_ids,
+                now_secs(),
+            )
+            .await
             {
                 vec![format!(
                     "Forum topic refresh failed for source {}: {error}",
@@ -1206,10 +1218,14 @@ async fn fetch_all_forum_topics(
 fn forum_topic_page_cursor(
     forum_topics: &tl::types::messages::ForumTopics,
 ) -> Option<(i32, i32, i32)> {
-    let last_topic = forum_topics.topics.iter().rev().find_map(|topic| match topic {
-        tl::enums::ForumTopic::Topic(topic) => Some(topic),
-        tl::enums::ForumTopic::Deleted(_) => None,
-    })?;
+    let last_topic = forum_topics
+        .topics
+        .iter()
+        .rev()
+        .find_map(|topic| match topic {
+            tl::enums::ForumTopic::Topic(topic) => Some(topic),
+            tl::enums::ForumTopic::Deleted(_) => None,
+        })?;
     let offset_date = forum_topics
         .messages
         .iter()
@@ -1400,6 +1416,23 @@ async fn load_item_rows_from_pool(
                     items.reply_to_top_id IS NULL
                     AND items.reply_to_msg_id = forum_topics.topic_id
                 )
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND forum_topics.topic_id = 1
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM telegram_forum_topics AS matched_topics
+                        WHERE matched_topics.source_id = items.source_id
+                          AND (
+                                (
+                                    items.external_id <> ''
+                                    AND items.external_id NOT GLOB '*[^0-9]*'
+                                    AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
+                                )
+                                OR items.reply_to_msg_id = matched_topics.topic_id
+                          )
+                    )
+                )
             )
         WHERE items.source_id = ?
         "#,
@@ -1469,6 +1502,23 @@ async fn list_source_forum_topics_from_pool(
                     items.reply_to_top_id IS NULL
                     AND items.reply_to_msg_id = topics.topic_id
                 )
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND topics.topic_id = 1
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM telegram_forum_topics AS matched_topics
+                        WHERE matched_topics.source_id = items.source_id
+                          AND (
+                                (
+                                    items.external_id <> ''
+                                    AND items.external_id NOT GLOB '*[^0-9]*'
+                                    AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
+                                )
+                                OR items.reply_to_msg_id = matched_topics.topic_id
+                          )
+                    )
+                )
             )
         WHERE topics.source_id = ?
         GROUP BY
@@ -1511,6 +1561,23 @@ async fn list_source_forum_topics_from_pool(
                 OR (
                     items.reply_to_top_id IS NULL
                     AND items.reply_to_msg_id = forum_topics.topic_id
+                )
+                OR (
+                    items.reply_to_top_id IS NULL
+                    AND forum_topics.topic_id = 1
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM telegram_forum_topics AS matched_topics
+                        WHERE matched_topics.source_id = items.source_id
+                          AND (
+                                (
+                                    items.external_id <> ''
+                                    AND items.external_id NOT GLOB '*[^0-9]*'
+                                    AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
+                                )
+                                OR items.reply_to_msg_id = matched_topics.topic_id
+                          )
+                    )
                 )
             )
         WHERE items.source_id = ?
@@ -2154,14 +2221,13 @@ mod tests {
         is_non_forum_topic_refresh_error, list_source_forum_topics_from_pool,
         load_item_rows_from_pool, load_source, load_sync_settings_from_pool,
         parse_supported_manual_telegram_source_ref, parse_username, reply_peer_context,
-        save_sync_settings_to_pool, upsert_forum_topics_from_refresh,
-        source_peer_ref_from_identity, source_peer_resolution_failure, source_peer_resolution_plan,
+        save_sync_settings_to_pool, source_peer_ref_from_identity, source_peer_resolution_failure,
+        source_peer_resolution_plan, upsert_forum_topics_from_refresh,
         validate_expected_telegram_source_kind, validate_sync_settings, ForumTopicFilter,
         ForumTopicSnapshot, InitialSyncMode, ManualTelegramSourceRef, ResolvedTelegramSource,
-        SourceMetadata, SourcePeerIdentity, SourcePeerResolutionStep,
-        SourcePeerResolutionStrategy, SourceRecordRow, SourceSyncTarget, SyncSettingsRecord,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
-        TELEGRAM_SOURCE_TYPE,
+        SourceMetadata, SourcePeerIdentity, SourcePeerResolutionStep, SourcePeerResolutionStrategy,
+        SourceRecordRow, SourceSyncTarget, SyncSettingsRecord, TELEGRAM_KIND_CHANNEL,
+        TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
     };
     use crate::compression::{compress_json_bytes, compress_text, decompress_text};
     use crate::error::AppErrorKind;
@@ -2811,35 +2877,41 @@ mod tests {
     #[tokio::test]
     async fn load_item_rows_attaches_topic_metadata_and_root_matches() {
         let pool = memory_pool_with_source_items_and_topics().await;
-        sqlx::query(
-            r#"
-            INSERT INTO telegram_forum_topics (
-                id, source_id, topic_id, top_message_id, title, is_closed, is_pinned, is_hidden,
-                is_deleted, sort_order, last_seen_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            "#,
-        )
-        .bind(1_i64)
-        .bind(1_i64)
-        .bind(200_i64)
-        .bind(700_i64)
-        .bind("Announcements")
-        .bind(0_i64)
-        .bind(1_i64)
-        .bind(0_i64)
-        .bind(0_i64)
-        .bind(1_i64)
-        .bind(100_i64)
-        .bind(100_i64)
-        .execute(&pool)
-        .await
-        .expect("insert forum topic");
+        for (id, topic_id, top_message_id, title, sort_order) in [
+            (1_i64, 200_i64, 700_i64, "Announcements", 1_i64),
+            (2_i64, 1_i64, 1_i64, "General", 2_i64),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO telegram_forum_topics (
+                    id, source_id, topic_id, top_message_id, title, is_closed, is_pinned, is_hidden,
+                    is_deleted, sort_order, last_seen_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(id)
+            .bind(1_i64)
+            .bind(topic_id)
+            .bind(top_message_id)
+            .bind(title)
+            .bind(0_i64)
+            .bind(1_i64)
+            .bind(0_i64)
+            .bind(0_i64)
+            .bind(sort_order)
+            .bind(100_i64)
+            .bind(100_i64)
+            .execute(&pool)
+            .await
+            .expect("insert forum topic");
+        }
 
         for (id, external_id, published_at, reply_to_msg_id, reply_to_top_id) in [
-            (1_i64, "700", 300_i64, None, None),
-            (2_i64, "701", 200_i64, None, Some(200_i64)),
-            (3_i64, "702", 150_i64, Some(200_i64), None),
-            (4_i64, "999", 100_i64, None, None),
+            (1_i64, "700", 500_i64, None, None),
+            (2_i64, "701", 400_i64, None, Some(200_i64)),
+            (3_i64, "702", 300_i64, Some(200_i64), None),
+            (4_i64, "999", 200_i64, None, None),
+            (5_i64, "1000", 100_i64, Some(123_i64), Some(404_i64)),
         ] {
             sqlx::query(
                 r#"
@@ -2876,12 +2948,13 @@ mod tests {
         let rows = load_item_rows_from_pool(&pool, 1, 20, None, None)
             .await
             .expect("load all rows");
-        assert_eq!(rows.len(), 4);
+        assert_eq!(rows.len(), 5);
         assert_eq!(rows[0].forum_topic_id, Some(200));
         assert_eq!(rows[0].forum_topic_top_message_id, Some(700));
         assert_eq!(rows[1].forum_topic_id, Some(200));
         assert_eq!(rows[2].forum_topic_id, Some(200));
-        assert_eq!(rows[3].forum_topic_id, None);
+        assert_eq!(rows[3].forum_topic_id, Some(1));
+        assert_eq!(rows[4].forum_topic_id, None);
 
         let topic_rows = load_item_rows_from_pool(
             &pool,
@@ -2895,17 +2968,24 @@ mod tests {
         assert_eq!(topic_rows.len(), 3);
         assert!(topic_rows.iter().all(|row| row.forum_topic_id == Some(200)));
 
-        let uncategorized_rows = load_item_rows_from_pool(
+        let general_rows = load_item_rows_from_pool(
             &pool,
             1,
             20,
             None,
-            Some(ForumTopicFilter::Uncategorized),
+            Some(ForumTopicFilter::Topic { topic_id: 1 }),
         )
         .await
-        .expect("load uncategorized rows");
+        .expect("load general rows");
+        assert_eq!(general_rows.len(), 1);
+        assert_eq!(general_rows[0].external_id, "999");
+
+        let uncategorized_rows =
+            load_item_rows_from_pool(&pool, 1, 20, None, Some(ForumTopicFilter::Uncategorized))
+                .await
+                .expect("load uncategorized rows");
         assert_eq!(uncategorized_rows.len(), 1);
-        assert_eq!(uncategorized_rows[0].external_id, "999");
+        assert_eq!(uncategorized_rows[0].external_id, "1000");
     }
 
     #[tokio::test]
@@ -2915,6 +2995,7 @@ mod tests {
         for (id, topic_id, top_message_id, title, is_pinned, sort_order) in [
             (1_i64, 22_i64, 900_i64, "beta", 0_i64, 2_i64),
             (2_i64, 11_i64, 800_i64, "Alpha", 1_i64, 5_i64),
+            (3_i64, 1_i64, 1_i64, "General", 0_i64, 3_i64),
         ] {
             sqlx::query(
                 r#"
@@ -2947,6 +3028,7 @@ mod tests {
             (3_i64, "950", 200_i64, None, None),
             (4_i64, "901", 100_i64, None, Some(22_i64)),
             (5_i64, "902", 50_i64, Some(22_i64), None),
+            (6_i64, "951", 25_i64, None, Some(404_i64)),
         ] {
             sqlx::query(
                 r#"
@@ -2984,15 +3066,17 @@ mod tests {
             .await
             .expect("list source forum topics");
 
-        assert_eq!(records.len(), 3);
+        assert_eq!(records.len(), 4);
         assert_eq!(records[0].kind, "topic");
         assert_eq!(records[0].topic_id, Some(11));
         assert_eq!(records[0].message_count, 2);
         assert_eq!(records[1].topic_id, Some(22));
         assert_eq!(records[1].message_count, 2);
-        assert_eq!(records[2].kind, "uncategorized");
-        assert_eq!(records[2].key, "general_uncategorized");
+        assert_eq!(records[2].topic_id, Some(1));
         assert_eq!(records[2].message_count, 1);
+        assert_eq!(records[3].kind, "uncategorized");
+        assert_eq!(records[3].key, "unrecognized_topic");
+        assert_eq!(records[3].message_count, 1);
     }
 
     #[tokio::test]

@@ -8,8 +8,8 @@ use crate::notebooklm_export::model::{
     RenderedMessageBlock,
 };
 
-const GENERAL_UNCATEGORIZED_SLUG: &str = "general_uncategorized";
-const GENERAL_UNCATEGORIZED_TITLE: &str = "General / Uncategorized";
+const UNRECOGNIZED_TOPIC_SLUG: &str = "unrecognized_topic";
+const UNRECOGNIZED_TOPIC_TITLE: &str = "Unrecognized topic";
 
 pub(crate) fn should_export_message(
     message: &NotebookLmExportMessage,
@@ -146,9 +146,9 @@ fn topic_descriptor(message: &NotebookLmExportMessage) -> ExportTopicDescriptor 
     }
 
     ExportTopicDescriptor {
-        key: GENERAL_UNCATEGORIZED_SLUG.to_string(),
-        slug: GENERAL_UNCATEGORIZED_SLUG.to_string(),
-        title: GENERAL_UNCATEGORIZED_TITLE.to_string(),
+        key: UNRECOGNIZED_TOPIC_SLUG.to_string(),
+        slug: UNRECOGNIZED_TOPIC_SLUG.to_string(),
+        title: UNRECOGNIZED_TOPIC_TITLE.to_string(),
         topic_id: None,
         top_message_id: None,
     }
@@ -340,7 +340,7 @@ fn period_overhead(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_chunks, should_export_message, GENERAL_UNCATEGORIZED_SLUG};
+    use super::{build_chunks, should_export_message, UNRECOGNIZED_TOPIC_SLUG};
     use crate::media::ItemMediaMetadata;
     use crate::notebooklm_export::model::{
         NotebookLmExportMessage, NotebookLmExportSource, RenderedMessageBlock,
@@ -409,7 +409,7 @@ mod tests {
         .0;
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].filename.starts_with("1970_"));
-        assert!(chunks[0].filename.contains(GENERAL_UNCATEGORIZED_SLUG));
+        assert!(chunks[0].filename.contains(UNRECOGNIZED_TOPIC_SLUG));
     }
 
     #[test]
@@ -489,11 +489,13 @@ mod tests {
         .0;
 
         assert_eq!(chunks.len(), 3);
-        assert!(chunks.iter().any(|chunk| chunk.filename.contains("_roadmap_")));
+        assert!(chunks
+            .iter()
+            .any(|chunk| chunk.filename.contains("_roadmap_")));
         assert!(chunks.iter().any(|chunk| chunk.filename.contains("_bugs_")));
         assert!(chunks
             .iter()
-            .any(|chunk| chunk.filename.contains(GENERAL_UNCATEGORIZED_SLUG)));
+            .any(|chunk| chunk.filename.contains(UNRECOGNIZED_TOPIC_SLUG)));
     }
 
     #[test]

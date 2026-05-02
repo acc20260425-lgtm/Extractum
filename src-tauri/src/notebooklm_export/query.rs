@@ -313,6 +313,23 @@ const BASE_QUERY: &str = r#"
                 items.reply_to_top_id IS NULL
                 AND items.reply_to_msg_id = forum_topics.topic_id
             )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND forum_topics.topic_id = 1
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM telegram_forum_topics AS matched_topics
+                    WHERE matched_topics.source_id = items.source_id
+                      AND (
+                            (
+                                items.external_id <> ''
+                                AND items.external_id NOT GLOB '*[^0-9]*'
+                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
+                            )
+                            OR items.reply_to_msg_id = matched_topics.topic_id
+                      )
+                )
+            )
         )
     WHERE items.source_id = ?
     ORDER BY items.published_at ASC, items.id ASC
@@ -351,6 +368,23 @@ const BASE_QUERY_WITH_FROM: &str = r#"
             OR (
                 items.reply_to_top_id IS NULL
                 AND items.reply_to_msg_id = forum_topics.topic_id
+            )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND forum_topics.topic_id = 1
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM telegram_forum_topics AS matched_topics
+                    WHERE matched_topics.source_id = items.source_id
+                      AND (
+                            (
+                                items.external_id <> ''
+                                AND items.external_id NOT GLOB '*[^0-9]*'
+                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
+                            )
+                            OR items.reply_to_msg_id = matched_topics.topic_id
+                      )
+                )
             )
         )
     WHERE items.source_id = ? AND items.published_at >= ?
@@ -391,6 +425,23 @@ const BASE_QUERY_WITH_TO: &str = r#"
                 items.reply_to_top_id IS NULL
                 AND items.reply_to_msg_id = forum_topics.topic_id
             )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND forum_topics.topic_id = 1
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM telegram_forum_topics AS matched_topics
+                    WHERE matched_topics.source_id = items.source_id
+                      AND (
+                            (
+                                items.external_id <> ''
+                                AND items.external_id NOT GLOB '*[^0-9]*'
+                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
+                            )
+                            OR items.reply_to_msg_id = matched_topics.topic_id
+                      )
+                )
+            )
         )
     WHERE items.source_id = ? AND items.published_at <= ?
     ORDER BY items.published_at ASC, items.id ASC
@@ -429,6 +480,23 @@ const BASE_QUERY_WITH_FROM_TO: &str = r#"
             OR (
                 items.reply_to_top_id IS NULL
                 AND items.reply_to_msg_id = forum_topics.topic_id
+            )
+            OR (
+                items.reply_to_top_id IS NULL
+                AND forum_topics.topic_id = 1
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM telegram_forum_topics AS matched_topics
+                    WHERE matched_topics.source_id = items.source_id
+                      AND (
+                            (
+                                items.external_id <> ''
+                                AND items.external_id NOT GLOB '*[^0-9]*'
+                                AND CAST(items.external_id AS INTEGER) = matched_topics.top_message_id
+                            )
+                            OR items.reply_to_msg_id = matched_topics.topic_id
+                      )
+                )
             )
         )
     WHERE items.source_id = ? AND items.published_at >= ? AND items.published_at <= ?
@@ -677,13 +745,75 @@ mod tests {
             .expect("load export messages");
 
         assert_eq!(messages.len(), 3);
-        assert!(messages.iter().all(|message| message.forum_topic_id == Some(200)));
+        assert!(messages
+            .iter()
+            .all(|message| message.forum_topic_id == Some(200)));
         assert!(messages
             .iter()
             .all(|message| message.forum_topic_title.as_deref() == Some("Roadmap")));
         assert!(messages
             .iter()
             .all(|message| message.forum_topic_top_message_id == Some(700)));
+    }
+
+    #[tokio::test]
+    async fn load_export_messages_attaches_general_topic_when_topic_header_is_missing() {
+        let pool = export_pool().await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_forum_topics (
+                source_id,
+                topic_id,
+                top_message_id,
+                title,
+                is_deleted
+            )
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind("General")
+        .bind(0_i64)
+        .execute(&pool)
+        .await
+        .expect("insert general topic");
+
+        sqlx::query(
+            r#"
+            INSERT INTO items (
+                source_id,
+                external_id,
+                author,
+                published_at,
+                content_zstd,
+                content_kind,
+                has_media
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind("999")
+        .bind("Ada")
+        .bind(100_i64)
+        .bind(compress_text("General message").expect("compress message"))
+        .bind("text_only")
+        .bind(0_i64)
+        .execute(&pool)
+        .await
+        .expect("insert general message");
+
+        let messages = load_export_messages(&pool, 1, None, None)
+            .await
+            .expect("load export messages");
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].forum_topic_id, Some(1));
+        assert_eq!(messages[0].forum_topic_title.as_deref(), Some("General"));
+        assert_eq!(messages[0].forum_topic_top_message_id, Some(1));
     }
 
     #[tokio::test]
