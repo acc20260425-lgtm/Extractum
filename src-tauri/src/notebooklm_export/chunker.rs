@@ -495,4 +495,19 @@ mod tests {
             .iter()
             .any(|chunk| chunk.filename.contains(GENERAL_UNCATEGORIZED_SLUG)));
     }
+
+    #[test]
+    fn falls_back_to_topic_id_when_topic_title_slug_is_invalid() {
+        let mut topic = block(1, 0, 10, 10);
+        topic.message.forum_topic_id = Some(200);
+        topic.message.forum_topic_title = Some("..".to_string());
+        topic.message.forum_topic_top_message_id = Some(700);
+
+        let chunks = build_chunks(&source(), &[topic], 100, 100, |_, _, _, _, _, _| (0, 0)).0;
+
+        assert_eq!(chunks.len(), 1);
+        assert!(chunks[0].filename.contains("_topic_200_"));
+        assert_eq!(chunks[0].topic.slug, "topic_200");
+        assert_eq!(chunks[0].topic.title, "..");
+    }
 }

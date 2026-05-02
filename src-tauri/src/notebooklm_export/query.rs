@@ -642,4 +642,64 @@ mod tests {
             .iter()
             .all(|message| message.forum_topic_top_message_id == Some(700)));
     }
+
+    #[tokio::test]
+    async fn load_export_messages_does_not_root_match_non_numeric_external_ids() {
+        let pool = export_pool().await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_forum_topics (
+                source_id,
+                topic_id,
+                top_message_id,
+                title,
+                is_deleted
+            )
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind(200_i64)
+        .bind(700_i64)
+        .bind("Roadmap")
+        .bind(0_i64)
+        .execute(&pool)
+        .await
+        .expect("insert forum topic");
+
+        sqlx::query(
+            r#"
+            INSERT INTO items (
+                source_id,
+                external_id,
+                author,
+                published_at,
+                content_zstd,
+                content_kind,
+                has_media
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1_i64)
+        .bind("700a")
+        .bind("Ada")
+        .bind(100_i64)
+        .bind(compress_text("Looks numeric but is not").expect("compress message"))
+        .bind("text_only")
+        .bind(0_i64)
+        .execute(&pool)
+        .await
+        .expect("insert message");
+
+        let messages = load_export_messages(&pool, 1, None, None)
+            .await
+            .expect("load export messages");
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].forum_topic_id, None);
+        assert_eq!(messages[0].forum_topic_title, None);
+        assert_eq!(messages[0].forum_topic_top_message_id, None);
+    }
 }
