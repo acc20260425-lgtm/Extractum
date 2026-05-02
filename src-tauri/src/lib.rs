@@ -18,6 +18,9 @@ use telegram::{
     tg_send_code, tg_sign_in, TelegramState,
 };
 
+mod source_ingest;
+use source_ingest::SourceIngestLocks;
+
 mod sources;
 use sources::{
     add_telegram_source, delete_source, get_items, get_sync_settings, list_source_forum_topics,
@@ -56,6 +59,7 @@ pub fn run() {
 
     let mut builder = tauri::Builder::default()
         .manage(TelegramState::new())
+        .manage(SourceIngestLocks::new())
         .manage(AnalysisState::new())
         .manage(LlmSchedulerState::new())
         .plugin(tauri_plugin_dialog::init())

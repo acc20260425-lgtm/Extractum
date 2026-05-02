@@ -17,6 +17,7 @@ use crate::forum_topics::{
 use crate::media::{
     decode_media_metadata, encode_media_metadata, extract_item_payload, ExtractedItemPayload,
 };
+use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::telegram::TelegramState;
 
 const DEFAULT_INITIAL_SYNC_MESSAGE_LIMIT: i64 = 500;
@@ -473,7 +474,14 @@ pub async fn save_sync_settings(
 }
 
 #[tauri::command]
-pub async fn delete_source(handle: AppHandle, source_id: i64) -> AppResult<()> {
+pub async fn delete_source(
+    handle: AppHandle,
+    ingest_locks: tauri::State<'_, SourceIngestLocks>,
+    source_id: i64,
+) -> AppResult<()> {
+    let _ingest_guard = ingest_locks
+        .try_acquire(source_id, SourceIngestKind::Delete)
+        .await?;
     let pool = get_pool(&handle).await?;
     let result = sqlx::query("DELETE FROM sources WHERE id = ?")
         .bind(source_id)
@@ -1042,8 +1050,12 @@ fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult
 pub async fn sync_source(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    ingest_locks: tauri::State<'_, SourceIngestLocks>,
     source_id: i64,
 ) -> AppResult<SyncResult> {
+    let _ingest_guard = ingest_locks
+        .try_acquire(source_id, SourceIngestKind::Sync)
+        .await?;
     let pool = get_pool(&handle).await?;
     let source = load_source(&pool, source_id).await?;
 
