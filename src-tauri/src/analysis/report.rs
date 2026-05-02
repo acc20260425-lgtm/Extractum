@@ -24,9 +24,9 @@ use super::store::{
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
     emit_analysis_event, now_secs, AnalysisState, ANALYSIS_CHUNK_TARGET_CHARS,
-    ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
-    ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_FAILED,
-    ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
+    ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED,
+    ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED,
+    ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
 };
 
 const INTERRUPTED_RUN_MESSAGE: &str = "Analysis run was interrupted when the app was restarted.";
@@ -303,9 +303,12 @@ fn finish_map_phase(
         return Err(error);
     }
 
-    ordered_summaries.into_iter().collect::<Option<Vec<_>>>().ok_or_else(|| {
-        ReportRunError::Failed("Some chunk summaries were not collected".to_string())
-    })
+    ordered_summaries
+        .into_iter()
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| {
+            ReportRunError::Failed("Some chunk summaries were not collected".to_string())
+        })
 }
 
 async fn ensure_report_not_cancelled(
@@ -558,11 +561,7 @@ async fn run_report_pipeline(
                         "failed",
                         "map",
                         None,
-                        Some(format!(
-                            "Chunk {} of {} failed.",
-                            index + 1,
-                            total_chunks
-                        )),
+                        Some(format!("Chunk {} of {} failed.", index + 1, total_chunks)),
                         Some(chunk_counter.load(Ordering::SeqCst) as i64),
                         Some(total_chunks as i64),
                         None,
@@ -1111,7 +1110,9 @@ pub async fn start_analysis_report(
         {
             Ok(()) => {}
             Err(ReportRunError::Failed(error)) => fail_run(&app_handle, run_id, error).await,
-            Err(ReportRunError::Cancelled(message)) => cancel_run(&app_handle, run_id, message).await,
+            Err(ReportRunError::Cancelled(message)) => {
+                cancel_run(&app_handle, run_id, message).await
+            }
         }
         app_handle
             .state::<AnalysisState>()
@@ -1130,8 +1131,7 @@ mod tests {
     };
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
 
-    const SAMPLE_JSON: &str =
-        r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-m2"]}"#;
+    const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-m2"]}"#;
 
     fn sample_chunk_summary(label: &str) -> ChunkSummary {
         ChunkSummary {
@@ -1237,7 +1237,9 @@ mod tests {
 
         let error = finish_map_phase(
             ordered,
-            Some(ReportRunError::Cancelled("Analysis run cancelled.".to_string())),
+            Some(ReportRunError::Cancelled(
+                "Analysis run cancelled.".to_string(),
+            )),
         )
         .expect_err("map cancellation should stop reduce");
 
@@ -1249,7 +1251,8 @@ mod tests {
 
     #[test]
     fn build_map_request_keeps_run_scoped_request_and_profile() {
-        let request = build_map_request(55, "default".to_string(), 2, 4, &[sample_corpus_message()]);
+        let request =
+            build_map_request(55, "default".to_string(), 2, 4, &[sample_corpus_message()]);
 
         assert!(request.request_id.starts_with("analysis-map-55-2-"));
         assert_eq!(request.profile_id.as_deref(), Some("default"));

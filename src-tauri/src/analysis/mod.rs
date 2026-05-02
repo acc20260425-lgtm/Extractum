@@ -28,7 +28,9 @@ pub use self::groups::{
     create_analysis_source_group, delete_analysis_source_group, list_analysis_source_groups,
     update_analysis_source_group,
 };
-pub use self::report::{cancel_analysis_run, cleanup_interrupted_analysis_runs, start_analysis_report};
+pub use self::report::{
+    cancel_analysis_run, cleanup_interrupted_analysis_runs, start_analysis_report,
+};
 pub use self::templates::{
     create_analysis_prompt_template, delete_analysis_prompt_template,
     list_analysis_prompt_templates, update_analysis_prompt_template,

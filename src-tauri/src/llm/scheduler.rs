@@ -187,7 +187,10 @@ impl SchedulerInner {
 
             match entry.state {
                 RequestState::Queued => {
-                    if let Some(index) = key_state.queue.iter().position(|queued| queued == request_id)
+                    if let Some(index) = key_state
+                        .queue
+                        .iter()
+                        .position(|queued| queued == request_id)
                     {
                         key_state.queue.remove(index);
                     }
@@ -242,7 +245,10 @@ impl LlmSchedulerState {
         let updates = {
             let mut inner = self.inner.lock().await;
             if inner.requests.contains_key(&request_id) {
-                return Err(format!("LLM request '{}' is already registered", request_id));
+                return Err(format!(
+                    "LLM request '{}' is already registered",
+                    request_id
+                ));
             }
 
             inner.requests.insert(
@@ -335,7 +341,10 @@ impl LlmSchedulerState {
     pub async fn cancel_request(&self, request_id: &str) -> bool {
         let control = {
             let inner = self.inner.lock().await;
-            inner.requests.get(request_id).map(|entry| entry.control.clone())
+            inner
+                .requests
+                .get(request_id)
+                .map(|entry| entry.control.clone())
         };
 
         if let Some(control) = control {
@@ -751,7 +760,10 @@ mod tests {
         .await
         .expect("owned request should register");
 
-        assert_eq!(task.await.expect("join task"), Err(LlmRequestError::Cancelled));
+        assert_eq!(
+            task.await.expect("join task"),
+            Err(LlmRequestError::Cancelled)
+        );
         assert_scheduler_empty(&scheduler).await;
     }
 

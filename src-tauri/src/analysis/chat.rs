@@ -362,7 +362,8 @@ pub async fn ask_analysis_run_question(
     let app_handle = handle.clone();
     tokio::spawn(async move {
         let resolved_profile =
-            match resolve_profile_for_backend(&app_handle, Some(effective_profile_id.as_str())).await
+            match resolve_profile_for_backend(&app_handle, Some(effective_profile_id.as_str()))
+                .await
             {
                 Ok(profile) => profile,
                 Err(error) => {

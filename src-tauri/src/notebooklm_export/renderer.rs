@@ -219,7 +219,10 @@ fn render_document_header(
     output.push_str(&format!("- Source: {source_name}\n"));
     output.push_str(&format!("- Source kind: {}\n", source.telegram_source_kind));
     output.push_str(&format!("- Topic: {}\n", topic.title));
-    output.push_str(&format!("- Topic id: {}\n", yaml_optional_i64(topic.topic_id)));
+    output.push_str(&format!(
+        "- Topic id: {}\n",
+        yaml_optional_i64(topic.topic_id)
+    ));
     output.push_str(&format!(
         "- Topic top message id: {}\n",
         yaml_optional_i64(topic.top_message_id)
