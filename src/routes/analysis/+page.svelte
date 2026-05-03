@@ -25,14 +25,25 @@
     applyAnalysisRunEvent,
     applyTakeoutImportJobs,
     analysisTraceRefOrigin as traceRefOriginFromState,
+    activeAnalysisRunIds,
+    canCancelAnalysisRun,
     createEmptyLiveRunState,
     currentTopicFilter as currentTopicFilterFromState,
+    focusedLiveRunState,
+    focusedRunChunkSummaries,
+    focusedRunStreamedOutput,
     hasRealForumTopics as hasRealForumTopicsInState,
     isActiveRunStatus,
+    isRunActive,
+    isRunFocused,
+    liveRunPhase,
+    liveRunProgress,
     mergeAnalysisTraceRefs,
     notebookLmExportProgressFromEvent,
     normalizeSelectedTopicKey as normalizeTopicKey,
     pruneLiveRuns as pruneLiveRunMap,
+    runActivePhase,
+    runActiveProgress,
     shouldShowTopicSelector as shouldShowTopicSelectorFromState,
     syncRunSnapshot as syncLiveRunSnapshot,
     upsertTakeoutImportJob,
@@ -343,15 +354,15 @@
   }
 
   function livePhase(runId: number) {
-    return liveRuns[runId]?.phase ?? "";
+    return liveRunPhase(liveRuns, runId);
   }
 
   function liveProgress(runId: number) {
-    return liveRuns[runId]?.progress ?? "";
+    return liveRunProgress(liveRuns, runId);
   }
 
   function isFocusedRun(runId: number) {
-    return activeRunId === runId || currentRun?.id === runId;
+    return isRunFocused(runId, activeRunId, currentRun);
   }
 
   function currentTopicFilter(): ForumTopicFilter | null {
@@ -394,30 +405,24 @@
     updateLiveRunState(payload.run_id, (current) => applyAnalysisRunEvent(current, payload));
   }
 
-  const activeRunIds = $derived.by(() => activeRuns.map((run) => run.id));
+  const activeRunIds = $derived.by(() => activeAnalysisRunIds(activeRuns));
 
-  const focusedLiveRun = $derived.by(() => {
-    if (activeRunId === null) return null;
-    return liveRuns[activeRunId] ?? null;
-  });
+  const focusedLiveRun = $derived.by(() => focusedLiveRunState(liveRuns, activeRunId));
 
-  const activePhase = $derived.by(() => focusedLiveRun?.phase || currentRun?.status || "");
-  const activeProgress = $derived.by(() => focusedLiveRun?.progress || "");
-  const focusedChunkSummaries = $derived.by(() => focusedLiveRun?.chunkSummaries ?? []);
-  const focusedStreamedOutput = $derived.by(() => {
-    if (focusedLiveRun?.streamedOutput) {
-      return focusedLiveRun.streamedOutput;
-    }
-
-    return currentRun?.result_markdown ?? "";
-  });
+  const activePhase = $derived.by(() => runActivePhase(focusedLiveRun, currentRun));
+  const activeProgress = $derived.by(() => runActiveProgress(focusedLiveRun));
+  const focusedChunkSummaries = $derived.by(() => focusedRunChunkSummaries(focusedLiveRun));
+  const focusedStreamedOutput = $derived.by(() => focusedRunStreamedOutput(
+    focusedLiveRun,
+    currentRun,
+  ));
 
   const selectedRunIsActive = $derived.by(
-    () => activeRunId !== null && activeRunIds.includes(activeRunId),
+    () => isRunActive(activeRunId, activeRunIds),
   );
 
   const canCancelCurrentRun = $derived.by(
-    () => activeRunId !== null && activeRunIds.includes(activeRunId),
+    () => canCancelAnalysisRun(activeRunId, activeRunIds),
   );
 
   const selectedTemplate = $derived.by(() => {

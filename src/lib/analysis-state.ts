@@ -1,6 +1,8 @@
 import type {
   AnalysisChunkSummaryEvent,
+  AnalysisRunDetail,
   AnalysisRunEvent,
+  AnalysisRunSummary,
   AnalysisTraceRef,
 } from "$lib/types/analysis";
 import type {
@@ -89,6 +91,68 @@ export function pruneLiveRuns(
   return Object.fromEntries(
     Object.entries(liveRuns).filter(([runId]) => keepIds.has(Number(runId))),
   );
+}
+
+export function activeAnalysisRunIds(activeRuns: Pick<AnalysisRunSummary, "id">[]) {
+  return activeRuns.map((run) => run.id);
+}
+
+export function focusedLiveRunState(
+  liveRuns: Record<number, LiveRunState>,
+  activeRunId: number | null,
+) {
+  if (activeRunId === null) return null;
+  return liveRuns[activeRunId] ?? null;
+}
+
+export function liveRunPhase(liveRuns: Record<number, LiveRunState>, runId: number) {
+  return liveRuns[runId]?.phase ?? "";
+}
+
+export function liveRunProgress(liveRuns: Record<number, LiveRunState>, runId: number) {
+  return liveRuns[runId]?.progress ?? "";
+}
+
+export function isRunFocused(
+  runId: number,
+  activeRunId: number | null,
+  currentRun: Pick<AnalysisRunDetail, "id"> | null,
+) {
+  return activeRunId === runId || currentRun?.id === runId;
+}
+
+export function runActivePhase(
+  focusedLiveRun: LiveRunState | null,
+  currentRun: Pick<AnalysisRunDetail, "status"> | null,
+) {
+  return focusedLiveRun?.phase || currentRun?.status || "";
+}
+
+export function runActiveProgress(focusedLiveRun: LiveRunState | null) {
+  return focusedLiveRun?.progress || "";
+}
+
+export function focusedRunChunkSummaries(focusedLiveRun: LiveRunState | null) {
+  return focusedLiveRun?.chunkSummaries ?? [];
+}
+
+export function focusedRunStreamedOutput(
+  focusedLiveRun: LiveRunState | null,
+  currentRun: Pick<AnalysisRunDetail, "result_markdown"> | null,
+) {
+  if (focusedLiveRun?.streamedOutput) {
+    return focusedLiveRun.streamedOutput;
+  }
+
+  return currentRun?.result_markdown ?? "";
+}
+
+export function isRunActive(activeRunId: number | null, activeRunIds: number[]) {
+  return activeRunId !== null && activeRunIds.includes(activeRunId);
+}
+
+export function canCancelAnalysisRun(activeRunId: number | null, activeRunIds: number[]) {
+  return isRunActive(activeRunId, activeRunIds);
 }
 
 export function formatAnalysisRunProgress(

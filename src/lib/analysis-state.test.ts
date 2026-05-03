@@ -3,19 +3,30 @@ import {
   applyAnalysisRunEvent,
   applyTakeoutImportJobs,
   analysisTraceRefOrigin,
+  canCancelAnalysisRun,
   createEmptyLiveRunState,
+  focusedLiveRunState,
+  focusedRunChunkSummaries,
+  focusedRunStreamedOutput,
   currentTopicFilter,
   formatAnalysisRunProgress,
   hasRealForumTopics,
+  isRunActive,
+  isRunFocused,
+  liveRunPhase,
+  liveRunProgress,
   mergeAnalysisTraceRefs,
   normalizeSelectedTopicKey,
   notebookLmExportProgressFromEvent,
   pruneLiveRuns,
+  runActivePhase,
+  runActiveProgress,
+  activeAnalysisRunIds,
   shouldShowTopicSelector,
   syncRunSnapshot,
   upsertTakeoutImportJob,
 } from "./analysis-state";
-import type { AnalysisRunEvent, AnalysisTraceRef } from "./types/analysis";
+import type { AnalysisRunDetail, AnalysisRunEvent, AnalysisRunSummary, AnalysisTraceRef } from "./types/analysis";
 import type {
   NotebookLmExportEvent,
   SourceRecord,
@@ -106,6 +117,42 @@ function traceRef(overrides: Partial<AnalysisTraceRef>): AnalysisTraceRef {
   };
 }
 
+function runSummary(overrides: Partial<AnalysisRunSummary>): AnalysisRunSummary {
+  return {
+    id: 1,
+    run_type: "daily",
+    scope_type: "single_source",
+    source_id: 2,
+    source_title: "Source",
+    source_group_id: null,
+    source_group_name: null,
+    scope_label: "Source",
+    period_from: 100,
+    period_to: 200,
+    output_language: "en",
+    prompt_template_id: 3,
+    prompt_template_name: "Template",
+    prompt_template_version: 1,
+    provider_profile: "default",
+    provider: "gemini",
+    model: "gemini-2.5-flash",
+    status: "running",
+    error: null,
+    has_trace_data: false,
+    created_at: 100,
+    completed_at: null,
+    ...overrides,
+  };
+}
+
+function runDetail(overrides: Partial<AnalysisRunDetail>): AnalysisRunDetail {
+  return {
+    ...runSummary(overrides),
+    result_markdown: "saved result",
+    ...overrides,
+  };
+}
+
 describe("analysis-state", () => {
   it("updates live run state from progress, deltas, and chunk summaries", () => {
     const first = applyAnalysisRunEvent(createEmptyLiveRunState(), analysisEvent({
@@ -182,6 +229,65 @@ describe("analysis-state", () => {
 
     expect(pruneLiveRuns(synced, [2], 1)).toEqual(synced);
     expect(Object.keys(pruneLiveRuns(synced, [2]))).toEqual(["2"]);
+  });
+
+  it("derives focused live run details with saved run fallbacks", () => {
+    const liveRun = {
+      ...createEmptyLiveRunState(),
+      phase: "map",
+      progress: "2/5",
+      chunkSummaries: [
+        {
+          index: 1,
+          total: 1,
+          message_count: 4,
+          summary: "chunk",
+          topics: [],
+          notable_points: [],
+          candidate_refs: [],
+        },
+      ],
+      streamedOutput: "streamed result",
+    };
+    const liveRuns = {
+      7: liveRun,
+    };
+    const currentRun = runDetail({
+      id: 7,
+      status: "completed",
+      result_markdown: "saved result",
+    });
+
+    expect(activeAnalysisRunIds([runSummary({ id: 7 }), runSummary({ id: 8 })]))
+      .toEqual([7, 8]);
+    expect(focusedLiveRunState(liveRuns, 7)).toBe(liveRun);
+    expect(focusedLiveRunState(liveRuns, null)).toBeNull();
+    expect(runActivePhase(liveRun, currentRun)).toBe("map");
+    expect(runActivePhase(null, currentRun)).toBe("completed");
+    expect(runActiveProgress(liveRun)).toBe("2/5");
+    expect(focusedRunChunkSummaries(liveRun)).toEqual(liveRun.chunkSummaries);
+    expect(focusedRunStreamedOutput(liveRun, currentRun)).toBe("streamed result");
+    expect(focusedRunStreamedOutput(null, currentRun)).toBe("saved result");
+    expect(focusedRunStreamedOutput(null, runDetail({ result_markdown: null }))).toBe("");
+  });
+
+  it("derives focused and active run flags from selected ids", () => {
+    const liveRuns = {
+      7: { ...createEmptyLiveRunState(), phase: "map", progress: "2/5" },
+    };
+    const currentRun = runDetail({ id: 8 });
+
+    expect(liveRunPhase(liveRuns, 7)).toBe("map");
+    expect(liveRunPhase(liveRuns, 9)).toBe("");
+    expect(liveRunProgress(liveRuns, 7)).toBe("2/5");
+    expect(liveRunProgress(liveRuns, 9)).toBe("");
+    expect(isRunFocused(7, 7, currentRun)).toBe(true);
+    expect(isRunFocused(8, null, currentRun)).toBe(true);
+    expect(isRunFocused(9, null, currentRun)).toBe(false);
+    expect(isRunActive(7, [7, 8])).toBe(true);
+    expect(isRunActive(null, [7, 8])).toBe(false);
+    expect(canCancelAnalysisRun(8, [7, 8])).toBe(true);
+    expect(canCancelAnalysisRun(9, [7, 8])).toBe(false);
   });
 
   it("formats run progress from counters, queue position, terminal events, or prior progress", () => {
