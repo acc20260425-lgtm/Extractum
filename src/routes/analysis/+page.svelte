@@ -35,6 +35,14 @@
     type LiveRunState,
     type NotebookLmExportProgressState,
   } from "$lib/analysis-state";
+  import {
+    appendPendingChatExchange,
+    applyAnalysisChatEvent,
+    chatTurnsFromMessages,
+    dropPendingChatExchange,
+    matchesActiveAnalysisChatEvent,
+    type AnalysisChatState,
+  } from "$lib/analysis-chat-state";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
     AnalysisChatEvent,
@@ -316,6 +324,22 @@
     activeChatRunId = null;
   }
 
+  function currentChatState(): AnalysisChatState {
+    return {
+      messages: chatMessages,
+      chatting,
+      activeRequestId: activeChatRequestId,
+      activeRunId: activeChatRunId,
+    };
+  }
+
+  function assignChatState(next: AnalysisChatState) {
+    chatMessages = next.messages;
+    chatting = next.chatting;
+    activeChatRequestId = next.activeRequestId;
+    activeChatRunId = next.activeRunId;
+  }
+
   function clearOpenedRunState(runId: number) {
     if (activeRunId !== runId && currentRun?.id !== runId) {
       return;
@@ -329,16 +353,6 @@
     const nextLiveRuns = { ...liveRuns };
     delete nextLiveRuns[runId];
     liveRuns = nextLiveRuns;
-  }
-
-  function dropPendingChatExchange() {
-    if (
-      chatMessages.length >= 2 &&
-      chatMessages[chatMessages.length - 1]?.role === "assistant" &&
-      chatMessages[chatMessages.length - 2]?.role === "user"
-    ) {
-      chatMessages = chatMessages.slice(0, -2);
-    }
   }
 
   function getLiveRunState(runId: number) {
@@ -926,10 +940,7 @@
       if (requestToken !== undefined && requestToken !== openRunRequestToken) {
         return;
       }
-      chatMessages = messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      }));
+      chatMessages = chatTurnsFromMessages(messages);
     } catch (error) {
       if (requestToken !== undefined && requestToken !== openRunRequestToken) {
         return;
@@ -1068,11 +1079,7 @@
     }
 
     const question = chatQuestion.trim();
-    chatMessages = [
-      ...chatMessages,
-      { role: "user", content: question },
-      { role: "assistant", content: "" },
-    ];
+    chatMessages = appendPendingChatExchange(chatMessages, question);
     chatQuestion = "";
     chatting = true;
     activeChatRunId = currentRun.id;
@@ -1086,7 +1093,7 @@
       });
       activeChatRequestId = requestId;
     } catch (error) {
-      dropPendingChatExchange();
+      chatMessages = dropPendingChatExchange(chatMessages);
       chatting = false;
       activeChatRunId = null;
       activeChatRequestId = null;
@@ -1621,56 +1628,18 @@
     void listen<AnalysisChatEvent>("analysis://chat", ({ payload }: EventEnvelope<AnalysisChatEvent>) => {
       if (
         disposed ||
-        payload.run_id !== activeChatRunId ||
-        (activeChatRequestId !== null && payload.request_id !== activeChatRequestId)
+        !matchesActiveAnalysisChatEvent(payload, activeChatRunId, activeChatRequestId)
       ) {
         return;
       }
 
-      if (payload.kind === "queued" || payload.kind === "started") {
-        if (payload.message) {
-          status = payload.message;
-        }
-        return;
+      const reduction = applyAnalysisChatEvent(currentChatState(), payload);
+      assignChatState(reduction.state);
+      if (reduction.reloadRunId !== null) {
+        void loadChatMessages(reduction.reloadRunId);
       }
-
-      if (payload.kind === "delta") {
-        const lastIndex = chatMessages.length - 1;
-        if (lastIndex >= 0 && chatMessages[lastIndex]?.role === "assistant") {
-          const updated = [...chatMessages];
-          updated[lastIndex] = {
-            role: "assistant",
-            content: `${updated[lastIndex].content}${payload.delta ?? ""}`,
-          };
-          chatMessages = updated;
-        }
-        return;
-      }
-
-      if (payload.kind === "completed") {
-        chatting = false;
-        activeChatRequestId = null;
-        if (activeChatRunId !== null) {
-          void loadChatMessages(activeChatRunId);
-        }
-        activeChatRunId = null;
-        if (payload.message) {
-          status = payload.message;
-        }
-        return;
-      }
-
-      if (payload.kind === "failed" || payload.kind === "cancelled") {
-        chatting = false;
-        activeChatRequestId = null;
-        activeChatRunId = null;
-        dropPendingChatExchange();
-        status =
-          payload.kind === "cancelled"
-            ? payload.message ?? "Answer cancelled."
-            : payload.error
-              ? `Analysis chat failed: ${payload.error}`
-              : "Analysis chat failed.";
+      if (reduction.status !== null) {
+        status = reduction.status;
       }
     }).then((unlisten) => {
       if (disposed) {
