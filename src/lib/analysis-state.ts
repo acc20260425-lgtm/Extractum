@@ -1,4 +1,4 @@
-import { endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
+import { endOfDayUnix, runTargetLabel, startOfDayUnix } from "$lib/analysis-utils";
 import type {
   AnalysisChunkSummaryEvent,
   AnalysisPromptTemplate,
@@ -75,6 +75,16 @@ export type SourceDeletionDialog = {
   cancelLabel: "Cancel";
   tone: "danger";
 };
+export type RunDeletionDialog = {
+  title: "Delete saved run?";
+  message: string;
+  confirmLabel: "Delete";
+  cancelLabel: "Cancel";
+  tone: "danger";
+};
+export type RunDeletionDecision =
+  | { ok: true; dialog: RunDeletionDialog }
+  | { ok: false; status: string };
 export type SourceDeletionResetState = {
   sourceItems: ItemRecord[];
   currentRun: AnalysisRunDetail | null;
@@ -456,6 +466,31 @@ export function openedRunResetState(
     activeChatRunId: null,
     liveRuns: nextLiveRuns,
   };
+}
+
+export function runDeletionDecision(run: AnalysisRunSummary): RunDeletionDecision {
+  if (isActiveRunStatus(run.status)) {
+    return {
+      ok: false,
+      status: "Cancel or wait for this run before deleting it.",
+    };
+  }
+
+  return {
+    ok: true,
+    dialog: {
+      title: "Delete saved run?",
+      message:
+        `The saved report for "${runTargetLabel(run)}" and its follow-up chat history will be removed from this device.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    },
+  };
+}
+
+export function runDeletedStatus(run: Pick<AnalysisRunSummary, "id">) {
+  return `Saved run ${run.id} deleted.`;
 }
 
 export function sourceDisplayName(source: Pick<SourceRecord, "title" | "external_id">) {

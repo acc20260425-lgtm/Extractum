@@ -34,6 +34,8 @@ import {
   activeAnalysisRunIds,
   activeRunSyncDecision,
   analysisReportStartCommand,
+  runDeletionDecision,
+  runDeletedStatus,
   shouldShowTopicSelector,
   selectedAnalysisGroup,
   selectedAnalysisTemplate,
@@ -640,6 +642,37 @@ describe("analysis-state", () => {
       5: liveRuns[5],
     });
     expect(liveRuns).toHaveProperty("6");
+  });
+
+  it("blocks deleting active runs and builds saved run deletion dialog", () => {
+    expect(runDeletionDecision(runSummary({ id: 7, status: "running" }))).toEqual({
+      ok: false,
+      status: "Cancel or wait for this run before deleting it.",
+    });
+    expect(runDeletionDecision(runSummary({ id: 8, status: "queued" }))).toEqual({
+      ok: false,
+      status: "Cancel or wait for this run before deleting it.",
+    });
+
+    expect(runDeletionDecision(runSummary({
+      id: 9,
+      status: "completed",
+      scope_label: "Announcements",
+    }))).toEqual({
+      ok: true,
+      dialog: {
+        title: "Delete saved run?",
+        message:
+          'The saved report for "Announcements" and its follow-up chat history will be removed from this device.',
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        tone: "danger",
+      },
+    });
+  });
+
+  it("formats saved run deletion status", () => {
+    expect(runDeletedStatus(runSummary({ id: 12 }))).toBe("Saved run 12 deleted.");
   });
 
   it("builds source deletion dialog and status text from the display name", () => {

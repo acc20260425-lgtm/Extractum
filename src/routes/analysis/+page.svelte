@@ -55,6 +55,8 @@
     pruneLiveRuns as pruneLiveRunMap,
     runActivePhase,
     runActiveProgress,
+    runDeletedStatus,
+    runDeletionDecision,
     selectedAnalysisGroup,
     selectedAnalysisTemplate,
     selectedAnalysisTraceRef,
@@ -924,18 +926,13 @@
   }
 
   async function deleteSavedRun(run: AnalysisRunSummary) {
-    if (isActiveRunStatus(run.status)) {
-      status = "Cancel or wait for this run before deleting it.";
+    const decision = runDeletionDecision(run);
+    if (!decision.ok) {
+      status = decision.status;
       return;
     }
 
-    const confirmed = await openConfirmModal({
-      title: "Delete saved run?",
-      message: `The saved report for "${runTargetLabel(run)}" and its follow-up chat history will be removed from this device.`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      tone: "danger",
-    });
+    const confirmed = await openConfirmModal(decision.dialog);
     if (!confirmed) {
       return;
     }
@@ -950,7 +947,7 @@
       activeRuns = activeRuns.filter((entry) => entry.id !== run.id);
       clearOpenedRunState(run.id);
       inspectorMode = "history";
-      status = `Saved run ${run.id} deleted.`;
+      status = runDeletedStatus(run);
       await loadRuns();
     } catch (error) {
       status = formatAppError("deleting the saved run", error);
