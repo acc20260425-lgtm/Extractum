@@ -1,3 +1,4 @@
+import { endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
 import type {
   AnalysisChunkSummaryEvent,
   AnalysisPromptTemplate,
@@ -10,6 +11,8 @@ import type {
 import type {
   ForumTopicFilter,
   NotebookLmExportEvent,
+  NotebookLmExportRequest,
+  NotebookLmExportResult,
   SourceForumTopicRecord,
   SourceRecord,
   TakeoutImportJobRecord,
@@ -45,6 +48,17 @@ export type TakeoutImportEventDecision = {
   status: string | null;
   reloadWorkspace: boolean;
   reloadSelectedSourceId: number | null;
+};
+export type NotebookLmExportFormState = {
+  outputDir: string;
+  range: "entire_history" | "analysis_period";
+  fromDate: string;
+  toDate: string;
+  includeMediaPlaceholders: boolean;
+  minMessageLength: number;
+  maxWordsPerFile: number;
+  maxBytesPerFile: number;
+  overwriteExisting: boolean;
 };
 
 export function createEmptyLiveRunState(): LiveRunState {
@@ -474,6 +488,42 @@ export function notebookLmExportProgressFromEvent(
       ? `NotebookLM export failed: ${payload.error}`
       : "NotebookLM export failed.",
   };
+}
+
+export function notebookLmExportInitialProgress(): NotebookLmExportProgressState {
+  return {
+    phase: "loading",
+    message: "Preparing NotebookLM export.",
+    current: null,
+    total: null,
+  };
+}
+
+export function notebookLmExportRequestFromForm(
+  exportId: string,
+  sourceId: number,
+  form: NotebookLmExportFormState,
+): NotebookLmExportRequest {
+  return {
+    export_id: exportId,
+    source_id: sourceId,
+    output_dir: form.outputDir.trim(),
+    period_from: form.range === "analysis_period" && form.fromDate
+      ? startOfDayUnix(form.fromDate)
+      : null,
+    period_to: form.range === "analysis_period" && form.toDate
+      ? endOfDayUnix(form.toDate)
+      : null,
+    include_media_placeholders: form.includeMediaPlaceholders,
+    min_message_length: form.minMessageLength,
+    max_words_per_file: form.maxWordsPerFile,
+    max_bytes_per_file: form.maxBytesPerFile,
+    overwrite_existing: form.overwriteExisting,
+  };
+}
+
+export function notebookLmExportCompleteStatus(result: NotebookLmExportResult) {
+  return `NotebookLM export complete: ${result.files.length} files, ${result.exported_message_count} messages.`;
 }
 
 export function mergeAnalysisTraceRefs(

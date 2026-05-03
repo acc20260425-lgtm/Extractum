@@ -21,6 +21,9 @@ import {
   mergeAnalysisTraceRefs,
   normalizeSelectedTopicKey,
   notebookLmExportProgressFromEvent,
+  notebookLmExportCompleteStatus,
+  notebookLmExportInitialProgress,
+  notebookLmExportRequestFromForm,
   pruneLiveRuns,
   runActivePhase,
   runActiveProgress,
@@ -44,6 +47,7 @@ import type {
 } from "./types/analysis";
 import type {
   NotebookLmExportEvent,
+  NotebookLmExportResult,
   SourceRecord,
   SourceForumTopicRecord,
   TakeoutImportJobRecord,
@@ -116,6 +120,26 @@ function notebookEvent(overrides: Partial<NotebookLmExportEvent> = {}): Notebook
     progress_total: 5,
     file_path: null,
     error: null,
+    ...overrides,
+  };
+}
+
+function notebookResult(overrides: Partial<NotebookLmExportResult> = {}): NotebookLmExportResult {
+  return {
+    output_dir: "C:/Exports",
+    files: [
+      {
+        path: "C:/Exports/source.md",
+        message_count: 12,
+        byte_size: 1024,
+        approximate_word_count: 300,
+      },
+    ],
+    glossary_file: null,
+    exported_message_count: 12,
+    skipped_message_count: 2,
+    warning_count: 0,
+    warnings: [],
     ...overrides,
   };
 }
@@ -628,6 +652,69 @@ describe("analysis-state", () => {
     });
 
     expect(notebookLmExportProgressFromEvent("other", notebookEvent())).toBeNull();
+  });
+
+  it("builds NotebookLM export request state from the export form", () => {
+    const request = notebookLmExportRequestFromForm("export-a", 7, {
+      outputDir: " C:/Exports ",
+      range: "analysis_period",
+      fromDate: "2026-05-03",
+      toDate: "2026-05-04",
+      includeMediaPlaceholders: true,
+      minMessageLength: 5,
+      maxWordsPerFile: 1000,
+      maxBytesPerFile: 5000,
+      overwriteExisting: false,
+    });
+
+    expect(request).toEqual({
+      export_id: "export-a",
+      source_id: 7,
+      output_dir: "C:/Exports",
+      period_from: Math.floor(new Date("2026-05-03T00:00:00").getTime() / 1000),
+      period_to: Math.floor(new Date("2026-05-04T23:59:59").getTime() / 1000),
+      include_media_placeholders: true,
+      min_message_length: 5,
+      max_words_per_file: 1000,
+      max_bytes_per_file: 5000,
+      overwrite_existing: false,
+    });
+
+    expect(notebookLmExportRequestFromForm("export-b", 8, {
+      outputDir: "C:/All",
+      range: "entire_history",
+      fromDate: "2026-05-03",
+      toDate: "2026-05-04",
+      includeMediaPlaceholders: false,
+      minMessageLength: 3,
+      maxWordsPerFile: 2000,
+      maxBytesPerFile: 8000,
+      overwriteExisting: true,
+    })).toMatchObject({
+      export_id: "export-b",
+      source_id: 8,
+      output_dir: "C:/All",
+      period_from: null,
+      period_to: null,
+      include_media_placeholders: false,
+      overwrite_existing: true,
+    });
+  });
+
+  it("formats NotebookLM export initial progress and completion status", () => {
+    expect(notebookLmExportInitialProgress()).toEqual({
+      phase: "loading",
+      message: "Preparing NotebookLM export.",
+      current: null,
+      total: null,
+    });
+    expect(notebookLmExportCompleteStatus(notebookResult())).toBe(
+      "NotebookLM export complete: 1 files, 12 messages.",
+    );
+    expect(notebookLmExportCompleteStatus(notebookResult({
+      files: [],
+      exported_message_count: 0,
+    }))).toBe("NotebookLM export complete: 0 files, 0 messages.");
   });
 
   it("merges trace refs by ref while keeping existing duplicates and sorting by publish time", () => {

@@ -43,7 +43,10 @@
     liveRunPhase,
     liveRunProgress,
     mergeAnalysisTraceRefs,
+    notebookLmExportCompleteStatus,
+    notebookLmExportInitialProgress,
     notebookLmExportProgressFromEvent,
+    notebookLmExportRequestFromForm,
     normalizeSelectedTopicKey as normalizeTopicKey,
     pruneLiveRuns as pruneLiveRunMap,
     runActivePhase,
@@ -109,7 +112,6 @@
     ForumTopicFilter,
     ItemRecord,
     NotebookLmExportEvent,
-    NotebookLmExportRequest,
     NotebookLmExportResult,
     SourceForumTopicRecord,
     SourceRecord,
@@ -1162,35 +1164,15 @@
     notebookLmExportResult = null;
     const exportId = createNotebookLmExportId();
     activeNotebookLmExportId = exportId;
-    notebookLmExportProgress = {
-      phase: "loading",
-      message: "Preparing NotebookLM export.",
-      current: null,
-      total: null,
-    };
+    notebookLmExportProgress = notebookLmExportInitialProgress();
     try {
-      const request: NotebookLmExportRequest = {
-        export_id: exportId,
-        source_id: source.id,
-        output_dir: notebookLmExportForm.outputDir.trim(),
-        period_from: notebookLmExportForm.range === "analysis_period" && notebookLmExportForm.fromDate
-          ? startOfDayUnix(notebookLmExportForm.fromDate)
-          : null,
-        period_to: notebookLmExportForm.range === "analysis_period" && notebookLmExportForm.toDate
-          ? endOfDayUnix(notebookLmExportForm.toDate)
-          : null,
-        include_media_placeholders: notebookLmExportForm.includeMediaPlaceholders,
-        min_message_length: notebookLmExportForm.minMessageLength,
-        max_words_per_file: notebookLmExportForm.maxWordsPerFile,
-        max_bytes_per_file: notebookLmExportForm.maxBytesPerFile,
-        overwrite_existing: notebookLmExportForm.overwriteExisting,
-      };
+      const request = notebookLmExportRequestFromForm(exportId, source.id, notebookLmExportForm);
 
       const result = await invoke<NotebookLmExportResult>("export_source_to_notebooklm", {
         request,
       });
       notebookLmExportResult = result;
-      status = `NotebookLM export complete: ${result.files.length} files, ${result.exported_message_count} messages.`;
+      status = notebookLmExportCompleteStatus(result);
     } catch (error) {
       status = formatAppError("exporting for NotebookLM", error);
     } finally {
