@@ -52,6 +52,14 @@
     toggleGroupSourceSelection,
   } from "$lib/analysis-editor-state";
   import {
+    analysisHistoryScopeParams,
+    currentAnalysisGroup,
+    currentAnalysisScopeSummary,
+    currentAnalysisScopeTitle,
+    currentAnalysisSource,
+    currentAnalysisSourceMetric,
+  } from "$lib/analysis-scope-state";
+  import {
     accountLabel as formatAccountLabel,
     membershipLabel,
     runtimeBadge,
@@ -228,41 +236,28 @@
   }
 
   function currentSource() {
-    if (!selectedSourceId) return null;
-    return sourceCatalog.find((source) => source.id === Number(selectedSourceId)) ?? null;
+    return currentAnalysisSource(selectedSourceId, sourceCatalog);
   }
 
   function currentSourceMetric() {
-    const source = currentSource();
-    return source ? sourceMetrics[source.id] ?? null : null;
+    return currentAnalysisSourceMetric(currentSource(), sourceMetrics);
   }
 
   function currentGroup() {
-    if (!selectedGroupId) return null;
-    return groups.find((group) => group.id === Number(selectedGroupId)) ?? null;
+    return currentAnalysisGroup(selectedGroupId, groups);
   }
 
   function currentScopeTitle() {
-    if (analysisScope === "source_group") {
-      return currentGroup()?.name ?? "Source group";
-    }
-    return currentSource()?.title ?? currentSource()?.external_id ?? "Source";
+    return currentAnalysisScopeTitle(analysisScope, currentSource(), currentGroup());
   }
 
   function currentScopeSummary() {
-    if (analysisScope === "source_group") {
-      const group = currentGroup();
-      if (!group) return "Select a saved source group to run a cross-source report.";
-      return `${group.members.length} sources in this group workspace.`;
-    }
-
-    const source = currentSource();
-    const metrics = currentSourceMetric();
-    if (!source) return "Select a synced source to inspect messages and launch a report.";
-    if (metrics) {
-      return `${metrics.item_count} synced messages available locally for analysis.`;
-    }
-    return "This source is available in the workspace but has no synced message count yet.";
+    return currentAnalysisScopeSummary(
+      analysisScope,
+      currentSource(),
+      currentGroup(),
+      currentSourceMetric(),
+    );
   }
 
   function accountLabel(accountId: number | null) {
@@ -463,28 +458,12 @@
   });
 
   const historyScopeParams = $derived.by(() => {
-    if (historyScope === "all") {
-      return {
-        sourceId: null as number | null,
-        sourceGroupId: null as number | null,
-      };
-    }
-
-    if (analysisScope === "single_source" && selectedSourceId) {
-      return {
-        sourceId: Number(selectedSourceId),
-        sourceGroupId: null as number | null,
-      };
-    }
-
-    if (analysisScope === "source_group" && selectedGroupId) {
-      return {
-        sourceId: null as number | null,
-        sourceGroupId: Number(selectedGroupId),
-      };
-    }
-
-    return null;
+    return analysisHistoryScopeParams(
+      historyScope,
+      analysisScope,
+      selectedSourceId,
+      selectedGroupId,
+    );
   });
 
   const filteredRuns = $derived.by(() => {
