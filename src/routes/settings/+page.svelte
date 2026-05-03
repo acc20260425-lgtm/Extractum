@@ -1,7 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
+  import {
+    askLlmStream,
+    cancelLlmRequest,
+    getLlmProfiles,
+    listLlmProviderModels,
+    listenToLlmResponses,
+    saveLlmProfile,
+  } from "$lib/api/llm";
   import { formatAppError } from "$lib/app-error";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -13,51 +19,7 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
-
-  interface LlmProfile {
-    profile_id: string;
-    provider: string;
-    default_model: string;
-    api_key: string;
-    base_url: string;
-  }
-
-  interface LlmProfilesState {
-    active_profile: string;
-    profiles: LlmProfile[];
-  }
-
-  interface LlmProviderModel {
-    model: string;
-    name: string;
-    display_name: string;
-    description: string;
-    input_token_limit: number | null;
-    output_token_limit: number | null;
-    supported_generation_methods: string[];
-  }
-
-  interface LlmUsage {
-    input_tokens: number | null;
-    output_tokens: number | null;
-    total_tokens: number | null;
-  }
-
-  interface LlmStreamEvent {
-    request_id: string;
-    kind: "queued" | "started" | "delta" | "completed" | "failed" | "cancelled";
-    queue_position: number | null;
-    delta: string | null;
-    text: string | null;
-    provider: string;
-    model: string;
-    usage: LlmUsage | null;
-    error: string | null;
-  }
-
-  interface LlmStreamEnvelope<T> {
-    payload: T;
-  }
+  import type { LlmProfile, LlmProfilesState, LlmProviderModel, LlmUsage } from "$lib/types/llm";
 
   interface ProviderOption {
     value: string;
@@ -242,7 +204,7 @@
 
   async function loadProfiles() {
     try {
-      const state = await invoke<LlmProfilesState>("get_llm_profiles");
+      const state = await getLlmProfiles();
       syncProfilesState(state);
 
       const currentProfile = state.profiles.find((profile) => profile.profile_id === state.active_profile);
@@ -259,7 +221,7 @@
     modelsStatus = "";
 
     try {
-      const models = await invoke<LlmProviderModel[]>("list_llm_provider_models", {
+      const models = await listLlmProviderModels({
         provider,
         profileId: creatingProfile ? null : selectedProfileId || activeProfile || "default",
         apiKey: apiKey.trim() ? apiKey : null,
@@ -351,7 +313,7 @@
     const wasCreatingProfile = creatingProfile;
 
     try {
-      const state = await invoke<LlmProfilesState>("save_llm_profile", {
+      const state = await saveLlmProfile({
         profileId: targetProfileId,
         provider,
         defaultModel,
@@ -401,7 +363,7 @@
     activeRequestId = newRequestId();
 
     try {
-      await invoke("ask_llm_stream", {
+      await askLlmStream({
         requestId: activeRequestId,
         profileId: savedProfileId,
         messages: [
@@ -424,7 +386,7 @@
 
     testStatus = "Cancelling provider test...";
     try {
-      await invoke("cancel_llm_request", { requestId: activeRequestId });
+      await cancelLlmRequest(activeRequestId);
     } catch (error) {
       testing = false;
       activeRequestId = null;
@@ -457,7 +419,7 @@
     let detachListener: (() => void) | null = null;
 
     void loadProfiles();
-    void listen<LlmStreamEvent>("llm://response", ({ payload }: LlmStreamEnvelope<LlmStreamEvent>) => {
+    void listenToLlmResponses(({ payload }) => {
       if (disposed || payload.request_id !== activeRequestId) {
         return;
       }

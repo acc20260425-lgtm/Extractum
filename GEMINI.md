@@ -8,7 +8,7 @@ It should reflect the current codebase, not the aspirational end-state.
 Extractum uses a "fat frontend, thin backend" model.
 
 - Frontend (`SvelteKit + TypeScript`): UI state, route flows, filters, orchestration, presentation.
-- Backend (`Tauri + Rust`): Telegram integration, SQLite access, migrations, compression, session persistence, security boundaries, future provider calls.
+- Backend (`Tauri + Rust`): Telegram integration, SQLite access, migrations, compression, session persistence, LLM provider calls, and security boundaries.
 
 Rule:
 - keep low-level integration logic in Rust;
@@ -96,13 +96,48 @@ Sources and items:
 - `list_telegram_sources`
 - `add_telegram_source`
 - `list_sources`
+- `delete_source`
+- `get_sync_settings`
+- `save_sync_settings`
 - `sync_source`
+- `start_takeout_source_import`
+- `cancel_takeout_source_import`
+- `list_takeout_source_import_jobs`
+- `run_takeout_export_dc_spike`
 - `get_items`
+- `list_source_forum_topics`
+- `export_source_to_notebooklm`
 
 LLM:
 - `get_llm_profiles`
+- `get_llm_request_snapshots`
 - `save_llm_profile`
+- `set_active_llm_profile`
+- `list_llm_provider_models`
 - `ask_llm_stream`
+- `cancel_llm_request`
+
+Analysis:
+- `list_analysis_sources`
+- `list_analysis_prompt_templates`
+- `create_analysis_prompt_template`
+- `update_analysis_prompt_template`
+- `delete_analysis_prompt_template`
+- `list_analysis_source_groups`
+- `create_analysis_source_group`
+- `update_analysis_source_group`
+- `delete_analysis_source_group`
+- `list_analysis_runs`
+- `list_active_analysis_runs`
+- `get_analysis_run`
+- `delete_analysis_run`
+- `get_analysis_run_trace`
+- `resolve_analysis_trace_refs`
+- `list_analysis_chat_messages`
+- `clear_analysis_chat_messages`
+- `ask_analysis_run_question`
+- `start_analysis_report`
+- `cancel_analysis_run`
 
 Utility:
 - `ping_db`
@@ -118,9 +153,13 @@ Implemented:
 - source registration linked to account and Telegram source kind
 - source discovery from Telegram dialogs
 - manual per-source sync into `items`
-- inline browsing of synced messages on `/sources`
-- runtime status display on `/accounts` and `/sources`
-- minimal Gemini settings/test UI on `/settings`
+- media-aware item metadata without binary media download
+- forum topic catalog and topic-aware message browsing for supported supergroups
+- Takeout source import for existing Telegram sources, with job state and cancellation
+- NotebookLM-friendly Markdown export for one synced source
+- runtime status display on `/accounts` and `/analysis`
+- `/analysis` source workspace for synced messages, report runs, active runs, saved history, trace inspection, source groups, prompt templates, follow-up chat, and exports
+- reusable LLM provider profiles on `/settings`, including Gemini and OpenAI-compatible providers with model refresh and provider smoke tests
 - persistent light/dark theme toggle, defaulting to light
 
 Current sync constraints:
@@ -129,11 +168,14 @@ Current sync constraints:
 - no binary media download
 - no edit/delete reconciliation
 - no background sync
+- Takeout import may leave partial rows on failure or cancellation but does not advance source sync state in those cases
 
 Not implemented yet:
-- richer item filtering/pagination
-- dedicated message detail views
+- richer saved-run filtering for large archives
+- full media download and preview
 - media-aware analysis beyond the current text-first corpus
+- secure storage for LLM API keys and Telegram credentials
+- full Telegram Forum Topics browsing/export and forward metadata
 
 ## 7. Workflow rules for agents
 
@@ -148,7 +190,7 @@ Not implemented yet:
 
 - never log secrets;
 - keep Telegram session persistence in the backend;
-- current temporary exception: the Gemini API key is stored in SQLite and read back into `/settings` for editing;
+- current temporary exception: LLM API keys are stored in SQLite-backed profile settings and read back into `/settings` for editing;
 - treat that exception as temporary security debt and document it when touching LLM code;
 - if secrets later move to secure storage, keep them profile-scoped and aligned with app identity;
 - recommended app identity scheme for parallel installs:
