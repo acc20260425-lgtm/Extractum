@@ -47,6 +47,23 @@ function runDetail(overrides: Partial<AnalysisRunDetail> = {}): AnalysisRunDetai
   };
 }
 
+function runEvent(overrides: Partial<AnalysisRunEvent> = {}): AnalysisRunEvent {
+  return {
+    run_id: 7,
+    request_id: null,
+    kind: "progress",
+    phase: "map",
+    queue_position: null,
+    message: null,
+    progress_current: null,
+    progress_total: null,
+    delta: null,
+    chunk_summary: null,
+    error: null,
+    ...overrides,
+  };
+}
+
 function createHarness(initial: Partial<AnalysisRunWorkflowState> = {}) {
   const state: AnalysisRunWorkflowState & {
     runs: AnalysisRunSummary[];
@@ -282,5 +299,100 @@ describe("analysis-run-workflow", () => {
     workflow.invalidateOpenRunRequests();
 
     expect(capturedGuard.isCurrent()).toBe(false);
+  });
+
+  it("applies run events and switches the inspector to chunks when chunk summaries arrive", () => {
+    const { state, deps, workflow } = createHarness({ activeRunId: 7 });
+    const payload = runEvent({
+      run_id: 7,
+      chunk_summary: {
+        index: 1,
+        total: 2,
+        message_count: 10,
+        summary: "chunk",
+        topics: [],
+        notable_points: [],
+        candidate_refs: [],
+      },
+    });
+
+    workflow.handleRunEvent(payload);
+
+    expect(deps.applyRunEvent).toHaveBeenCalledWith(payload);
+    expect(state.inspectorMode).toBe("chunks");
+  });
+
+  it("selects and opens the event run when no run is active", () => {
+    const { state, deps, workflow } = createHarness({ activeRunId: null });
+    deps.getRun.mockResolvedValueOnce(runDetail({ id: 7 }));
+    deps.loadChatMessages.mockResolvedValueOnce(undefined);
+
+    workflow.handleRunEvent(runEvent({
+      run_id: 7,
+      kind: "started",
+      message: "Started",
+    }));
+
+    expect(state.activeRunId).toBe(7);
+    expect(state.inspectorMode).toBe("history");
+    expect(deps.getRun).toHaveBeenCalledWith(7);
+    expect(state.status).toBe("Started");
+  });
+
+  it("updates progress status only for the focused run", () => {
+    const { state, workflow } = createHarness({ activeRunId: 7 });
+
+    workflow.handleRunEvent(runEvent({
+      run_id: 8,
+      kind: "progress",
+      message: "Other run progress",
+    }));
+    expect(state.status).toBe("");
+
+    workflow.handleRunEvent(runEvent({
+      run_id: 7,
+      kind: "progress",
+      message: "Focused progress",
+    }));
+    expect(state.status).toBe("Focused progress");
+  });
+
+  it("refreshes active and saved runs on terminal events", () => {
+    const { state, deps, workflow } = createHarness({
+      activeRunId: 7,
+      currentRun: runDetail({ id: 7 }),
+    });
+    deps.listActiveRuns.mockResolvedValue([]);
+    deps.listRuns.mockResolvedValue([]);
+    deps.getRun.mockResolvedValue(runDetail({ id: 7, status: "completed" }));
+    deps.loadChatMessages.mockResolvedValue(undefined);
+
+    workflow.handleRunEvent(runEvent({
+      run_id: 7,
+      kind: "completed",
+      message: "Analysis complete",
+    }));
+
+    expect(state.status).toBe("Analysis complete");
+    expect(deps.listActiveRuns).toHaveBeenCalled();
+    expect(deps.listRuns).toHaveBeenCalled();
+    expect(deps.getRun).toHaveBeenCalledWith(7);
+  });
+
+  it("uses terminal error status for focused failed events without a message", () => {
+    const { state, deps, workflow } = createHarness({ activeRunId: 7 });
+    deps.listActiveRuns.mockResolvedValue([]);
+    deps.listRuns.mockResolvedValue([]);
+    deps.getRun.mockResolvedValue(runDetail({ id: 7, status: "failed" }));
+    deps.loadChatMessages.mockResolvedValue(undefined);
+
+    workflow.handleRunEvent(runEvent({
+      run_id: 7,
+      kind: "failed",
+      message: null,
+      error: "model failed",
+    }));
+
+    expect(state.status).toBe("Analysis failed: model failed");
   });
 });
