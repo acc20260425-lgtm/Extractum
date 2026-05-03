@@ -3,12 +3,12 @@ use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use crate::compression::{compress_json_bytes, decompress_bytes};
 use super::avatar::{cache_source_avatar, peer_photo_bytes_with_timeout};
 use super::types::{
     SourceSyncTarget, TelegramSourceInfo, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
     TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
 };
+use crate::compression::{compress_json_bytes, decompress_bytes};
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
