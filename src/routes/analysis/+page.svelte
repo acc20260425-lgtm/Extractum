@@ -21,12 +21,25 @@
     statusTone,
   } from "$lib/analysis-utils";
   import { openConfirmModal } from "$lib/modals";
+  import {
+    applyAnalysisRunEvent,
+    applyTakeoutImportJobs,
+    createEmptyLiveRunState,
+    hasRealForumTopics as hasRealForumTopicsInState,
+    isActiveRunStatus,
+    notebookLmExportProgressFromEvent,
+    normalizeSelectedTopicKey as normalizeTopicKey,
+    pruneLiveRuns as pruneLiveRunMap,
+    syncRunSnapshot as syncLiveRunSnapshot,
+    upsertTakeoutImportJob,
+    type LiveRunState,
+    type NotebookLmExportProgressState,
+  } from "$lib/analysis-state";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
     AnalysisChatEvent,
     AnalysisChatMessage,
     AnalysisChatTurn,
-    AnalysisChunkSummaryEvent,
     AnalysisPromptTemplate,
     AnalysisRunDetail,
     AnalysisRunEvent,
@@ -53,32 +66,7 @@
   } from "$lib/types/sources";
   import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
 
-  type LiveRunState = {
-    phase: string;
-    progress: string;
-    queuePosition: number | null;
-    chunkSummaries: AnalysisChunkSummaryEvent[];
-    streamedOutput: string;
-  };
-
   type InspectorMode = "active" | "history" | "trace" | "chunks";
-
-  type NotebookLmExportProgressState = {
-    phase: NotebookLmExportEvent["phase"];
-    message: string;
-    current: number | null;
-    total: number | null;
-  };
-
-  function createEmptyLiveRunState(): LiveRunState {
-    return {
-      phase: "",
-      progress: "",
-      queuePosition: null,
-      chunkSummaries: [],
-      streamedOutput: "",
-    };
-  }
 
   function createNotebookLmExportId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -177,34 +165,12 @@
     return value.startsWith("Error") || value.startsWith("Analysis failed");
   }
 
-  function isActiveRunStatus(value: string) {
-    return value === "queued" || value === "running";
-  }
-
   function upsertTakeoutJob(job: TakeoutImportJobRecord) {
-    const current = takeoutJobsBySource[job.source_id];
-    if (
-      current &&
-      current.job_id !== job.job_id &&
-      current.started_at > job.started_at
-    ) {
-      return;
-    }
-    takeoutJobsBySource = {
-      ...takeoutJobsBySource,
-      [job.source_id]: job,
-    };
+    takeoutJobsBySource = upsertTakeoutImportJob(takeoutJobsBySource, job);
   }
 
   function applyTakeoutJobs(jobs: TakeoutImportJobRecord[]) {
-    const next: Record<number, TakeoutImportJobRecord> = {};
-    for (const job of jobs) {
-      const current = next[job.source_id];
-      if (!current || current.started_at <= job.started_at) {
-        next[job.source_id] = job;
-      }
-    }
-    takeoutJobsBySource = next;
+    takeoutJobsBySource = applyTakeoutImportJobs(jobs);
   }
 
   function applyTakeoutImportEvent(job: TakeoutImportEvent) {
@@ -383,31 +349,18 @@
     runId: number,
     updater: (current: LiveRunState) => LiveRunState,
   ) {
-    const current = getLiveRunState(runId);
     liveRuns = {
       ...liveRuns,
-      [runId]: updater(current),
+      [runId]: updater(getLiveRunState(runId)),
     };
   }
 
   function syncRunSnapshot(runId: number, runStatus: string) {
-    updateLiveRunState(runId, (current) => ({
-      ...current,
-      phase: runStatus,
-      progress: isActiveRunStatus(runStatus) ? current.progress : "",
-      queuePosition: isActiveRunStatus(runStatus) ? current.queuePosition : null,
-    }));
+    liveRuns = syncLiveRunSnapshot(liveRuns, runId, runStatus);
   }
 
   function pruneLiveRuns(activeRunIds: number[], preserveRunId: number | null = null) {
-    const keepIds = new Set(activeRunIds);
-    if (preserveRunId !== null) {
-      keepIds.add(preserveRunId);
-    }
-
-    liveRuns = Object.fromEntries(
-      Object.entries(liveRuns).filter(([runId]) => keepIds.has(Number(runId))),
-    );
+    liveRuns = pruneLiveRunMap(liveRuns, activeRunIds, preserveRunId);
   }
 
   function livePhase(runId: number) {
@@ -420,26 +373,6 @@
 
   function isFocusedRun(runId: number) {
     return activeRunId === runId || currentRun?.id === runId;
-  }
-
-  function formatRunProgress(payload: AnalysisRunEvent, currentProgress: string) {
-    if (payload.progress_current !== null && payload.progress_total !== null) {
-      return `${payload.progress_current}/${payload.progress_total}`;
-    }
-
-    if (payload.queue_position !== null) {
-      return `Queue ${payload.queue_position}`;
-    }
-
-    if (
-      payload.kind === "completed" ||
-      payload.kind === "failed" ||
-      payload.kind === "cancelled"
-    ) {
-      return "";
-    }
-
-    return currentProgress;
   }
 
   function currentTopicFilter(): ForumTopicFilter | null {
@@ -465,7 +398,7 @@
   }
 
   function hasRealForumTopics(topics: SourceForumTopicRecord[] = sourceTopics) {
-    return topics.some((topic) => topic.kind === "topic");
+    return hasRealForumTopicsInState(topics);
   }
 
   function shouldShowTopicSelector() {
@@ -485,63 +418,23 @@
     topics: SourceForumTopicRecord[],
     preferredKey: string,
   ) {
-    if (!hasRealForumTopics(topics)) {
-      return "__all_topics__";
-    }
-
-    if (preferredKey === "__all_topics__") {
-      return preferredKey;
-    }
-
-    return topics.some((topic) => topic.key === preferredKey)
-      ? preferredKey
-      : "__all_topics__";
+    return normalizeTopicKey(topics, preferredKey);
   }
 
   function applyNotebookLmExportEvent(payload: NotebookLmExportEvent) {
-    if (payload.export_id !== activeNotebookLmExportId) {
+    const next = notebookLmExportProgressFromEvent(activeNotebookLmExportId, payload);
+    if (next === null) {
       return;
     }
 
-    notebookLmExportProgress = {
-      phase: payload.phase,
-      message: payload.message ?? payload.error ?? "",
-      current: payload.progress_current,
-      total: payload.progress_total,
-    };
-
-    if (payload.kind === "failed") {
-      status = payload.error
-        ? `NotebookLM export failed: ${payload.error}`
-        : "NotebookLM export failed.";
+    notebookLmExportProgress = next.progress;
+    if (next.status) {
+      status = next.status;
     }
   }
 
   function applyRunEvent(payload: AnalysisRunEvent) {
-    updateLiveRunState(payload.run_id, (current) => {
-      const nextSummaries = payload.chunk_summary
-        ? [
-            ...current.chunkSummaries.filter((chunk) => chunk.index !== payload.chunk_summary?.index),
-            payload.chunk_summary,
-          ].sort((left, right) => left.index - right.index)
-        : current.chunkSummaries;
-      const nextPhase =
-        payload.kind === "completed" ||
-        payload.kind === "failed" ||
-        payload.kind === "cancelled"
-          ? payload.kind
-          : payload.phase || current.phase;
-
-      return {
-        phase: nextPhase,
-        progress: formatRunProgress(payload, current.progress),
-        queuePosition: payload.queue_position,
-        chunkSummaries: nextSummaries,
-        streamedOutput: payload.delta
-          ? `${current.streamedOutput}${payload.delta}`
-          : current.streamedOutput,
-      };
-    });
+    updateLiveRunState(payload.run_id, (current) => applyAnalysisRunEvent(current, payload));
   }
 
   const activeRunIds = $derived.by(() => activeRuns.map((run) => run.id));
