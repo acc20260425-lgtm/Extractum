@@ -31,6 +31,7 @@ import {
   selectedAnalysisTemplate,
   selectedAnalysisTraceRef,
   syncRunSnapshot,
+  takeoutImportEventDecision,
   upsertTakeoutImportJob,
 } from "./analysis-state";
 import type {
@@ -478,6 +479,68 @@ describe("analysis-state", () => {
     });
     expect(upsertTakeoutImportJob({ 1: newer }, older)).toEqual({ 1: newer });
     expect(upsertTakeoutImportJob({ 1: older }, newer)).toEqual({ 1: newer });
+  });
+
+  it("decides route effects for Takeout import events", () => {
+    expect(takeoutImportEventDecision(takeoutJob({
+      source_id: 3,
+      status: "completed",
+      inserted: 12,
+      skipped: 4,
+    }), "3")).toEqual({
+      status: "Takeout import complete: inserted 12, skipped 4.",
+      reloadWorkspace: true,
+      reloadSelectedSourceId: 3,
+    });
+
+    expect(takeoutImportEventDecision(takeoutJob({
+      source_id: 3,
+      status: "completed",
+      inserted: 12,
+      skipped: 4,
+    }), "9")).toEqual({
+      status: "Takeout import complete: inserted 12, skipped 4.",
+      reloadWorkspace: true,
+      reloadSelectedSourceId: null,
+    });
+
+    expect(takeoutImportEventDecision(takeoutJob({
+      status: "failed",
+      error: "bad export",
+    }), "")).toEqual({
+      status: "Takeout import failed: bad export",
+      reloadWorkspace: false,
+      reloadSelectedSourceId: null,
+    });
+
+    expect(takeoutImportEventDecision(takeoutJob({
+      status: "cancelled",
+      message: "Stopped by user.",
+    }), "")).toEqual({
+      status: "Stopped by user.",
+      reloadWorkspace: false,
+      reloadSelectedSourceId: null,
+    });
+
+    expect(takeoutImportEventDecision(takeoutJob({
+      source_id: 3,
+      status: "running",
+      message: "Importing...",
+    }), "3")).toEqual({
+      status: "Importing...",
+      reloadWorkspace: false,
+      reloadSelectedSourceId: null,
+    });
+
+    expect(takeoutImportEventDecision(takeoutJob({
+      source_id: 3,
+      status: "running",
+      message: "Importing...",
+    }), "9")).toEqual({
+      status: null,
+      reloadWorkspace: false,
+      reloadSelectedSourceId: null,
+    });
   });
 
   it("normalizes selected topic keys only when real forum topics exist", () => {

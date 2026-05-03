@@ -53,6 +53,7 @@
     selectedAnalysisTraceRef,
     shouldShowTopicSelector as shouldShowTopicSelectorFromState,
     syncRunSnapshot as syncLiveRunSnapshot,
+    takeoutImportEventDecision,
     upsertTakeoutImportJob,
     type AnalysisRunFilter,
     type LiveRunState,
@@ -230,29 +231,19 @@
   function applyTakeoutImportEvent(job: TakeoutImportEvent) {
     upsertTakeoutJob(job);
 
-    if (job.status === "completed") {
-      status = `Takeout import complete: inserted ${job.inserted}, skipped ${job.skipped}.`;
+    const decision = takeoutImportEventDecision(job, selectedSourceId);
+
+    if (decision.status !== null) {
+      status = decision.status;
+    }
+
+    if (decision.reloadWorkspace) {
       void Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
-      if (selectedSourceId === String(job.source_id)) {
-        void loadSourceTopics(job.source_id, { preserveSelection: true }).then(() =>
-          loadItems(job.source_id),
-        );
-      }
-      return;
     }
 
-    if (job.status === "failed") {
-      status = job.error ? `Takeout import failed: ${job.error}` : "Takeout import failed.";
-      return;
-    }
-
-    if (job.status === "cancelled") {
-      status = job.message ?? "Takeout import cancelled.";
-      return;
-    }
-
-    if (job.message && selectedSourceId === String(job.source_id)) {
-      status = job.message;
+    if (decision.reloadSelectedSourceId !== null) {
+      const sourceId = decision.reloadSelectedSourceId;
+      void loadSourceTopics(sourceId, { preserveSelection: true }).then(() => loadItems(sourceId));
     }
   }
 

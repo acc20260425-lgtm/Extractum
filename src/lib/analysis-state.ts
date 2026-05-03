@@ -41,6 +41,11 @@ export type ActiveRunSyncDecision = {
   nextActiveRunId: number | null;
   runToOpen: number | null;
 };
+export type TakeoutImportEventDecision = {
+  status: string | null;
+  reloadWorkspace: boolean;
+  reloadSelectedSourceId: number | null;
+};
 
 export function createEmptyLiveRunState(): LiveRunState {
   return {
@@ -344,6 +349,41 @@ export function applyTakeoutImportJobs(jobs: TakeoutImportJobRecord[]) {
     next = upsertTakeoutImportJob(next, job);
   }
   return next;
+}
+
+export function takeoutImportEventDecision(
+  job: TakeoutImportJobRecord,
+  selectedSourceId: string,
+): TakeoutImportEventDecision {
+  if (job.status === "completed") {
+    return {
+      status: `Takeout import complete: inserted ${job.inserted}, skipped ${job.skipped}.`,
+      reloadWorkspace: true,
+      reloadSelectedSourceId: selectedSourceId === String(job.source_id) ? job.source_id : null,
+    };
+  }
+
+  if (job.status === "failed") {
+    return {
+      status: job.error ? `Takeout import failed: ${job.error}` : "Takeout import failed.",
+      reloadWorkspace: false,
+      reloadSelectedSourceId: null,
+    };
+  }
+
+  if (job.status === "cancelled") {
+    return {
+      status: job.message ?? "Takeout import cancelled.",
+      reloadWorkspace: false,
+      reloadSelectedSourceId: null,
+    };
+  }
+
+  return {
+    status: job.message && selectedSourceId === String(job.source_id) ? job.message : null,
+    reloadWorkspace: false,
+    reloadSelectedSourceId: null,
+  };
 }
 
 export function hasRealForumTopics(topics: SourceForumTopicRecord[]) {
