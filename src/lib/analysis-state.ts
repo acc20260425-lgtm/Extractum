@@ -12,6 +12,7 @@ import type {
 } from "$lib/types/analysis";
 import type {
   ForumTopicFilter,
+  ItemRecord,
   NotebookLmExportEvent,
   NotebookLmExportRequest,
   NotebookLmExportResult,
@@ -65,6 +66,27 @@ export type OpenedRunResetState = {
   activeChatRequestId: string | null;
   activeChatRunId: number | null;
   liveRuns: Record<number, LiveRunState>;
+};
+export type SourceDeletionDialog = {
+  title: "Delete source?";
+  message: string;
+  confirmLabel: "Delete";
+  cancelLabel: "Cancel";
+  tone: "danger";
+};
+export type SourceDeletionResetState = {
+  sourceItems: ItemRecord[];
+  currentRun: AnalysisRunDetail | null;
+  activeRunId: number | null;
+  traceData: AnalysisTraceData;
+  savedTraceRefs: string[];
+  resolvedTraceRefs: string[];
+  selectedTraceRef: string | null;
+  chatMessages: AnalysisChatTurn[];
+  chatQuestion: string;
+  chatting: boolean;
+  activeChatRequestId: string | null;
+  activeChatRunId: number | null;
 };
 export type ActiveRunSyncDecision = {
   activeRunIds: number[];
@@ -365,6 +387,55 @@ export function openedRunResetState(
     activeChatRequestId: null,
     activeChatRunId: null,
     liveRuns: nextLiveRuns,
+  };
+}
+
+export function sourceDisplayName(source: Pick<SourceRecord, "title" | "external_id">) {
+  return source.title ?? source.external_id;
+}
+
+export function sourceDeletionDialog(
+  source: Pick<SourceRecord, "title" | "external_id">,
+): SourceDeletionDialog {
+  const sourceName = sourceDisplayName(source);
+  return {
+    title: "Delete source?",
+    message:
+      `The source "${sourceName}" and its synced local items will be removed from Extractum.\n\n` +
+      "Saved analysis snapshots remain available as frozen run artifacts.",
+    confirmLabel: "Delete",
+    cancelLabel: "Cancel",
+    tone: "danger",
+  };
+}
+
+export function sourceDeletedStatus(
+  source: Pick<SourceRecord, "title" | "external_id">,
+) {
+  return `Source "${sourceDisplayName(source)}" deleted.`;
+}
+
+export function sourceDeletionResetState(
+  deletedSourceId: number,
+  selectedSourceId: string,
+): SourceDeletionResetState | null {
+  if (selectedSourceId !== String(deletedSourceId)) {
+    return null;
+  }
+
+  return {
+    sourceItems: [],
+    currentRun: null,
+    activeRunId: null,
+    traceData: { refs: [] },
+    savedTraceRefs: [],
+    resolvedTraceRefs: [],
+    selectedTraceRef: null,
+    chatMessages: [],
+    chatQuestion: "",
+    chatting: false,
+    activeChatRequestId: null,
+    activeChatRunId: null,
   };
 }
 

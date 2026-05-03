@@ -58,6 +58,9 @@
     selectedAnalysisTemplate,
     selectedAnalysisTraceRef,
     shouldShowTopicSelector as shouldShowTopicSelectorFromState,
+    sourceDeletedStatus,
+    sourceDeletionDialog,
+    sourceDeletionResetState,
     syncRunSnapshot as syncLiveRunSnapshot,
     takeoutImportEventDecision,
     upsertTakeoutImportJob,
@@ -1107,16 +1110,7 @@
   }
 
   async function deleteSource(source: SourceRecord) {
-    const sourceName = source.title ?? source.external_id;
-    const confirmed = await openConfirmModal({
-      title: "Delete source?",
-      message:
-        `The source "${sourceName}" and its synced local items will be removed from Extractum.\n\n` +
-        "Saved analysis snapshots remain available as frozen run artifacts.",
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      tone: "danger",
-    });
+    const confirmed = await openConfirmModal(sourceDeletionDialog(source));
     if (!confirmed) {
       return;
     }
@@ -1124,14 +1118,22 @@
     deletingSourceIds = { ...deletingSourceIds, [source.id]: true };
     try {
       await invoke("delete_source", { sourceId: source.id });
-      status = `Source "${sourceName}" deleted.`;
+      status = sourceDeletedStatus(source);
 
-      if (selectedSourceId === String(source.id)) {
-        sourceItems = [];
-        currentRun = null;
-        activeRunId = null;
-        clearTraceState();
-        clearChatState();
+      const reset = sourceDeletionResetState(source.id, selectedSourceId);
+      if (reset !== null) {
+        sourceItems = reset.sourceItems;
+        currentRun = reset.currentRun;
+        activeRunId = reset.activeRunId;
+        traceData = reset.traceData;
+        savedTraceRefs = reset.savedTraceRefs;
+        resolvedTraceRefs = reset.resolvedTraceRefs;
+        selectedTraceRef = reset.selectedTraceRef;
+        chatMessages = reset.chatMessages;
+        chatQuestion = reset.chatQuestion;
+        chatting = reset.chatting;
+        activeChatRequestId = reset.activeChatRequestId;
+        activeChatRunId = reset.activeChatRunId;
       }
 
       await refreshSourcesAfterManagement();

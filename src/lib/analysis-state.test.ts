@@ -37,6 +37,9 @@ import {
   selectedAnalysisGroup,
   selectedAnalysisTemplate,
   selectedAnalysisTraceRef,
+  sourceDeletedStatus,
+  sourceDeletionDialog,
+  sourceDeletionResetState,
   syncRunSnapshot,
   takeoutImportEventDecision,
   upsertTakeoutImportJob,
@@ -532,6 +535,41 @@ describe("analysis-state", () => {
       5: liveRuns[5],
     });
     expect(liveRuns).toHaveProperty("6");
+  });
+
+  it("builds source deletion dialog and status text from the display name", () => {
+    const titled = sourceRecord({ title: "Announcements", external_id: "channel-1" });
+    const untitled = sourceRecord({ title: null, external_id: "channel-2" });
+
+    expect(sourceDeletionDialog(titled)).toEqual({
+      title: "Delete source?",
+      message:
+        'The source "Announcements" and its synced local items will be removed from Extractum.\n\n' +
+        "Saved analysis snapshots remain available as frozen run artifacts.",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    expect(sourceDeletedStatus(titled)).toBe('Source "Announcements" deleted.');
+    expect(sourceDeletedStatus(untitled)).toBe('Source "channel-2" deleted.');
+  });
+
+  it("builds reset state only when deleting the selected source", () => {
+    expect(sourceDeletionResetState(3, "4")).toBeNull();
+    expect(sourceDeletionResetState(3, "3")).toEqual({
+      sourceItems: [],
+      currentRun: null,
+      activeRunId: null,
+      traceData: { refs: [] },
+      savedTraceRefs: [],
+      resolvedTraceRefs: [],
+      selectedTraceRef: null,
+      chatMessages: [],
+      chatQuestion: "",
+      chatting: false,
+      activeChatRequestId: null,
+      activeChatRunId: null,
+    });
   });
 
   it("formats run progress from counters, queue position, terminal events, or prior progress", () => {
