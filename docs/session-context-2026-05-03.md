@@ -25,6 +25,7 @@ b828f74 refactor(sources): extract items module
 f476fca refactor(sources): extract forum topics module
 0746e1c refactor(sources): extract sync module
 7be867f refactor(sources): remove monolith facade
+424ee0d docs(session): update sources split handoff context
 ```
 
 ## User Instructions To Preserve
@@ -263,6 +264,70 @@ exit 0, only CRLF normalization warnings
 7be867f refactor(sources): remove monolith facade
 ```
 
+### Task 9: Full Verification
+
+- Full plan verification was run after Task 8 removed the transitional module
+  ambiguity.
+- Backend sources tests passed:
+
+```text
+cargo test sources --lib
+30 passed; 0 failed; 100 filtered out
+```
+
+- Full backend tests passed:
+
+```text
+cargo test
+130 passed; 0 failed
+```
+
+- Frontend tests passed after rerunning outside the sandbox because the first
+  sandbox run failed with `spawn EPERM` while Vite/esbuild tried to spawn:
+
+```text
+npm.cmd test
+10 test files passed; 97 tests passed
+```
+
+- Svelte/type check passed after rerunning outside the sandbox because the first
+  sandbox run failed with `spawn EPERM` during Svelte style preprocessing:
+
+```text
+npm.cmd run check
+svelte-check found 0 errors and 0 warnings
+```
+
+- Whitespace check passed:
+
+```text
+git diff --check
+exit 0
+```
+
+- No file edits were intentionally made for Task 9, and no Task 9 commit was
+  created.
+- Suggested commit message if verification is later recorded in docs:
+
+```text
+test(sources): run full backend split verification
+```
+
+### Task 10: Update Review Documentation
+
+- Updated `docs/code-review-results-2026-05-03.md` so the large backend modules
+  finding records the `sources.rs` split plan as implemented.
+- Updated this session handoff to include Task 9 verification results and the
+  final sources split state.
+- Task 10 doc whitespace check passed with only expected LF-to-CRLF warnings for
+  edited Markdown files.
+- Commit is pending.
+- Suggested commit message:
+
+```text
+docs(sources): record backend split completion
+```
+
 ## Current Code Shape
 
 - `src-tauri/src/sources.rs` no longer exists.
@@ -321,34 +386,31 @@ SourceSyncTarget
 ## Current Verification State
 
 - The old transitional `E0761` module ambiguity is resolved.
-- Latest confirmed verification for Task 8:
+- Latest confirmed full verification for Task 9:
 
 ```powershell
 Set-Location src-tauri
 cargo test sources --lib
-```
-
-Result:
-
-```text
-30 passed; 0 failed; 100 filtered out
-```
-
-- Latest whitespace/export checks for Task 8:
-
-```powershell
+cargo test
+Set-Location ..
+npm.cmd test
+npm.cmd run check
 git diff --check
-rg -n "pub\(|pub(crate)|pub use|pub struct|pub enum|pub async fn|pub fn" src-tauri/src/sources
 ```
 
 Result:
 
 ```text
-git diff --check: exit 0, only CRLF normalization warnings
-export scan: reviewed; visibility matches the plan
+cargo test sources --lib: 30 passed; 0 failed; 100 filtered out
+cargo test: 130 passed; 0 failed
+npm.cmd test: 10 test files passed; 97 tests passed
+npm.cmd run check: 0 errors; 0 warnings
+git diff --check: exit 0
 ```
 
-- Full plan verification has not run yet. Task 9 is next.
+- Frontend `npm.cmd test` and `npm.cmd run check` needed sandbox escalation
+  because Vite/esbuild failed to spawn in the default sandbox with
+  `spawn EPERM`; both passed when rerun outside the sandbox.
 
 ## Review Notes
 
@@ -363,36 +425,27 @@ export scan: reviewed; visibility matches the plan
 
 Wait for the user's explicit instruction before continuing.
 
-The next plan item is:
-
-```text
-Task 9: Full Verification
-```
-
-Expected Task 9 commands:
-
-```powershell
-Set-Location src-tauri
-cargo test sources --lib
-cargo test
-Set-Location ..
-npm.cmd test
-npm.cmd run check
-git diff --check
-```
-
-Expected commit message after Task 9 if only verification state/docs are
-recorded later:
-
-```text
-test(sources): run full backend split verification
-```
-
-Task 10 after that updates:
+Task 10 updated:
 
 ```text
 docs/code-review-results-2026-05-03.md
 docs/session-context-2026-05-03.md
 ```
 
-Do not proceed to Task 9 until the user explicitly asks for the next task.
+Task 10 doc whitespace check passed:
+
+```powershell
+git diff --check docs/code-review-results-2026-05-03.md docs/session-context-2026-05-03.md docs/superpowers/plans/2026-05-03-sources-backend-split.md
+```
+
+Result:
+
+```text
+exit 0; only expected LF-to-CRLF warnings for edited Markdown files
+```
+
+Suggested commit message:
+
+```text
+docs(sources): record backend split completion
+```
