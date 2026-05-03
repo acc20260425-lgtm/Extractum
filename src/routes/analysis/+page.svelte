@@ -46,6 +46,12 @@
     type AnalysisChatState,
   } from "$lib/analysis-chat-state";
   import {
+    groupEditorStateFromGroup,
+    isGroupSourceSelected as groupSourceIsSelected,
+    templateEditorStateFromTemplate,
+    toggleGroupSourceSelection,
+  } from "$lib/analysis-editor-state";
+  import {
     accountLabel as formatAccountLabel,
     membershipLabel,
     runtimeBadge,
@@ -506,42 +512,25 @@
   });
 
   function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
-    if (!template) {
-      editorBoundTemplateId = null;
-      templateName = "";
-      templateBody = "";
-      return;
-    }
-
-    editorBoundTemplateId = template.id;
-    templateName = template.name;
-    templateBody = template.body;
+    const next = templateEditorStateFromTemplate(template);
+    editorBoundTemplateId = next.editorBoundTemplateId;
+    templateName = next.templateName;
+    templateBody = next.templateBody;
   }
 
   function bindEditorToGroup(group: AnalysisSourceGroup | null) {
-    if (!group) {
-      editorBoundGroupId = null;
-      groupName = "";
-      groupMemberSourceIds = [];
-      return;
-    }
-
-    editorBoundGroupId = group.id;
-    groupName = group.name;
-    groupMemberSourceIds = group.members.map((member) => member.source_id);
+    const next = groupEditorStateFromGroup(group);
+    editorBoundGroupId = next.editorBoundGroupId;
+    groupName = next.groupName;
+    groupMemberSourceIds = next.groupMemberSourceIds;
   }
 
   function isGroupSourceSelected(sourceId: number) {
-    return groupMemberSourceIds.includes(sourceId);
+    return groupSourceIsSelected(groupMemberSourceIds, sourceId);
   }
 
   function toggleGroupSource(sourceId: number) {
-    if (groupMemberSourceIds.includes(sourceId)) {
-      groupMemberSourceIds = groupMemberSourceIds.filter((id) => id !== sourceId);
-      return;
-    }
-
-    groupMemberSourceIds = [...groupMemberSourceIds, sourceId].sort((a, b) => a - b);
+    groupMemberSourceIds = toggleGroupSourceSelection(groupMemberSourceIds, sourceId);
   }
 
   function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
