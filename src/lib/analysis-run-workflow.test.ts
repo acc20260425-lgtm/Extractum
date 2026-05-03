@@ -174,4 +174,113 @@ describe("analysis-run-workflow", () => {
     expect(state.activeRunId).toBe(7);
     expect(deps.getRun).toHaveBeenCalledWith(7);
   });
+
+  it("opens a run by loading detail, chat, and trace data", async () => {
+    const { state, deps, workflow } = createHarness();
+    deps.getRun.mockResolvedValueOnce(runDetail({
+      id: 7,
+      status: "completed",
+      has_trace_data: true,
+    }));
+    deps.loadChatMessages.mockResolvedValueOnce(undefined);
+    deps.loadTrace.mockResolvedValueOnce(undefined);
+
+    await workflow.openRun(7);
+
+    expect(state.inspectorMode).toBe("history");
+    expect(state.activeRunId).toBe(7);
+    expect(state.currentRun?.id).toBe(7);
+    expect(deps.syncRunSnapshot).toHaveBeenCalledWith(7, "completed");
+    expect(deps.loadChatMessages).toHaveBeenCalledWith(7, expect.objectContaining({
+      isCurrent: expect.any(Function),
+    }));
+    expect(deps.loadTrace).toHaveBeenCalledWith(7, expect.objectContaining({
+      isCurrent: expect.any(Function),
+    }));
+    expect(state.loadingRunDetail).toBe(false);
+  });
+
+  it("clears trace state when the opened run has no trace data", async () => {
+    const { deps, workflow } = createHarness();
+    deps.getRun.mockResolvedValueOnce(runDetail({ id: 7, has_trace_data: false }));
+    deps.loadChatMessages.mockResolvedValueOnce(undefined);
+
+    await workflow.openRun(7);
+
+    expect(deps.clearTraceState).toHaveBeenCalled();
+    expect(deps.loadTrace).not.toHaveBeenCalled();
+  });
+
+  it("cancels a foreign active chat before opening another run", async () => {
+    const { deps, workflow } = createHarness({
+      activeChatRequestId: "chat-a",
+      activeChatRunId: 5,
+    });
+    deps.getRun.mockResolvedValueOnce(runDetail({ id: 7 }));
+    deps.loadChatMessages.mockResolvedValueOnce(undefined);
+
+    await workflow.openRun(7);
+
+    expect(deps.cancelChatSilently).toHaveBeenCalled();
+    expect(deps.clearChatState).toHaveBeenCalled();
+  });
+
+  it("reports a not-found run and clears current run only when it matches", async () => {
+    const { state, deps, workflow } = createHarness({
+      currentRun: runDetail({ id: 7 }),
+    });
+    deps.getRun.mockResolvedValueOnce(null);
+
+    await workflow.openRun(7);
+
+    expect(state.status).toBe("Analysis run 7 was not found.");
+    expect(state.currentRun).toBeNull();
+    expect(state.loadingRunDetail).toBe(false);
+
+    const other = createHarness({
+      currentRun: runDetail({ id: 8 }),
+    });
+    other.deps.getRun.mockResolvedValueOnce(null);
+
+    await other.workflow.openRun(7);
+
+    expect(other.state.status).toBe("Analysis run 7 was not found.");
+    expect(other.state.currentRun?.id).toBe(8);
+    expect(other.state.loadingRunDetail).toBe(false);
+  });
+
+  it("ignores stale openRun results from overlapping requests", async () => {
+    const { state, deps, workflow } = createHarness();
+    let resolveFirst: (run: AnalysisRunDetail) => void = () => {};
+    deps.getRun
+      .mockImplementationOnce(() => new Promise<AnalysisRunDetail>((resolve) => {
+        resolveFirst = resolve;
+      }))
+      .mockResolvedValueOnce(runDetail({ id: 8, result_markdown: "second" }));
+    deps.loadChatMessages.mockResolvedValue(undefined);
+
+    const first = workflow.openRun(7);
+    const second = workflow.openRun(8);
+    resolveFirst(runDetail({ id: 7, result_markdown: "first" }));
+    await Promise.all([first, second]);
+
+    expect(state.currentRun?.id).toBe(8);
+    expect(deps.loadChatMessages).toHaveBeenCalledWith(8, expect.any(Object));
+    expect(deps.loadChatMessages).not.toHaveBeenCalledWith(7, expect.any(Object));
+    expect(state.loadingRunDetail).toBe(false);
+  });
+
+  it("keeps stale loadChatMessages callbacks from changing route chat state", async () => {
+    const { deps, workflow } = createHarness();
+    let capturedGuard = { isCurrent: () => true };
+    deps.getRun.mockResolvedValueOnce(runDetail({ id: 7 }));
+    deps.loadChatMessages.mockImplementationOnce(async (_runId, guard) => {
+      capturedGuard = guard;
+    });
+
+    await workflow.openRun(7);
+    workflow.invalidateOpenRunRequests();
+
+    expect(capturedGuard.isCurrent()).toBe(false);
+  });
 });
