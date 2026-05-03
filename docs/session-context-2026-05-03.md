@@ -7,19 +7,21 @@
 - User timezone from environment: `Europe/Minsk`
 - Current date in environment: `2026-05-03`
 - Active branch: `analysis-run-workflow-extraction`
-- Base branch for the current phase: `main`
-- Current branch was created after the small stabilization branch was fast-forward merged into `main`.
-- Current worktree before this handoff refresh was clean:
+- Base branch for this phase: `main`
+- Current worktree status at this handoff:
 
 ```text
 git status --short --branch
 ## analysis-run-workflow-extraction
 ```
 
-Recent relevant branch state observed in this session:
+- Current recent history at this handoff:
 
 ```text
-c838e0f (HEAD -> analysis-run-workflow-extraction) docs(session): refresh stabilization handoff context
+3e31cb1 (HEAD -> analysis-run-workflow-extraction) test(frontend): extract analysis run loading workflow
+8eb8bcb test(frontend): add analysis run api wrapper
+9afd8c9 docs(session): add analysis run workflow plan
+c838e0f docs(session): refresh stabilization handoff context
 ab938f8 (main) docs(session): refresh stabilization handoff context
 15de06d test(frontend): extract run deletion helpers
 b05955a test(frontend): extract report start helpers
@@ -28,152 +30,326 @@ b05955a test(frontend): extract report start helpers
 
 ## User Intent And Constraints
 
-The user asked to continue from the code review and stabilization handoff, then plan the next phase of work.
+The user asked to continue from the review/stabilization work and execute the next planned phase.
+The active implementation plan is:
 
-Main condition for the new phase:
+- `docs/superpowers/plans/2026-05-03-analysis-run-workflow-controller.md`
 
-- do not do another small helper-only step.
+The agreed direction for this phase:
 
-Agreed direction:
-
+- do not do another small helper-only step;
 - perform a larger frontend extraction around analysis run workflow behavior;
-- start from the current `analysis-run-workflow-extraction` branch;
 - keep backend behavior unchanged;
-- keep Svelte route state in the route;
-- extract route-local workflow orchestration into a plain TypeScript module;
-- include typed Tauri API wrappers for this run workflow;
-- include `analysis://run` event orchestration in the same extraction;
+- keep Svelte `$state`, route listener lifecycle, and UI composition in `src/routes/analysis/+page.svelte`;
+- extract route-local analysis run orchestration into a plain TypeScript controller;
+- add typed Tauri API wrappers for the run command/event boundary;
+- include `analysis://run` event orchestration in this extraction;
 - do not include report start, run deletion, chat listener, NotebookLM, Takeout, source management, or backend work in this phase.
 
-The user explicitly said subagents may be used when working with Superpowers skills.
+The user explicitly said that subagents may be used with Superpowers work.
+
+## Skills And Process Used
+
+Relevant Superpowers skills read/used in this session:
+
+- `superpowers:using-superpowers`
+- `superpowers:subagent-driven-development`
+- `superpowers:test-driven-development`
+- `superpowers:verification-before-completion`
+- `superpowers:using-git-worktrees`
+- `superpowers:requesting-code-review`
+
+Practical adjustment made during execution:
+
+- Worker/reviewer subagents repeatedly hit sandbox-related `spawn EPERM` when trying to run Vitest/Svelte checks.
+- After Task 1, implementation/test commands were run locally by the main agent with escalation for `npm.cmd test`.
+- Subagents were still used for Task 1 review gates.
+- Task 2 spec-review subagent was started but interrupted/closed when the user changed the request to this handoff update.
+
+Important environment caveats:
+
+- Use `npm.cmd`, not `npm`, because PowerShell blocks `npm.ps1`.
+- `npm.cmd test` and `npm.cmd run check` can fail inside the sandbox with Vite/esbuild `spawn EPERM`; rerun important verification commands with escalation.
+- Git index writes may require escalation in this environment. `git add` initially failed with `.git/index.lock: Permission denied`; rerunning `git add` / `git commit` with escalation worked.
 
 ## Review And Stabilization Context
 
-Detailed review notes are in:
+Detailed review notes remain in:
 
 - `docs/code-review-results-2026-05-03.md`
 
 Review summary:
 
-1. `src/routes/analysis/+page.svelte` was too broad and should be reduced toward composition plus extracted domain controllers/helpers.
-2. `src-tauri/src/sources.rs` and `src-tauri/src/takeout_import.rs` are large mixed-responsibility modules.
+1. `src/routes/analysis/+page.svelte` had grown into a broad workflow controller.
+2. `src-tauri/src/sources.rs` and `src-tauri/src/takeout_import.rs` mix several unrelated responsibilities.
 3. Frontend/backend contracts were manually mirrored with raw Tauri command and event strings.
-4. Backend error typing is partial because many helpers still return `Result<T, String>` and `error.rs` classifies strings by substring.
+4. Backend error typing is partial because some helpers still return `Result<T, String>` and error classification uses string heuristics.
 5. Frontend originally lacked a unit test harness.
-6. `GEMINI.md` had become stale versus current command surface and product status.
+6. `GEMINI.md` was stale versus current command surface and product status.
 
-Completed stabilization work before this phase:
+Completed stabilization work before this branch included:
 
-- added Vitest;
-- added frontend helper tests;
-- introduced `src/lib/types/llm.ts` and `src/lib/api/llm.ts`;
-- extracted many pure helpers from `src/routes/analysis/+page.svelte` into:
+- adding Vitest;
+- adding frontend helper tests;
+- adding `src/lib/types/llm.ts` and `src/lib/api/llm.ts`;
+- extracting pure helpers into:
   - `src/lib/analysis-state.ts`
   - `src/lib/analysis-chat-state.ts`
   - `src/lib/analysis-source-state.ts`
   - `src/lib/analysis-editor-state.ts`
   - `src/lib/analysis-scope-state.ts`
-- refreshed `GEMINI.md`;
-- verified stabilization branch with `npm.cmd test`, `npm.cmd run check`, and earlier `cargo test`.
+- refreshing `GEMINI.md`;
+- verifying the stabilization branch with frontend tests/checks and earlier `cargo test`.
 
-## Current Route Hotspots
+## Plan Status
 
-The new plan targets this run-oriented cluster in `src/routes/analysis/+page.svelte`:
+The current plan has five implementation tasks plus final verification.
 
-```text
-207:  let activeRunId = $state<number | null>(null);
-209:  let currentRun = $state<AnalysisRunDetail | null>(null);
-245:  let openRunRequestToken = 0;
-385:  function pruneLiveRuns(activeRunIds: number[], preserveRunId: number | null = null) {
-728:  async function loadRuns() {
-750:  function syncActiveRunState(summaries: AnalysisRunSummary[]) {
-771:  async function loadActiveRuns() {
-802:  async function openRun(runId: number) {
-850:  async function loadChatMessages(runId: number, requestToken?: number) {
-1391: onMount(() => {
-1411: listen<AnalysisRunEvent>("analysis://run", ...)
-```
+### Task 1: Typed Analysis Run API Wrapper
 
-The route currently owns:
+Status: implemented, tested, committed, and reviewed.
 
-- Tauri `invoke` calls;
-- Tauri `listen` subscriptions;
-- status assignment and transient status clearing;
-- route-level Svelte `$state` and `$derived` wiring;
-- load/reload side effects for accounts, sources, topics, items, runs, trace, chat, groups, templates, NotebookLM export, sync, Takeout import, deletion, and cancellation.
-
-The next extraction must reduce only the analysis run workflow surface.
-
-## Agreed Implementation Plan
-
-The plan was written to:
-
-- `docs/superpowers/plans/2026-05-03-analysis-run-workflow-controller.md`
-
-Plan title:
+Commit:
 
 ```text
-Analysis Run Workflow Controller Implementation Plan
+8eb8bcb test(frontend): add analysis run api wrapper
 ```
 
-High-level plan:
+Files added:
 
-1. Create `src/lib/api/analysis-runs.ts` with typed wrappers:
-   - `listAnalysisRuns`
-   - `listActiveAnalysisRuns`
-   - `getAnalysisRun`
-   - `ANALYSIS_RUN_EVENT`
-   - `listenToAnalysisRunEvents`
-2. Add wrapper tests in `src/lib/api/analysis-runs.test.ts`.
-3. Create `src/lib/analysis-run-workflow.ts` with `createAnalysisRunWorkflow(deps)`.
-4. Controller methods:
-   - `loadRuns`
-   - `loadActiveRuns`
-   - `openRun`
-   - `handleRunEvent`
-   - `invalidateOpenRunRequests`
-5. Controller owns only private `openRunRequestToken`.
-6. Route keeps all Svelte state and updates it through an injected `patch` adapter.
-7. Update `loadTrace` and `loadChatMessages` to accept `AnalysisRunRequestGuard` instead of a route-local numeric request token.
-8. Replace the `analysis://run` listener body with `runWorkflow.handleRunEvent(payload)`.
+- `src/lib/api/analysis-runs.ts`
+- `src/lib/api/analysis-runs.test.ts`
 
-The planned workflow dependencies are:
+What was implemented:
 
-- `getState`
-- `patch`
-- `listRuns`
-- `listActiveRuns`
-- `getRun`
-- `syncRunSnapshot`
-- `pruneLiveRuns`
-- `applyRunEvent`
-- `cancelChatSilently`
-- `clearChatState`
-- `loadChatMessages`
-- `loadTrace`
-- `clearTraceState`
-- `formatError`
+- `ANALYSIS_RUN_EVENT = "analysis://run"`
+- `ListAnalysisRunsInput`
+- `listAnalysisRuns(input)`
+- `listActiveAnalysisRuns()`
+- `getAnalysisRun(runId)`
+- `listenToAnalysisRunEvents(handler)`
 
-Behavior to preserve:
+TDD evidence:
 
-- `loadRuns` clears saved runs when history scope is unavailable.
-- `loadRuns` loads limit `50` and filters active statuses out of saved history.
-- `loadActiveRuns` applies `activeRunSyncDecision`, syncs snapshots, prunes live runs, and auto-opens the first active run when needed.
-- `openRun` cancels foreign active chat silently, clears chat state, sets `inspectorMode = "history"`, guards stale async results, loads detail, chat, and trace, and clears trace when `has_trace_data` is false.
-- `handleRunEvent` applies live run events, switches to chunks inspector for chunk summaries, auto-selects the first event run when no run is active, updates focused statuses, refreshes run lists on terminal events, and reopens focused terminal runs.
-
-## Planned Verification
-
-Targeted commands from the plan:
+- RED command:
 
 ```powershell
 npm.cmd test -- src/lib/api/analysis-runs.test.ts
+```
+
+- RED result after escalation: Vitest started and failed because `src/lib/api/analysis-runs.ts` did not exist.
+- GREEN command:
+
+```powershell
+npm.cmd test -- src/lib/api/analysis-runs.test.ts
+```
+
+- GREEN result:
+
+```text
+Test Files  1 passed (1)
+Tests       3 passed (3)
+```
+
+Review gates:
+
+- Spec review subagent result: `Spec compliant`.
+- Code quality review subagent result: no Critical, Important, or Minor issues found.
+- The code-quality subagent said "Ready to merge? With fixes" only because it could not complete verification inside the sandbox; the main agent had already run the targeted Vitest outside the sandbox successfully.
+
+### Task 2: Workflow Types And Run Loading Workflows
+
+Status: implemented, tested, and committed. Review gates are not complete.
+
+Commit:
+
+```text
+3e31cb1 test(frontend): extract analysis run loading workflow
+```
+
+Files added:
+
+- `src/lib/analysis-run-workflow.ts`
+- `src/lib/analysis-run-workflow.test.ts`
+
+What was implemented:
+
+- `AnalysisRunInspectorMode`
+- `AnalysisRunWorkflowState`
+- `AnalysisRunRequestGuard`
+- `AnalysisRunWorkflowPatch`
+- `AnalysisRunWorkflowDeps`
+- `createAnalysisRunWorkflow(deps)`
+
+Controller methods currently present:
+
+- `loadRuns`
+- `loadActiveRuns`
+- `openRun`
+- `handleRunEvent`
+- `invalidateOpenRunRequests`
+
+The implementation follows the plan's larger Task 2 code block, so `openRun` and `handleRunEvent` are already present even though deeper coverage for them is planned in Tasks 3 and 4.
+
+Task 2 tests currently cover:
+
+- clearing saved runs when `historyScopeParams` is unavailable;
+- loading saved runs with `{ sourceId, sourceGroupId, limit: 50 }`;
+- filtering active statuses out of saved history;
+- formatting error status and clearing `loadingRuns`;
+- loading active runs;
+- syncing live snapshots;
+- pruning live runs;
+- preserving selected active run;
+- auto-opening first active run when selected active id is stale.
+
+TDD evidence:
+
+- RED command:
+
+```powershell
 npm.cmd test -- src/lib/analysis-run-workflow.test.ts
+```
+
+- RED result after escalation: Vitest started and failed because `src/lib/analysis-run-workflow.ts` did not exist.
+- GREEN command:
+
+```powershell
+npm.cmd test -- src/lib/analysis-run-workflow.test.ts
+```
+
+- GREEN result:
+
+```text
+Test Files  1 passed (1)
+Tests       5 passed (5)
+```
+
+Task 2 review status:
+
+- A spec-review subagent was started for commit `3e31cb1` against base `8eb8bcb`.
+- The user interrupted the turn before the reviewer returned a verdict.
+- The subagent was closed and its previous status was `interrupted`.
+- Next session should either rerun Task 2 spec review or manually inspect `8eb8bcb..3e31cb1` before proceeding to Task 3.
+
+## Remaining Plan Work
+
+### Next Immediate Step
+
+Resume at Task 2 review, not Task 3 implementation.
+
+Recommended next sequence:
+
+1. Run or redo spec compliance review for Task 2 (`8eb8bcb..3e31cb1`).
+2. If spec compliant, run code-quality review for Task 2.
+3. If no blocking feedback remains, mark Task 2 complete.
+4. Continue with Task 3: add focused `openRun` tests.
+
+### Task 3: Open Run Workflow Coverage
+
+Status: not started.
+
+Planned work:
+
+- Add tests for `openRun` loading detail, chat, trace, trace clearing, foreign chat cancellation, not-found handling, overlapping stale requests, and guard invalidation.
+- Run:
+
+```powershell
+npm.cmd test -- src/lib/analysis-run-workflow.test.ts
+```
+
+- Commit:
+
+```text
+test(frontend): extract open run workflow
+```
+
+Important note:
+
+- Because the Task 2 implementation already contains full `openRun`, Task 3 tests may pass immediately. The plan explicitly allows this: if behavior was already completed in Task 2, fix only test/implementation mismatches and keep behavior aligned with the route.
+
+### Task 4: Run Event Orchestration Coverage
+
+Status: not started.
+
+Planned work:
+
+- Add tests for `handleRunEvent`: event application, chunks inspector switch, auto-select/open when no run is active, focused status updates, terminal refresh behavior, and failed status from error.
+- Run:
+
+```powershell
+npm.cmd test -- src/lib/analysis-run-workflow.test.ts
+```
+
+- Commit:
+
+```text
+test(frontend): extract analysis run event workflow
+```
+
+Important note:
+
+- Because the Task 2 implementation already contains full `handleRunEvent`, these tests may pass immediately unless mismatches are discovered.
+
+### Task 5: Route Wiring
+
+Status: not started.
+
+Planned files:
+
+- Modify `src/routes/analysis/+page.svelte`
+
+Planned changes:
+
+- Import analysis run API wrapper:
+
+```ts
+import {
+  getAnalysisRun,
+  listActiveAnalysisRuns,
+  listAnalysisRuns,
+  listenToAnalysisRunEvents,
+} from "$lib/api/analysis-runs";
+```
+
+- Import workflow controller types:
+
+```ts
+import {
+  createAnalysisRunWorkflow,
+  type AnalysisRunRequestGuard,
+  type AnalysisRunWorkflowPatch,
+} from "$lib/analysis-run-workflow";
+```
+
+- Keep `listen` from `@tauri-apps/api/event` for chat, NotebookLM, and Takeout listeners.
+- Remove route-local `openRunRequestToken`.
+- Replace token invalidation in `clearOpenedRunState` with `runWorkflow.invalidateOpenRunRequests()`.
+- Add `applyRunWorkflowPatch`.
+- Instantiate `runWorkflow` with route state adapter and dependencies.
+- Replace local `loadRuns`, `loadActiveRuns`, and `openRun` bodies with delegating wrappers.
+- Remove route-local `syncActiveRunState`.
+- Update `loadTrace` and `loadChatMessages` to accept `AnalysisRunRequestGuard`.
+- Replace the `analysis://run` listener body with `runWorkflow.handleRunEvent(payload)` through `listenToAnalysisRunEvents`.
+
+Planned verification:
+
+```powershell
 npm.cmd test -- src/lib/analysis-run-workflow.test.ts src/lib/api/analysis-runs.test.ts
 npm.cmd run check
 ```
 
-Final verification:
+Planned commit:
+
+```text
+refactor(frontend): extract analysis run workflow controller
+```
+
+### Final Verification
+
+Status: not started.
+
+Planned commands:
 
 ```powershell
 npm.cmd test
@@ -181,24 +357,66 @@ npm.cmd run check
 git diff --check
 ```
 
-Environment caveats:
+If `git diff --check` reports only known CRLF normalization warnings, record them explicitly.
 
-- Use `npm.cmd`, not `npm`, because PowerShell blocks `npm.ps1`.
-- `npm.cmd test` and `npm.cmd run check` may require escalation because Vite/esbuild spawning can fail in the sandbox with `EPERM`.
-- `git diff --check` may report known CRLF normalization warnings; record any such output explicitly.
+## Current Files Of Interest
 
-## Current Request Completed In This Turn
+New files already committed:
 
-The current user request was documentation-only:
+- `src/lib/api/analysis-runs.ts`
+- `src/lib/api/analysis-runs.test.ts`
+- `src/lib/analysis-run-workflow.ts`
+- `src/lib/analysis-run-workflow.test.ts`
 
-1. write the agreed plan into a separate file;
-2. overwrite `docs/session-context-2026-05-03.md` with enough context to restore the session;
-3. provide a commit message.
-
-No product code changes were requested in this turn.
-
-Suggested commit message:
+Route hotspots still pending extraction:
 
 ```text
-docs(session): add analysis run workflow plan
+src/routes/analysis/+page.svelte
+  openRunRequestToken
+  clearOpenedRunState token invalidation
+  loadTrace(runId, requestToken?)
+  loadRuns()
+  syncActiveRunState()
+  loadActiveRuns()
+  openRun(runId)
+  loadChatMessages(runId, requestToken?)
+  listen<AnalysisRunEvent>("analysis://run", ...)
+```
+
+Existing helper modules relevant to this work:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-scope-state.ts`
+- `src/lib/types/analysis.ts`
+- `src/lib/api/analysis-runs.ts`
+
+## Subagent History In This Session
+
+Task 1 implementer:
+
+- Agent id: `019decfe-36e3-76d3-b898-4e12f06c3062`
+- Result: `BLOCKED`
+- It created only `src/lib/api/analysis-runs.test.ts`.
+- It hit sandbox `spawn EPERM` on `npm.cmd test -- src/lib/api/analysis-runs.test.ts`.
+- Main agent reran RED with escalation, implemented, verified GREEN, and committed.
+
+Task 1 spec reviewer:
+
+- Agent id: `019ded09-c657-7940-9fe1-3ecaaeb202cf`
+- Result: `Spec compliant`
+
+Task 1 code-quality reviewer:
+
+- Agent id: `019ded0f-1da5-74b2-99ea-985f3a4e7351`
+- Result: no code-quality issues found; verification caveat due sandbox.
+
+Task 2 spec reviewer:
+
+- Agent id: `019ded16-e280-7021-9117-9ff5c999479c`
+- Result: interrupted/closed before verdict due user changing request to this handoff update.
+
+## Suggested Commit Message For This Handoff
+
+```text
+docs(session): refresh analysis workflow handoff
 ```
