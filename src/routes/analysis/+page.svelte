@@ -73,7 +73,14 @@
   import {
     groupEditorStateFromGroup,
     isGroupSourceSelected as groupSourceIsSelected,
+    templateCopyCommand,
+    templateCreatedStatus,
+    templateDeleteDecision,
+    templateDeletedStatus,
     templateEditorStateFromTemplate,
+    templateFallbackSelection,
+    templateUpdateCommand,
+    templateUpdatedStatus,
     toggleGroupSourceSelection,
   } from "$lib/analysis-editor-state";
   import {
@@ -1185,28 +1192,20 @@
   }
 
   async function saveTemplateChanges(nextName = templateName, nextBody = templateBody) {
-    const current = selectedTemplate;
-    if (!current) {
-      status = "Select a template first.";
-      return;
-    }
-    if (current.is_builtin) {
-      status = "Built-in templates cannot be edited directly. Save a copy instead.";
-      return;
-    }
-    if (!nextName.trim() || !nextBody.trim()) {
-      status = "Template name and body cannot be empty.";
+    const command = templateUpdateCommand(selectedTemplate, nextName, nextBody);
+    if (!command.ok) {
+      status = command.status;
       return;
     }
 
     savingTemplate = true;
     try {
       const updated = await invoke<AnalysisPromptTemplate>("update_analysis_prompt_template", {
-        templateId: current.id,
-        name: nextName.trim(),
-        body: nextBody.trim(),
+        templateId: command.templateId,
+        name: command.name,
+        body: command.body,
       });
-      status = `Template "${updated.name}" saved.`;
+      status = templateUpdatedStatus(updated);
       await loadTemplates();
       selectedTemplateId = String(updated.id);
       bindEditorToTemplate(updated);
@@ -1218,19 +1217,20 @@
   }
 
   async function saveTemplateCopy(nextName = templateName, nextBody = templateBody) {
-    if (!nextName.trim() || !nextBody.trim()) {
-      status = "Template name and body cannot be empty.";
+    const command = templateCopyCommand(nextName, nextBody);
+    if (!command.ok) {
+      status = command.status;
       return;
     }
 
     savingTemplate = true;
     try {
       const created = await invoke<AnalysisPromptTemplate>("create_analysis_prompt_template", {
-        name: nextName.trim(),
+        name: command.name,
         templateKind: "report",
-        body: nextBody.trim(),
+        body: command.body,
       });
-      status = `Template "${created.name}" created.`;
+      status = templateCreatedStatus(created);
       await loadTemplates();
       selectedTemplateId = String(created.id);
       bindEditorToTemplate(created);
@@ -1242,18 +1242,14 @@
   }
 
   async function deleteTemplate() {
-    const current = selectedTemplate;
-    if (!current) {
-      status = "Select a template first.";
-      return;
-    }
-    if (current.is_builtin) {
-      status = "Built-in templates cannot be deleted.";
+    const decision = templateDeleteDecision(selectedTemplate);
+    if (!decision.ok) {
+      status = decision.status;
       return;
     }
     const confirmed = await openConfirmModal({
       title: "Delete template?",
-      message: `The template "${current.name}" will be removed from the local app.`,
+      message: `The template "${decision.name}" will be removed from the local app.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       tone: "danger",
@@ -1264,12 +1260,12 @@
 
     deletingTemplate = true;
     try {
-      await invoke("delete_analysis_prompt_template", { templateId: current.id });
-      status = `Template "${current.name}" deleted.`;
+      await invoke("delete_analysis_prompt_template", { templateId: decision.templateId });
+      status = templateDeletedStatus(decision.name);
       await loadTemplates();
-      const fallback = templates[0] ?? null;
-      selectedTemplateId = fallback ? String(fallback.id) : "";
-      bindEditorToTemplate(fallback);
+      const fallback = templateFallbackSelection(templates);
+      selectedTemplateId = fallback.selectedTemplateId;
+      bindEditorToTemplate(fallback.template);
     } catch (error) {
       status = formatAppError("deleting the template", error);
     } finally {
