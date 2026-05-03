@@ -12,5 +12,6 @@ reference
 artifacts
 /.vscode
 /.codex
+.worktrees/
 kilo.json
 

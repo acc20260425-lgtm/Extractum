@@ -2,519 +2,436 @@
 
 ## Environment
 
-- Repository: `G:\Develop\Extractum`
+- Repository root: `G:\Develop\Extractum`
 - Shell: PowerShell
 - User timezone from environment: `Europe/Minsk`
 - Current date in environment: `2026-05-03`
-- Active branch: `analysis-run-workflow-extraction`
-- Base branch for this phase: `main`
-- Current HEAD before this handoff document update:
-
-```text
-4e16e40 (HEAD -> analysis-run-workflow-extraction) refactor(frontend): extract analysis run workflow controller
-```
-
-- Expected worktree status immediately after writing this handoff:
-
-```text
-## analysis-run-workflow-extraction
- M docs/session-context-2026-05-03.md
-```
-
-- Recent history at this handoff:
-
-```text
-4e16e40 (HEAD -> analysis-run-workflow-extraction) refactor(frontend): extract analysis run workflow controller
-50c3605 test(frontend): extract analysis run event workflow
-fe0b78b test(frontend): extract open run workflow
-a8fbfc4 test(frontend): tighten analysis run loading workflow
-b732e95 docs(session): refresh stabilization handoff context
-3e31cb1 test(frontend): extract analysis run loading workflow
-8eb8bcb test(frontend): add analysis run api wrapper
-9afd8c9 docs(session): add analysis run workflow plan
-c838e0f docs(session): refresh stabilization handoff context
-ab938f8 (main) docs(session): refresh stabilization handoff context
-15de06d test(frontend): extract run deletion helpers
-b05955a test(frontend): extract report start helpers
-```
+- Implementation worktree: `G:\Develop\Extractum\.worktrees\takeout-import-backend-split`
+- Implementation branch: `takeout-import-backend-split`
+- Base branch: `main`
+- Worktree was created because Superpowers execution plans require isolated work before implementation.
 
 ## User Intent And Standing Instructions
 
-The user asked to execute the plan in:
+The user asked to implement:
 
-- `docs/superpowers/plans/2026-05-03-analysis-run-workflow-controller.md`
+- `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md`
 
 The user explicitly instructed:
 
 - implement the plan task by task;
-- after each task, stop and wait for the user's explicit instruction before continuing;
-- use Superpowers workflow;
-- subagents are allowed for Superpowers work;
-- do not launch worker subagents for tasks where the work is literally inserting tests from the plan;
-- keep all other behavior the same, including TDD, spec review, code-quality review, verification, and stopping after each task.
+- after each Task, form a commit message;
+- after each Task, stop and wait for the user's explicit permission before starting the next Task;
+- Superpowers subagents may be used;
+- preserve all user-visible behavior.
 
-Current phase goal:
-
-- Extract analysis run loading, opening, and run-event orchestration from `src/routes/analysis/+page.svelte` into a tested route-local workflow controller.
-- Keep backend Rust code unchanged.
-- Keep Svelte `$state`, listener lifecycle, and UI composition in the route.
-- Do not extract chat listener, NotebookLM, Takeout, source management, report start, run deletion, or backend workflows as part of this phase.
+The latest request was to start and complete Task 5.
 
 ## Skills And Process Used
 
 Relevant Superpowers skills used/read during this session:
 
 - `superpowers:using-superpowers`
-- `superpowers:subagent-driven-development`
-- `superpowers:test-driven-development`
-- `superpowers:systematic-debugging`
-- `superpowers:verification-before-completion`
 - `superpowers:using-git-worktrees`
-- `superpowers:requesting-code-review`
+- `superpowers:subagent-driven-development`
+- `superpowers:receiving-code-review`
 
-Process notes:
+Workflow pattern:
 
-- This branch already existed as the isolated implementation branch, so no new worktree was created during this continuation.
-- Worker subagents were initially used for mechanical test insertion, but after one worker timed out the user requested not to use worker subagents for literal test insertion tasks. That instruction is now active for future work.
-- Review subagents were still used for spec compliance and code quality gates.
-- Subagents were spawned without an explicit `model` override; they inherited the current parent model. Reasoning effort was set per task, usually `medium` for spec review and `high` for code quality review.
+- The coordinator implements one plan Task at a time.
+- After each Task:
+  - run task-specific verification;
+  - dispatch a spec-compliance review subagent;
+  - dispatch a code-quality/regression review subagent;
+  - classify review findings before changing scope;
+  - report a commit message and stop.
 
-Environment caveats:
+## Important Environment Notes
 
-- Use `npm.cmd`, not `npm`, because PowerShell can block `npm.ps1`.
-- `npm.cmd test` and `npm.cmd run check` often fail inside the sandbox with Vite/esbuild `spawn EPERM`; important verification should be rerun with escalation.
-- `git add` and `git commit` often fail inside the sandbox with `.git/index.lock: Permission denied`; rerunning those git commands with escalation has worked.
-- `git diff --check` reports LF-to-CRLF warnings on touched files in this Windows worktree. Those warnings have been treated as expected unless actual whitespace errors appear.
+- `.worktrees/` was not ignored initially.
+- `.worktrees/` was added to `.gitignore` before creating the implementation worktree.
+- `git worktree add .worktrees\takeout-import-backend-split -b refactor/takeout-import-backend-split` failed because Git could not create a nested ref path.
+- The worktree was created with the flat branch name:
 
-## Review And Stabilization Context
+```text
+takeout-import-backend-split
+```
 
-Detailed manual review notes are in:
+- `git worktree add` required escalation because sandbox permissions blocked `.git` lock-file writes.
+- The worktree required adding this path to Git `safe.directory` because escalated Git created the worktree as the normal user while later sandbox reads ran as `CodexSandboxOffline`:
 
+```text
+G:/Develop/Extractum/.worktrees/takeout-import-backend-split
+```
+
+- `git diff --check` currently reports only the expected Windows LF-to-CRLF warnings for
+  `.gitignore` and `docs/session-context-2026-05-03.md`.
+- CodeRabbit could not be used by review agents because `coderabbit --version` failed with WSL `E_ACCESSDENIED`.
+
+## Plan Scope
+
+The plan addresses the code-review finding "Large backend modules mix unrelated behavior" for Takeout import only.
+
+Target split:
+
+- `src-tauri/src/takeout_import/mod.rs`
+- `src-tauri/src/takeout_import/state.rs`
+- `src-tauri/src/takeout_import/pagination.rs`
+- `src-tauri/src/takeout_import/export_dc.rs`
+- existing `src-tauri/src/takeout_import/raw_parse.rs` remains unchanged except for module path compatibility.
+
+Behavior freeze:
+
+- Tauri commands stay unchanged:
+  - `start_takeout_source_import`
+  - `cancel_takeout_source_import`
+  - `list_takeout_source_import_jobs`
+  - `run_takeout_export_dc_spike`
+- Event name stays `sources://takeout-import`.
+- DTO shapes, statuses, phases, warning text, pagination behavior, export-DC behavior, and cancellation behavior must remain stable.
+- `src-tauri/src/lib.rs` must still import the same public Takeout surface:
+
+```rust
+use takeout_import::{
+    cancel_takeout_source_import, list_takeout_source_import_jobs, run_takeout_export_dc_spike,
+    start_takeout_source_import, TakeoutImportState,
+};
+```
+
+Intentional first-pass boundary:
+
+- `mod.rs` remains the command and orchestration facade.
+- Peer validation and history import orchestration intentionally stay in `mod.rs` for this first pass.
+- Do not add `job`, `history`, service traits, generated code, new crates, or frontend changes for this plan.
+
+## Current Worktree Status
+
+At the time this context was written, the implementation worktree status was:
+
+```text
+## takeout-import-backend-split
+ M .gitignore
+ M docs/code-review-results-2026-05-03.md
+ M docs/session-context-2026-05-03.md
+ D src-tauri/src/takeout_import.rs
+?? src-tauri/src/takeout_import/export_dc.rs
+?? src-tauri/src/takeout_import/mod.rs
+?? src-tauri/src/takeout_import/pagination.rs
+?? src-tauri/src/takeout_import/state.rs
+```
+
+Expected uncommitted changes so far:
+
+- `.gitignore`
 - `docs/code-review-results-2026-05-03.md`
+- `docs/session-context-2026-05-03.md`
+- `src-tauri/src/takeout_import.rs` deleted because it was renamed into a module directory
+- `src-tauri/src/takeout_import/mod.rs`
+- `src-tauri/src/takeout_import/state.rs`
+- `src-tauri/src/takeout_import/pagination.rs`
+- `src-tauri/src/takeout_import/export_dc.rs`
 
-Review summary:
+Note: `git diff --name-status` may not show untracked files until they are added.
 
-1. `src/routes/analysis/+page.svelte` had grown into a broad workflow controller.
-2. `src-tauri/src/sources.rs` and `src-tauri/src/takeout_import.rs` mix several unrelated responsibilities.
-3. Frontend/backend contracts were manually mirrored with raw Tauri command and event strings.
-4. Backend error typing is partial because some helpers still return `Result<T, String>` and error classification uses string heuristics.
-5. Frontend originally lacked a unit test harness.
-6. `GEMINI.md` was stale versus the current command surface and product state.
+## Completed Task 1: Module Shell And Job State
 
-Completed stabilization before this branch included:
-
-- adding Vitest;
-- adding frontend helper tests;
-- adding `src/lib/types/llm.ts` and `src/lib/api/llm.ts`;
-- extracting pure helper modules such as:
-  - `src/lib/analysis-state.ts`
-  - `src/lib/analysis-chat-state.ts`
-  - `src/lib/analysis-source-state.ts`
-  - `src/lib/analysis-editor-state.ts`
-  - `src/lib/analysis-scope-state.ts`
-- refreshing `GEMINI.md`;
-- verifying the stabilization branch with frontend tests/checks and earlier `cargo test`.
-
-## Active Plan Status
-
-The active plan has Tasks 1-5 complete. Final Verification is still pending.
-
-### Task 1: Typed Analysis Run API Wrapper
-
-Status: complete, tested, committed, reviewed.
-
-Commit:
-
-```text
-8eb8bcb test(frontend): add analysis run api wrapper
-```
-
-Files added:
-
-- `src/lib/api/analysis-runs.ts`
-- `src/lib/api/analysis-runs.test.ts`
+Status: complete, verified, reviewed, not committed.
 
 Implemented:
 
-- `ANALYSIS_RUN_EVENT = "analysis://run"`
-- `ListAnalysisRunsInput`
-- `listAnalysisRuns(input)`
-- `listActiveAnalysisRuns()`
-- `getAnalysisRun(runId)`
-- `listenToAnalysisRunEvents(handler)`
-
-Recorded verification:
-
-- RED: `npm.cmd test -- src/lib/api/analysis-runs.test.ts` failed because the wrapper module did not exist.
-- GREEN: `npm.cmd test -- src/lib/api/analysis-runs.test.ts` passed with 1 file, 3 tests.
-
-Review gates:
-
-- Spec review: compliant.
-- Code-quality review: no blocking issues.
-
-### Task 2: Workflow Types And Run Loading Workflows
-
-Status: complete, reviewed, fixed, tested, committed.
-
-Initial implementation commit:
-
-```text
-3e31cb1 test(frontend): extract analysis run loading workflow
-```
-
-Review-fix commit:
-
-```text
-a8fbfc4 test(frontend): tighten analysis run loading workflow
-```
-
-Files added/updated:
-
-- `src/lib/analysis-run-workflow.ts`
-- `src/lib/analysis-run-workflow.test.ts`
-
-Implemented:
-
-- `AnalysisRunInspectorMode`
-- `AnalysisRunWorkflowState`
-- `AnalysisRunRequestGuard`
-- `AnalysisRunWorkflowPatch`
-- `AnalysisRunWorkflowDeps`
-- `createAnalysisRunWorkflow(deps)`
-- Controller methods:
-  - `loadRuns`
-  - `loadActiveRuns`
-  - `openRun`
-  - `handleRunEvent`
-  - `invalidateOpenRunRequests`
-
-Task 2 tests cover:
-
-- clearing saved runs when `historyScopeParams` is unavailable;
-- loading saved runs with `{ sourceId, sourceGroupId, limit: 50 }`;
-- filtering active statuses out of saved history;
-- formatting saved-run load errors and clearing `loadingRuns`;
-- loading active runs;
-- syncing live snapshots;
-- pruning live runs;
-- preserving the selected active run and preserving opened run state;
-- auto-opening the first active run when the selected active id is stale.
-
-Review findings and fixes:
-
-- First spec review found that `loadRuns()` returned early when `historyScopeParams` was null without forcing `loadingRuns: false`.
-- First spec review also found the active-runs test did not cover a non-null `preserveRunId`.
-- Fix in `a8fbfc4`:
-  - `loadRuns()` patches `{ runs: [], loadingRuns: false }` for null history scope.
-  - active-runs test starts with `currentRun` id 8 and asserts `pruneLiveRuns([7, 8], 8)`.
-
-Recorded verification:
-
-- `npm.cmd test -- src/lib/analysis-run-workflow.test.ts` passed with 1 file, 5 tests after escalation.
-- `git diff --check` passed with only LF-to-CRLF warnings.
-
-Review gates:
-
-- Spec re-review: compliant.
-- Code-quality review: approved with only minor notes. No critical or important issues.
-
-### Task 3: Open Run Workflow Coverage
-
-Status: complete, reviewed, tested, committed.
-
-Commit:
-
-```text
-fe0b78b test(frontend): extract open run workflow
-```
-
-Files changed:
-
-- `src/lib/analysis-run-workflow.test.ts`
-
-Production code changed:
-
-- No. The `openRun` implementation already existed from Task 2.
-
-Added tests for:
-
-- opening a run by loading detail, chat, and trace data;
-- clearing trace state when the opened run has no trace data;
-- cancelling a foreign active chat before opening another run;
-- reporting a not-found run and clearing current run only when it matches;
-- ignoring stale `openRun` results from overlapping requests;
-- stale `loadChatMessages` guard invalidation via `invalidateOpenRunRequests()`.
-
-Quality-review follow-up:
-
-- Code-quality review noted the not-found test name promised preservation for a non-matching current run, but only covered the matching case.
-- The test was strengthened to also cover the non-matching current run preservation case.
-- Re-review approved.
-
-Recorded verification:
-
-- `npm.cmd test -- src/lib/analysis-run-workflow.test.ts` passed with 1 file, 11 tests after escalation.
-- `git diff --check` passed with only LF-to-CRLF warnings.
-
-Review gates:
-
-- Spec review: compliant.
-- Code-quality review: approved after the minor test improvement.
-
-### Task 4: Run Event Orchestration Coverage
-
-Status: complete, reviewed, tested, committed.
-
-Commit:
-
-```text
-50c3605 test(frontend): extract analysis run event workflow
-```
-
-Files changed:
-
-- `src/lib/analysis-run-workflow.test.ts`
-
-Production code changed:
-
-- No. The `handleRunEvent` implementation already existed from Task 2.
-
-Added:
-
-- `runEvent` test helper.
-- Tests for:
-  - applying run events and switching inspector to `chunks` when chunk summaries arrive;
-  - selecting and opening the event run when no run is active;
-  - updating progress status only for the focused run;
-  - refreshing active and saved runs on terminal events;
-  - using terminal error status for focused failed events without a message.
-
-Recorded verification:
-
-- `npm.cmd test -- src/lib/analysis-run-workflow.test.ts` passed with 1 file, 16 tests after escalation.
-- `git diff --check` passed with only LF-to-CRLF warnings.
-
-Review gates:
-
-- Spec review: compliant.
-- Code-quality review: approved with no issues.
-
-### Task 5: Route Wiring
-
-Status: complete, reviewed, tested, committed.
-
-Commit:
-
-```text
-4e16e40 refactor(frontend): extract analysis run workflow controller
-```
-
-Files changed:
-
-- `src/routes/analysis/+page.svelte`
-- `src/lib/analysis-run-workflow.test.ts`
-
-Route changes:
-
-- Imported analysis-run API wrappers:
-  - `getAnalysisRun`
-  - `listActiveAnalysisRuns`
-  - `listAnalysisRuns`
-  - `listenToAnalysisRunEvents`
-- Imported workflow controller:
-  - `createAnalysisRunWorkflow`
-  - `AnalysisRunRequestGuard`
-  - `AnalysisRunWorkflowPatch`
-- Kept `listen` from `@tauri-apps/api/event` for chat, NotebookLM, and Takeout listeners.
-- Removed unused route-level imports from `$lib/analysis-state`:
-  - `activeRunSyncDecision`
-  - `isActiveRunStatus`
-  - `isRunFocused`
-- Removed route-local `openRunRequestToken`.
-- Replaced token invalidation in `clearOpenedRunState` with `runWorkflow.invalidateOpenRunRequests()`.
-- Added `applyRunWorkflowPatch`.
-- Instantiated `runWorkflow` with route state adapter and dependencies:
-  - `historyScopeParams`
-  - `activeRunId`
-  - `currentRun`
-  - `activeChatRequestId`
-  - `activeChatRunId`
-  - typed API wrappers
-  - `syncRunSnapshot`
-  - `pruneLiveRuns`
-  - `applyRunEvent`
-  - silent chat cancellation
-  - chat/trace loaders and clearers
-  - `formatAppError`
-- Replaced route-local `loadRuns`, `loadActiveRuns`, and `openRun` bodies with delegating wrappers.
-- Removed route-local `syncActiveRunState`.
-- Updated `loadTrace(runId, guard?: AnalysisRunRequestGuard)` to use guard stale checks.
-- Updated `loadChatMessages(runId, guard?: AnalysisRunRequestGuard)` to use guard stale checks and only clear `loadingChat` when no guard is present or the guard is still current.
-- Replaced the raw `listen<AnalysisRunEvent>("analysis://run", ...)` body with `listenToAnalysisRunEvents(... runWorkflow.handleRunEvent(payload) ...)`.
-- Preserved the existing unlisten/disposed lifecycle behavior.
-- Left chat listener, NotebookLM listener, Takeout listener, source management, report start, and run deletion in the route.
-
-Additional test harness change:
-
-- `src/lib/analysis-run-workflow.test.ts` now has `AnalysisRunWorkflowHarnessState`.
-- Reason: `npm.cmd run check` found a real TypeScript error because `createHarness(initial: Partial<AnalysisRunWorkflowState>)` rejected harness-only route fields like `runs` and `loadingRuns`.
-- The fix is type-only and keeps the controller state shape strict.
-
-Recorded verification:
-
-- First sandboxed `npm.cmd test -- src/lib/analysis-run-workflow.test.ts src/lib/api/analysis-runs.test.ts` failed with Vite/esbuild `spawn EPERM`.
-- Escalated `npm.cmd test -- src/lib/analysis-run-workflow.test.ts src/lib/api/analysis-runs.test.ts` passed:
-
-```text
-Test Files  2 passed (2)
-Tests       19 passed (19)
-```
-
-- First sandboxed `npm.cmd run check` failed with many style preprocessing `spawn EPERM` errors and one real TypeScript error in the test harness.
-- After the harness type fix, escalated `npm.cmd run check` passed:
-
-```text
-svelte-check found 0 errors and 0 warnings
-```
-
-- `git diff --check -- src/routes/analysis/+page.svelte src/lib/analysis-run-workflow.test.ts` passed with only LF-to-CRLF warnings.
-
-Review gates:
-
-- Spec review: compliant.
-- Code-quality review: approved with no issues.
-
-## Current Verification State
-
-The per-task verification for Task 5 has passed.
-
-Final Verification from the plan is still pending. It has not been run after Task 5 as a separate final phase.
-
-Pending final verification commands:
+- moved `src-tauri/src/takeout_import.rs` to `src-tauri/src/takeout_import/mod.rs`;
+- added `src-tauri/src/takeout_import/state.rs`;
+- added `mod state;` in `mod.rs`;
+- re-exported `TakeoutImportState` from `state`;
+- moved job DTOs, job maps, active source tracking, cancel tracking, status constants, phase constants, event emission, `update_and_emit`, terminal status logic, and `now_secs` into `state.rs`;
+- moved these tests into `state.rs`:
+  - `job_state_rejects_duplicate_active_source_jobs`
+  - `job_state_can_cancel_and_finish_job`
+- kept `mod raw_parse;` in `mod.rs`.
+
+Verification:
 
 ```powershell
+Set-Location .worktrees\takeout-import-backend-split\src-tauri
+cargo fmt --check
+cargo test takeout_import::state
+cargo test takeout_import
+```
+
+Results:
+
+- `cargo fmt --check`: passed
+- `cargo test takeout_import::state`: passed, 2/2
+- `cargo test takeout_import`: passed, 20/20
+- `git diff --check`: passed with only the expected LF-to-CRLF warning for `.gitignore`
+
+Reviews:
+
+- Spec review agent `019dedc8-8a53-70c1-a5c7-6f2cdb001187` / Mendel: approved.
+- Code-quality review agent `019dedc9-c712-7cc3-80d0-9ce75eae92a0` / Einstein: approved.
+
+Task 1 commit message reported to user:
+
+```text
+refactor(takeout): move import job state into module
+```
+
+## Completed Task 2: Pure Pagination Logic
+
+Status: complete, verified, reviewed, not committed.
+
+Implemented:
+
+- added `src-tauri/src/takeout_import/pagination.rs`;
+- added `mod pagination;` in `mod.rs`;
+- moved pagination types and helpers into `pagination.rs`:
+  - `TAKEOUT_HISTORY_PAGE_LIMIT`
+  - `TakeoutPaginationProfile`
+  - `TakeoutPageRequest`
+  - `TakeoutPaginationCursor`
+  - `TakeoutCursorAdvance`
+  - `ParsedTakeoutPage`
+  - `TakeoutPaginationFallbackReason`
+  - `select_history_splits`
+  - `fallback_message_range`
+  - `takeout_page_request`
+  - `next_takeout_cursor`
+  - `should_restart_with_descending_fallback`
+  - `takeout_pagination_fallback_warning`
+  - `message_range_min_id`
+  - `message_range_max_id`
+  - `parse_takeout_page`
+- moved the TDesktop pagination comment next to `TakeoutPaginationCursor`;
+- moved pagination-focused tests and their helpers into `pagination.rs`;
+- kept source-kind constants canonical in parent `mod.rs` and imported them into `pagination.rs`.
+
+Verification:
+
+```powershell
+Set-Location .worktrees\takeout-import-backend-split\src-tauri
+cargo fmt --check
+cargo test takeout_import::pagination
+cargo test takeout_import
+```
+
+Results:
+
+- `cargo fmt --check`: passed
+- `cargo test takeout_import::pagination`: passed, 9/9
+- `cargo test takeout_import`: passed, 20/20
+- Code-quality reviewer also ran `cargo check` and `cargo test --lib takeout_import`; both passed.
+- `git diff --check`: passed with only the expected LF-to-CRLF warning for `.gitignore`
+
+Reviews:
+
+- Spec review agent `019dedd8-b32e-7bc3-b573-35cdd8cd08ac` / Nash: approved.
+- Code-quality review agent `019dedd9-e5f6-7833-a48e-7655aba1c6b4` / Ramanujan: approved.
+
+Task 2 commit message reported to user:
+
+```text
+refactor(takeout): move pagination logic into module
+```
+
+## Completed Task 3: Export-DC Helpers
+
+Status: complete, verified, reviewed, not committed.
+
+Implemented:
+
+- added `src-tauri/src/takeout_import/export_dc.rs`;
+- added `mod export_dc;` in `mod.rs`;
+- moved export-DC types and helpers into `export_dc.rs`:
+  - `ExportDcAlias`
+  - `EXPORT_DC_SHIFT`
+  - `TAKEOUT_FILE_MAX_SIZE`
+  - `prepare_export_dc_alias`
+  - `export_dc_id_for_home_dc`
+  - `takeout_init_request_for_source_kind`
+  - `export_dc_invoke`
+  - `should_fallback_export_dc_error`
+  - `finish_takeout_session`
+- moved the three export-DC tests into `export_dc.rs`;
+- kept source-kind constants canonical in parent `mod.rs` and imported them into `export_dc.rs`;
+- removed export-DC helper imports/constants/tests from `mod.rs`.
+
+Verification:
+
+```powershell
+Set-Location .worktrees\takeout-import-backend-split\src-tauri
+cargo fmt --check
+cargo test takeout_import::export_dc
+cargo test takeout_import
+```
+
+Results:
+
+- `cargo fmt --check`: passed
+- `cargo test takeout_import::export_dc`: passed, 3/3
+- `cargo test takeout_import`: passed, 20/20
+- Code-quality reviewer also ran `cargo check` and `cargo test takeout_import::`; both passed.
+- `git diff --check`: passed with only the expected LF-to-CRLF warning for `.gitignore`
+
+Reviews:
+
+- Spec review agent `019deddf-bf6d-71c3-b91d-dc363bb5f98d` / Hubble: approved.
+- Code-quality review agent `019dede1-2e93-70f2-ad36-88ec329945e3` / Linnaeus: reported one minor finding that `mod.rs` still carries orchestration.
+
+Review finding classification:
+
+- The minor finding is intentional out-of-scope for Task 3 and the overall first pass.
+- The plan explicitly says peer validation and history import orchestration stay in the Takeout facade for now.
+- No code change was made for that finding.
+
+Task 3 commit message reported to user:
+
+```text
+refactor(takeout): move export dc helpers into module
+```
+
+## Completed Task 4: Clean The Facade Without Changing Behavior
+
+Status: complete, verified, reviewed, not committed.
+
+Implemented:
+
+- cleaned `src-tauri/src/takeout_import/mod.rs` facade imports;
+- removed the remaining direct `MemorySession` and `Arc` imports from the facade;
+- changed `run_export_dc_spike_for_runtime` to accept `AuthorizedTelegramRuntime` instead of
+  separate `Client` and `Arc<MemorySession>`, preserving behavior while keeping session type details
+  out of the facade;
+- left `src-tauri/src/lib.rs` unchanged because the public Takeout command/state surface already
+  matched the plan.
+
+Verification:
+
+```powershell
+Set-Location .worktrees\takeout-import-backend-split\src-tauri
+cargo fmt --check
+cargo test
+Set-Location ..
+rg -n "start_takeout_source_import|cancel_takeout_source_import|list_takeout_source_import_jobs|run_takeout_export_dc_spike|TakeoutImportState" src-tauri\src\lib.rs src-tauri\src\takeout_import
+rg -n "const TELEGRAM_KIND_|sources://takeout-import|TAKEOUT_HISTORY_PAGE_LIMIT|TAKEOUT_FILE_MAX_SIZE" src-tauri\src\takeout_import
+git diff --check
+```
+
+Results:
+
+- `cargo fmt --check`: passed
+- `cargo test`: passed, 130/130
+- public API check: `lib.rs` still imports/manages/registers the same five Takeout items; command
+  function names are unchanged in `mod.rs`
+- constants check: `TELEGRAM_KIND_*` constants appear only in `mod.rs`; `sources://takeout-import`
+  appears only in `state.rs`; `TAKEOUT_HISTORY_PAGE_LIMIT` is declared only in `pagination.rs`;
+  `TAKEOUT_FILE_MAX_SIZE` is declared only in `export_dc.rs`
+- import check: no `HashMap`, `HashSet`, `Mutex`, `InvocationError`, `MemorySession`, `Session`, or
+  `Arc` imports remain in `mod.rs`; the only `Session` substring hit is the Telegram
+  `FinishTakeoutSession` type
+- `git diff --check`: passed with only expected LF-to-CRLF warnings for `.gitignore` and
+  `docs/session-context-2026-05-03.md`
+
+Reviews:
+
+- Spec review agent `019dedec-ccb0-75b2-82b8-83931d32e062` / Descartes: approved.
+- Code-quality review agent `019dedee-7d8e-77a1-8922-1ab0117b024f` / Huygens: approved, no issues.
+
+CodeRabbit note:
+
+- The code-quality reviewer attempted `coderabbit --version`; it still failed with
+  `Wsl/Service/E_ACCESSDENIED`, so CodeRabbit could not be used.
+
+Task 4 commit message reported to user:
+
+```text
+refactor(takeout): clean import facade dependencies
+```
+
+## Completed Task 5: Update Review Documentation
+
+Status: complete, verified, reviewed, not committed.
+
+Implemented:
+
+- updated the "Large backend modules mix unrelated behavior" finding in
+  `docs/code-review-results-2026-05-03.md`;
+- documented that Takeout import has been split into `state`, `pagination`, and `export_dc`;
+- documented that remaining Takeout orchestration in `mod.rs` is intentional for this first slice;
+- documented that `sources.rs` remains the next backend split target;
+- updated recommended follow-up order so it no longer says to execute the already-completed Takeout
+  split;
+- updated the recent `git diff --check` note to mention real whitespace errors versus Windows
+  LF-to-CRLF warnings;
+- left `docs/takeout-source-import.md` unchanged because it did not reference the old single-file
+  implementation.
+
+Verification:
+
+```powershell
+git diff --check -- docs/code-review-results-2026-05-03.md docs/takeout-source-import.md
+```
+
+Results:
+
+- docs whitespace check: passed with no output after normalizing
+  `docs/code-review-results-2026-05-03.md` working-tree line endings to CRLF;
+- `docs/takeout-source-import.md` was checked for stale old single-file references and did not need
+  changes.
+
+Reviews:
+
+- Spec review agent `019dedf5-60dd-7de1-85c1-31ae8e8dc7e1` / James: approved.
+- Code-quality review agent `019dedf6-6e7d-79d0-b86d-8a639fb11d11` / Jason: found a minor
+  contradiction in the recommended follow-up order.
+- Re-review agent `019dedf7-e8ce-7f60-9c64-17869a90a015` / Kepler: found remaining minor
+  line-ending and verification-note mismatches.
+- Second re-review agent `019dedf9-ec5b-73f2-aad0-4b4906429008` / Godel: approved, no issues.
+
+Task 5 commit message reported to user:
+
+```text
+docs(review): mark takeout split complete
+```
+
+## Final Verification
+
+Status: complete.
+
+Commands run after Task 5:
+
+```powershell
+Set-Location .worktrees\takeout-import-backend-split\src-tauri
+cargo test
+Set-Location ..
 npm.cmd test
 npm.cmd run check
 git diff --check
 ```
 
-Expected notes:
+Results:
 
-- `npm.cmd test` and `npm.cmd run check` may need escalation because of sandbox `spawn EPERM`.
-- `git diff --check` may print LF-to-CRLF warnings. Record those explicitly if they are the only output.
+- `cargo test`: passed, 130/130.
+- `npm.cmd test`: first sandboxed run failed with Vite/esbuild `spawn EPERM`; escalated rerun
+  passed with 10 test files and 97 tests.
+- `npm.cmd run check`: first sandboxed run failed with Svelte/Vite style preprocessing
+  `spawn EPERM`; escalated rerun passed with 0 errors and 0 warnings.
+- `git diff --check`: passed with only expected LF-to-CRLF warnings for `.gitignore` and
+  `docs/session-context-2026-05-03.md`.
 
-## Current Files Of Interest
+## Current Next Step
 
-Created or substantially updated by this phase:
+All tasks in `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md` are complete.
 
-- `src/lib/api/analysis-runs.ts`
-- `src/lib/api/analysis-runs.test.ts`
-- `src/lib/analysis-run-workflow.ts`
-- `src/lib/analysis-run-workflow.test.ts`
-- `src/routes/analysis/+page.svelte`
-
-Route hotspots that were addressed:
-
-- route-local `openRunRequestToken` removed;
-- route-local `loadRuns` logic delegated;
-- route-local `syncActiveRunState` removed;
-- route-local `loadActiveRuns` logic delegated;
-- route-local `openRun` logic delegated;
-- `loadTrace` and `loadChatMessages` now accept `AnalysisRunRequestGuard`;
-- raw `listen<AnalysisRunEvent>("analysis://run", ...)` replaced with typed wrapper and controller handler.
-
-Still intentionally not extracted:
-
-- chat listener and chat orchestration beyond the guard-aware loader boundary;
-- NotebookLM export listener;
-- Takeout import listener;
-- source management;
-- report start;
-- run deletion;
-- backend Rust modules.
-
-## Subagent History
-
-Task 2 review:
-
-- `019ded21-4e30-7093-955a-4af8667171a5` / Mencius: spec review found two issues in Task 2.
-- `019ded24-0b59-7d02-92cc-eb8da8196010` / Hubble: spec re-review passed.
-- `019ded25-d496-7450-8d75-f8f195bc637e` / Aristotle: code-quality review approved with minor notes.
-
-Task 3:
-
-- `019ded2c-7892-7002-a999-3ec1414ef921` / Ptolemy: worker subagent inserted the Task 3 tests but timed out before final report; it was closed. This led to the later user instruction not to use worker subagents for literal test insertion tasks.
-- `019ded32-827b-7c13-a35d-613d10498a97` / Bohr: spec review passed.
-- `019ded33-9335-7192-9bd4-4e0f59d40bd0` / Poincare: code-quality review found one minor test-name/coverage issue.
-- `019ded35-4734-75f3-858f-b2b20443bc50` / Rawls: quality re-review approved after the minor test improvement.
-
-Task 4:
-
-- `019ded3b-9803-7843-bfe9-e11d7950fed1` / Kierkegaard: spec review passed.
-- `019ded3c-b753-75e2-8aa5-5e285dcdf855` / Raman: code-quality review approved.
-
-Task 5:
-
-- `019ded46-bdc3-7cb2-b11a-ca2c173d4177` / Dalton: spec review passed.
-- `019ded48-73dd-7aa0-abeb-2f53078dfcb9` / Fermat: code-quality review approved.
-
-All review agents have been closed. No subagents should be left running.
-
-## Next Immediate Step
-
-The next implementation-plan step is Final Verification.
-
-Do not proceed automatically. The user requested waiting for explicit instruction after each task. Task 5 is complete, and this handoff document is being refreshed before final verification.
-
-Recommended next sequence after the user says to continue:
-
-1. Run full frontend tests:
-
-```powershell
-npm.cmd test
-```
-
-2. Run Svelte check:
-
-```powershell
-npm.cmd run check
-```
-
-3. Run whitespace check:
-
-```powershell
-git diff --check
-```
-
-4. If final verification passes, use the appropriate completion/branch-finishing workflow and ask the user how they want to integrate the branch.
-
-## Suggested Commit Message For This Handoff
+The next workflow decision is how to finish the branch:
 
 ```text
-docs(session): refresh analysis workflow handoff
+1. Merge back to main locally
+2. Push and create a Pull Request
+3. Keep the branch as-is
+4. Discard this work
 ```
 
-## Takeout Import Backend Split Planning
+## Suggested Commit Message For This Context Update
 
-The code-review finding "Large backend modules mix unrelated behavior" was discussed for the
-backend files `src-tauri/src/sources.rs` and `src-tauri/src/takeout_import.rs`.
-
-Planning decisions recorded on 2026-05-03:
-
-- start with `takeout_import.rs`, not `sources.rs`;
-- use a focused split for the first pass;
-- extract Takeout `state`, `pagination`, and `export_dc` modules;
-- keep peer validation and history import orchestration in the Takeout facade for now;
-- preserve all Tauri command names, event names, payload shapes, statuses, phases, warning text,
-  and pagination behavior.
-
-Plan file:
-
-- `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md`
-
-Recommended next step after the user says to implement:
-
-1. Use `superpowers:subagent-driven-development` or `superpowers:executing-plans`.
-2. Execute the plan task by task.
-3. Run `cargo test`, `npm.cmd test`, `npm.cmd run check`, and `git diff --check`.
+```text
+docs(session): record completed takeout split
+```

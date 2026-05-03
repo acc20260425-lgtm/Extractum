@@ -36,8 +36,9 @@ Suggested follow-up:
 `src-tauri/src/sources.rs` mixes DTOs, sync settings, avatar cache, Telegram peer resolution, sync,
 forum topic refresh, DB row mapping, and tests.
 
-`src-tauri/src/takeout_import.rs` mixes job state, Tauri commands, Telegram RPC details, pagination,
-fallback policy, export-DC behavior, and tests.
+Takeout import has been split into focused `state`, `pagination`, and `export_dc` modules under
+`src-tauri/src/takeout_import/`. The remaining Takeout orchestration in `mod.rs` is intentional for
+this first slice, with peer validation and history import flow still owned by the facade.
 
 Impact:
 
@@ -48,16 +49,15 @@ Impact:
 Suggested fix:
 
 - split by existing behavior boundaries, not by abstract architecture;
-- likely modules: `sources/peer_resolution`, `sources/sync`, `sources/items`, `sources/settings`,
-  `takeout/state`, `takeout/pagination`, and `takeout/rpc`.
+- next likely modules: `sources/peer_resolution`, `sources/sync`, `sources/items`, and
+  `sources/settings`.
 
 Planning status:
 
-- first implementation slice is documented in
-  `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md`;
-- agreed priority is `takeout_import.rs` before `sources.rs`;
-- agreed depth is a focused split into Takeout `state`, `pagination`, and `export_dc`;
-- peer validation and history import orchestration stay in the Takeout facade for the first pass.
+- first Takeout implementation slice is documented in
+  `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md` and has been implemented;
+- `sources.rs` remains the next backend split target;
+- any remaining Takeout orchestration in `mod.rs` is intentional for this first pass.
 
 ### Major: Some frontend/backend contracts remain manually mirrored
 
@@ -98,13 +98,13 @@ Suggested fix:
 - `npm.cmd test`: passed with 10 test files and 97 tests.
 - `npm.cmd run check`: passed with 0 errors and 0 warnings when run outside the sandbox so
   Vite/esbuild could spawn.
-- `git diff --check`: passed with no output.
+- `git diff --check`: passed with no real whitespace errors. Windows LF-to-CRLF warnings may appear
+  for edited Markdown files in this worktree.
 
 ## Recommended Follow-Up Order
 
 1. Extract the remaining non-run analysis route controllers/helpers.
 2. Add typed wrappers for the next compact Tauri command/event surface.
-3. Execute the planned Takeout import split, then split `sources.rs` only along behavior boundaries
-   already covered by tests.
+3. Split `sources.rs` only along behavior boundaries already covered by tests.
 4. Improve typed error conversion for DB, Telegram, LLM, and validation paths.
 5. Continue with secure secret storage as a separate backlog item, not mixed into stabilization work.
