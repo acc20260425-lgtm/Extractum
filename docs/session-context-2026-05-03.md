@@ -321,11 +321,10 @@ test(sources): run full backend split verification
   final sources split state.
 - Task 10 doc whitespace check passed with only expected LF-to-CRLF warnings for
   edited Markdown files.
-- Commit is pending.
-- Suggested commit message:
+- Commit:
 
 ```text
-docs(sources): record backend split completion
+3d7d2aa docs(sources): record backend split completion
 ```
 
 ## Current Code Shape
