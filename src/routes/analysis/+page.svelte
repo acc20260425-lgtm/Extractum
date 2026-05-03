@@ -26,6 +26,7 @@
     applyTakeoutImportJobs,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
+    activeRunSyncDecision,
     canCancelAnalysisRun,
     createEmptyLiveRunState,
     currentTopicFilter as currentTopicFilterFromState,
@@ -720,30 +721,24 @@
   }
 
   function syncActiveRunState(summaries: AnalysisRunSummary[]) {
-    for (const run of summaries) {
-      syncRunSnapshot(run.id, run.status);
-    }
-
-    pruneLiveRuns(
-      summaries.map((run) => run.id),
+    const decision = activeRunSyncDecision(
+      summaries,
+      activeRunId,
       currentRun?.id ?? null,
     );
 
-    if (currentRun !== null) {
+    for (const snapshot of decision.runSnapshots) {
+      syncRunSnapshot(snapshot.runId, snapshot.status);
+    }
+
+    pruneLiveRuns(decision.activeRunIds, decision.preserveRunId);
+
+    if (decision.runToOpen !== null) {
+      void openRun(decision.runToOpen);
       return;
     }
 
-    const selectedRunIsStillActive =
-      activeRunId !== null && summaries.some((run) => run.id === activeRunId);
-
-    if (!selectedRunIsStillActive && summaries.length > 0) {
-      void openRun(summaries[0].id);
-      return;
-    }
-
-    if (summaries.length === 0) {
-      activeRunId = null;
-    }
+    activeRunId = decision.nextActiveRunId;
   }
 
   async function loadActiveRuns() {

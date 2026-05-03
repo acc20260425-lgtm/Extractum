@@ -25,6 +25,7 @@ import {
   runActivePhase,
   runActiveProgress,
   activeAnalysisRunIds,
+  activeRunSyncDecision,
   shouldShowTopicSelector,
   selectedAnalysisGroup,
   selectedAnalysisTemplate,
@@ -344,6 +345,54 @@ describe("analysis-state", () => {
     expect(isRunActive(null, [7, 8])).toBe(false);
     expect(canCancelAnalysisRun(8, [7, 8])).toBe(true);
     expect(canCancelAnalysisRun(9, [7, 8])).toBe(false);
+  });
+
+  it("decides how active run snapshots should update route state", () => {
+    const summaries = [
+      runSummary({ id: 7, status: "running" }),
+      runSummary({ id: 8, status: "queued" }),
+    ];
+
+    expect(activeRunSyncDecision(summaries, 7, null)).toEqual({
+      activeRunIds: [7, 8],
+      preserveRunId: null,
+      runSnapshots: [
+        { runId: 7, status: "running" },
+        { runId: 8, status: "queued" },
+      ],
+      nextActiveRunId: 7,
+      runToOpen: null,
+    });
+
+    expect(activeRunSyncDecision(summaries, 99, null)).toEqual({
+      activeRunIds: [7, 8],
+      preserveRunId: null,
+      runSnapshots: [
+        { runId: 7, status: "running" },
+        { runId: 8, status: "queued" },
+      ],
+      nextActiveRunId: null,
+      runToOpen: 7,
+    });
+
+    expect(activeRunSyncDecision([], 99, null)).toEqual({
+      activeRunIds: [],
+      preserveRunId: null,
+      runSnapshots: [],
+      nextActiveRunId: null,
+      runToOpen: null,
+    });
+
+    expect(activeRunSyncDecision(summaries, 99, 42)).toEqual({
+      activeRunIds: [7, 8],
+      preserveRunId: 42,
+      runSnapshots: [
+        { runId: 7, status: "running" },
+        { runId: 8, status: "queued" },
+      ],
+      nextActiveRunId: 99,
+      runToOpen: null,
+    });
   });
 
   it("filters analysis runs by selected status", () => {

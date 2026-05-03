@@ -34,6 +34,13 @@ export type NotebookLmExportProgressState = {
 
 export type AnalysisTraceRefOrigin = "saved" | "resolved" | "unknown";
 export type AnalysisRunFilter = "all" | "completed" | "failed";
+export type ActiveRunSyncDecision = {
+  activeRunIds: number[];
+  preserveRunId: number | null;
+  runSnapshots: { runId: number; status: string }[];
+  nextActiveRunId: number | null;
+  runToOpen: number | null;
+};
 
 export function createEmptyLiveRunState(): LiveRunState {
   return {
@@ -156,6 +163,49 @@ export function isRunActive(activeRunId: number | null, activeRunIds: number[]) 
 
 export function canCancelAnalysisRun(activeRunId: number | null, activeRunIds: number[]) {
   return isRunActive(activeRunId, activeRunIds);
+}
+
+export function activeRunSyncDecision(
+  summaries: Pick<AnalysisRunSummary, "id" | "status">[],
+  activeRunId: number | null,
+  currentRunId: number | null,
+): ActiveRunSyncDecision {
+  const activeRunIds = summaries.map((run) => run.id);
+  const runSnapshots = summaries.map((run) => ({
+    runId: run.id,
+    status: run.status,
+  }));
+
+  if (currentRunId !== null) {
+    return {
+      activeRunIds,
+      preserveRunId: currentRunId,
+      runSnapshots,
+      nextActiveRunId: activeRunId,
+      runToOpen: null,
+    };
+  }
+
+  const selectedRunIsStillActive =
+    activeRunId !== null && summaries.some((run) => run.id === activeRunId);
+
+  if (!selectedRunIsStillActive && summaries.length > 0) {
+    return {
+      activeRunIds,
+      preserveRunId: null,
+      runSnapshots,
+      nextActiveRunId: null,
+      runToOpen: summaries[0].id,
+    };
+  }
+
+  return {
+    activeRunIds,
+    preserveRunId: null,
+    runSnapshots,
+    nextActiveRunId: summaries.length === 0 ? null : activeRunId,
+    runToOpen: null,
+  };
 }
 
 export function filteredAnalysisRuns(
