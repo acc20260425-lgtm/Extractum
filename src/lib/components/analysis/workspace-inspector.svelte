@@ -107,6 +107,10 @@
         return "Follow intermediate chunk summaries while a run is still streaming.";
     }
   }
+
+  function inspectorTabId(mode: "active" | "history" | "trace" | "chunks") {
+    return `inspector-tab-${mode}`;
+  }
 </script>
 
 <aside class="inspector">
@@ -119,55 +123,67 @@
     <div class="inspector-header-meta">
       <span class="inspector-mode-pill">{inspectorModeLabel(inspectorMode)}</span>
       <div class="inspector-tabs" role="tablist" aria-label="Inspector sections">
-      <Button
-        variant="secondary"
-        size="sm"
-        className="inspector-tab"
-        selected={inspectorMode === "active"}
-        ariaPressed={inspectorMode === "active"}
-        ariaControls="inspector-panel"
-        onclick={() => onChangeInspectorMode("active")}
-      >
-        Active
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        className="inspector-tab"
-        selected={inspectorMode === "history"}
-        ariaPressed={inspectorMode === "history"}
-        ariaControls="inspector-panel"
-        onclick={() => onChangeInspectorMode("history")}
-      >
-        History
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        className="inspector-tab"
-        selected={inspectorMode === "trace"}
-        ariaPressed={inspectorMode === "trace"}
-        ariaControls="inspector-panel"
-        onclick={() => onChangeInspectorMode("trace")}
-      >
-        Trace
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        className="inspector-tab"
-        selected={inspectorMode === "chunks"}
-        ariaPressed={inspectorMode === "chunks"}
-        ariaControls="inspector-panel"
-        onclick={() => onChangeInspectorMode("chunks")}
-      >
-        Chunks
-      </Button>
+        <Button
+          id={inspectorTabId("active")}
+          role="tab"
+          variant="secondary"
+          size="sm"
+          className="inspector-tab"
+          selected={inspectorMode === "active"}
+          ariaSelected={inspectorMode === "active"}
+          ariaControls="inspector-panel"
+          tabIndex={inspectorMode === "active" ? 0 : -1}
+          onclick={() => onChangeInspectorMode("active")}
+        >
+          Active
+        </Button>
+        <Button
+          id={inspectorTabId("history")}
+          role="tab"
+          variant="secondary"
+          size="sm"
+          className="inspector-tab"
+          selected={inspectorMode === "history"}
+          ariaSelected={inspectorMode === "history"}
+          ariaControls="inspector-panel"
+          tabIndex={inspectorMode === "history" ? 0 : -1}
+          onclick={() => onChangeInspectorMode("history")}
+        >
+          History
+        </Button>
+        <Button
+          id={inspectorTabId("trace")}
+          role="tab"
+          variant="secondary"
+          size="sm"
+          className="inspector-tab"
+          selected={inspectorMode === "trace"}
+          ariaSelected={inspectorMode === "trace"}
+          ariaControls="inspector-panel"
+          tabIndex={inspectorMode === "trace" ? 0 : -1}
+          onclick={() => onChangeInspectorMode("trace")}
+        >
+          Trace
+        </Button>
+        <Button
+          id={inspectorTabId("chunks")}
+          role="tab"
+          variant="secondary"
+          size="sm"
+          className="inspector-tab"
+          selected={inspectorMode === "chunks"}
+          ariaSelected={inspectorMode === "chunks"}
+          ariaControls="inspector-panel"
+          tabIndex={inspectorMode === "chunks" ? 0 : -1}
+          onclick={() => onChangeInspectorMode("chunks")}
+        >
+          Chunks
+        </Button>
       </div>
     </div>
   </div>
 
-  <div class="inspector-body" id="inspector-panel">
+  <div class="inspector-body" id="inspector-panel" role="tabpanel" aria-labelledby={inspectorTabId(inspectorMode)}>
     {#if inspectorMode === "active"}
       <ActiveRunList
         {activeRuns}

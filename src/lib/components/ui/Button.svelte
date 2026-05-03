@@ -16,10 +16,14 @@
     size = "md",
     disabled = false,
     selected = false,
+    id,
+    role,
     title,
     ariaLabel,
     ariaPressed,
+    ariaSelected,
     ariaControls,
+    tabIndex,
     className = "",
     onclick,
     children,
@@ -29,10 +33,14 @@
     size?: ButtonSize;
     disabled?: boolean;
     selected?: boolean;
+    id?: string;
+    role?: string;
     title?: string;
     ariaLabel?: string;
     ariaPressed?: boolean;
+    ariaSelected?: boolean;
     ariaControls?: string;
+    tabIndex?: number;
     className?: string;
     onclick?: (event: MouseEvent) => unknown | Promise<unknown>;
     children?: Snippet;
@@ -40,12 +48,16 @@
 </script>
 
 <button
+  {id}
   {type}
+  {role}
   {disabled}
   {title}
   aria-label={ariaLabel}
   aria-pressed={ariaPressed}
+  aria-selected={ariaSelected}
   aria-controls={ariaControls}
+  tabindex={tabIndex}
   class={`ui-button ${variant} ${size} ${selected ? "selected" : ""} ${className}`.trim()}
   onclick={onclick}
 >
