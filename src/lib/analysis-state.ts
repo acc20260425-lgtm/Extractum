@@ -18,6 +18,7 @@ import type {
   NotebookLmExportResult,
   SourceForumTopicRecord,
   SourceRecord,
+  SyncResult,
   TakeoutImportJobRecord,
 } from "$lib/types/sources";
 
@@ -413,6 +414,37 @@ export function sourceDeletedStatus(
   source: Pick<SourceRecord, "title" | "external_id">,
 ) {
   return `Source "${sourceDisplayName(source)}" deleted.`;
+}
+
+export function sourceActionPending(
+  current: Record<number, boolean>,
+  sourceId: number,
+) {
+  return {
+    ...current,
+    [sourceId]: true,
+  };
+}
+
+export function clearSourceActionPending(
+  current: Record<number, boolean>,
+  sourceId: number,
+) {
+  const next = { ...current };
+  delete next[sourceId];
+  return next;
+}
+
+export function sourceSyncStatus(result: SyncResult) {
+  return (
+    `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}.` +
+    (result.initial_sync_policy_applied
+      ? ` First sync policy applied: ${result.initial_sync_policy_applied}.`
+      : "") +
+    (result.warnings.length > 0
+      ? ` Warnings: ${result.warnings.join(" ")}`
+      : "")
+  );
 }
 
 export function sourceDeletionResetState(

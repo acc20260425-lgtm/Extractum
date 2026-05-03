@@ -37,9 +37,12 @@ import {
   selectedAnalysisGroup,
   selectedAnalysisTemplate,
   selectedAnalysisTraceRef,
+  clearSourceActionPending,
+  sourceActionPending,
   sourceDeletedStatus,
   sourceDeletionDialog,
   sourceDeletionResetState,
+  sourceSyncStatus,
   syncRunSnapshot,
   takeoutImportEventDecision,
   upsertTakeoutImportJob,
@@ -57,6 +60,7 @@ import type {
   NotebookLmExportResult,
   SourceRecord,
   SourceForumTopicRecord,
+  SyncResult,
   TakeoutImportJobRecord,
 } from "./types/sources";
 
@@ -93,6 +97,17 @@ function takeoutJob(overrides: Partial<TakeoutImportJobRecord>): TakeoutImportJo
     finished_at: null,
     warnings: [],
     error: null,
+    ...overrides,
+  };
+}
+
+function syncResult(overrides: Partial<SyncResult> = {}): SyncResult {
+  return {
+    inserted: 10,
+    skipped: 2,
+    last_message_id: 123,
+    initial_sync_policy_applied: null,
+    warnings: [],
     ...overrides,
   };
 }
@@ -570,6 +585,27 @@ describe("analysis-state", () => {
       activeChatRequestId: null,
       activeChatRunId: null,
     });
+  });
+
+  it("updates source action pending maps without mutating current state", () => {
+    const current = { 1: true, 2: true };
+
+    expect(sourceActionPending(current, 3)).toEqual({ 1: true, 2: true, 3: true });
+    expect(clearSourceActionPending(current, 1)).toEqual({ 2: true });
+    expect(current).toEqual({ 1: true, 2: true });
+  });
+
+  it("formats source sync completion status from sync results", () => {
+    expect(sourceSyncStatus(syncResult())).toBe(
+      "Sync complete: inserted 10, skipped 2.",
+    );
+
+    expect(sourceSyncStatus(syncResult({
+      initial_sync_policy_applied: "recent_days:30",
+      warnings: ["one", "two"],
+    }))).toBe(
+      "Sync complete: inserted 10, skipped 2. First sync policy applied: recent_days:30. Warnings: one two",
+    );
   });
 
   it("formats run progress from counters, queue position, terminal events, or prior progress", () => {

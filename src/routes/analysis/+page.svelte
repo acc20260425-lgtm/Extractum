@@ -57,10 +57,13 @@
     selectedAnalysisGroup,
     selectedAnalysisTemplate,
     selectedAnalysisTraceRef,
+    clearSourceActionPending,
+    sourceActionPending,
     shouldShowTopicSelector as shouldShowTopicSelectorFromState,
     sourceDeletedStatus,
     sourceDeletionDialog,
     sourceDeletionResetState,
+    sourceSyncStatus,
     syncRunSnapshot as syncLiveRunSnapshot,
     takeoutImportEventDecision,
     upsertTakeoutImportJob,
@@ -1038,17 +1041,10 @@
   }
 
   async function syncSelectedSource(sourceId: number) {
-    syncingIds = { ...syncingIds, [sourceId]: true };
+    syncingIds = sourceActionPending(syncingIds, sourceId);
     try {
       const result = await invoke<SyncResult>("sync_source", { sourceId });
-      status =
-        `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}.` +
-        (result.initial_sync_policy_applied
-          ? ` First sync policy applied: ${result.initial_sync_policy_applied}.`
-          : "") +
-        (result.warnings.length > 0
-          ? ` Warnings: ${result.warnings.join(" ")}`
-          : "");
+      status = sourceSyncStatus(result);
 
       await Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
 
@@ -1059,23 +1055,19 @@
     } catch (error) {
       status = formatAppError("syncing the source", error);
     } finally {
-      const next = { ...syncingIds };
-      delete next[sourceId];
-      syncingIds = next;
+      syncingIds = clearSourceActionPending(syncingIds, sourceId);
     }
   }
 
   async function startTakeoutImport(sourceId: number) {
-    startingTakeoutSourceIds = { ...startingTakeoutSourceIds, [sourceId]: true };
+    startingTakeoutSourceIds = sourceActionPending(startingTakeoutSourceIds, sourceId);
     try {
       await invoke<StartTakeoutImportResponse>("start_takeout_source_import", { sourceId });
       status = "Takeout import started.";
     } catch (error) {
       status = formatAppError("starting Takeout import", error);
     } finally {
-      const next = { ...startingTakeoutSourceIds };
-      delete next[sourceId];
-      startingTakeoutSourceIds = next;
+      startingTakeoutSourceIds = clearSourceActionPending(startingTakeoutSourceIds, sourceId);
     }
   }
 
