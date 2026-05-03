@@ -47,6 +47,9 @@
     pruneLiveRuns as pruneLiveRunMap,
     runActivePhase,
     runActiveProgress,
+    selectedAnalysisGroup,
+    selectedAnalysisTemplate,
+    selectedAnalysisTraceRef,
     shouldShowTopicSelector as shouldShowTopicSelectorFromState,
     syncRunSnapshot as syncLiveRunSnapshot,
     upsertTakeoutImportJob,
@@ -429,22 +432,17 @@
     () => canCancelAnalysisRun(activeRunId, activeRunIds),
   );
 
-  const selectedTemplate = $derived.by(() => {
-    const templateId = selectedTemplateId ? Number(selectedTemplateId) : null;
-    if (templateId === null) return null;
-    return templates.find((template) => template.id === templateId) ?? null;
-  });
+  const selectedTemplate = $derived.by(() => selectedAnalysisTemplate(
+    selectedTemplateId,
+    templates,
+  ));
 
-  const selectedGroup = $derived.by(() => {
-    const groupId = selectedGroupId ? Number(selectedGroupId) : null;
-    if (groupId === null) return null;
-    return groups.find((group) => group.id === groupId) ?? null;
-  });
+  const selectedGroup = $derived.by(() => selectedAnalysisGroup(selectedGroupId, groups));
 
-  const selectedTrace = $derived.by(() => {
-    if (!selectedTraceRef) return null;
-    return traceData.refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
-  });
+  const selectedTrace = $derived.by(() => selectedAnalysisTraceRef(
+    selectedTraceRef,
+    traceData.refs,
+  ));
 
   const historyScopeParams = $derived.by(() => {
     return analysisHistoryScopeParams(

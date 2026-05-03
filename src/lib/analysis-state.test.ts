@@ -26,10 +26,14 @@ import {
   runActiveProgress,
   activeAnalysisRunIds,
   shouldShowTopicSelector,
+  selectedAnalysisGroup,
+  selectedAnalysisTemplate,
+  selectedAnalysisTraceRef,
   syncRunSnapshot,
   upsertTakeoutImportJob,
 } from "./analysis-state";
 import type {
+  AnalysisPromptTemplate,
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
@@ -158,6 +162,20 @@ function runDetail(overrides: Partial<AnalysisRunDetail>): AnalysisRunDetail {
   return {
     ...runSummary(overrides),
     result_markdown: "saved result",
+    ...overrides,
+  };
+}
+
+function promptTemplate(overrides: Partial<AnalysisPromptTemplate>): AnalysisPromptTemplate {
+  return {
+    id: 1,
+    name: "Template",
+    template_kind: "report",
+    body: "Body",
+    version: 1,
+    is_builtin: false,
+    created_at: 100,
+    updated_at: 100,
     ...overrides,
   };
 }
@@ -363,6 +381,31 @@ describe("analysis-state", () => {
     expect(filteredAnalysisGroups(groups, " ")).toBe(groups);
     expect(filteredAnalysisGroups(groups, "brief")).toEqual([groups[1]]);
     expect(filteredAnalysisGroups(groups, "RESEARCH")).toEqual([groups[0]]);
+  });
+
+  it("selects templates, groups, and trace refs from route ids", () => {
+    const templates = [
+      promptTemplate({ id: 1, name: "Daily" }),
+      promptTemplate({ id: 2, name: "Weekly" }),
+    ];
+    const groups = [
+      sourceGroup({ id: 3, name: "Research" }),
+      sourceGroup({ id: 4, name: "Ops" }),
+    ];
+    const refs = [
+      traceRef({ ref: "ref-a" }),
+      traceRef({ ref: "ref-b" }),
+    ];
+
+    expect(selectedAnalysisTemplate("2", templates)).toBe(templates[1]);
+    expect(selectedAnalysisTemplate("", templates)).toBeNull();
+    expect(selectedAnalysisTemplate("missing", templates)).toBeNull();
+    expect(selectedAnalysisGroup("4", groups)).toBe(groups[1]);
+    expect(selectedAnalysisGroup("", groups)).toBeNull();
+    expect(selectedAnalysisGroup("missing", groups)).toBeNull();
+    expect(selectedAnalysisTraceRef("ref-b", refs)).toBe(refs[1]);
+    expect(selectedAnalysisTraceRef(null, refs)).toBeNull();
+    expect(selectedAnalysisTraceRef("missing", refs)).toBeNull();
   });
 
   it("formats run progress from counters, queue position, terminal events, or prior progress", () => {

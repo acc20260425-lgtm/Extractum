@@ -1,5 +1,6 @@
 import type {
   AnalysisChunkSummaryEvent,
+  AnalysisPromptTemplate,
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
@@ -189,6 +190,32 @@ export function filteredAnalysisGroups(
   if (!query) return groups;
 
   return groups.filter((group) => group.name.toLocaleLowerCase().includes(query));
+}
+
+export function selectedAnalysisTemplate(
+  selectedTemplateId: string,
+  templates: AnalysisPromptTemplate[],
+) {
+  const templateId = selectedTemplateId ? Number(selectedTemplateId) : null;
+  if (templateId === null) return null;
+  return templates.find((template) => template.id === templateId) ?? null;
+}
+
+export function selectedAnalysisGroup(
+  selectedGroupId: string,
+  groups: AnalysisSourceGroup[],
+) {
+  const groupId = selectedGroupId ? Number(selectedGroupId) : null;
+  if (groupId === null) return null;
+  return groups.find((group) => group.id === groupId) ?? null;
+}
+
+export function selectedAnalysisTraceRef(
+  selectedTraceRef: string | null,
+  refs: AnalysisTraceRef[],
+) {
+  if (!selectedTraceRef) return null;
+  return refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
 }
 
 export function formatAnalysisRunProgress(
