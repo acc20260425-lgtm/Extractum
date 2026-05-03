@@ -9,35 +9,34 @@ The repository was clean at the start of the review. CodeRabbit could not be use
 `coderabbit --version` failed in this environment with `Wsl/Service/E_ACCESSDENIED`, so the results
 below are from a manual review.
 
-## Findings
+## Open Findings
 
-### Major: Analysis route owns too many responsibilities
+### Major: Analysis route still owns several non-run workflows
 
-`src/routes/analysis/+page.svelte` had grown into a broad workflow controller: route state, Tauri I/O,
-event reducers, source/group/template editing, chat, NotebookLM export, Takeout job state, trace state,
-and UI composition all lived together.
+`src/routes/analysis/+page.svelte` has been reduced by extracting analysis run loading, opening, and
+run-event orchestration into a tested route-local workflow controller.
 
-The downstream symptom was a very large prop contract in
-`src/lib/components/analysis/workspace-main.svelte`.
+The remaining route responsibilities still include source/group/template editing, chat orchestration,
+NotebookLM export, Takeout job state, trace presentation state, listener lifecycle, and UI composition.
 
 Impact:
 
-- new analysis features are harder to test in isolation;
-- event-driven state updates are hard to reason about;
-- every feature addition risks touching unrelated workflow state.
+- remaining feature areas are still difficult to test in isolation;
+- unrelated workflow state can still be touched by future analysis-page changes;
+- the route remains a high-context file for new analysis features.
 
-Suggested fix:
+Suggested follow-up:
 
-- extract focused domain controllers/helpers for runs, chat, sources, Takeout import, and NotebookLM export;
-- keep the route as a composition layer;
-- test extracted pure reducers before doing broader UI refactors.
+- extract focused controllers/helpers for chat, sources, Takeout import, and NotebookLM export;
+- keep the route as a composition and Svelte lifecycle layer;
+- add focused tests around extracted pure reducers/controllers before broader UI refactors.
 
 ### Major: Large backend modules mix unrelated behavior
 
-`src-tauri/src/sources.rs` mixed DTOs, sync settings, avatar cache, Telegram peer resolution, sync,
+`src-tauri/src/sources.rs` mixes DTOs, sync settings, avatar cache, Telegram peer resolution, sync,
 forum topic refresh, DB row mapping, and tests.
 
-`src-tauri/src/takeout_import.rs` mixed job state, Tauri commands, Telegram RPC details, pagination,
+`src-tauri/src/takeout_import.rs` mixes job state, Tauri commands, Telegram RPC details, pagination,
 fallback policy, export-DC behavior, and tests.
 
 Impact:
@@ -52,29 +51,22 @@ Suggested fix:
 - likely modules: `sources/peer_resolution`, `sources/sync`, `sources/items`, `sources/settings`,
   `takeout/state`, `takeout/pagination`, and `takeout/rpc`.
 
-### Major: Frontend/backend contracts were manually mirrored
+### Major: Some frontend/backend contracts remain manually mirrored
 
-Frontend TypeScript DTOs and raw Tauri command/event strings were manually maintained beside Rust serde
-structs. One concrete example was `/settings`, where LLM interfaces were declared directly in
-`src/routes/settings/+page.svelte`, while Rust owned the corresponding structs in
-`src-tauri/src/llm/types.rs`.
+Several frontend TypeScript DTOs and raw Tauri command/event strings are still manually maintained
+beside Rust serde structs.
 
 Impact:
 
 - DTO drift can become silent runtime breakage;
-- command names are harder to search and refactor safely;
-- route files carry infrastructure detail they do not need.
+- command and event names are harder to search and refactor safely;
+- route files can still carry infrastructure detail they do not need.
 
 Suggested fix:
 
-- introduce typed `$lib/api/*` wrappers for Tauri commands and events;
+- introduce typed `$lib/api/*` wrappers for the remaining compact Tauri command/event surfaces;
 - move route-local DTOs to shared frontend type modules;
 - later consider generated TypeScript types from Rust if drift remains a recurring problem.
-
-Status after stabilization increment:
-
-- LLM settings now has `src/lib/types/llm.ts` and `src/lib/api/llm.ts`;
-- `/settings` uses the LLM wrapper instead of local DTO declarations and raw command strings.
 
 ### Major: Error typing is only partial
 
@@ -93,61 +85,17 @@ Suggested fix:
 - add small typed conversion helpers for DB, Telegram, LLM, and validation paths;
 - reduce reliance on message heuristics over time.
 
-### Major: Frontend lacked a unit test harness
+## Recent Verification
 
-Before the stabilization increment, `package.json` had `check` and `build`, but no frontend test script.
-There were no `*.test.*` or `*.spec.*` files.
-
-Impact:
-
-- pure frontend logic was protected only by type checking;
-- route extraction/refactoring would be riskier than necessary;
-- helpers such as `analysis-utils.ts` and `app-error.ts` had no regression coverage.
-
-Suggested fix:
-
-- add Vitest;
-- start with pure helper tests;
-- then cover extracted analysis event reducers when that refactor begins.
-
-Status after stabilization increment:
-
-- Vitest was added;
-- `analysis-utils.ts`, `app-error.ts`, and the new LLM API wrapper now have unit tests.
-
-### Minor: Agent-facing documentation was stale
-
-`GEMINI.md` no longer matched the real Tauri command surface in `src-tauri/src/lib.rs`.
-It also described older product status such as a minimal Gemini-only settings UI.
-
-Impact:
-
-- future AI-agent work could follow stale contracts;
-- stale docs are especially risky in this repo because they are used as modification guidance.
-
-Suggested fix:
-
-- keep command lists and current product status aligned with `src-tauri/src/lib.rs`, `README.md`,
-  and `docs/backlog.md`.
-
-Status after stabilization increment:
-
-- `GEMINI.md` was refreshed to match the current command surface and product state.
-
-## Verification Recorded During Review
-
-- `cargo test`: passed with 130 tests, 0 failed.
-- `npm.cmd run check`: passed with 0 errors and 0 warnings when run outside the sandbox so Vite/esbuild
-  could spawn.
-
-The first `npm run check` attempt failed because PowerShell blocked `npm.ps1`.
-The first sandboxed `npm.cmd run check` attempt failed with `spawn EPERM` from Vite/esbuild; rerunning
-outside the sandbox passed.
+- `npm.cmd test`: passed with 10 test files and 97 tests.
+- `npm.cmd run check`: passed with 0 errors and 0 warnings when run outside the sandbox so
+  Vite/esbuild could spawn.
+- `git diff --check`: passed with no output.
 
 ## Recommended Follow-Up Order
 
-1. Keep expanding frontend tests around pure helpers and extracted reducers.
-2. Extract analysis event/state reducers before splitting the full UI workflow.
-3. Add typed wrappers for the next compact Tauri surface after LLM settings.
-4. Split `sources.rs` and `takeout_import.rs` only along behavior boundaries already covered by tests.
+1. Extract the remaining non-run analysis route controllers/helpers.
+2. Add typed wrappers for the next compact Tauri command/event surface.
+3. Split `sources.rs` and `takeout_import.rs` only along behavior boundaries already covered by tests.
+4. Improve typed error conversion for DB, Telegram, LLM, and validation paths.
 5. Continue with secure secret storage as a separate backlog item, not mixed into stabilization work.
