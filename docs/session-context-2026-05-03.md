@@ -494,3 +494,27 @@ git diff --check
 ```text
 docs(session): refresh analysis workflow handoff
 ```
+
+## Takeout Import Backend Split Planning
+
+The code-review finding "Large backend modules mix unrelated behavior" was discussed for the
+backend files `src-tauri/src/sources.rs` and `src-tauri/src/takeout_import.rs`.
+
+Planning decisions recorded on 2026-05-03:
+
+- start with `takeout_import.rs`, not `sources.rs`;
+- use a focused split for the first pass;
+- extract Takeout `state`, `pagination`, and `export_dc` modules;
+- keep peer validation and history import orchestration in the Takeout facade for now;
+- preserve all Tauri command names, event names, payload shapes, statuses, phases, warning text,
+  and pagination behavior.
+
+Plan file:
+
+- `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md`
+
+Recommended next step after the user says to implement:
+
+1. Use `superpowers:subagent-driven-development` or `superpowers:executing-plans`.
+2. Execute the plan task by task.
+3. Run `cargo test`, `npm.cmd test`, `npm.cmd run check`, and `git diff --check`.

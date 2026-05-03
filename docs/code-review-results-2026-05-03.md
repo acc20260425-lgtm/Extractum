@@ -51,6 +51,14 @@ Suggested fix:
 - likely modules: `sources/peer_resolution`, `sources/sync`, `sources/items`, `sources/settings`,
   `takeout/state`, `takeout/pagination`, and `takeout/rpc`.
 
+Planning status:
+
+- first implementation slice is documented in
+  `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md`;
+- agreed priority is `takeout_import.rs` before `sources.rs`;
+- agreed depth is a focused split into Takeout `state`, `pagination`, and `export_dc`;
+- peer validation and history import orchestration stay in the Takeout facade for the first pass.
+
 ### Major: Some frontend/backend contracts remain manually mirrored
 
 Several frontend TypeScript DTOs and raw Tauri command/event strings are still manually maintained
@@ -96,6 +104,7 @@ Suggested fix:
 
 1. Extract the remaining non-run analysis route controllers/helpers.
 2. Add typed wrappers for the next compact Tauri command/event surface.
-3. Split `sources.rs` and `takeout_import.rs` only along behavior boundaries already covered by tests.
+3. Execute the planned Takeout import split, then split `sources.rs` only along behavior boundaries
+   already covered by tests.
 4. Improve typed error conversion for DB, Telegram, LLM, and validation paths.
 5. Continue with secure secret storage as a separate backlog item, not mixed into stabilization work.
