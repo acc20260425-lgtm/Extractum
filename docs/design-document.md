@@ -70,7 +70,24 @@ The first sync window is configurable through app settings:
 
 After the first sync, the app resumes from `last_sync_state`.
 
-### 3.3 Item persistence
+`sync_source` remains the ordinary incremental ingest path. It is optimized for regular refreshes rather than full historical reconstruction.
+
+### 3.3 Takeout import model
+
+Takeout import is the full-history ingest path for an existing source. It intentionally writes into the same `items` table as sync, so browsing, NotebookLM export, and analysis can read one local archive model.
+
+Important design choices:
+
+- Takeout import targets existing sources only; it does not create sources.
+- It uses in-memory job state with `sources://takeout-import` progress events.
+- It shares the same-source ingest lock with sync and delete.
+- It does not download media files or Telegram Desktop export assets.
+- It updates `last_sync_state` only after a successful Takeout finish.
+- Failed and cancelled imports can leave partial rows, and repeat runs rely on duplicate skipping.
+
+The history pagination is TDesktop-first. The app models the full state machine with `largest_id_plus_one`, page-order normalization, and cursor advancement, then falls back per split to the older descending cursor profile only when the TDesktop profile is visibly unsafe for that split.
+
+### 3.4 Item persistence
 
 Each synced item can be:
 
@@ -225,6 +242,7 @@ Earlier planning documents treated the following as future work:
 - configurable initial sync policy
 - Telegram item context metadata
 - NotebookLM reply/thread/reaction metadata rendering
+- Takeout source import for existing sources with TDesktop-first pagination
 
 Those items are now implemented and should no longer be treated as future milestones.
 
@@ -235,6 +253,8 @@ The most meaningful remaining design questions are:
 - how to move secrets out of SQLite cleanly;
 - whether Telegram `api_hash` and session storage should move together or in separate steps;
 - whether private Telegram peer resolution should gain stronger cached identity data;
+- how to handle migrated supergroup history without corrupting `(source_id, external_id)` uniqueness;
+- whether Takeout import should run the forum-topic auxiliary refresh after successful Takeout finish;
 - how to expand analysis beyond text-bearing corpus items;
 - whether a full Telegram Forum Topics model is needed beyond stored `reply_to_top_id`;
 - how and when to persist forward metadata;

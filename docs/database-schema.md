@@ -38,10 +38,11 @@ Notes:
 - older rows that used `source_type = 'telegram_channel'` are migrated to `source_type = 'telegram'`;
 - uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
 - uniqueness includes `telegram_source_kind` because Telegram bare ids are not enough to safely describe every peer shape.
+- `last_sync_state` and `last_synced_at` are advanced by normal sync and by successful Takeout import; failed or cancelled Takeout jobs leave these fields unchanged.
 
 ### 1.2 `items`
 
-Stores synced Telegram messages.
+Stores locally ingested Telegram messages.
 
 Important fields:
 
@@ -73,7 +74,9 @@ Notes:
 
 - rows may have text, media metadata, or both;
 - rows without both text and useful media metadata are skipped during ingest.
-- Telegram context fields are nullable and are populated only for rows inserted after migration `13.sql` and the updated sync code;
+- rows can be inserted by normal `sync_source` or by Takeout import;
+- Takeout import does not add a separate provenance column and does not create a separate archive table;
+- Telegram context fields are nullable and are populated only for rows inserted after migration `13.sql` and the updated ingest code;
 - `NULL` in Telegram context fields means metadata is unavailable, the row predates the migration, or Telegram did not expose that value;
 - `reply_to_peer_kind` uses Telegram peer values (`user`, `chat`, `channel`), not Extractum source-kind values (`channel`, `supergroup`, `group`);
 - `reaction_count = 0` means Telegram explicitly exposed zero aggregate reactions; `NULL` means the app cannot distinguish zero from unavailable metadata.
@@ -83,6 +86,11 @@ Important constraints / indexes:
 - unique item by `(source_id, external_id)`
 - browse index on `(source_id, published_at DESC)`
 - author index on `author`
+
+Takeout implication:
+
+- repeated Takeout runs, or a Takeout run after normal sync, rely on `(source_id, external_id)` conflict handling to skip duplicates;
+- migrated supergroup history is currently not inserted by Takeout because old small-group ids may collide with current supergroup ids under this key.
 
 ### 1.3 `app_settings`
 
@@ -272,6 +280,7 @@ Purpose:
 - the analysis workspace can render media-bearing and media-only items from `items`;
 - `/analysis` still loads only text-bearing corpus rows;
 - NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
+- Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
 - `app_settings` still contains secrets temporarily, which remains a security debt.

@@ -81,6 +81,33 @@ Sync operates per source:
 - duplicate items are ignored by `(source_id, external_id)` uniqueness.
 - newly inserted rows persist minimal Telegram context when available: reply target, reply target peer, thread/topic root id, and aggregate reaction count.
 
+### 2.4 Takeout source import
+
+Takeout import is a second source ingest path for already registered Telegram sources. It is not a replacement for `sync_source`: normal sync remains the fast incremental path, while Takeout import is the full-history path that uses Telegram Takeout wrappers.
+
+The runtime shape is:
+
+1. load the source/account runtime and resolve the source peer through the existing source-resolution path;
+2. acquire the same-source ingest lock shared with sync and delete;
+3. start `account.initTakeoutSession` without `InvokeWithTakeout`;
+4. run validation, split loading, count probes, and history pages through `InvokeWithTakeout`;
+5. wrap history requests in `InvokeWithMessagesRange`;
+6. parse raw TL messages into the shared item insert helper;
+7. finish the Takeout session before advancing `sources.last_sync_state`.
+
+Takeout job state is in memory and is mirrored to the frontend through full-record `sources://takeout-import` events. The analysis workspace can start, cancel, and display a job's phase/progress/warnings.
+
+The history loop is TDesktop-first, not just `add_offset = -100`. Each split starts with `largest_id_plus_one = 1`, reverses raw newest-to-oldest pages into oldest-to-newest order before persistence, and advances the cursor through the newest parsed message id plus one. A per-split `DescendingFallback` restarts only the current split if the TDesktop profile returns an empty first page despite a nonzero count or if the cursor does not advance.
+
+Current source-kind behavior:
+
+- `channel`: import the last split only;
+- `supergroup`: import the last split only and warn if migrated small-group history is detected;
+- `group`: import all selected split ranges;
+- `CHANNEL_PRIVATE` on channel/supergroup history switches to `messages.search(from_id=self)` and records an only-my-messages warning.
+
+Takeout import writes to the same `items` table and does not download media bytes, thumbnails, custom emoji documents, or Telegram Desktop export assets. Failed and cancelled jobs may leave partial rows, but they do not update `last_sync_state`.
+
 ## 3. Item model
 
 The current `items` model is intentionally richer than the current analysis corpus.
@@ -179,6 +206,8 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 
 - LLM API keys still live in SQLite-backed settings and Telegram `api_hash` still lives in SQLite-backed account storage;
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
+- Takeout import still needs broader live validation across supergroups, groups, private/left sources, and shifted export DC behavior;
+- migrated supergroup history is detected but not imported until the `(source_id, external_id)` collision policy is decided;
 - the analysis layer has not yet become media-aware;
 - full Telegram Forum Topics and forward metadata are not modeled yet;
 - Telegram session storage may still deserve a more robust long-term format.
@@ -188,8 +217,13 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 If you are changing ingest:
 
 - `src-tauri/src/sources.rs`
+- `src-tauri/src/source_ingest.rs`
+- `src-tauri/src/takeout_import.rs`
+- `src-tauri/src/takeout_import/raw_parse.rs`
 - `src/routes/analysis/+page.svelte`
 - `src/lib/components/analysis/`
+
+Detailed Takeout ingest notes live in `docs/takeout-source-import.md`.
 
 If you are only changing the legacy compatibility route:
 

@@ -1,6 +1,6 @@
 # Extractum Unified Backlog
 
-> **Updated:** 2026-05-02
+> **Updated:** 2026-05-03
 > **Working rule:** this file tracks open follow-up work only
 
 ---
@@ -17,6 +17,7 @@ Released work should stay in the codebase and in current-state documentation, no
 
 - Telegram runtime behavior still needs broader validation against real accounts and dialogs
 - private-source resolution is better defined but still needs more real-world validation
+- Takeout source import is shipped, but still needs broader live validation and a few parity follow-ups
 - LLM API keys and Telegram credentials still live in SQLite-backed storage
 - LLM concurrency policy still needs refinement beyond the current request-scoped scheduling baseline
 - saved-run history still lacks richer filtering for larger archives
@@ -42,6 +43,7 @@ Released work should stay in the codebase and in current-state documentation, no
 |---|---|---|
 | Telegram runtime correctness | partially validated | validated on real accounts and dialogs |
 | Private source resolution | explicit rules exist, but runtime coverage is incomplete | predictable behavior for dialog-picked private sources |
+| Takeout source import | implemented for existing sources with TDesktop-first pagination and per-split descending fallback | validated across source kinds, private/left cases, and export DC behavior |
 | Secret storage | SQLite-backed | secure store with migration/import path |
 | LLM concurrency | request isolation is in place, but limit policy is still coarse | predictable request scheduling with clearer limits |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
@@ -116,6 +118,38 @@ Current notes:
 - runtime spot-checks on April 27, 2026 already validated public `channel` and `supergroup` flows plus typed `validation` / `not_found` errors
 - no real legacy small `group` has been validated yet
 - dialog-list add flow still needs explicit UI-level validation rather than only command-level checks
+
+---
+
+### Phase 2.5. Takeout Source Import Follow-Ups
+
+Status: MVP shipped.
+
+Priority: high.
+
+Current state is documented in `docs/takeout-source-import.md` and the implementation notes in `reference/takeout_source_import_plan.md`.
+
+Open checks:
+
+- [ ] validate Takeout import on representative public channels, supergroups, and small groups
+- [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup test case
+- [ ] validate shifted export DC behavior on a real session and confirm the warning path when fallback to home DC is used
+- [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
+- [ ] decide how to handle migrated small-group history without corrupting `(source_id, external_id)` uniqueness
+- [ ] decide whether Takeout import should run the forum-topic auxiliary refresh after successful Takeout finish
+
+Acceptance criteria:
+
+- [ ] successful Takeout import updates `last_sync_state` and `last_synced_at`
+- [ ] failed or cancelled Takeout import leaves partial rows but does not advance source sync state
+- [ ] export DC fallback and only-my-messages fallback warnings are visible in job state
+- [ ] per-split TDesktop pagination fallback remains covered by tests and documented in code comments
+
+Current notes:
+
+- Takeout history pagination is TDesktop-first, with per-split `DescendingFallback` only for empty-first-page or non-advancing cursor safety
+- a live public-channel run imported without a descending fallback warning
+- migrated supergroup history is detected but deliberately deferred because item ids can collide under the current uniqueness key
 
 ---
 
@@ -294,8 +328,9 @@ If implementation resumes directly from this file, the recommended opening seque
 
 1. validate the remaining Telegram runtime cases on real accounts and dialogs
 2. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
-3. decide whether saved-run history now needs richer metadata/date filters before Phase 4
-4. continue with secure secret storage for LLM and Telegram credentials
+3. validate the shipped Takeout import path across representative source kinds and fallback cases
+4. decide whether saved-run history now needs richer metadata/date filters before Phase 4
+5. continue with secure secret storage for LLM and Telegram credentials
 
 ### Session Handoff
 

@@ -20,6 +20,7 @@ Implemented:
 - startup session restore
 - source management for Telegram channels, supergroups, and groups
 - history sync into local SQLite
+- Takeout source import for existing Telegram sources with TDesktop-first pagination
 - media-aware sync metadata for text-bearing and media-only items
 - Telegram reply/thread/reaction context metadata for newly synced items
 - configurable initial sync window
@@ -64,6 +65,7 @@ Not implemented yet:
   - browse sources and inspect synced items
   - add sources manually or from dialogs
   - sync source history
+  - start/cancel Takeout source imports and monitor import progress
   - configure the first sync policy
   - manage report templates
   - manage source groups
@@ -91,6 +93,9 @@ Not implemented yet:
 - `list_sources`
 - `delete_source`
 - `sync_source`
+- `start_takeout_source_import`
+- `cancel_takeout_source_import`
+- `list_takeout_source_import_jobs`
 - `get_items`
 - `get_sync_settings`
 - `save_sync_settings`
@@ -116,7 +121,8 @@ Not implemented yet:
 
 - `accounts`: local Telegram accounts and their current SQLite-backed credentials
 - `sources`: registered Telegram sources
-- `items`: synced Telegram messages, media-aware metadata, and nullable Telegram context metadata for new rows
+- `items`: ingested Telegram messages, media-aware metadata, and nullable Telegram context metadata for new rows
+- no persistent table exists for Takeout import jobs; job records are in-memory runtime state
 - `app_settings`: app-level key/value storage, including active LLM profile, per-profile provider metadata, sync policy, and the current temporary LLM API keys
 - `analysis_runs`: saved report runs
 - `analysis_run_messages`: frozen corpus snapshot for saved runs
@@ -130,15 +136,21 @@ Not implemented yet:
 - LLM API keys still remain in `app_settings` for now;
 - Telegram `api_hash` still remains in SQLite-backed account storage for now;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
+- Takeout import does not download media bytes and currently defers migrated supergroup history to avoid `(source_id, external_id)` collisions.
 
 ## Reading order for implementation work
 
 1. `src-tauri/src/sources.rs`
-2. `src-tauri/src/analysis/`
-3. `src-tauri/src/llm/`
-4. `src/routes/analysis/+page.svelte`
-5. `src/lib/components/analysis/`
-6. `src/routes/settings/+page.svelte`
-7. `src/routes/sources/+page.svelte`
-8. `src-tauri/src/error.rs`
-9. `src-tauri/src/migrations.rs`
+2. `src-tauri/src/source_ingest.rs`
+3. `src-tauri/src/takeout_import.rs`
+4. `src-tauri/src/takeout_import/raw_parse.rs`
+5. `src-tauri/src/analysis/`
+6. `src-tauri/src/llm/`
+7. `src/routes/analysis/+page.svelte`
+8. `src/lib/components/analysis/`
+9. `src/routes/settings/+page.svelte`
+10. `src/routes/sources/+page.svelte`
+11. `src-tauri/src/error.rs`
+12. `src-tauri/src/migrations.rs`
+
+Related deep dive: `docs/takeout-source-import.md`.
