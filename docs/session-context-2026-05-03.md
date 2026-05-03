@@ -8,7 +8,7 @@
 - Active branch: `small-stabilization-increment`
 - Base branch: `main`
 - Merge base: `a64b0d85d832b4fab09a6ed6805546dcb4288812`
-- Current HEAD before this handoff update: `b3e5e10 test(frontend): extract analysis filter helpers`
+- Current HEAD before this handoff update: `8a80828 test(frontend): extract group command helpers`
 - Worktree before this handoff update was clean:
 
 ```text
@@ -56,6 +56,13 @@ Main review findings:
 ## Recent Branch History
 
 ```text
+8a80828 test(frontend): extract group command helpers
+d504165 test(frontend): extract template command helpers
+bf26dfb test(frontend): extract notebooklm export helpers
+01109f3 test(frontend): extract takeout import event decision
+8f47c31 test(frontend): extract active run sync decision
+6262e3d test(frontend): extract analysis selection helpers
+7a450d9 docs(session): refresh stabilization handoff context
 b3e5e10 test(frontend): extract analysis filter helpers
 5360c96 test(frontend): extract analysis run view helpers
 306f07c docs(session): refresh stabilization handoff context
@@ -70,8 +77,20 @@ f5efe51 test(frontend): extract analysis chat state helpers
 c2ba934 test(frontend): extract analysis state reducers
 97ca774 docs(review): record code review and session handoff
 2fb7397 test(frontend): add Vitest stabilization baseline
-a64b0d8 fix(accounts): keep Telegram API hash in backend
 ```
+
+## Stabilization Pattern
+
+The stabilization work has followed this loop:
+
+1. Pick a small pure behavior currently embedded in `src/routes/analysis/+page.svelte`.
+2. Add a failing Vitest test first.
+3. Verify RED. In this environment the first sandboxed `npm.cmd test ...` usually fails with
+   `spawn EPERM`; rerun the same command outside the sandbox with escalation to observe the real RED.
+4. Implement the smallest helper/reducer.
+5. Keep route-owned side effects in the route.
+6. Verify targeted test, full `npm.cmd test`, `npm.cmd run check`, Svelte autofixer for touched Svelte
+   wiring, and `git diff --check`.
 
 ## Completed Stabilization Increments
 
@@ -170,7 +189,7 @@ Recorded verification:
 - `npm.cmd run check`: 0 errors, 0 warnings.
 - Svelte autofixer: no issues or suggestions.
 
-### 6. Analysis Editor Helpers
+### 6. Analysis Editor Snapshot Helpers
 
 Commit: `bba37a0 test(frontend): extract analysis editor helpers`
 
@@ -180,7 +199,8 @@ Files changed:
 - `src/lib/analysis-editor-state.test.ts`
 - `src/routes/analysis/+page.svelte`
 
-`analysis-editor-state.ts` owns template/group editor snapshots and group source selection toggling.
+`analysis-editor-state.ts` initially gained template/group editor snapshots and group source selection
+toggling.
 
 Recorded verification:
 
@@ -287,6 +307,181 @@ Recorded verification:
 - Svelte autofixer: no issues or suggestions.
 - `git diff --check`: CRLF warnings only.
 
+### 11. Analysis Selection Helpers
+
+Commit: `6262e3d test(frontend): extract analysis selection helpers`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `selectedAnalysisTemplate`
+- `selectedAnalysisGroup`
+- `selectedAnalysisTraceRef`
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` test failed on missing `selectedAnalysisTemplate`.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 17 passed.
+- `npm.cmd test`: 8 test files, 57 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
+### 12. Active Run Sync Decision
+
+Commit: `8f47c31 test(frontend): extract active run sync decision`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `ActiveRunSyncDecision`
+- `activeRunSyncDecision`
+
+The route still owns `openRun`, live run snapshot sync/prune mutation, and `activeRunId` assignment.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` test failed on missing `activeRunSyncDecision`.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 18 passed.
+- `npm.cmd test`: 8 test files, 58 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
+### 13. Takeout Import Event Decision
+
+Commit: `01109f3 test(frontend): extract takeout import event decision`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `TakeoutImportEventDecision`
+- `takeoutImportEventDecision`
+
+The route still owns `upsertTakeoutJob`, reload calls, and `status` assignment.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` test failed on missing `takeoutImportEventDecision`.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 19 passed.
+- `npm.cmd test`: 8 test files, 59 tests passed.
+- `npm.cmd run check`: initially found a TypeScript narrowing error inside a callback; fixed with a local
+  `sourceId`, then passed with 0 errors and 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
+### 14. NotebookLM Export Helpers
+
+Commit: `bf26dfb test(frontend): extract notebooklm export helpers`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `NotebookLmExportFormState`
+- `notebookLmExportInitialProgress`
+- `notebookLmExportRequestFromForm`
+- `notebookLmExportCompleteStatus`
+
+The route still owns `invoke`, loading flags, result/status assignment, and error handling.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` tests failed on missing NotebookLM helper functions.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 21 passed.
+- `npm.cmd test`: 8 test files, 61 tests passed.
+- `npm.cmd run check`: initially found missing `startOfDayUnix` / `endOfDayUnix` imports still used by
+  report flow and component props; imports were restored, then check passed with 0 errors and 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
+### 15. Template Command Helpers
+
+Commit: `d504165 test(frontend): extract template command helpers`
+
+Files changed:
+
+- `src/lib/analysis-editor-state.ts`
+- `src/lib/analysis-editor-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-editor-state.ts` gained:
+
+- `TemplateUpdateCommand`
+- `TemplateCopyCommand`
+- `TemplateDeleteDecision`
+- `templateUpdateCommand`
+- `templateCopyCommand`
+- `templateDeleteDecision`
+- `templateUpdatedStatus`
+- `templateCreatedStatus`
+- `templateDeletedStatus`
+- `templateFallbackSelection`
+
+The route still owns `invoke`, confirm modal, `loadTemplates`, selected id assignment, and editor binding.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-editor-state` tests failed on missing template helper functions.
+- `npm.cmd test -- src/lib/analysis-editor-state.test.ts`: 8 passed.
+- `npm.cmd test`: 8 test files, 64 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
+### 16. Group Command Helpers
+
+Commit: `8a80828 test(frontend): extract group command helpers`
+
+Files changed:
+
+- `src/lib/analysis-editor-state.ts`
+- `src/lib/analysis-editor-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-editor-state.ts` gained:
+
+- `GroupUpdateCommand`
+- `GroupCopyCommand`
+- `GroupDeleteDecision`
+- `groupUpdateCommand`
+- `groupCopyCommand`
+- `groupDeleteDecision`
+- `groupUpdatedStatus`
+- `groupCreatedStatus`
+- `groupDeletedStatus`
+- `groupFallbackSelection`
+
+The route still owns `invoke`, confirm modal, `loadGroups`, selected id assignment, and editor binding.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-editor-state` tests failed on missing group helper functions.
+- `npm.cmd test -- src/lib/analysis-editor-state.test.ts`: 11 passed.
+- `npm.cmd test`: 8 test files, 67 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
 ## Current Route Stabilization Shape
 
 `src/routes/analysis/+page.svelte` is still the composition and side-effect layer. It still owns:
@@ -300,13 +495,61 @@ Recorded verification:
 
 Pure behavior already extracted and covered:
 
-- analysis run reducers, run view helpers, filters, topic helpers, trace helpers, Takeout reducers, and
-  NotebookLM helpers: `src/lib/analysis-state.ts`;
+- analysis run reducers, run view helpers, filters, selection helpers, topic helpers, trace helpers,
+  Takeout reducers/decisions, active-run sync decision, NotebookLM helpers:
+  `src/lib/analysis-state.ts`;
 - chat state/event reducers: `src/lib/analysis-chat-state.ts`;
 - source display/runtime helpers: `src/lib/analysis-source-state.ts`;
-- editor snapshot helpers: `src/lib/analysis-editor-state.ts`;
+- editor snapshots, group source selection, template command helpers, and group command helpers:
+  `src/lib/analysis-editor-state.ts`;
 - scope and history params helpers: `src/lib/analysis-scope-state.ts`;
 - LLM settings API/types: `src/lib/api/llm.ts`, `src/lib/types/llm.ts`.
+
+## Current Likely Next Step
+
+Recommended next small TDD increment:
+
+```text
+test(frontend): extract analysis selection state helpers
+```
+
+Suggested scope:
+
+- extract pure state transitions from `selectSource(sourceId)` and `selectGroup(groupId)`;
+- likely helpers:
+  - `analysisSourceSelectionState(sourceId)`
+  - `analysisGroupSelectionState(groupId)`
+  - or one union-based helper such as `analysisScopeSelectionState({ kind: "source", sourceId })`;
+- keep route side effects in the route:
+  - `loadSourceTopics`
+  - `loadItems`
+  - async flow and assignments to existing `$state` variables.
+
+Important current route candidates around this next step:
+
+```text
+selectSource(sourceId):
+  analysisScope = "single_source";
+  selectedSourceId = String(sourceId);
+  selectedTopicKey = "__all_topics__";
+  inspectorMode = "history";
+  await loadSourceTopics(sourceId);
+  await loadItems(sourceId);
+
+selectGroup(groupId):
+  analysisScope = "source_group";
+  selectedGroupId = String(groupId);
+  sourceTopics = [];
+  selectedTopicKey = "__all_topics__";
+  inspectorMode = "history";
+```
+
+Follow-on candidates after selection state helpers:
+
+1. reset helpers for `clearTraceState`, `clearChatState`, and part of `clearOpenedRunState`;
+2. source deletion decision/status helpers;
+3. source refresh decision helpers;
+4. run report validation/request helpers.
 
 ## Sandbox And Tooling Caveats
 
@@ -322,29 +565,11 @@ Pure behavior already extracted and covered:
 
 ## Current Request
 
-The current user request is:
+The current user request is to overwrite this file with enough information to restore the current session
+and provide a commit message. No code changes are requested in this turn.
 
-1. Update this handoff document.
-2. Commit it as `docs(session): refresh stabilization handoff context`.
-3. Continue with the next code increment: extract analysis selection helpers.
-
-## Suggested Next Technical Step
-
-After this handoff update is committed, continue with a small TDD extraction for selection helpers in
-`src/routes/analysis/+page.svelte`:
-
-- `selectedTemplate`
-- `selectedGroup`
-- `selectedTrace`
-
-Likely target:
-
-- add helpers to `src/lib/analysis-state.ts`;
-- extend `src/lib/analysis-state.test.ts`;
-- keep route-owned Svelte state and side effects unchanged.
-
-Suggested commit message for the code increment:
+Suggested commit message:
 
 ```text
-test(frontend): extract analysis selection helpers
+docs(session): refresh stabilization handoff context
 ```
