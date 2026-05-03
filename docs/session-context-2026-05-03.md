@@ -47,9 +47,11 @@ Final verification after merge into `main`:
   `Wsl/Service/E_ACCESSDENIED`.
 - `git pull` was not run during merge because local `main` has no upstream tracking branch.
 - `src-tauri/src/sources.rs` remains the next backend split target.
+- The implementation-ready plan is documented in
+  `docs/superpowers/plans/2026-05-03-sources-backend-split.md`.
 
 ## Suggested Commit Message
 
 ```text
-docs(takeout): archive completed backend split plan
+docs(sources): add backend split implementation plan
 ```

@@ -56,7 +56,8 @@ Planning status:
 
 - first Takeout implementation slice is documented in
   `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md` and has been implemented;
-- `sources.rs` remains the next backend split target;
+- `sources.rs` split is documented in
+  `docs/superpowers/plans/2026-05-03-sources-backend-split.md` and is ready for implementation;
 - any remaining Takeout orchestration in `mod.rs` is intentional for this first pass.
 
 ### Major: Some frontend/backend contracts remain manually mirrored
