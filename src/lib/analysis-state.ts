@@ -2,10 +2,12 @@ import { endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
 import type {
   AnalysisChunkSummaryEvent,
   AnalysisPromptTemplate,
+  AnalysisChatTurn,
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
   AnalysisSourceGroup,
+  AnalysisTraceData,
   AnalysisTraceRef,
 } from "$lib/types/analysis";
 import type {
@@ -49,6 +51,20 @@ export type AnalysisGroupSelectionState = {
   sourceTopics: SourceForumTopicRecord[];
   selectedTopicKey: typeof ALL_TOPICS_KEY;
   inspectorMode: "history";
+};
+export type OpenedRunResetState = {
+  activeRunId: number | null;
+  currentRun: AnalysisRunDetail | null;
+  traceData: AnalysisTraceData;
+  savedTraceRefs: string[];
+  resolvedTraceRefs: string[];
+  selectedTraceRef: string | null;
+  chatMessages: AnalysisChatTurn[];
+  chatQuestion: string;
+  chatting: boolean;
+  activeChatRequestId: string | null;
+  activeChatRunId: number | null;
+  liveRuns: Record<number, LiveRunState>;
 };
 export type ActiveRunSyncDecision = {
   activeRunIds: number[];
@@ -320,6 +336,35 @@ export function analysisGroupSelectionState(
     sourceTopics: [],
     selectedTopicKey: ALL_TOPICS_KEY,
     inspectorMode: "history",
+  };
+}
+
+export function openedRunResetState(
+  runId: number,
+  activeRunId: number | null,
+  currentRun: AnalysisRunDetail | null,
+  liveRuns: Record<number, LiveRunState>,
+): OpenedRunResetState | null {
+  if (activeRunId !== runId && currentRun?.id !== runId) {
+    return null;
+  }
+
+  const nextLiveRuns = { ...liveRuns };
+  delete nextLiveRuns[runId];
+
+  return {
+    activeRunId: null,
+    currentRun: null,
+    traceData: { refs: [] },
+    savedTraceRefs: [],
+    resolvedTraceRefs: [],
+    selectedTraceRef: null,
+    chatMessages: [],
+    chatQuestion: "",
+    chatting: false,
+    activeChatRequestId: null,
+    activeChatRunId: null,
+    liveRuns: nextLiveRuns,
   };
 }
 

@@ -27,6 +27,7 @@ import {
   notebookLmExportCompleteStatus,
   notebookLmExportInitialProgress,
   notebookLmExportRequestFromForm,
+  openedRunResetState,
   pruneLiveRuns,
   runActivePhase,
   runActiveProgress,
@@ -502,6 +503,35 @@ describe("analysis-state", () => {
       selectedTopicKey: ALL_TOPICS_KEY,
       inspectorMode: "history",
     });
+  });
+
+  it("builds reset state only when the cleared run is currently opened", () => {
+    const firstRun = runDetail({ id: 5 });
+    const secondRun = runDetail({ id: 6 });
+    const liveRuns = {
+      5: createEmptyLiveRunState(),
+      6: { ...createEmptyLiveRunState(), phase: "running" },
+    };
+
+    expect(openedRunResetState(4, 5, firstRun, liveRuns)).toBeNull();
+    expect(openedRunResetState(5, 5, firstRun, liveRuns)).toEqual({
+      activeRunId: null,
+      currentRun: null,
+      traceData: { refs: [] },
+      savedTraceRefs: [],
+      resolvedTraceRefs: [],
+      selectedTraceRef: null,
+      chatMessages: [],
+      chatQuestion: "",
+      chatting: false,
+      activeChatRequestId: null,
+      activeChatRunId: null,
+      liveRuns: { 6: liveRuns[6] },
+    });
+    expect(openedRunResetState(6, null, secondRun, liveRuns)?.liveRuns).toEqual({
+      5: liveRuns[5],
+    });
+    expect(liveRuns).toHaveProperty("6");
   });
 
   it("formats run progress from counters, queue position, terminal events, or prior progress", () => {

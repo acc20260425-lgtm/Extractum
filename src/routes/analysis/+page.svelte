@@ -49,6 +49,7 @@
     notebookLmExportInitialProgress,
     notebookLmExportProgressFromEvent,
     notebookLmExportRequestFromForm,
+    openedRunResetState,
     normalizeSelectedTopicKey as normalizeTopicKey,
     pruneLiveRuns as pruneLiveRunMap,
     runActivePhase,
@@ -334,18 +335,24 @@
   }
 
   function clearOpenedRunState(runId: number) {
-    if (activeRunId !== runId && currentRun?.id !== runId) {
+    const next = openedRunResetState(runId, activeRunId, currentRun, liveRuns);
+    if (next === null) {
       return;
     }
 
     openRunRequestToken += 1;
-    activeRunId = null;
-    currentRun = null;
-    clearTraceState();
-    clearChatState();
-    const nextLiveRuns = { ...liveRuns };
-    delete nextLiveRuns[runId];
-    liveRuns = nextLiveRuns;
+    activeRunId = next.activeRunId;
+    currentRun = next.currentRun;
+    traceData = next.traceData;
+    savedTraceRefs = next.savedTraceRefs;
+    resolvedTraceRefs = next.resolvedTraceRefs;
+    selectedTraceRef = next.selectedTraceRef;
+    chatMessages = next.chatMessages;
+    chatQuestion = next.chatQuestion;
+    chatting = next.chatting;
+    activeChatRequestId = next.activeChatRequestId;
+    activeChatRunId = next.activeChatRunId;
+    liveRuns = next.liveRuns;
   }
 
   function getLiveRunState(runId: number) {
