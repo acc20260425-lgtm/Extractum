@@ -31,35 +31,6 @@ Suggested follow-up:
 - keep the route as a composition and Svelte lifecycle layer;
 - add focused tests around extracted pure reducers/controllers before broader UI refactors.
 
-### Major: Large backend modules mix unrelated behavior
-
-`src-tauri/src/sources.rs` mixes DTOs, sync settings, avatar cache, Telegram peer resolution, sync,
-forum topic refresh, DB row mapping, and tests.
-
-Takeout import has been split into focused `state`, `pagination`, and `export_dc` modules under
-`src-tauri/src/takeout_import/`. The remaining Takeout orchestration in `mod.rs` is intentional for
-this first slice, with peer validation and history import flow still owned by the facade.
-
-Impact:
-
-- larger change blast radius;
-- more difficult targeted tests;
-- more context required for safe edits.
-
-Suggested fix:
-
-- split by existing behavior boundaries, not by abstract architecture;
-- next likely modules: `sources/peer_resolution`, `sources/sync`, `sources/items`, and
-  `sources/settings`.
-
-Planning status:
-
-- first Takeout implementation slice is documented in
-  `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md` and has been implemented;
-- `sources.rs` split is documented in
-  `docs/superpowers/plans/2026-05-03-sources-backend-split.md` and has been implemented;
-- any remaining Takeout orchestration in `mod.rs` is intentional for this first pass.
-
 ### Major: Some frontend/backend contracts remain manually mirrored
 
 Several frontend TypeScript DTOs and raw Tauri command/event strings are still manually maintained
@@ -106,6 +77,5 @@ Suggested fix:
 
 1. Extract the remaining non-run analysis route controllers/helpers.
 2. Add typed wrappers for the next compact Tauri command/event surface.
-3. Split `sources.rs` only along behavior boundaries already covered by tests.
-4. Improve typed error conversion for DB, Telegram, LLM, and validation paths.
-5. Continue with secure secret storage as a separate backlog item, not mixed into stabilization work.
+3. Improve typed error conversion for DB, Telegram, LLM, and validation paths.
+4. Continue with secure secret storage as a separate backlog item, not mixed into stabilization work.
