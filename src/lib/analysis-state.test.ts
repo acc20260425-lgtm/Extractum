@@ -2,16 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   applyAnalysisRunEvent,
   applyTakeoutImportJobs,
+  analysisTraceRefOrigin,
   createEmptyLiveRunState,
   formatAnalysisRunProgress,
   hasRealForumTopics,
+  mergeAnalysisTraceRefs,
   normalizeSelectedTopicKey,
   notebookLmExportProgressFromEvent,
   pruneLiveRuns,
   syncRunSnapshot,
   upsertTakeoutImportJob,
 } from "./analysis-state";
-import type { AnalysisRunEvent } from "./types/analysis";
+import type { AnalysisRunEvent, AnalysisTraceRef } from "./types/analysis";
 import type {
   NotebookLmExportEvent,
   SourceForumTopicRecord,
@@ -85,6 +87,18 @@ function notebookEvent(overrides: Partial<NotebookLmExportEvent> = {}): Notebook
     progress_total: 5,
     file_path: null,
     error: null,
+    ...overrides,
+  };
+}
+
+function traceRef(overrides: Partial<AnalysisTraceRef>): AnalysisTraceRef {
+  return {
+    ref: "ref-a",
+    item_id: 1,
+    source_id: 2,
+    external_id: "external-a",
+    published_at: 100,
+    excerpt: "excerpt",
     ...overrides,
   };
 }
@@ -229,5 +243,38 @@ describe("analysis-state", () => {
     });
 
     expect(notebookLmExportProgressFromEvent("other", notebookEvent())).toBeNull();
+  });
+
+  it("merges trace refs by ref while keeping existing duplicates and sorting by publish time", () => {
+    const existing = traceRef({
+      ref: "ref-b",
+      item_id: 2,
+      external_id: "existing-b",
+      published_at: 200,
+    });
+    const incomingDuplicate = traceRef({
+      ref: "ref-b",
+      item_id: 99,
+      external_id: "incoming-b",
+      published_at: 50,
+    });
+    const incomingNew = traceRef({
+      ref: "ref-a",
+      item_id: 1,
+      external_id: "incoming-a",
+      published_at: 100,
+    });
+
+    expect(mergeAnalysisTraceRefs([existing], [incomingDuplicate, incomingNew])).toEqual([
+      incomingNew,
+      existing,
+    ]);
+    expect(mergeAnalysisTraceRefs([existing], [])).toEqual([existing]);
+  });
+
+  it("reports trace ref origin with saved refs taking priority over resolved refs", () => {
+    expect(analysisTraceRefOrigin("ref-a", ["ref-a"], ["ref-a"])).toBe("saved");
+    expect(analysisTraceRefOrigin("ref-b", ["ref-a"], ["ref-b"])).toBe("resolved");
+    expect(analysisTraceRefOrigin("ref-c", ["ref-a"], ["ref-b"])).toBe("unknown");
   });
 });

@@ -1,6 +1,7 @@
 import type {
   AnalysisChunkSummaryEvent,
   AnalysisRunEvent,
+  AnalysisTraceRef,
 } from "$lib/types/analysis";
 import type {
   NotebookLmExportEvent,
@@ -24,6 +25,8 @@ export type NotebookLmExportProgressState = {
   current: number | null;
   total: number | null;
 };
+
+export type AnalysisTraceRefOrigin = "saved" | "resolved" | "unknown";
 
 export function createEmptyLiveRunState(): LiveRunState {
   return {
@@ -210,4 +213,32 @@ export function notebookLmExportProgressFromEvent(
       ? `NotebookLM export failed: ${payload.error}`
       : "NotebookLM export failed.",
   };
+}
+
+export function mergeAnalysisTraceRefs(
+  currentRefs: AnalysisTraceRef[],
+  nextRefs: AnalysisTraceRef[],
+): AnalysisTraceRef[] {
+  if (nextRefs.length === 0) {
+    return currentRefs;
+  }
+
+  const merged = [...currentRefs];
+  for (const nextRef of nextRefs) {
+    if (!merged.some((existing) => existing.ref === nextRef.ref)) {
+      merged.push(nextRef);
+    }
+  }
+
+  return merged.sort((left, right) => left.published_at - right.published_at);
+}
+
+export function analysisTraceRefOrigin(
+  ref: string,
+  savedTraceRefs: string[],
+  resolvedTraceRefs: string[],
+): AnalysisTraceRefOrigin {
+  if (savedTraceRefs.includes(ref)) return "saved";
+  if (resolvedTraceRefs.includes(ref)) return "resolved";
+  return "unknown";
 }

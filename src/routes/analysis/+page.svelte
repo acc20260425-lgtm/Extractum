@@ -24,9 +24,11 @@
   import {
     applyAnalysisRunEvent,
     applyTakeoutImportJobs,
+    analysisTraceRefOrigin as traceRefOriginFromState,
     createEmptyLiveRunState,
     hasRealForumTopics as hasRealForumTopicsInState,
     isActiveRunStatus,
+    mergeAnalysisTraceRefs,
     notebookLmExportProgressFromEvent,
     normalizeSelectedTopicKey as normalizeTopicKey,
     pruneLiveRuns as pruneLiveRunMap,
@@ -584,20 +586,11 @@
 
   function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
     if (nextRefs.length === 0) return;
-    const merged = [...traceData.refs];
-    for (const nextRef of nextRefs) {
-      if (!merged.some((existing) => existing.ref === nextRef.ref)) {
-        merged.push(nextRef);
-      }
-    }
-    merged.sort((left, right) => left.published_at - right.published_at);
-    traceData = { refs: merged };
+    traceData = { refs: mergeAnalysisTraceRefs(traceData.refs, nextRefs) };
   }
 
   function traceRefOrigin(ref: string) {
-    if (savedTraceRefs.includes(ref)) return "saved";
-    if (resolvedTraceRefs.includes(ref)) return "resolved";
-    return "unknown";
+    return traceRefOriginFromState(ref, savedTraceRefs, resolvedTraceRefs);
   }
 
   async function focusTraceRef(ref: string) {
