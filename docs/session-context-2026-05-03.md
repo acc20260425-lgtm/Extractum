@@ -8,7 +8,7 @@
 - Active branch: `small-stabilization-increment`
 - Base branch: `main`
 - Merge base: `a64b0d85d832b4fab09a6ed6805546dcb4288812`
-- Current HEAD before this handoff update: `8a80828 test(frontend): extract group command helpers`
+- Current HEAD before this handoff update: `42ad176 test(frontend): extract source deletion helpers`
 - Worktree before this handoff update was clean:
 
 ```text
@@ -29,7 +29,8 @@ After the review, the user chose a small stabilization track on the existing bra
 - keep Tauri I/O, event listener side effects, and backend behavior unchanged;
 - keep secure secret storage as a separate backlog item.
 
-The user explicitly confirmed that subagents can be used when working with the Superpowers plugin.
+The user explicitly confirmed that subagents can be used when working with the Superpowers plugin, but the
+recent small frontend increments were handled locally without subagents.
 
 ## Review Summary
 
@@ -56,6 +57,10 @@ Main review findings:
 ## Recent Branch History
 
 ```text
+42ad176 test(frontend): extract source deletion helpers
+0167830 test(frontend): extract opened run reset helper
+4368f48 test(frontend): extract analysis selection state helpers
+335e82f docs(session): refresh stabilization handoff context
 8a80828 test(frontend): extract group command helpers
 d504165 test(frontend): extract template command helpers
 bf26dfb test(frontend): extract notebooklm export helpers
@@ -91,6 +96,7 @@ The stabilization work has followed this loop:
 5. Keep route-owned side effects in the route.
 6. Verify targeted test, full `npm.cmd test`, `npm.cmd run check`, Svelte autofixer for touched Svelte
    wiring, and `git diff --check`.
+7. The user usually commits after each completed increment, then asks for the next step.
 
 ## Completed Stabilization Increments
 
@@ -482,6 +488,94 @@ Recorded verification:
 - Svelte autofixer: no issues or suggestions.
 - `git diff --check`: CRLF warnings only.
 
+### 17. Analysis Selection State Helpers
+
+Commit: `4368f48 test(frontend): extract analysis selection state helpers`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `AnalysisSourceSelectionState`
+- `AnalysisGroupSelectionState`
+- `analysisSourceSelectionState`
+- `analysisGroupSelectionState`
+
+The route still owns `loadSourceTopics`, `loadItems`, async flow, and `$state` assignments.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` tests failed on missing selection-state helper functions.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 23 passed.
+- `npm.cmd test`: 8 test files, 69 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
+### 18. Opened Run Reset Helper
+
+Commit: `0167830 test(frontend): extract opened run reset helper`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `OpenedRunResetState`
+- `openedRunResetState`
+
+The helper builds a pure reset snapshot for `activeRunId`, `currentRun`, trace state, chat state, and
+`liveRuns` when a currently opened run is cleared. The route still owns the `openRunRequestToken += 1`
+side effect and Svelte assignments.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` test failed on missing `openedRunResetState`.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 24 passed.
+- `npm.cmd test`: 8 test files, 70 tests passed.
+- `npm.cmd run check`: initially found a missing `AnalysisTraceData` import; import was restored, then check
+  passed with 0 errors and 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
+### 19. Source Deletion Helpers
+
+Commit: `42ad176 test(frontend): extract source deletion helpers`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `SourceDeletionDialog`
+- `SourceDeletionResetState`
+- `sourceDisplayName`
+- `sourceDeletionDialog`
+- `sourceDeletedStatus`
+- `sourceDeletionResetState`
+
+The route still owns `openConfirmModal`, `invoke("delete_source")`, `deletingSourceIds`, error formatting,
+and `refreshSourcesAfterManagement()`.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` tests failed on missing source deletion helpers.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 26 passed.
+- `npm.cmd test`: 8 test files, 72 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: CRLF warnings only.
+
 ## Current Route Stabilization Shape
 
 `src/routes/analysis/+page.svelte` is still the composition and side-effect layer. It still owns:
@@ -495,8 +589,9 @@ Recorded verification:
 
 Pure behavior already extracted and covered:
 
-- analysis run reducers, run view helpers, filters, selection helpers, topic helpers, trace helpers,
-  Takeout reducers/decisions, active-run sync decision, NotebookLM helpers:
+- analysis run reducers, run view helpers, filters, selection lookup helpers, selection-state helpers,
+  topic helpers, trace helpers, Takeout reducers/decisions, active-run sync decision, NotebookLM helpers,
+  opened-run reset helper, and source deletion helpers:
   `src/lib/analysis-state.ts`;
 - chat state/event reducers: `src/lib/analysis-chat-state.ts`;
 - source display/runtime helpers: `src/lib/analysis-source-state.ts`;
@@ -510,46 +605,35 @@ Pure behavior already extracted and covered:
 Recommended next small TDD increment:
 
 ```text
-test(frontend): extract analysis selection state helpers
+test(frontend): extract source action helpers
 ```
 
 Suggested scope:
 
-- extract pure state transitions from `selectSource(sourceId)` and `selectGroup(groupId)`;
-- likely helpers:
-  - `analysisSourceSelectionState(sourceId)`
-  - `analysisGroupSelectionState(groupId)`
-  - or one union-based helper such as `analysisScopeSelectionState({ kind: "source", sourceId })`;
+- inspect `syncSelectedSource`, `refreshSourcesAfterManagement`, `startTakeoutImport`,
+  `cancelTakeoutImport`, and nearby source-action code in `src/routes/analysis/+page.svelte`;
+- extract only compact pure behavior, likely one or more of:
+  - `markSourceActionPending(current, sourceId)`;
+  - `clearSourceActionPending(current, sourceId)`;
+  - `sourceSyncCompleteStatus(result)` or `sourceSyncStatus(source, result)`;
+  - `sourceRefreshDecision(sourceId, selectedSourceId)`;
 - keep route side effects in the route:
-  - `loadSourceTopics`
-  - `loadItems`
-  - async flow and assignments to existing `$state` variables.
+  - Tauri `invoke`;
+  - loading map assignment;
+  - `loadSourceCatalog`, `loadGroups`, `loadActiveRuns`, `loadRuns`;
+  - `loadSourceTopics` and `loadItems`;
+  - error formatting and status assignment where not yet extracted.
 
-Important current route candidates around this next step:
+Possible follow-on increments after source action helpers:
 
-```text
-selectSource(sourceId):
-  analysisScope = "single_source";
-  selectedSourceId = String(sourceId);
-  selectedTopicKey = "__all_topics__";
-  inspectorMode = "history";
-  await loadSourceTopics(sourceId);
-  await loadItems(sourceId);
+1. run report validation/request helpers;
+2. run deletion dialog/status/reset decision helpers;
+3. remaining source refresh decision helpers if not included in the next increment;
+4. final docs/session refresh;
+5. stop the "small stabilization increment" phase and plan a larger controller/reducer extraction or backend
+   module split separately.
 
-selectGroup(groupId):
-  analysisScope = "source_group";
-  selectedGroupId = String(groupId);
-  sourceTopics = [];
-  selectedTopicKey = "__all_topics__";
-  inspectorMode = "history";
-```
-
-Follow-on candidates after selection state helpers:
-
-1. reset helpers for `clearTraceState`, `clearChatState`, and part of `clearOpenedRunState`;
-2. source deletion decision/status helpers;
-3. source refresh decision helpers;
-4. run report validation/request helpers.
+Estimated remaining small stabilization increments before a good stopping point: 3-5.
 
 ## Sandbox And Tooling Caveats
 
@@ -566,7 +650,7 @@ Follow-on candidates after selection state helpers:
 ## Current Request
 
 The current user request is to overwrite this file with enough information to restore the current session
-and provide a commit message. No code changes are requested in this turn.
+and provide a commit message. No product code changes are requested in this turn.
 
 Suggested commit message:
 
