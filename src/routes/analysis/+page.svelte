@@ -45,6 +45,15 @@
     matchesActiveAnalysisChatEvent,
     type AnalysisChatState,
   } from "$lib/analysis-chat-state";
+  import {
+    accountLabel as formatAccountLabel,
+    membershipLabel,
+    runtimeBadge,
+    runtimeStatus as getRuntimeStatus,
+    sourceInitial,
+    sourceKindLabel,
+    sourceSyncDisabledReason as getSourceSyncDisabledReason,
+  } from "$lib/analysis-source-state";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
     AnalysisChatEvent,
@@ -251,64 +260,15 @@
   }
 
   function accountLabel(accountId: number | null) {
-    if (accountId === null) return "No account";
-    return accounts.find((account) => account.id === accountId)?.label ?? `Account #${accountId}`;
+    return formatAccountLabel(accountId, accounts);
   }
 
   function runtimeStatus(accountId: number | null) {
-    if (accountId === null) return null;
-    return accountStatuses[accountId] ?? null;
-  }
-
-  function runtimeBadge(runtime: AccountRuntimeStatus | null) {
-    if (!runtime) return "";
-    if (runtime.status === "restoring") return "restoring";
-    if (runtime.status === "reauth_required") return "sign-in needed";
-    if (runtime.status === "restore_failed") return "restore failed";
-    if (runtime.status === "not_initialized") return "offline";
-    return "";
-  }
-
-  function sourceKindLabel(kind: string) {
-    switch (kind) {
-      case "channel":
-        return "channel";
-      case "supergroup":
-        return "supergroup";
-      case "group":
-        return "group";
-      default:
-        return "telegram";
-    }
-  }
-
-  function membershipLabel(kind: string, isMember: boolean) {
-    if (kind === "channel") {
-      return isMember ? "subscribed" : "not subscribed";
-    }
-    return isMember ? "member" : "not a member";
-  }
-
-  function sourceInitial(source: SourceRecord) {
-    return (source.title ?? source.external_id).trim().charAt(0).toUpperCase() || "#";
+    return getRuntimeStatus(accountId, accountStatuses);
   }
 
   function sourceSyncDisabledReason(source: SourceRecord) {
-    const runtime = runtimeStatus(source.account_id);
-    if (source.account_id === null) return "Source is not linked to an account.";
-    if (!runtime || runtime.status === "not_initialized") {
-      return "Initialize this account before syncing.";
-    }
-    if (runtime.status === "restoring") {
-      return "This account is still restoring.";
-    }
-    if (runtime.status === "reauth_required") {
-      return "Sign in to this account again before syncing.";
-    }
-    if (runtime.status === "restore_failed") {
-      return runtime.message ?? "The saved Telegram session could not be restored.";
-    }
-    return null;
+    return getSourceSyncDisabledReason(source, accountStatuses);
   }
 
   function clearTraceState() {
