@@ -8,9 +8,14 @@
 - Active branch: `small-stabilization-increment`
 - Base branch: `main`
 - Merge base recorded during the session: `a64b0d85d832b4fab09a6ed6805546dcb4288812`
-- Current HEAD: `c2ba934 test(frontend): extract analysis state reducers`
-- Previous docs commit: `97ca774 docs(review): record code review and session handoff`
-- First stabilization commit: `2fb7397 test(frontend): add Vitest stabilization baseline`
+- Current HEAD before this handoff update: `bb10ae285d29b2e7182e76d715f7ff2c08478287`
+- Current HEAD short: `bb10ae2 test(frontend): extract analysis trace ref helpers`
+- Worktree before this handoff update was clean:
+
+```text
+git status --short --branch
+## small-stabilization-increment
+```
 
 ## User Intent
 
@@ -24,20 +29,27 @@ The review focus was:
 - improve testability;
 - avoid duplication.
 
-After the review, the user chose the recommended stabilization track and a small first increment.
-The branch is intentionally being kept for now. The user then asked to continue stabilization by extracting
-and testing analysis reducers/event-state. The user explicitly confirmed that subagents can be used when
-working with the Superpowers plugin.
+After the review, the user chose a small stabilization track on the existing branch. The direction is to
+reduce the responsibility of `src/routes/analysis/+page.svelte` by extracting one small pure helper or
+reducer family at a time, with Vitest coverage first, while keeping Tauri I/O, event listener side effects,
+and backend behavior unchanged.
+
+The user explicitly confirmed that subagents can be used when working with the Superpowers plugin.
 
 ## Review Summary
 
+Detailed review notes are in `docs/code-review-results-2026-05-03.md`.
+
 Manual review was chosen because CodeRabbit was unavailable in this environment:
 
-- `coderabbit --version` failed with `Wsl/Service/E_ACCESSDENIED`.
+```text
+coderabbit --version
+Wsl/Service/E_ACCESSDENIED
+```
 
 Main review findings:
 
-1. `src/routes/analysis/+page.svelte` is too broad and should be reduced to composition plus extracted
+1. `src/routes/analysis/+page.svelte` was too broad and should be reduced to composition plus extracted
    domain controllers/helpers.
 2. `src-tauri/src/sources.rs` and `src-tauri/src/takeout_import.rs` are large mixed-responsibility modules.
 3. Frontend/backend contracts were manually mirrored with raw Tauri command strings.
@@ -46,23 +58,32 @@ Main review findings:
 5. Frontend had no unit test harness.
 6. `GEMINI.md` was stale versus the real command surface and current product state.
 
-Detailed review notes are in `docs/code-review-results-2026-05-03.md`.
+## Relevant Commits
 
-## Completed Documentation Handoff
+Recent branch history:
 
-Commit:
+```text
+bb10ae2 test(frontend): extract analysis trace ref helpers
+f5efe51 test(frontend): extract analysis chat state helpers
+12b6478 docs(session): refresh stabilization handoff context
+c2ba934 test(frontend): extract analysis state reducers
+97ca774 docs(review): record code review and session handoff
+2fb7397 test(frontend): add Vitest stabilization baseline
+a64b0d8 fix(accounts): keep Telegram API hash in backend
+267a65e fix(accounts): validate Telegram API ID input
+```
+
+The original review documentation commit was:
 
 ```text
 97ca774 docs(review): record code review and session handoff
 ```
 
-Files:
+The previous handoff refresh commit was:
 
-- `docs/code-review-results-2026-05-03.md`
-- `docs/session-context-2026-05-03.md`
-
-The user later asked to overwrite this handoff file with the current session context after the reducer
-extraction commit.
+```text
+12b6478 docs(session): refresh stabilization handoff context
+```
 
 ## Stabilization Increment 1: Frontend Test Baseline And LLM API Wrapper
 
@@ -99,10 +120,6 @@ Important implementation details:
 
 - `package.json` gained `test` and `test:watch` scripts.
 - `vitest` was added as a dev dependency.
-- `analysis-utils.test.ts` covers date helpers, run target labels, phase/status mapping, ref parsing,
-  report segment parsing, and line splitting.
-- `app-error.test.ts` covers structured objects, JSON string errors, plain strings, `Error` instances,
-  internal-kind display, invalid objects, and unknown values.
 - `src/lib/types/llm.ts` centralizes LLM DTOs previously declared in `settings/+page.svelte`.
 - `src/lib/api/llm.ts` wraps:
   - `get_llm_profiles`
@@ -114,19 +131,12 @@ Important implementation details:
 - `/settings` was refactored to use those wrappers and shared types.
 - `src-tauri` was not changed.
 
-TDD and verification notes:
+Verification recorded after implementation:
 
-- RED: `npm.cmd test` initially failed with `Missing script: "test"`.
-- RED: after adding wrapper tests, `npm.cmd test` failed because `src/lib/api/llm.ts` did not exist.
-- A test expectation in `analysis-utils.test.ts` initially had the wrong `text-tail` key index and was
-  corrected to match existing behavior.
-- `svelte-check` later found a strict TypeScript issue with passing typed interfaces directly to
-  Tauri `invoke`; wrappers were changed to pass object literals via `{ ...input }`.
-- Verification after implementation:
-  - `npm.cmd test`: 3 test files, 17 tests passed.
-  - `npm.cmd run check`: 0 errors, 0 warnings.
-  - `cargo test`: 130 tests passed, 0 failed.
-  - `git diff --cached -- src-tauri`: empty at the time of implementation verification.
+- `npm.cmd test`: 3 test files, 17 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `cargo test`: 130 tests passed, 0 failed.
+- `git diff --cached -- src-tauri`: empty at the time of implementation verification.
 
 ## Stabilization Increment 2: Analysis State Reducers
 
@@ -138,7 +148,6 @@ c2ba934 test(frontend): extract analysis state reducers
 
 Scope:
 
-- continue stabilization while keeping the current branch;
 - extract pure analysis event/state logic from `src/routes/analysis/+page.svelte`;
 - keep Tauri I/O, listener side effects, UI state wiring, and backend behavior unchanged;
 - add Vitest coverage before production code.
@@ -151,7 +160,7 @@ Files changed:
 
 Important implementation details:
 
-- `src/lib/analysis-state.ts` now owns:
+- `src/lib/analysis-state.ts` owns:
   - `LiveRunState`
   - `NotebookLmExportProgressState`
   - `createEmptyLiveRunState`
@@ -162,7 +171,7 @@ Important implementation details:
   - Takeout job reducers: `upsertTakeoutImportJob`, `applyTakeoutImportJobs`
   - topic helpers: `ALL_TOPICS_KEY`, `hasRealForumTopics`, `normalizeSelectedTopicKey`
   - NotebookLM event mapper: `notebookLmExportProgressFromEvent`
-- `src/routes/analysis/+page.svelte` now imports those helpers and keeps route-specific side effects:
+- `src/routes/analysis/+page.svelte` imports those helpers and keeps route-specific side effects:
   - `loadRuns`
   - `loadActiveRuns`
   - `openRun`
@@ -172,48 +181,143 @@ Important implementation details:
   - `status`
   - `inspectorMode`
   - Tauri `listen` handlers
-- The extraction intentionally did not move chat reducers, trace reducers, template/group editor helpers,
-  or source runtime label helpers yet.
+
+Verification recorded after implementation:
+
+- Targeted `src/lib/analysis-state.test.ts`: 7 tests passed.
+- `npm.cmd test`: 4 test files, 24 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+
+## Stabilization Increment 3: Analysis Chat State Helpers
+
+Commit:
+
+```text
+f5efe51 test(frontend): extract analysis chat state helpers
+```
+
+Scope:
+
+- extract pure chat turn/event logic from `src/routes/analysis/+page.svelte`;
+- keep Tauri `invoke`, Tauri `listen`, status assignment, cancellation, and saved chat reload side effects
+  in the route;
+- add Vitest coverage first.
+
+Files changed:
+
+- `src/lib/analysis-chat-state.ts`
+- `src/lib/analysis-chat-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+Important implementation details:
+
+- `src/lib/analysis-chat-state.ts` owns:
+  - `AnalysisChatState`
+  - `AnalysisChatEventReduction`
+  - `appendPendingChatExchange`
+  - `chatTurnsFromMessages`
+  - `dropPendingChatExchange`
+  - `appendAssistantChatDelta`
+  - `matchesActiveAnalysisChatEvent`
+  - `applyAnalysisChatEvent`
+- `src/routes/analysis/+page.svelte` now uses these helpers for:
+  - optimistic user question plus assistant placeholder;
+  - rollback of failed chat startup;
+  - mapping persisted `AnalysisChatMessage[]` to `AnalysisChatTurn[]`;
+  - chat event request/run matching;
+  - lifecycle event reduction.
+- The route still owns:
+  - `ask_analysis_run_question`
+  - `cancel_llm_request`
+  - `list_analysis_chat_messages`
+  - `clear_analysis_chat_messages`
+  - `status` assignment
+  - `loadChatMessages` side effects after completed chat events.
 
 TDD and verification notes:
 
-- RED: `npm.cmd test -- src/lib/analysis-state.test.ts` first failed in sandbox with `spawn EPERM`
-  from Vite/esbuild.
-- RED rerun outside sandbox failed as expected with:
-  - `Cannot find module './analysis-state'`
-- GREEN: after adding `src/lib/analysis-state.ts` and wiring the route, the targeted test passed:
-  - `src/lib/analysis-state.test.ts`: 7 tests passed.
-- Full frontend verification after the extraction:
-  - `npm.cmd test`: 4 test files, 24 tests passed.
+- RED in sandbox failed with Vite/esbuild `spawn EPERM`; rerun outside sandbox failed as expected because
+  `./analysis-chat-state` was missing.
+- After adding initial helper coverage, later RED failures were missing exports for the new API.
+- A compatibility test was added for empty informational chat messages so the reducer does not replace
+  status with an empty string.
+- Final verification after implementation:
+  - `npm.cmd test -- src/lib/analysis-chat-state.test.ts`: 7 tests passed.
+  - `npm.cmd test`: 5 test files, 31 tests passed.
   - `npm.cmd run check`: 0 errors, 0 warnings.
-- During verification, `svelte-check` caught two strict TypeScript issues:
-  - test helper `notebookEvent` needed a default `{}` argument;
-  - `src/routes/analysis/+page.svelte` still used `isActiveRunStatus` and needed to import it from
-    `analysis-state`.
-- Both issues were fixed before the final test/check pass.
+  - `git diff --check`: no whitespace errors; CRLF warnings only.
 
 Subagent notes:
 
-- The user allowed subagents.
-- A read-only explorer subagent inspected `src/routes/analysis/+page.svelte` and recommended the same
-  smallest first increment: extract live-run reducers first.
-- The explorer also listed future pure extraction candidates:
-  - Takeout job reducers;
-  - topic filter/selector helpers;
-  - chat turn list reducers;
-  - trace ref helpers;
-  - template/group editor snapshot helpers;
-  - source runtime label helpers.
-- A second read-only review subagent was started for staged diff review but timed out and was closed.
+- A read-only explorer subagent inspected chat and trace candidates.
+- It recommended trace ref helpers as the smallest next extraction, but chat extraction was already in a
+  valid RED/GREEN cycle and was completed first.
+- A read-only review subagent for the chat diff timed out and was closed without result.
 
-## Sandbox Caveats
+## Stabilization Increment 4: Analysis Trace Ref Helpers
+
+Commit:
+
+```text
+bb10ae2 test(frontend): extract analysis trace ref helpers
+```
+
+Scope:
+
+- extract pure trace reference merge/origin helpers from `src/routes/analysis/+page.svelte`;
+- keep Tauri `resolve_analysis_trace_refs`, `get_analysis_run_trace`, selected trace state, and status
+  side effects in the route;
+- add Vitest coverage first.
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+Important implementation details:
+
+- `src/lib/analysis-state.ts` now also owns:
+  - `AnalysisTraceRefOrigin`
+  - `mergeAnalysisTraceRefs`
+  - `analysisTraceRefOrigin`
+- `mergeAnalysisTraceRefs`:
+  - adds only refs whose `ref` is not already present;
+  - preserves existing entries when an incoming duplicate has the same `ref`;
+  - sorts the merged result by `published_at` ascending;
+  - returns the existing array when `nextRefs` is empty.
+- `analysisTraceRefOrigin`:
+  - returns `saved` if the ref is in saved refs;
+  - returns `resolved` if the ref is only in resolved refs;
+  - returns `unknown` otherwise;
+  - preserves saved-over-resolved priority from the route.
+- `src/routes/analysis/+page.svelte` keeps thin state-aware wrappers:
+  - `mergeTraceRefs(nextRefs)` still early-returns on empty input before assigning Svelte state;
+  - `traceRefOrigin(ref)` calls the shared helper with current `savedTraceRefs` and `resolvedTraceRefs`.
+
+TDD and verification notes:
+
+- RED in sandbox failed with Vite/esbuild `spawn EPERM`; rerun outside sandbox failed as expected with two
+  missing function failures:
+  - `mergeAnalysisTraceRefs is not a function`
+  - `analysisTraceRefOrigin is not a function`
+- GREEN targeted verification:
+  - `npm.cmd test -- src/lib/analysis-state.test.ts`: 9 tests passed.
+- Full frontend verification after route wiring and final compatibility tweak:
+  - `npm.cmd test`: 5 test files, 33 tests passed.
+  - `npm.cmd run check`: 0 errors, 0 warnings.
+  - Svelte autofixer on the changed wrapper pattern: no issues or suggestions.
+  - `git diff --check`: no whitespace errors; CRLF warnings only.
+
+## Sandbox And Tooling Caveats
 
 - `npm.cmd install -D vitest` required escalation because registry access failed in the sandbox.
-- `npm.cmd test` and `npm.cmd run check` required escalation because Vite/esbuild spawn failed in the sandbox
-  with `EPERM`.
-- Initial `npm run check` failed because PowerShell blocked `npm.ps1`; `npm.cmd` was used instead.
-- Creating or updating git refs/index sometimes required escalation because writing under `.git` failed in
-  the sandbox.
+- `npm.cmd test` and `npm.cmd run check` require escalation in this environment because Vite/esbuild
+  spawning fails in the sandbox with `EPERM`.
+- Initial `npm run check` failed because PowerShell blocked `npm.ps1`; use `npm.cmd` instead.
+- Creating or updating git refs/index sometimes requires escalation because writing under `.git` can fail
+  in the sandbox.
+- `git diff --check` commonly reports only CRLF normalization warnings for touched files.
 
 ## Current Request
 
@@ -233,9 +337,18 @@ git status --short --branch
 ## small-stabilization-increment
 ```
 
-Recent commits:
+Current HEAD before this handoff update:
 
 ```text
+bb10ae285d29b2e7182e76d715f7ff2c08478287
+```
+
+Recent commits before this handoff update:
+
+```text
+bb10ae2 test(frontend): extract analysis trace ref helpers
+f5efe51 test(frontend): extract analysis chat state helpers
+12b6478 docs(session): refresh stabilization handoff context
 c2ba934 test(frontend): extract analysis state reducers
 97ca774 docs(review): record code review and session handoff
 2fb7397 test(frontend): add Vitest stabilization baseline
@@ -247,9 +360,18 @@ a64b0d8 fix(accounts): keep Telegram API hash in backend
 
 The next technical steps should remain small and test-led:
 
-1. commit this updated session handoff if it looks useful;
-2. continue analysis stabilization by extracting one small pure helper family at a time;
-3. good next candidates are chat turn reducers or trace ref helpers, because they can be tested without
-   touching Tauri listeners;
-4. defer larger UI splits in `src/routes/analysis/+page.svelte` until more reducers/helpers are covered;
-5. keep secure secret storage as a separate backlog item and separate implementation branch.
+1. Commit this updated session handoff.
+2. Continue analysis stabilization by extracting one small pure helper family at a time.
+3. Recommended next candidate: source/runtime display helpers from `src/routes/analysis/+page.svelte`,
+   likely into `src/lib/analysis-source-state.ts` with `src/lib/analysis-source-state.test.ts`.
+4. Candidate source/runtime helpers:
+   - `accountLabel`
+   - `runtimeStatus`
+   - `runtimeBadge`
+   - `sourceKindLabel`
+   - `membershipLabel`
+   - `sourceInitial`
+   - `sourceSyncDisabledReason`
+5. After that, consider template/group editor snapshot helpers.
+6. Defer larger UI splits in `src/routes/analysis/+page.svelte` until more reducers/helpers are covered.
+7. Keep secure secret storage as a separate backlog item and separate implementation branch.
