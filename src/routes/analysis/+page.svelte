@@ -10,6 +10,17 @@
   import SourceManagementDialog from "$lib/components/analysis/source-management-dialog.svelte";
   import { formatAppError } from "$lib/app-error";
   import {
+    getAnalysisRun,
+    listActiveAnalysisRuns,
+    listAnalysisRuns,
+    listenToAnalysisRunEvents,
+  } from "$lib/api/analysis-runs";
+  import {
+    createAnalysisRunWorkflow,
+    type AnalysisRunRequestGuard,
+    type AnalysisRunWorkflowPatch,
+  } from "$lib/analysis-run-workflow";
+  import {
     defaultDateOffset,
     endOfDayUnix,
     formatPeriod,
@@ -29,7 +40,6 @@
     analysisSourceSelectionState,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
-    activeRunSyncDecision,
     canCancelAnalysisRun,
     createEmptyLiveRunState,
     currentTopicFilter as currentTopicFilterFromState,
@@ -40,9 +50,7 @@
     focusedRunChunkSummaries,
     focusedRunStreamedOutput,
     hasRealForumTopics as hasRealForumTopicsInState,
-    isActiveRunStatus,
     isRunActive,
-    isRunFocused,
     liveRunPhase,
     liveRunProgress,
     mergeAnalysisTraceRefs,
@@ -242,7 +250,6 @@
     overwriteExisting: false,
   });
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
-  let openRunRequestToken = 0;
 
   function isErrorStatus(value: string) {
     return value.startsWith("Error") || value.startsWith("Analysis failed");
@@ -349,7 +356,7 @@
       return;
     }
 
-    openRunRequestToken += 1;
+    runWorkflow.invalidateOpenRunRequests();
     activeRunId = next.activeRunId;
     currentRun = next.currentRun;
     traceData = next.traceData;
@@ -392,10 +399,6 @@
 
   function liveProgress(runId: number) {
     return liveRunProgress(liveRuns, runId);
-  }
-
-  function isFocusedRun(runId: number) {
-    return isRunFocused(runId, activeRunId, currentRun);
   }
 
   function currentTopicFilter(): ForumTopicFilter | null {
@@ -487,6 +490,41 @@
 
   const filteredGroups = $derived.by(() => filteredAnalysisGroups(groups, railQuery));
 
+  function applyRunWorkflowPatch(patch: AnalysisRunWorkflowPatch) {
+    if ("runs" in patch) runs = patch.runs ?? [];
+    if ("activeRuns" in patch) activeRuns = patch.activeRuns ?? [];
+    if ("activeRunId" in patch) activeRunId = patch.activeRunId ?? null;
+    if ("currentRun" in patch) currentRun = patch.currentRun ?? null;
+    if ("inspectorMode" in patch && patch.inspectorMode) inspectorMode = patch.inspectorMode;
+    if ("loadingRuns" in patch) loadingRuns = patch.loadingRuns ?? false;
+    if ("loadingActiveRuns" in patch) loadingActiveRuns = patch.loadingActiveRuns ?? false;
+    if ("loadingRunDetail" in patch) loadingRunDetail = patch.loadingRunDetail ?? false;
+    if ("status" in patch && patch.status !== undefined) status = patch.status;
+  }
+
+  const runWorkflow = createAnalysisRunWorkflow({
+    getState: () => ({
+      historyScopeParams,
+      activeRunId,
+      currentRun,
+      activeChatRequestId,
+      activeChatRunId,
+    }),
+    patch: applyRunWorkflowPatch,
+    listRuns: listAnalysisRuns,
+    listActiveRuns: listActiveAnalysisRuns,
+    getRun: getAnalysisRun,
+    syncRunSnapshot,
+    pruneLiveRuns,
+    applyRunEvent,
+    cancelChatSilently: () => cancelChat({ silent: true }),
+    clearChatState,
+    loadChatMessages,
+    loadTrace,
+    clearTraceState,
+    formatError: formatAppError,
+  });
+
   function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
     const next = templateEditorStateFromTemplate(template);
     editorBoundTemplateId = next.editorBoundTemplateId;
@@ -545,10 +583,10 @@
     }
   }
 
-  async function loadTrace(runId: number, requestToken?: number) {
+  async function loadTrace(runId: number, guard?: AnalysisRunRequestGuard) {
     try {
       const nextTraceData = await invoke<AnalysisTraceData>("get_analysis_run_trace", { runId });
-      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+      if (guard && !guard.isCurrent()) {
         return;
       }
       traceData = nextTraceData;
@@ -556,7 +594,7 @@
       resolvedTraceRefs = [];
       selectedTraceRef = traceData.refs[0]?.ref ?? null;
     } catch (error) {
-      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+      if (guard && !guard.isCurrent()) {
         return;
       }
       clearTraceState();
@@ -726,59 +764,11 @@
   }
 
   async function loadRuns() {
-    const params = historyScopeParams;
-    if (params === null) {
-      runs = [];
-      return;
-    }
-
-    loadingRuns = true;
-    try {
-      const summaries = await invoke<AnalysisRunSummary[]>("list_analysis_runs", {
-        sourceId: params.sourceId,
-        sourceGroupId: params.sourceGroupId,
-        limit: 50,
-      });
-      runs = summaries.filter((run) => !isActiveRunStatus(run.status));
-    } catch (error) {
-      status = formatAppError("loading analysis runs", error);
-    } finally {
-      loadingRuns = false;
-    }
-  }
-
-  function syncActiveRunState(summaries: AnalysisRunSummary[]) {
-    const decision = activeRunSyncDecision(
-      summaries,
-      activeRunId,
-      currentRun?.id ?? null,
-    );
-
-    for (const snapshot of decision.runSnapshots) {
-      syncRunSnapshot(snapshot.runId, snapshot.status);
-    }
-
-    pruneLiveRuns(decision.activeRunIds, decision.preserveRunId);
-
-    if (decision.runToOpen !== null) {
-      void openRun(decision.runToOpen);
-      return;
-    }
-
-    activeRunId = decision.nextActiveRunId;
+    await runWorkflow.loadRuns();
   }
 
   async function loadActiveRuns() {
-    loadingActiveRuns = true;
-    try {
-      const summaries = await invoke<AnalysisRunSummary[]>("list_active_analysis_runs");
-      activeRuns = summaries;
-      syncActiveRunState(summaries);
-    } catch (error) {
-      status = formatAppError("loading active analysis runs", error);
-    } finally {
-      loadingActiveRuns = false;
-    }
+    await runWorkflow.loadActiveRuns();
   }
 
   async function cancelChat({ silent = false }: { silent?: boolean } = {}) {
@@ -800,69 +790,25 @@
   }
 
   async function openRun(runId: number) {
-    const requestToken = ++openRunRequestToken;
-    inspectorMode = "history";
-
-    if (activeChatRequestId !== null && activeChatRunId !== null && activeChatRunId !== runId) {
-      await cancelChat({ silent: true });
-      clearChatState();
-    }
-
-    activeRunId = runId;
-    loadingRunDetail = true;
-    try {
-      const run = await invoke<AnalysisRunDetail | null>("get_analysis_run", { runId });
-      if (requestToken !== openRunRequestToken) {
-        return;
-      }
-
-      if (!run) {
-        status = `Analysis run ${runId} was not found.`;
-        if (currentRun?.id === runId) {
-          currentRun = null;
-        }
-        return;
-      }
-
-      currentRun = run;
-      syncRunSnapshot(run.id, run.status);
-      await loadChatMessages(run.id, requestToken);
-      if (requestToken !== openRunRequestToken) {
-        return;
-      }
-      if (run.has_trace_data) {
-        await loadTrace(run.id, requestToken);
-      } else {
-        clearTraceState();
-      }
-    } catch (error) {
-      if (requestToken !== openRunRequestToken) {
-        return;
-      }
-      status = formatAppError("loading the analysis run", error);
-    } finally {
-      if (requestToken === openRunRequestToken) {
-        loadingRunDetail = false;
-      }
-    }
+    await runWorkflow.openRun(runId);
   }
 
-  async function loadChatMessages(runId: number, requestToken?: number) {
+  async function loadChatMessages(runId: number, guard?: AnalysisRunRequestGuard) {
     loadingChat = true;
     try {
       const messages = await invoke<AnalysisChatMessage[]>("list_analysis_chat_messages", { runId });
-      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+      if (guard && !guard.isCurrent()) {
         return;
       }
       chatMessages = chatTurnsFromMessages(messages);
     } catch (error) {
-      if (requestToken !== undefined && requestToken !== openRunRequestToken) {
+      if (guard && !guard.isCurrent()) {
         return;
       }
       chatMessages = [];
       status = formatAppError("loading analysis chat", error);
     } finally {
-      if (requestToken === undefined || requestToken === openRunRequestToken) {
+      if (!guard || guard.isCurrent()) {
         loadingChat = false;
       }
     }
@@ -1408,51 +1354,12 @@
     void loadActiveRuns();
     void loadTakeoutImportJobs();
 
-    void listen<AnalysisRunEvent>("analysis://run", ({ payload }: EventEnvelope<AnalysisRunEvent>) => {
+    void listenToAnalysisRunEvents(({ payload }) => {
       if (disposed) {
         return;
       }
 
-      applyRunEvent(payload);
-
-      if (payload.chunk_summary) {
-        inspectorMode = "chunks";
-      }
-
-      if (activeRunId === null) {
-        activeRunId = payload.run_id;
-        inspectorMode = "active";
-        void openRun(payload.run_id);
-      }
-
-      if (
-        payload.kind === "queued" ||
-        payload.kind === "started" ||
-        payload.kind === "progress"
-      ) {
-        if (payload.message && (activeRunId === null || isFocusedRun(payload.run_id))) {
-          status = payload.message;
-        }
-      }
-
-      if (
-        payload.kind === "completed" ||
-        payload.kind === "failed" ||
-        payload.kind === "cancelled"
-      ) {
-        if (payload.message && (activeRunId === null || isFocusedRun(payload.run_id))) {
-          status = payload.message;
-        } else if (payload.error && (activeRunId === null || isFocusedRun(payload.run_id))) {
-          status = `Analysis failed: ${payload.error}`;
-        }
-
-        void loadActiveRuns();
-        void loadRuns();
-
-        if (activeRunId === payload.run_id || currentRun?.id === payload.run_id) {
-          void openRun(payload.run_id);
-        }
-      }
+      runWorkflow.handleRunEvent(payload);
     }).then((unlisten) => {
       if (disposed) {
         unlisten();

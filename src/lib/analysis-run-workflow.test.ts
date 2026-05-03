@@ -64,16 +64,18 @@ function runEvent(overrides: Partial<AnalysisRunEvent> = {}): AnalysisRunEvent {
   };
 }
 
-function createHarness(initial: Partial<AnalysisRunWorkflowState> = {}) {
-  const state: AnalysisRunWorkflowState & {
-    runs: AnalysisRunSummary[];
-    activeRuns: AnalysisRunSummary[];
-    loadingRuns: boolean;
-    loadingActiveRuns: boolean;
-    loadingRunDetail: boolean;
-    inspectorMode: "active" | "history" | "trace" | "chunks";
-    status: string;
-  } = {
+type AnalysisRunWorkflowHarnessState = AnalysisRunWorkflowState & {
+  runs: AnalysisRunSummary[];
+  activeRuns: AnalysisRunSummary[];
+  loadingRuns: boolean;
+  loadingActiveRuns: boolean;
+  loadingRunDetail: boolean;
+  inspectorMode: "active" | "history" | "trace" | "chunks";
+  status: string;
+};
+
+function createHarness(initial: Partial<AnalysisRunWorkflowHarnessState> = {}) {
+  const state: AnalysisRunWorkflowHarnessState = {
     historyScopeParams: { sourceId: null, sourceGroupId: null },
     activeRunId: null,
     currentRun: null,
