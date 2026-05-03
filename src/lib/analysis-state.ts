@@ -4,8 +4,10 @@ import type {
   AnalysisTraceRef,
 } from "$lib/types/analysis";
 import type {
+  ForumTopicFilter,
   NotebookLmExportEvent,
   SourceForumTopicRecord,
+  SourceRecord,
   TakeoutImportJobRecord,
 } from "$lib/types/sources";
 
@@ -186,6 +188,48 @@ export function normalizeSelectedTopicKey(
   return topics.some((topic) => topic.key === preferredKey)
     ? preferredKey
     : ALL_TOPICS_KEY;
+}
+
+export function currentTopicFilter(
+  selectedTopicKey: string,
+  topics: SourceForumTopicRecord[],
+): ForumTopicFilter | null {
+  if (selectedTopicKey === ALL_TOPICS_KEY) {
+    return null;
+  }
+
+  const topic = topics.find((entry) => entry.key === selectedTopicKey);
+  if (!topic) {
+    return null;
+  }
+
+  if (topic.kind === "topic" && topic.topic_id !== null) {
+    return {
+      kind: "topic",
+      topic_id: topic.topic_id,
+    };
+  }
+
+  return {
+    kind: "uncategorized",
+  };
+}
+
+export function shouldShowTopicSelector(
+  source: Pick<SourceRecord, "telegram_source_kind"> | null,
+  analysisScope: "single_source" | "source_group",
+  loadingSourceTopics: boolean,
+  topics: SourceForumTopicRecord[],
+) {
+  if (!source || analysisScope !== "single_source") {
+    return false;
+  }
+
+  if (loadingSourceTopics) {
+    return source.telegram_source_kind === "supergroup";
+  }
+
+  return hasRealForumTopics(topics);
 }
 
 export function notebookLmExportProgressFromEvent(

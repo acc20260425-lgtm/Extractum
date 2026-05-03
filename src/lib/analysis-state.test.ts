@@ -4,18 +4,21 @@ import {
   applyTakeoutImportJobs,
   analysisTraceRefOrigin,
   createEmptyLiveRunState,
+  currentTopicFilter,
   formatAnalysisRunProgress,
   hasRealForumTopics,
   mergeAnalysisTraceRefs,
   normalizeSelectedTopicKey,
   notebookLmExportProgressFromEvent,
   pruneLiveRuns,
+  shouldShowTopicSelector,
   syncRunSnapshot,
   upsertTakeoutImportJob,
 } from "./analysis-state";
 import type { AnalysisRunEvent, AnalysisTraceRef } from "./types/analysis";
 import type {
   NotebookLmExportEvent,
+  SourceRecord,
   SourceForumTopicRecord,
   TakeoutImportJobRecord,
 } from "./types/sources";
@@ -215,6 +218,52 @@ describe("analysis-state", () => {
     expect(normalizeSelectedTopicKey(topics, "missing")).toBe("__all_topics__");
     expect(normalizeSelectedTopicKey([topic({ kind: "uncategorized", topic_id: null })], "topic-1"))
       .toBe("__all_topics__");
+  });
+
+  it("builds topic filters from selected topic keys", () => {
+    const topics = [
+      topic({ kind: "uncategorized", key: "uncategorized", topic_id: null }),
+      topic({ key: "topic-1", topic_id: 1 }),
+      topic({ key: "deleted-topic", topic_id: null }),
+    ];
+
+    expect(currentTopicFilter("__all_topics__", topics)).toBeNull();
+    expect(currentTopicFilter("missing", topics)).toBeNull();
+    expect(currentTopicFilter("topic-1", topics)).toEqual({
+      kind: "topic",
+      topic_id: 1,
+    });
+    expect(currentTopicFilter("uncategorized", topics)).toEqual({
+      kind: "uncategorized",
+    });
+    expect(currentTopicFilter("deleted-topic", topics)).toEqual({
+      kind: "uncategorized",
+    });
+  });
+
+  it("shows topic selector only for single-source supergroup topic workflows", () => {
+    const supergroup = { telegram_source_kind: "supergroup" } satisfies Pick<
+      SourceRecord,
+      "telegram_source_kind"
+    >;
+    const channel = { telegram_source_kind: "channel" } satisfies Pick<
+      SourceRecord,
+      "telegram_source_kind"
+    >;
+    const topics = [
+      topic({ kind: "uncategorized", key: "uncategorized", topic_id: null }),
+      topic({ key: "topic-1", topic_id: 1 }),
+    ];
+
+    expect(shouldShowTopicSelector(null, "single_source", false, topics)).toBe(false);
+    expect(shouldShowTopicSelector(supergroup, "source_group", false, topics))
+      .toBe(false);
+    expect(shouldShowTopicSelector(supergroup, "single_source", true, [])).toBe(true);
+    expect(shouldShowTopicSelector(channel, "single_source", true, [])).toBe(false);
+    expect(shouldShowTopicSelector(supergroup, "single_source", false, topics)).toBe(true);
+    expect(shouldShowTopicSelector(supergroup, "single_source", false, [
+      topic({ kind: "uncategorized", topic_id: null }),
+    ])).toBe(false);
   });
 
   it("maps matching NotebookLM export events to progress state", () => {

@@ -26,12 +26,14 @@
     applyTakeoutImportJobs,
     analysisTraceRefOrigin as traceRefOriginFromState,
     createEmptyLiveRunState,
+    currentTopicFilter as currentTopicFilterFromState,
     hasRealForumTopics as hasRealForumTopicsInState,
     isActiveRunStatus,
     mergeAnalysisTraceRefs,
     notebookLmExportProgressFromEvent,
     normalizeSelectedTopicKey as normalizeTopicKey,
     pruneLiveRuns as pruneLiveRunMap,
+    shouldShowTopicSelector as shouldShowTopicSelectorFromState,
     syncRunSnapshot as syncLiveRunSnapshot,
     upsertTakeoutImportJob,
     type LiveRunState,
@@ -353,25 +355,7 @@
   }
 
   function currentTopicFilter(): ForumTopicFilter | null {
-    if (selectedTopicKey === "__all_topics__") {
-      return null;
-    }
-
-    const topic = sourceTopics.find((entry) => entry.key === selectedTopicKey);
-    if (!topic) {
-      return null;
-    }
-
-    if (topic.kind === "topic" && topic.topic_id !== null) {
-      return {
-        kind: "topic",
-        topic_id: topic.topic_id,
-      };
-    }
-
-    return {
-      kind: "uncategorized",
-    };
+    return currentTopicFilterFromState(selectedTopicKey, sourceTopics);
   }
 
   function hasRealForumTopics(topics: SourceForumTopicRecord[] = sourceTopics) {
@@ -379,16 +363,12 @@
   }
 
   function shouldShowTopicSelector() {
-    const source = currentSource();
-    if (!source || analysisScope !== "single_source") {
-      return false;
-    }
-
-    if (loadingSourceTopics) {
-      return source.telegram_source_kind === "supergroup";
-    }
-
-    return hasRealForumTopics();
+    return shouldShowTopicSelectorFromState(
+      currentSource(),
+      analysisScope,
+      loadingSourceTopics,
+      sourceTopics,
+    );
   }
 
   function normalizeSelectedTopicKey(
