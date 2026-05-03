@@ -4,6 +4,8 @@
 
 - Repository root: `G:\Develop\Extractum`
 - Current branch: `sources-backend-split`
+- Working tree was clean before this handoff rewrite.
+- This file is intentionally rewritten as the current session handoff.
 - `main` currently points at:
 
 ```text
@@ -13,16 +15,17 @@
 - Current branch commits on top of `main`:
 
 ```text
-b828f74 refactor(sources): extract items module
-fbdc1ad refactor(sources): extract store commands module
-013a06a docs(session): update sources split handoff context
-ec69c25 refactor(sources): extract avatar and peer resolution modules
-8238db7 refactor(sources): extract sync settings module
 2ca3518 refactor(sources): create directory module skeleton
+8238db7 refactor(sources): extract sync settings module
+ec69c25 refactor(sources): extract avatar and peer resolution modules
+013a06a docs(session): update sources split handoff context
+fbdc1ad refactor(sources): extract store commands module
+b828f74 refactor(sources): extract items module
+49fc3fc docs(session): update sources split handoff context
+f476fca refactor(sources): extract forum topics module
+0746e1c refactor(sources): extract sync module
+7be867f refactor(sources): remove monolith facade
 ```
-
-- Working tree was clean before this handoff document rewrite.
-- This file is now intentionally updated as the current session handoff.
 
 ## User Instructions To Preserve
 
@@ -30,10 +33,11 @@ ec69c25 refactor(sources): extract avatar and peer resolution modules
 - Use the normal branch in the current directory.
 - Use Superpowers subagents when useful.
 - Execute the active implementation plan task-by-task.
-- After each plan Task, stop and wait for explicit user instruction before continuing.
+- After each plan Task, stop and wait for explicit user instruction before
+  continuing.
 - After each Task, provide a commit message.
-- Reviews for completed Tasks have used the `superpowers:subagent-driven-development`
-  pattern:
+- Reviews for completed Tasks have used the
+  `superpowers:subagent-driven-development` pattern:
   implementer subagent, spec compliance review subagent, code quality review
   subagent, then stop.
 - Superpowers worktree advice is intentionally overridden by the user's explicit
@@ -50,18 +54,18 @@ ec69c25 refactor(sources): extract avatar and peer resolution modules
 
 ### Task 1: Create Directory Module Skeleton
 
-- Created `src-tauri/src/sources/mod.rs` facade with planned module declarations
-  and re-exports.
+- Created `src-tauri/src/sources/mod.rs` facade with planned module
+  declarations and re-exports.
 - Created `src-tauri/src/sources/types.rs`.
 - Added placeholder module files:
   `avatar.rs`, `items.rs`, `peer_resolution.rs`, `settings.rs`, `store.rs`,
   `sync.rs`, `topics.rs`.
 - Moved shared constants and structs from `src-tauri/src/sources.rs` into
   `types.rs`:
-  `TELEGRAM_SOURCE_TYPE`, `TELEGRAM_KIND_CHANNEL`, `TELEGRAM_KIND_SUPERGROUP`,
-  `TELEGRAM_KIND_GROUP`, `TelegramSourceInfo`, `SourceRecord`,
-  `SourceSyncTarget`, `SourceRecordRow`, `StoredItemRow`,
-  `SourceForumTopicRow`.
+  `TELEGRAM_SOURCE_TYPE`, `TELEGRAM_KIND_CHANNEL`,
+  `TELEGRAM_KIND_SUPERGROUP`, `TELEGRAM_KIND_GROUP`,
+  `TelegramSourceInfo`, `SourceRecord`, `SourceSyncTarget`,
+  `SourceRecordRow`, `StoredItemRow`, `SourceForumTopicRow`.
 - Spec review passed.
 - Code quality review accepted the expected temporary `sources.rs` /
   `sources/mod.rs` module ambiguity and empty-module re-export noise.
@@ -103,7 +107,7 @@ ec69c25 refactor(sources): extract avatar and peer resolution modules
   `telegram_group_is_member` into `peer_resolution.rs`.
 - Moved 14 peer resolution tests into `peer_resolution.rs`.
 - Added transitional wiring in `src-tauri/src/sources.rs` so the old active
-  module root can still reference moved Task 3 modules while the split is
+  module root could reference moved Task 3 modules while the split was
   incomplete.
 - Updated `finalize_sync_updates_source_state_and_metadata` so it no longer
   constructs private peer metadata structs directly.
@@ -156,7 +160,7 @@ fbdc1ad refactor(sources): extract store commands module
   `reply_peer_context_uses_telegram_peer_kinds`,
   `load_item_rows_attaches_topic_metadata_and_root_matches`.
 - Kept transitional item re-exports/imports in `src-tauri/src/sources.rs`.
-- Sync behavior still lives in `src-tauri/src/sources.rs` and calls moved item
+- Sync behavior still lived in `src-tauri/src/sources.rs` and called moved item
   helpers through `self::items`.
 - Spec review passed.
 - Code quality review approved.
@@ -169,38 +173,191 @@ fbdc1ad refactor(sources): extract store commands module
 b828f74 refactor(sources): extract items module
 ```
 
-## Current Technical Caveat
+### Task 6: Extract Forum Topics
 
-The project is intentionally in a transitional split state:
+- Moved forum topic DTO, refresh/list behavior, SQL helpers, and tests into
+  `src-tauri/src/sources/topics.rs`:
+  `SourceForumTopicRecord`, `ForumTopicSnapshot`, `refresh_forum_topics`,
+  `fetch_all_forum_topics`, `forum_topic_page_cursor`,
+  `forum_topic_message_date`, `upsert_forum_topics_from_refresh`,
+  `is_non_forum_topic_refresh_error`, `list_source_forum_topics`,
+  `list_source_forum_topics_from_pool`.
+- Preserved public Tauri command name `list_source_forum_topics`.
+- Kept `SourceForumTopicRecord` public through the facade.
+- Kept `refresh_forum_topics` available to sync through `pub(super)`.
+- Did not move remaining sync behavior.
+- Moved topic tests into `topics.rs`:
+  `list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket`,
+  `upsert_forum_topics_refresh_preserves_missing_topics_and_marks_deleted`,
+  `non_forum_topic_refresh_errors_are_detected`.
+- Spec review passed.
+- Code quality review passed.
+- `cargo test sources::topics --lib` was blocked by expected `E0761`; follow-on
+  Tauri command macro errors were treated as downstream of module ambiguity.
+- `git diff --check` passed with only CRLF normalization warnings.
+- Commit:
 
-- both `src-tauri/src/sources.rs` and `src-tauri/src/sources/mod.rs` exist;
-- Rust reports module ambiguity `E0761` before module-specific tests can run
-  normally;
-- Tauri command macro lookup errors after `E0761` are expected downstream noise;
-- this is expected until the remaining behavior is moved and the old monolith is
-  deleted in the later cleanup task.
+```text
+f476fca refactor(sources): extract forum topics module
+```
 
-Do not treat that ambiguity as a new regression during Tasks 6-7 unless it is
-accompanied by unrelated compile errors from the module being extracted.
+### Task 7: Extract Sync
+
+- Moved sync DTO and orchestration into `src-tauri/src/sources/sync.rs`:
+  `SyncResult`, `SyncPolicy`, `IngestOutcome`, `determine_sync_policy`,
+  `persist_items`, `sync_source`, `finalize_sync`.
+- Preserved public Tauri command name `sync_source`.
+- Preserved crate-level API `finalize_sync` through facade/transitional exports.
+- Left forum topics in `topics.rs`; sync calls `super::topics::refresh_forum_topics`.
+- Did not move store/items/settings/peer_resolution behavior.
+- Moved sync tests into `sync.rs`:
+  `determine_sync_policy_only_applies_initial_settings_on_first_sync`,
+  `finalize_sync_updates_source_state_and_metadata`.
+- Spec review passed.
+- Code quality review passed.
+- `cargo test sources::sync --lib` was blocked by expected `E0761`; follow-on
+  Tauri command macro errors were treated as downstream of module ambiguity.
+- `git diff --check` passed with only CRLF normalization warnings.
+- Commit:
+
+```text
+0746e1c refactor(sources): extract sync module
+```
+
+### Task 8: Remove Old Monolith And Fix Visibility
+
+- Deleted old `src-tauri/src/sources.rs`.
+- `src-tauri/src/sources/mod.rs` is now the active final facade.
+- Added narrow `#[allow(unused_imports)]` annotations on DTO/type re-exports in
+  `mod.rs` to preserve the public facade contract without widening module
+  visibility.
+- `cargo fmt` reordered one import in
+  `src-tauri/src/sources/peer_resolution.rs`.
+- Export scan was run:
+
+```powershell
+rg -n "pub\(|pub(crate)|pub use|pub struct|pub enum|pub async fn|pub fn" src-tauri/src/sources
+```
+
+- Export assessment:
+  - `pub` remains for serialized DTOs and Tauri commands exported through the
+    facade;
+  - `pub(crate)` remains for Takeout-facing APIs and structs;
+  - `pub(super)` remains for cross-module helpers, rows, constants, and local
+    source internals.
+- Spec review passed.
+- Code quality review passed.
+- Verification passed:
+
+```text
+cargo test sources --lib
+30 passed; 0 failed; 100 filtered out
+
+git diff --check
+exit 0, only CRLF normalization warnings
+```
+
+- Commit:
+
+```text
+7be867f refactor(sources): remove monolith facade
+```
 
 ## Current Code Shape
 
-- `src-tauri/src/sources/mod.rs` is already the intended final facade shape and
-  re-exports from `items`, `settings`, `store`, `sync`, `topics`, and `types`.
-- `src-tauri/src/sources.rs` remains the transitional active monolith for the
-  behavior not yet extracted. It currently still owns:
-  - sync behavior:
-    `SyncResult`, `SyncPolicy`, `IngestOutcome`, `determine_sync_policy`,
-    `persist_items`, `sync_source`, `finalize_sync`;
-  - forum topic behavior:
-    `SourceForumTopicRecord`, `ForumTopicSnapshot`, `refresh_forum_topics`,
-    `fetch_all_forum_topics`, `forum_topic_page_cursor`,
-    `forum_topic_message_date`, `upsert_forum_topics_from_refresh`,
-    `is_non_forum_topic_refresh_error`, `list_source_forum_topics`,
-    `list_source_forum_topics_from_pool`;
-  - tests for sync and forum topic behavior.
-- `src-tauri/src/sources/topics.rs` and `src-tauri/src/sources/sync.rs` still
-  need to be filled in later Tasks.
+- `src-tauri/src/sources.rs` no longer exists.
+- `src-tauri/src/sources/mod.rs` is the active facade and declares:
+
+```text
+avatar, items, peer_resolution, settings, store, sync, topics, types
+```
+
+- Facade public command/DTO exports:
+
+```text
+get_items
+ForumTopicFilter
+ItemRecord
+get_sync_settings
+save_sync_settings
+InitialSyncMode
+SyncSettingsRecord
+add_telegram_source
+delete_source
+list_sources
+list_telegram_sources
+sync_source
+SyncResult
+list_source_forum_topics
+SourceForumTopicRecord
+SourceRecord
+TelegramSourceInfo
+```
+
+- Facade crate-visible Takeout-facing exports:
+
+```text
+insert_source_item
+SourceItemInsert
+TelegramItemContext
+resolve_and_refresh_peer
+ResolvedSyncPeer
+load_source
+finalize_sync
+SourceSyncTarget
+```
+
+- Module ownership now matches the plan:
+  - `types.rs`: shared constants, DTOs, row structs, `now_secs()`.
+  - `settings.rs`: sync settings parsing, validation, persistence, commands.
+  - `avatar.rs`: Telegram photo/avatar cache helpers.
+  - `peer_resolution.rs`: metadata, source/peer resolution, peer refs, avatar
+    refresh during resolution.
+  - `store.rs`: source CRUD, source listing, `load_source`.
+  - `items.rs`: item insert/list behavior and Telegram item payload helpers.
+  - `topics.rs`: forum topic refresh/list/upsert behavior.
+  - `sync.rs`: sync orchestration and `finalize_sync`.
+
+## Current Verification State
+
+- The old transitional `E0761` module ambiguity is resolved.
+- Latest confirmed verification for Task 8:
+
+```powershell
+Set-Location src-tauri
+cargo test sources --lib
+```
+
+Result:
+
+```text
+30 passed; 0 failed; 100 filtered out
+```
+
+- Latest whitespace/export checks for Task 8:
+
+```powershell
+git diff --check
+rg -n "pub\(|pub(crate)|pub use|pub struct|pub enum|pub async fn|pub fn" src-tauri/src/sources
+```
+
+Result:
+
+```text
+git diff --check: exit 0, only CRLF normalization warnings
+export scan: reviewed; visibility matches the plan
+```
+
+- Full plan verification has not run yet. Task 9 is next.
+
+## Review Notes
+
+- CodeRabbit CLI was unavailable earlier in this environment due
+  `Wsl/Service/E_ACCESSDENIED`.
+- Reviews for Tasks 1-8 were performed by read-only subagents using the
+  `superpowers:subagent-driven-development` pattern.
+- Task 6 and Task 7 had expected `E0761` blockers before Task 8.
+- Task 8 removed `E0761` and made sources-specific tests runnable again.
 
 ## Next Step
 
@@ -209,29 +366,33 @@ Wait for the user's explicit instruction before continuing.
 The next plan item is:
 
 ```text
-Task 6: Extract Forum Topics
+Task 9: Full Verification
 ```
 
-Expected ownership for Task 6:
+Expected Task 9 commands:
 
-- create/fill `src-tauri/src/sources/topics.rs`;
-- remove only forum-topic-related code and topic tests from
-  `src-tauri/src/sources.rs`;
-- preserve public Tauri command name `list_source_forum_topics`;
-- keep `refresh_forum_topics` available to sync via `pub(super)`;
-- do not move remaining sync behavior yet.
+```powershell
+Set-Location src-tauri
+cargo test sources --lib
+cargo test
+Set-Location ..
+npm.cmd test
+npm.cmd run check
+git diff --check
+```
 
-Expected commit message after Task 6:
+Expected commit message after Task 9 if only verification state/docs are
+recorded later:
 
 ```text
-refactor(sources): extract forum topics module
+test(sources): run full backend split verification
 ```
 
-## Verification Notes
+Task 10 after that updates:
 
-- `git diff --check` has passed after each completed Task, with only CRLF
-  normalization warnings.
-- CodeRabbit CLI was unavailable earlier in this environment due
-  `Wsl/Service/E_ACCESSDENIED`; reviews were performed by read-only subagents.
-- Full verification from the plan has not run yet because the split is
-  incomplete.
+```text
+docs/code-review-results-2026-05-03.md
+docs/session-context-2026-05-03.md
+```
+
+Do not proceed to Task 9 until the user explicitly asks for the next task.
