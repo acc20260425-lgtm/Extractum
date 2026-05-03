@@ -7,9 +7,9 @@
 - User timezone from environment: `Europe/Minsk`
 - Active branch: `small-stabilization-increment`
 - Base branch: `main`
-- Merge base recorded during the session: `a64b0d85d832b4fab09a6ed6805546dcb4288812`
-- Current HEAD before this handoff update: `bb10ae285d29b2e7182e76d715f7ff2c08478287`
-- Current HEAD short: `bb10ae2 test(frontend): extract analysis trace ref helpers`
+- Merge base: `a64b0d85d832b4fab09a6ed6805546dcb4288812`
+- Current HEAD before this handoff update: `686525513b60779cfcd2e3fe682de86bc71d8d0b`
+- Current HEAD short: `6865255 test(frontend): extract analysis topic helpers`
 - Worktree before this handoff update was clean:
 
 ```text
@@ -58,11 +58,14 @@ Main review findings:
 5. Frontend had no unit test harness.
 6. `GEMINI.md` was stale versus the real command surface and current product state.
 
-## Relevant Commits
-
-Recent branch history:
+## Recent Branch History
 
 ```text
+6865255 test(frontend): extract analysis topic helpers
+2c070d2 test(frontend): extract analysis scope helpers
+bba37a0 test(frontend): extract analysis editor helpers
+a8f0421 test(frontend): extract analysis source helpers
+50293d7 docs(session): refresh stabilization handoff context
 bb10ae2 test(frontend): extract analysis trace ref helpers
 f5efe51 test(frontend): extract analysis chat state helpers
 12b6478 docs(session): refresh stabilization handoff context
@@ -70,7 +73,6 @@ c2ba934 test(frontend): extract analysis state reducers
 97ca774 docs(review): record code review and session handoff
 2fb7397 test(frontend): add Vitest stabilization baseline
 a64b0d8 fix(accounts): keep Telegram API hash in backend
-267a65e fix(accounts): validate Telegram API ID input
 ```
 
 The original review documentation commit was:
@@ -79,10 +81,10 @@ The original review documentation commit was:
 97ca774 docs(review): record code review and session handoff
 ```
 
-The previous handoff refresh commit was:
+The latest completed code commit before this handoff update was:
 
 ```text
-12b6478 docs(session): refresh stabilization handoff context
+6865255 test(frontend): extract analysis topic helpers
 ```
 
 ## Stabilization Increment 1: Frontend Test Baseline And LLM API Wrapper
@@ -115,21 +117,6 @@ Files changed:
 - `src/lib/app-error.test.ts`
 - `src/lib/types/llm.ts`
 - `src/routes/settings/+page.svelte`
-
-Important implementation details:
-
-- `package.json` gained `test` and `test:watch` scripts.
-- `vitest` was added as a dev dependency.
-- `src/lib/types/llm.ts` centralizes LLM DTOs previously declared in `settings/+page.svelte`.
-- `src/lib/api/llm.ts` wraps:
-  - `get_llm_profiles`
-  - `save_llm_profile`
-  - `list_llm_provider_models`
-  - `ask_llm_stream`
-  - `cancel_llm_request`
-  - `llm://response`
-- `/settings` was refactored to use those wrappers and shared types.
-- `src-tauri` was not changed.
 
 Verification recorded after implementation:
 
@@ -171,16 +158,6 @@ Important implementation details:
   - Takeout job reducers: `upsertTakeoutImportJob`, `applyTakeoutImportJobs`
   - topic helpers: `ALL_TOPICS_KEY`, `hasRealForumTopics`, `normalizeSelectedTopicKey`
   - NotebookLM event mapper: `notebookLmExportProgressFromEvent`
-- `src/routes/analysis/+page.svelte` imports those helpers and keeps route-specific side effects:
-  - `loadRuns`
-  - `loadActiveRuns`
-  - `openRun`
-  - `loadSourceCatalog`
-  - `loadSourceTopics`
-  - `loadItems`
-  - `status`
-  - `inspectorMode`
-  - Tauri `listen` handlers
 
 Verification recorded after implementation:
 
@@ -220,32 +197,15 @@ Important implementation details:
   - `appendAssistantChatDelta`
   - `matchesActiveAnalysisChatEvent`
   - `applyAnalysisChatEvent`
-- `src/routes/analysis/+page.svelte` now uses these helpers for:
-  - optimistic user question plus assistant placeholder;
-  - rollback of failed chat startup;
-  - mapping persisted `AnalysisChatMessage[]` to `AnalysisChatTurn[]`;
-  - chat event request/run matching;
-  - lifecycle event reduction.
-- The route still owns:
-  - `ask_analysis_run_question`
-  - `cancel_llm_request`
-  - `list_analysis_chat_messages`
-  - `clear_analysis_chat_messages`
-  - `status` assignment
-  - `loadChatMessages` side effects after completed chat events.
+- The route still owns `ask_analysis_run_question`, `cancel_llm_request`,
+  `list_analysis_chat_messages`, `clear_analysis_chat_messages`, status assignment, and reload side effects.
 
-TDD and verification notes:
+Verification recorded after implementation:
 
-- RED in sandbox failed with Vite/esbuild `spawn EPERM`; rerun outside sandbox failed as expected because
-  `./analysis-chat-state` was missing.
-- After adding initial helper coverage, later RED failures were missing exports for the new API.
-- A compatibility test was added for empty informational chat messages so the reducer does not replace
-  status with an empty string.
-- Final verification after implementation:
-  - `npm.cmd test -- src/lib/analysis-chat-state.test.ts`: 7 tests passed.
-  - `npm.cmd test`: 5 test files, 31 tests passed.
-  - `npm.cmd run check`: 0 errors, 0 warnings.
-  - `git diff --check`: no whitespace errors; CRLF warnings only.
+- `npm.cmd test -- src/lib/analysis-chat-state.test.ts`: 7 tests passed.
+- `npm.cmd test`: 5 test files, 31 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `git diff --check`: no whitespace errors; CRLF warnings only.
 
 Subagent notes:
 
@@ -281,33 +241,209 @@ Important implementation details:
   - `AnalysisTraceRefOrigin`
   - `mergeAnalysisTraceRefs`
   - `analysisTraceRefOrigin`
-- `mergeAnalysisTraceRefs`:
-  - adds only refs whose `ref` is not already present;
-  - preserves existing entries when an incoming duplicate has the same `ref`;
-  - sorts the merged result by `published_at` ascending;
-  - returns the existing array when `nextRefs` is empty.
-- `analysisTraceRefOrigin`:
-  - returns `saved` if the ref is in saved refs;
-  - returns `resolved` if the ref is only in resolved refs;
-  - returns `unknown` otherwise;
-  - preserves saved-over-resolved priority from the route.
-- `src/routes/analysis/+page.svelte` keeps thin state-aware wrappers:
-  - `mergeTraceRefs(nextRefs)` still early-returns on empty input before assigning Svelte state;
-  - `traceRefOrigin(ref)` calls the shared helper with current `savedTraceRefs` and `resolvedTraceRefs`.
+- Route keeps thin wrappers for `mergeTraceRefs(nextRefs)` and `traceRefOrigin(ref)`.
 
-TDD and verification notes:
+Verification recorded after implementation:
 
-- RED in sandbox failed with Vite/esbuild `spawn EPERM`; rerun outside sandbox failed as expected with two
-  missing function failures:
-  - `mergeAnalysisTraceRefs is not a function`
-  - `analysisTraceRefOrigin is not a function`
-- GREEN targeted verification:
-  - `npm.cmd test -- src/lib/analysis-state.test.ts`: 9 tests passed.
-- Full frontend verification after route wiring and final compatibility tweak:
-  - `npm.cmd test`: 5 test files, 33 tests passed.
-  - `npm.cmd run check`: 0 errors, 0 warnings.
-  - Svelte autofixer on the changed wrapper pattern: no issues or suggestions.
-  - `git diff --check`: no whitespace errors; CRLF warnings only.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 9 tests passed.
+- `npm.cmd test`: 5 test files, 33 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer on the changed wrapper pattern: no issues or suggestions.
+- `git diff --check`: no whitespace errors; CRLF warnings only.
+
+## Stabilization Increment 5: Analysis Source Helpers
+
+Commit:
+
+```text
+a8f0421 test(frontend): extract analysis source helpers
+```
+
+Scope:
+
+- extract source/account/runtime display helpers from `src/routes/analysis/+page.svelte`;
+- keep route-owned Svelte state and component prop wiring unchanged;
+- add Vitest coverage first.
+
+Files changed:
+
+- `src/lib/analysis-source-state.ts`
+- `src/lib/analysis-source-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+Important implementation details:
+
+- `src/lib/analysis-source-state.ts` owns:
+  - `accountLabel`
+  - `runtimeStatus`
+  - `runtimeBadge`
+  - `sourceKindLabel`
+  - `membershipLabel`
+  - `sourceInitial`
+  - `sourceSyncDisabledReason`
+- Route now keeps thin wrappers where current `accounts` or `accountStatuses` state is needed.
+
+Verification recorded after implementation:
+
+- RED confirmed: targeted test failed because `./analysis-source-state` was missing.
+- `npm.cmd test -- src/lib/analysis-source-state.test.ts`: 6 tests passed.
+- `npm.cmd test`: 6 test files, 39 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: no whitespace errors; CRLF warnings only.
+
+## Stabilization Increment 6: Analysis Editor Helpers
+
+Commit:
+
+```text
+bba37a0 test(frontend): extract analysis editor helpers
+```
+
+Scope:
+
+- extract pure template/group editor snapshot helpers from `src/routes/analysis/+page.svelte`;
+- keep Svelte assignment and route-owned editing workflow state in the route;
+- add Vitest coverage first.
+
+Files changed:
+
+- `src/lib/analysis-editor-state.ts`
+- `src/lib/analysis-editor-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+Important implementation details:
+
+- `src/lib/analysis-editor-state.ts` owns:
+  - `TemplateEditorState`
+  - `GroupEditorState`
+  - `templateEditorStateFromTemplate`
+  - `groupEditorStateFromGroup`
+  - `isGroupSourceSelected`
+  - `toggleGroupSourceSelection`
+- Route applies returned snapshots to Svelte state via `bindEditorToTemplate` and `bindEditorToGroup`.
+
+Verification recorded after implementation:
+
+- RED confirmed: targeted test failed because `./analysis-editor-state` was missing.
+- `npm.cmd test -- src/lib/analysis-editor-state.test.ts`: 5 tests passed.
+- `npm.cmd test`: 7 test files, 44 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: no whitespace errors; CRLF warnings only.
+
+## Stabilization Increment 7: Analysis Scope Helpers
+
+Commit:
+
+```text
+2c070d2 test(frontend): extract analysis scope helpers
+```
+
+Scope:
+
+- extract pure selected source/group lookup, scope title/summary, metric lookup, and history scope params;
+- keep route-owned selected ids, source catalog, groups, metrics, and Svelte derived wiring in the route;
+- add Vitest coverage first.
+
+Files changed:
+
+- `src/lib/analysis-scope-state.ts`
+- `src/lib/analysis-scope-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+Important implementation details:
+
+- `src/lib/analysis-scope-state.ts` owns:
+  - `AnalysisScope`
+  - `AnalysisHistoryScope`
+  - `AnalysisHistoryScopeParams`
+  - `currentAnalysisSource`
+  - `currentAnalysisSourceMetric`
+  - `currentAnalysisGroup`
+  - `currentAnalysisScopeTitle`
+  - `currentAnalysisScopeSummary`
+  - `analysisHistoryScopeParams`
+- Route wrappers now call these helpers for `currentSource`, `currentSourceMetric`, `currentGroup`,
+  `currentScopeTitle`, `currentScopeSummary`, and `historyScopeParams`.
+
+Verification recorded after implementation:
+
+- RED confirmed: targeted test failed because `./analysis-scope-state` was missing.
+- `npm.cmd test -- src/lib/analysis-scope-state.test.ts`: 5 tests passed.
+- `npm.cmd test`: 8 test files, 49 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: no whitespace errors; CRLF warnings only.
+
+## Stabilization Increment 8: Analysis Topic Helpers
+
+Commit:
+
+```text
+6865255 test(frontend): extract analysis topic helpers
+```
+
+Scope:
+
+- extract pure topic filter and topic selector visibility helpers from `src/routes/analysis/+page.svelte`;
+- keep selected topic state, loading state, current source lookup, and route side effects in the route;
+- extend existing `analysis-state.ts` tests because topic helpers were already housed there.
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+Important implementation details:
+
+- `src/lib/analysis-state.ts` now also owns:
+  - `currentTopicFilter`
+  - `shouldShowTopicSelector`
+- `currentTopicFilter`:
+  - returns `null` for `ALL_TOPICS_KEY`;
+  - returns `null` for missing topic keys;
+  - returns `{ kind: "topic", topic_id }` for real topics with an id;
+  - returns `{ kind: "uncategorized" }` for uncategorized or topic entries without `topic_id`.
+- `shouldShowTopicSelector`:
+  - requires a current source;
+  - requires `analysisScope === "single_source"`;
+  - while topics are loading, only shows for `telegram_source_kind === "supergroup"`;
+  - after loading, shows only when real forum topics exist.
+- Route now calls `currentTopicFilterFromState` and `shouldShowTopicSelectorFromState` with current
+  Svelte state.
+
+Verification recorded after implementation:
+
+- RED confirmed: targeted `analysis-state` test failed with missing `currentTopicFilter` and
+  `shouldShowTopicSelector` functions.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 11 tests passed.
+- `npm.cmd test`: 8 test files, 51 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- Svelte autofixer: no issues or suggestions.
+- `git diff --check`: no whitespace errors; CRLF warnings only.
+
+## Current Route Stabilization Shape
+
+`src/routes/analysis/+page.svelte` is still the composition and side-effect layer. It still owns:
+
+- Tauri `invoke` calls;
+- Tauri `listen` event subscriptions;
+- status assignment and transient status clearing;
+- route-level Svelte `$state` and `$derived` wiring;
+- load/reload side effects for accounts, sources, topics, items, runs, trace, chat, groups, templates,
+  NotebookLM export, sync, Takeout import, deletion, and cancellation.
+
+Pure behavior already extracted and covered:
+
+- analysis run reducers and Takeout reducers: `src/lib/analysis-state.ts`;
+- topic, trace, and NotebookLM pure helpers: `src/lib/analysis-state.ts`;
+- chat state/event reducers: `src/lib/analysis-chat-state.ts`;
+- source display/runtime helpers: `src/lib/analysis-source-state.ts`;
+- editor snapshot helpers: `src/lib/analysis-editor-state.ts`;
+- scope and history params helpers: `src/lib/analysis-scope-state.ts`;
+- LLM settings API/types: `src/lib/api/llm.ts`, `src/lib/types/llm.ts`.
 
 ## Sandbox And Tooling Caveats
 
@@ -318,6 +454,8 @@ TDD and verification notes:
 - Creating or updating git refs/index sometimes requires escalation because writing under `.git` can fail
   in the sandbox.
 - `git diff --check` commonly reports only CRLF normalization warnings for touched files.
+- When running TDD, the first sandboxed `npm.cmd test ...` usually fails with `spawn EPERM`; rerun the
+  same `npm.cmd` command outside the sandbox with escalation to observe the real RED/GREEN result.
 
 ## Current Request
 
@@ -340,12 +478,17 @@ git status --short --branch
 Current HEAD before this handoff update:
 
 ```text
-bb10ae285d29b2e7182e76d715f7ff2c08478287
+686525513b60779cfcd2e3fe682de86bc71d8d0b
 ```
 
 Recent commits before this handoff update:
 
 ```text
+6865255 test(frontend): extract analysis topic helpers
+2c070d2 test(frontend): extract analysis scope helpers
+bba37a0 test(frontend): extract analysis editor helpers
+a8f0421 test(frontend): extract analysis source helpers
+50293d7 docs(session): refresh stabilization handoff context
 bb10ae2 test(frontend): extract analysis trace ref helpers
 f5efe51 test(frontend): extract analysis chat state helpers
 12b6478 docs(session): refresh stabilization handoff context
@@ -353,7 +496,6 @@ c2ba934 test(frontend): extract analysis state reducers
 97ca774 docs(review): record code review and session handoff
 2fb7397 test(frontend): add Vitest stabilization baseline
 a64b0d8 fix(accounts): keep Telegram API hash in backend
-267a65e fix(accounts): validate Telegram API ID input
 ```
 
 ## Suggested Next Steps
@@ -362,16 +504,27 @@ The next technical steps should remain small and test-led:
 
 1. Commit this updated session handoff.
 2. Continue analysis stabilization by extracting one small pure helper family at a time.
-3. Recommended next candidate: source/runtime display helpers from `src/routes/analysis/+page.svelte`,
-   likely into `src/lib/analysis-source-state.ts` with `src/lib/analysis-source-state.test.ts`.
-4. Candidate source/runtime helpers:
-   - `accountLabel`
-   - `runtimeStatus`
-   - `runtimeBadge`
-   - `sourceKindLabel`
-   - `membershipLabel`
-   - `sourceInitial`
-   - `sourceSyncDisabledReason`
-5. After that, consider template/group editor snapshot helpers.
+3. Recommended next candidate: run derived helpers from `src/routes/analysis/+page.svelte`, likely into
+   `src/lib/analysis-state.ts` with tests in `src/lib/analysis-state.test.ts`.
+4. Candidate run derived helpers:
+   - `activeRunIds`
+   - `focusedLiveRun`
+   - `activePhase`
+   - `activeProgress`
+   - `focusedChunkSummaries`
+   - `focusedStreamedOutput`
+   - `selectedRunIsActive`
+   - `canCancelCurrentRun`
+   - thin wrapper candidates: `livePhase`, `liveProgress`, `isFocusedRun`
+5. After run view helpers, consider filter/search helpers:
+   - `filteredRuns`
+   - `filteredSourceCatalog`
+   - `filteredGroups`
 6. Defer larger UI splits in `src/routes/analysis/+page.svelte` until more reducers/helpers are covered.
 7. Keep secure secret storage as a separate backlog item and separate implementation branch.
+
+Suggested commit message for this handoff update:
+
+```text
+docs(session): refresh stabilization handoff context
+```
