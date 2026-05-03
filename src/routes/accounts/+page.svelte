@@ -87,12 +87,18 @@
 
   async function createAccount() {
     if (!newLabel.trim() || !newApiId.trim() || !newApiHash.trim()) return;
+    const parsedApiId = Number.parseInt(newApiId.trim(), 10);
+    if (!Number.isInteger(parsedApiId) || parsedApiId <= 0) {
+      status = "Telegram API ID must be a positive number.";
+      return;
+    }
+
     creating = true;
     status = "";
     try {
       await invoke("create_account", {
         label: newLabel.trim(),
-        apiId: parseInt(newApiId, 10),
+        apiId: parsedApiId,
         apiHash: newApiHash.trim(),
       });
       newLabel = "";
