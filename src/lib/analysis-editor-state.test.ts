@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  groupCopyCommand,
+  groupCreatedStatus,
+  groupDeleteDecision,
+  groupDeletedStatus,
   groupEditorStateFromGroup,
+  groupFallbackSelection,
+  groupUpdateCommand,
+  groupUpdatedStatus,
   isGroupSourceSelected,
   templateCopyCommand,
   templateCreatedStatus,
@@ -146,6 +153,66 @@ describe("analysis-editor-state", () => {
     expect(templateFallbackSelection([])).toEqual({
       selectedTemplateId: "",
       template: null,
+    });
+  });
+
+  it("validates and builds update commands for source groups", () => {
+    expect(groupUpdateCommand(null, "Name", [1])).toEqual({
+      ok: false,
+      status: "Select a source group first.",
+    });
+    expect(groupUpdateCommand(group({ id: 9 }), " ", [1])).toEqual({
+      ok: false,
+      status: "Group name cannot be empty.",
+    });
+    expect(groupUpdateCommand(group({ id: 9 }), "Name", [])).toEqual({
+      ok: false,
+      status: "Select at least one source for the group.",
+    });
+    expect(groupUpdateCommand(group({ id: 9 }), " Name ", [3, 1])).toEqual({
+      ok: true,
+      groupId: 9,
+      name: "Name",
+      sourceIds: [3, 1],
+    });
+  });
+
+  it("validates and builds copy commands for source groups", () => {
+    expect(groupCopyCommand(" ", [1])).toEqual({
+      ok: false,
+      status: "Group name cannot be empty.",
+    });
+    expect(groupCopyCommand("Name", [])).toEqual({
+      ok: false,
+      status: "Select at least one source for the group.",
+    });
+    expect(groupCopyCommand(" Name ", [3, 1])).toEqual({
+      ok: true,
+      name: "Name",
+      sourceIds: [3, 1],
+    });
+  });
+
+  it("validates group deletion and formats group command results", () => {
+    expect(groupDeleteDecision(null)).toEqual({
+      ok: false,
+      status: "Select a source group first.",
+    });
+    expect(groupDeleteDecision(group({ id: 11, name: "Research" }))).toEqual({
+      ok: true,
+      groupId: 11,
+      name: "Research",
+    });
+    expect(groupUpdatedStatus(group({ name: "Research" }))).toBe('Source group "Research" saved.');
+    expect(groupCreatedStatus(group({ name: "Research" }))).toBe('Source group "Research" created.');
+    expect(groupDeletedStatus("Research")).toBe('Source group "Research" deleted.');
+    expect(groupFallbackSelection([group({ id: 4 })])).toEqual({
+      selectedGroupId: "4",
+      group: group({ id: 4 }),
+    });
+    expect(groupFallbackSelection([])).toEqual({
+      selectedGroupId: "",
+      group: null,
     });
   });
 });

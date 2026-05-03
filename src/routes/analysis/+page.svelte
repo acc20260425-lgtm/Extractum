@@ -71,7 +71,14 @@
     type AnalysisChatState,
   } from "$lib/analysis-chat-state";
   import {
+    groupCopyCommand,
+    groupCreatedStatus,
+    groupDeleteDecision,
+    groupDeletedStatus,
     groupEditorStateFromGroup,
+    groupFallbackSelection,
+    groupUpdateCommand,
+    groupUpdatedStatus,
     isGroupSourceSelected as groupSourceIsSelected,
     templateCopyCommand,
     templateCreatedStatus,
@@ -1274,28 +1281,20 @@
   }
 
   async function saveGroupChanges() {
-    const current = selectedGroup;
-    if (!current) {
-      status = "Select a source group first.";
-      return;
-    }
-    if (!groupName.trim()) {
-      status = "Group name cannot be empty.";
-      return;
-    }
-    if (groupMemberSourceIds.length === 0) {
-      status = "Select at least one source for the group.";
+    const command = groupUpdateCommand(selectedGroup, groupName, groupMemberSourceIds);
+    if (!command.ok) {
+      status = command.status;
       return;
     }
 
     savingGroup = true;
     try {
       const updated = await invoke<AnalysisSourceGroup>("update_analysis_source_group", {
-        groupId: current.id,
-        name: groupName.trim(),
-        sourceIds: groupMemberSourceIds,
+        groupId: command.groupId,
+        name: command.name,
+        sourceIds: command.sourceIds,
       });
-      status = `Source group "${updated.name}" saved.`;
+      status = groupUpdatedStatus(updated);
       await loadGroups();
       selectedGroupId = String(updated.id);
       bindEditorToGroup(updated);
@@ -1307,22 +1306,19 @@
   }
 
   async function saveGroupCopy() {
-    if (!groupName.trim()) {
-      status = "Group name cannot be empty.";
-      return;
-    }
-    if (groupMemberSourceIds.length === 0) {
-      status = "Select at least one source for the group.";
+    const command = groupCopyCommand(groupName, groupMemberSourceIds);
+    if (!command.ok) {
+      status = command.status;
       return;
     }
 
     savingGroup = true;
     try {
       const created = await invoke<AnalysisSourceGroup>("create_analysis_source_group", {
-        name: groupName.trim(),
-        sourceIds: groupMemberSourceIds,
+        name: command.name,
+        sourceIds: command.sourceIds,
       });
-      status = `Source group "${created.name}" created.`;
+      status = groupCreatedStatus(created);
       await loadGroups();
       selectedGroupId = String(created.id);
       bindEditorToGroup(created);
@@ -1334,14 +1330,14 @@
   }
 
   async function deleteGroup() {
-    const current = selectedGroup;
-    if (!current) {
-      status = "Select a source group first.";
+    const decision = groupDeleteDecision(selectedGroup);
+    if (!decision.ok) {
+      status = decision.status;
       return;
     }
     const confirmed = await openConfirmModal({
       title: "Delete source group?",
-      message: `The group "${current.name}" will be removed, but its synced sources will stay available for analysis.`,
+      message: `The group "${decision.name}" will be removed, but its synced sources will stay available for analysis.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       tone: "danger",
@@ -1352,12 +1348,12 @@
 
     deletingGroup = true;
     try {
-      await invoke("delete_analysis_source_group", { groupId: current.id });
-      status = `Source group "${current.name}" deleted.`;
+      await invoke("delete_analysis_source_group", { groupId: decision.groupId });
+      status = groupDeletedStatus(decision.name);
       await loadGroups();
-      const fallback = groups[0] ?? null;
-      selectedGroupId = fallback ? String(fallback.id) : "";
-      bindEditorToGroup(fallback);
+      const fallback = groupFallbackSelection(groups);
+      selectedGroupId = fallback.selectedGroupId;
+      bindEditorToGroup(fallback.group);
     } catch (error) {
       status = formatAppError("deleting the source group", error);
     } finally {

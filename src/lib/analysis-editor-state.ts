@@ -24,6 +24,18 @@ export type TemplateDeleteDecision =
   | { ok: false; status: string }
   | { ok: true; templateId: number; name: string };
 
+export type GroupUpdateCommand =
+  | { ok: false; status: string }
+  | { ok: true; groupId: number; name: string; sourceIds: number[] };
+
+export type GroupCopyCommand =
+  | { ok: false; status: string }
+  | { ok: true; name: string; sourceIds: number[] };
+
+export type GroupDeleteDecision =
+  | { ok: false; status: string }
+  | { ok: true; groupId: number; name: string };
+
 export function templateEditorStateFromTemplate(
   template: AnalysisPromptTemplate | null,
 ): TemplateEditorState {
@@ -160,5 +172,85 @@ export function templateFallbackSelection(templates: AnalysisPromptTemplate[]) {
   return {
     selectedTemplateId: template ? String(template.id) : "",
     template,
+  };
+}
+
+export function groupUpdateCommand(
+  group: AnalysisSourceGroup | null,
+  name: string,
+  sourceIds: number[],
+): GroupUpdateCommand {
+  if (!group) {
+    return { ok: false, status: "Select a source group first." };
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    return { ok: false, status: "Group name cannot be empty." };
+  }
+
+  if (sourceIds.length === 0) {
+    return { ok: false, status: "Select at least one source for the group." };
+  }
+
+  return {
+    ok: true,
+    groupId: group.id,
+    name: trimmedName,
+    sourceIds,
+  };
+}
+
+export function groupCopyCommand(
+  name: string,
+  sourceIds: number[],
+): GroupCopyCommand {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    return { ok: false, status: "Group name cannot be empty." };
+  }
+
+  if (sourceIds.length === 0) {
+    return { ok: false, status: "Select at least one source for the group." };
+  }
+
+  return {
+    ok: true,
+    name: trimmedName,
+    sourceIds,
+  };
+}
+
+export function groupDeleteDecision(
+  group: AnalysisSourceGroup | null,
+): GroupDeleteDecision {
+  if (!group) {
+    return { ok: false, status: "Select a source group first." };
+  }
+
+  return {
+    ok: true,
+    groupId: group.id,
+    name: group.name,
+  };
+}
+
+export function groupUpdatedStatus(group: Pick<AnalysisSourceGroup, "name">) {
+  return `Source group "${group.name}" saved.`;
+}
+
+export function groupCreatedStatus(group: Pick<AnalysisSourceGroup, "name">) {
+  return `Source group "${group.name}" created.`;
+}
+
+export function groupDeletedStatus(name: string) {
+  return `Source group "${name}" deleted.`;
+}
+
+export function groupFallbackSelection(groups: AnalysisSourceGroup[]) {
+  const group = groups[0] ?? null;
+  return {
+    selectedGroupId: group ? String(group.id) : "",
+    group,
   };
 }
