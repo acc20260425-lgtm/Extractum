@@ -112,6 +112,29 @@ export type NotebookLmExportFormState = {
   maxBytesPerFile: number;
   overwriteExisting: boolean;
 };
+export type AnalysisReportStartState = {
+  analysisScope: "single_source" | "source_group";
+  selectedSourceId: string;
+  selectedGroupId: string;
+  selectedTemplateId: string;
+  periodFrom: string;
+  periodTo: string;
+  outputLanguage: string;
+  modelOverride: string;
+};
+export type AnalysisReportStartCommand = {
+  sourceId: number | null;
+  sourceGroupId: number | null;
+  periodFrom: number;
+  periodTo: number;
+  outputLanguage: string;
+  promptTemplateId: number;
+  modelOverride: string | null;
+  profileId: null;
+};
+export type AnalysisReportStartDecision =
+  | { ok: true; command: AnalysisReportStartCommand }
+  | { ok: false; status: string };
 
 export function createEmptyLiveRunState(): LiveRunState {
   return {
@@ -359,6 +382,50 @@ export function analysisGroupSelectionState(
     sourceTopics: [],
     selectedTopicKey: ALL_TOPICS_KEY,
     inspectorMode: "history",
+  };
+}
+
+export function analysisReportStartCommand(
+  state: AnalysisReportStartState,
+): AnalysisReportStartDecision {
+  if (state.analysisScope === "single_source" && !state.selectedSourceId) {
+    return { ok: false, status: "Select a source first." };
+  }
+  if (state.analysisScope === "source_group" && !state.selectedGroupId) {
+    return { ok: false, status: "Select a source group first." };
+  }
+  if (!state.selectedTemplateId) {
+    return { ok: false, status: "Select a report template first." };
+  }
+  if (!state.periodFrom || !state.periodTo) {
+    return { ok: false, status: "Select both dates first." };
+  }
+
+  const periodFrom = startOfDayUnix(state.periodFrom);
+  const periodTo = endOfDayUnix(state.periodTo);
+  if (periodFrom > periodTo) {
+    return { ok: false, status: "The start date must not be after the end date." };
+  }
+
+  const outputLanguage = state.outputLanguage.trim();
+  if (!outputLanguage) {
+    return { ok: false, status: "Output language cannot be empty." };
+  }
+
+  const modelOverride = state.modelOverride.trim();
+
+  return {
+    ok: true,
+    command: {
+      sourceId: state.analysisScope === "single_source" ? Number(state.selectedSourceId) : null,
+      sourceGroupId: state.analysisScope === "source_group" ? Number(state.selectedGroupId) : null,
+      periodFrom,
+      periodTo,
+      outputLanguage,
+      promptTemplateId: Number(state.selectedTemplateId),
+      modelOverride: modelOverride ? modelOverride : null,
+      profileId: null,
+    },
   };
 }
 

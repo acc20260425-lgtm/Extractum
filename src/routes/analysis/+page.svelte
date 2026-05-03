@@ -25,6 +25,7 @@
     applyAnalysisRunEvent,
     applyTakeoutImportJobs,
     analysisGroupSelectionState,
+    analysisReportStartCommand,
     analysisSourceSelectionState,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
@@ -866,28 +867,18 @@
   }
 
   async function runReport() {
-    if (analysisScope === "single_source" && !selectedSourceId) {
-      status = "Select a source first.";
-      return;
-    }
-    if (analysisScope === "source_group" && !selectedGroupId) {
-      status = "Select a source group first.";
-      return;
-    }
-    if (!selectedTemplateId) {
-      status = "Select a report template first.";
-      return;
-    }
-    if (!periodFrom || !periodTo) {
-      status = "Select both dates first.";
-      return;
-    }
-    if (startOfDayUnix(periodFrom) > endOfDayUnix(periodTo)) {
-      status = "The start date must not be after the end date.";
-      return;
-    }
-    if (!outputLanguage.trim()) {
-      status = "Output language cannot be empty.";
+    const command = analysisReportStartCommand({
+      analysisScope,
+      selectedSourceId,
+      selectedGroupId,
+      selectedTemplateId,
+      periodFrom,
+      periodTo,
+      outputLanguage,
+      modelOverride,
+    });
+    if (!command.ok) {
+      status = command.status;
       return;
     }
 
@@ -901,16 +892,7 @@
     currentRun = null;
 
     try {
-      const runId = await invoke<number>("start_analysis_report", {
-        sourceId: analysisScope === "single_source" ? Number(selectedSourceId) : null,
-        sourceGroupId: analysisScope === "source_group" ? Number(selectedGroupId) : null,
-        periodFrom: startOfDayUnix(periodFrom),
-        periodTo: endOfDayUnix(periodTo),
-        outputLanguage: outputLanguage.trim(),
-        promptTemplateId: Number(selectedTemplateId),
-        modelOverride: modelOverride.trim() ? modelOverride.trim() : null,
-        profileId: null,
-      });
+      const runId = await invoke<number>("start_analysis_report", command.command);
 
       liveRuns = {
         ...liveRuns,

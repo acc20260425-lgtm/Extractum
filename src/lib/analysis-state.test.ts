@@ -33,6 +33,7 @@ import {
   runActiveProgress,
   activeAnalysisRunIds,
   activeRunSyncDecision,
+  analysisReportStartCommand,
   shouldShowTopicSelector,
   selectedAnalysisGroup,
   selectedAnalysisTemplate,
@@ -520,6 +521,95 @@ describe("analysis-state", () => {
       sourceTopics: [],
       selectedTopicKey: ALL_TOPICS_KEY,
       inspectorMode: "history",
+    });
+  });
+
+  it("returns report start validation status before building a command", () => {
+    const base = {
+      analysisScope: "single_source" as const,
+      selectedSourceId: "7",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "Russian",
+      modelOverride: "",
+    };
+
+    expect(analysisReportStartCommand({ ...base, selectedSourceId: "" })).toEqual({
+      ok: false,
+      status: "Select a source first.",
+    });
+    expect(analysisReportStartCommand({
+      ...base,
+      analysisScope: "source_group",
+      selectedGroupId: "",
+    })).toEqual({
+      ok: false,
+      status: "Select a source group first.",
+    });
+    expect(analysisReportStartCommand({ ...base, selectedTemplateId: "" })).toEqual({
+      ok: false,
+      status: "Select a report template first.",
+    });
+    expect(analysisReportStartCommand({ ...base, periodTo: "" })).toEqual({
+      ok: false,
+      status: "Select both dates first.",
+    });
+    expect(analysisReportStartCommand({
+      ...base,
+      periodFrom: "2026-05-04",
+      periodTo: "2026-05-03",
+    })).toEqual({
+      ok: false,
+      status: "The start date must not be after the end date.",
+    });
+    expect(analysisReportStartCommand({ ...base, outputLanguage: " " })).toEqual({
+      ok: false,
+      status: "Output language cannot be empty.",
+    });
+  });
+
+  it("builds report start command args from valid report state", () => {
+    expect(analysisReportStartCommand({
+      analysisScope: "single_source",
+      selectedSourceId: "7",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: " Russian ",
+      modelOverride: " ",
+    })).toEqual({
+      ok: true,
+      command: {
+        sourceId: 7,
+        sourceGroupId: null,
+        periodFrom: Math.floor(new Date("2026-05-01T00:00:00").getTime() / 1000),
+        periodTo: Math.floor(new Date("2026-05-03T23:59:59").getTime() / 1000),
+        outputLanguage: "Russian",
+        promptTemplateId: 5,
+        modelOverride: null,
+        profileId: null,
+      },
+    });
+
+    expect(analysisReportStartCommand({
+      analysisScope: "source_group",
+      selectedSourceId: "7",
+      selectedGroupId: "9",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "English",
+      modelOverride: "gemini-2.5-pro",
+    })).toMatchObject({
+      ok: true,
+      command: {
+        sourceId: null,
+        sourceGroupId: 9,
+        modelOverride: "gemini-2.5-pro",
+      },
     });
   });
 
