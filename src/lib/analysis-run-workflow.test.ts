@@ -102,6 +102,7 @@ describe("analysis-run-workflow", () => {
     const { state, deps, workflow } = createHarness({
       historyScopeParams: null,
       runs: [runSummary({ id: 1 })],
+      loadingRuns: true,
     });
 
     await workflow.loadRuns();
@@ -142,8 +143,11 @@ describe("analysis-run-workflow", () => {
     expect(state.loadingRuns).toBe(false);
   });
 
-  it("loads active runs and syncs live snapshots", async () => {
-    const { state, deps, workflow } = createHarness({ activeRunId: 7 });
+  it("loads active runs, syncs live snapshots, and preserves the opened run", async () => {
+    const { state, deps, workflow } = createHarness({
+      activeRunId: 7,
+      currentRun: runDetail({ id: 8, status: "running" }),
+    });
     deps.listActiveRuns.mockResolvedValueOnce([
       runSummary({ id: 7, status: "running" }),
       runSummary({ id: 8, status: "queued" }),
@@ -154,7 +158,7 @@ describe("analysis-run-workflow", () => {
     expect(state.activeRuns.map((run) => run.id)).toEqual([7, 8]);
     expect(deps.syncRunSnapshot).toHaveBeenCalledWith(7, "running");
     expect(deps.syncRunSnapshot).toHaveBeenCalledWith(8, "queued");
-    expect(deps.pruneLiveRuns).toHaveBeenCalledWith([7, 8], null);
+    expect(deps.pruneLiveRuns).toHaveBeenCalledWith([7, 8], 8);
     expect(state.activeRunId).toBe(7);
     expect(state.loadingActiveRuns).toBe(false);
   });

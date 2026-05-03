@@ -65,7 +65,7 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
   async function loadRuns() {
     const params = deps.getState().historyScopeParams;
     if (params === null) {
-      deps.patch({ runs: [] });
+      deps.patch({ runs: [], loadingRuns: false });
       return;
     }
 
