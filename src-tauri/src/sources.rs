@@ -3,7 +3,6 @@ use grammers_session::types::PeerRef;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::AppHandle;
-use tokio::time::{Duration, Instant};
 
 use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, decompress_text};
 use crate::db::get_pool;
@@ -21,24 +20,22 @@ use crate::telegram::TelegramState;
 mod avatar;
 mod peer_resolution;
 mod settings;
+mod store;
 mod types;
 
 pub use self::settings::{
     get_sync_settings, save_sync_settings, InitialSyncMode, SyncSettingsRecord,
 };
+pub use self::store::{
+    add_telegram_source, delete_source, list_sources, list_telegram_sources,
+};
 pub use self::types::{SourceRecord, TelegramSourceInfo};
 
 pub(crate) use self::peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
+pub(crate) use self::store::load_source;
 pub(crate) use self::types::SourceSyncTarget;
 
-use self::avatar::{
-    cache_source_avatar, peer_photo_data_url_with_timeout, read_source_avatar_data_url,
-    TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS,
-};
-use self::peer_resolution::{
-    decode_source_metadata, encode_source_metadata, resolve_telegram_source,
-    source_metadata_for_added_source, telegram_source_info_from_peer,
-};
+use self::peer_resolution::decode_source_metadata;
 use self::settings::{initial_sync_policy_label, load_sync_settings_from_pool, SECONDS_PER_DAY};
 use self::types::{
     SourceForumTopicRow, SourceRecordRow, StoredItemRow, TELEGRAM_KIND_CHANNEL,
@@ -140,71 +137,6 @@ pub(crate) struct TelegramItemContext {
     pub(crate) reply_to_peer_id: Option<String>,
     pub(crate) reply_to_top_id: Option<i64>,
     pub(crate) reaction_count: Option<i64>,
-}
-
-#[tauri::command]
-pub async fn delete_source(
-    handle: AppHandle,
-    ingest_locks: tauri::State<'_, SourceIngestLocks>,
-    source_id: i64,
-) -> AppResult<()> {
-    let _ingest_guard = ingest_locks
-        .try_acquire(source_id, SourceIngestKind::Delete)
-        .await?;
-    let pool = get_pool(&handle).await?;
-    let result = sqlx::query("DELETE FROM sources WHERE id = ?")
-        .bind(source_id)
-        .execute(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if result.rows_affected() == 0 {
-        return Err(AppError::not_found(format!("Source {source_id} not found")));
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn list_telegram_sources(
-    state: tauri::State<'_, TelegramState>,
-    account_id: i64,
-) -> AppResult<Vec<TelegramSourceInfo>> {
-    let client = {
-        let accounts = state.accounts.lock().await;
-        crate::telegram::get_client(&accounts, account_id)
-            .await?
-            .clone()
-    };
-
-    let mut sources = Vec::new();
-    let mut dialogs = client.iter_dialogs();
-    let photo_budget_started_at = Instant::now();
-    let photo_budget = Duration::from_millis(TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS);
-    while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
-        if let Some(mut source) = telegram_source_info_from_peer(dialog.peer()) {
-            if photo_budget_started_at.elapsed() < photo_budget {
-                source.photo_data_url =
-                    peer_photo_data_url_with_timeout(&client, dialog.peer()).await;
-            }
-            sources.push(source);
-        }
-    }
-    Ok(sources)
-}
-
-pub(crate) async fn load_source(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    source_id: i64,
-) -> AppResult<SourceSyncTarget> {
-    sqlx::query_as(
-        "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
-    )
-    .bind(source_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))
 }
 
 async fn determine_sync_policy(
@@ -422,141 +354,6 @@ pub(crate) async fn insert_source_item(
     .map_err(|e| e.to_string())?;
 
     Ok(result.rows_affected() == 1)
-}
-
-#[tauri::command]
-pub async fn add_telegram_source(
-    handle: AppHandle,
-    state: tauri::State<'_, TelegramState>,
-    account_id: i64,
-    source_ref: String,
-    telegram_source_kind: Option<String>,
-) -> AppResult<SourceRecord> {
-    let client = {
-        let accounts = state.accounts.lock().await;
-        crate::telegram::get_client(&accounts, account_id)
-            .await?
-            .clone()
-    };
-
-    let resolved =
-        resolve_telegram_source(&client, &source_ref, telegram_source_kind.as_deref()).await?;
-    let avatar_cache_key = if let Some(bytes) = resolved.avatar_bytes.as_deref() {
-        cache_source_avatar(
-            &handle,
-            account_id,
-            &resolved.telegram_source_kind,
-            &resolved.external_id,
-            bytes,
-        )?
-    } else {
-        None
-    };
-    let metadata_zstd = encode_source_metadata(&source_metadata_for_added_source(
-        &source_ref,
-        telegram_source_kind.as_deref(),
-        &resolved,
-        avatar_cache_key,
-    ))?;
-    let now = now_secs();
-
-    let pool = get_pool(&handle).await?;
-    let row: SourceRecordRow = sqlx::query_as(
-        r#"
-        INSERT INTO sources (
-            source_type,
-            telegram_source_kind,
-            external_id,
-            title,
-            metadata_zstd,
-            is_active,
-            is_member,
-            account_id,
-            created_at
-        )
-        VALUES ('telegram', ?, ?, ?, ?, 1, ?, ?, ?)
-        ON CONFLICT(account_id, source_type, telegram_source_kind, external_id) DO UPDATE SET
-            title = excluded.title,
-            metadata_zstd = excluded.metadata_zstd,
-            is_member = excluded.is_member,
-            account_id = excluded.account_id
-        RETURNING
-            id,
-            source_type,
-            telegram_source_kind,
-            account_id,
-            external_id,
-            title,
-            metadata_zstd,
-            last_sync_state,
-            last_synced_at,
-            is_active,
-            is_member,
-            created_at
-        "#,
-    )
-    .bind(&resolved.telegram_source_kind)
-    .bind(&resolved.external_id)
-    .bind(&resolved.title)
-    .bind(metadata_zstd)
-    .bind(resolved.is_member)
-    .bind(account_id)
-    .bind(now)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
-    source_record_from_row(&handle, row)
-}
-
-#[tauri::command]
-pub async fn list_sources(
-    handle: AppHandle,
-    account_id: Option<i64>,
-) -> AppResult<Vec<SourceRecord>> {
-    let pool = get_pool(&handle).await?;
-    let rows: Vec<SourceRecordRow> = if let Some(aid) = account_id {
-        sqlx::query_as(
-            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
-        )
-        .bind(aid)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?
-    } else {
-        sqlx::query_as(
-            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
-        )
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| e.to_string())?
-    };
-
-    rows.into_iter()
-        .map(|row| source_record_from_row(&handle, row))
-        .collect()
-}
-
-fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult<SourceRecord> {
-    let metadata = decode_source_metadata(row.metadata_zstd.as_deref())?;
-    let avatar_data_url = metadata
-        .avatar_cache_key
-        .as_deref()
-        .and_then(|cache_key| read_source_avatar_data_url(handle, cache_key));
-
-    Ok(SourceRecord {
-        id: row.id,
-        source_type: row.source_type,
-        telegram_source_kind: row.telegram_source_kind,
-        account_id: row.account_id,
-        external_id: row.external_id,
-        title: row.title,
-        last_sync_state: row.last_sync_state,
-        last_synced_at: row.last_synced_at,
-        is_member: row.is_member,
-        is_active: row.is_active,
-        created_at: row.created_at,
-        avatar_data_url,
-    })
 }
 
 #[tauri::command]
@@ -1137,7 +934,6 @@ mod tests {
     use crate::compression::{
         compress_json_bytes, compress_text, decompress_bytes, decompress_text,
     };
-    use crate::error::AppErrorKind;
     use crate::media::{
         ExtractedItemPayload, ExtractedMediaPayload, ItemMediaMetadata, CONTENT_KIND_TEXT_ONLY,
         CONTENT_KIND_TEXT_WITH_MEDIA,
@@ -1395,17 +1191,6 @@ mod tests {
             Some(("channel", "33".to_string()))
         );
         assert_eq!(reply_peer_context(None), None);
-    }
-
-    #[tokio::test]
-    async fn load_source_returns_not_found_for_missing_source() {
-        let pool = memory_pool_with_sources().await;
-        let error = match load_source(&pool, 999).await {
-            Ok(_) => panic!("expected missing source error"),
-            Err(error) => error,
-        };
-
-        assert_eq!(error.kind, AppErrorKind::NotFound);
     }
 
     #[tokio::test]

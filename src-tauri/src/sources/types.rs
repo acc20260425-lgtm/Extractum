@@ -91,3 +91,10 @@ pub(super) struct SourceForumTopicRow {
     pub(super) sort_order: Option<i64>,
     pub(super) message_count: i64,
 }
+
+pub(super) fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
