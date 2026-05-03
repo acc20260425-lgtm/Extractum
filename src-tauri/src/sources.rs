@@ -29,10 +29,6 @@ const MAX_INITIAL_SYNC_DAY_LIMIT: i64 = 365;
 const INITIAL_SYNC_MODE_SETTING_KEY: &str = "sync.initial.mode";
 const INITIAL_SYNC_VALUE_SETTING_KEY: &str = "sync.initial.value";
 const SECONDS_PER_DAY: i64 = 86_400;
-const TELEGRAM_SOURCE_TYPE: &str = "telegram";
-const TELEGRAM_KIND_CHANNEL: &str = "channel";
-const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
-const TELEGRAM_KIND_GROUP: &str = "group";
 const TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS: u64 = 750;
 const TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS: u64 = 4_000;
 const TELEGRAM_SOURCE_AVATAR_CACHE_DIR: &str = "source_avatars";
@@ -65,32 +61,6 @@ impl InitialSyncMode {
 pub struct SyncSettingsRecord {
     pub initial_sync_mode: InitialSyncMode,
     pub initial_sync_value: i64,
-}
-
-#[derive(Serialize)]
-pub struct TelegramSourceInfo {
-    pub id: i64,
-    pub title: String,
-    pub username: Option<String>,
-    pub telegram_source_kind: String,
-    pub is_member: bool,
-    pub photo_data_url: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct SourceRecord {
-    pub id: i64,
-    pub source_type: String,
-    pub telegram_source_kind: String,
-    pub account_id: Option<i64>,
-    pub external_id: String,
-    pub title: Option<String>,
-    pub last_sync_state: Option<i64>,
-    pub last_synced_at: Option<i64>,
-    pub is_member: bool,
-    pub is_active: bool,
-    pub created_at: i64,
-    pub avatar_data_url: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -144,67 +114,6 @@ pub struct SourceForumTopicRecord {
     pub is_hidden: bool,
     pub is_deleted: bool,
     pub sort_order: Option<i64>,
-}
-
-#[derive(sqlx::FromRow)]
-pub(crate) struct SourceSyncTarget {
-    pub(crate) id: i64,
-    pub(crate) source_type: String,
-    pub(crate) telegram_source_kind: String,
-    pub(crate) account_id: Option<i64>,
-    pub(crate) external_id: String,
-    pub(crate) title: Option<String>,
-    pub(crate) metadata_zstd: Option<Vec<u8>>,
-    pub(crate) last_sync_state: Option<i64>,
-}
-
-#[derive(sqlx::FromRow)]
-struct SourceRecordRow {
-    id: i64,
-    source_type: String,
-    telegram_source_kind: String,
-    account_id: Option<i64>,
-    external_id: String,
-    title: Option<String>,
-    metadata_zstd: Option<Vec<u8>>,
-    last_sync_state: Option<i64>,
-    last_synced_at: Option<i64>,
-    is_active: bool,
-    is_member: bool,
-    created_at: i64,
-}
-
-#[derive(sqlx::FromRow)]
-struct StoredItemRow {
-    id: i64,
-    source_id: i64,
-    external_id: String,
-    author: Option<String>,
-    published_at: i64,
-    content_kind: String,
-    has_media: bool,
-    media_kind: Option<String>,
-    content_zstd: Option<Vec<u8>>,
-    media_metadata_zstd: Option<Vec<u8>>,
-    raw_data_zstd: Option<Vec<u8>>,
-    forum_topic_id: Option<i64>,
-    forum_topic_title: Option<String>,
-    forum_topic_top_message_id: Option<i64>,
-}
-
-#[derive(sqlx::FromRow)]
-struct SourceForumTopicRow {
-    topic_id: i64,
-    top_message_id: i64,
-    title: String,
-    icon_color: Option<i64>,
-    icon_emoji_id: Option<i64>,
-    is_closed: bool,
-    is_pinned: bool,
-    is_hidden: bool,
-    is_deleted: bool,
-    sort_order: Option<i64>,
-    message_count: i64,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
