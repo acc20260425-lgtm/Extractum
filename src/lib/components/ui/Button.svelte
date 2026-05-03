@@ -83,6 +83,11 @@
     cursor: not-allowed;
   }
 
+  .ui-button:focus-visible:not(:disabled) {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
   .ui-button.md {
     padding: 0.6rem 1rem;
     font-size: 0.95rem;
