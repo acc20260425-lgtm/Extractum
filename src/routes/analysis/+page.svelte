@@ -29,6 +29,9 @@
     canCancelAnalysisRun,
     createEmptyLiveRunState,
     currentTopicFilter as currentTopicFilterFromState,
+    filteredAnalysisGroups,
+    filteredAnalysisRuns,
+    filteredAnalysisSourceCatalog,
     focusedLiveRunState,
     focusedRunChunkSummaries,
     focusedRunStreamedOutput,
@@ -47,6 +50,7 @@
     shouldShowTopicSelector as shouldShowTopicSelectorFromState,
     syncRunSnapshot as syncLiveRunSnapshot,
     upsertTakeoutImportJob,
+    type AnalysisRunFilter,
     type LiveRunState,
     type NotebookLmExportProgressState,
   } from "$lib/analysis-state";
@@ -174,7 +178,7 @@
   let selectedTraceRef = $state<string | null>(null);
   let savedTraceRefs = $state<string[]>([]);
   let resolvedTraceRefs = $state<string[]>([]);
-  let runFilter = $state<"all" | "completed" | "failed">("all");
+  let runFilter = $state<AnalysisRunFilter>("all");
   let historyScope = $state<"all" | "current">("all");
   let chatQuestion = $state("");
   let chatMessages = $state<AnalysisChatTurn[]>([]);
@@ -451,29 +455,13 @@
     );
   });
 
-  const filteredRuns = $derived.by(() => {
-    if (runFilter === "all") return runs;
-    return runs.filter((run) => run.status === runFilter);
-  });
+  const filteredRuns = $derived.by(() => filteredAnalysisRuns(runs, runFilter));
 
   const filteredSourceCatalog = $derived.by(() => {
-    const query = railQuery.trim().toLocaleLowerCase();
-    return sourceCatalog.filter((source) => {
-      if (!query) return true;
-      return (
-        (source.title ?? source.external_id).toLocaleLowerCase().includes(query) ||
-        accountLabel(source.account_id).toLocaleLowerCase().includes(query)
-      );
-    });
+    return filteredAnalysisSourceCatalog(sourceCatalog, railQuery, accountLabel);
   });
 
-  const filteredGroups = $derived.by(() => {
-    const query = railQuery.trim().toLocaleLowerCase();
-    return groups.filter((group) => {
-      if (!query) return true;
-      return group.name.toLocaleLowerCase().includes(query);
-    });
-  });
+  const filteredGroups = $derived.by(() => filteredAnalysisGroups(groups, railQuery));
 
   function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
     const next = templateEditorStateFromTemplate(template);

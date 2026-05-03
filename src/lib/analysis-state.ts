@@ -3,6 +3,7 @@ import type {
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
+  AnalysisSourceGroup,
   AnalysisTraceRef,
 } from "$lib/types/analysis";
 import type {
@@ -31,6 +32,7 @@ export type NotebookLmExportProgressState = {
 };
 
 export type AnalysisTraceRefOrigin = "saved" | "resolved" | "unknown";
+export type AnalysisRunFilter = "all" | "completed" | "failed";
 
 export function createEmptyLiveRunState(): LiveRunState {
   return {
@@ -153,6 +155,40 @@ export function isRunActive(activeRunId: number | null, activeRunIds: number[]) 
 
 export function canCancelAnalysisRun(activeRunId: number | null, activeRunIds: number[]) {
   return isRunActive(activeRunId, activeRunIds);
+}
+
+export function filteredAnalysisRuns(
+  runs: AnalysisRunSummary[],
+  runFilter: AnalysisRunFilter,
+) {
+  if (runFilter === "all") return runs;
+  return runs.filter((run) => run.status === runFilter);
+}
+
+export function filteredAnalysisSourceCatalog(
+  sources: SourceRecord[],
+  railQuery: string,
+  accountLabel: (accountId: number | null) => string,
+) {
+  const query = railQuery.trim().toLocaleLowerCase();
+  if (!query) return sources;
+
+  return sources.filter((source) => {
+    return (
+      (source.title ?? source.external_id).toLocaleLowerCase().includes(query) ||
+      accountLabel(source.account_id).toLocaleLowerCase().includes(query)
+    );
+  });
+}
+
+export function filteredAnalysisGroups(
+  groups: AnalysisSourceGroup[],
+  railQuery: string,
+) {
+  const query = railQuery.trim().toLocaleLowerCase();
+  if (!query) return groups;
+
+  return groups.filter((group) => group.name.toLocaleLowerCase().includes(query));
 }
 
 export function formatAnalysisRunProgress(

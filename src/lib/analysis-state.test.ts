@@ -5,6 +5,9 @@ import {
   analysisTraceRefOrigin,
   canCancelAnalysisRun,
   createEmptyLiveRunState,
+  filteredAnalysisGroups,
+  filteredAnalysisRuns,
+  filteredAnalysisSourceCatalog,
   focusedLiveRunState,
   focusedRunChunkSummaries,
   focusedRunStreamedOutput,
@@ -26,7 +29,13 @@ import {
   syncRunSnapshot,
   upsertTakeoutImportJob,
 } from "./analysis-state";
-import type { AnalysisRunDetail, AnalysisRunEvent, AnalysisRunSummary, AnalysisTraceRef } from "./types/analysis";
+import type {
+  AnalysisRunDetail,
+  AnalysisRunEvent,
+  AnalysisRunSummary,
+  AnalysisSourceGroup,
+  AnalysisTraceRef,
+} from "./types/analysis";
 import type {
   NotebookLmExportEvent,
   SourceRecord,
@@ -149,6 +158,35 @@ function runDetail(overrides: Partial<AnalysisRunDetail>): AnalysisRunDetail {
   return {
     ...runSummary(overrides),
     result_markdown: "saved result",
+    ...overrides,
+  };
+}
+
+function sourceRecord(overrides: Partial<SourceRecord>): SourceRecord {
+  return {
+    id: 1,
+    source_type: "telegram",
+    telegram_source_kind: "channel",
+    account_id: null,
+    external_id: "external-a",
+    title: "Announcements",
+    last_sync_state: null,
+    last_synced_at: null,
+    is_member: true,
+    is_active: true,
+    created_at: 100,
+    avatar_data_url: null,
+    ...overrides,
+  };
+}
+
+function sourceGroup(overrides: Partial<AnalysisSourceGroup>): AnalysisSourceGroup {
+  return {
+    id: 1,
+    name: "Research",
+    members: [],
+    created_at: 100,
+    updated_at: 100,
     ...overrides,
   };
 }
@@ -288,6 +326,43 @@ describe("analysis-state", () => {
     expect(isRunActive(null, [7, 8])).toBe(false);
     expect(canCancelAnalysisRun(8, [7, 8])).toBe(true);
     expect(canCancelAnalysisRun(9, [7, 8])).toBe(false);
+  });
+
+  it("filters analysis runs by selected status", () => {
+    const completed = runSummary({ id: 1, status: "completed" });
+    const failed = runSummary({ id: 2, status: "failed" });
+    const running = runSummary({ id: 3, status: "running" });
+    const runs = [completed, failed, running];
+
+    expect(filteredAnalysisRuns(runs, "all")).toBe(runs);
+    expect(filteredAnalysisRuns(runs, "completed")).toEqual([completed]);
+    expect(filteredAnalysisRuns(runs, "failed")).toEqual([failed]);
+  });
+
+  it("filters source catalog by title, external id, or account label", () => {
+    const sources = [
+      sourceRecord({ id: 1, title: "Announcements", external_id: "channel-a", account_id: 10 }),
+      sourceRecord({ id: 2, title: null, external_id: "market-feed", account_id: 20 }),
+      sourceRecord({ id: 3, title: "Archive", external_id: "archive", account_id: null }),
+    ];
+    const accountLabel = (accountId: number | null) =>
+      accountId === 10 ? "Primary Account" : "Backup Account";
+
+    expect(filteredAnalysisSourceCatalog(sources, "", accountLabel)).toBe(sources);
+    expect(filteredAnalysisSourceCatalog(sources, "announce", accountLabel)).toEqual([sources[0]]);
+    expect(filteredAnalysisSourceCatalog(sources, "MARKET", accountLabel)).toEqual([sources[1]]);
+    expect(filteredAnalysisSourceCatalog(sources, "primary", accountLabel)).toEqual([sources[0]]);
+  });
+
+  it("filters source groups by trimmed case-insensitive query", () => {
+    const groups = [
+      sourceGroup({ id: 1, name: "Research" }),
+      sourceGroup({ id: 2, name: "Daily Briefing" }),
+    ];
+
+    expect(filteredAnalysisGroups(groups, " ")).toBe(groups);
+    expect(filteredAnalysisGroups(groups, "brief")).toEqual([groups[1]]);
+    expect(filteredAnalysisGroups(groups, "RESEARCH")).toEqual([groups[0]]);
   });
 
   it("formats run progress from counters, queue position, terminal events, or prior progress", () => {
