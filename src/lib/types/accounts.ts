@@ -9,7 +9,6 @@ export interface AccountRecord {
   id: number;
   label: string;
   api_id: number;
-  api_hash: string;
   phone: string | null;
   created_at: number;
 }

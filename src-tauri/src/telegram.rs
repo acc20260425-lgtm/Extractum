@@ -136,6 +136,23 @@ async fn list_account_credentials(handle: &AppHandle) -> Result<Vec<AccountCrede
         .map_err(|e| e.to_string())
 }
 
+async fn get_account_credentials(
+    handle: &AppHandle,
+    account_id: i64,
+) -> Result<AccountCredentials, String> {
+    let pool = get_pool(handle).await?;
+    sqlx::query_as("SELECT id, api_id, api_hash FROM accounts WHERE id = ?")
+        .bind(account_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Account not found".to_string())
+}
+
+fn telegram_api_id(api_id: i64) -> Result<i32, String> {
+    i32::try_from(api_id).map_err(|_| "Telegram API ID is out of range".to_string())
+}
+
 const TELEGRAM_ACCOUNT_STATUS_EVENT: &str = "telegram://account-status";
 
 async fn set_account_status(
@@ -256,7 +273,20 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
             &handle,
             &state,
             account.id,
-            account.api_id as i32,
+            match telegram_api_id(account.api_id) {
+                Ok(api_id) => api_id,
+                Err(error) => {
+                    set_account_status(
+                        &handle,
+                        &state,
+                        account.id,
+                        STATUS_RESTORE_FAILED,
+                        Some(restore_failure_message(error)),
+                    )
+                    .await;
+                    continue;
+                }
+            },
             account.api_hash,
         )
         .await;
@@ -285,10 +315,11 @@ pub async fn tg_init(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
-    api_id: i32,
-    api_hash: String,
 ) -> AppResult<bool> {
-    match init_account_client(&handle, &state, account_id, api_id, api_hash).await {
+    let credentials = get_account_credentials(&handle, account_id).await?;
+    let api_id = telegram_api_id(credentials.api_id)?;
+
+    match init_account_client(&handle, &state, account_id, api_id, credentials.api_hash).await {
         Ok(is_auth) => Ok(is_auth),
         Err(error) => {
             let mut accounts = state.accounts.lock().await;

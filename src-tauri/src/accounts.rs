@@ -10,7 +10,6 @@ pub struct AccountRecord {
     pub id: i64,
     pub label: String,
     pub api_id: i64,
-    pub api_hash: String,
     pub phone: Option<String>,
     pub created_at: i64,
 }
@@ -19,7 +18,7 @@ pub struct AccountRecord {
 pub async fn list_accounts(handle: AppHandle) -> AppResult<Vec<AccountRecord>> {
     let pool = get_pool(&handle).await?;
     Ok(sqlx::query_as(
-        "SELECT id, label, api_id, api_hash, phone, created_at FROM accounts ORDER BY created_at ASC",
+        "SELECT id, label, api_id, phone, created_at FROM accounts ORDER BY created_at ASC",
     )
     .fetch_all(&pool)
     .await
@@ -29,13 +28,13 @@ pub async fn list_accounts(handle: AppHandle) -> AppResult<Vec<AccountRecord>> {
 #[tauri::command]
 pub async fn get_account(handle: AppHandle, account_id: i64) -> AppResult<Option<AccountRecord>> {
     let pool = get_pool(&handle).await?;
-    Ok(sqlx::query_as(
-        "SELECT id, label, api_id, api_hash, phone, created_at FROM accounts WHERE id = ?",
+    Ok(
+        sqlx::query_as("SELECT id, label, api_id, phone, created_at FROM accounts WHERE id = ?")
+            .bind(account_id)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| e.to_string())?,
     )
-    .bind(account_id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| e.to_string())?)
 }
 
 #[tauri::command]
@@ -51,7 +50,7 @@ pub async fn create_account(
         .unwrap()
         .as_secs() as i64;
     Ok(sqlx::query_as(
-        "INSERT INTO accounts (label, api_id, api_hash, created_at) VALUES (?, ?, ?, ?) RETURNING id, label, api_id, api_hash, phone, created_at",
+        "INSERT INTO accounts (label, api_id, api_hash, created_at) VALUES (?, ?, ?, ?) RETURNING id, label, api_id, phone, created_at",
     )
     .bind(&label)
     .bind(api_id)

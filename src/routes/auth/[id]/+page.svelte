@@ -17,7 +17,6 @@
 
   let label = $state("");
   let apiId = $state(0);
-  let apiHash = $state("");
   let phone = $state("");
   let code = $state("");
   let status = $state("");
@@ -39,7 +38,6 @@
       }
       label = acc.label;
       apiId = acc.api_id;
-      apiHash = acc.api_hash;
       phone = acc.phone ?? "";
 
       await initClient();
@@ -54,8 +52,6 @@
     try {
       const isAuth = await invoke<boolean>("tg_init", {
         accountId,
-        apiId,
-        apiHash,
       });
       if (isAuth) {
         step = "done";
