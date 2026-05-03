@@ -8,7 +8,7 @@
 - Active branch: `small-stabilization-increment`
 - Base branch: `main`
 - Merge base: `a64b0d85d832b4fab09a6ed6805546dcb4288812`
-- Current HEAD before this handoff update: `42ad176 test(frontend): extract source deletion helpers`
+- Current HEAD before this handoff update: `15de06d test(frontend): extract run deletion helpers`
 - Worktree before this handoff update was clean:
 
 ```text
@@ -57,6 +57,10 @@ Main review findings:
 ## Recent Branch History
 
 ```text
+15de06d test(frontend): extract run deletion helpers
+b05955a test(frontend): extract report start helpers
+7836c83 test(frontend): extract source action helpers
+d5244aa docs(session): refresh stabilization handoff context
 42ad176 test(frontend): extract source deletion helpers
 0167830 test(frontend): extract opened run reset helper
 4368f48 test(frontend): extract analysis selection state helpers
@@ -576,6 +580,84 @@ Recorded verification:
 - Svelte autofixer: no issues or suggestions.
 - `git diff --check`: CRLF warnings only.
 
+### 20. Source Action Helpers
+
+Commit: `7836c83 test(frontend): extract source action helpers`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `sourceActionPending`
+- `clearSourceActionPending`
+
+The route still owns Tauri `invoke`, status text assignment, source reload calls, and Takeout/sync side
+effects. The pure helper now owns immutable pending-map updates for source sync/start actions.
+
+Recorded verification:
+
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 27 passed.
+- `npm.cmd test`: 8 test files, 73 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+
+### 21. Report Start Helpers
+
+Commit: `b05955a test(frontend): extract report start helpers`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `AnalysisReportStartState`
+- `AnalysisReportStartCommand`
+- `AnalysisReportStartDecision`
+- `analysisReportStartCommand`
+
+The helper now owns pure validation and request-shape building for starting an analysis report. The route
+still owns Tauri `invoke("run_analysis_report")`, loading/status assignment, and post-start reload flow.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` tests failed on missing report start helper functions.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 33 passed.
+- `npm.cmd test`: 8 test files, 79 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+
+### 22. Run Deletion Helpers
+
+Commit: `15de06d test(frontend): extract run deletion helpers`
+
+Files changed:
+
+- `src/lib/analysis-state.ts`
+- `src/lib/analysis-state.test.ts`
+- `src/routes/analysis/+page.svelte`
+
+`analysis-state.ts` gained:
+
+- `RunDeletionDialog`
+- `RunDeletionDecision`
+- `runDeletionDecision`
+
+The helper now owns saved-run deletion eligibility, confirm-dialog content, and active-run protection
+decisions. The route still owns confirm modal invocation, `invoke("delete_analysis_run")`, reloads, and
+status assignment.
+
+Recorded verification:
+
+- RED confirmed: targeted `analysis-state` tests failed on missing run deletion helpers.
+- `npm.cmd test -- src/lib/analysis-state.test.ts`: 35 passed.
+- `npm.cmd test`: 8 test files, 81 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+
 ## Current Route Stabilization Shape
 
 `src/routes/analysis/+page.svelte` is still the composition and side-effect layer. It still owns:
@@ -591,7 +673,8 @@ Pure behavior already extracted and covered:
 
 - analysis run reducers, run view helpers, filters, selection lookup helpers, selection-state helpers,
   topic helpers, trace helpers, Takeout reducers/decisions, active-run sync decision, NotebookLM helpers,
-  opened-run reset helper, and source deletion helpers:
+  opened-run reset helper, source deletion helpers, source action helpers, report start helpers, and run
+  deletion helpers:
   `src/lib/analysis-state.ts`;
 - chat state/event reducers: `src/lib/analysis-chat-state.ts`;
 - source display/runtime helpers: `src/lib/analysis-source-state.ts`;
@@ -600,40 +683,31 @@ Pure behavior already extracted and covered:
 - scope and history params helpers: `src/lib/analysis-scope-state.ts`;
 - LLM settings API/types: `src/lib/api/llm.ts`, `src/lib/types/llm.ts`.
 
-## Current Likely Next Step
+## Current Session State
 
-Recommended next small TDD increment:
+The previously suggested next three compact TDD increments are now complete:
 
-```text
-test(frontend): extract source action helpers
-```
+1. source action helpers;
+2. report start validation/request helpers;
+3. run deletion helpers.
 
-Suggested scope:
+This handoff refresh closes the stale gap from the previous `42ad176`-based session snapshot.
 
-- inspect `syncSelectedSource`, `refreshSourcesAfterManagement`, `startTakeoutImport`,
-  `cancelTakeoutImport`, and nearby source-action code in `src/routes/analysis/+page.svelte`;
-- extract only compact pure behavior, likely one or more of:
-  - `markSourceActionPending(current, sourceId)`;
-  - `clearSourceActionPending(current, sourceId)`;
-  - `sourceSyncCompleteStatus(result)` or `sourceSyncStatus(source, result)`;
-  - `sourceRefreshDecision(sourceId, selectedSourceId)`;
-- keep route side effects in the route:
-  - Tauri `invoke`;
-  - loading map assignment;
-  - `loadSourceCatalog`, `loadGroups`, `loadActiveRuns`, `loadRuns`;
-  - `loadSourceTopics` and `loadItems`;
-  - error formatting and status assignment where not yet extracted.
+Recommended next action from this point:
 
-Possible follow-on increments after source action helpers:
+1. treat this document refresh as the end of the current small stabilization micro-sequence;
+2. on the next implementation turn, either:
+   - stop the small frontend extraction phase and plan a larger controller/reducer pass for
+     `src/routes/analysis/+page.svelte`; or
+   - pick one final compact pure helper only if there is still an obviously isolated decision block left in
+     the route.
 
-1. run report validation/request helpers;
-2. run deletion dialog/status/reset decision helpers;
-3. remaining source refresh decision helpers if not included in the next increment;
-4. final docs/session refresh;
-5. stop the "small stabilization increment" phase and plan a larger controller/reducer extraction or backend
-   module split separately.
+Most likely remaining compact frontend extraction, if desired:
 
-Estimated remaining small stabilization increments before a good stopping point: 3-5.
+- source refresh/status decision helpers around post-sync/post-management reload behavior.
+
+Otherwise, the branch is at a reasonable stopping point for this stabilization track and can shift to
+planning the next larger refactor or a different review follow-up item.
 
 ## Sandbox And Tooling Caveats
 
