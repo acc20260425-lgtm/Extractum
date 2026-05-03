@@ -37,6 +37,19 @@ export type NotebookLmExportProgressState = {
 
 export type AnalysisTraceRefOrigin = "saved" | "resolved" | "unknown";
 export type AnalysisRunFilter = "all" | "completed" | "failed";
+export type AnalysisSourceSelectionState = {
+  analysisScope: "single_source";
+  selectedSourceId: string;
+  selectedTopicKey: typeof ALL_TOPICS_KEY;
+  inspectorMode: "history";
+};
+export type AnalysisGroupSelectionState = {
+  analysisScope: "source_group";
+  selectedGroupId: string;
+  sourceTopics: SourceForumTopicRecord[];
+  selectedTopicKey: typeof ALL_TOPICS_KEY;
+  inspectorMode: "history";
+};
 export type ActiveRunSyncDecision = {
   activeRunIds: number[];
   preserveRunId: number | null;
@@ -285,6 +298,29 @@ export function selectedAnalysisTraceRef(
 ) {
   if (!selectedTraceRef) return null;
   return refs.find((ref) => ref.ref === selectedTraceRef) ?? null;
+}
+
+export function analysisSourceSelectionState(
+  sourceId: number,
+): AnalysisSourceSelectionState {
+  return {
+    analysisScope: "single_source",
+    selectedSourceId: String(sourceId),
+    selectedTopicKey: ALL_TOPICS_KEY,
+    inspectorMode: "history",
+  };
+}
+
+export function analysisGroupSelectionState(
+  groupId: number,
+): AnalysisGroupSelectionState {
+  return {
+    analysisScope: "source_group",
+    selectedGroupId: String(groupId),
+    sourceTopics: [],
+    selectedTopicKey: ALL_TOPICS_KEY,
+    inspectorMode: "history",
+  };
 }
 
 export function formatAnalysisRunProgress(

@@ -24,6 +24,8 @@
   import {
     applyAnalysisRunEvent,
     applyTakeoutImportJobs,
+    analysisGroupSelectionState,
+    analysisSourceSelectionState,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
     activeRunSyncDecision,
@@ -640,20 +642,22 @@
   }
 
   async function selectSource(sourceId: number) {
-    analysisScope = "single_source";
-    selectedSourceId = String(sourceId);
-    selectedTopicKey = "__all_topics__";
-    inspectorMode = "history";
+    const next = analysisSourceSelectionState(sourceId);
+    analysisScope = next.analysisScope;
+    selectedSourceId = next.selectedSourceId;
+    selectedTopicKey = next.selectedTopicKey;
+    inspectorMode = next.inspectorMode;
     await loadSourceTopics(sourceId);
     await loadItems(sourceId);
   }
 
   function selectGroup(groupId: number) {
-    analysisScope = "source_group";
-    selectedGroupId = String(groupId);
-    sourceTopics = [];
-    selectedTopicKey = "__all_topics__";
-    inspectorMode = "history";
+    const next = analysisGroupSelectionState(groupId);
+    analysisScope = next.analysisScope;
+    selectedGroupId = next.selectedGroupId;
+    sourceTopics = next.sourceTopics;
+    selectedTopicKey = next.selectedTopicKey;
+    inspectorMode = next.inspectorMode;
   }
 
   async function changeSelectedTopicKey(nextKey: string) {
