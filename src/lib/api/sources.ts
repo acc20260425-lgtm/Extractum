@@ -261,6 +261,6 @@ function mapForumTopicFilter(filter: ForumTopicFilter | null) {
   }
   return {
     kind: "topic" as const,
-    topicId: "topicId" in filter ? filter.topicId : filter.topic_id,
+    topicId: filter.topicId,
   };
 }

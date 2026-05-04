@@ -11,22 +11,22 @@ import type {
   AnalysisSourceGroup,
   AnalysisSourceOption,
 } from "./types/analysis";
-import type { SourceRecord } from "./types/sources";
+import type { Source } from "./types/sources";
 
-function source(overrides: Partial<SourceRecord> = {}): SourceRecord {
+function source(overrides: Partial<Source> = {}): Source {
   return {
     id: 1,
-    source_type: "telegram",
-    telegram_source_kind: "channel",
-    account_id: 1,
-    external_id: "@extractum",
+    sourceType: "telegram",
+    telegramSourceKind: "channel",
+    accountId: 1,
+    externalId: "@extractum",
     title: "Extractum",
-    last_sync_state: null,
-    last_synced_at: null,
-    is_member: true,
-    is_active: true,
-    created_at: 100,
-    avatar_data_url: null,
+    lastSyncState: null,
+    lastSyncedAt: null,
+    isMember: true,
+    isActive: true,
+    createdAt: 100,
+    avatarDataUrl: null,
     ...overrides,
   };
 }
@@ -84,7 +84,7 @@ describe("analysis-scope-state", () => {
     expect(currentAnalysisScopeTitle("source_group", null, null)).toBe("Source group");
     expect(currentAnalysisScopeTitle("single_source", source({ title: "Named" }), null))
       .toBe("Named");
-    expect(currentAnalysisScopeTitle("single_source", source({ title: null, external_id: "@raw" }), null))
+    expect(currentAnalysisScopeTitle("single_source", source({ title: null, externalId: "@raw" }), null))
       .toBe("@raw");
     expect(currentAnalysisScopeTitle("single_source", null, null)).toBe("Source");
   });

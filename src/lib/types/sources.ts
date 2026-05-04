@@ -13,15 +13,6 @@ export interface TelegramDialogSource {
   photoDataUrl: string | null;
 }
 
-export interface TelegramSourceInfo {
-  id: number;
-  title: string;
-  username: string | null;
-  telegram_source_kind: TelegramSourceKind;
-  is_member: boolean;
-  photo_data_url: string | null;
-}
-
 export interface Source {
   id: number;
   sourceType: SourceType;
@@ -35,21 +26,6 @@ export interface Source {
   isActive: boolean;
   createdAt: number;
   avatarDataUrl: string | null;
-}
-
-export interface SourceRecord {
-  id: number;
-  source_type: string;
-  telegram_source_kind: TelegramSourceKind;
-  account_id: number | null;
-  external_id: string;
-  title: string | null;
-  last_sync_state: number | null;
-  last_synced_at: number | null;
-  is_member: boolean;
-  is_active: boolean;
-  created_at: number;
-  avatar_data_url: string | null;
 }
 
 export interface SourceItem {
@@ -71,28 +47,8 @@ export interface SourceItem {
   forumTopicTopMessageId: number | null;
 }
 
-export interface ItemRecord {
-  id: number;
-  source_id: number;
-  external_id: string;
-  author: string | null;
-  published_at: number;
-  content: string | null;
-  content_kind: string;
-  has_media: boolean;
-  media_kind: string | null;
-  media_summary: string | null;
-  media_file_name: string | null;
-  media_mime_type: string | null;
-  has_raw_data: boolean;
-  forum_topic_id: number | null;
-  forum_topic_title: string | null;
-  forum_topic_top_message_id: number | null;
-}
-
 export type ForumTopicFilter =
   | { kind: "topic"; topicId: number }
-  | { kind: "topic"; topic_id: number }
   | { kind: "uncategorized" };
 
 export interface SourceForumTopic {
@@ -111,22 +67,6 @@ export interface SourceForumTopic {
   sortOrder: number | null;
 }
 
-export interface SourceForumTopicRecord {
-  kind: "topic" | "uncategorized";
-  key: string;
-  title: string;
-  message_count: number;
-  topic_id: number | null;
-  top_message_id: number | null;
-  icon_color: number | null;
-  icon_emoji_id: number | null;
-  is_closed: boolean;
-  is_pinned: boolean;
-  is_hidden: boolean;
-  is_deleted: boolean;
-  sort_order: number | null;
-}
-
 export interface SyncSourceResult {
   inserted: number;
   skipped: number;
@@ -135,22 +75,9 @@ export interface SyncSourceResult {
   warnings: string[];
 }
 
-export interface SyncResult {
-  inserted: number;
-  skipped: number;
-  last_message_id: number | null;
-  initial_sync_policy_applied: string | null;
-  warnings: string[];
-}
-
 export interface SyncSettings {
   initialSyncMode: InitialSyncMode;
   initialSyncValue: number;
-}
-
-export interface SyncSettingsRecord {
-  initial_sync_mode: InitialSyncMode;
-  initial_sync_value: number;
 }
 
 export type TakeoutImportStatus =

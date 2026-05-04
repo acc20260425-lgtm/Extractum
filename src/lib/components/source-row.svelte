@@ -3,7 +3,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
-  import type { SourceRecord } from "$lib/types/sources";
+  import type { Source } from "$lib/types/sources";
 
   let {
     source,
@@ -20,13 +20,13 @@
     onSync,
     onDelete,
   }: {
-    source: SourceRecord;
+    source: Source;
     selected: boolean;
     syncing: boolean;
     deleting: boolean;
     accountLabel: (id: number | null) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
-    syncDisabledReason: (source: SourceRecord) => string | null;
+    syncDisabledReason: (source: Source) => string | null;
     sourceKindLabel: (kind: string) => string;
     membershipLabel: (kind: string, isMember: boolean) => string;
     formatDate: (timestamp: number) => string;
@@ -36,7 +36,7 @@
   } = $props();
 
   const syncReason = $derived(syncDisabledReason(source));
-  const sourceRuntimeStatus = $derived(runtimeStatus(source.account_id));
+  const sourceRuntimeStatus = $derived(runtimeStatus(source.accountId));
   const runtimeBadgeLabel = $derived(
     !sourceRuntimeStatus
       ? null
@@ -52,29 +52,29 @@
   );
 
   function sourceInitial() {
-    return (source.title ?? source.external_id).trim().charAt(0).toUpperCase() || "#";
+    return (source.title ?? source.externalId).trim().charAt(0).toUpperCase() || "#";
   }
 </script>
 
 <li class:selected={selected}>
   <div class="source-avatar" aria-hidden="true">
-    {#if source.avatar_data_url}
-      <img src={source.avatar_data_url} alt="" loading="lazy" />
+    {#if source.avatarDataUrl}
+      <img src={source.avatarDataUrl} alt="" loading="lazy" />
     {:else}
       <span>{sourceInitial()}</span>
     {/if}
   </div>
   <div class="channel-info">
     <button class="source-main" onclick={() => onSelect(source.id)}>
-      <span class="title">{source.title ?? source.external_id}</span>
-      <span class="sub">{accountLabel(source.account_id)}</span>
+      <span class="title">{source.title ?? source.externalId}</span>
+      <span class="sub">{accountLabel(source.accountId)}</span>
     </button>
     <div class="channel-actions">
-      <Badge>{sourceKindLabel(source.telegram_source_kind)}</Badge>
-      {#if source.last_synced_at !== null}
-        <Badge>synced {formatDate(source.last_synced_at)}</Badge>
+      <Badge>{sourceKindLabel(source.telegramSourceKind)}</Badge>
+      {#if source.lastSyncedAt !== null}
+        <Badge>synced {formatDate(source.lastSyncedAt)}</Badge>
       {/if}
-      {#if source.account_id !== null}
+      {#if source.accountId !== null}
         {#if runtimeBadgeLabel}
           <Badge
             variant="warning"
@@ -86,10 +86,10 @@
           </Badge>
         {/if}
       {/if}
-      {#if source.is_member}
-        <Badge variant="member">{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
+      {#if source.isMember}
+        <Badge variant="member">{membershipLabel(source.telegramSourceKind, source.isMember)}</Badge>
       {:else}
-        <Badge>{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
+        <Badge>{membershipLabel(source.telegramSourceKind, source.isMember)}</Badge>
       {/if}
       <Button
         size="sm"

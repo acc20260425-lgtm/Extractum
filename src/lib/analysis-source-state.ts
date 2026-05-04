@@ -1,5 +1,5 @@
 import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
-import type { SourceRecord } from "$lib/types/sources";
+import type { Source } from "$lib/types/sources";
 
 export function accountLabel(
   accountId: number | null,
@@ -46,16 +46,16 @@ export function membershipLabel(kind: string, isMember: boolean) {
   return isMember ? "member" : "not a member";
 }
 
-export function sourceInitial(source: SourceRecord) {
-  return (source.title ?? source.external_id).trim().charAt(0).toUpperCase() || "#";
+export function sourceInitial(source: Source) {
+  return (source.title ?? source.externalId).trim().charAt(0).toUpperCase() || "#";
 }
 
 export function sourceSyncDisabledReason(
-  source: SourceRecord,
+  source: Source,
   accountStatuses: Record<number, AccountRuntimeStatus>,
 ) {
-  const runtime = runtimeStatus(source.account_id, accountStatuses);
-  if (source.account_id === null) return "Source is not linked to an account.";
+  const runtime = runtimeStatus(source.accountId, accountStatuses);
+  if (source.accountId === null) return "Source is not linked to an account.";
   if (!runtime || runtime.status === "not_initialized") {
     return "Initialize this account before syncing.";
   }

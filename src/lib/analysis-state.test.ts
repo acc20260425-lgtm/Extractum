@@ -61,9 +61,9 @@ import type {
 import type {
   NotebookLmExportEvent,
   NotebookLmExportResult,
-  SourceRecord,
-  SourceForumTopicRecord,
-  SyncResult,
+  Source,
+  SourceForumTopic,
+  SyncSourceResult,
   TakeoutImportJobRecord,
 } from "./types/sources";
 
@@ -104,32 +104,32 @@ function takeoutJob(overrides: Partial<TakeoutImportJobRecord>): TakeoutImportJo
   };
 }
 
-function syncResult(overrides: Partial<SyncResult> = {}): SyncResult {
+function syncResult(overrides: Partial<SyncSourceResult> = {}): SyncSourceResult {
   return {
     inserted: 10,
     skipped: 2,
-    last_message_id: 123,
-    initial_sync_policy_applied: null,
+    lastMessageId: 123,
+    initialSyncPolicyApplied: null,
     warnings: [],
     ...overrides,
   };
 }
 
-function topic(overrides: Partial<SourceForumTopicRecord>): SourceForumTopicRecord {
+function topic(overrides: Partial<SourceForumTopic>): SourceForumTopic {
   return {
     kind: "topic",
     key: "topic-1",
     title: "Topic",
-    message_count: 1,
-    topic_id: 1,
-    top_message_id: 10,
-    icon_color: null,
-    icon_emoji_id: null,
-    is_closed: false,
-    is_pinned: false,
-    is_hidden: false,
-    is_deleted: false,
-    sort_order: null,
+    messageCount: 1,
+    topicId: 1,
+    topMessageId: 10,
+    iconColor: null,
+    iconEmojiId: null,
+    isClosed: false,
+    isPinned: false,
+    isHidden: false,
+    isDeleted: false,
+    sortOrder: null,
     ...overrides,
   };
 }
@@ -231,20 +231,20 @@ function promptTemplate(overrides: Partial<AnalysisPromptTemplate>): AnalysisPro
   };
 }
 
-function sourceRecord(overrides: Partial<SourceRecord>): SourceRecord {
+function sourceRecord(overrides: Partial<Source>): Source {
   return {
     id: 1,
-    source_type: "telegram",
-    telegram_source_kind: "channel",
-    account_id: null,
-    external_id: "external-a",
+    sourceType: "telegram",
+    telegramSourceKind: "channel",
+    accountId: null,
+    externalId: "external-a",
     title: "Announcements",
-    last_sync_state: null,
-    last_synced_at: null,
-    is_member: true,
-    is_active: true,
-    created_at: 100,
-    avatar_data_url: null,
+    lastSyncState: null,
+    lastSyncedAt: null,
+    isMember: true,
+    isActive: true,
+    createdAt: 100,
+    avatarDataUrl: null,
     ...overrides,
   };
 }
@@ -458,9 +458,9 @@ describe("analysis-state", () => {
 
   it("filters source catalog by title, external id, or account label", () => {
     const sources = [
-      sourceRecord({ id: 1, title: "Announcements", external_id: "channel-a", account_id: 10 }),
-      sourceRecord({ id: 2, title: null, external_id: "market-feed", account_id: 20 }),
-      sourceRecord({ id: 3, title: "Archive", external_id: "archive", account_id: null }),
+      sourceRecord({ id: 1, title: "Announcements", externalId: "channel-a", accountId: 10 }),
+      sourceRecord({ id: 2, title: null, externalId: "market-feed", accountId: 20 }),
+      sourceRecord({ id: 3, title: "Archive", externalId: "archive", accountId: null }),
     ];
     const accountLabel = (accountId: number | null) =>
       accountId === 10 ? "Primary Account" : "Backup Account";
@@ -676,8 +676,8 @@ describe("analysis-state", () => {
   });
 
   it("builds source deletion dialog and status text from the display name", () => {
-    const titled = sourceRecord({ title: "Announcements", external_id: "channel-1" });
-    const untitled = sourceRecord({ title: null, external_id: "channel-2" });
+    const titled = sourceRecord({ title: "Announcements", externalId: "channel-1" });
+    const untitled = sourceRecord({ title: null, externalId: "channel-2" });
 
     expect(sourceDeletionDialog(titled)).toEqual({
       title: "Delete source?",
@@ -724,7 +724,7 @@ describe("analysis-state", () => {
     );
 
     expect(sourceSyncStatus(syncResult({
-      initial_sync_policy_applied: "recent_days:30",
+      initialSyncPolicyApplied: "recent_days:30",
       warnings: ["one", "two"],
     }))).toBe(
       "Sync complete: inserted 10, skipped 2. First sync policy applied: recent_days:30. Warnings: one two",
@@ -818,29 +818,29 @@ describe("analysis-state", () => {
 
   it("normalizes selected topic keys only when real forum topics exist", () => {
     const topics = [
-      topic({ kind: "uncategorized", key: "uncategorized", topic_id: null }),
-      topic({ key: "topic-1", topic_id: 1 }),
+      topic({ kind: "uncategorized", key: "uncategorized", topicId: null }),
+      topic({ key: "topic-1", topicId: 1 }),
     ];
 
     expect(hasRealForumTopics(topics)).toBe(true);
     expect(normalizeSelectedTopicKey(topics, "topic-1")).toBe("topic-1");
     expect(normalizeSelectedTopicKey(topics, "missing")).toBe("__all_topics__");
-    expect(normalizeSelectedTopicKey([topic({ kind: "uncategorized", topic_id: null })], "topic-1"))
+    expect(normalizeSelectedTopicKey([topic({ kind: "uncategorized", topicId: null })], "topic-1"))
       .toBe("__all_topics__");
   });
 
   it("builds topic filters from selected topic keys", () => {
     const topics = [
-      topic({ kind: "uncategorized", key: "uncategorized", topic_id: null }),
-      topic({ key: "topic-1", topic_id: 1 }),
-      topic({ key: "deleted-topic", topic_id: null }),
+      topic({ kind: "uncategorized", key: "uncategorized", topicId: null }),
+      topic({ key: "topic-1", topicId: 1 }),
+      topic({ key: "deleted-topic", topicId: null }),
     ];
 
     expect(currentTopicFilter("__all_topics__", topics)).toBeNull();
     expect(currentTopicFilter("missing", topics)).toBeNull();
     expect(currentTopicFilter("topic-1", topics)).toEqual({
       kind: "topic",
-      topic_id: 1,
+      topicId: 1,
     });
     expect(currentTopicFilter("uncategorized", topics)).toEqual({
       kind: "uncategorized",
@@ -851,17 +851,17 @@ describe("analysis-state", () => {
   });
 
   it("shows topic selector only for single-source supergroup topic workflows", () => {
-    const supergroup = { telegram_source_kind: "supergroup" } satisfies Pick<
-      SourceRecord,
-      "telegram_source_kind"
+    const supergroup = { telegramSourceKind: "supergroup" } satisfies Pick<
+      Source,
+      "telegramSourceKind"
     >;
-    const channel = { telegram_source_kind: "channel" } satisfies Pick<
-      SourceRecord,
-      "telegram_source_kind"
+    const channel = { telegramSourceKind: "channel" } satisfies Pick<
+      Source,
+      "telegramSourceKind"
     >;
     const topics = [
-      topic({ kind: "uncategorized", key: "uncategorized", topic_id: null }),
-      topic({ key: "topic-1", topic_id: 1 }),
+      topic({ kind: "uncategorized", key: "uncategorized", topicId: null }),
+      topic({ key: "topic-1", topicId: 1 }),
     ];
 
     expect(shouldShowTopicSelector(null, "single_source", false, topics)).toBe(false);
@@ -871,7 +871,7 @@ describe("analysis-state", () => {
     expect(shouldShowTopicSelector(channel, "single_source", true, [])).toBe(false);
     expect(shouldShowTopicSelector(supergroup, "single_source", false, topics)).toBe(true);
     expect(shouldShowTopicSelector(supergroup, "single_source", false, [
-      topic({ kind: "uncategorized", topic_id: null }),
+      topic({ kind: "uncategorized", topicId: null }),
     ])).toBe(false);
   });
 

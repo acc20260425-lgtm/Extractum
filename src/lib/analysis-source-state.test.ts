@@ -9,7 +9,7 @@ import {
   sourceSyncDisabledReason,
 } from "./analysis-source-state";
 import type { AccountRecord, AccountRuntimeStatus } from "./types/accounts";
-import type { SourceRecord } from "./types/sources";
+import type { Source } from "./types/sources";
 
 function account(overrides: Partial<AccountRecord>): AccountRecord {
   return {
@@ -31,20 +31,20 @@ function runtime(overrides: Partial<AccountRuntimeStatus>): AccountRuntimeStatus
   };
 }
 
-function source(overrides: Partial<SourceRecord>): SourceRecord {
+function source(overrides: Partial<Source>): Source {
   return {
     id: 1,
-    source_type: "telegram",
-    telegram_source_kind: "channel",
-    account_id: 1,
-    external_id: "@extractum",
+    sourceType: "telegram",
+    telegramSourceKind: "channel",
+    accountId: 1,
+    externalId: "@extractum",
     title: "Extractum",
-    last_sync_state: null,
-    last_synced_at: null,
-    is_member: true,
-    is_active: true,
-    created_at: 100,
-    avatar_data_url: null,
+    lastSyncState: null,
+    lastSyncedAt: null,
+    isMember: true,
+    isActive: true,
+    createdAt: 100,
+    avatarDataUrl: null,
     ...overrides,
   };
 }
@@ -91,37 +91,37 @@ describe("analysis-source-state", () => {
 
   it("derives a stable source initial from title, external id, or fallback", () => {
     expect(sourceInitial(source({ title: " alpha" }))).toBe("A");
-    expect(sourceInitial(source({ title: null, external_id: " beta" }))).toBe("B");
-    expect(sourceInitial(source({ title: "   ", external_id: "   " }))).toBe("#");
+    expect(sourceInitial(source({ title: null, externalId: " beta" }))).toBe("B");
+    expect(sourceInitial(source({ title: "   ", externalId: "   " }))).toBe("#");
   });
 
   it("explains why sync is disabled until the linked account is ready", () => {
-    expect(sourceSyncDisabledReason(source({ account_id: null }), {}))
+    expect(sourceSyncDisabledReason(source({ accountId: null }), {}))
       .toBe("Source is not linked to an account.");
-    expect(sourceSyncDisabledReason(source({ account_id: 7 }), {}))
+    expect(sourceSyncDisabledReason(source({ accountId: 7 }), {}))
       .toBe("Initialize this account before syncing.");
     expect(sourceSyncDisabledReason(
-      source({ account_id: 7 }),
+      source({ accountId: 7 }),
       { 7: runtime({ account_id: 7, status: "not_initialized" }) },
     )).toBe("Initialize this account before syncing.");
     expect(sourceSyncDisabledReason(
-      source({ account_id: 7 }),
+      source({ accountId: 7 }),
       { 7: runtime({ account_id: 7, status: "restoring" }) },
     )).toBe("This account is still restoring.");
     expect(sourceSyncDisabledReason(
-      source({ account_id: 7 }),
+      source({ accountId: 7 }),
       { 7: runtime({ account_id: 7, status: "reauth_required" }) },
     )).toBe("Sign in to this account again before syncing.");
     expect(sourceSyncDisabledReason(
-      source({ account_id: 7 }),
+      source({ accountId: 7 }),
       { 7: runtime({ account_id: 7, status: "restore_failed", message: "expired" }) },
     )).toBe("expired");
     expect(sourceSyncDisabledReason(
-      source({ account_id: 7 }),
+      source({ accountId: 7 }),
       { 7: runtime({ account_id: 7, status: "restore_failed", message: null }) },
     )).toBe("The saved Telegram session could not be restored.");
     expect(sourceSyncDisabledReason(
-      source({ account_id: 7 }),
+      source({ accountId: 7 }),
       { 7: runtime({ account_id: 7, status: "ready" }) },
     )).toBeNull();
   });

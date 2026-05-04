@@ -16,6 +16,13 @@
     listenToAnalysisRunEvents,
   } from "$lib/api/analysis-runs";
   import {
+    deleteSource as deleteSourceCommand,
+    listSourceForumTopics,
+    listSourceItems,
+    listSources,
+    syncSource,
+  } from "$lib/api/sources";
+  import {
     createAnalysisRunWorkflow,
     type AnalysisRunRequestGuard,
     type AnalysisRunWorkflowPatch,
@@ -144,14 +151,13 @@
   } from "$lib/types/analysis";
   import type {
     ForumTopicFilter,
-    ItemRecord,
     NotebookLmExportEvent,
     NotebookLmExportResult,
-    SourceForumTopicRecord,
-    SourceRecord,
+    Source,
+    SourceForumTopic,
+    SourceItem,
     CancelTakeoutImportResponse,
     StartTakeoutImportResponse,
-    SyncResult,
     TakeoutImportEvent,
     TakeoutImportJobRecord,
   } from "$lib/types/sources";
@@ -166,10 +172,10 @@
     return `notebooklm-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
-  let sourceCatalog = $state<SourceRecord[]>([]);
+  let sourceCatalog = $state<Source[]>([]);
   let sourceMetrics = $state<Record<number, AnalysisSourceOption>>({});
-  let sourceItems = $state<ItemRecord[]>([]);
-  let sourceTopics = $state<SourceForumTopicRecord[]>([]);
+  let sourceItems = $state<SourceItem[]>([]);
+  let sourceTopics = $state<SourceForumTopic[]>([]);
   let accounts = $state<AccountRecord[]>([]);
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
   let templates = $state<AnalysisPromptTemplate[]>([]);
@@ -315,7 +321,7 @@
     return getRuntimeStatus(accountId, accountStatuses);
   }
 
-  function sourceSyncDisabledReason(source: SourceRecord) {
+  function sourceSyncDisabledReason(source: Source) {
     return getSourceSyncDisabledReason(source, accountStatuses);
   }
 
@@ -405,7 +411,7 @@
     return currentTopicFilterFromState(selectedTopicKey, sourceTopics);
   }
 
-  function hasRealForumTopics(topics: SourceForumTopicRecord[] = sourceTopics) {
+  function hasRealForumTopics(topics: SourceForumTopic[] = sourceTopics) {
     return hasRealForumTopicsInState(topics);
   }
 
@@ -419,7 +425,7 @@
   }
 
   function normalizeSelectedTopicKey(
-    topics: SourceForumTopicRecord[],
+    topics: SourceForumTopic[],
     preferredKey: string,
   ) {
     return normalizeTopicKey(topics, preferredKey);
@@ -624,7 +630,7 @@
     loadingSourceCatalog = true;
     try {
       const [allSources, analysisSources] = await Promise.all([
-        invoke<SourceRecord[]>("list_sources", { accountId: null }),
+        listSources(null),
         invoke<AnalysisSourceOption[]>("list_analysis_sources"),
       ]);
       sourceCatalog = allSources;
@@ -664,9 +670,7 @@
     const preferredKey = preserveSelection ? selectedTopicKey : "__all_topics__";
     loadingSourceTopics = true;
     try {
-      const topics = await invoke<SourceForumTopicRecord[]>("list_source_forum_topics", {
-        sourceId,
-      });
+      const topics = await listSourceForumTopics(sourceId);
       sourceTopics = topics;
       selectedTopicKey = normalizeSelectedTopicKey(topics, preferredKey);
     } catch (error) {
@@ -681,7 +685,7 @@
   async function loadItems(sourceId: number) {
     loadingItems = true;
     try {
-      sourceItems = await invoke<ItemRecord[]>("get_items", {
+      sourceItems = await listSourceItems({
         sourceId,
         limit: 120,
         beforePublishedAt: null,
@@ -968,7 +972,7 @@
   async function syncSelectedSource(sourceId: number) {
     syncingIds = sourceActionPending(syncingIds, sourceId);
     try {
-      const result = await invoke<SyncResult>("sync_source", { sourceId });
+      const result = await syncSource(sourceId);
       status = sourceSyncStatus(result);
 
       await Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
@@ -1026,7 +1030,7 @@
     sourceItems = [];
   }
 
-  async function deleteSource(source: SourceRecord) {
+  async function deleteSource(source: Source) {
     const confirmed = await openConfirmModal(sourceDeletionDialog(source));
     if (!confirmed) {
       return;
@@ -1034,7 +1038,7 @@
 
     deletingSourceIds = { ...deletingSourceIds, [source.id]: true };
     try {
-      await invoke("delete_source", { sourceId: source.id });
+      await deleteSourceCommand(source.id);
       status = sourceDeletedStatus(source);
 
       const reset = sourceDeletionResetState(source.id, selectedSourceId);

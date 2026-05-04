@@ -6,7 +6,7 @@
   import type {
     NotebookLmExportEvent,
     NotebookLmExportResult,
-    SourceRecord,
+    Source,
   } from "$lib/types/sources";
 
   export type NotebookLmExportRange = "entire_history" | "analysis_period";
@@ -43,7 +43,7 @@
     onChangeForm,
   }: {
     open: boolean;
-    source: SourceRecord | null;
+    source: Source | null;
     form: NotebookLmExportForm;
     exporting: boolean;
     progress: NotebookLmExportProgressState | null;
@@ -105,7 +105,7 @@
 <DesktopDialog
   {open}
   title="Export for NotebookLM"
-  description={source ? `Prepare Markdown files for ${source.title ?? source.external_id}.` : ""}
+  description={source ? `Prepare Markdown files for ${source.title ?? source.externalId}.` : ""}
   width="44rem"
   onClose={onClose}
 >

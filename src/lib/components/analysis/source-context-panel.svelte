@@ -4,7 +4,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import type { AnalysisSourceOption } from "$lib/types/analysis";
-  import type { ItemRecord, SourceForumTopicRecord } from "$lib/types/sources";
+  import type { SourceItem, SourceForumTopic } from "$lib/types/sources";
 
   let {
     currentRunOpen,
@@ -20,9 +20,9 @@
   }: {
     currentRunOpen: boolean;
     currentSourceMetric: AnalysisSourceOption | null;
-    sourceItems: ItemRecord[];
+    sourceItems: SourceItem[];
     loadingItems: boolean;
-    sourceTopics: SourceForumTopicRecord[];
+    sourceTopics: SourceForumTopic[];
     loadingSourceTopics: boolean;
     selectedTopicKey: string;
     showTopicSelector: boolean;
@@ -38,13 +38,13 @@
   const contextExpanded = $derived(contextExpandedOverride ?? !currentRunOpen);
   const sortedSourceTopics = $derived([...sourceTopics].sort(compareTopics));
 
-  function compareTopics(left: SourceForumTopicRecord, right: SourceForumTopicRecord) {
+  function compareTopics(left: SourceForumTopic, right: SourceForumTopic) {
     if (left.kind !== right.kind) {
       return left.kind === "topic" ? -1 : 1;
     }
 
-    if (left.is_deleted !== right.is_deleted) {
-      return left.is_deleted ? 1 : -1;
+    if (left.isDeleted !== right.isDeleted) {
+      return left.isDeleted ? 1 : -1;
     }
 
     const titleOrder = left.title.localeCompare(right.title, undefined, {
@@ -104,7 +104,7 @@
             {:else}
               {#each sortedSourceTopics as topic (topic.key)}
                 <option value={topic.key}>
-                  {topic.title} ({topic.message_count})
+                  {topic.title} ({topic.messageCount})
                 </option>
               {/each}
             {/if}

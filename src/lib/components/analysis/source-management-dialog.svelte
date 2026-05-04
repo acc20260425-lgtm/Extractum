@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import { addTelegramSource, listTelegramSources } from "$lib/api/sources";
   import { formatAppError } from "$lib/app-error";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
     DialogKindFilter,
-    SourceRecord,
-    TelegramSourceInfo,
+    Source,
+    TelegramDialogSource,
     TelegramSourceKind,
   } from "$lib/types/sources";
 
@@ -27,7 +27,7 @@
     open: boolean;
     accounts: AccountRecord[];
     accountStatuses: Record<number, AccountRuntimeStatus>;
-    existingSources: SourceRecord[];
+    existingSources: Source[];
     onClose: () => void;
     onSourcesChanged: (sourceId?: number) => void | Promise<void>;
     onStatus: (message: string) => void;
@@ -36,7 +36,7 @@
   let selectedAccountId = $state("");
   let kindFilter = $state<DialogKindFilter>("all");
   let dialogQuery = $state("");
-  let dialogSources = $state<TelegramSourceInfo[]>([]);
+  let dialogSources = $state<TelegramDialogSource[]>([]);
   let loadingDialogs = $state(false);
   let addingSourceKey = $state<string | null>(null);
   let manualRef = $state("");
@@ -69,8 +69,8 @@
     const accountId = Number(activeAccountId);
     return new Set(
       existingSources
-        .filter((source) => source.account_id === accountId)
-        .map((source) => `${source.telegram_source_kind}:${source.external_id}`),
+        .filter((source) => source.accountId === accountId)
+        .map((source) => `${source.telegramSourceKind}:${source.externalId}`),
     );
   });
 
@@ -78,7 +78,7 @@
     const query = dialogQuery.trim().toLocaleLowerCase();
     return dialogSources
       .filter((source) => {
-        const matchesKind = kindFilter === "all" || source.telegram_source_kind === kindFilter;
+        const matchesKind = kindFilter === "all" || source.telegramSourceKind === kindFilter;
         if (!matchesKind) return false;
         if (!query) return true;
         return (
@@ -103,11 +103,11 @@
     }
   }
 
-  function dialogSourceKey(source: TelegramSourceInfo) {
-    return `${source.telegram_source_kind}:${source.id}`;
+  function dialogSourceKey(source: TelegramDialogSource) {
+    return `${source.telegramSourceKind}:${source.id}`;
   }
 
-  function sourceAlreadyAdded(source: TelegramSourceInfo) {
+  function sourceAlreadyAdded(source: TelegramDialogSource) {
     return existingDialogSourceKeys.has(dialogSourceKey(source));
   }
 
@@ -122,7 +122,7 @@
     });
   }
 
-  function compareDialogSources(left: TelegramSourceInfo, right: TelegramSourceInfo) {
+  function compareDialogSources(left: TelegramDialogSource, right: TelegramDialogSource) {
     const addedDelta = Number(sourceAlreadyAdded(left)) - Number(sourceAlreadyAdded(right));
     if (addedDelta !== 0) return addedDelta;
 
@@ -132,7 +132,7 @@
     );
     if (titleDelta !== 0) return titleDelta;
 
-    const kindDelta = compareSortText(left.telegram_source_kind, right.telegram_source_kind);
+    const kindDelta = compareSortText(left.telegramSourceKind, right.telegramSourceKind);
     if (kindDelta !== 0) return kindDelta;
 
     const usernameDelta = compareSortText(
@@ -152,9 +152,7 @@
     loadingDialogs = true;
     localStatus = "";
     try {
-      dialogSources = await invoke<TelegramSourceInfo[]>("list_telegram_sources", {
-        accountId: Number(activeAccountId),
-      });
+      dialogSources = await listTelegramSources(Number(activeAccountId));
     } catch (error) {
       dialogSources = [];
       localStatus = formatAppError("loading Telegram dialogs", error);
@@ -171,12 +169,12 @@
     addingSourceKey = key;
     localStatus = "";
     try {
-      const source = await invoke<SourceRecord>("add_telegram_source", {
+      const source = await addTelegramSource({
         accountId: Number(activeAccountId),
         sourceRef: sourceRef.trim(),
-        telegramSourceKind,
+        expectedKind: telegramSourceKind,
       });
-      onStatus(`Source "${source.title ?? source.external_id}" added.`);
+      onStatus(`Source "${source.title ?? source.externalId}" added.`);
       await onSourcesChanged(source.id);
       if (key === "manual") {
         manualRef = "";
@@ -188,8 +186,8 @@
     }
   }
 
-  function addDialogSource(source: TelegramSourceInfo) {
-    return addSource(String(source.id), source.telegram_source_kind, dialogSourceKey(source));
+  function addDialogSource(source: TelegramDialogSource) {
+    return addSource(String(source.id), source.telegramSourceKind, dialogSourceKey(source));
   }
 
   function addManualSource() {
@@ -334,8 +332,8 @@
             {@const key = dialogSourceKey(source)}
             <article class="dialog-row">
               <div class="dialog-avatar" aria-hidden="true">
-                {#if source.photo_data_url}
-                  <img src={source.photo_data_url} alt="" loading="lazy" />
+                {#if source.photoDataUrl}
+                  <img src={source.photoDataUrl} alt="" loading="lazy" />
                 {:else}
                   <span>{source.title.trim().charAt(0).toUpperCase() || "#"}</span>
                 {/if}
@@ -343,13 +341,13 @@
               <div class="dialog-copy">
                 <strong>{source.title}</strong>
                 <div class="dialog-meta">
-                  <span>{sourceKindLabel(source.telegram_source_kind)}</span>
+                  <span>{sourceKindLabel(source.telegramSourceKind)}</span>
                   {#if source.username}
                     <span>@{source.username}</span>
                   {:else}
                     <span>{source.id}</span>
                   {/if}
-                  <span>{source.is_member ? "member" : "not member"}</span>
+                  <span>{source.isMember ? "member" : "not member"}</span>
                 </div>
               </div>
               <Button

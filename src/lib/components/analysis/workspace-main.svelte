@@ -22,11 +22,11 @@
     ReportSegment,
   } from "$lib/types/analysis";
   import type {
-    SourceForumTopicRecord,
-    ItemRecord,
+    SourceForumTopic,
+    SourceItem,
     NotebookLmExportEvent,
     NotebookLmExportResult,
-    SourceRecord,
+    Source,
   } from "$lib/types/sources";
 
   export type NotebookLmExportProgressState = {
@@ -135,7 +135,7 @@
     onDeleteGroup,
   }: {
     analysisScope: "single_source" | "source_group";
-    currentSource: SourceRecord | null;
+    currentSource: Source | null;
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
     currentScopeTitle: string;
@@ -157,9 +157,9 @@
     activePhase: string;
     focusedStreamedOutput: string;
     canCancelCurrentRun: boolean;
-    sourceItems: ItemRecord[];
+    sourceItems: SourceItem[];
     loadingItems: boolean;
-    sourceTopics: SourceForumTopicRecord[];
+    sourceTopics: SourceForumTopic[];
     loadingSourceTopics: boolean;
     selectedTopicKey: string;
     showTopicSelector: boolean;
@@ -200,7 +200,7 @@
     phaseLabel: (value: string) => string;
     accountLabel: (accountId: number | null) => string;
     sourceKindLabel: (kind: string) => string;
-    sourceSyncDisabledReason: (source: SourceRecord) => string | null;
+    sourceSyncDisabledReason: (source: Source) => string | null;
     startOfDayUnix: (value: string) => number;
     endOfDayUnix: (value: string) => number;
     isGroupSourceSelected: (sourceId: number) => boolean;
@@ -254,8 +254,8 @@
     </div>
     <div class="scope-hero-meta">
       {#if analysisScope === "single_source" && currentSource}
-        <Badge variant="info">{sourceKindLabel(currentSource.telegram_source_kind)}</Badge>
-        <Badge>{accountLabel(currentSource.account_id)}</Badge>
+        <Badge variant="info">{sourceKindLabel(currentSource.telegramSourceKind)}</Badge>
+        <Badge>{accountLabel(currentSource.accountId)}</Badge>
       {/if}
       {#if analysisScope === "source_group" && currentGroup}
         <Badge variant="info">{currentGroup.members.length} sources</Badge>

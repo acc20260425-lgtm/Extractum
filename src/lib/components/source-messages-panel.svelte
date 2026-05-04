@@ -3,7 +3,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
-  import type { ItemRecord } from "$lib/types/sources";
+  import type { SourceItem } from "$lib/types/sources";
 
   let {
     loadingItems,
@@ -13,7 +13,7 @@
     previewLimit = 200,
   }: {
     loadingItems: boolean;
-    items: ItemRecord[];
+    items: SourceItem[];
     formatDate: (timestamp: number) => string;
     embedded?: boolean;
     previewLimit?: number;
@@ -31,8 +31,8 @@
     return kind.replaceAll("_", " ");
   }
 
-  function mediaDetails(item: ItemRecord) {
-    return [item.media_summary, item.media_file_name, item.media_mime_type].filter(
+  function mediaDetails(item: SourceItem) {
+    return [item.mediaSummary, item.mediaFileName, item.mediaMimeType].filter(
       (value, index, values): value is string => !!value && values.indexOf(value) === index
     );
   }
@@ -57,19 +57,19 @@
       {#each visibleItems as item (item.id)}
         <li>
           <div class="message-meta">
-            <span>{formatDate(item.published_at)}</span>
+            <span>{formatDate(item.publishedAt)}</span>
             {#if item.author}<span>{item.author}</span>{/if}
-            {#if item.forum_topic_title}
-              <Badge variant="neutral">{item.forum_topic_title}</Badge>
+            {#if item.forumTopicTitle}
+              <Badge variant="neutral">{item.forumTopicTitle}</Badge>
             {/if}
-            {#if item.has_media}
-              <Badge variant="info">{formatMediaKind(item.media_kind)}</Badge>
+            {#if item.hasMedia}
+              <Badge variant="info">{formatMediaKind(item.mediaKind)}</Badge>
             {/if}
           </div>
           {#if item.content}
             <p>{item.content}</p>
           {/if}
-          {#if item.has_media}
+          {#if item.hasMedia}
             {@const details = mediaDetails(item)}
             <div class="media-block">
               {#if !item.content}

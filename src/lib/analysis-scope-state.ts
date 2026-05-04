@@ -2,7 +2,7 @@ import type {
   AnalysisSourceGroup,
   AnalysisSourceOption,
 } from "$lib/types/analysis";
-import type { SourceRecord } from "$lib/types/sources";
+import type { Source } from "$lib/types/sources";
 
 export type AnalysisScope = "single_source" | "source_group";
 export type AnalysisHistoryScope = "all" | "current";
@@ -14,14 +14,14 @@ export type AnalysisHistoryScopeParams = {
 
 export function currentAnalysisSource(
   selectedSourceId: string,
-  sourceCatalog: SourceRecord[],
+  sourceCatalog: Source[],
 ) {
   if (!selectedSourceId) return null;
   return sourceCatalog.find((source) => source.id === Number(selectedSourceId)) ?? null;
 }
 
 export function currentAnalysisSourceMetric(
-  source: SourceRecord | null,
+  source: Source | null,
   sourceMetrics: Record<number, AnalysisSourceOption>,
 ) {
   return source ? sourceMetrics[source.id] ?? null : null;
@@ -37,18 +37,18 @@ export function currentAnalysisGroup(
 
 export function currentAnalysisScopeTitle(
   analysisScope: AnalysisScope,
-  source: SourceRecord | null,
+  source: Source | null,
   group: AnalysisSourceGroup | null,
 ) {
   if (analysisScope === "source_group") {
     return group?.name ?? "Source group";
   }
-  return source?.title ?? source?.external_id ?? "Source";
+  return source?.title ?? source?.externalId ?? "Source";
 }
 
 export function currentAnalysisScopeSummary(
   analysisScope: AnalysisScope,
-  source: SourceRecord | null,
+  source: Source | null,
   group: AnalysisSourceGroup | null,
   metrics: AnalysisSourceOption | null,
 ) {

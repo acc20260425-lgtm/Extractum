@@ -12,13 +12,13 @@ import type {
 } from "$lib/types/analysis";
 import type {
   ForumTopicFilter,
-  ItemRecord,
+  SourceItem,
   NotebookLmExportEvent,
   NotebookLmExportRequest,
   NotebookLmExportResult,
-  SourceForumTopicRecord,
-  SourceRecord,
-  SyncResult,
+  SourceForumTopic,
+  Source,
+  SyncSourceResult,
   TakeoutImportJobRecord,
 } from "$lib/types/sources";
 
@@ -50,7 +50,7 @@ export type AnalysisSourceSelectionState = {
 export type AnalysisGroupSelectionState = {
   analysisScope: "source_group";
   selectedGroupId: string;
-  sourceTopics: SourceForumTopicRecord[];
+  sourceTopics: SourceForumTopic[];
   selectedTopicKey: typeof ALL_TOPICS_KEY;
   inspectorMode: "history";
 };
@@ -86,7 +86,7 @@ export type RunDeletionDecision =
   | { ok: true; dialog: RunDeletionDialog }
   | { ok: false; status: string };
 export type SourceDeletionResetState = {
-  sourceItems: ItemRecord[];
+  sourceItems: SourceItem[];
   currentRun: AnalysisRunDetail | null;
   activeRunId: number | null;
   traceData: AnalysisTraceData;
@@ -321,7 +321,7 @@ export function filteredAnalysisRuns(
 }
 
 export function filteredAnalysisSourceCatalog(
-  sources: SourceRecord[],
+  sources: Source[],
   railQuery: string,
   accountLabel: (accountId: number | null) => string,
 ) {
@@ -330,8 +330,8 @@ export function filteredAnalysisSourceCatalog(
 
   return sources.filter((source) => {
     return (
-      (source.title ?? source.external_id).toLocaleLowerCase().includes(query) ||
-      accountLabel(source.account_id).toLocaleLowerCase().includes(query)
+      (source.title ?? source.externalId).toLocaleLowerCase().includes(query) ||
+      accountLabel(source.accountId).toLocaleLowerCase().includes(query)
     );
   });
 }
@@ -493,12 +493,12 @@ export function runDeletedStatus(run: Pick<AnalysisRunSummary, "id">) {
   return `Saved run ${run.id} deleted.`;
 }
 
-export function sourceDisplayName(source: Pick<SourceRecord, "title" | "external_id">) {
-  return source.title ?? source.external_id;
+export function sourceDisplayName(source: Pick<Source, "title" | "externalId">) {
+  return source.title ?? source.externalId;
 }
 
 export function sourceDeletionDialog(
-  source: Pick<SourceRecord, "title" | "external_id">,
+  source: Pick<Source, "title" | "externalId">,
 ): SourceDeletionDialog {
   const sourceName = sourceDisplayName(source);
   return {
@@ -513,7 +513,7 @@ export function sourceDeletionDialog(
 }
 
 export function sourceDeletedStatus(
-  source: Pick<SourceRecord, "title" | "external_id">,
+  source: Pick<Source, "title" | "externalId">,
 ) {
   return `Source "${sourceDisplayName(source)}" deleted.`;
 }
@@ -537,11 +537,11 @@ export function clearSourceActionPending(
   return next;
 }
 
-export function sourceSyncStatus(result: SyncResult) {
+export function sourceSyncStatus(result: SyncSourceResult) {
   return (
     `Sync complete: inserted ${result.inserted}, skipped ${result.skipped}.` +
-    (result.initial_sync_policy_applied
-      ? ` First sync policy applied: ${result.initial_sync_policy_applied}.`
+    (result.initialSyncPolicyApplied
+      ? ` First sync policy applied: ${result.initialSyncPolicyApplied}.`
       : "") +
     (result.warnings.length > 0
       ? ` Warnings: ${result.warnings.join(" ")}`
@@ -686,12 +686,12 @@ export function takeoutImportEventDecision(
   };
 }
 
-export function hasRealForumTopics(topics: SourceForumTopicRecord[]) {
+export function hasRealForumTopics(topics: SourceForumTopic[]) {
   return topics.some((topic) => topic.kind === "topic");
 }
 
 export function normalizeSelectedTopicKey(
-  topics: SourceForumTopicRecord[],
+  topics: SourceForumTopic[],
   preferredKey: string,
 ) {
   if (!hasRealForumTopics(topics)) {
@@ -709,7 +709,7 @@ export function normalizeSelectedTopicKey(
 
 export function currentTopicFilter(
   selectedTopicKey: string,
-  topics: SourceForumTopicRecord[],
+  topics: SourceForumTopic[],
 ): ForumTopicFilter | null {
   if (selectedTopicKey === ALL_TOPICS_KEY) {
     return null;
@@ -720,10 +720,10 @@ export function currentTopicFilter(
     return null;
   }
 
-  if (topic.kind === "topic" && topic.topic_id !== null) {
+  if (topic.kind === "topic" && topic.topicId !== null) {
     return {
       kind: "topic",
-      topic_id: topic.topic_id,
+      topicId: topic.topicId,
     };
   }
 
@@ -733,17 +733,17 @@ export function currentTopicFilter(
 }
 
 export function shouldShowTopicSelector(
-  source: Pick<SourceRecord, "telegram_source_kind"> | null,
+  source: Pick<Source, "telegramSourceKind"> | null,
   analysisScope: "single_source" | "source_group",
   loadingSourceTopics: boolean,
-  topics: SourceForumTopicRecord[],
+  topics: SourceForumTopic[],
 ) {
   if (!source || analysisScope !== "single_source") {
     return false;
   }
 
   if (loadingSourceTopics) {
-    return source.telegram_source_kind === "supergroup";
+    return source.telegramSourceKind === "supergroup";
   }
 
   return hasRealForumTopics(topics);

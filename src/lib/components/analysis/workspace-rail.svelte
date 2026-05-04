@@ -4,7 +4,7 @@
   import Input from "$lib/components/ui/Input.svelte";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
-  import type { SourceRecord, TakeoutImportJobRecord } from "$lib/types/sources";
+  import type { Source, TakeoutImportJobRecord } from "$lib/types/sources";
   import type { BadgeVariant } from "$lib/components/ui/types";
 
   let {
@@ -40,13 +40,13 @@
     onOpenSourceManager,
     onDeleteSource,
   }: {
-    sourceCatalog: SourceRecord[];
+    sourceCatalog: Source[];
     groups: AnalysisSourceGroup[];
     sourceMetrics: Record<number, AnalysisSourceOption>;
     loadingSourceCatalog: boolean;
     loadingGroups: boolean;
     railQuery: string;
-    filteredSourceCatalog: SourceRecord[];
+    filteredSourceCatalog: Source[];
     filteredGroups: AnalysisSourceGroup[];
     analysisScope: "single_source" | "source_group";
     selectedSourceId: string;
@@ -59,10 +59,10 @@
     accountLabel: (accountId: number | null) => string;
     sourceKindLabel: (kind: string) => string;
     membershipLabel: (kind: string, isMember: boolean) => string;
-    sourceInitial: (source: SourceRecord) => string;
+    sourceInitial: (source: Source) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     runtimeBadge: (runtime: AccountRuntimeStatus | null) => string;
-    sourceSyncDisabledReason: (source: SourceRecord) => string | null;
+    sourceSyncDisabledReason: (source: Source) => string | null;
     onChangeRailQuery: (value: string) => void;
     onSelectSource: (sourceId: number) => void;
     onSelectGroup: (groupId: number) => void;
@@ -70,7 +70,7 @@
     onStartTakeoutImport: (sourceId: number) => void;
     onCancelTakeoutImport: (jobId: string) => void;
     onOpenSourceManager: () => void;
-    onDeleteSource: (source: SourceRecord) => void;
+    onDeleteSource: (source: Source) => void;
   } = $props();
 
   const totalItems = $derived(sourceCatalog.length + groups.length);
@@ -199,7 +199,7 @@
         {#each filteredSourceCatalog as source (source.id)}
           {@const metrics = sourceMetrics[source.id]}
           {@const syncReason = sourceSyncDisabledReason(source)}
-          {@const runtime = runtimeStatus(source.account_id)}
+          {@const runtime = runtimeStatus(source.accountId)}
           {@const runtimeStateBadge = runtimeBadge(runtime)}
           {@const isSelected = analysisScope === "single_source" && selectedSourceId === String(source.id)}
           {@const deleting = !!deletingSourceIds[source.id]}
@@ -214,22 +214,22 @@
               onclick={() => onSelectSource(source.id)}
             >
               <div class="rail-avatar" aria-hidden="true">
-                {#if source.avatar_data_url}
-                  <img src={source.avatar_data_url} alt="" loading="lazy" />
+                {#if source.avatarDataUrl}
+                  <img src={source.avatarDataUrl} alt="" loading="lazy" />
                 {:else}
                   <span>{sourceInitial(source)}</span>
                 {/if}
               </div>
               <div class="rail-copy">
                 <div class="rail-copy-top">
-                  <strong>{source.title ?? source.external_id}</strong>
+                  <strong>{source.title ?? source.externalId}</strong>
                   {#if metrics?.last_synced_at}
                     <span>{formatTimestamp(metrics.last_synced_at)}</span>
                   {/if}
                 </div>
                 <div class="rail-copy-meta">
-                  <span>{accountLabel(source.account_id)}</span>
-                  <span>{sourceKindLabel(source.telegram_source_kind)}</span>
+                  <span>{accountLabel(source.accountId)}</span>
+                  <span>{sourceKindLabel(source.telegramSourceKind)}</span>
                   {#if metrics}
                     <span>{metrics.item_count} msgs</span>
                   {/if}
@@ -237,7 +237,7 @@
               </div>
             </button>
             <div class="rail-row-actions">
-              <Badge>{membershipLabel(source.telegram_source_kind, source.is_member)}</Badge>
+              <Badge>{membershipLabel(source.telegramSourceKind, source.isMember)}</Badge>
               {#if runtimeStateBadge}
                 <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeStateBadge}</Badge>
               {/if}
