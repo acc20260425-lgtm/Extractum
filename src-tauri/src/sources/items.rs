@@ -34,8 +34,20 @@ pub struct ItemRecord {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ForumTopicFilter {
-    Topic { topic_id: i64 },
+    Topic {
+        #[serde(rename = "topicId")]
+        topic_id: i64,
+    },
     Uncategorized,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListSourceItemsRequest {
+    pub source_id: i64,
+    pub limit: i64,
+    pub before_published_at: Option<i64>,
+    pub topic_filter: Option<ForumTopicFilter>,
 }
 
 pub(crate) struct SourceItemInsert {
@@ -128,46 +140,48 @@ pub(crate) async fn insert_source_item(
 }
 
 #[tauri::command]
-pub async fn get_items(
+pub async fn list_source_items(
     handle: AppHandle,
-    source_id: i64,
-    limit: i64,
-    before_published_at: Option<i64>,
-    topic_filter: Option<ForumTopicFilter>,
+    request: ListSourceItemsRequest,
 ) -> AppResult<Vec<ItemRecord>> {
     let pool = get_pool(&handle).await?;
-    let limit = limit.clamp(1, 200);
-    let rows = load_item_rows_from_pool(&pool, source_id, limit, before_published_at, topic_filter)
-        .await?;
+    let limit = request.limit.clamp(1, 200);
+    let rows = load_item_rows_from_pool(
+        &pool,
+        request.source_id,
+        limit,
+        request.before_published_at,
+        request.topic_filter,
+    )
+    .await?;
 
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            let media_metadata = decode_media_metadata(row.media_metadata_zstd.as_deref())?;
-            Ok(ItemRecord {
-                id: row.id,
-                source_id: row.source_id,
-                external_id: row.external_id,
-                author: row.author,
-                published_at: row.published_at,
-                content: row
-                    .content_zstd
-                    .as_deref()
-                    .map(decompress_text)
-                    .transpose()?,
-                content_kind: row.content_kind,
-                has_media: row.has_media,
-                media_kind: row.media_kind,
-                media_summary: media_metadata.summary,
-                media_file_name: media_metadata.file_name,
-                media_mime_type: media_metadata.mime_type,
-                has_raw_data: row.raw_data_zstd.is_some(),
-                forum_topic_id: row.forum_topic_id,
-                forum_topic_title: row.forum_topic_title,
-                forum_topic_top_message_id: row.forum_topic_top_message_id,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?)
+    rows.into_iter().map(item_record_from_row).collect()
+}
+
+fn item_record_from_row(row: StoredItemRow) -> AppResult<ItemRecord> {
+    let media_metadata = decode_media_metadata(row.media_metadata_zstd.as_deref())?;
+    Ok(ItemRecord {
+        id: row.id,
+        source_id: row.source_id,
+        external_id: row.external_id,
+        author: row.author,
+        published_at: row.published_at,
+        content: row
+            .content_zstd
+            .as_deref()
+            .map(decompress_text)
+            .transpose()?,
+        content_kind: row.content_kind,
+        has_media: row.has_media,
+        media_kind: row.media_kind,
+        media_summary: media_metadata.summary,
+        media_file_name: media_metadata.file_name,
+        media_mime_type: media_metadata.mime_type,
+        has_raw_data: row.raw_data_zstd.is_some(),
+        forum_topic_id: row.forum_topic_id,
+        forum_topic_title: row.forum_topic_title,
+        forum_topic_top_message_id: row.forum_topic_top_message_id,
+    })
 }
 
 async fn load_item_rows_from_pool(
@@ -389,6 +403,13 @@ mod tests {
         .await
         .expect("create telegram_forum_topics unique index");
         pool
+    }
+
+    #[test]
+    fn forum_topic_filter_deserializes_camel_case_topic_id() {
+        let filter: ForumTopicFilter =
+            serde_json::from_str(r#"{"kind":"topic","topicId":200}"#).expect("deserialize");
+        assert_eq!(filter, ForumTopicFilter::Topic { topic_id: 200 });
     }
 
     #[test]

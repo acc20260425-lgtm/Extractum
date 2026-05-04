@@ -29,8 +29,8 @@ use takeout_import::{
 
 mod sources;
 use sources::{
-    add_telegram_source, delete_source, get_items, get_sync_settings, list_source_forum_topics,
-    list_sources, list_telegram_sources, save_sync_settings, sync_source,
+    add_telegram_source, delete_source, get_sync_settings, list_source_forum_topics,
+    list_source_items, list_sources, list_telegram_sources, save_sync_settings, sync_source,
 };
 
 mod notebooklm_export;
@@ -116,7 +116,7 @@ pub fn run() {
             cancel_takeout_source_import,
             list_takeout_source_import_jobs,
             run_takeout_export_dc_spike,
-            get_items,
+            list_source_items,
             list_source_forum_topics,
             export_source_to_notebooklm,
             get_llm_profiles,

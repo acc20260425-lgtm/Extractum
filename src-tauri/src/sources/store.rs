@@ -14,7 +14,18 @@ use super::peer_resolution::{
     decode_source_metadata, encode_source_metadata, resolve_telegram_source,
     source_metadata_for_added_source, telegram_source_info_from_peer,
 };
-use super::types::{now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, TelegramSourceInfo};
+use super::types::{
+    now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, TelegramSourceInfo,
+    TelegramSourceKind,
+};
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddTelegramSourceRequest {
+    pub account_id: i64,
+    pub source_ref: String,
+    pub expected_kind: Option<TelegramSourceKind>,
+}
 
 #[tauri::command]
 pub async fn delete_source(
@@ -85,23 +96,21 @@ pub(crate) async fn load_source(
 pub async fn add_telegram_source(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
-    account_id: i64,
-    source_ref: String,
-    telegram_source_kind: Option<String>,
+    request: AddTelegramSourceRequest,
 ) -> AppResult<SourceRecord> {
     let client = {
         let accounts = state.accounts.lock().await;
-        crate::telegram::get_client(&accounts, account_id)
+        crate::telegram::get_client(&accounts, request.account_id)
             .await?
             .clone()
     };
 
-    let resolved =
-        resolve_telegram_source(&client, &source_ref, telegram_source_kind.as_deref()).await?;
+    let expected_kind = request.expected_kind.map(TelegramSourceKind::as_str);
+    let resolved = resolve_telegram_source(&client, &request.source_ref, expected_kind).await?;
     let avatar_cache_key = if let Some(bytes) = resolved.avatar_bytes.as_deref() {
         cache_source_avatar(
             &handle,
-            account_id,
+            request.account_id,
             &resolved.telegram_source_kind,
             &resolved.external_id,
             bytes,
@@ -110,8 +119,8 @@ pub async fn add_telegram_source(
         None
     };
     let metadata_zstd = encode_source_metadata(&source_metadata_for_added_source(
-        &source_ref,
-        telegram_source_kind.as_deref(),
+        &request.source_ref,
+        expected_kind,
         &resolved,
         avatar_cache_key,
     ))?;
@@ -157,7 +166,7 @@ pub async fn add_telegram_source(
     .bind(&resolved.title)
     .bind(metadata_zstd)
     .bind(resolved.is_member)
-    .bind(account_id)
+    .bind(request.account_id)
     .bind(now)
     .fetch_one(&pool)
     .await

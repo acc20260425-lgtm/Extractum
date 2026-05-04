@@ -44,6 +44,13 @@ pub struct SyncSettingsRecord {
     pub initial_sync_value: i64,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSyncSettingsRequest {
+    pub initial_sync_mode: InitialSyncMode,
+    pub initial_sync_value: i64,
+}
+
 fn default_sync_settings() -> SyncSettingsRecord {
     SyncSettingsRecord {
         initial_sync_mode: InitialSyncMode::RecentMessages,
@@ -193,14 +200,13 @@ pub async fn get_sync_settings(handle: AppHandle) -> AppResult<SyncSettingsRecor
 #[tauri::command]
 pub async fn save_sync_settings(
     handle: AppHandle,
-    initial_sync_mode: String,
-    initial_sync_value: i64,
+    settings: SaveSyncSettingsRequest,
 ) -> AppResult<SyncSettingsRecord> {
     let pool = get_pool(&handle).await?;
-    let mode = InitialSyncMode::parse(&initial_sync_mode)?;
-    let settings = validate_sync_settings(mode, initial_sync_value)?;
-    save_sync_settings_to_pool(&pool, &settings).await?;
-    Ok(settings)
+    let validated =
+        validate_sync_settings(settings.initial_sync_mode, settings.initial_sync_value)?;
+    save_sync_settings_to_pool(&pool, &validated).await?;
+    Ok(validated)
 }
 
 #[cfg(test)]

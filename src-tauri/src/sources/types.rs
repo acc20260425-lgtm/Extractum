@@ -5,6 +5,24 @@ pub(super) const TELEGRAM_KIND_CHANNEL: &str = "channel";
 pub(super) const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
 pub(super) const TELEGRAM_KIND_GROUP: &str = "group";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TelegramSourceKind {
+    Channel,
+    Supergroup,
+    Group,
+}
+
+impl TelegramSourceKind {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Channel => "channel",
+            Self::Supergroup => "supergroup",
+            Self::Group => "group",
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct TelegramSourceInfo {
     pub id: i64,
