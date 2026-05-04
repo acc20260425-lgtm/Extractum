@@ -1,6 +1,17 @@
 export type TelegramSourceKind = "channel" | "supergroup" | "group";
+export type SourceType = "telegram";
+export type InitialSyncMode = "recent_messages" | "recent_days";
 
 export type DialogKindFilter = "all" | TelegramSourceKind;
+
+export interface TelegramDialogSource {
+  id: number;
+  title: string;
+  username: string | null;
+  telegramSourceKind: TelegramSourceKind;
+  isMember: boolean;
+  photoDataUrl: string | null;
+}
 
 export interface TelegramSourceInfo {
   id: number;
@@ -9,6 +20,21 @@ export interface TelegramSourceInfo {
   telegram_source_kind: TelegramSourceKind;
   is_member: boolean;
   photo_data_url: string | null;
+}
+
+export interface Source {
+  id: number;
+  sourceType: SourceType;
+  telegramSourceKind: TelegramSourceKind;
+  accountId: number | null;
+  externalId: string;
+  title: string | null;
+  lastSyncState: number | null;
+  lastSyncedAt: number | null;
+  isMember: boolean;
+  isActive: boolean;
+  createdAt: number;
+  avatarDataUrl: string | null;
 }
 
 export interface SourceRecord {
@@ -24,6 +50,25 @@ export interface SourceRecord {
   is_active: boolean;
   created_at: number;
   avatar_data_url: string | null;
+}
+
+export interface SourceItem {
+  id: number;
+  sourceId: number;
+  externalId: string;
+  author: string | null;
+  publishedAt: number;
+  content: string | null;
+  contentKind: string;
+  hasMedia: boolean;
+  mediaKind: string | null;
+  mediaSummary: string | null;
+  mediaFileName: string | null;
+  mediaMimeType: string | null;
+  hasRawData: boolean;
+  forumTopicId: number | null;
+  forumTopicTitle: string | null;
+  forumTopicTopMessageId: number | null;
 }
 
 export interface ItemRecord {
@@ -46,8 +91,25 @@ export interface ItemRecord {
 }
 
 export type ForumTopicFilter =
+  | { kind: "topic"; topicId: number }
   | { kind: "topic"; topic_id: number }
   | { kind: "uncategorized" };
+
+export interface SourceForumTopic {
+  kind: "topic" | "uncategorized";
+  key: string;
+  title: string;
+  messageCount: number;
+  topicId: number | null;
+  topMessageId: number | null;
+  iconColor: number | null;
+  iconEmojiId: number | null;
+  isClosed: boolean;
+  isPinned: boolean;
+  isHidden: boolean;
+  isDeleted: boolean;
+  sortOrder: number | null;
+}
 
 export interface SourceForumTopicRecord {
   kind: "topic" | "uncategorized";
@@ -65,6 +127,14 @@ export interface SourceForumTopicRecord {
   sort_order: number | null;
 }
 
+export interface SyncSourceResult {
+  inserted: number;
+  skipped: number;
+  lastMessageId: number | null;
+  initialSyncPolicyApplied: string | null;
+  warnings: string[];
+}
+
 export interface SyncResult {
   inserted: number;
   skipped: number;
@@ -73,8 +143,13 @@ export interface SyncResult {
   warnings: string[];
 }
 
+export interface SyncSettings {
+  initialSyncMode: InitialSyncMode;
+  initialSyncValue: number;
+}
+
 export interface SyncSettingsRecord {
-  initial_sync_mode: "recent_messages" | "recent_days";
+  initial_sync_mode: InitialSyncMode;
   initial_sync_value: number;
 }
 
