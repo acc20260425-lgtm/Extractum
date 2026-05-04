@@ -72,26 +72,28 @@ pub(crate) async fn insert_source_item(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
     item: SourceItemInsert,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     let content_zstd = item
         .payload
         .content
         .as_deref()
         .map(compress_text)
-        .transpose()?;
+        .transpose()
+        .map_err(AppError::internal)?;
     let media_kind = item.payload.media.as_ref().map(|media| media.kind.clone());
     let media_metadata_zstd = item
         .payload
         .media
         .as_ref()
         .map(|media| encode_media_metadata(&media.metadata))
-        .transpose()?;
+        .transpose()
+        .map_err(AppError::internal)?;
 
     if content_zstd.is_none() && media_metadata_zstd.is_none() {
         return Ok(false);
     }
 
-    let raw_data_zstd = compress_json_bytes(&item.raw_data)?;
+    let raw_data_zstd = compress_json_bytes(&item.raw_data).map_err(AppError::internal)?;
     let result = sqlx::query(
         r#"
         INSERT INTO items (
@@ -134,7 +136,7 @@ pub(crate) async fn insert_source_item(
     .bind(item.telegram_context.reaction_count)
     .execute(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| AppError::internal(e.to_string()))?;
 
     Ok(result.rows_affected() == 1)
 }
@@ -247,7 +249,7 @@ async fn load_item_rows_from_pool(
         .bind(limit)
         .fetch_all(pool)
         .await
-        .map_err(|e| AppError::from(e.to_string()))
+        .map_err(|e| AppError::internal(e.to_string()))
 }
 
 pub(super) fn message_author(message: &grammers_client::message::Message) -> Option<String> {
@@ -300,7 +302,7 @@ pub(super) fn build_raw_payload(
     source_title: &Option<String>,
     author: &Option<String>,
     item_payload: &ExtractedItemPayload,
-) -> Result<Vec<u8>, String> {
+) -> AppResult<Vec<u8>> {
     serde_json::to_vec(&json!({
         "id": message.id(),
         "peer_id": message.peer_id().to_string(),
@@ -315,7 +317,7 @@ pub(super) fn build_raw_payload(
         "source_title": source_title,
         "author": author,
     }))
-    .map_err(|e| e.to_string())
+    .map_err(|e| AppError::internal(e.to_string()))
 }
 
 #[cfg(test)]

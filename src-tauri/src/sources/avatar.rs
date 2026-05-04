@@ -4,6 +4,8 @@ use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 use tokio::time::{timeout, Duration};
 
+use crate::error::{AppError, AppResult};
+
 const TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS: u64 = 750;
 pub(super) const TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS: u64 = 4_000;
 const TELEGRAM_SOURCE_AVATAR_CACHE_DIR: &str = "source_avatars";
@@ -34,14 +36,18 @@ pub(super) async fn peer_photo_bytes_with_timeout(
 async fn peer_photo_bytes(
     client: &grammers_client::Client,
     peer: &Peer,
-) -> Result<Option<Vec<u8>>, String> {
+) -> AppResult<Option<Vec<u8>>> {
     let Some(photo) = peer.photo(false).await else {
         return Ok(None);
     };
 
     let mut bytes = Vec::new();
     let mut download = client.iter_download(&photo).chunk_size(4 * 1024);
-    while let Some(chunk) = download.next().await.map_err(|e| e.to_string())? {
+    while let Some(chunk) = download
+        .next()
+        .await
+        .map_err(|e| AppError::network(e.to_string()))?
+    {
         bytes.extend(chunk);
     }
 
@@ -67,11 +73,11 @@ fn source_avatar_cache_key(
     format!("{account_id}_{telegram_source_kind}_{external_id}.jpg")
 }
 
-fn source_avatar_cache_dir(handle: &AppHandle) -> Result<PathBuf, String> {
+fn source_avatar_cache_dir(handle: &AppHandle) -> AppResult<PathBuf> {
     Ok(handle
         .path()
         .app_data_dir()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| AppError::internal(e.to_string()))?
         .join(TELEGRAM_SOURCE_AVATAR_CACHE_DIR))
 }
 
@@ -81,15 +87,15 @@ pub(super) fn cache_source_avatar(
     telegram_source_kind: &str,
     external_id: &str,
     bytes: &[u8],
-) -> Result<Option<String>, String> {
+) -> AppResult<Option<String>> {
     if bytes.is_empty() {
         return Ok(None);
     }
 
     let cache_key = source_avatar_cache_key(account_id, telegram_source_kind, external_id);
     let cache_dir = source_avatar_cache_dir(handle)?;
-    fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
-    fs::write(cache_dir.join(&cache_key), bytes).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&cache_dir).map_err(|e| AppError::internal(e.to_string()))?;
+    fs::write(cache_dir.join(&cache_key), bytes).map_err(|e| AppError::internal(e.to_string()))?;
     Ok(Some(cache_key))
 }
 

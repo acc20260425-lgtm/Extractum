@@ -71,7 +71,7 @@ pub(super) async fn refresh_forum_topics(
                 Vec::new()
             }
         }
-        Err(error) if is_non_forum_topic_refresh_error(&error) => Vec::new(),
+        Err(error) if is_non_forum_topic_refresh_error(&error.message) => Vec::new(),
         Err(error) => vec![format!(
             "Forum topic refresh failed for source {}: {error}",
             source.id
@@ -82,7 +82,7 @@ pub(super) async fn refresh_forum_topics(
 async fn fetch_all_forum_topics(
     client: &Client,
     peer: PeerRef,
-) -> Result<(Vec<ForumTopicSnapshot>, Vec<i64>), String> {
+) -> AppResult<(Vec<ForumTopicSnapshot>, Vec<i64>)> {
     let mut topics = Vec::new();
     let mut deleted_topic_ids = Vec::new();
     let mut offset_date = 0_i32;
@@ -101,7 +101,7 @@ async fn fetch_all_forum_topics(
                 limit: 100,
             })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| AppError::network(e.to_string()))?;
 
         let tl::enums::messages::ForumTopics::Topics(forum_topics) = response;
 
@@ -186,7 +186,7 @@ async fn upsert_forum_topics_from_refresh(
     topics: &[ForumTopicSnapshot],
     deleted_topic_ids: &[i64],
     refreshed_at: i64,
-) -> Result<(), String> {
+) -> AppResult<()> {
     for topic in topics {
         sqlx::query(
             r#"
@@ -234,7 +234,7 @@ async fn upsert_forum_topics_from_refresh(
         .bind(refreshed_at)
         .execute(pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::internal(e.to_string()))?;
     }
 
     for topic_id in deleted_topic_ids {
@@ -251,7 +251,7 @@ async fn upsert_forum_topics_from_refresh(
         .bind(topic_id)
         .execute(pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::internal(e.to_string()))?;
     }
 
     Ok(())
@@ -319,7 +319,7 @@ async fn list_source_forum_topics_from_pool(
         .bind(source_id)
         .fetch_all(pool)
         .await
-        .map_err(|e| AppError::from(e.to_string()))?;
+        .map_err(|e| AppError::internal(e.to_string()))?;
 
     let topic_join = resolved_topic_join(&ResolvedTopicAliases {
         item: "items",
@@ -339,7 +339,7 @@ async fn list_source_forum_topics_from_pool(
         .bind(source_id)
         .fetch_one(pool)
         .await
-        .map_err(|e| AppError::from(e.to_string()))?;
+        .map_err(|e| AppError::internal(e.to_string()))?;
 
     let mut records = rows
         .into_iter()

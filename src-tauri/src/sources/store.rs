@@ -41,7 +41,7 @@ pub async fn delete_source(
         .bind(source_id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::internal(e.to_string()))?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::not_found(format!("Source {source_id} not found")));
@@ -66,7 +66,11 @@ pub async fn list_telegram_sources(
     let mut dialogs = client.iter_dialogs();
     let photo_budget_started_at = Instant::now();
     let photo_budget = Duration::from_millis(TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS);
-    while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
+    while let Some(dialog) = dialogs
+        .next()
+        .await
+        .map_err(|e| AppError::network(e.to_string()))?
+    {
         if let Some(mut source) = telegram_source_info_from_peer(dialog.peer()) {
             if photo_budget_started_at.elapsed() < photo_budget {
                 source.photo_data_url =
@@ -88,7 +92,7 @@ pub(crate) async fn load_source(
     .bind(source_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| AppError::internal(e.to_string()))?
     .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))
 }
 
@@ -171,7 +175,7 @@ pub async fn add_telegram_source(
     .bind(now)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| AppError::internal(e.to_string()))?;
     source_record_from_row(&handle, row)
 }
 
@@ -188,14 +192,14 @@ pub async fn list_sources(
         .bind(aid)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| AppError::internal(e.to_string()))?
     } else {
         sqlx::query_as(
             "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
         )
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| AppError::internal(e.to_string()))?
     };
 
     rows.into_iter()

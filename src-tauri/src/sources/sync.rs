@@ -80,7 +80,7 @@ async fn persist_items(
     peer: PeerRef,
     source: &SourceSyncTarget,
     sync_policy: &SyncPolicy,
-) -> Result<IngestOutcome, String> {
+) -> AppResult<IngestOutcome> {
     let mut inserted = 0_i64;
     let mut skipped = 0_i64;
     let mut max_message_id = sync_policy.previous_last_sync;
@@ -95,7 +95,11 @@ async fn persist_items(
         client.iter_messages(peer)
     };
 
-    while let Some(message) = messages.next().await.map_err(|e| e.to_string())? {
+    while let Some(message) = messages
+        .next()
+        .await
+        .map_err(|e| AppError::network(e.to_string()))?
+    {
         let message_id = i64::from(message.id());
         if sync_policy.previous_last_sync > 0 && message_id <= sync_policy.previous_last_sync {
             break;
@@ -157,7 +161,7 @@ pub(crate) async fn finalize_sync(
     previous_last_sync: i64,
     max_message_id: i64,
     refreshed_metadata_zstd: Option<Vec<u8>>,
-) -> Result<Option<i64>, String> {
+) -> AppResult<Option<i64>> {
     let sync_completed_at = now_secs();
     let last_sync_state = if max_message_id > previous_last_sync {
         Some(max_message_id)
@@ -175,7 +179,7 @@ pub(crate) async fn finalize_sync(
         .bind(source.id)
         .execute(pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::internal(e.to_string()))?;
     } else {
         sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
             .bind(last_sync_state)
@@ -183,7 +187,7 @@ pub(crate) async fn finalize_sync(
             .bind(source.id)
             .execute(pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| AppError::internal(e.to_string()))?;
     }
 
     Ok(last_sync_state)

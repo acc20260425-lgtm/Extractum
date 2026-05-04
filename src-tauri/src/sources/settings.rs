@@ -22,11 +22,13 @@ pub enum InitialSyncMode {
 }
 
 impl InitialSyncMode {
-    fn parse(value: &str) -> Result<Self, String> {
+    fn parse(value: &str) -> AppResult<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "recent_messages" => Ok(Self::RecentMessages),
             "recent_days" => Ok(Self::RecentDays),
-            other => Err(format!("Unsupported initial sync mode '{other}'")),
+            other => Err(AppError::validation(format!(
+                "Unsupported initial sync mode '{other}'"
+            ))),
         }
     }
 
@@ -118,22 +120,15 @@ pub(super) fn initial_sync_policy_label(settings: &SyncSettingsRecord) -> String
     }
 }
 
-async fn read_setting(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    key: &str,
-) -> Result<Option<String>, String> {
+async fn read_setting(pool: &sqlx::Pool<sqlx::Sqlite>, key: &str) -> AppResult<Option<String>> {
     sqlx::query_scalar::<_, String>("SELECT value FROM app_settings WHERE key = ?")
         .bind(key)
         .fetch_optional(pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::internal(e.to_string()))
 }
 
-async fn write_setting(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    key: &str,
-    value: &str,
-) -> Result<(), String> {
+async fn write_setting(pool: &sqlx::Pool<sqlx::Sqlite>, key: &str, value: &str) -> AppResult<()> {
     sqlx::query(
         r#"
         INSERT INTO app_settings (key, value)
@@ -145,7 +140,7 @@ async fn write_setting(
     .bind(value)
     .execute(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| AppError::internal(e.to_string()))?;
 
     Ok(())
 }

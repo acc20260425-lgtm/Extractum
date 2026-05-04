@@ -9,6 +9,7 @@ use super::types::{
     TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
 };
 use crate::compression::{compress_json_bytes, decompress_bytes};
+use crate::error::{AppError, AppResult};
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -115,10 +116,12 @@ fn unsupported_private_manual_source_ref_message(source_ref: &str) -> String {
 
 fn parse_supported_manual_telegram_source_ref(
     source_ref: &str,
-) -> Result<ManualTelegramSourceRef, String> {
+) -> AppResult<ManualTelegramSourceRef> {
     let trimmed = source_ref.trim();
     if trimmed.is_empty() {
-        return Err("Telegram source reference cannot be empty".to_string());
+        return Err(AppError::validation(
+            "Telegram source reference cannot be empty",
+        ));
     }
 
     if let Ok(source_id) = trimmed.parse::<i64>() {
@@ -128,7 +131,9 @@ fn parse_supported_manual_telegram_source_ref(
     if let Some(rest) = trimmed.strip_prefix('@') {
         let username = rest.trim();
         if username.is_empty() || username.contains('/') || username.starts_with('+') {
-            return Err(unsupported_manual_source_ref_message(source_ref));
+            return Err(AppError::validation(unsupported_manual_source_ref_message(
+                source_ref,
+            )));
         }
         return Ok(ManualTelegramSourceRef::Username(username.to_string()));
     }
@@ -141,13 +146,17 @@ fn parse_supported_manual_telegram_source_ref(
         let path = rest.trim_matches('/');
         let first_segment = path.split('/').next().unwrap_or(path).trim();
         if first_segment.is_empty() {
-            return Err(unsupported_manual_source_ref_message(source_ref));
+            return Err(AppError::validation(unsupported_manual_source_ref_message(
+                source_ref,
+            )));
         }
         if first_segment.eq_ignore_ascii_case("joinchat")
             || first_segment.eq_ignore_ascii_case("c")
             || first_segment.starts_with('+')
         {
-            return Err(unsupported_private_manual_source_ref_message(source_ref));
+            return Err(AppError::validation(
+                unsupported_private_manual_source_ref_message(source_ref),
+            ));
         }
         return Ok(ManualTelegramSourceRef::Username(first_segment.to_string()));
     }
@@ -161,7 +170,9 @@ fn parse_supported_manual_telegram_source_ref(
         return Ok(ManualTelegramSourceRef::Username(username));
     }
 
-    Err(unsupported_manual_source_ref_message(source_ref))
+    Err(AppError::validation(unsupported_manual_source_ref_message(
+        source_ref,
+    )))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -299,15 +310,17 @@ async fn resolve_telegram_source_by_username(
     username: &str,
     source_ref: &str,
     expected_kind: Option<&str>,
-) -> Result<ResolvedTelegramSource, String> {
+) -> AppResult<ResolvedTelegramSource> {
     let peer = client
         .resolve_username(username)
         .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Telegram source '{}' not found", source_ref))?;
+        .map_err(|e| AppError::network(e.to_string()))?
+        .ok_or_else(|| {
+            AppError::not_found(format!("Telegram source '{}' not found", source_ref))
+        })?;
 
     let mut source = resolved_telegram_source_from_peer(&peer)
-        .ok_or_else(|| "Not a Telegram channel, group, or supergroup".to_string())?;
+        .ok_or_else(|| AppError::validation("Not a Telegram channel, group, or supergroup"))?;
     validate_expected_telegram_source_kind(&source, expected_kind)?;
     source.avatar_bytes = peer_photo_bytes_with_timeout(client, &peer).await;
     Ok(source)
@@ -327,15 +340,23 @@ fn dialog_lookup_not_found_message(source_ref: &str, expected_kind: Option<&str>
     }
 }
 
+fn dialog_lookup_not_found_error(source_ref: &str, expected_kind: Option<&str>) -> AppError {
+    AppError::not_found(dialog_lookup_not_found_message(source_ref, expected_kind))
+}
+
 async fn resolve_telegram_source_from_dialogs(
     client: &grammers_client::Client,
     source_id: i64,
     source_ref: &str,
     expected_kind: Option<&str>,
-) -> Result<ResolvedTelegramSource, String> {
+) -> AppResult<ResolvedTelegramSource> {
     let mut dialogs = client.iter_dialogs();
     let mut found_wrong_kind = false;
-    while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
+    while let Some(dialog) = dialogs
+        .next()
+        .await
+        .map_err(|e| AppError::network(e.to_string()))?
+    {
         if dialog.peer().id().bare_id() == source_id {
             if let Some(source) = resolved_telegram_source_from_peer(dialog.peer()) {
                 if telegram_source_kind_matches(&source, expected_kind)? {
@@ -350,20 +371,20 @@ async fn resolve_telegram_source_from_dialogs(
     }
 
     if found_wrong_kind {
-        return Err(format!(
+        return Err(AppError::validation(format!(
             "Telegram source '{}' was found, but it has a different Telegram source kind than the requested source kind",
             source_ref
-        ));
+        )));
     }
 
-    Err(dialog_lookup_not_found_message(source_ref, expected_kind))
+    Err(dialog_lookup_not_found_error(source_ref, expected_kind))
 }
 
 pub(super) async fn resolve_telegram_source(
     client: &grammers_client::Client,
     source_ref: &str,
     expected_kind: Option<&str>,
-) -> Result<ResolvedTelegramSource, String> {
+) -> AppResult<ResolvedTelegramSource> {
     let trimmed = source_ref.trim();
     if expected_kind.is_none() {
         match parse_supported_manual_telegram_source_ref(trimmed)? {
@@ -395,7 +416,10 @@ pub(super) async fn resolve_telegram_source(
     }
 
     let Ok(source_id) = trimmed.parse::<i64>() else {
-        return Err(format!("Telegram source '{}' not found", source_ref));
+        return Err(AppError::not_found(format!(
+            "Telegram source '{}' not found",
+            source_ref
+        )));
     };
 
     resolve_telegram_source_from_dialogs(client, source_id, source_ref, expected_kind).await
@@ -404,7 +428,7 @@ pub(super) async fn resolve_telegram_source(
 fn telegram_source_kind_matches(
     source: &ResolvedTelegramSource,
     expected_kind: Option<&str>,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     let Some(expected_kind) = expected_kind else {
         return Ok(true);
     };
@@ -416,15 +440,15 @@ fn telegram_source_kind_matches(
 fn validate_expected_telegram_source_kind(
     source: &ResolvedTelegramSource,
     expected_kind: Option<&str>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     if telegram_source_kind_matches(source, expected_kind)? {
         Ok(())
     } else {
-        Err(format!(
+        Err(AppError::validation(format!(
             "Resolved Telegram source has a different Telegram source kind than the requested source kind: expected '{}', got '{}'",
             expected_kind.unwrap_or("unknown"),
             source.telegram_source_kind
-        ))
+        )))
     }
 }
 
@@ -494,38 +518,43 @@ fn peer_access_hash(peer: &Peer) -> Option<i64> {
     }
 }
 
-pub(super) fn encode_source_metadata(metadata: &SourceMetadata) -> Result<Vec<u8>, String> {
-    let json = serde_json::to_vec(&metadata.normalized()).map_err(|e| e.to_string())?;
-    compress_json_bytes(&json)
+pub(super) fn encode_source_metadata(metadata: &SourceMetadata) -> AppResult<Vec<u8>> {
+    let json = serde_json::to_vec(&metadata.normalized())
+        .map_err(|e| AppError::internal(e.to_string()))?;
+    compress_json_bytes(&json).map_err(AppError::internal)
 }
 
-pub(super) fn decode_source_metadata(bytes: Option<&[u8]>) -> Result<SourceMetadata, String> {
+pub(super) fn decode_source_metadata(bytes: Option<&[u8]>) -> AppResult<SourceMetadata> {
     let Some(bytes) = bytes else {
         return Ok(SourceMetadata::default());
     };
-    let decoded = decompress_bytes(bytes)?;
+    let decoded = decompress_bytes(bytes).map_err(AppError::internal)?;
     serde_json::from_slice::<SourceMetadata>(&decoded)
         .map(|metadata| metadata.normalized())
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::internal(e.to_string()))
+}
+
+fn telegram_source_id_from_sync_target(source: &SourceSyncTarget) -> AppResult<i64> {
+    if source.source_type != TELEGRAM_SOURCE_TYPE {
+        return Err(AppError::validation(format!(
+            "Source {} has unsupported source_type '{}'",
+            source.id, source.source_type
+        )));
+    }
+
+    source.external_id.parse::<i64>().map_err(|_| {
+        AppError::validation(format!(
+            "Invalid external_id '{}' for source {}",
+            source.external_id, source.id
+        ))
+    })
 }
 
 async fn resolve_source_peer(
     client: &grammers_client::Client,
     source: &SourceSyncTarget,
-) -> Result<PeerRef, String> {
-    if source.source_type != TELEGRAM_SOURCE_TYPE {
-        return Err(format!(
-            "Source {} has unsupported source_type '{}'",
-            source.id, source.source_type
-        ));
-    }
-
-    let telegram_source_id = source.external_id.parse::<i64>().map_err(|_| {
-        format!(
-            "Invalid external_id '{}' for source {}",
-            source.external_id, source.id
-        )
-    })?;
+) -> AppResult<PeerRef> {
+    let telegram_source_id = telegram_source_id_from_sync_target(source)?;
 
     let metadata = decode_source_metadata(source.metadata_zstd.as_deref())?;
     for step in source_peer_resolution_plan(&metadata) {
@@ -542,7 +571,7 @@ async fn resolve_source_peer(
                 if let Some(peer) = client
                     .resolve_username(username)
                     .await
-                    .map_err(|e| e.to_string())?
+                    .map_err(|e| AppError::network(e.to_string()))?
                 {
                     return peer_ref_for_source_kind(
                         &peer,
@@ -560,7 +589,11 @@ async fn resolve_source_peer(
             }
             SourcePeerResolutionStep::DialogScan => {
                 let mut dialogs = client.iter_dialogs();
-                while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
+                while let Some(dialog) = dialogs
+                    .next()
+                    .await
+                    .map_err(|e| AppError::network(e.to_string()))?
+                {
                     if dialog.peer().id().bare_id() == telegram_source_id {
                         return peer_ref_for_source_kind(
                             dialog.peer(),
@@ -573,14 +606,16 @@ async fn resolve_source_peer(
         }
     }
 
-    Err(source_peer_resolution_failure(source, &metadata))
+    Err(AppError::not_found(source_peer_resolution_failure(
+        source, &metadata,
+    )))
 }
 
 fn source_peer_ref_from_identity(
     source: &SourceSyncTarget,
     telegram_source_id: i64,
     metadata: &SourceMetadata,
-) -> Result<Option<PeerRef>, String> {
+) -> AppResult<Option<PeerRef>> {
     let Some(access_hash) = metadata
         .peer_identity
         .as_ref()
@@ -595,10 +630,10 @@ fn source_peer_ref_from_identity(
             auth: PeerAuth::from_hash(access_hash),
         })),
         TELEGRAM_KIND_GROUP => Ok(None),
-        other => Err(format!(
+        other => Err(AppError::validation(format!(
             "Source {} has unsupported telegram_source_kind '{}'",
             source.id, other
-        )),
+        ))),
     }
 }
 
@@ -606,7 +641,7 @@ fn peer_ref_for_source_kind(
     peer: &Peer,
     telegram_source_kind: &str,
     source_id: i64,
-) -> Result<PeerRef, String> {
+) -> AppResult<PeerRef> {
     match (telegram_source_kind, peer) {
         (TELEGRAM_KIND_CHANNEL, Peer::Channel(channel)) => Ok(channel.raw.clone().into()),
         (TELEGRAM_KIND_SUPERGROUP, Peer::Group(group)) if group.is_megagroup() => {
@@ -616,15 +651,15 @@ fn peer_ref_for_source_kind(
             Ok(group.raw.clone().into())
         }
         (TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP, _) => Err(
-            format!(
+            AppError::validation(format!(
                 "Source {} resolved to a different Telegram source kind than the requested source kind",
                 source_id
-            ),
+            )),
         ),
-        (other, _) => Err(format!(
+        (other, _) => Err(AppError::validation(format!(
             "Source {} has unsupported telegram_source_kind '{}'",
             source_id, other
-        )),
+        ))),
     }
 }
 
@@ -633,7 +668,7 @@ pub(crate) async fn resolve_and_refresh_peer(
     client: &grammers_client::Client,
     source: &SourceSyncTarget,
     account_id: i64,
-) -> Result<ResolvedSyncPeer, String> {
+) -> AppResult<ResolvedSyncPeer> {
     let peer = resolve_source_peer(client, source).await?;
     let refreshed_metadata_zstd =
         refresh_source_avatar_cache(handle, client, source, account_id, peer).await;
@@ -672,6 +707,7 @@ async fn refresh_source_avatar_cache(
 mod tests {
     use super::*;
     use crate::compression::compress_json_bytes;
+    use crate::error::AppErrorKind;
 
     #[test]
     fn source_metadata_decodes_old_username_only_payloads() {
@@ -736,6 +772,14 @@ mod tests {
     }
 
     #[test]
+    fn source_metadata_decode_failures_are_internal() {
+        let error =
+            decode_source_metadata(Some(b"not zstd metadata")).expect_err("decode should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+    }
+
+    #[test]
     fn parse_username_accepts_username_and_t_me_links() {
         assert_eq!(parse_username("@example"), "example");
         assert_eq!(parse_username("t.me/example"), "example");
@@ -771,9 +815,27 @@ mod tests {
         ] {
             let error = parse_supported_manual_telegram_source_ref(source_ref)
                 .expect_err("private/manual ref should be rejected");
-            assert!(error.contains("not supported for manual add"));
-            assert!(error.contains("dialogs"));
+            assert!(error.message.contains("not supported for manual add"));
+            assert!(error.message.contains("dialogs"));
         }
+    }
+
+    #[test]
+    fn parse_supported_manual_telegram_source_ref_rejects_empty_refs_as_validation() {
+        let error = parse_supported_manual_telegram_source_ref("   ")
+            .expect_err("empty ref should be rejected");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+    }
+
+    #[test]
+    fn dialog_lookup_misses_are_not_found() {
+        let error = dialog_lookup_not_found_error("12345", None);
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert!(error
+            .message
+            .contains("not found in this account's dialogs"));
     }
 
     #[test]
@@ -855,9 +917,9 @@ mod tests {
         let error = validate_expected_telegram_source_kind(&source, Some(TELEGRAM_KIND_CHANNEL))
             .expect_err("expected kind mismatch");
 
-        assert!(error.contains("requested source kind"));
-        assert!(error.contains(TELEGRAM_KIND_CHANNEL));
-        assert!(error.contains(TELEGRAM_KIND_SUPERGROUP));
+        assert!(error.message.contains("requested source kind"));
+        assert!(error.message.contains(TELEGRAM_KIND_CHANNEL));
+        assert!(error.message.contains(TELEGRAM_KIND_SUPERGROUP));
     }
 
     #[test]
@@ -943,6 +1005,71 @@ mod tests {
             source_peer_ref_from_identity(&source, 12345, &metadata).expect("metadata peer ref");
 
         assert!(peer_ref.is_none());
+    }
+
+    #[test]
+    fn peer_ref_from_identity_rejects_unsupported_telegram_kind_as_validation() {
+        let source = SourceSyncTarget {
+            id: 7,
+            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            telegram_source_kind: "unsupported".to_string(),
+            account_id: Some(1),
+            external_id: "12345".to_string(),
+            title: Some("Example".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+        let metadata = SourceMetadata {
+            peer_identity: Some(SourcePeerIdentity {
+                strategy: SourcePeerResolutionStrategy::Dialog,
+                username: None,
+                access_hash: Some(67890),
+            }),
+            ..SourceMetadata::default()
+        };
+
+        let error = source_peer_ref_from_identity(&source, 12345, &metadata)
+            .expect_err("unsupported kind should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+    }
+
+    #[test]
+    fn source_peer_input_rejects_unsupported_source_type_as_validation() {
+        let source = SourceSyncTarget {
+            id: 7,
+            source_type: "rss".to_string(),
+            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
+            account_id: Some(1),
+            external_id: "12345".to_string(),
+            title: Some("Example".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+
+        let error = telegram_source_id_from_sync_target(&source)
+            .expect_err("unsupported source type should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+    }
+
+    #[test]
+    fn source_peer_input_rejects_malformed_external_id_as_validation() {
+        let source = SourceSyncTarget {
+            id: 7,
+            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
+            account_id: Some(1),
+            external_id: "not-a-number".to_string(),
+            title: Some("Example".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+
+        let error = telegram_source_id_from_sync_target(&source)
+            .expect_err("malformed external id should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
     }
 
     #[test]
