@@ -1,9 +1,23 @@
 use serde::Serialize;
 
-pub(super) const TELEGRAM_SOURCE_TYPE: &str = "telegram";
-pub(super) const TELEGRAM_KIND_CHANNEL: &str = "channel";
-pub(super) const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
-pub(super) const TELEGRAM_KIND_GROUP: &str = "group";
+pub(crate) const TELEGRAM_SOURCE_TYPE: &str = "telegram";
+pub(crate) const TELEGRAM_KIND_CHANNEL: &str = "channel";
+pub(crate) const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
+pub(crate) const TELEGRAM_KIND_GROUP: &str = "group";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceType {
+    Telegram,
+}
+
+impl SourceType {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Telegram => TELEGRAM_SOURCE_TYPE,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -16,9 +30,20 @@ pub enum TelegramSourceKind {
 impl TelegramSourceKind {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
-            Self::Channel => "channel",
-            Self::Supergroup => "supergroup",
-            Self::Group => "group",
+            Self::Channel => TELEGRAM_KIND_CHANNEL,
+            Self::Supergroup => TELEGRAM_KIND_SUPERGROUP,
+            Self::Group => TELEGRAM_KIND_GROUP,
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> crate::error::AppResult<Self> {
+        match value {
+            TELEGRAM_KIND_CHANNEL => Ok(Self::Channel),
+            TELEGRAM_KIND_SUPERGROUP => Ok(Self::Supergroup),
+            TELEGRAM_KIND_GROUP => Ok(Self::Group),
+            other => Err(crate::error::AppError::validation(format!(
+                "Unsupported telegram_source_kind '{other}'"
+            ))),
         }
     }
 }
@@ -115,4 +140,37 @@ pub(super) fn now_secs() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TelegramSourceKind;
+
+    #[test]
+    fn telegram_source_kind_parses_supported_values() {
+        assert_eq!(
+            TelegramSourceKind::parse("channel").unwrap(),
+            TelegramSourceKind::Channel
+        );
+        assert_eq!(
+            TelegramSourceKind::parse("supergroup").unwrap(),
+            TelegramSourceKind::Supergroup
+        );
+        assert_eq!(
+            TelegramSourceKind::parse("group").unwrap(),
+            TelegramSourceKind::Group
+        );
+    }
+
+    #[test]
+    fn telegram_source_kind_rejects_unknown_values_as_validation() {
+        let error = TelegramSourceKind::parse("user").expect_err("unsupported kind");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+    }
+
+    #[test]
+    fn telegram_source_kind_serializes_as_existing_wire_value() {
+        let value = serde_json::to_string(&TelegramSourceKind::Supergroup).expect("serialize");
+        assert_eq!(value, "\"supergroup\"");
+    }
 }

@@ -1,7 +1,7 @@
 use grammers_client::tl;
 
-use super::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
 use crate::error::{AppError, AppResult};
+use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
 
 const TAKEOUT_HISTORY_PAGE_LIMIT: i32 = 100;
 
@@ -267,9 +267,7 @@ mod tests {
         takeout_pagination_fallback_warning, TakeoutPaginationCursor,
         TakeoutPaginationFallbackReason, TakeoutPaginationProfile, TAKEOUT_HISTORY_PAGE_LIMIT,
     };
-    use crate::takeout_import::{
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
-    };
+    use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
     use grammers_client::tl;
 
     #[test]

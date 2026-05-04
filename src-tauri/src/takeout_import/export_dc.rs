@@ -4,8 +4,8 @@ use grammers_client::{tl, Client};
 use grammers_mtsender::InvocationError;
 use grammers_session::{storages::MemorySession, Session};
 
-use super::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
 use crate::error::{AppError, AppResult};
+use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
 
 const EXPORT_DC_SHIFT: i32 = 4 * 10_000;
 const TAKEOUT_FILE_MAX_SIZE: i64 = 8 * 1024 * 1024;
@@ -130,9 +130,7 @@ mod tests {
         export_dc_id_for_home_dc, should_fallback_export_dc_error,
         takeout_init_request_for_source_kind, TAKEOUT_FILE_MAX_SIZE,
     };
-    use crate::takeout_import::{
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
-    };
+    use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
     use grammers_mtsender::{InvocationError, RpcError};
 
     #[test]

@@ -15,7 +15,7 @@ use super::peer_resolution::{
     source_metadata_for_added_source, telegram_source_info_from_peer,
 };
 use super::types::{
-    now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, TelegramSourceInfo,
+    now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, SourceType, TelegramSourceInfo,
     TelegramSourceKind,
 };
 
@@ -140,7 +140,7 @@ pub async fn add_telegram_source(
             account_id,
             created_at
         )
-        VALUES ('telegram', ?, ?, ?, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
         ON CONFLICT(account_id, source_type, telegram_source_kind, external_id) DO UPDATE SET
             title = excluded.title,
             metadata_zstd = excluded.metadata_zstd,
@@ -161,6 +161,7 @@ pub async fn add_telegram_source(
             created_at
         "#,
     )
+    .bind(SourceType::Telegram.as_str())
     .bind(&resolved.telegram_source_kind)
     .bind(&resolved.external_id)
     .bind(&resolved.title)

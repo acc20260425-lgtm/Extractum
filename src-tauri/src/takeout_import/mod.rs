@@ -5,7 +5,10 @@ use tauri::{AppHandle, Manager};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
-use crate::sources::{finalize_sync, insert_source_item, load_source, resolve_and_refresh_peer};
+use crate::sources::{
+    finalize_sync, insert_source_item, load_source, resolve_and_refresh_peer, TelegramSourceKind,
+    TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+};
 use crate::telegram::{get_authorized_runtime, AuthorizedTelegramRuntime, TelegramState};
 
 mod export_dc;
@@ -32,10 +35,6 @@ use state::{
     PHASE_LOADING_SPLITS, PHASE_RESOLVING_SOURCE, PHASE_STARTING_TAKEOUT, PHASE_VALIDATING_PEER,
     STATUS_CANCELLED, STATUS_COMPLETED, STATUS_FAILED, STATUS_RUNNING,
 };
-
-const TELEGRAM_KIND_CHANNEL: &str = "channel";
-const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
-const TELEGRAM_KIND_GROUP: &str = "group";
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub(crate) struct TakeoutExportDcSpikeResult {
@@ -574,12 +573,7 @@ struct TakeoutHistoryProbe {
 }
 
 fn ensure_supported_takeout_source_kind(telegram_source_kind: &str) -> AppResult<()> {
-    match telegram_source_kind {
-        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP => Ok(()),
-        other => Err(AppError::validation(format!(
-            "Unsupported telegram_source_kind '{other}'"
-        ))),
-    }
+    TelegramSourceKind::parse(telegram_source_kind).map(|_| ())
 }
 
 async fn validate_takeout_peer(

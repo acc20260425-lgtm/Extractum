@@ -23,10 +23,12 @@ pub use topics::list_source_forum_topics;
 #[allow(unused_imports)]
 pub use topics::SourceForumTopicRecord;
 #[allow(unused_imports)]
-pub use types::{SourceRecord, TelegramSourceInfo, TelegramSourceKind};
+pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind};
 
 pub(crate) use items::{insert_source_item, SourceItemInsert, TelegramItemContext};
 pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
 pub(crate) use store::load_source;
 pub(crate) use sync::finalize_sync;
-pub(crate) use types::SourceSyncTarget;
+pub(crate) use types::{
+    SourceSyncTarget, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+};

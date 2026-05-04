@@ -5,8 +5,8 @@ use tauri::AppHandle;
 
 use super::avatar::{cache_source_avatar, peer_photo_bytes_with_timeout};
 use super::types::{
-    SourceSyncTarget, TelegramSourceInfo, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
-    TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
+    SourceSyncTarget, TelegramSourceInfo, TelegramSourceKind, TELEGRAM_KIND_CHANNEL,
+    TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP, TELEGRAM_SOURCE_TYPE,
 };
 use crate::compression::{compress_json_bytes, decompress_bytes};
 
@@ -409,7 +409,7 @@ fn telegram_source_kind_matches(
         return Ok(true);
     };
 
-    ensure_supported_telegram_source_kind(expected_kind)?;
+    TelegramSourceKind::parse(expected_kind)?;
     Ok(source.telegram_source_kind == expected_kind)
 }
 
@@ -425,13 +425,6 @@ fn validate_expected_telegram_source_kind(
             expected_kind.unwrap_or("unknown"),
             source.telegram_source_kind
         ))
-    }
-}
-
-fn ensure_supported_telegram_source_kind(kind: &str) -> Result<(), String> {
-    match kind {
-        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP => Ok(()),
-        other => Err(format!("Unsupported telegram_source_kind '{other}'")),
     }
 }
 
