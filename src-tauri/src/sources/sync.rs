@@ -241,46 +241,10 @@ mod tests {
     use crate::compression::{compress_json_bytes, decompress_bytes};
     use crate::sources::peer_resolution::decode_source_metadata;
     use crate::sources::store::load_source;
+    use crate::sources::test_support::memory_pool_with_sources;
     use crate::sources::types::{
         SourceRecordRow, SourceSyncTarget, TELEGRAM_KIND_CHANNEL, TELEGRAM_SOURCE_TYPE,
     };
-
-    async fn memory_pool() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        sqlx::query("CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT)")
-            .execute(&pool)
-            .await
-            .expect("create app_settings");
-        pool
-    }
-
-    async fn memory_pool_with_sources() -> sqlx::SqlitePool {
-        let pool = memory_pool().await;
-        sqlx::query(
-            r#"
-            CREATE TABLE sources (
-                id INTEGER PRIMARY KEY,
-                source_type TEXT NOT NULL,
-                telegram_source_kind TEXT NOT NULL,
-                account_id INTEGER,
-                external_id TEXT NOT NULL,
-                title TEXT,
-                metadata_zstd BLOB,
-                last_sync_state INTEGER,
-                last_synced_at INTEGER,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                is_member INTEGER NOT NULL DEFAULT 1,
-                created_at INTEGER NOT NULL
-            )
-            "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("create sources");
-        pool
-    }
 
     #[tokio::test]
     async fn determine_sync_policy_only_applies_initial_settings_on_first_sync() {

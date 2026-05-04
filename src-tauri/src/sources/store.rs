@@ -234,34 +234,7 @@ fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult
 mod tests {
     use super::*;
     use crate::error::AppErrorKind;
-
-    async fn memory_pool_with_sources() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        sqlx::query(
-            r#"
-            CREATE TABLE sources (
-                id INTEGER PRIMARY KEY,
-                source_type TEXT NOT NULL,
-                telegram_source_kind TEXT NOT NULL,
-                account_id INTEGER,
-                external_id TEXT NOT NULL,
-                title TEXT,
-                metadata_zstd BLOB,
-                last_sync_state INTEGER,
-                last_synced_at INTEGER,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                is_member INTEGER NOT NULL DEFAULT 1,
-                created_at INTEGER NOT NULL
-            )
-            "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("create sources");
-        pool
-    }
+    use crate::sources::test_support::memory_pool_with_sources;
 
     #[tokio::test]
     async fn load_source_returns_not_found_for_missing_source() {

@@ -207,17 +207,7 @@ pub async fn save_sync_settings(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    async fn memory_pool() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        sqlx::query("CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT)")
-            .execute(&pool)
-            .await
-            .expect("create app_settings");
-        pool
-    }
+    use crate::sources::test_support::memory_pool;
 
     #[test]
     fn initial_sync_policy_label_formats_messages_and_days() {

@@ -4,6 +4,8 @@ mod peer_resolution;
 mod settings;
 mod store;
 mod sync;
+#[cfg(test)]
+mod test_support;
 mod topics;
 mod types;
 
