@@ -22,6 +22,10 @@
     startTakeoutSourceImport,
   } from "$lib/api/takeout-import";
   import {
+    exportSourceToNotebookLm,
+    listenToNotebookLmExportEvents,
+  } from "$lib/api/notebooklm-export";
+  import {
     deleteSource as deleteSourceCommand,
     listSourceForumTopics,
     listSourceItems,
@@ -1117,9 +1121,7 @@
     try {
       const request = notebookLmExportRequestFromForm(exportId, source.id, notebookLmExportForm);
 
-      const result = await invoke<NotebookLmExportResult>("export_source_to_notebooklm", {
-        request,
-      });
+      const result = await exportSourceToNotebookLm(request);
       notebookLmExportResult = result;
       status = notebookLmExportCompleteStatus(result);
     } catch (error) {
@@ -1397,7 +1399,7 @@
       detachChatListener = unlisten;
     });
 
-    void listen<NotebookLmExportEvent>("notebooklm://export", ({ payload }: EventEnvelope<NotebookLmExportEvent>) => {
+    void listenToNotebookLmExportEvents(({ payload }) => {
       if (disposed) {
         return;
       }
