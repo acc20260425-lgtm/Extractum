@@ -7,7 +7,7 @@
 - Current HEAD when this context was refreshed:
 
 ```text
-b32a782 docs(session): refresh takeout wrapper completion handoff
+66f634e test(notebooklm): verify export wrapper integration
 ```
 
 - Working tree before this documentation update: clean.
@@ -17,20 +17,22 @@ b32a782 docs(session): refresh takeout wrapper completion handoff
 - The Takeout wrapper implementation branch
   `takeout-import-frontend-wrapper` was fast-forward merged into `main` and
   then deleted locally.
+- The NotebookLM wrapper implementation branch
+  `notebooklm-export-frontend-wrapper` was fast-forward merged into `main` and
+  then deleted locally.
 
 Recent history at context refresh:
 
 ```text
+66f634e test(notebooklm): verify export wrapper integration
+0bba531 refactor(notebooklm): use export api wrapper in analysis route
+b302c85 feat(notebooklm): add export api wrapper
+ba36db1 test(notebooklm): add export api wrapper contract tests
+a39fd3f docs(notebooklm): add export wrapper plan
 b32a782 docs(session): refresh takeout wrapper completion handoff
 dd7d6fe test(takeout): verify frontend wrapper integration
 a4a5bd8 refactor(takeout): use api wrapper in analysis route
 df6dd43 feat(takeout): add api wrapper
-3ee9d8b test(takeout): add api wrapper contract tests
-3a72f50 docs(session): refresh takeout wrapper handoff
-3f8204b docs(takeout): add frontend wrapper implementation plan
-e3f18ab docs(sources): record contract v2 completion
-ca8e6a2 refactor(sources): extract focused source helpers
-2516d3b docs(session): refresh sources contract v2 handoff
 ```
 
 Git writes such as `git add`, `git commit`, `git switch`, `git merge`, and
@@ -55,14 +57,17 @@ outside the sandbox with approval.
 
 ## Current Planning State
 
-The user asked to continue planning after the completed Takeout wrapper work.
-We compared reasonable next workstreams from the manual review:
+The NotebookLM export frontend wrapper workstream is complete and merged into
+`main`.
+
+Before implementation, we compared reasonable next workstreams from the manual
+review:
 
 1. NotebookLM export frontend API wrapper.
 2. Analysis chat API wrapper/controller extraction.
 3. Takeout workflow controller extraction.
 
-Chosen next workstream:
+Chosen and completed workstream:
 
 ```text
 NotebookLM export frontend API wrapper
@@ -96,70 +101,62 @@ The folder picker remains route-local:
 openDialog(...)
 ```
 
-## New NotebookLM Export Wrapper Documents
+## Completed NotebookLM Export Frontend Wrapper Work
 
-Design/spec written for the next workstream:
-
-```text
-docs/superpowers/specs/2026-05-05-notebooklm-export-frontend-wrapper-design.md
-```
-
-Implementation plan written for the next workstream:
+Plan:
 
 ```text
 docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md
 ```
 
-Review documentation updated:
+Design/spec:
 
 ```text
-docs/code-review-results-2026-05-03.md
+docs/superpowers/specs/2026-05-05-notebooklm-export-frontend-wrapper-design.md
 ```
 
-Recommended commit message for these documentation changes:
+Goal completed:
+
+- Centralized NotebookLM export frontend command/event access in
+  `$lib/api/notebooklm-export.ts`.
+- Removed NotebookLM-specific raw Tauri calls from
+  `src/routes/analysis/+page.svelte`.
+- Kept the task wrapper-only.
+
+Scope intentionally preserved:
+
+- No Rust backend command or event changes.
+- No NotebookLM DTO camelCase migration.
+- No NotebookLM workflow controller extraction.
+- No folder picker abstraction; `openDialog(...)` remains route-local.
+- No chat, template, source group, Takeout, or source management workflow
+  refactors.
+
+Commits created for this work:
 
 ```text
-docs(notebooklm): add export wrapper plan
+ba36db1 test(notebooklm): add export api wrapper contract tests
+b302c85 feat(notebooklm): add export api wrapper
+0bba531 refactor(notebooklm): use export api wrapper in analysis route
+66f634e test(notebooklm): verify export wrapper integration
 ```
 
-## Planned NotebookLM Export Frontend API Contract
+Note: `66f634e` is an empty verification commit, created because the user
+requested a commit at the end of each task and Task 4 only ran verification.
 
-New wrapper file to create during implementation:
+Current NotebookLM wrapper files:
 
 ```text
 src/lib/api/notebooklm-export.ts
-```
-
-New test file to create during implementation:
-
-```text
 src/lib/api/notebooklm-export.test.ts
 ```
 
-Route to migrate during implementation:
-
-```text
-src/routes/analysis/+page.svelte
-```
-
-Planned exports:
+NotebookLM wrapper exports:
 
 ```ts
 NOTEBOOKLM_EXPORT_EVENT = "notebooklm://export";
 exportSourceToNotebookLm;
 listenToNotebookLmExportEvents;
-```
-
-Planned wrapper signatures:
-
-```ts
-export function exportSourceToNotebookLm(
-  request: NotebookLmExportRequest,
-): Promise<NotebookLmExportResult>;
-
-export function listenToNotebookLmExportEvents(
-  handler: (event: Event<NotebookLmExportEvent>) => void,
-): Promise<UnlistenFn>;
 ```
 
 Wrapped Tauri command:
@@ -219,103 +216,25 @@ notebookLmExportInitialProgress
 notebookLmExportCompleteStatus
 ```
 
-Current raw NotebookLM locations before implementation:
+No raw NotebookLM command/event strings remain in:
 
 ```text
 src/routes/analysis/+page.svelte
-  invoke<NotebookLmExportResult>("export_source_to_notebooklm", { request })
-  listen<NotebookLmExportEvent>("notebooklm://export", ...)
 ```
 
-After implementation, this command should return no matches:
+Verified with:
 
 ```powershell
 rg -n "export_source_to_notebooklm|notebooklm://export" src\routes\analysis\+page.svelte
 ```
 
-## Planned NotebookLM Implementation Tasks
-
-Task 1: Add wrapper contract tests.
-
-- Create `src/lib/api/notebooklm-export.test.ts`.
-- Mock `@tauri-apps/api/core` and `@tauri-apps/api/event`.
-- Verify `exportSourceToNotebookLm(request)` calls:
-
-```ts
-invoke("export_source_to_notebooklm", { request });
-```
-
-- Verify `NOTEBOOKLM_EXPORT_EVENT` equals `notebooklm://export`.
-- Verify `listenToNotebookLmExportEvents(handler)` calls `listen(...)` and
-  forwards the event.
-- Run:
-
-```powershell
-npm.cmd test -- notebooklm-export
-```
-
-- Expected RED:
-
-```text
-Cannot find module './notebooklm-export'
-```
-
-- Commit:
-
-```text
-test(notebooklm): add export api wrapper contract tests
-```
-
-Task 2: Implement wrapper.
-
-- Create `src/lib/api/notebooklm-export.ts`.
-- Follow the existing `src/lib/api/takeout-import.ts` pattern.
-- Run:
-
-```powershell
-npm.cmd test -- notebooklm-export
-```
-
-- Expected GREEN:
-
-```text
-src/lib/api/notebooklm-export.test.ts passes
-```
-
-- Commit:
-
-```text
-feat(notebooklm): add export api wrapper
-```
-
-Task 3: Migrate `/analysis`.
-
-- Modify only NotebookLM export raw command/event usage in
-  `src/routes/analysis/+page.svelte`.
-- Keep `openDialog(...)` route-local.
-- Keep chat raw listener unchanged.
-- Run:
-
-```powershell
-npm.cmd test -- notebooklm-export
-rg -n "export_source_to_notebooklm|notebooklm://export" src\routes\analysis\+page.svelte
-```
-
-- Expected `rg` result:
+Result:
 
 ```text
 no matches
 ```
 
-- Commit:
-
-```text
-refactor(notebooklm): use export api wrapper in analysis route
-```
-
-Task 4: Final verification.
-
-- Run:
+Final NotebookLM wrapper verification:
 
 ```powershell
 npm.cmd test -- analysis-state notebooklm-export takeout-import analysis-runs sources
@@ -324,11 +243,17 @@ npm.cmd run check
 git diff --check
 ```
 
-- If verification creates no file changes, create an empty commit because the
-  user requested a commit at the end of each top-level task:
+Results:
 
 ```text
-test(notebooklm): verify export wrapper integration
+npm.cmd test -- analysis-state notebooklm-export takeout-import analysis-runs sources:
+  5 test files passed; 46 tests passed
+npm.cmd test:
+  13 test files passed; 108 tests passed
+npm.cmd run check:
+  0 errors; 0 warnings
+git diff --check:
+  exit 0
 ```
 
 ## Completed Takeout Import Frontend Wrapper Work
@@ -514,6 +439,7 @@ Already completed and merged into `main`:
 - `docs/superpowers/plans/2026-05-03-sources-backend-split.md`
 - `docs/superpowers/plans/2026-05-03-sources-contract-v2.md`
 - `docs/superpowers/plans/2026-05-05-takeout-import-frontend-wrapper.md`
+- `docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md`
 
 Historical note:
 
@@ -523,7 +449,7 @@ Historical note:
 
 ## Remaining Follow-Up Work
 
-After the planned NotebookLM export wrapper, reasonable next workstreams are:
+After the completed NotebookLM export wrapper, reasonable next workstreams are:
 
 1. Extract remaining non-run analysis route controllers/helpers.
 2. Analysis chat API wrapper and/or chat workflow controller extraction.
@@ -535,5 +461,6 @@ After the planned NotebookLM export wrapper, reasonable next workstreams are:
 8. Secure secret storage as a separate backlog item.
 9. Full media download/preview.
 
-The current recommendation is to implement the NotebookLM wrapper first, then
-return to the larger `/analysis` controller extraction work.
+The current recommendation is to return to the larger `/analysis` controller
+extraction work, starting with a focused chat wrapper/controller or another
+compact non-run workflow boundary.

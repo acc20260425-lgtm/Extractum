@@ -29,14 +29,13 @@ Resolved for core sources:
 
 Deferred by design:
 
-- NotebookLM export frontend API wrapper;
 - Rust-to-TypeScript type generation.
 
-## Frontend Wrapper Planning Update - 2026-05-05
+## Frontend Wrapper Update - 2026-05-05
 
 Takeout import frontend API wrapping is now complete and merged into `main`.
-The next selected workstream is a matching NotebookLM export frontend API
-wrapper:
+NotebookLM export frontend API wrapping is also complete and merged into
+`main`:
 
 - design: `docs/superpowers/specs/2026-05-05-notebooklm-export-frontend-wrapper-design.md`;
 - plan: `docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md`.
@@ -46,6 +45,15 @@ The NotebookLM workstream is intentionally wrapper-only. It centralizes
 `$lib/api/notebooklm-export.ts`, while leaving backend Rust code, DTO field
 names, the folder picker, and route lifecycle state unchanged.
 
+Resolved for NotebookLM export:
+
+- `src/lib/api/notebooklm-export.ts` owns the
+  `export_source_to_notebooklm` command and `notebooklm://export` event name;
+- `src/lib/api/notebooklm-export.test.ts` covers command payload shape, event
+  constant, and listener forwarding;
+- `/analysis` no longer owns NotebookLM-specific raw Tauri command/event
+  strings.
+
 ## Open Findings
 
 ### Major: Analysis route still owns several non-run workflows
@@ -54,7 +62,8 @@ names, the folder picker, and route lifecycle state unchanged.
 run-event orchestration into a tested route-local workflow controller.
 
 The remaining route responsibilities still include source/group/template editing, chat orchestration,
-NotebookLM export, Takeout job state, trace presentation state, listener lifecycle, and UI composition.
+NotebookLM export lifecycle/form state, Takeout job state, trace presentation state, listener lifecycle,
+and UI composition.
 
 Impact:
 
@@ -83,8 +92,8 @@ Impact:
 
 Suggested fix:
 
-- introduce typed `$lib/api/*` wrappers for NotebookLM export and other compact
-  Tauri command/event surfaces;
+- introduce typed `$lib/api/*` wrappers for other compact Tauri command/event
+  surfaces;
 - move remaining route-local DTOs to shared frontend type modules;
 - later consider generated TypeScript types from Rust if drift remains a recurring problem.
 
@@ -116,7 +125,7 @@ Suggested fix:
 
 - `cargo test sources --lib`: passed with 41 tests.
 - `cargo test`: passed with 141 tests.
-- `npm.cmd test`: passed with 11 test files and 102 tests when run outside the
+- `npm.cmd test`: passed with 13 test files and 108 tests when run outside the
   sandbox so Vite/esbuild could spawn.
 - `npm.cmd run check`: passed with 0 errors and 0 warnings when run outside the
   sandbox so Vite/esbuild could spawn.
@@ -124,7 +133,7 @@ Suggested fix:
 
 ## Recommended Follow-Up Order
 
-1. Add the planned typed wrapper for NotebookLM export.
-2. Extract the remaining non-run analysis route controllers/helpers.
+1. Extract the remaining non-run analysis route controllers/helpers.
+2. Add an analysis chat API wrapper and/or chat workflow controller.
 3. Improve typed error conversion for remaining DB, Telegram, LLM, and validation paths.
 4. Continue with secure secret storage as a separate backlog item, not mixed into stabilization work.
