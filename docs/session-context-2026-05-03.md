@@ -5,20 +5,22 @@
 - Repository root: `G:\Develop\Extractum`
 - Current branch: `main`
 - Working tree before this handoff refresh: clean.
-- Git remotes: none configured; `git remote -v` prints no output.
-- Local branches:
+- Git remotes: none configured; `git remote -v` prints no output in the
+  previous handoff.
+- Local branches from the previous handoff:
 
 ```text
 desktop-ui
 main
 ```
 
-- Feature branch `analysis-chat-wrapper-controller` was merged into `main` with
-  a fast-forward merge and deleted.
-
 Current recent history:
 
 ```text
+da9beed docs(analysis): add trace wrapper controller plan
+a9c7392 docs(analysis): add trace wrapper controller design
+46ed0eb docs(review): refresh code review follow-ups
+f6cfb64 docs(session): refresh current handoff context
 2c8e302 docs(analysis): condense chat controller plan
 86ffa78 docs(analysis): record chat controller completion
 344f2e0 refactor(analysis): extract chat workflow controller
@@ -39,16 +41,18 @@ ba36db1 test(notebooklm): add export api wrapper contract tests
 - Use a normal branch workflow when implementing work.
 - When executing an implementation plan, perform exactly one top-level task per
   user turn, then stop and wait for explicit instruction.
-- At the end of each top-level task, create a commit.
-- The user allows subagents, but the active no-worktree rule conflicts with the
-  usual Superpowers subagent/worktree workflow for small plans. Prefer local
-  execution unless the user explicitly changes that constraint.
+- At the end of each top-level task in an implementation plan, create a commit.
+- The user allows subagents when using Superpowers, but the active no-worktree
+  rule conflicts with the usual Superpowers subagent/worktree workflow for this
+  plan. Prefer inline execution unless the user explicitly changes that
+  constraint.
 
 ## Environment Notes
 
 - Shell: PowerShell on Windows.
 - Workspace root: `G:\Develop\Extractum`.
 - Current timezone from environment context: `Europe/Minsk`.
+- Current date in this session: Tuesday, 2026-05-05.
 - Network access is restricted.
 - Git writes such as `git add`, `git commit`, `git switch`, `git merge`, and
   `git branch -d` often fail in the default Windows sandbox with `.git/*.lock`
@@ -58,6 +62,226 @@ ba36db1 test(notebooklm): add export api wrapper contract tests
   child processes. Rerunning outside the sandbox has worked.
 - `git diff --check` runs in the sandbox. It may print LF/CRLF warnings from
   Git, but exit code 0 means whitespace is clean.
+
+## Current Active Workstream: Analysis Trace Wrapper And Controller
+
+Design/spec:
+
+```text
+docs/superpowers/specs/2026-05-05-analysis-trace-wrapper-controller-design.md
+```
+
+Implementation plan:
+
+```text
+docs/superpowers/plans/2026-05-05-analysis-trace-wrapper-controller.md
+```
+
+Status:
+
+- Design approved by the user.
+- Implementation plan written and committed.
+- Implementation has not started yet.
+- Next implementation step is Task 1 from the plan.
+
+Goal:
+
+- Centralize Analysis trace frontend command access in
+  `$lib/api/analysis-trace.ts`.
+- Extract route-level trace orchestration into
+  `$lib/analysis-trace-workflow.ts`.
+- Preserve existing `/analysis` trace behavior.
+
+Planned files:
+
+```text
+src/lib/api/analysis-trace.ts
+src/lib/api/analysis-trace.test.ts
+src/lib/analysis-trace-workflow.ts
+src/lib/analysis-trace-workflow.test.ts
+src/routes/analysis/+page.svelte
+docs/superpowers/plans/2026-05-05-analysis-trace-wrapper-controller.md
+```
+
+Planned public frontend API:
+
+```ts
+getAnalysisRunTrace(runId: number): Promise<AnalysisTraceData>;
+resolveAnalysisTraceRefs(runId: number, refs: string[]): Promise<AnalysisTraceRef[]>;
+```
+
+Planned workflow controller API:
+
+```ts
+createAnalysisTraceWorkflow(deps): {
+  loadTrace(runId, guard?): Promise<void>;
+  focusTraceRef(ref): Promise<void>;
+  clearState(): void;
+}
+```
+
+Backend commands to wrap:
+
+```text
+get_analysis_run_trace
+resolve_analysis_trace_refs
+```
+
+Route cleanup target:
+
+```powershell
+rg -n "get_analysis_run_trace|resolve_analysis_trace_refs" src\routes\analysis\+page.svelte
+```
+
+Expected result after Task 3:
+
+```text
+no matches
+```
+
+## Analysis Trace Plan Tasks
+
+Task 1: Add Analysis Trace API Wrapper
+
+- Create `src/lib/api/analysis-trace.test.ts`.
+- Confirm RED with `npm.cmd test -- analysis-trace`.
+- Create `src/lib/api/analysis-trace.ts`.
+- Confirm GREEN with `npm.cmd test -- analysis-trace`.
+- Commit:
+
+```text
+refactor(analysis): add trace api wrapper
+```
+
+Task 2: Add Analysis Trace Workflow Controller
+
+- Create `src/lib/analysis-trace-workflow.test.ts`.
+- Confirm RED with `npm.cmd test -- analysis-trace-workflow`.
+- Create `src/lib/analysis-trace-workflow.ts`.
+- Confirm GREEN with `npm.cmd test -- analysis-trace-workflow`.
+- Run focused tests:
+
+```powershell
+npm.cmd test -- analysis-trace analysis-trace-workflow analysis-state analysis-runs
+```
+
+- Commit:
+
+```text
+refactor(analysis): extract trace workflow controller
+```
+
+Task 3: Migrate The Analysis Route To The Trace Workflow
+
+- Update `src/routes/analysis/+page.svelte` imports.
+- Add `applyTraceWorkflowPatch(...)`.
+- Instantiate `traceWorkflow`.
+- Delegate `clearTraceState`, `loadTrace`, and `focusTraceRef`.
+- Remove route-local raw trace command strings and unused trace imports.
+- Run route cleanup search.
+- Run focused tests and `npm.cmd run check`.
+- Commit:
+
+```text
+refactor(analysis): use trace workflow controller
+```
+
+Task 4: Final Verification And Plan Closeout
+
+- Run route cleanup search.
+- Run focused frontend tests.
+- Run full frontend tests.
+- Run `npm.cmd run check`.
+- Run `git diff --check`.
+- Condense/update the implementation plan with completion notes.
+- Commit:
+
+```text
+docs(analysis): record trace controller completion
+```
+
+## Current Trace Route Context
+
+Current raw trace command ownership still lives in:
+
+```text
+src/routes/analysis/+page.svelte
+```
+
+Known current route locations before implementation:
+
+```text
+focusTraceRef(ref) uses resolve_analysis_trace_refs
+loadTrace(runId, guard?) uses get_analysis_run_trace
+clearTraceState() directly resets trace Svelte state
+mergeTraceRefs(...) wraps mergeAnalysisTraceRefs(...)
+traceRefOrigin(ref) delegates to analysisTraceRefOrigin(...)
+```
+
+Trace Svelte state currently owned by the route:
+
+```text
+traceData
+selectedTraceRef
+savedTraceRefs
+resolvedTraceRefs
+inspectorMode
+status
+```
+
+Existing reusable pure helpers:
+
+```text
+src/lib/analysis-state.ts
+selectedAnalysisTraceRef
+mergeAnalysisTraceRefs
+analysisTraceRefOrigin
+```
+
+Existing trace types:
+
+```text
+src/lib/types/analysis.ts
+AnalysisTraceRef
+AnalysisTraceData
+```
+
+Existing run workflow integration:
+
+```text
+src/lib/analysis-run-workflow.ts
+```
+
+`createAnalysisRunWorkflow(...)` already receives `loadTrace` and
+`clearTraceState` as dependencies. After Task 3, those route functions should
+delegate to `traceWorkflow`.
+
+## Recently Updated Code Review Document
+
+Document:
+
+```text
+docs/code-review-results-2026-05-03.md
+```
+
+Updated and committed:
+
+```text
+46ed0eb docs(review): refresh code review follow-ups
+```
+
+Current review state:
+
+- Source Contract V2 is marked as complete and merged into `main`.
+- Takeout import, NotebookLM export, and Analysis chat wrapper/controller work
+  are marked as resolved.
+- The open route cleanup finding is narrowed to remaining `/analysis` raw
+  command surfaces: trace, accounts/statuses, source metrics, templates, source
+  groups, and report actions.
+- The Analysis trace wrapper/controller workstream was chosen as the next
+  recommended cleanup item.
+- The error typing finding remains open for backend DB, Telegram, LLM, and
+  validation paths.
 
 ## Completed Workstream: Analysis Chat Wrapper And Controller
 
@@ -102,8 +326,6 @@ d5a3595 docs(session): refresh analysis chat planning handoff
 2c8e302 docs(analysis): condense chat controller plan
 ```
 
-## Analysis Chat Implementation Details
-
 API wrapper:
 
 ```text
@@ -120,25 +342,6 @@ askAnalysisRunQuestion;
 clearAnalysisChatMessages;
 listenToAnalysisChatEvents;
 ```
-
-Backend command/event contract preserved:
-
-```text
-list_analysis_chat_messages(runId) -> AnalysisChatMessage[]
-ask_analysis_run_question(runId, question, modelOverride, profileId) -> string request id
-clear_analysis_chat_messages(runId) -> void
-analysis://chat
-```
-
-LLM cancellation wrapper used by the route:
-
-```text
-src/lib/api/llm.ts
-cancelLlmRequest(requestId)
-```
-
-Note: `src/lib/api/llm.ts` intentionally still contains the backend command
-string `cancel_llm_request`; the route no longer owns it.
 
 Workflow controller:
 
@@ -160,37 +363,11 @@ createAnalysisChatWorkflow(deps): {
 }
 ```
 
-Controller dependency rules achieved:
-
-- Dependency-injected.
-- Does not import Svelte.
-- Does not import modal helpers.
-- Does not import Tauri APIs.
-- Reuses the pure reducer helpers from `src/lib/analysis-chat-state.ts`.
-
-Pure reducer files:
-
-```text
-src/lib/analysis-chat-state.ts
-src/lib/analysis-chat-state.test.ts
-```
-
 Route integration:
 
 ```text
 src/routes/analysis/+page.svelte
 ```
-
-Route responsibilities after refactor:
-
-- Owns Svelte state.
-- Owns listener disposal.
-- Owns modal host integration.
-- Instantiates `createAnalysisChatWorkflow(...)`.
-- Delegates chat load/ask/cancel/clear/event handling to the workflow.
-- Does not import from `src/lib/analysis-chat-state.ts`.
-- Does not contain raw Analysis chat command names, the chat event name, or
-  `cancel_llm_request`.
 
 Route cleanup command:
 
@@ -203,73 +380,6 @@ Expected result:
 ```text
 no matches
 ```
-
-Current broader raw-string search still finds only expected wrapper locations:
-
-```text
-src/lib/api/analysis-chat.ts contains analysis://chat and chat command strings
-src/lib/api/llm.ts contains cancel_llm_request
-```
-
-## Verification Evidence
-
-Task 2 verification:
-
-```text
-RED confirmed: analysis-chat wrapper tests failed on missing ./analysis-chat.
-npm.cmd test -- analysis-chat: 2 files / 11 tests passed.
-route cleanup rg: no matches.
-npm.cmd test -- analysis-chat analysis-runs llm: 4 files / 18 tests passed.
-```
-
-Task 3 verification:
-
-```text
-RED confirmed: analysis-chat-workflow tests failed on missing ./analysis-chat-workflow.
-npm.cmd test -- analysis-chat-workflow: 1 file / 12 tests passed.
-npm.cmd test -- analysis-chat-workflow analysis-chat-state: 2 files / 19 tests passed.
-npm.cmd test -- analysis-chat analysis-chat-workflow analysis-chat-state analysis-runs llm: 5 files / 30 tests passed.
-npm.cmd run check: svelte-check found 0 errors and 0 warnings.
-```
-
-Task 4 final verification:
-
-```text
-route cleanup rg: no matches.
-npm.cmd test -- analysis-chat analysis-chat-workflow analysis-chat-state: 3 files / 23 tests passed.
-npm.cmd test -- analysis-chat analysis-chat-workflow analysis-chat-state analysis-runs llm notebooklm-export takeout-import sources: 8 files / 41 tests passed.
-npm.cmd test: 15 files / 124 tests passed.
-npm.cmd run check: svelte-check found 0 errors and 0 warnings.
-git diff --check: exit 0.
-```
-
-Post-merge verification on `main`:
-
-```text
-npm.cmd test: 15 files / 124 tests passed.
-```
-
-Plan cleanup verification:
-
-```text
-git diff --check: exit 0.
-rg -n -- "- \[ \]|Task [1-4]:|Step [0-9]+:" docs\superpowers\plans\2026-05-05-analysis-chat-wrapper-controller.md: no matches.
-```
-
-## Scope Intentionally Preserved
-
-Do not change as part of this completed workstream:
-
-- Rust backend commands or events.
-- Analysis chat DTO field names.
-- The `analysis://chat` event name.
-- Existing optimistic pending chat exchange behavior.
-- Saved-message reload after completed chat events.
-- Clear-chat modal copy.
-- Silent cancellation behavior used when switching runs or starting reports.
-- UI layout or component prop structure.
-- Templates, source groups, trace APIs, report start/cancel/delete, accounts,
-  sources, Takeout, or NotebookLM workflows.
 
 ## Completed NotebookLM Export Frontend Wrapper Work
 
@@ -399,12 +509,59 @@ docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md
 docs/superpowers/plans/2026-05-05-analysis-chat-wrapper-controller.md
 ```
 
+Planned but not yet implemented:
+
+```text
+docs/superpowers/plans/2026-05-05-analysis-trace-wrapper-controller.md
+```
+
+## Verification Evidence From This Session
+
+For `docs/code-review-results-2026-05-03.md` refresh:
+
+```text
+git diff --check HEAD~1..HEAD: exit 0
+git status --short: clean after commit
+commit: 46ed0eb docs(review): refresh code review follow-ups
+```
+
+For trace design spec:
+
+```text
+red-flag scan: no matches
+git diff --check HEAD~1..HEAD: exit 0
+git status --short: clean after commit
+commit: a9c7392 docs(analysis): add trace wrapper controller design
+```
+
+For trace implementation plan:
+
+```text
+red-flag scan: no matches
+git diff --check HEAD~1..HEAD: exit 0
+git status --short: clean after commit
+commit: da9beed docs(analysis): add trace wrapper controller plan
+```
+
+## Scope Intentionally Preserved For Trace Work
+
+Do not change as part of the Analysis Trace Wrapper And Controller workstream:
+
+- Rust backend commands.
+- Tauri command names.
+- Analysis trace DTO field names.
+- Trace UI layout or component prop structure.
+- Analysis run workflow behavior beyond delegating trace dependencies.
+- Analysis chat behavior.
+- Templates, source groups, accounts, sources, Takeout, or NotebookLM workflows.
+- Generated TypeScript types from Rust.
+
 ## Current Request Context
 
 User asked:
 
 ```text
-в файл docs\session-context-2026-05-03.md запиши всю информацию, по которой можно восстановить контекст текущей сессии. Файл можно просто перезаписать. Сформируй commit message
+в файл docs\session-context-2026-05-03.md запиши всю информацию, по которой можно восстановить контекст текущей сессии. Файл можно просто перезаписать.
 ```
 
 This file has been overwritten as a fresh handoff for the current session.
@@ -412,15 +569,17 @@ This file has been overwritten as a fresh handoff for the current session.
 Recommended commit message for this documentation refresh:
 
 ```text
-docs(session): refresh current handoff context
+docs(session): refresh trace planning handoff
 ```
 
 ## Recommended Next Action
 
-There is no remaining task in the Analysis Chat Wrapper And Controller plan.
-If the user asks to continue, ask for or infer the next workstream. If they ask
-to commit this handoff refresh, use:
+If the user asks to continue implementation, execute exactly Task 1 from:
 
 ```text
-docs(session): refresh current handoff context
+docs/superpowers/plans/2026-05-05-analysis-trace-wrapper-controller.md
 ```
+
+Task 1 creates only the Analysis trace API wrapper and wrapper tests, verifies
+`npm.cmd test -- analysis-trace`, commits
+`refactor(analysis): add trace api wrapper`, then stops for the next user turn.
