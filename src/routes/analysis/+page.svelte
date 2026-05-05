@@ -16,6 +16,12 @@
     listenToAnalysisRunEvents,
   } from "$lib/api/analysis-runs";
   import {
+    cancelTakeoutSourceImport,
+    listTakeoutSourceImportJobs,
+    listenToTakeoutImportEvents,
+    startTakeoutSourceImport,
+  } from "$lib/api/takeout-import";
+  import {
     deleteSource as deleteSourceCommand,
     listSourceForumTopics,
     listSourceItems,
@@ -156,8 +162,6 @@
     Source,
     SourceForumTopic,
     SourceItem,
-    CancelTakeoutImportResponse,
-    StartTakeoutImportResponse,
     TakeoutImportEvent,
     TakeoutImportJobRecord,
   } from "$lib/types/sources";
@@ -656,7 +660,7 @@
 
   async function loadTakeoutImportJobs() {
     try {
-      const jobs = await invoke<TakeoutImportJobRecord[]>("list_takeout_source_import_jobs");
+      const jobs = await listTakeoutSourceImportJobs();
       applyTakeoutJobs(jobs);
     } catch (error) {
       status = formatAppError("loading Takeout import jobs", error);
@@ -991,7 +995,7 @@
   async function startTakeoutImport(sourceId: number) {
     startingTakeoutSourceIds = sourceActionPending(startingTakeoutSourceIds, sourceId);
     try {
-      await invoke<StartTakeoutImportResponse>("start_takeout_source_import", { sourceId });
+      await startTakeoutSourceImport(sourceId);
       status = "Takeout import started.";
     } catch (error) {
       status = formatAppError("starting Takeout import", error);
@@ -1002,10 +1006,7 @@
 
   async function cancelTakeoutImport(jobId: string) {
     try {
-      const result = await invoke<CancelTakeoutImportResponse>(
-        "cancel_takeout_source_import",
-        { jobId },
-      );
+      const result = await cancelTakeoutSourceImport(jobId);
       status = result.cancelled ? "Takeout import cancel requested." : "No active Takeout import to cancel.";
     } catch (error) {
       status = formatAppError("cancelling Takeout import", error);
@@ -1410,7 +1411,7 @@
       detachNotebookLmExportListener = unlisten;
     });
 
-    void listen<TakeoutImportEvent>("sources://takeout-import", ({ payload }: EventEnvelope<TakeoutImportEvent>) => {
+    void listenToTakeoutImportEvents(({ payload }) => {
       if (disposed) {
         return;
       }
