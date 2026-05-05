@@ -20,6 +20,10 @@
     listAnalysisChatMessages,
     listenToAnalysisChatEvents,
   } from "$lib/api/analysis-chat";
+  import {
+    getAnalysisRunTrace,
+    resolveAnalysisTraceRefs,
+  } from "$lib/api/analysis-trace";
   import { cancelLlmRequest } from "$lib/api/llm";
   import {
     cancelTakeoutSourceImport,
@@ -47,6 +51,10 @@
     createAnalysisChatWorkflow,
     type AnalysisChatWorkflowPatch,
   } from "$lib/analysis-chat-workflow";
+  import {
+    createAnalysisTraceWorkflow,
+    type AnalysisTraceWorkflowPatch,
+  } from "$lib/analysis-trace-workflow";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -80,7 +88,6 @@
     isRunActive,
     liveRunPhase,
     liveRunProgress,
-    mergeAnalysisTraceRefs,
     notebookLmExportCompleteStatus,
     notebookLmExportInitialProgress,
     notebookLmExportProgressFromEvent,
@@ -156,7 +163,6 @@
     AnalysisSourceGroup,
     AnalysisSourceOption,
     AnalysisTraceData,
-    AnalysisTraceRef,
   } from "$lib/types/analysis";
   import type {
     ForumTopicFilter,
@@ -332,11 +338,17 @@
     return getSourceSyncDisabledReason(source, accountStatuses);
   }
 
+  function applyTraceWorkflowPatch(patch: AnalysisTraceWorkflowPatch) {
+    if ("traceData" in patch) traceData = patch.traceData ?? { refs: [] };
+    if ("savedTraceRefs" in patch) savedTraceRefs = patch.savedTraceRefs ?? [];
+    if ("resolvedTraceRefs" in patch) resolvedTraceRefs = patch.resolvedTraceRefs ?? [];
+    if ("selectedTraceRef" in patch) selectedTraceRef = patch.selectedTraceRef ?? null;
+    if ("inspectorMode" in patch && patch.inspectorMode) inspectorMode = patch.inspectorMode;
+    if ("status" in patch && patch.status !== undefined) status = patch.status;
+  }
+
   function clearTraceState() {
-    traceData = { refs: [] };
-    savedTraceRefs = [];
-    resolvedTraceRefs = [];
-    selectedTraceRef = null;
+    traceWorkflow.clearState();
   }
 
   function clearChatState() {
@@ -531,6 +543,20 @@
     formatError: formatAppError,
   });
 
+  const traceWorkflow = createAnalysisTraceWorkflow({
+    getState: () => ({
+      currentRun,
+      traceData,
+      savedTraceRefs,
+      resolvedTraceRefs,
+      selectedTraceRef,
+    }),
+    patch: applyTraceWorkflowPatch,
+    getTrace: getAnalysisRunTrace,
+    resolveRefs: resolveAnalysisTraceRefs,
+    formatError: formatAppError,
+  });
+
   const runWorkflow = createAnalysisRunWorkflow({
     getState: () => ({
       historyScopeParams,
@@ -576,59 +602,16 @@
     groupMemberSourceIds = toggleGroupSourceSelection(groupMemberSourceIds, sourceId);
   }
 
-  function mergeTraceRefs(nextRefs: AnalysisTraceRef[]) {
-    if (nextRefs.length === 0) return;
-    traceData = { refs: mergeAnalysisTraceRefs(traceData.refs, nextRefs) };
-  }
-
   function traceRefOrigin(ref: string) {
     return traceRefOriginFromState(ref, savedTraceRefs, resolvedTraceRefs);
   }
 
   async function focusTraceRef(ref: string) {
-    if (!currentRun) return;
-
-    inspectorMode = "trace";
-    selectedTraceRef = ref;
-    if (traceData.refs.some((entry) => entry.ref === ref)) {
-      return;
-    }
-
-    try {
-      const resolved = await invoke<AnalysisTraceRef[]>("resolve_analysis_trace_refs", {
-        runId: currentRun.id,
-        refs: [ref],
-      });
-      mergeTraceRefs(resolved);
-      resolvedTraceRefs = [
-        ...resolvedTraceRefs,
-        ...resolved
-          .map((entry) => entry.ref)
-          .filter((entry) => !resolvedTraceRefs.includes(entry)),
-      ];
-      selectedTraceRef = ref;
-    } catch (error) {
-      status = formatAppError("resolving the trace reference", error);
-    }
+    await traceWorkflow.focusTraceRef(ref);
   }
 
   async function loadTrace(runId: number, guard?: AnalysisRunRequestGuard) {
-    try {
-      const nextTraceData = await invoke<AnalysisTraceData>("get_analysis_run_trace", { runId });
-      if (guard && !guard.isCurrent()) {
-        return;
-      }
-      traceData = nextTraceData;
-      savedTraceRefs = traceData.refs.map((ref) => ref.ref);
-      resolvedTraceRefs = [];
-      selectedTraceRef = traceData.refs[0]?.ref ?? null;
-    } catch (error) {
-      if (guard && !guard.isCurrent()) {
-        return;
-      }
-      clearTraceState();
-      status = formatAppError("loading the analysis trace", error);
-    }
+    await traceWorkflow.loadTrace(runId, guard);
   }
 
   async function loadAccounts() {
