@@ -3,11 +3,11 @@
 ## Repository State
 
 - Repository root: `G:\Develop\Extractum`
-- Current branch at handoff refresh: `main`
+- Current branch at handoff refresh: `analysis-chat-wrapper-controller`
 - Current HEAD at the start of this handoff refresh:
 
 ```text
-bc636ea docs(analysis): add chat wrapper controller plan
+344f2e0 refactor(analysis): extract chat workflow controller
 ```
 
 - Working tree before this handoff refresh: clean.
@@ -16,13 +16,17 @@ bc636ea docs(analysis): add chat wrapper controller plan
 - Local branches currently known:
 
 ```text
-desktop-ui e6ca2cd feat(ui): polish workspace and unify accounts/settings layout
-main       bc636ea docs(analysis): add chat wrapper controller plan
+analysis-chat-wrapper-controller 344f2e0 refactor(analysis): extract chat workflow controller
+desktop-ui                        e6ca2cd feat(ui): polish workspace and unify accounts/settings layout
+main                              bc636ea docs(analysis): add chat wrapper controller plan
 ```
 
 Recent history at handoff refresh:
 
 ```text
+344f2e0 refactor(analysis): extract chat workflow controller
+8108b22 refactor(analysis): add chat api wrapper
+d5a3595 docs(session): refresh analysis chat planning handoff
 bc636ea docs(analysis): add chat wrapper controller plan
 6f1f920 docs(session): refresh notebooklm completion handoff
 e21843e docs(notebooklm): record export wrapper completion
@@ -93,22 +97,24 @@ Implementation plan:
 docs/superpowers/plans/2026-05-05-analysis-chat-wrapper-controller.md
 ```
 
-Documentation baseline commit already created:
+Completed commits:
 
 ```text
 bc636ea docs(analysis): add chat wrapper controller plan
+8108b22 refactor(analysis): add chat api wrapper
+344f2e0 refactor(analysis): extract chat workflow controller
 ```
 
 Task status:
 
 - Task 1: Documentation Baseline - completed and committed.
-- Task 2: Analysis Chat API Wrapper - next task, not started.
-- Task 3: Analysis Chat Workflow Controller - planned, not started.
-- Task 4: Final Verification And Handoff - planned, not started.
+- Task 2: Analysis Chat API Wrapper - completed and committed.
+- Task 3: Analysis Chat Workflow Controller - completed and committed.
+- Task 4: Final Verification And Handoff - completed during this handoff refresh.
 
 Important: because of the one-top-level-task rule, the next user turn that
-asks to continue implementation should execute only Task 2, commit it, then
-stop and wait.
+asks to continue should not start a new implementation task for this workstream
+unless a new plan or follow-up scope is provided.
 
 ## Analysis Chat Plan Summary
 
@@ -118,13 +124,58 @@ Goal:
 - Extract route-level chat orchestration from `src/routes/analysis/+page.svelte`.
 - Preserve existing behavior.
 
-Current route that still owns raw chat calls:
+Completed frontend API wrapper:
+
+```text
+src/lib/api/analysis-chat.ts
+src/lib/api/analysis-chat.test.ts
+```
+
+Wrapper exports:
+
+```ts
+ANALYSIS_CHAT_EVENT = "analysis://chat";
+listAnalysisChatMessages;
+askAnalysisRunQuestion;
+clearAnalysisChatMessages;
+listenToAnalysisChatEvents;
+```
+
+Completed workflow controller:
+
+```text
+src/lib/analysis-chat-workflow.ts
+src/lib/analysis-chat-workflow.test.ts
+```
+
+Controller API:
+
+```ts
+createAnalysisChatWorkflow(deps): {
+  loadMessages(runId, guard?): Promise<void>;
+  askRunQuestion(): Promise<void>;
+  cancelChat(options?): Promise<void>;
+  clearMessages(): Promise<void>;
+  clearState(): void;
+  handleEvent(payload): void;
+}
+```
+
+Route integration:
 
 ```text
 src/routes/analysis/+page.svelte
 ```
 
-Current pure reducer that should be reused:
+- Route imports chat API wrapper functions from `$lib/api/analysis-chat`.
+- Route imports `cancelLlmRequest` from `$lib/api/llm`.
+- Route instantiates `createAnalysisChatWorkflow(...)`.
+- Route owns Svelte state, listener disposal, and modal host integration.
+- Route no longer imports from `src/lib/analysis-chat-state.ts`.
+- Route no longer owns raw Analysis chat command names, the chat event name, or
+  `cancel_llm_request`.
+
+Pure reducer reused by the controller:
 
 ```text
 src/lib/analysis-chat-state.ts
@@ -177,174 +228,23 @@ src/lib/api/llm.ts
 cancelLlmRequest(requestId)
 ```
 
-The route still directly calls the raw cancellation command and must migrate to
-`cancelLlmRequest(...)` during Task 2.
+## Final Verification From Task 4
 
-## Current Raw Chat Call Sites
-
-Verified during handoff refresh with:
-
-```powershell
-rg -n "analysis://chat|list_analysis_chat_messages|ask_analysis_run_question|clear_analysis_chat_messages|cancel_llm_request" src/routes/analysis/+page.svelte src/lib/api src/lib/analysis-chat-state.ts
-```
-
-Current route matches:
-
-```text
-src/routes/analysis/+page.svelte:793:      await invoke("cancel_llm_request", { requestId });
-src/routes/analysis/+page.svelte:811:      const messages = await invoke<AnalysisChatMessage[]>("list_analysis_chat_messages", { runId });
-src/routes/analysis/+page.svelte:936:      const requestId = await invoke<string>("ask_analysis_run_question", {
-src/routes/analysis/+page.svelte:970:      await invoke("clear_analysis_chat_messages", { runId: currentRun.id });
-src/routes/analysis/+page.svelte:1378:    void listen<AnalysisChatEvent>("analysis://chat", ({ payload }: EventEnvelope<AnalysisChatEvent>) => {
-```
-
-Expected route cleanup check after Task 2:
+Route cleanup command:
 
 ```powershell
 rg -n "analysis://chat|list_analysis_chat_messages|ask_analysis_run_question|clear_analysis_chat_messages|cancel_llm_request" src\routes\analysis\+page.svelte
 ```
 
-Expected result:
+Result:
 
 ```text
 no matches
 ```
 
-Note: `src/lib/api/llm.ts` and `src/lib/api/llm.test.ts` should continue to
-contain `cancel_llm_request`; the route cleanup check is intentionally scoped
-to `src/routes/analysis/+page.svelte`.
-
-## Planned Task 2: Analysis Chat API Wrapper
-
-Create:
-
-```text
-src/lib/api/analysis-chat.ts
-src/lib/api/analysis-chat.test.ts
-```
-
-Modify:
-
-```text
-src/routes/analysis/+page.svelte
-```
-
-Wrapper exports:
-
-```ts
-ANALYSIS_CHAT_EVENT = "analysis://chat";
-
-interface AskAnalysisRunQuestionInput {
-  runId: number;
-  question: string;
-  modelOverride: string | null;
-  profileId: string | null;
-}
-
-listAnalysisChatMessages(runId: number): Promise<AnalysisChatMessage[]>;
-askAnalysisRunQuestion(input: AskAnalysisRunQuestionInput): Promise<string>;
-clearAnalysisChatMessages(runId: number): Promise<void>;
-listenToAnalysisChatEvents(handler): Promise<UnlistenFn>;
-```
-
-Task 2 route migrations:
-
-- Import chat wrapper functions from `$lib/api/analysis-chat`.
-- Import `cancelLlmRequest` from `$lib/api/llm`.
-- Remove raw `listen` import from `@tauri-apps/api/event` if no longer used.
-- Replace direct `cancel_llm_request` call with `cancelLlmRequest(requestId)`.
-- Replace direct `list_analysis_chat_messages` call with
-  `listAnalysisChatMessages(runId)`.
-- Replace direct `ask_analysis_run_question` call with
-  `askAnalysisRunQuestion(...)`.
-- Replace direct `clear_analysis_chat_messages` call with
-  `clearAnalysisChatMessages(currentRun.id)`.
-- Replace direct `listen<AnalysisChatEvent>("analysis://chat", ...)` with
-  `listenToAnalysisChatEvents(...)`.
-- Do not extract the workflow controller in Task 2.
-
-Task 2 verification:
+Verification commands run during Task 4:
 
 ```powershell
-npm.cmd test -- analysis-chat
-npm.cmd test -- analysis-chat analysis-runs llm
-rg -n "analysis://chat|list_analysis_chat_messages|ask_analysis_run_question|clear_analysis_chat_messages|cancel_llm_request" src\routes\analysis\+page.svelte
-```
-
-Expected:
-
-```text
-analysis-chat wrapper tests pass
-analysis-chat, analysis-runs, and llm tests pass
-route cleanup rg has no matches
-```
-
-Task 2 commit message:
-
-```text
-refactor(analysis): add chat api wrapper
-```
-
-## Planned Task 3: Analysis Chat Workflow Controller
-
-Create:
-
-```text
-src/lib/analysis-chat-workflow.ts
-src/lib/analysis-chat-workflow.test.ts
-```
-
-Modify:
-
-```text
-src/routes/analysis/+page.svelte
-```
-
-Controller API from the design:
-
-```ts
-createAnalysisChatWorkflow(deps): {
-  loadMessages(runId, guard?): Promise<void>;
-  askRunQuestion(): Promise<void>;
-  cancelChat(options?): Promise<void>;
-  clearMessages(): Promise<void>;
-  clearState(): void;
-  handleEvent(payload): void;
-}
-```
-
-Controller dependency rules:
-
-- Dependency-injected only.
-- Must not import Svelte.
-- Must not import modal helpers.
-- Must not import Tauri APIs.
-- Must reuse existing pure helpers from `src/lib/analysis-chat-state.ts`.
-
-Route should continue to own Svelte state, listener disposal, and modal host
-integration. The route should delegate chat actions to the workflow.
-
-Task 3 verification:
-
-```powershell
-npm.cmd test -- analysis-chat-workflow
-npm.cmd test -- analysis-chat-workflow analysis-chat-state
-npm.cmd test -- analysis-chat analysis-chat-workflow analysis-chat-state analysis-runs llm
-npm.cmd run check
-```
-
-Task 3 commit message:
-
-```text
-refactor(analysis): extract chat workflow controller
-```
-
-## Planned Task 4: Final Verification And Handoff
-
-Verification commands:
-
-```powershell
-rg -n "analysis://chat|list_analysis_chat_messages|ask_analysis_run_question|clear_analysis_chat_messages|cancel_llm_request" src\routes\analysis\+page.svelte
 npm.cmd test -- analysis-chat analysis-chat-workflow analysis-chat-state
 npm.cmd test -- analysis-chat analysis-chat-workflow analysis-chat-state analysis-runs llm notebooklm-export takeout-import sources
 npm.cmd test
@@ -352,27 +252,19 @@ npm.cmd run check
 git diff --check
 ```
 
-Expected route cleanup result:
+Observed results:
 
 ```text
-no matches
+3 test files / 23 tests passed
+8 test files / 41 tests passed
+15 test files / 124 tests passed
+svelte-check found 0 errors and 0 warnings
+git diff --check exited 0 with no output
 ```
 
-Task 4 should refresh this handoff file and/or the plan completion notes if the
-implementation completed.
-
-Task 4 commit message if docs changed:
-
-```text
-docs(analysis): record chat controller completion
-```
-
-Task 4 empty verification commit message if no files changed and the user still
-requires one commit per top-level task:
-
-```text
-test(analysis): verify chat controller integration
-```
+Note: `src/lib/api/llm.ts` and `src/lib/api/llm.test.ts` intentionally continue
+to contain the backend command string `cancel_llm_request`; the route cleanup
+check is scoped to `src/routes/analysis/+page.svelte`.
 
 ## Scope Intentionally Preserved
 
@@ -388,6 +280,37 @@ Do not change:
 - UI layout or component prop structure.
 - Templates, source groups, trace APIs, report start/cancel/delete, accounts,
   sources, Takeout, or NotebookLM workflows.
+
+## Completed Analysis Chat Wrapper And Controller Work
+
+Plan:
+
+```text
+docs/superpowers/plans/2026-05-05-analysis-chat-wrapper-controller.md
+```
+
+Design/spec:
+
+```text
+docs/superpowers/specs/2026-05-05-analysis-chat-wrapper-controller-design.md
+```
+
+Goal completed:
+
+- Centralized Analysis chat frontend command/event access in
+  `$lib/api/analysis-chat.ts`.
+- Removed Analysis chat raw Tauri calls from
+  `src/routes/analysis/+page.svelte`.
+- Extracted route-level chat orchestration into
+  `$lib/analysis-chat-workflow.ts`.
+
+Scope intentionally preserved:
+
+- No Rust backend command or event changes.
+- No Analysis chat DTO camelCase migration.
+- No chat UI redesign.
+- No template, source group, trace, report-run, accounts, sources, Takeout, or
+  NotebookLM refactors.
 
 ## Completed NotebookLM Export Frontend Wrapper Work
 
@@ -561,32 +484,27 @@ docs/superpowers/plans/2026-05-05-analysis-chat-wrapper-controller.md
 
 ## Recommended Next Action
 
-When the user asks to continue implementation, execute exactly this one
-top-level task:
+The Analysis Chat Wrapper And Controller workstream is complete on branch
+`analysis-chat-wrapper-controller`. If the user asks to continue this exact
+workstream, the next useful action is branch integration/review rather than
+another implementation task.
 
-```text
-Task 2: Analysis Chat API Wrapper
-```
-
-Use the plan file:
+Reference plan:
 
 ```text
 docs/superpowers/plans/2026-05-05-analysis-chat-wrapper-controller.md
 ```
 
-Recommended execution style:
+Recommended execution style for any follow-up:
 
 - Local execution, not subagent/worktree, unless the user explicitly changes
   the no-worktree constraint.
-- Follow TDD steps in the plan.
-- Commit after Task 2 with:
-
-```text
-refactor(analysis): add chat api wrapper
-```
+- Continue to honor the one-top-level-task-per-turn rule.
+- If merging, verify branch state first and avoid reverting unrelated user
+  changes.
 
 ## Recommended Commit Message For This Handoff Refresh
 
 ```text
-docs(session): refresh analysis chat planning handoff
+docs(analysis): record chat controller completion
 ```
