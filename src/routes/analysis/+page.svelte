@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
@@ -15,6 +14,13 @@
     listAnalysisRuns,
     listenToAnalysisRunEvents,
   } from "$lib/api/analysis-runs";
+  import {
+    askAnalysisRunQuestion,
+    clearAnalysisChatMessages,
+    listAnalysisChatMessages,
+    listenToAnalysisChatEvents,
+  } from "$lib/api/analysis-chat";
+  import { cancelLlmRequest } from "$lib/api/llm";
   import {
     cancelTakeoutSourceImport,
     listTakeoutSourceImportJobs,
@@ -146,8 +152,6 @@
   } from "$lib/analysis-source-state";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
-    AnalysisChatEvent,
-    AnalysisChatMessage,
     AnalysisChatTurn,
     AnalysisPromptTemplate,
     AnalysisRunDetail,
@@ -157,7 +161,6 @@
     AnalysisSourceOption,
     AnalysisTraceData,
     AnalysisTraceRef,
-    EventEnvelope,
   } from "$lib/types/analysis";
   import type {
     ForumTopicFilter,
@@ -790,7 +793,7 @@
 
     const requestId = activeChatRequestId;
     try {
-      await invoke("cancel_llm_request", { requestId });
+      await cancelLlmRequest(requestId);
       if (!silent) {
         status = "Cancelling answer...";
       }
@@ -808,7 +811,7 @@
   async function loadChatMessages(runId: number, guard?: AnalysisRunRequestGuard) {
     loadingChat = true;
     try {
-      const messages = await invoke<AnalysisChatMessage[]>("list_analysis_chat_messages", { runId });
+      const messages = await listAnalysisChatMessages(runId);
       if (guard && !guard.isCurrent()) {
         return;
       }
@@ -933,7 +936,7 @@
     activeChatRunId = currentRun.id;
 
     try {
-      const requestId = await invoke<string>("ask_analysis_run_question", {
+      const requestId = await askAnalysisRunQuestion({
         runId: currentRun.id,
         question,
         modelOverride: modelOverride.trim() ? modelOverride.trim() : null,
@@ -967,7 +970,7 @@
 
     clearingChat = true;
     try {
-      await invoke("clear_analysis_chat_messages", { runId: currentRun.id });
+      await clearAnalysisChatMessages(currentRun.id);
       chatMessages = [];
       status = "Saved chat history cleared.";
     } catch (error) {
@@ -1375,7 +1378,7 @@
       detachAnalysisListener = unlisten;
     });
 
-    void listen<AnalysisChatEvent>("analysis://chat", ({ payload }: EventEnvelope<AnalysisChatEvent>) => {
+    void listenToAnalysisChatEvents(({ payload }) => {
       if (
         disposed ||
         !matchesActiveAnalysisChatEvent(payload, activeChatRunId, activeChatRequestId)
