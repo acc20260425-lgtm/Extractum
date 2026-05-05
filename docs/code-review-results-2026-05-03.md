@@ -29,9 +29,22 @@ Resolved for core sources:
 
 Deferred by design:
 
-- Takeout import frontend API wrapper;
 - NotebookLM export frontend API wrapper;
 - Rust-to-TypeScript type generation.
+
+## Frontend Wrapper Planning Update - 2026-05-05
+
+Takeout import frontend API wrapping is now complete and merged into `main`.
+The next selected workstream is a matching NotebookLM export frontend API
+wrapper:
+
+- design: `docs/superpowers/specs/2026-05-05-notebooklm-export-frontend-wrapper-design.md`;
+- plan: `docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md`.
+
+The NotebookLM workstream is intentionally wrapper-only. It centralizes
+`export_source_to_notebooklm` and `notebooklm://export` in
+`$lib/api/notebooklm-export.ts`, while leaving backend Rust code, DTO field
+names, the folder picker, and route lifecycle state unchanged.
 
 ## Open Findings
 
@@ -70,8 +83,8 @@ Impact:
 
 Suggested fix:
 
-- introduce typed `$lib/api/*` wrappers for Takeout import, NotebookLM export,
-  and other compact Tauri command/event surfaces;
+- introduce typed `$lib/api/*` wrappers for NotebookLM export and other compact
+  Tauri command/event surfaces;
 - move remaining route-local DTOs to shared frontend type modules;
 - later consider generated TypeScript types from Rust if drift remains a recurring problem.
 
@@ -111,7 +124,7 @@ Suggested fix:
 
 ## Recommended Follow-Up Order
 
-1. Extract the remaining non-run analysis route controllers/helpers.
-2. Add typed wrappers for Takeout import and NotebookLM export.
+1. Add the planned typed wrapper for NotebookLM export.
+2. Extract the remaining non-run analysis route controllers/helpers.
 3. Improve typed error conversion for remaining DB, Telegram, LLM, and validation paths.
 4. Continue with secure secret storage as a separate backlog item, not mixed into stabilization work.

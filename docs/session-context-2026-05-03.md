@@ -4,23 +4,24 @@
 
 - Repository root: `G:\Develop\Extractum`
 - Current branch: `main`
-- Current HEAD:
+- Current HEAD when this context was refreshed:
 
 ```text
-dd7d6fe test(takeout): verify frontend wrapper integration
+b32a782 docs(session): refresh takeout wrapper completion handoff
 ```
 
-- Working tree at handoff time: clean.
+- Working tree before this documentation update: clean.
 - No git remotes are configured in this repository, so `git pull` on `main`
   has no upstream to pull from.
+- The user explicitly requested a normal branch workflow and no git worktree.
 - The Takeout wrapper implementation branch
   `takeout-import-frontend-wrapper` was fast-forward merged into `main` and
   then deleted locally.
-- The user explicitly requested a normal branch workflow and no git worktree.
 
-Recent history:
+Recent history at context refresh:
 
 ```text
+b32a782 docs(session): refresh takeout wrapper completion handoff
 dd7d6fe test(takeout): verify frontend wrapper integration
 a4a5bd8 refactor(takeout): use api wrapper in analysis route
 df6dd43 feat(takeout): add api wrapper
@@ -30,15 +31,17 @@ df6dd43 feat(takeout): add api wrapper
 e3f18ab docs(sources): record contract v2 completion
 ca8e6a2 refactor(sources): extract focused source helpers
 2516d3b docs(session): refresh sources contract v2 handoff
-147fcae test(sources): share sqlite fixtures
-0cf0ae1 refactor(sources): tighten source error typing
-0bb2e20 docs(session): update sources contract v2 handoff
 ```
 
 Git writes such as `git add`, `git commit`, `git switch`, `git merge`, and
 `git branch -d` may fail in the default Windows sandbox with `.git/*.lock`
-permission errors. In this session, those commands succeeded after rerunning
+permission errors. In prior tasks, those commands succeeded after rerunning
 with approval outside the sandbox.
+
+Frontend verification commands may fail in the default sandbox with
+`spawn EPERM` because Vite, esbuild, or Svelte preprocessing needs to spawn
+child processes. In prior tasks, npm verification succeeded after rerunning
+outside the sandbox with approval.
 
 ## Current Workflow Rules From User
 
@@ -46,9 +49,287 @@ with approval outside the sandbox.
 - When executing an implementation plan, perform exactly one top-level task per
   user turn, then stop and wait for explicit instruction.
 - At the end of each top-level task, create a commit.
-- The user allowed use of Superpowers subagents, but the current plan was small
-  and the subagent workflow conflicted with the explicit no-worktree rule, so
-  implementation was done locally.
+- The user allowed Superpowers subagents, but the current no-worktree rule
+  conflicts with the normal subagent/worktree workflow for small plans. Prefer
+  local execution unless the user explicitly changes that constraint.
+
+## Current Planning State
+
+The user asked to continue planning after the completed Takeout wrapper work.
+We compared reasonable next workstreams from the manual review:
+
+1. NotebookLM export frontend API wrapper.
+2. Analysis chat API wrapper/controller extraction.
+3. Takeout workflow controller extraction.
+
+Chosen next workstream:
+
+```text
+NotebookLM export frontend API wrapper
+```
+
+Reasoning:
+
+- It is the smallest remaining compact raw Tauri command/event boundary.
+- It mirrors the already completed Takeout wrapper pattern.
+- It reduces `/analysis` infrastructure coupling before larger controller
+  extractions.
+- It avoids the larger blast radius of chat/controller extraction, typed backend
+  errors, or secure secret storage.
+
+Scope decision from the user:
+
+```text
+Command/event only
+```
+
+That means the wrapper should centralize only:
+
+```text
+export_source_to_notebooklm
+notebooklm://export
+```
+
+The folder picker remains route-local:
+
+```text
+openDialog(...)
+```
+
+## New NotebookLM Export Wrapper Documents
+
+Design/spec written for the next workstream:
+
+```text
+docs/superpowers/specs/2026-05-05-notebooklm-export-frontend-wrapper-design.md
+```
+
+Implementation plan written for the next workstream:
+
+```text
+docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md
+```
+
+Review documentation updated:
+
+```text
+docs/code-review-results-2026-05-03.md
+```
+
+Recommended commit message for these documentation changes:
+
+```text
+docs(notebooklm): add export wrapper plan
+```
+
+## Planned NotebookLM Export Frontend API Contract
+
+New wrapper file to create during implementation:
+
+```text
+src/lib/api/notebooklm-export.ts
+```
+
+New test file to create during implementation:
+
+```text
+src/lib/api/notebooklm-export.test.ts
+```
+
+Route to migrate during implementation:
+
+```text
+src/routes/analysis/+page.svelte
+```
+
+Planned exports:
+
+```ts
+NOTEBOOKLM_EXPORT_EVENT = "notebooklm://export";
+exportSourceToNotebookLm;
+listenToNotebookLmExportEvents;
+```
+
+Planned wrapper signatures:
+
+```ts
+export function exportSourceToNotebookLm(
+  request: NotebookLmExportRequest,
+): Promise<NotebookLmExportResult>;
+
+export function listenToNotebookLmExportEvents(
+  handler: (event: Event<NotebookLmExportEvent>) => void,
+): Promise<UnlistenFn>;
+```
+
+Wrapped Tauri command:
+
+```text
+export_source_to_notebooklm
+```
+
+Wrapped Tauri event:
+
+```text
+notebooklm://export
+```
+
+Existing NotebookLM frontend types remain in:
+
+```text
+src/lib/types/sources.ts
+```
+
+Relevant NotebookLM types:
+
+```text
+NotebookLmExportRequest
+NotebookLmExportResult
+NotebookLmExportEvent
+```
+
+Existing NotebookLM DTO snake_case fields stay unchanged:
+
+```text
+export_id
+source_id
+output_dir
+period_from
+period_to
+include_media_placeholders
+min_message_length
+max_words_per_file
+max_bytes_per_file
+overwrite_existing
+progress_current
+progress_total
+file_path
+exported_message_count
+skipped_message_count
+warning_count
+```
+
+Route-local NotebookLM helpers stay unchanged:
+
+```text
+createNotebookLmExportId
+notebookLmExportRequestFromForm
+notebookLmExportProgressFromEvent
+notebookLmExportInitialProgress
+notebookLmExportCompleteStatus
+```
+
+Current raw NotebookLM locations before implementation:
+
+```text
+src/routes/analysis/+page.svelte
+  invoke<NotebookLmExportResult>("export_source_to_notebooklm", { request })
+  listen<NotebookLmExportEvent>("notebooklm://export", ...)
+```
+
+After implementation, this command should return no matches:
+
+```powershell
+rg -n "export_source_to_notebooklm|notebooklm://export" src\routes\analysis\+page.svelte
+```
+
+## Planned NotebookLM Implementation Tasks
+
+Task 1: Add wrapper contract tests.
+
+- Create `src/lib/api/notebooklm-export.test.ts`.
+- Mock `@tauri-apps/api/core` and `@tauri-apps/api/event`.
+- Verify `exportSourceToNotebookLm(request)` calls:
+
+```ts
+invoke("export_source_to_notebooklm", { request });
+```
+
+- Verify `NOTEBOOKLM_EXPORT_EVENT` equals `notebooklm://export`.
+- Verify `listenToNotebookLmExportEvents(handler)` calls `listen(...)` and
+  forwards the event.
+- Run:
+
+```powershell
+npm.cmd test -- notebooklm-export
+```
+
+- Expected RED:
+
+```text
+Cannot find module './notebooklm-export'
+```
+
+- Commit:
+
+```text
+test(notebooklm): add export api wrapper contract tests
+```
+
+Task 2: Implement wrapper.
+
+- Create `src/lib/api/notebooklm-export.ts`.
+- Follow the existing `src/lib/api/takeout-import.ts` pattern.
+- Run:
+
+```powershell
+npm.cmd test -- notebooklm-export
+```
+
+- Expected GREEN:
+
+```text
+src/lib/api/notebooklm-export.test.ts passes
+```
+
+- Commit:
+
+```text
+feat(notebooklm): add export api wrapper
+```
+
+Task 3: Migrate `/analysis`.
+
+- Modify only NotebookLM export raw command/event usage in
+  `src/routes/analysis/+page.svelte`.
+- Keep `openDialog(...)` route-local.
+- Keep chat raw listener unchanged.
+- Run:
+
+```powershell
+npm.cmd test -- notebooklm-export
+rg -n "export_source_to_notebooklm|notebooklm://export" src\routes\analysis\+page.svelte
+```
+
+- Expected `rg` result:
+
+```text
+no matches
+```
+
+- Commit:
+
+```text
+refactor(notebooklm): use export api wrapper in analysis route
+```
+
+Task 4: Final verification.
+
+- Run:
+
+```powershell
+npm.cmd test -- analysis-state notebooklm-export takeout-import analysis-runs sources
+npm.cmd test
+npm.cmd run check
+git diff --check
+```
+
+- If verification creates no file changes, create an empty commit because the
+  user requested a commit at the end of each top-level task:
+
+```text
+test(notebooklm): verify export wrapper integration
+```
 
 ## Completed Takeout Import Frontend Wrapper Work
 
@@ -68,7 +349,8 @@ Goal completed:
 
 - Centralized Takeout import frontend command/event access in
   `$lib/api/takeout-import.ts`.
-- Removed Takeout-specific raw Tauri calls from `src/routes/analysis/+page.svelte`.
+- Removed Takeout-specific raw Tauri calls from
+  `src/routes/analysis/+page.svelte`.
 - Kept the task wrapper-only.
 
 Scope intentionally preserved:
@@ -91,27 +373,14 @@ dd7d6fe test(takeout): verify frontend wrapper integration
 Note: `dd7d6fe` is an empty verification commit, created because the user
 requested a commit at the end of each task and Task 4 only ran verification.
 
-## Takeout Import Frontend API Contract
-
-New wrapper file:
+Current Takeout wrapper files:
 
 ```text
 src/lib/api/takeout-import.ts
-```
-
-New test file:
-
-```text
 src/lib/api/takeout-import.test.ts
 ```
 
-Route migrated:
-
-```text
-src/routes/analysis/+page.svelte
-```
-
-Exports:
+Takeout wrapper exports:
 
 ```ts
 TAKEOUT_IMPORT_EVENT = "sources://takeout-import";
@@ -121,57 +390,13 @@ cancelTakeoutSourceImport;
 listenToTakeoutImportEvents;
 ```
 
-Wrapped Tauri commands:
-
-```text
-list_takeout_source_import_jobs
-start_takeout_source_import
-cancel_takeout_source_import
-```
-
-Wrapped event:
-
-```text
-sources://takeout-import
-```
-
-Existing Takeout frontend types remain in:
-
-```text
-src/lib/types/sources.ts
-```
-
-Relevant Takeout types:
-
-```text
-TakeoutImportJobRecord
-TakeoutImportEvent
-StartTakeoutImportResponse
-CancelTakeoutImportResponse
-```
-
-Existing Takeout DTO snake_case fields were kept unchanged:
-
-```text
-job_id
-source_id
-account_id
-progress_current
-progress_total
-started_at
-finished_at
-```
-
-The analysis route still imports raw `invoke` and `listen` for non-Takeout
-boundaries. Only Takeout raw calls/listener were replaced.
-
 No raw Takeout command/event strings remain in:
 
 ```text
 src/routes/analysis/+page.svelte
 ```
 
-Verified with:
+Verified previously with:
 
 ```powershell
 rg -n "list_takeout_source_import_jobs|start_takeout_source_import|cancel_takeout_source_import|sources://takeout-import" src/routes/analysis/+page.svelte
@@ -181,112 +406,6 @@ Result:
 
 ```text
 no matches
-```
-
-## Verification Evidence
-
-Frontend commands commonly fail in the default sandbox with `spawn EPERM`
-because Vite/esbuild or Svelte preprocessing needs to spawn child processes.
-In this session, npm verification was rerun outside the sandbox after approval.
-
-Task 1 RED:
-
-```powershell
-npm.cmd test -- takeout-import
-```
-
-Sandbox result:
-
-```text
-spawn EPERM
-```
-
-Outside sandbox result:
-
-```text
-FAIL src/lib/api/takeout-import.test.ts
-Cannot find module '/src/lib/api/takeout-import'
-```
-
-Task 2 GREEN:
-
-```powershell
-npm.cmd test -- takeout-import
-```
-
-Outside sandbox result:
-
-```text
-Test Files  1 passed (1)
-Tests       4 passed (4)
-```
-
-Task 4 verification before merge:
-
-```powershell
-npm.cmd test -- takeout-import
-```
-
-Result:
-
-```text
-Test Files  1 passed (1)
-Tests       4 passed (4)
-```
-
-```powershell
-npm.cmd test -- analysis-runs sources takeout-import
-```
-
-Result:
-
-```text
-Test Files  3 passed (3)
-Tests       12 passed (12)
-```
-
-```powershell
-npm.cmd test
-```
-
-Result:
-
-```text
-Test Files  12 passed (12)
-Tests       106 passed (106)
-```
-
-```powershell
-npm.cmd run check
-```
-
-Result:
-
-```text
-svelte-check found 0 errors and 0 warnings
-```
-
-```powershell
-git diff --check
-```
-
-Result:
-
-```text
-no output
-```
-
-Post-merge verification on `main`:
-
-```powershell
-npm.cmd test
-```
-
-Result:
-
-```text
-Test Files  12 passed (12)
-Tests       106 passed (106)
 ```
 
 ## Completed Source Contract V2 Work
@@ -358,18 +477,6 @@ list_source_forum_topics
 
 `get_items` is no longer registered.
 
-Current frontend core source domain types:
-
-```text
-TelegramDialogSource
-Source
-SourceItem
-SourceForumTopic
-SyncSourceResult
-SyncSettings
-ForumTopicFilter
-```
-
 Current backend source module:
 
 ```text
@@ -405,6 +512,7 @@ Already completed and merged into `main`:
 - `docs/superpowers/plans/2026-05-03-analysis-run-workflow-controller.md`
 - `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md`
 - `docs/superpowers/plans/2026-05-03-sources-backend-split.md`
+- `docs/superpowers/plans/2026-05-03-sources-contract-v2.md`
 - `docs/superpowers/plans/2026-05-05-takeout-import-frontend-wrapper.md`
 
 Historical note:
@@ -415,29 +523,17 @@ Historical note:
 
 ## Remaining Follow-Up Work
 
-Manual review in `docs/code-review-results-2026-05-03.md` left these reasonable
-cleanup directions:
+After the planned NotebookLM export wrapper, reasonable next workstreams are:
 
 1. Extract remaining non-run analysis route controllers/helpers.
-2. Add typed wrappers for NotebookLM export.
-3. Improve typed error conversion outside source boundaries.
-4. Keep secure secret storage as a separate backlog item.
+2. Analysis chat API wrapper and/or chat workflow controller extraction.
+3. Takeout import camelCase domain DTO migration.
+4. Takeout workflow controller extraction from `/analysis`.
+5. Template and source-group wrappers/controllers.
+6. Rust-to-TypeScript type generation.
+7. Improve typed error conversion outside source boundaries.
+8. Secure secret storage as a separate backlog item.
+9. Full media download/preview.
 
-Takeout import frontend wrapper is now complete, so likely next workstream is
-one of:
-
-- NotebookLM export frontend API wrapper.
-- Takeout import camelCase domain DTO migration.
-- Takeout workflow controller extraction from `/analysis`.
-- Chat workflow controller/helper extraction from `/analysis`.
-- Template and source-group wrappers/controllers.
-- Rust-to-TypeScript type generation.
-- Secure secret storage.
-- Full media download/preview.
-- Further typed error conversion outside source boundaries.
-
-## Suggested Commit Message For This Handoff Update
-
-```text
-docs(session): refresh takeout wrapper completion handoff
-```
+The current recommendation is to implement the NotebookLM wrapper first, then
+return to the larger `/analysis` controller extraction work.
