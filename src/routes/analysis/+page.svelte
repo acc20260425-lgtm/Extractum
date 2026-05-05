@@ -44,6 +44,10 @@
     type AnalysisRunWorkflowPatch,
   } from "$lib/analysis-run-workflow";
   import {
+    createAnalysisChatWorkflow,
+    type AnalysisChatWorkflowPatch,
+  } from "$lib/analysis-chat-workflow";
+  import {
     defaultDateOffset,
     endOfDayUnix,
     formatPeriod,
@@ -105,14 +109,6 @@
     type LiveRunState,
     type NotebookLmExportProgressState,
   } from "$lib/analysis-state";
-  import {
-    appendPendingChatExchange,
-    applyAnalysisChatEvent,
-    chatTurnsFromMessages,
-    dropPendingChatExchange,
-    matchesActiveAnalysisChatEvent,
-    type AnalysisChatState,
-  } from "$lib/analysis-chat-state";
   import {
     groupCopyCommand,
     groupCreatedStatus,
@@ -344,27 +340,18 @@
   }
 
   function clearChatState() {
-    chatMessages = [];
-    chatQuestion = "";
-    chatting = false;
-    activeChatRequestId = null;
-    activeChatRunId = null;
+    chatWorkflow.clearState();
   }
 
-  function currentChatState(): AnalysisChatState {
-    return {
-      messages: chatMessages,
-      chatting,
-      activeRequestId: activeChatRequestId,
-      activeRunId: activeChatRunId,
-    };
-  }
-
-  function assignChatState(next: AnalysisChatState) {
-    chatMessages = next.messages;
-    chatting = next.chatting;
-    activeChatRequestId = next.activeRequestId;
-    activeChatRunId = next.activeRunId;
+  function applyChatWorkflowPatch(patch: AnalysisChatWorkflowPatch) {
+    if ("chatMessages" in patch) chatMessages = patch.chatMessages ?? [];
+    if ("chatQuestion" in patch) chatQuestion = patch.chatQuestion ?? "";
+    if ("chatting" in patch) chatting = patch.chatting ?? false;
+    if ("activeChatRequestId" in patch) activeChatRequestId = patch.activeChatRequestId ?? null;
+    if ("activeChatRunId" in patch) activeChatRunId = patch.activeChatRunId ?? null;
+    if ("loadingChat" in patch) loadingChat = patch.loadingChat ?? false;
+    if ("clearingChat" in patch) clearingChat = patch.clearingChat ?? false;
+    if ("status" in patch && patch.status !== undefined) status = patch.status;
   }
 
   function clearOpenedRunState(runId: number) {
@@ -518,6 +505,31 @@
     if ("loadingRunDetail" in patch) loadingRunDetail = patch.loadingRunDetail ?? false;
     if ("status" in patch && patch.status !== undefined) status = patch.status;
   }
+
+  const chatWorkflow = createAnalysisChatWorkflow({
+    getState: () => ({
+      currentRun,
+      chatQuestion,
+      chatMessages,
+      chatting,
+      activeChatRequestId,
+      activeChatRunId,
+      modelOverride,
+    }),
+    patch: applyChatWorkflowPatch,
+    listMessages: listAnalysisChatMessages,
+    askQuestion: askAnalysisRunQuestion,
+    clearMessages: clearAnalysisChatMessages,
+    cancelRequest: cancelLlmRequest,
+    confirmClearChat: () => openConfirmModal({
+      title: "Clear chat history?",
+      message: "This will remove all saved follow-up messages for the currently opened run.",
+      confirmLabel: "Clear history",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    }),
+    formatError: formatAppError,
+  });
 
   const runWorkflow = createAnalysisRunWorkflow({
     getState: () => ({
@@ -787,21 +799,7 @@
   }
 
   async function cancelChat({ silent = false }: { silent?: boolean } = {}) {
-    if (!activeChatRequestId) {
-      return;
-    }
-
-    const requestId = activeChatRequestId;
-    try {
-      await cancelLlmRequest(requestId);
-      if (!silent) {
-        status = "Cancelling answer...";
-      }
-    } catch (error) {
-      if (!silent) {
-        status = formatAppError("cancelling the chat answer", error);
-      }
-    }
+    await chatWorkflow.cancelChat({ silent });
   }
 
   async function openRun(runId: number) {
@@ -809,24 +807,7 @@
   }
 
   async function loadChatMessages(runId: number, guard?: AnalysisRunRequestGuard) {
-    loadingChat = true;
-    try {
-      const messages = await listAnalysisChatMessages(runId);
-      if (guard && !guard.isCurrent()) {
-        return;
-      }
-      chatMessages = chatTurnsFromMessages(messages);
-    } catch (error) {
-      if (guard && !guard.isCurrent()) {
-        return;
-      }
-      chatMessages = [];
-      status = formatAppError("loading analysis chat", error);
-    } finally {
-      if (!guard || guard.isCurrent()) {
-        loadingChat = false;
-      }
-    }
+    await chatWorkflow.loadMessages(runId, guard);
   }
 
   async function runReport() {
@@ -920,64 +901,11 @@
   }
 
   async function askRunQuestion() {
-    if (!currentRun || currentRun.status !== "completed") {
-      status = "Open a completed report first.";
-      return;
-    }
-    if (!chatQuestion.trim()) {
-      status = "Question cannot be empty.";
-      return;
-    }
-
-    const question = chatQuestion.trim();
-    chatMessages = appendPendingChatExchange(chatMessages, question);
-    chatQuestion = "";
-    chatting = true;
-    activeChatRunId = currentRun.id;
-
-    try {
-      const requestId = await askAnalysisRunQuestion({
-        runId: currentRun.id,
-        question,
-        modelOverride: modelOverride.trim() ? modelOverride.trim() : null,
-        profileId: null,
-      });
-      activeChatRequestId = requestId;
-    } catch (error) {
-      chatMessages = dropPendingChatExchange(chatMessages);
-      chatting = false;
-      activeChatRunId = null;
-      activeChatRequestId = null;
-      status = formatAppError("starting the chat answer", error);
-    }
+    await chatWorkflow.askRunQuestion();
   }
 
   async function clearChatMessages() {
-    if (!currentRun) {
-      status = "Open a run first.";
-      return;
-    }
-    const confirmed = await openConfirmModal({
-      title: "Clear chat history?",
-      message: "This will remove all saved follow-up messages for the currently opened run.",
-      confirmLabel: "Clear history",
-      cancelLabel: "Cancel",
-      tone: "danger",
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    clearingChat = true;
-    try {
-      await clearAnalysisChatMessages(currentRun.id);
-      chatMessages = [];
-      status = "Saved chat history cleared.";
-    } catch (error) {
-      status = formatAppError("clearing analysis chat", error);
-    } finally {
-      clearingChat = false;
-    }
+    await chatWorkflow.clearMessages();
   }
 
   async function syncSelectedSource(sourceId: number) {
@@ -1379,21 +1307,11 @@
     });
 
     void listenToAnalysisChatEvents(({ payload }) => {
-      if (
-        disposed ||
-        !matchesActiveAnalysisChatEvent(payload, activeChatRunId, activeChatRequestId)
-      ) {
+      if (disposed) {
         return;
       }
 
-      const reduction = applyAnalysisChatEvent(currentChatState(), payload);
-      assignChatState(reduction.state);
-      if (reduction.reloadRunId !== null) {
-        void loadChatMessages(reduction.reloadRunId);
-      }
-      if (reduction.status !== null) {
-        status = reduction.status;
-      }
+      chatWorkflow.handleEvent(payload);
     }).then((unlisten) => {
       if (disposed) {
         unlisten();
