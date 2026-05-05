@@ -7,23 +7,24 @@
 - Current HEAD when this context was refreshed:
 
 ```text
-66f634e test(notebooklm): verify export wrapper integration
+e21843e docs(notebooklm): record export wrapper completion
 ```
 
-- Working tree before this documentation update: clean.
-- No git remotes are configured in this repository, so `git pull` on `main`
-  has no upstream to pull from.
-- The user explicitly requested a normal branch workflow and no git worktree.
-- The Takeout wrapper implementation branch
-  `takeout-import-frontend-wrapper` was fast-forward merged into `main` and
-  then deleted locally.
-- The NotebookLM wrapper implementation branch
-  `notebooklm-export-frontend-wrapper` was fast-forward merged into `main` and
-  then deleted locally.
+- Working tree before this handoff refresh: clean.
+- No git remotes are configured. `git remote -v` prints no remotes.
+- `main` has no upstream/tracking branch. `git pull` on `main` reports no
+  tracking information.
+- Local branches currently known:
+
+```text
+main       e21843e docs(notebooklm): record export wrapper completion
+desktop-ui e6ca2cd feat(ui): polish workspace and unify accounts/settings layout
+```
 
 Recent history at context refresh:
 
 ```text
+e21843e docs(notebooklm): record export wrapper completion
 66f634e test(notebooklm): verify export wrapper integration
 0bba531 refactor(notebooklm): use export api wrapper in analysis route
 b302c85 feat(notebooklm): add export api wrapper
@@ -33,75 +34,54 @@ b32a782 docs(session): refresh takeout wrapper completion handoff
 dd7d6fe test(takeout): verify frontend wrapper integration
 a4a5bd8 refactor(takeout): use api wrapper in analysis route
 df6dd43 feat(takeout): add api wrapper
+3ee9d8b test(takeout): add api wrapper contract tests
+3a72f50 docs(session): refresh takeout wrapper handoff
+3f8204b docs(takeout): add frontend wrapper implementation plan
+e3f18ab docs(sources): record contract v2 completion
+ca8e6a2 refactor(sources): extract focused source helpers
+2516d3b docs(session): refresh sources contract v2 handoff
+147fcae test(sources): share sqlite fixtures
+0cf0ae1 refactor(sources): tighten source error typing
 ```
-
-Git writes such as `git add`, `git commit`, `git switch`, `git merge`, and
-`git branch -d` may fail in the default Windows sandbox with `.git/*.lock`
-permission errors. In prior tasks, those commands succeeded after rerunning
-with approval outside the sandbox.
-
-Frontend verification commands may fail in the default sandbox with
-`spawn EPERM` because Vite, esbuild, or Svelte preprocessing needs to spawn
-child processes. In prior tasks, npm verification succeeded after rerunning
-outside the sandbox with approval.
 
 ## Current Workflow Rules From User
 
 - Do not create a git worktree.
+- Use a normal branch workflow when implementing work.
 - When executing an implementation plan, perform exactly one top-level task per
   user turn, then stop and wait for explicit instruction.
 - At the end of each top-level task, create a commit.
-- The user allowed Superpowers subagents, but the current no-worktree rule
-  conflicts with the normal subagent/worktree workflow for small plans. Prefer
-  local execution unless the user explicitly changes that constraint.
+- The user allows subagents, but the active no-worktree rule conflicts with the
+  usual Superpowers subagent/worktree workflow for small plans. Prefer local
+  execution unless the user explicitly changes that constraint.
 
-## Current Planning State
+## Environment Notes
 
-The NotebookLM export frontend wrapper workstream is complete and merged into
-`main`.
-
-Before implementation, we compared reasonable next workstreams from the manual
-review:
-
-1. NotebookLM export frontend API wrapper.
-2. Analysis chat API wrapper/controller extraction.
-3. Takeout workflow controller extraction.
-
-Chosen and completed workstream:
-
-```text
-NotebookLM export frontend API wrapper
-```
-
-Reasoning:
-
-- It is the smallest remaining compact raw Tauri command/event boundary.
-- It mirrors the already completed Takeout wrapper pattern.
-- It reduces `/analysis` infrastructure coupling before larger controller
-  extractions.
-- It avoids the larger blast radius of chat/controller extraction, typed backend
-  errors, or secure secret storage.
-
-Scope decision from the user:
-
-```text
-Command/event only
-```
-
-That means the wrapper should centralize only:
-
-```text
-export_source_to_notebooklm
-notebooklm://export
-```
-
-The folder picker remains route-local:
-
-```text
-openDialog(...)
-```
+- Git writes such as `git add`, `git commit`, `git switch`, `git merge`, and
+  `git branch -d` often fail in the default Windows sandbox with `.git/*.lock`
+  permission errors. In this session, those commands succeeded after rerunning
+  with approval outside the sandbox.
+- Frontend verification commands often fail in the default sandbox with
+  `spawn EPERM` because Vite, esbuild, or Svelte preprocessing needs to spawn
+  child processes. In this session, npm verification succeeded after rerunning
+  outside the sandbox with approval.
+- `git diff --check` runs in the sandbox. It may print LF/CRLF warnings from
+  Git, but it exited successfully for the documentation changes.
 
 ## Completed NotebookLM Export Frontend Wrapper Work
+
+Branch:
+
+```text
+notebooklm-export-frontend-wrapper
+```
+
+Branch lifecycle:
+
+- Created from `main`.
+- Implemented in four user-approved top-level tasks.
+- Fast-forward merged back into `main`.
+- Deleted locally after successful verification on merged `main`.
 
 Plan:
 
@@ -143,6 +123,12 @@ b302c85 feat(notebooklm): add export api wrapper
 
 Note: `66f634e` is an empty verification commit, created because the user
 requested a commit at the end of each task and Task 4 only ran verification.
+
+Documentation completion commit:
+
+```text
+e21843e docs(notebooklm): record export wrapper completion
+```
 
 Current NotebookLM wrapper files:
 
@@ -243,7 +229,7 @@ npm.cmd run check
 git diff --check
 ```
 
-Results:
+Recorded results:
 
 ```text
 npm.cmd test -- analysis-state notebooklm-export takeout-import analysis-runs sources:
@@ -251,9 +237,16 @@ npm.cmd test -- analysis-state notebooklm-export takeout-import analysis-runs so
 npm.cmd test:
   13 test files passed; 108 tests passed
 npm.cmd run check:
-  0 errors; 0 warnings
+  svelte-check found 0 errors and 0 warnings
 git diff --check:
   exit 0
+```
+
+After merge into `main`, full tests were run again:
+
+```text
+npm.cmd test:
+  13 test files passed; 108 tests passed
 ```
 
 ## Completed Takeout Import Frontend Wrapper Work
@@ -283,7 +276,7 @@ Scope intentionally preserved:
 - No Rust backend command or event changes.
 - No Takeout DTO camelCase migration.
 - No Takeout workflow controller extraction.
-- No NotebookLM export wrapper work.
+- No NotebookLM export work at that time.
 - No chat, source group, template, or source management workflow refactors.
 
 Commits created for this work:
@@ -321,10 +314,10 @@ No raw Takeout command/event strings remain in:
 src/routes/analysis/+page.svelte
 ```
 
-Verified previously with:
+Verified with:
 
 ```powershell
-rg -n "list_takeout_source_import_jobs|start_takeout_source_import|cancel_takeout_source_import|sources://takeout-import" src/routes/analysis/+page.svelte
+rg -n "list_takeout_source_import_jobs|start_takeout_source_import|cancel_takeout_source_import|sources://takeout-import" src\routes\analysis\+page.svelte
 ```
 
 Result:
@@ -434,12 +427,14 @@ git diff --check: exit 0
 
 Already completed and merged into `main`:
 
-- `docs/superpowers/plans/2026-05-03-analysis-run-workflow-controller.md`
-- `docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md`
-- `docs/superpowers/plans/2026-05-03-sources-backend-split.md`
-- `docs/superpowers/plans/2026-05-03-sources-contract-v2.md`
-- `docs/superpowers/plans/2026-05-05-takeout-import-frontend-wrapper.md`
-- `docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md`
+```text
+docs/superpowers/plans/2026-05-03-analysis-run-workflow-controller.md
+docs/superpowers/plans/2026-05-03-takeout-import-backend-split.md
+docs/superpowers/plans/2026-05-03-sources-backend-split.md
+docs/superpowers/plans/2026-05-03-sources-contract-v2.md
+docs/superpowers/plans/2026-05-05-takeout-import-frontend-wrapper.md
+docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md
+```
 
 Historical note:
 
@@ -447,12 +442,31 @@ Historical note:
 - `sources-contract-v2` later intentionally replaced it with
   `list_source_items`.
 
+## Current Documentation State
+
+The NotebookLM wrapper completion documentation was committed in:
+
+```text
+e21843e docs(notebooklm): record export wrapper completion
+```
+
+That commit updated:
+
+```text
+docs/code-review-results-2026-05-03.md
+docs/session-context-2026-05-03.md
+docs/superpowers/plans/2026-05-05-notebooklm-export-frontend-wrapper.md
+```
+
+The NotebookLM implementation plan has had completed task checklists removed
+and now keeps a compact completed-work summary instead of active task sections.
+
 ## Remaining Follow-Up Work
 
-After the completed NotebookLM export wrapper, reasonable next workstreams are:
+Reasonable next workstreams:
 
 1. Extract remaining non-run analysis route controllers/helpers.
-2. Analysis chat API wrapper and/or chat workflow controller extraction.
+2. Add an analysis chat API wrapper and/or chat workflow controller.
 3. Takeout import camelCase domain DTO migration.
 4. Takeout workflow controller extraction from `/analysis`.
 5. Template and source-group wrappers/controllers.
@@ -461,6 +475,15 @@ After the completed NotebookLM export wrapper, reasonable next workstreams are:
 8. Secure secret storage as a separate backlog item.
 9. Full media download/preview.
 
-The current recommendation is to return to the larger `/analysis` controller
-extraction work, starting with a focused chat wrapper/controller or another
-compact non-run workflow boundary.
+Current recommendation:
+
+- Return to the larger `/analysis` controller extraction work.
+- Start with a focused chat wrapper/controller or another compact non-run
+  workflow boundary.
+- Keep using the user's rule: one top-level task per turn, commit, then wait.
+
+## Recommended Commit Message For This Handoff Refresh
+
+```text
+docs(session): refresh notebooklm completion handoff
+```
