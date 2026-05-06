@@ -41,6 +41,10 @@ cleanup branch:
 - Analysis account/status loading and analysis source metrics command access are
   centralized in `src/lib/api/analysis-workspace.ts` and
   `src/lib/analysis-workspace-workflow.ts`.
+- Analysis source group loading and template/group deletion command access and
+  route-level orchestration are centralized in
+  `src/lib/api/analysis-source-groups.ts` and
+  `src/lib/analysis-source-groups-workflow.ts`.
 
 Historical Superpowers plan/spec files for these completed workstreams were
 removed after this consolidation. Future files under `docs/superpowers/plans`
@@ -63,12 +67,9 @@ start/cancel/delete actions, listener lifecycle, and UI composition.
 Current raw `/analysis` command surfaces found in the route:
 
 ```text
-list_analysis_source_groups
 start_analysis_report
 cancel_analysis_run
 delete_analysis_run
-delete_analysis_prompt_template
-delete_analysis_source_group
 ```
 
 Impact:
@@ -94,8 +95,7 @@ Takeout import, NotebookLM export, and LLM cancellation.
 
 Several remaining frontend TypeScript DTOs and raw Tauri command strings are
 still manually maintained beside Rust serde structs. Current notable raw
-`/analysis` command surfaces are analysis source groups, template deletion, and
-report start/cancel/delete actions.
+`/analysis` command surfaces are report start/cancel/delete actions.
 
 Impact:
 
@@ -139,21 +139,20 @@ Suggested fix:
 
 ## Recent Verification
 
-Recent verification from the completed Analysis workspace loading
-wrapper/controller workstream:
+Recent verification from the completed Analysis source groups and template
+deletion wrapper/controller workstream:
 
-- route cleanup search found no raw `list_accounts`,
-  `tg_get_account_statuses`, or `list_analysis_sources` command strings in
-  `src/routes/analysis/+page.svelte`;
-- focused tests passed for `analysis-workspace` and
-  `analysis-workspace-workflow`;
-- `npm.cmd test` passed with 19 test files and 145 tests;
+- route cleanup search found no raw `list_analysis_source_groups`,
+  `delete_analysis_prompt_template`, or `delete_analysis_source_group` command
+  strings in `src/routes/analysis/+page.svelte`;
+- focused tests passed for `analysis-source-groups` and
+  `analysis-source-groups-workflow`;
+- `npm.cmd test` passed with 21 test files and 156 tests;
 - `npm.cmd run check` passed with 0 errors and 0 warnings;
 - `git diff --check` passed with exit code 0.
 
 ## Recommended Follow-Up Order
 
-1. Extract wrappers/controllers for analysis source groups and template deletion.
-2. Extract wrappers/controllers for report start/cancel/delete actions.
-3. Improve typed error conversion for remaining DB, Telegram, LLM, and
+1. Extract wrappers/controllers for report start/cancel/delete actions.
+2. Improve typed error conversion for remaining DB, Telegram, LLM, and
    validation paths.
