@@ -12,7 +12,8 @@ manual review.
 
 ## Consolidated Resolved Work
 
-The following maintainability work is complete and merged into `main`:
+The following maintainability work is complete in the cleanup history or current
+cleanup branch:
 
 - Analysis run loading, opening, and run-event orchestration were extracted from
   `src/routes/analysis/+page.svelte` into a tested workflow controller.
@@ -37,6 +38,9 @@ The following maintainability work is complete and merged into `main`:
 - Analysis trace command access and route-level orchestration are centralized in
   `src/lib/api/analysis-trace.ts` and
   `src/lib/analysis-trace-workflow.ts`.
+- Analysis account/status loading and analysis source metrics command access are
+  centralized in `src/lib/api/analysis-workspace.ts` and
+  `src/lib/analysis-workspace-workflow.ts`.
 
 Historical Superpowers plan/spec files for these completed workstreams were
 removed after this consolidation. Future files under `docs/superpowers/plans`
@@ -53,16 +57,12 @@ Deferred by design:
 
 `src/routes/analysis/+page.svelte` is smaller than at the start of the review,
 but it still coordinates several feature areas directly. The remaining route
-responsibilities include account/status loading, analysis source metrics
-loading, source group editing, template deletion, report start/cancel/delete
-actions, listener lifecycle, and UI composition.
+responsibilities include source group editing, template deletion, report
+start/cancel/delete actions, listener lifecycle, and UI composition.
 
 Current raw `/analysis` command surfaces found in the route:
 
 ```text
-list_accounts
-tg_get_account_statuses
-list_analysis_sources
 list_analysis_source_groups
 start_analysis_report
 cancel_analysis_run
@@ -79,9 +79,7 @@ Impact:
 
 Suggested follow-up:
 
-- extract focused wrappers/controllers for account/status loading and analysis
-  source metrics first;
-- then extract analysis source group, template deletion, and report action
+- extract analysis source group, template deletion, and report action
   surfaces in similarly small slices;
 - keep the route as a composition and Svelte lifecycle layer;
 - add focused tests around extracted wrappers/controllers before broader UI
@@ -91,14 +89,13 @@ Suggested follow-up:
 
 Core source command strings and DTO mapping are centralized in
 `src/lib/api/sources.ts`, and compact frontend API wrappers now exist for
-analysis runs, Analysis chat, Analysis trace, Takeout import, NotebookLM export,
-and LLM cancellation.
+analysis runs, Analysis chat, Analysis trace, Analysis workspace loading,
+Takeout import, NotebookLM export, and LLM cancellation.
 
 Several remaining frontend TypeScript DTOs and raw Tauri command strings are
 still manually maintained beside Rust serde structs. Current notable raw
-`/analysis` command surfaces are account/status loading, analysis source
-metrics, analysis source groups, template deletion, and report
-start/cancel/delete actions.
+`/analysis` command surfaces are analysis source groups, template deletion, and
+report start/cancel/delete actions.
 
 Impact:
 
@@ -142,23 +139,21 @@ Suggested fix:
 
 ## Recent Verification
 
-Recent verification from the completed Analysis trace wrapper/controller
-workstream:
+Recent verification from the completed Analysis workspace loading
+wrapper/controller workstream:
 
-- route cleanup search found no raw Analysis trace command strings in
+- route cleanup search found no raw `list_accounts`,
+  `tg_get_account_statuses`, or `list_analysis_sources` command strings in
   `src/routes/analysis/+page.svelte`;
-- focused tests passed for `analysis-trace`, `analysis-trace-workflow`,
-  `analysis-state`, and `analysis-runs`;
-- `npm.cmd test` passed with 17 test files and 136 tests;
+- focused tests passed for `analysis-workspace` and
+  `analysis-workspace-workflow`;
+- `npm.cmd test` passed with 19 test files and 145 tests;
 - `npm.cmd run check` passed with 0 errors and 0 warnings;
 - `git diff --check` passed with exit code 0.
 
 ## Recommended Follow-Up Order
 
-1. Extract wrappers/controllers for accounts/statuses and analysis source
-   metrics: `list_accounts`, `tg_get_account_statuses`, and
-   `list_analysis_sources`.
-2. Extract wrappers/controllers for analysis source groups and template deletion.
-3. Extract wrappers/controllers for report start/cancel/delete actions.
-4. Improve typed error conversion for remaining DB, Telegram, LLM, and
+1. Extract wrappers/controllers for analysis source groups and template deletion.
+2. Extract wrappers/controllers for report start/cancel/delete actions.
+3. Improve typed error conversion for remaining DB, Telegram, LLM, and
    validation paths.

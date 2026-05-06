@@ -1,11 +1,12 @@
-# Session Context Handoff - 2026-05-05
+# Session Context Handoff - 2026-05-06
 
 ## Current Repository State
 
 - Repository root: `G:\Develop\Extractum`.
-- Current branch: `main`.
+- Current branch: `analysis-workspace-loading`.
 - Git remotes: none configured.
-- Local branches known from the latest handoff: `main`, `desktop-ui`.
+- Local branches known from the latest handoff: `main`, `desktop-ui`,
+  `analysis-workspace-loading`.
 - Current documentation policy: `docs/superpowers/plans` and
   `docs/superpowers/specs` should contain only active future work. Historical
   completed plan/spec files were intentionally removed after consolidating the
@@ -14,16 +15,16 @@
 Recent relevant history:
 
 ```text
+5293634 refactor(analysis): use workspace loading workflow
+96a898c refactor(analysis): extract workspace loading workflow
+a8c2793 refactor(analysis): add workspace api wrapper
+3004b64 docs(analysis): add workspace loading plan
+1a9aed4 docs(analysis): add workspace loading design
 319c705 docs(session): refresh trace completion handoff
 0729b72 docs(analysis): record trace controller completion
 ecdd3b0 refactor(analysis): use trace workflow controller
 c7ea9b6 refactor(analysis): extract trace workflow controller
 2caccf9 refactor(analysis): add trace api wrapper
-46ed0eb docs(review): refresh code review follow-ups
-2c8e302 docs(analysis): condense chat controller plan
-86ffa78 docs(analysis): record chat controller completion
-344f2e0 refactor(analysis): extract chat workflow controller
-8108b22 refactor(analysis): add chat api wrapper
 ```
 
 ## Current User Workflow Rules
@@ -41,7 +42,7 @@ c7ea9b6 refactor(analysis): extract trace workflow controller
 - Shell: PowerShell on Windows.
 - Workspace root: `G:\Develop\Extractum`.
 - Timezone: `Europe/Minsk`.
-- Current date in this session: Tuesday, 2026-05-05.
+- Current date in this session: Wednesday, 2026-05-06.
 - Network access is restricted.
 - Git writes such as `git add` and `git commit` often fail in the default
   Windows sandbox with `.git/*.lock` permission errors. Rerunning with approval
@@ -54,8 +55,9 @@ c7ea9b6 refactor(analysis): extract trace workflow controller
 
 ## Completed Cleanup Workstreams
 
-These workstreams are complete, merged into `main`, and should be treated as
-historical context rather than active planning material:
+These workstreams are complete in the cleanup history or current cleanup branch
+and should be treated as historical context rather than active planning
+material:
 
 - Analysis run workflow controller extraction.
 - Takeout import backend split.
@@ -65,6 +67,8 @@ historical context rather than active planning material:
 - NotebookLM export frontend API wrapper.
 - Analysis chat API wrapper and workflow controller.
 - Analysis trace API wrapper and workflow controller.
+- Analysis workspace account/status and source metrics API wrapper and workflow
+  controller.
 
 Important completed frontend boundaries:
 
@@ -78,6 +82,9 @@ Important completed frontend boundaries:
   centralize Analysis chat command/event access and orchestration.
 - `src/lib/api/analysis-trace.ts` and `src/lib/analysis-trace-workflow.ts`
   centralize Analysis trace command access and orchestration.
+- `src/lib/api/analysis-workspace.ts` and
+  `src/lib/analysis-workspace-workflow.ts` centralize Analysis account/status
+  loading and analysis source metrics loading.
 
 Recent completed verification:
 
@@ -87,8 +94,8 @@ npm.cmd run check
 git diff --check
 ```
 
-The latest full frontend verification recorded before this consolidation passed
-with 17 test files and 136 tests, and `svelte-check` reported 0 errors and
+The latest full frontend verification recorded for this cleanup branch passed
+with 19 test files and 145 tests, and `svelte-check` reported 0 errors and
 0 warnings.
 
 ## Current Review Document
@@ -109,9 +116,6 @@ As of this handoff, `src/routes/analysis/+page.svelte` still owns these raw
 Tauri command surfaces:
 
 ```text
-list_accounts
-tg_get_account_statuses
-list_analysis_sources
 list_analysis_source_groups
 start_analysis_report
 cancel_analysis_run
@@ -120,24 +124,24 @@ delete_analysis_prompt_template
 delete_analysis_source_group
 ```
 
-Trace, chat, Takeout import, NotebookLM export, source facade, and analysis run
-workflow extraction are already complete.
+Trace, chat, workspace loading, Takeout import, NotebookLM export, source
+facade, and analysis run workflow extraction are already complete.
 
 ## Recommended Next Workstream
 
 If the user asks to continue route cleanup, start with:
 
 ```text
-Analysis accounts/statuses and source metrics wrapper/controller
+Analysis source groups and template deletion wrapper/controller
 ```
 
 Rationale:
 
-- This is the smallest remaining coherent `/analysis` command surface.
-- The relevant commands are `list_accounts`, `tg_get_account_statuses`, and
-  `list_analysis_sources`.
-- It can likely be implemented as typed frontend API wrappers plus a small
-  dependency-injected workflow only if route-level state patching needs it.
+- This is the next smallest coherent `/analysis` command surface.
+- The relevant commands are `list_analysis_source_groups`,
+  `delete_analysis_prompt_template`, and `delete_analysis_source_group`.
+- It can likely be implemented as typed frontend API wrappers plus focused
+  workflow/controller extraction for group/template deletion state.
 
 Before implementing a new workstream:
 
