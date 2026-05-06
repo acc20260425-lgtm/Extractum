@@ -29,6 +29,11 @@
     listAnalysisSources,
     listWorkspaceAccounts,
   } from "$lib/api/analysis-workspace";
+  import {
+    deleteAnalysisPromptTemplate,
+    deleteAnalysisSourceGroup,
+    listAnalysisSourceGroups,
+  } from "$lib/api/analysis-source-groups";
   import { cancelLlmRequest } from "$lib/api/llm";
   import {
     cancelTakeoutSourceImport,
@@ -64,6 +69,10 @@
     createAnalysisWorkspaceWorkflow,
     type AnalysisWorkspaceWorkflowPatch,
   } from "$lib/analysis-workspace-workflow";
+  import {
+    createAnalysisSourceGroupsWorkflow,
+    type AnalysisSourceGroupsWorkflowPatch,
+  } from "$lib/analysis-source-groups-workflow";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -128,19 +137,13 @@
   import {
     groupCopyCommand,
     groupCreatedStatus,
-    groupDeleteDecision,
-    groupDeletedStatus,
     groupEditorStateFromGroup,
-    groupFallbackSelection,
     groupUpdateCommand,
     groupUpdatedStatus,
     isGroupSourceSelected as groupSourceIsSelected,
     templateCopyCommand,
     templateCreatedStatus,
-    templateDeleteDecision,
-    templateDeletedStatus,
     templateEditorStateFromTemplate,
-    templateFallbackSelection,
     templateUpdateCommand,
     templateUpdatedStatus,
     toggleGroupSourceSelection,
@@ -539,6 +542,16 @@
     if ("status" in patch && patch.status !== undefined) status = patch.status;
   }
 
+  function applySourceGroupsWorkflowPatch(patch: AnalysisSourceGroupsWorkflowPatch) {
+    if ("groups" in patch) groups = patch.groups ?? [];
+    if ("selectedTemplateId" in patch) selectedTemplateId = patch.selectedTemplateId ?? "";
+    if ("selectedGroupId" in patch) selectedGroupId = patch.selectedGroupId ?? "";
+    if ("loadingGroups" in patch) loadingGroups = patch.loadingGroups ?? false;
+    if ("deletingTemplate" in patch) deletingTemplate = patch.deletingTemplate ?? false;
+    if ("deletingGroup" in patch) deletingGroup = patch.deletingGroup ?? false;
+    if ("status" in patch && patch.status !== undefined) status = patch.status;
+  }
+
   const chatWorkflow = createAnalysisChatWorkflow({
     getState: () => ({
       currentRun,
@@ -749,22 +762,30 @@
   }
 
   async function loadGroups() {
-    loadingGroups = true;
-    try {
-      groups = await invoke<AnalysisSourceGroup[]>("list_analysis_source_groups");
-      if (!selectedGroupId && groups.length > 0) {
-        selectedGroupId = String(groups[0].id);
-      }
-      const current = selectedGroup;
-      if (current && editorBoundGroupId !== current.id) {
-        bindEditorToGroup(current);
-      }
-    } catch (error) {
-      status = formatAppError("loading source groups", error);
-    } finally {
-      loadingGroups = false;
-    }
+    await sourceGroupsWorkflow.loadGroups();
   }
+
+  const sourceGroupsWorkflow = createAnalysisSourceGroupsWorkflow({
+    getState: () => ({
+      groups,
+      templates,
+      selectedTemplate,
+      selectedGroup,
+      selectedTemplateId,
+      selectedGroupId,
+      editorBoundTemplateId,
+      editorBoundGroupId,
+    }),
+    patch: applySourceGroupsWorkflowPatch,
+    listGroups: listAnalysisSourceGroups,
+    deleteTemplate: deleteAnalysisPromptTemplate,
+    deleteGroup: deleteAnalysisSourceGroup,
+    loadTemplates,
+    confirm: openConfirmModal,
+    bindTemplateEditor: bindEditorToTemplate,
+    bindGroupEditor: bindEditorToGroup,
+    formatError: formatAppError,
+  });
 
   async function loadRuns() {
     await runWorkflow.loadRuns();
@@ -1093,35 +1114,7 @@
   }
 
   async function deleteTemplate() {
-    const decision = templateDeleteDecision(selectedTemplate);
-    if (!decision.ok) {
-      status = decision.status;
-      return;
-    }
-    const confirmed = await openConfirmModal({
-      title: "Delete template?",
-      message: `The template "${decision.name}" will be removed from the local app.`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      tone: "danger",
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    deletingTemplate = true;
-    try {
-      await invoke("delete_analysis_prompt_template", { templateId: decision.templateId });
-      status = templateDeletedStatus(decision.name);
-      await loadTemplates();
-      const fallback = templateFallbackSelection(templates);
-      selectedTemplateId = fallback.selectedTemplateId;
-      bindEditorToTemplate(fallback.template);
-    } catch (error) {
-      status = formatAppError("deleting the template", error);
-    } finally {
-      deletingTemplate = false;
-    }
+    await sourceGroupsWorkflow.deleteTemplate();
   }
 
   async function saveGroupChanges() {
@@ -1174,35 +1167,7 @@
   }
 
   async function deleteGroup() {
-    const decision = groupDeleteDecision(selectedGroup);
-    if (!decision.ok) {
-      status = decision.status;
-      return;
-    }
-    const confirmed = await openConfirmModal({
-      title: "Delete source group?",
-      message: `The group "${decision.name}" will be removed, but its synced sources will stay available for analysis.`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      tone: "danger",
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    deletingGroup = true;
-    try {
-      await invoke("delete_analysis_source_group", { groupId: decision.groupId });
-      status = groupDeletedStatus(decision.name);
-      await loadGroups();
-      const fallback = groupFallbackSelection(groups);
-      selectedGroupId = fallback.selectedGroupId;
-      bindEditorToGroup(fallback.group);
-    } catch (error) {
-      status = formatAppError("deleting the source group", error);
-    } finally {
-      deletingGroup = false;
-    }
+    await sourceGroupsWorkflow.deleteGroup();
   }
 
   function startNewGroup() {
