@@ -24,6 +24,11 @@
     getAnalysisRunTrace,
     resolveAnalysisTraceRefs,
   } from "$lib/api/analysis-trace";
+  import {
+    getWorkspaceAccountStatuses,
+    listAnalysisSources,
+    listWorkspaceAccounts,
+  } from "$lib/api/analysis-workspace";
   import { cancelLlmRequest } from "$lib/api/llm";
   import {
     cancelTakeoutSourceImport,
@@ -55,6 +60,10 @@
     createAnalysisTraceWorkflow,
     type AnalysisTraceWorkflowPatch,
   } from "$lib/analysis-trace-workflow";
+  import {
+    createAnalysisWorkspaceWorkflow,
+    type AnalysisWorkspaceWorkflowPatch,
+  } from "$lib/analysis-workspace-workflow";
   import {
     defaultDateOffset,
     endOfDayUnix,
@@ -518,6 +527,18 @@
     if ("status" in patch && patch.status !== undefined) status = patch.status;
   }
 
+  function applyWorkspaceWorkflowPatch(patch: AnalysisWorkspaceWorkflowPatch) {
+    if ("accounts" in patch) accounts = patch.accounts ?? [];
+    if ("accountStatuses" in patch) accountStatuses = patch.accountStatuses ?? {};
+    if ("sourceCatalog" in patch) sourceCatalog = patch.sourceCatalog ?? [];
+    if ("sourceMetrics" in patch) sourceMetrics = patch.sourceMetrics ?? {};
+    if ("selectedSourceId" in patch) selectedSourceId = patch.selectedSourceId ?? "";
+    if ("loadingSourceCatalog" in patch) {
+      loadingSourceCatalog = patch.loadingSourceCatalog ?? false;
+    }
+    if ("status" in patch && patch.status !== undefined) status = patch.status;
+  }
+
   const chatWorkflow = createAnalysisChatWorkflow({
     getState: () => ({
       currentRun,
@@ -580,6 +601,16 @@
     formatError: formatAppError,
   });
 
+  const workspaceWorkflow = createAnalysisWorkspaceWorkflow({
+    getState: () => ({ selectedSourceId }),
+    patch: applyWorkspaceWorkflowPatch,
+    listAccounts: listWorkspaceAccounts,
+    getAccountStatuses: getWorkspaceAccountStatuses,
+    listSources,
+    listAnalysisSources,
+    formatError: formatAppError,
+  });
+
   function bindEditorToTemplate(template: AnalysisPromptTemplate | null) {
     const next = templateEditorStateFromTemplate(template);
     editorBoundTemplateId = next.editorBoundTemplateId;
@@ -615,49 +646,11 @@
   }
 
   async function loadAccounts() {
-    try {
-      accounts = await invoke<AccountRecord[]>("list_accounts");
-      if (accounts.length === 0) {
-        accountStatuses = {};
-        return;
-      }
-      const statuses = await invoke<AccountRuntimeStatus[]>("tg_get_account_statuses", {
-        accountIds: accounts.map((account) => account.id),
-      });
-      accountStatuses = Object.fromEntries(
-        statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus]),
-      );
-    } catch (error) {
-      status = formatAppError("loading workspace accounts", error);
-    }
+    await workspaceWorkflow.loadAccounts();
   }
 
   async function loadSourceCatalog() {
-    loadingSourceCatalog = true;
-    try {
-      const [allSources, analysisSources] = await Promise.all([
-        listSources(null),
-        invoke<AnalysisSourceOption[]>("list_analysis_sources"),
-      ]);
-      sourceCatalog = allSources;
-      sourceMetrics = Object.fromEntries(
-        analysisSources.map((source) => [source.id, source]),
-      );
-
-      if (!selectedSourceId && allSources.length > 0) {
-        const firstSynced = analysisSources[0]?.id ?? allSources[0].id;
-        selectedSourceId = String(firstSynced);
-      } else if (
-        selectedSourceId &&
-        !allSources.some((source) => source.id === Number(selectedSourceId))
-      ) {
-        selectedSourceId = allSources[0] ? String(allSources[0].id) : "";
-      }
-    } catch (error) {
-      status = formatAppError("loading workspace sources", error);
-    } finally {
-      loadingSourceCatalog = false;
-    }
+    await workspaceWorkflow.loadSourceCatalog();
   }
 
   async function loadTakeoutImportJobs() {
