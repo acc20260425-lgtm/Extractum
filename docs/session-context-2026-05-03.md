@@ -3,18 +3,19 @@
 ## Purpose
 
 This file is the handoff needed to restore the current session context for the
-Extractum cleanup work. It supersedes earlier handoff contents in this file.
+Extractum cleanup work. It supersedes all earlier handoff contents in this file.
 
 ## Current Repository State
 
 - Repository root: `G:\Develop\Extractum`.
-- Current branch: `analysis-source-groups-cleanup`.
-- The branch is not merged into `main` yet.
+- Current branch: `main`.
+- Working tree state before this handoff edit: clean.
 - Git remotes: none configured.
-- Local feature branch `analysis-workspace-loading` was merged into `main` with
-  a fast-forward merge and then deleted.
-- Known local branches from this session: `main`, `desktop-ui`,
-  `analysis-source-groups-cleanup`.
+- Local feature branch `analysis-source-groups-cleanup` was merged into `main`
+  with a fast-forward merge and then deleted.
+- Local feature branch `analysis-workspace-loading` was previously merged into
+  `main` with a fast-forward merge and then deleted.
+- Known local branches after cleanup: `main`, `desktop-ui`.
 - Shell: PowerShell on Windows.
 - Timezone: `Europe/Minsk`.
 - Current date in this session: Wednesday, 2026-05-06.
@@ -23,6 +24,7 @@ Extractum cleanup work. It supersedes earlier handoff contents in this file.
 Recent relevant history:
 
 ```text
+9ab78c8 docs(analysis): refresh source groups cleanup context
 39f3cd6 refactor(analysis): use source groups workflow
 c8d7921 refactor(analysis): extract source groups workflow
 47eec77 refactor(analysis): add source groups api wrapper
@@ -35,6 +37,12 @@ a8c2793 refactor(analysis): add workspace api wrapper
 3004b64 docs(analysis): add workspace loading plan
 1a9aed4 docs(analysis): add workspace loading design
 a9da386 docs(audit): record 2026-05-05 codebase risks
+a18b052 docs(session): consolidate cleanup context
+319c705 docs(session): refresh trace completion handoff
+0729b72 docs(analysis): record trace controller completion
+ecdd3b0 refactor(analysis): use trace workflow controller
+c7ea9b6 refactor(analysis): extract trace workflow controller
+2caccf9 refactor(analysis): add trace api wrapper
 ```
 
 ## Current User Workflow Rules
@@ -68,13 +76,15 @@ a9da386 docs(audit): record 2026-05-05 codebase risks
 - Historical completed plan/spec files should not be recreated after their
   useful context is consolidated into this handoff and
   `docs/code-review-results-2026-05-03.md`.
+- Completed plan/spec files for the source-groups cleanup were removed in
+  `9ab78c8`.
 - The active follow-up source is
   `docs/code-review-results-2026-05-03.md`.
 
-## Completed In Current Branch
+## Completed In This Session
 
-The Analysis source groups and template deletion cleanup workstream is complete
-on branch `analysis-source-groups-cleanup`.
+The Analysis source groups and template deletion cleanup workstream is complete,
+verified, merged into `main`, and its feature branch was deleted.
 
 Implemented files:
 
@@ -116,6 +126,7 @@ Task commits:
 47eec77 refactor(analysis): add source groups api wrapper
 c8d7921 refactor(analysis): extract source groups workflow
 39f3cd6 refactor(analysis): use source groups workflow
+9ab78c8 docs(analysis): refresh source groups cleanup context
 ```
 
 ## Verification Performed
@@ -139,9 +150,9 @@ Route cleanup verification:
 rg "list_analysis_source_groups|delete_analysis_prompt_template|delete_analysis_source_group" src/routes/analysis/+page.svelte
 ```
 
-The route search returned no output after Task 3.
+The route search returned no output after the route wiring task.
 
-Full verification before this handoff update:
+Full verification before merging `analysis-source-groups-cleanup`:
 
 ```text
 npm.cmd test
@@ -152,6 +163,22 @@ svelte-check found 0 errors and 0 warnings
 
 git diff --check
 exit code 0
+```
+
+Verification after fast-forward merge into `main`:
+
+```text
+npm.cmd test
+21 test files passed, 156 tests passed
+
+npm.cmd run check
+svelte-check found 0 errors and 0 warnings
+
+git diff --check
+exit code 0
+
+git status --short --branch
+## main
 ```
 
 ## Completed Historical Cleanup Workstreams
@@ -190,6 +217,19 @@ Important completed frontend boundaries:
   `src/lib/analysis-source-groups-workflow.ts` centralize Analysis source group
   loading and template/group deletion orchestration.
 
+## Current Review Document State
+
+`docs/code-review-results-2026-05-03.md` has been updated to record the source
+groups and template deletion extraction as resolved and to remove
+`list_analysis_source_groups`, `delete_analysis_prompt_template`, and
+`delete_analysis_source_group` from the remaining raw route command surface.
+
+The remaining recommended follow-up order in that document is:
+
+1. Extract wrappers/controllers for report start/cancel/delete actions.
+2. Improve typed error conversion for remaining DB, Telegram, LLM, and
+   validation paths.
+
 ## Remaining `/analysis` Cleanup Surface
 
 As of this handoff, `src/routes/analysis/+page.svelte` still owns these raw
@@ -226,27 +266,23 @@ Rationale:
 
 Before implementing the next workstream:
 
-- Finish the current branch through the finishing workflow.
 - Create a fresh, focused design/spec only for the active work.
 - Create a fresh implementation plan only for the active work.
 - Follow the user workflow rules above: no worktree, one top-level task per
   turn, commit at the end of each top-level task.
 
-## Current Review Document State
+## Current IDE Notes
 
-`docs/code-review-results-2026-05-03.md` has been updated to record the source
-groups and template deletion extraction as resolved and to remove
-`list_analysis_source_groups`, `delete_analysis_prompt_template`, and
-`delete_analysis_source_group` from the remaining raw route command surface.
+Open tabs reported by the IDE include:
 
-The remaining recommended follow-up order in that document is:
-
-1. Extract wrappers/controllers for report start/cancel/delete actions.
-2. Improve typed error conversion for remaining DB, Telegram, LLM, and
-   validation paths.
+- `docs/code-review-results-2026-05-03.md`
+- `docs/session-context-2026-05-03.md`
+- previously completed workspace-loading plan/spec paths under
+  `docs/superpowers`; those historical files were intentionally removed per the
+  documentation policy and may be stale editor tabs.
 
 ## Suggested Commit Message For This Handoff Edit
 
 ```text
-docs(analysis): refresh source groups cleanup context
+docs(session): refresh post-merge cleanup handoff
 ```
