@@ -1,5 +1,7 @@
 use sqlx::{Pool, Sqlite};
 
+use crate::error::{AppError, AppResult};
+
 use super::{
     default_base_url_for_provider, normalize_base_url, ProviderKind, DEFAULT_MODEL,
     DEFAULT_PROFILE_ID, DEFAULT_PROVIDER,
@@ -34,20 +36,19 @@ fn profile_provider_key_suffix() -> &'static str {
     ".provider"
 }
 
-fn normalize_profile_id(raw_profile_id: &str) -> Result<String, String> {
+fn normalize_profile_id(raw_profile_id: &str) -> AppResult<String> {
     let profile_id = raw_profile_id.trim().to_ascii_lowercase();
     if profile_id.is_empty() {
-        return Err("Profile ID cannot be empty".to_string());
+        return Err(AppError::validation("Profile ID cannot be empty"));
     }
 
     if !profile_id
         .chars()
         .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
     {
-        return Err(
-            "Profile ID can only contain ASCII letters, numbers, dashes, and underscores"
-                .to_string(),
-        );
+        return Err(AppError::validation(
+            "Profile ID can only contain ASCII letters, numbers, dashes, and underscores",
+        ));
     }
 
     Ok(profile_id)
@@ -60,15 +61,15 @@ fn profile_id_from_provider_key(key: &str) -> Option<String> {
         .map(ToString::to_string)
 }
 
-async fn read_setting(pool: &Pool<Sqlite>, key: &str) -> Result<Option<String>, String> {
+async fn read_setting(pool: &Pool<Sqlite>, key: &str) -> AppResult<Option<String>> {
     sqlx::query_scalar::<_, String>("SELECT value FROM app_settings WHERE key = ?")
         .bind(key)
         .fetch_optional(pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::database)
 }
 
-async fn write_setting(pool: &Pool<Sqlite>, key: &str, value: &str) -> Result<(), String> {
+async fn write_setting(pool: &Pool<Sqlite>, key: &str, value: &str) -> AppResult<()> {
     sqlx::query(
         r#"
         INSERT INTO app_settings (key, value)
@@ -80,12 +81,12 @@ async fn write_setting(pool: &Pool<Sqlite>, key: &str, value: &str) -> Result<()
     .bind(value)
     .execute(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     Ok(())
 }
 
-async fn list_profile_ids_from_pool(pool: &Pool<Sqlite>) -> Result<Vec<String>, String> {
+async fn list_profile_ids_from_pool(pool: &Pool<Sqlite>) -> AppResult<Vec<String>> {
     let like_pattern = format!(
         "{}%{}",
         profile_provider_key_prefix(),
@@ -97,7 +98,7 @@ async fn list_profile_ids_from_pool(pool: &Pool<Sqlite>) -> Result<Vec<String>, 
     .bind(like_pattern)
     .fetch_all(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     let mut profile_ids = keys
         .into_iter()
@@ -119,7 +120,7 @@ async fn list_profile_ids_from_pool(pool: &Pool<Sqlite>) -> Result<Vec<String>, 
 async fn load_profile_from_pool(
     pool: &Pool<Sqlite>,
     profile_id: &str,
-) -> Result<LlmProfile, String> {
+) -> AppResult<LlmProfile> {
     let profile_id = normalize_profile_id(profile_id)?;
     let provider = read_setting(pool, &profile_provider_key(&profile_id))
         .await?
@@ -151,7 +152,7 @@ pub(super) async fn save_profile_to_pool(
     api_key: &str,
     base_url: &str,
     set_active: bool,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let profile_id = normalize_profile_id(profile_id)?;
 
     write_setting(pool, &profile_provider_key(&profile_id), provider).await?;
@@ -168,7 +169,7 @@ pub(super) async fn save_profile_to_pool(
 
 pub(super) async fn load_profiles_state_from_pool(
     pool: &Pool<Sqlite>,
-) -> Result<LlmProfilesState, String> {
+) -> AppResult<LlmProfilesState> {
     let active_profile = read_setting(pool, active_profile_key())
         .await?
         .unwrap_or_else(|| DEFAULT_PROFILE_ID.to_string());
@@ -199,12 +200,22 @@ pub(super) async fn load_profiles_state_from_pool(
 pub(super) async fn resolve_profile_from_pool(
     pool: &Pool<Sqlite>,
     requested_profile_id: Option<&str>,
-) -> Result<ResolvedLlmProfile, String> {
+) -> AppResult<ResolvedLlmProfile> {
     let profiles_state = load_profiles_state_from_pool(pool).await?;
     let profile_id = requested_profile_id
         .map(normalize_profile_id)
         .transpose()?
         .unwrap_or_else(|| profiles_state.active_profile.clone());
+
+    if !profiles_state
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == profile_id)
+    {
+        return Err(AppError::not_found(format!(
+            "Profile '{profile_id}' was not found"
+        )));
+    }
 
     let profile = load_profile_from_pool(pool, &profile_id).await?;
     let provider = ProviderKind::parse(&profile.provider)?;
@@ -221,20 +232,22 @@ pub(super) async fn resolve_profile_from_pool(
 pub(super) async fn set_active_profile_in_pool(
     pool: &Pool<Sqlite>,
     profile_id: &str,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let profile_id = normalize_profile_id(profile_id)?;
     let profile_ids = list_profile_ids_from_pool(pool).await?;
     if !profile_ids
         .iter()
         .any(|existing_id| existing_id == &profile_id)
     {
-        return Err(format!("Profile '{profile_id}' was not found"));
+        return Err(AppError::not_found(format!(
+            "Profile '{profile_id}' was not found"
+        )));
     }
 
     write_setting(pool, active_profile_key(), &profile_id).await
 }
 
-pub(super) fn validate_profile_id(profile_id: &str) -> Result<String, String> {
+pub(super) fn validate_profile_id(profile_id: &str) -> AppResult<String> {
     normalize_profile_id(profile_id)
 }
 
@@ -243,13 +256,13 @@ pub(super) fn validate_profile_input(
     provider: String,
     default_model: String,
     base_url: Option<String>,
-) -> Result<(String, ProviderKind, String, String), String> {
+) -> AppResult<(String, ProviderKind, String, String)> {
     let profile_id =
         normalize_profile_id(&profile_id.unwrap_or_else(|| DEFAULT_PROFILE_ID.to_string()))?;
     let provider_kind = ProviderKind::parse(&provider)?;
     let default_model = default_model.trim().to_string();
     if default_model.is_empty() {
-        return Err("Default model cannot be empty".to_string());
+        return Err(AppError::validation("Default model cannot be empty"));
     }
 
     let base_url = normalize_base_url(provider_kind, base_url.as_deref())?;
@@ -263,6 +276,7 @@ mod tests {
         load_profiles_state_from_pool, resolve_profile_from_pool, save_profile_to_pool,
         set_active_profile_in_pool, validate_profile_id,
     };
+    use crate::error::AppErrorKind;
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -371,6 +385,22 @@ mod tests {
     fn validate_profile_id_rejects_invalid_characters() {
         let error = validate_profile_id("prod west").expect_err("invalid profile id");
 
-        assert!(error.contains("ASCII letters"));
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(
+            error.message,
+            "Profile ID can only contain ASCII letters, numbers, dashes, and underscores"
+        );
+    }
+
+    #[tokio::test]
+    async fn set_active_profile_returns_typed_not_found_error() {
+        let pool = memory_pool().await;
+
+        let error = set_active_profile_in_pool(&pool, "missing")
+            .await
+            .expect_err("missing profile");
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert_eq!(error.message, "Profile 'missing' was not found");
     }
 }

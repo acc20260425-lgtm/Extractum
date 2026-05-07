@@ -390,7 +390,7 @@ pub async fn ask_analysis_run_question(
                 Ok(profile) => profile,
                 Err(error) => {
                     ChatEvent::new(emitted_request_id.clone(), run_id, "failed")
-                        .error(error)
+                        .error(String::from(error))
                         .emit(&app_handle);
                     return;
                 }

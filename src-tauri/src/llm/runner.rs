@@ -1,24 +1,26 @@
 use tokio::time::{timeout, Duration};
 
+use crate::error::{AppError, AppResult};
+
 use super::gemini::stream_gemini_response;
 use super::openai_compat::{stream_openai_compat_response, OpenAiCompatProviderConfig};
 use super::{LlmChatRequest, LlmCompletion, ProviderKind, ResolvedLlmProfile};
 
 const LLM_STREAM_TIMEOUT_SECS: u64 = 90;
 
-pub(crate) fn validate_request(request: &LlmChatRequest) -> Result<(), String> {
+pub(crate) fn validate_request(request: &LlmChatRequest) -> AppResult<()> {
     if request.request_id.trim().is_empty() {
-        return Err("request_id cannot be empty".to_string());
+        return Err(AppError::validation("request_id cannot be empty"));
     }
     if request.messages.is_empty() {
-        return Err("At least one message is required".to_string());
+        return Err(AppError::validation("At least one message is required"));
     }
     if request
         .messages
         .iter()
         .all(|message| message.content.trim().is_empty())
     {
-        return Err("Messages cannot all be empty".to_string());
+        return Err(AppError::validation("Messages cannot all be empty"));
     }
 
     Ok(())
@@ -27,7 +29,7 @@ pub(crate) fn validate_request(request: &LlmChatRequest) -> Result<(), String> {
 pub(crate) fn resolve_effective_model(
     profile: &ResolvedLlmProfile,
     model_override: Option<&str>,
-) -> Result<String, String> {
+) -> AppResult<String> {
     let model = model_override
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -36,7 +38,7 @@ pub(crate) fn resolve_effective_model(
         .to_string();
 
     if model.is_empty() {
-        return Err("Model override cannot be empty".to_string());
+        return Err(AppError::validation("Model override cannot be empty"));
     }
 
     Ok(model)
@@ -66,7 +68,7 @@ pub(crate) async fn run_llm_collect_with_profile(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
 ) -> Result<LlmCompletion, String> {
-    validate_request(request)?;
+    validate_request(request).map_err(String::from)?;
 
     let result = timeout(
         Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
@@ -90,7 +92,7 @@ pub(crate) async fn run_llm_stream_with_profile<F>(
 where
     F: FnMut(&str),
 {
-    validate_request(request)?;
+    validate_request(request).map_err(String::from)?;
 
     let result = timeout(
         Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
@@ -103,5 +105,43 @@ where
         Err(_) => Err(format!(
             "LLM request timed out after {LLM_STREAM_TIMEOUT_SECS} seconds"
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_effective_model, validate_request};
+    use crate::error::AppErrorKind;
+    use crate::llm::{LlmChatRequest, ProviderKind, ResolvedLlmProfile};
+
+    #[test]
+    fn validate_request_returns_typed_validation_error() {
+        let request = LlmChatRequest {
+            request_id: "   ".to_string(),
+            profile_id: None,
+            messages: vec![],
+            model_override: None,
+        };
+
+        let error = validate_request(&request).expect_err("reject empty request id");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "request_id cannot be empty");
+    }
+
+    #[test]
+    fn resolve_effective_model_returns_typed_validation_error() {
+        let profile = ResolvedLlmProfile {
+            profile_id: "default".to_string(),
+            provider: ProviderKind::Gemini,
+            default_model: "   ".to_string(),
+            api_key: String::new(),
+            base_url: String::new(),
+        };
+
+        let error = resolve_effective_model(&profile, None).expect_err("reject empty model");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Model override cannot be empty");
     }
 }

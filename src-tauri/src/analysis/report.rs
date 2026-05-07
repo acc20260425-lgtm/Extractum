@@ -738,7 +738,7 @@ async fn run_report_pipeline(
     let chunks = chunk_messages(&corpus, ANALYSIS_CHUNK_TARGET_CHARS);
     let resolved_profile = resolve_profile_for_backend(&handle, input.profile_id.as_deref())
         .await
-        .map_err(ReportRunError::Failed)?;
+        .map_err(|error| ReportRunError::Failed(String::from(error)))?;
     let ctx = ReportPipelineContext {
         handle,
         pool,

@@ -56,11 +56,13 @@ impl ProviderKind {
         }
     }
 
-    pub(crate) fn parse(value: &str) -> Result<Self, String> {
+    pub(crate) fn parse(value: &str) -> AppResult<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             DEFAULT_PROVIDER => Ok(Self::Gemini),
             "omniroute" => Ok(Self::OmniRoute),
-            other => Err(format!("Unsupported provider '{other}'")),
+            other => Err(AppError::validation(format!(
+                "Unsupported provider '{other}'"
+            ))),
         }
     }
 
@@ -85,7 +87,7 @@ fn default_base_url_for_provider(provider: &str) -> &'static str {
         .unwrap_or("")
 }
 
-fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> Result<String, String> {
+fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> AppResult<String> {
     match provider {
         ProviderKind::Gemini => Ok(String::new()),
         ProviderKind::OmniRoute => {
@@ -94,9 +96,9 @@ fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> Result<
                 .filter(|value| !value.is_empty())
                 .unwrap_or(DEFAULT_OPENAI_COMPAT_BASE_URL);
             let parsed = reqwest::Url::parse(candidate)
-                .map_err(|_| format!("Invalid base URL '{candidate}'"))?;
+                .map_err(|_| AppError::validation(format!("Invalid base URL '{candidate}'")))?;
             if !matches!(parsed.scheme(), "http" | "https") {
-                return Err("Base URL must use http or https".to_string());
+                return Err(AppError::validation("Base URL must use http or https"));
             }
 
             Ok(parsed.as_str().trim_end_matches('/').to_string())
@@ -162,7 +164,7 @@ impl StreamEvent {
 pub(crate) async fn resolve_profile_for_backend(
     handle: &AppHandle,
     requested_profile_id: Option<&str>,
-) -> Result<ResolvedLlmProfile, String> {
+) -> AppResult<ResolvedLlmProfile> {
     let pool = get_pool(handle).await?;
     resolve_profile_from_pool(&pool, requested_profile_id).await
 }
@@ -285,12 +287,11 @@ pub async fn list_llm_provider_models(
     .await;
 
     match result {
-        Ok(models) => Ok(models?),
-        Err(_) => Err(format!(
+        Ok(models) => models.map_err(AppError::llm_network),
+        Err(_) => Err(AppError::llm_network(format!(
             "Loading {} models timed out after {timeout_secs} seconds",
             provider_kind.display_name()
-        )
-        .into()),
+        ))),
     }
 }
 
@@ -460,5 +461,28 @@ pub async fn cancel_llm_request(
         Err(AppError::not_found(format!(
             "LLM request '{request_id}' is no longer active"
         )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_base_url, ProviderKind};
+    use crate::error::AppErrorKind;
+
+    #[test]
+    fn provider_parse_returns_typed_validation_error() {
+        let error = ProviderKind::parse("unknown").expect_err("reject unsupported provider");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Unsupported provider 'unknown'");
+    }
+
+    #[test]
+    fn normalize_base_url_returns_typed_validation_error() {
+        let error = normalize_base_url(ProviderKind::OmniRoute, Some("ftp://localhost"))
+            .expect_err("reject non-http base url");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Base URL must use http or https");
     }
 }
