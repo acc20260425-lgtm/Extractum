@@ -9,10 +9,13 @@
   import SourceManagementDialog from "$lib/components/analysis/source-management-dialog.svelte";
   import { formatAppError } from "$lib/app-error";
   import {
+    cancelAnalysisRun,
+    deleteAnalysisRun,
     getAnalysisRun,
     listActiveAnalysisRuns,
     listAnalysisRuns,
     listenToAnalysisRunEvents,
+    startAnalysisReport,
   } from "$lib/api/analysis-runs";
   import {
     askAnalysisRunQuestion,
@@ -89,7 +92,6 @@
     applyAnalysisRunEvent,
     applyTakeoutImportJobs,
     analysisGroupSelectionState,
-    analysisReportStartCommand,
     analysisSourceSelectionState,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
@@ -115,8 +117,6 @@
     pruneLiveRuns as pruneLiveRunMap,
     runActivePhase,
     runActiveProgress,
-    runDeletedStatus,
-    runDeletionDecision,
     selectedAnalysisGroup,
     selectedAnalysisTemplate,
     selectedAnalysisTraceRef,
@@ -527,6 +527,8 @@
     if ("loadingRuns" in patch) loadingRuns = patch.loadingRuns ?? false;
     if ("loadingActiveRuns" in patch) loadingActiveRuns = patch.loadingActiveRuns ?? false;
     if ("loadingRunDetail" in patch) loadingRunDetail = patch.loadingRunDetail ?? false;
+    if ("startingReport" in patch) startingReport = patch.startingReport ?? false;
+    if ("deletingRunIds" in patch) deletingRunIds = patch.deletingRunIds ?? {};
     if ("status" in patch && patch.status !== undefined) status = patch.status;
   }
 
@@ -598,6 +600,9 @@
       currentRun,
       activeChatRequestId,
       activeChatRunId,
+      runs,
+      activeRuns,
+      deletingRunIds,
     }),
     patch: applyRunWorkflowPatch,
     listRuns: listAnalysisRuns,
@@ -606,8 +611,25 @@
     syncRunSnapshot,
     pruneLiveRuns,
     applyRunEvent,
+    startReport: startAnalysisReport,
+    cancelRun: cancelAnalysisRun,
+    deleteRun: deleteAnalysisRun,
+    confirm: openConfirmModal,
     cancelChatSilently: () => cancelChat({ silent: true }),
     clearChatState,
+    clearOpenedRunState,
+    setInitialLiveRun: (runId) => {
+      liveRuns = {
+        ...liveRuns,
+        [runId]: {
+          phase: "queued",
+          progress: "",
+          queuePosition: null,
+          chunkSummaries: [],
+          streamedOutput: "",
+        },
+      };
+    },
     loadChatMessages,
     loadTrace,
     clearTraceState,
@@ -808,7 +830,7 @@
   }
 
   async function runReport() {
-    const command = analysisReportStartCommand({
+    await runWorkflow.startReport({
       analysisScope,
       selectedSourceId,
       selectedGroupId,
@@ -818,83 +840,14 @@
       outputLanguage,
       modelOverride,
     });
-    if (!command.ok) {
-      status = command.status;
-      return;
-    }
-
-    startingReport = true;
-    inspectorMode = "active";
-    if (activeChatRequestId !== null) {
-      await cancelChat({ silent: true });
-    }
-    clearChatState();
-    clearTraceState();
-    currentRun = null;
-
-    try {
-      const runId = await invoke<number>("start_analysis_report", command.command);
-
-      liveRuns = {
-        ...liveRuns,
-        [runId]: {
-          phase: "queued",
-          progress: "",
-          queuePosition: null,
-          chunkSummaries: [],
-          streamedOutput: "",
-        },
-      };
-      activeRunId = runId;
-
-      await Promise.all([loadActiveRuns(), openRun(runId)]);
-    } catch (error) {
-      status = formatAppError("starting the analysis report", error);
-    } finally {
-      startingReport = false;
-    }
   }
 
   async function cancelActiveRun(runId: number) {
-    try {
-      await invoke("cancel_analysis_run", { runId });
-      status = `Cancelling analysis run ${runId}...`;
-    } catch (error) {
-      status = formatAppError("cancelling the analysis run", error);
-    }
+    await runWorkflow.cancelRun(runId);
   }
 
   async function deleteSavedRun(run: AnalysisRunSummary) {
-    const decision = runDeletionDecision(run);
-    if (!decision.ok) {
-      status = decision.status;
-      return;
-    }
-
-    const confirmed = await openConfirmModal(decision.dialog);
-    if (!confirmed) {
-      return;
-    }
-
-    deletingRunIds = { ...deletingRunIds, [run.id]: true };
-    try {
-      if (activeChatRequestId !== null && activeChatRunId === run.id) {
-        await cancelChat({ silent: true });
-      }
-      await invoke("delete_analysis_run", { runId: run.id });
-      runs = runs.filter((entry) => entry.id !== run.id);
-      activeRuns = activeRuns.filter((entry) => entry.id !== run.id);
-      clearOpenedRunState(run.id);
-      inspectorMode = "history";
-      status = runDeletedStatus(run);
-      await loadRuns();
-    } catch (error) {
-      status = formatAppError("deleting the saved run", error);
-    } finally {
-      const next = { ...deletingRunIds };
-      delete next[run.id];
-      deletingRunIds = next;
-    }
+    await runWorkflow.deleteSavedRun(run);
   }
 
   async function askRunQuestion() {

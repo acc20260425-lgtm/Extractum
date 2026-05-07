@@ -1,4 +1,4 @@
-# Session Context Handoff - 2026-05-06
+# Session Context Handoff - 2026-05-07
 
 ## Purpose
 
@@ -8,22 +8,28 @@ Extractum cleanup work. It supersedes all earlier handoff contents in this file.
 ## Current Repository State
 
 - Repository root: `G:\Develop\Extractum`.
-- Current branch: `main`.
-- Working tree state before this handoff edit: clean.
+- Current branch: `analysis-report-actions-cleanup`.
+- Working tree state after the final route wiring/docs task commit: clean.
 - Git remotes: none configured.
 - Local feature branch `analysis-source-groups-cleanup` was merged into `main`
   with a fast-forward merge and then deleted.
 - Local feature branch `analysis-workspace-loading` was previously merged into
   `main` with a fast-forward merge and then deleted.
-- Known local branches after cleanup: `main`, `desktop-ui`.
+- Known local branches after cleanup: `main`, `desktop-ui`,
+  `analysis-report-actions-cleanup`.
 - Shell: PowerShell on Windows.
 - Timezone: `Europe/Minsk`.
-- Current date in this session: Wednesday, 2026-05-06.
+- Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 
 Recent relevant history:
 
 ```text
+33e53fa refactor(analysis): move report actions into run workflow
+30302b7 refactor(analysis): add report action api wrappers
+abc570e docs(analysis): add report actions cleanup plan
+373352d docs(analysis): add report actions cleanup design
+b639057 docs(session): refresh post-merge cleanup handoff
 9ab78c8 docs(analysis): refresh source groups cleanup context
 39f3cd6 refactor(analysis): use source groups workflow
 c8d7921 refactor(analysis): extract source groups workflow
@@ -83,50 +89,57 @@ c7ea9b6 refactor(analysis): extract trace workflow controller
 
 ## Completed In This Session
 
-The Analysis source groups and template deletion cleanup workstream is complete,
-verified, merged into `main`, and its feature branch was deleted.
+The Analysis report start/cancel/delete cleanup workstream is complete on the
+local branch `analysis-report-actions-cleanup`. It has not yet been merged into
+`main`.
 
 Implemented files:
 
-- `src/lib/api/analysis-source-groups.ts`
-- `src/lib/api/analysis-source-groups.test.ts`
-- `src/lib/analysis-source-groups-workflow.ts`
-- `src/lib/analysis-source-groups-workflow.test.ts`
+- `src/lib/api/analysis-runs.ts`
+- `src/lib/api/analysis-runs.test.ts`
+- `src/lib/analysis-run-workflow.ts`
+- `src/lib/analysis-run-workflow.test.ts`
+- `src/lib/types/analysis.ts`
 - `src/routes/analysis/+page.svelte`
+- `docs/code-review-results-2026-05-03.md`
+- `docs/session-context-2026-05-03.md`
 
 Behavior extracted from `src/routes/analysis/+page.svelte`:
 
-- `list_analysis_source_groups`
-- `delete_analysis_prompt_template`
-- `delete_analysis_source_group`
+- `start_analysis_report`
+- `cancel_analysis_run`
+- `delete_analysis_run`
 
 New frontend boundaries:
 
-- `src/lib/api/analysis-source-groups.ts` centralizes typed Tauri command access
-  for source group loading and destructive template/group deletion commands.
-- `src/lib/analysis-source-groups-workflow.ts` centralizes
-  framework-independent orchestration for:
-  - loading analysis source groups;
-  - selecting the first group when none is selected;
-  - preserving and rebinding a selected group editor record;
-  - template deletion validation, confirmation, API call, template reload, and
-    fallback selection;
-  - source group deletion validation, confirmation, API call, group reload, and
-    fallback selection;
-  - formatting loading/deletion errors through injected `formatError`.
+- `src/lib/api/analysis-runs.ts` now centralizes typed Tauri command access for:
+  - listing saved and active runs;
+  - loading run details;
+  - listening to `analysis://run` events;
+  - starting analysis reports;
+  - cancelling active runs;
+  - deleting saved runs.
+- `src/lib/analysis-run-workflow.ts` now centralizes framework-independent
+  orchestration for:
+  - loading saved and active runs;
+  - opening run detail/chat/trace state;
+  - handling analysis run events;
+  - validating, starting, focusing, and refreshing new report runs;
+  - cancelling active runs;
+  - validating, confirming, deleting, cleaning up, and reloading saved runs;
+  - formatting action errors through injected `formatError`.
 - `src/routes/analysis/+page.svelte` wires Svelte `$state` through
-  `applySourceGroupsWorkflowPatch` and delegates `loadGroups()`,
-  `deleteTemplate()`, and `deleteGroup()` to the workflow.
+  `applyRunWorkflowPatch` and delegates `runReport()`, `cancelActiveRun()`,
+  and `deleteSavedRun()` to the run workflow.
 
 Task commits:
 
 ```text
-4c4bbcc docs(analysis): add source groups cleanup design
-02b5010 docs(analysis): add source groups cleanup plan
-47eec77 refactor(analysis): add source groups api wrapper
-c8d7921 refactor(analysis): extract source groups workflow
-39f3cd6 refactor(analysis): use source groups workflow
-9ab78c8 docs(analysis): refresh source groups cleanup context
+373352d docs(analysis): add report actions cleanup design
+abc570e docs(analysis): add report actions cleanup plan
+30302b7 refactor(analysis): add report action api wrappers
+33e53fa refactor(analysis): move report actions into run workflow
+current HEAD: refactor(analysis): use report action workflow
 ```
 
 ## Verification Performed
@@ -134,51 +147,41 @@ c8d7921 refactor(analysis): extract source groups workflow
 Focused TDD verification:
 
 ```text
-npm.cmd test -- src/lib/api/analysis-source-groups.test.ts
-1 test file passed, 3 tests passed
+npm.cmd test -- src/lib/api/analysis-runs.test.ts
+RED: failed with TypeError: startAnalysisReport is not a function
 
-npm.cmd test -- src/lib/analysis-source-groups-workflow.test.ts
-1 test file passed, 8 tests passed
+npm.cmd test -- src/lib/api/analysis-runs.test.ts src/lib/analysis-state.test.ts
+2 test files passed, 36 tests passed
 
-npm.cmd test -- src/lib/api/analysis-source-groups.test.ts src/lib/analysis-source-groups-workflow.test.ts
-2 test files passed, 11 tests passed
+npm.cmd test -- src/lib/analysis-run-workflow.test.ts
+RED: 9 tests failed on missing startReport/cancelRun/deleteSavedRun workflow methods
+
+npm.cmd test -- src/lib/analysis-run-workflow.test.ts
+1 test file passed, 25 tests passed
+
+npm.cmd test -- src/lib/api/analysis-runs.test.ts src/lib/analysis-run-workflow.test.ts src/lib/analysis-state.test.ts
+3 test files passed, 61 tests passed
 ```
 
 Route cleanup verification:
 
 ```text
-rg "list_analysis_source_groups|delete_analysis_prompt_template|delete_analysis_source_group" src/routes/analysis/+page.svelte
+rg "start_analysis_report|cancel_analysis_run|delete_analysis_run" src/routes/analysis/+page.svelte
 ```
 
 The route search returned no output after the route wiring task.
 
-Full verification before merging `analysis-source-groups-cleanup`:
+Full verification on `analysis-report-actions-cleanup`:
 
 ```text
 npm.cmd test
-21 test files passed, 156 tests passed
+21 test files passed, 166 tests passed
 
 npm.cmd run check
 svelte-check found 0 errors and 0 warnings
 
 git diff --check
 exit code 0
-```
-
-Verification after fast-forward merge into `main`:
-
-```text
-npm.cmd test
-21 test files passed, 156 tests passed
-
-npm.cmd run check
-svelte-check found 0 errors and 0 warnings
-
-git diff --check
-exit code 0
-
-git status --short --branch
-## main
 ```
 
 ## Completed Historical Cleanup Workstreams
@@ -197,6 +200,7 @@ These workstreams are complete and should be treated as historical context:
   controller.
 - Analysis source groups and template deletion API wrapper and workflow
   controller.
+- Analysis report start/cancel/delete API wrapper and workflow controller.
 
 Important completed frontend boundaries:
 
@@ -216,53 +220,47 @@ Important completed frontend boundaries:
 - `src/lib/api/analysis-source-groups.ts` and
   `src/lib/analysis-source-groups-workflow.ts` centralize Analysis source group
   loading and template/group deletion orchestration.
+- `src/lib/api/analysis-runs.ts` and `src/lib/analysis-run-workflow.ts`
+  centralize Analysis run loading, event handling, report start, run cancel, and
+  saved-run deletion orchestration.
 
 ## Current Review Document State
 
-`docs/code-review-results-2026-05-03.md` has been updated to record the source
-groups and template deletion extraction as resolved and to remove
-`list_analysis_source_groups`, `delete_analysis_prompt_template`, and
-`delete_analysis_source_group` from the remaining raw route command surface.
+`docs/code-review-results-2026-05-03.md` has been updated to record the report
+start/cancel/delete extraction as resolved and to remove
+`start_analysis_report`, `cancel_analysis_run`, and `delete_analysis_run` from
+the remaining raw route command surface.
 
 The remaining recommended follow-up order in that document is:
 
-1. Extract wrappers/controllers for report start/cancel/delete actions.
-2. Improve typed error conversion for remaining DB, Telegram, LLM, and
+1. Improve typed error conversion for remaining DB, Telegram, LLM, and
    validation paths.
 
 ## Remaining `/analysis` Cleanup Surface
 
-As of this handoff, `src/routes/analysis/+page.svelte` still owns these raw
-Tauri command surfaces:
+As of this handoff, `src/routes/analysis/+page.svelte` no longer owns raw Tauri
+command strings for report start/cancel/delete. The route still coordinates
+listener lifecycle, remaining template/group create-update actions, and UI
+composition.
 
-```text
-start_analysis_report
-cancel_analysis_run
-delete_analysis_run
-```
-
-The route still coordinates report start/cancel/delete actions, listener
-lifecycle, remaining template/group create-update actions, and UI composition.
-
-Trace, chat, workspace loading, source group/template deletion, Takeout import,
-NotebookLM export, source facade, and analysis run workflow extraction are
-already complete.
+Trace, chat, workspace loading, source group/template deletion, report
+start/cancel/delete, Takeout import, NotebookLM export, source facade, and
+analysis run workflow extraction are already complete.
 
 ## Recommended Next Workstream
 
-If the user asks to continue route cleanup, start with:
+If the user asks to continue cleanup, start with:
 
 ```text
-Analysis report start/cancel/delete wrapper/controller
+Typed error conversion for remaining DB, Telegram, LLM, and validation paths
 ```
 
 Rationale:
 
-- It is the remaining compact raw `/analysis` command surface in the route.
-- The relevant commands are `start_analysis_report`, `cancel_analysis_run`, and
-  `delete_analysis_run`.
-- It can likely be implemented as typed frontend API wrappers plus focused
-  workflow/controller extraction for report start and destructive run actions.
+- It is now the first remaining recommendation in
+  `docs/code-review-results-2026-05-03.md`.
+- It should tighten non-source backend error paths that still rely on string
+  conversion or compatibility heuristics.
 
 Before implementing the next workstream:
 
@@ -276,13 +274,10 @@ Before implementing the next workstream:
 Open tabs reported by the IDE include:
 
 - `docs/code-review-results-2026-05-03.md`
-- `docs/session-context-2026-05-03.md`
-- previously completed workspace-loading plan/spec paths under
-  `docs/superpowers`; those historical files were intentionally removed per the
-  documentation policy and may be stale editor tabs.
+- `docs/superpowers/plans/2026-05-07-analysis-report-actions.md`
 
 ## Suggested Commit Message For This Handoff Edit
 
 ```text
-docs(session): refresh post-merge cleanup handoff
+refactor(analysis): use report action workflow
 ```

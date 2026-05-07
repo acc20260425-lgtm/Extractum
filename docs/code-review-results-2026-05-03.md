@@ -45,6 +45,9 @@ cleanup branch:
   route-level orchestration are centralized in
   `src/lib/api/analysis-source-groups.ts` and
   `src/lib/analysis-source-groups-workflow.ts`.
+- Analysis report start/cancel/delete command access and route-level
+  orchestration are centralized in `src/lib/api/analysis-runs.ts` and
+  `src/lib/analysis-run-workflow.ts`.
 
 Historical Superpowers plan/spec files for these completed workstreams were
 removed after this consolidation. Future files under `docs/superpowers/plans`
@@ -61,27 +64,22 @@ Deferred by design:
 
 `src/routes/analysis/+page.svelte` is smaller than at the start of the review,
 but it still coordinates several feature areas directly. The remaining route
-responsibilities include source group editing, template deletion, report
-start/cancel/delete actions, listener lifecycle, and UI composition.
-
-Current raw `/analysis` command surfaces found in the route:
-
-```text
-start_analysis_report
-cancel_analysis_run
-delete_analysis_run
-```
+responsibilities include source group create-update actions, template
+create-update actions, listener lifecycle, and UI composition. The previously
+remaining report start/cancel/delete actions are now delegated to the analysis
+run workflow.
 
 Impact:
 
-- remaining feature areas are still difficult to test in isolation;
+- remaining create-update feature areas are still difficult to test in
+  isolation;
 - unrelated workflow state can still be touched by future analysis-page changes;
 - the route remains a high-context file for new analysis features.
 
 Suggested follow-up:
 
-- extract analysis source group, template deletion, and report action
-  surfaces in similarly small slices;
+- extract remaining source group and template create-update surfaces in
+  similarly small slices if route-size pressure continues;
 - keep the route as a composition and Svelte lifecycle layer;
 - add focused tests around extracted wrappers/controllers before broader UI
   refactors.
@@ -91,17 +89,18 @@ Suggested follow-up:
 Core source command strings and DTO mapping are centralized in
 `src/lib/api/sources.ts`, and compact frontend API wrappers now exist for
 analysis runs, Analysis chat, Analysis trace, Analysis workspace loading,
-Takeout import, NotebookLM export, and LLM cancellation.
+Takeout import, NotebookLM export, report start/cancel/delete actions, and LLM
+cancellation.
 
 Several remaining frontend TypeScript DTOs and raw Tauri command strings are
-still manually maintained beside Rust serde structs. Current notable raw
-`/analysis` command surfaces are report start/cancel/delete actions.
+still manually maintained beside Rust serde structs.
 
 Impact:
 
-- DTO drift can still become silent runtime breakage on the remaining raw
-  command surfaces;
-- the remaining raw command names are harder to search and refactor safely;
+- DTO drift can still become silent runtime breakage on manually mirrored
+  non-source contracts;
+- raw command names outside the extracted wrappers are harder to search and
+  refactor safely;
 - route files can still carry infrastructure detail they do not need.
 
 Suggested fix:
@@ -139,20 +138,19 @@ Suggested fix:
 
 ## Recent Verification
 
-Recent verification from the completed Analysis source groups and template
-deletion wrapper/controller workstream:
+Recent verification from the completed Analysis report action
+wrapper/controller workstream:
 
-- route cleanup search found no raw `list_analysis_source_groups`,
-  `delete_analysis_prompt_template`, or `delete_analysis_source_group` command
+- route cleanup search found no raw `start_analysis_report`,
+  `cancel_analysis_run`, or `delete_analysis_run` command
   strings in `src/routes/analysis/+page.svelte`;
-- focused tests passed for `analysis-source-groups` and
-  `analysis-source-groups-workflow`;
-- `npm.cmd test` passed with 21 test files and 156 tests;
+- focused tests passed for `analysis-runs`, `analysis-run-workflow`, and
+  `analysis-state`;
+- `npm.cmd test` passed with 21 test files and 166 tests;
 - `npm.cmd run check` passed with 0 errors and 0 warnings;
 - `git diff --check` passed with exit code 0.
 
 ## Recommended Follow-Up Order
 
-1. Extract wrappers/controllers for report start/cancel/delete actions.
-2. Improve typed error conversion for remaining DB, Telegram, LLM, and
+1. Improve typed error conversion for remaining DB, Telegram, LLM, and
    validation paths.

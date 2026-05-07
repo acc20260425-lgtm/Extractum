@@ -29,7 +29,7 @@ export function getAnalysisRun(runId: number) {
 }
 
 export function startAnalysisReport(command: AnalysisReportStartCommand) {
-  return invoke<number>("start_analysis_report", command);
+  return invoke<number>("start_analysis_report", { ...command });
 }
 
 export function cancelAnalysisRun(runId: number) {
