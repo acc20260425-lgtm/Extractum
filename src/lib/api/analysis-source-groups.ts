@@ -1,32 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AnalysisPromptTemplate, AnalysisSourceGroup } from "$lib/types/analysis";
-
-export interface CreateAnalysisPromptTemplateInput {
-  name: string;
-  templateKind: "report" | "chat";
-  body: string;
-}
-
-export interface UpdateAnalysisPromptTemplateInput {
-  templateId: number;
-  name: string;
-  body: string;
-}
-
-export interface CreateAnalysisSourceGroupInput {
-  name: string;
-  sourceIds: number[];
-}
-
-export interface UpdateAnalysisSourceGroupInput extends CreateAnalysisSourceGroupInput {
-  groupId: number;
-}
+import type {
+  AnalysisPromptTemplate,
+  AnalysisPromptTemplateKind,
+  AnalysisSourceGroup,
+  CreateAnalysisPromptTemplateInput,
+  CreateAnalysisSourceGroupInput,
+  UpdateAnalysisPromptTemplateInput,
+  UpdateAnalysisSourceGroupInput,
+} from "$lib/types/analysis";
 
 export function listAnalysisSourceGroups() {
   return invoke<AnalysisSourceGroup[]>("list_analysis_source_groups");
 }
 
-export function listAnalysisPromptTemplates(templateKind: "report" | "chat") {
+export function listAnalysisPromptTemplates(templateKind: AnalysisPromptTemplateKind) {
   return invoke<AnalysisPromptTemplate[]>("list_analysis_prompt_templates", { templateKind });
 }
 

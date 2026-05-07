@@ -6,30 +6,32 @@ This file is the current session handoff for Extractum cleanup work. It is
 intended to restore enough context for a future Codex session without reading
 the full chat transcript.
 
-The latest user request was:
+Latest user request:
 
 ```text
-в файл docs\session-context-2026-05-03.md запиши всю информацию, по которой
-можно восстановить контекст текущей сессии. Файл можно просто перезаписать.
-Сформируй commit message
+PLEASE IMPLEMENT THIS PLAN: Frontend DTO Contract Audit.
 ```
 
-This file may be overwritten again as the session evolves.
+The agreed scope is a narrow type-only frontend contract pass:
+
+- centralize only shared/drift-prone wrapper input types in `src/lib/types/*`;
+- keep runtime behavior, Tauri command names, payload casing, and Rust
+  signatures unchanged;
+- do not move broad response/event DTOs;
+- keep Rust-to-TypeScript generation deferred.
 
 ## Repository And Environment
 
 - Repository root: `G:\Develop\Extractum`.
 - Current branch: `main`.
 - Git remotes: none configured.
-- Local branches known from prior handoff:
-  - `main`
-  - `desktop-ui`
 - Shell: PowerShell on Windows.
 - Timezone in the IDE environment: `Europe/Minsk`.
 - Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 - Collaboration mode: Default mode.
-- Current working tree before this handoff rewrite: clean on `main`.
+- Current working tree before the frontend DTO contract audit task: clean on
+  `main`.
 - Git writes such as `git add` and `git commit` often fail in the default
   sandbox with `.git/index.lock` permission errors. Rerunning the same git
   command with approval outside the sandbox has worked.
@@ -43,8 +45,6 @@ This file may be overwritten again as the session evolves.
 
 ## Active Workflow Rules
 
-These rules have been carried through the cleanup work:
-
 - Do not create a git worktree.
 - Execute exactly one top-level implementation-plan task per user turn.
 - Commit at the end of each top-level task when the user asks to execute work.
@@ -54,15 +54,12 @@ These rules have been carried through the cleanup work:
 - For docs-only handoff updates, at minimum verify with `git diff --check` and
   any targeted `rg` command that proves the documented claim.
 
-For the latest user request, the user asked to rewrite this file and formulate a
-commit message. The file has been rewritten; the proposed commit message is
-listed below.
-
 ## Latest Git History
 
-Recent commits at the time this handoff was rewritten:
+Recent commits before the current frontend DTO contract audit commit:
 
 ```text
+3e6b255 docs(session): refresh current handoff context
 1b95cfa docs(review): recalibrate frontend contract follow-up
 77dbdcb docs(session): refresh account api handoff
 71a3aea refactor(accounts): use api wrappers in routes
@@ -70,19 +67,6 @@ ee070e1 refactor(analysis): reuse account api wrappers
 0d0778c refactor(accounts): add api wrappers
 5a9278c docs(accounts): add api wrapper cleanup plan
 4e9f3df docs(accounts): add api wrapper cleanup design
-1827552 docs(session): refresh analysis editor handoff
-5b0705c refactor(analysis): use editor workflow
-d8d641d refactor(analysis): move source group editor workflow
-3f6ebfa refactor(analysis): move template editor workflow
-3fb3696 refactor(analysis): add editor api wrappers
-4ffc87b docs(analysis): add editor workflow extraction plan
-26d3781 docs(analysis): add editor workflow extraction design
-81c0b11 docs(session): refresh typed error cleanup handoff
-c2584d3 refactor(error): type llm command failures
-5bcd2ef refactor(error): type telegram failures
-8c9a073 refactor(error): type analysis validation failures
-89a65a8 refactor(error): type account database failures
-ae5bc7d refactor(error): add typed conversion helpers
 ```
 
 ## Current Review State
@@ -97,7 +81,7 @@ Review scope:
 
 - Whole Extractum codebase.
 - Security findings intentionally out of scope.
-- Focus: maintainability, consistency, extensibility, testability, avoiding
+- Focus: maintainability, consistency, extensibility, testability, and avoiding
   duplication.
 - CodeRabbit could not be used because `coderabbit --version` failed with
   `Wsl/Service/E_ACCESSDENIED`; the review is manual.
@@ -107,24 +91,28 @@ Current open findings:
 1. **Major: Analysis route remains a high-context composition surface**
    - `src/routes/analysis/+page.svelte` still owns listener lifecycle, local
      Svelte state binding, and UI composition.
-   - Future Analysis changes should keep using the existing API and workflow
+   - Future Analysis changes should keep using existing API and workflow
      boundaries.
    - Listener lifecycle should only be extracted later if it becomes a concrete
      source of defects or test friction.
 
-2. **Moderate: Remaining non-source frontend/backend contracts are manually
+2. **Moderate: Remaining response/event frontend/backend DTOs are manually
    mirrored**
    - Core source command strings and DTO mapping are centralized in
      `src/lib/api/sources.ts`.
-   - Compact frontend API wrappers now exist for Analysis runs, Analysis chat,
+   - Compact frontend API wrappers exist for Analysis runs, Analysis chat,
      Analysis trace, Analysis workspace loading, Analysis source
      groups/templates, Takeout import, NotebookLM export, report
      start/cancel/delete actions, Telegram accounts/authentication, and LLM
      cancellation.
+   - Shared wrapper input contracts for Accounts, Analysis run/chat/source
+     group/template, LLM, and source wrappers now live in `src/lib/types/*`.
+   - `AnalysisReportStartCommand.profileId` is `string | null`, matching the
+     Rust `Option<String>` command boundary.
    - A route-level raw Tauri command search returns no matches under
      `src/routes`.
-   - Remaining risk is frontend DTO / wrapper input drift beside Rust serde
-     structs, not missing route wrappers.
+   - Remaining risk is manually mirrored response/event DTO drift beside Rust
+     serde structs, not missing route wrappers or wrapper input drift.
 
 3. **Low: Some lower-level string errors remain by design**
    - DB, Telegram, LLM, and validation command boundaries now use explicit typed
@@ -135,8 +123,8 @@ Current open findings:
 
 Current recommended follow-up order:
 
-1. Audit remaining manually mirrored frontend DTOs and `$lib/api/*` wrapper
-   input types, then consolidate only the shared or drift-prone contracts.
+1. Audit remaining manually mirrored response/event DTOs only if drift recurs
+   or shared usage makes consolidation worthwhile.
 2. Opportunistically reduce lower-level `Result<T, String>` and
    `classify_message` fallback reliance when touching nearby backend code.
 
@@ -200,19 +188,11 @@ d8d641d refactor(analysis): move source group editor workflow
 
 Implemented:
 
-- `src/lib/api/analysis-source-groups.ts` owns frontend command access for:
-  - `list_analysis_source_groups`;
-  - `list_analysis_prompt_templates`;
-  - `create_analysis_prompt_template`;
-  - `update_analysis_prompt_template`;
-  - `delete_analysis_prompt_template`;
-  - `create_analysis_source_group`;
-  - `update_analysis_source_group`;
-  - `delete_analysis_source_group`.
+- `src/lib/api/analysis-source-groups.ts` owns frontend command access for
+  Analysis source group and prompt-template commands.
 - `src/lib/analysis-source-groups-workflow.ts` owns template/group loading,
-  save/copy/delete orchestration, validation status handling via
-  `analysis-editor-state`, reload/selection fallback, editor rebinding, busy
-  flags, and formatted operation errors.
+  save/copy/delete orchestration, validation status handling, reload/selection
+  fallback, editor rebinding, busy flags, and formatted operation errors.
 - `src/routes/analysis/+page.svelte` delegates editor load/save/copy/delete
   actions to the workflow and no longer invokes those editor Tauri commands
   directly.
@@ -246,28 +226,14 @@ ee070e1 refactor(analysis): reuse account api wrappers
 
 Implemented:
 
-- `src/lib/api/accounts.ts` owns frontend command access for:
-  - `list_accounts`;
-  - `get_account`;
-  - `create_account`;
-  - `delete_account`;
-  - `set_account_phone`;
-  - `clear_account_phone`;
-  - `tg_get_account_statuses`;
-  - `tg_init`;
-  - `tg_send_code`;
-  - `tg_sign_in`;
-  - `tg_logout`.
+- `src/lib/api/accounts.ts` owns frontend command access for account CRUD and
+  Telegram authentication/runtime status commands.
 - `src/lib/api/accounts.test.ts` pins every account/auth command name and
   payload shape.
 - `src/lib/api/analysis-workspace.ts` reuses `accounts.ts` for workspace
-  account listing and account runtime status calls while keeping
-  `listAnalysisSources()` local to the Analysis workspace API.
-- `src/routes/accounts/+page.svelte` delegates account list/status/create/delete
-  command access to `$lib/api/accounts`.
-- `src/routes/auth/[id]/+page.svelte` delegates account load, Telegram
-  initialization, send-code, sign-in, phone persistence, logout, and phone
-  clearing command access to `$lib/api/accounts`.
+  account listing and account runtime status calls.
+- `src/routes/accounts/+page.svelte` and `src/routes/auth/[id]/+page.svelte`
+  delegate account/auth command access to `$lib/api/accounts`.
 
 Focused verification recorded during implementation:
 
@@ -293,73 +259,108 @@ Results recorded in the previous handoff:
   outside sandbox passed with 0 errors and 0 warnings.
 - `git diff --check`: exit code 0 with LF/CRLF warnings for edited docs only.
 
+### Frontend DTO Contract Audit
+
+Implemented in the latest task:
+
+- Public wrapper input contracts moved out of `$lib/api/*` and into domain type
+  modules:
+  - `src/lib/types/accounts.ts`;
+  - `src/lib/types/analysis.ts`;
+  - `src/lib/types/llm.ts`;
+  - `src/lib/types/sources.ts`.
+- API wrappers still own command names, `invoke` calls, and mapper-local raw DTO
+  shapes.
+- Workflow modules now import shared input contracts from `$lib/types/*`, not
+  from API wrappers.
+- `AnalysisReportStartCommand.profileId` changed from `null` to `string | null`
+  to match the Rust `Option<String>` command boundary.
+- `src/lib/api/analysis-runs.test.ts` now pins non-null `profileId` pass-through
+  for `start_analysis_report`.
+
+TDD note:
+
+- A failing `npm.cmd run check` was observed outside the sandbox before the
+  implementation: `Type 'string' is not assignable to type 'null'` in
+  `src/lib/api/analysis-runs.test.ts`.
+- After implementation, the focused test and type-check passed outside the
+  sandbox.
+
+Final verification for the latest implementation:
+
+```powershell
+npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-runs.test.ts src/lib/api/analysis-chat.test.ts src/lib/api/analysis-source-groups.test.ts src/lib/api/llm.test.ts src/lib/api/sources.test.ts
+npm.cmd run check
+rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
+git diff --check
+```
+
+Results:
+
+- Full frontend test suite passed outside the sandbox: 22 test files, 187
+  tests.
+- Targeted wrapper suite passed outside the sandbox: 6 test files, 35 tests.
+- `npm.cmd run check` passed outside the sandbox with 0 errors and 0 warnings.
+- Route-level raw Tauri command search returned no matches under `src/routes`
+  with exit code 1.
+- `git diff --check` exited 0; LF/CRLF warnings were shown for edited files.
+
 ## Route-Level Raw Tauri Command Status
 
-Most recent targeted check before this handoff rewrite:
+Most recent targeted check:
 
 ```powershell
 rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
 ```
 
-Result:
+Expected result:
 
 ```text
 no output, exit code 1
 ```
 
-Conclusion: route-level raw Tauri command access is currently absent under
-`src/routes`.
-
-Remaining `invoke` calls are expected in `$lib/api/*` wrappers and their tests.
+Conclusion: route-level raw Tauri command access should remain absent under
+`src/routes`. Remaining `invoke` calls are expected in `$lib/api/*` wrappers
+and their tests.
 
 ## Current Suggested Next Work
 
 Recommended next workstream:
 
 ```text
-Frontend DTO contract audit
+Remaining response/event DTO drift audit
 ```
 
 Recommended shape:
 
-1. Create a short design/spec for auditing manually mirrored frontend DTOs and
-   `$lib/api/*` wrapper input types.
-2. Inventory the wrapper input/interface types in `src/lib/api/*` and compare
-   them to Rust command/request structs where practical.
-3. Choose only the shared or drift-prone contracts for consolidation into
-   frontend shared type modules.
-4. Avoid a broad refactor if wrapper-local tests already cover the real risk.
+1. Do not add route wrappers; that surface is already clean.
+2. Audit response/event DTO mirrors only when a Rust serde shape changes or
+   multiple frontend modules share the same contract.
+3. Keep raw source DTO mapping local to `src/lib/api/sources.ts`.
+4. Keep Rust-to-TypeScript generation deferred unless DTO drift becomes a
+   recurring problem.
 
-Known frontend wrapper/input type starting points from recent search:
+Known response/event type starting points:
 
 ```text
-src/lib/api/accounts.ts
-src/lib/api/analysis-chat.ts
-src/lib/api/analysis-runs.ts
-src/lib/api/analysis-source-groups.ts
-src/lib/api/llm.ts
-src/lib/api/sources.ts
+src/lib/types/accounts.ts
 src/lib/types/analysis.ts
-src/lib/analysis-editor-state.ts
+src/lib/types/llm.ts
+src/lib/types/sources.ts
 ```
-
-The review follow-up should not be interpreted as "add wrappers for routes";
-that work is already complete for the currently searched route surface.
 
 ## Important Files
 
 - Review/handoff:
   - `docs/code-review-results-2026-05-03.md`
   - `docs/session-context-2026-05-03.md`
-- Active or recent plans/specs:
-  - `docs/superpowers/specs/2026-05-07-typed-error-conversion-design.md`
-  - `docs/superpowers/plans/2026-05-07-typed-error-conversion.md`
-  - `docs/superpowers/specs/2026-05-07-analysis-editor-workflow-design.md`
-  - `docs/superpowers/plans/2026-05-07-analysis-editor-workflow.md`
-  - `docs/superpowers/specs/2026-05-07-telegram-account-api-wrappers-design.md`
-  - `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`
 - Main route still worth treating carefully:
   - `src/routes/analysis/+page.svelte`
+- Domain type modules:
+  - `src/lib/types/accounts.ts`
+  - `src/lib/types/analysis.ts`
+  - `src/lib/types/llm.ts`
+  - `src/lib/types/sources.ts`
 - API wrapper modules:
   - `src/lib/api/accounts.ts`
   - `src/lib/api/analysis-runs.ts`
@@ -374,28 +375,13 @@ that work is already complete for the currently searched route surface.
 
 ## IDE Notes
 
-Open tabs reported by the IDE at the end of the session:
+Open tabs reported by the IDE at the start of the latest implementation turn:
 
 - `docs/code-review-results-2026-05-03.md`
 - `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`
 
-## Verification For This Handoff Rewrite
-
-Run after rewriting this file:
-
-```powershell
-git diff --check
-git status --short --branch
-```
-
-Expected:
-
-- `git diff --check` exits 0; LF/CRLF warnings for edited docs are acceptable.
-- `git status --short --branch` shows this handoff file modified unless the
-  change has already been committed.
-
 ## Proposed Commit Message
 
 ```text
-docs(session): refresh current handoff context
+refactor(api): centralize frontend contract types
 ```

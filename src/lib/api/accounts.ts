@@ -1,23 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
-
-export interface CreateAccountInput {
-  label: string;
-  apiId: number;
-  apiHash: string;
-}
-
-export interface AccountIdInput {
-  accountId: number;
-}
-
-export interface AccountPhoneInput extends AccountIdInput {
-  phone: string;
-}
-
-export interface AccountCodeInput extends AccountIdInput {
-  code: string;
-}
+import type {
+  AccountCodeInput,
+  AccountPhoneInput,
+  AccountRecord,
+  AccountRuntimeStatus,
+  CreateAccountInput,
+} from "$lib/types/accounts";
 
 export function listAccounts() {
   return invoke<AccountRecord[]>("list_accounts");

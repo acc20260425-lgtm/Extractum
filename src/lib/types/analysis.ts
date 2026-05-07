@@ -6,6 +6,8 @@ export interface AnalysisSourceOption {
   last_synced_at: number | null;
 }
 
+export type AnalysisPromptTemplateKind = "report" | "chat";
+
 export interface AnalysisPromptTemplate {
   id: number;
   name: string;
@@ -61,6 +63,12 @@ export interface AnalysisRunDetail extends AnalysisRunSummary {
   error: string | null;
 }
 
+export interface ListAnalysisRunsInput {
+  sourceId: number | null;
+  sourceGroupId: number | null;
+  limit: number;
+}
+
 export interface AnalysisReportStartCommand {
   sourceId: number | null;
   sourceGroupId: number | null;
@@ -69,7 +77,7 @@ export interface AnalysisReportStartCommand {
   outputLanguage: string;
   promptTemplateId: number;
   modelOverride: string | null;
-  profileId: null;
+  profileId: string | null;
 }
 
 export interface AnalysisTraceRef {
@@ -122,6 +130,13 @@ export interface AnalysisChatMessage {
   created_at: number;
 }
 
+export interface AskAnalysisRunQuestionInput {
+  runId: number;
+  question: string;
+  modelOverride: string | null;
+  profileId: string | null;
+}
+
 export interface AnalysisChatEvent {
   request_id: string;
   run_id: number;
@@ -139,3 +154,24 @@ export interface EventEnvelope<T> {
 export type ReportSegment =
   | { type: "text"; value: string; key: string }
   | { type: "ref"; value: string; key: string };
+
+export interface CreateAnalysisPromptTemplateInput {
+  name: string;
+  templateKind: AnalysisPromptTemplateKind;
+  body: string;
+}
+
+export interface UpdateAnalysisPromptTemplateInput {
+  templateId: number;
+  name: string;
+  body: string;
+}
+
+export interface CreateAnalysisSourceGroupInput {
+  name: string;
+  sourceIds: number[];
+}
+
+export interface UpdateAnalysisSourceGroupInput extends CreateAnalysisSourceGroupInput {
+  groupId: number;
+}

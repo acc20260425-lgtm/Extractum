@@ -51,6 +51,19 @@ export type ForumTopicFilter =
   | { kind: "topic"; topicId: number }
   | { kind: "uncategorized" };
 
+export interface AddTelegramSourceInput {
+  accountId: number;
+  sourceRef: string;
+  expectedKind: TelegramSourceKind | null;
+}
+
+export interface ListSourceItemsInput {
+  sourceId: number;
+  limit: number;
+  beforePublishedAt: number | null;
+  topicFilter: ForumTopicFilter | null;
+}
+
 export interface SourceForumTopic {
   kind: "topic" | "uncategorized";
   key: string;

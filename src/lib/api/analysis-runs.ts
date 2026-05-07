@@ -6,15 +6,10 @@ import type {
   AnalysisRunEvent,
   AnalysisRunSummary,
   EventEnvelope,
+  ListAnalysisRunsInput,
 } from "$lib/types/analysis";
 
 export const ANALYSIS_RUN_EVENT = "analysis://run";
-
-export interface ListAnalysisRunsInput {
-  sourceId: number | null;
-  sourceGroupId: number | null;
-  limit: number;
-}
 
 export function listAnalysisRuns(input: ListAnalysisRunsInput) {
   return invoke<AnalysisRunSummary[]>("list_analysis_runs", { ...input });

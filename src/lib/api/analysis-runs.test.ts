@@ -85,6 +85,32 @@ describe("analysis run api wrappers", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("delete_analysis_run", { runId: 77 });
   });
 
+  it("passes explicit analysis report profile ids through unchanged", async () => {
+    invokeMock.mockResolvedValueOnce(78);
+
+    await expect(startAnalysisReport({
+      sourceId: null,
+      sourceGroupId: 9,
+      periodFrom: 1_776_038_400,
+      periodTo: 1_776_211_199,
+      outputLanguage: "Russian",
+      promptTemplateId: 5,
+      modelOverride: null,
+      profileId: "work",
+    })).resolves.toBe(78);
+
+    expect(invokeMock).toHaveBeenLastCalledWith("start_analysis_report", {
+      sourceId: null,
+      sourceGroupId: 9,
+      periodFrom: 1_776_038_400,
+      periodTo: 1_776_211_199,
+      outputLanguage: "Russian",
+      promptTemplateId: 5,
+      modelOverride: null,
+      profileId: "work",
+    });
+  });
+
   it("listens on the shared analysis run event name", async () => {
     const unlisten = vi.fn();
     const handler = vi.fn();

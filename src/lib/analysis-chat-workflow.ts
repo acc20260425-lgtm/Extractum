@@ -6,8 +6,8 @@ import {
   matchesActiveAnalysisChatEvent,
   type AnalysisChatState,
 } from "$lib/analysis-chat-state";
-import type { AskAnalysisRunQuestionInput } from "$lib/api/analysis-chat";
 import type {
+  AskAnalysisRunQuestionInput,
   AnalysisChatEvent,
   AnalysisChatMessage,
   AnalysisChatTurn,

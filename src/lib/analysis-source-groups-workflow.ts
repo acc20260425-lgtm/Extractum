@@ -15,12 +15,14 @@ import {
   templateUpdatedStatus,
 } from "$lib/analysis-editor-state";
 import type {
+  AnalysisPromptTemplate,
+  AnalysisPromptTemplateKind,
+  AnalysisSourceGroup,
   CreateAnalysisPromptTemplateInput,
   CreateAnalysisSourceGroupInput,
   UpdateAnalysisPromptTemplateInput,
   UpdateAnalysisSourceGroupInput,
-} from "$lib/api/analysis-source-groups";
-import type { AnalysisPromptTemplate, AnalysisSourceGroup } from "$lib/types/analysis";
+} from "$lib/types/analysis";
 
 export interface AnalysisSourceGroupsWorkflowState {
   groups: AnalysisSourceGroup[];
@@ -58,7 +60,7 @@ export interface ConfirmOptions {
 export interface AnalysisSourceGroupsWorkflowDeps {
   getState(): AnalysisSourceGroupsWorkflowState;
   patch(patch: AnalysisSourceGroupsWorkflowPatch): void;
-  listTemplates(templateKind: "report" | "chat"): Promise<AnalysisPromptTemplate[]>;
+  listTemplates(templateKind: AnalysisPromptTemplateKind): Promise<AnalysisPromptTemplate[]>;
   listGroups(): Promise<AnalysisSourceGroup[]>;
   createTemplate(input: CreateAnalysisPromptTemplateInput): Promise<AnalysisPromptTemplate>;
   updateTemplate(input: UpdateAnalysisPromptTemplateInput): Promise<AnalysisPromptTemplate>;

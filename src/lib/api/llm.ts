@@ -1,38 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
-  LlmMessage,
-  LlmProfile,
+  AskLlmStreamInput,
+  ListLlmProviderModelsInput,
   LlmProfilesState,
   LlmProviderModel,
   LlmStreamEnvelope,
   LlmStreamEvent,
+  SaveLlmProfileInput,
 } from "$lib/types/llm";
 
 export const LLM_RESPONSE_EVENT = "llm://response";
-
-export interface SaveLlmProfileInput {
-  profileId: LlmProfile["profile_id"];
-  provider: LlmProfile["provider"];
-  defaultModel: LlmProfile["default_model"];
-  apiKey: LlmProfile["api_key"];
-  baseUrl: LlmProfile["base_url"] | null;
-  setActive: boolean;
-}
-
-export interface ListLlmProviderModelsInput {
-  provider: string;
-  profileId?: string | null;
-  apiKey?: string | null;
-  baseUrl?: string | null;
-}
-
-export interface AskLlmStreamInput {
-  requestId: string;
-  profileId: string | null;
-  messages: LlmMessage[];
-  modelOverride: string | null;
-}
 
 export function getLlmProfiles() {
   return invoke<LlmProfilesState>("get_llm_profiles");

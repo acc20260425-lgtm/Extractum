@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AddTelegramSourceInput,
   ForumTopicFilter,
   InitialSyncMode,
+  ListSourceItemsInput,
   Source,
   SourceForumTopic,
   SourceItem,
@@ -93,19 +95,6 @@ interface RawSyncResult {
 interface RawSyncSettings {
   initial_sync_mode: InitialSyncMode;
   initial_sync_value: number;
-}
-
-export interface AddTelegramSourceInput {
-  accountId: number;
-  sourceRef: string;
-  expectedKind: TelegramSourceKind | null;
-}
-
-export interface ListSourceItemsInput {
-  sourceId: number;
-  limit: number;
-  beforePublishedAt: number | null;
-  topicFilter: ForumTopicFilter | null;
 }
 
 export function listSources(accountId: number | null) {

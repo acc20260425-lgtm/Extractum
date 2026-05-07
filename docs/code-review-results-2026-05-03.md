@@ -59,6 +59,10 @@ cleanup branch:
   Telegram, LLM, and validation command boundaries. Shared helpers now cover
   database, Telegram transport, and LLM network failures while preserving the
   existing `{ kind, message }` frontend wire shape.
+- Shared frontend wrapper input contracts for Accounts, Analysis run/chat/source
+  group/template, LLM, and source command wrappers now live in domain type
+  modules under `src/lib/types/*`; API wrappers no longer export those public
+  input interfaces, while wrapper tests continue to pin command payload shapes.
 
 Historical Superpowers plan/spec files for some completed workstreams may remain
 as handoff artifacts. Future files under `docs/superpowers/plans` and
@@ -68,6 +72,8 @@ explicitly for session recovery.
 Deferred by design:
 
 - Rust-to-TypeScript type generation.
+- Broad response/event DTO consolidation; the latest pass intentionally
+  centralized wrapper input contracts only.
 - Secure secret storage, as a separate security backlog item.
 
 ## Open Findings
@@ -93,7 +99,7 @@ Suggested follow-up:
 - only extract listener lifecycle later if it becomes a concrete source of
   defects or test friction.
 
-### Moderate: Remaining non-source frontend/backend contracts are manually mirrored
+### Moderate: Remaining response/event frontend/backend DTOs are manually mirrored
 
 Core source command strings and DTO mapping are centralized in
 `src/lib/api/sources.ts`, and compact frontend API wrappers now exist for
@@ -103,13 +109,18 @@ start/cancel/delete actions, Telegram accounts/authentication, and LLM
 cancellation. A route-level raw Tauri command search now returns no matches
 under `src/routes`.
 
-Several frontend TypeScript DTOs and wrapper input types are still manually
-maintained beside Rust serde structs.
+Shared wrapper input contracts for Accounts, Analysis run/chat/source
+group/template, LLM, and source wrapper commands are centralized in
+`src/lib/types/*`. `AnalysisReportStartCommand.profileId` now matches the Rust
+`Option<String>` command boundary as `string | null`.
+
+Several frontend response/event DTOs are still manually maintained beside Rust
+serde structs.
 
 Impact:
 
-- DTO drift can still become silent runtime breakage on manually mirrored
-  non-source contracts;
+- response/event DTO drift can still become silent runtime breakage on manually
+  mirrored non-source contracts;
 - wrapper-local command payloads still need focused tests whenever Rust command
   structs change;
 - route files are cleaner, but frontend/backend contract drift remains a
@@ -117,9 +128,8 @@ Impact:
 
 Suggested fix:
 
-- audit the remaining manually mirrored `$lib/api/*` wrapper inputs and DTOs,
-  then consolidate the ones with real sharing or drift risk into shared
-  frontend type modules;
+- audit remaining manually mirrored response/event DTOs only when they show real
+  sharing or drift risk;
 - keep route files free of raw command access as new command surfaces are added;
 - later consider generated TypeScript types from Rust if drift remains a
   recurring problem.
@@ -165,12 +175,18 @@ workstreams:
   `npm.cmd test -- src/lib/api/accounts.test.ts`,
   `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-workspace.test.ts`,
   and `npm.cmd run check`;
+- focused frontend checks passed during the wrapper input contract audit:
+  `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-runs.test.ts src/lib/api/analysis-chat.test.ts src/lib/api/analysis-source-groups.test.ts src/lib/api/llm.test.ts src/lib/api/sources.test.ts`,
+  `npm.cmd run check`, route-level raw Tauri command search under
+  `src/routes`, and `git diff --check`;
+- full frontend test suite also passed for the latest wrapper input contract
+  audit: `npm.cmd test` with 22 test files and 187 tests;
 - final full verification for the latest docs refresh is recorded in
   `docs/session-context-2026-05-03.md`.
 
 ## Recommended Follow-Up Order
 
-1. Audit remaining manually mirrored frontend DTOs and `$lib/api/*` wrapper
-   input types, then consolidate only the shared or drift-prone contracts.
+1. Audit remaining manually mirrored response/event DTOs only when drift recurs
+   or shared usage makes consolidation worthwhile.
 2. Opportunistically reduce lower-level `Result<T, String>` and
    `classify_message` fallback reliance when touching nearby backend code.

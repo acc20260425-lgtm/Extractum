@@ -11,6 +11,15 @@ export interface LlmProfile {
   base_url: string;
 }
 
+export interface SaveLlmProfileInput {
+  profileId: LlmProfile["profile_id"];
+  provider: LlmProfile["provider"];
+  defaultModel: LlmProfile["default_model"];
+  apiKey: LlmProfile["api_key"];
+  baseUrl: LlmProfile["base_url"] | null;
+  setActive: boolean;
+}
+
 export interface LlmProfilesState {
   active_profile: string;
   profiles: LlmProfile[];
@@ -24,6 +33,20 @@ export interface LlmProviderModel {
   input_token_limit: number | null;
   output_token_limit: number | null;
   supported_generation_methods: string[];
+}
+
+export interface ListLlmProviderModelsInput {
+  provider: string;
+  profileId?: string | null;
+  apiKey?: string | null;
+  baseUrl?: string | null;
+}
+
+export interface AskLlmStreamInput {
+  requestId: string;
+  profileId: string | null;
+  messages: LlmMessage[];
+  modelOverride: string | null;
 }
 
 export interface LlmUsage {

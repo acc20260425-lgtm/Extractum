@@ -8,12 +8,12 @@ import {
   type RunDeletionDialog,
 } from "$lib/analysis-state";
 import type { AnalysisHistoryScopeParams } from "$lib/analysis-scope-state";
-import type { ListAnalysisRunsInput } from "$lib/api/analysis-runs";
 import type {
   AnalysisReportStartCommand,
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
+  ListAnalysisRunsInput,
 } from "$lib/types/analysis";
 
 export type AnalysisRunInspectorMode = "active" | "history" | "trace" | "chunks";

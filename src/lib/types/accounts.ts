@@ -13,6 +13,24 @@ export interface AccountRecord {
   created_at: number;
 }
 
+export interface CreateAccountInput {
+  label: string;
+  apiId: number;
+  apiHash: string;
+}
+
+export interface AccountIdInput {
+  accountId: number;
+}
+
+export interface AccountPhoneInput extends AccountIdInput {
+  phone: string;
+}
+
+export interface AccountCodeInput extends AccountIdInput {
+  code: string;
+}
+
 export interface AccountRuntimeStatus {
   account_id: number;
   status: AccountRuntimeState;
