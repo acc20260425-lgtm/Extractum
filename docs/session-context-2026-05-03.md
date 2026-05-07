@@ -2,30 +2,35 @@
 
 ## Purpose
 
-This file is the handoff needed to restore the current session context for the
+This file is the handoff needed to restore the current Codex session context for
 Extractum cleanup work. It supersedes all earlier handoff contents in this file.
 
 ## Current Repository State
 
 - Repository root: `G:\Develop\Extractum`.
 - Current branch: `main`.
-- Working tree state after this handoff edit: clean.
+- Working tree state before this handoff refresh: clean.
+- This handoff refresh modifies only `docs/session-context-2026-05-03.md`.
 - Git remotes: none configured.
-- Local feature branch `analysis-source-groups-cleanup` was merged into `main`
-  with a fast-forward merge and then deleted.
-- Local feature branch `analysis-report-actions-cleanup` was merged into `main`
-  with a fast-forward merge and then deleted.
-- Local feature branch `analysis-workspace-loading` was previously merged into
-  `main` with a fast-forward merge and then deleted.
-- Known local branches after cleanup: `main`, `desktop-ui`.
+- Local branches currently known:
+  - `main`
+  - `desktop-ui`
+- Deleted local cleanup branches:
+  - `analysis-workspace-loading`, previously fast-forward merged into `main`
+    and deleted.
+  - `analysis-source-groups-cleanup`, fast-forward merged into `main` and
+    deleted.
+  - `analysis-report-actions-cleanup`, fast-forward merged into `main` and
+    deleted.
 - Shell: PowerShell on Windows.
 - Timezone: `Europe/Minsk`.
 - Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 
-Recent relevant history:
+Recent relevant history on `main`:
 
 ```text
+ad3115f docs(session): refresh report actions post-merge handoff
 c4fe2e2 refactor(analysis): use report action workflow
 33e53fa refactor(analysis): move report actions into run workflow
 30302b7 refactor(analysis): add report action api wrappers
@@ -45,12 +50,6 @@ a8c2793 refactor(analysis): add workspace api wrapper
 3004b64 docs(analysis): add workspace loading plan
 1a9aed4 docs(analysis): add workspace loading design
 a9da386 docs(audit): record 2026-05-05 codebase risks
-a18b052 docs(session): consolidate cleanup context
-319c705 docs(session): refresh trace completion handoff
-0729b72 docs(analysis): record trace controller completion
-ecdd3b0 refactor(analysis): use trace workflow controller
-c7ea9b6 refactor(analysis): extract trace workflow controller
-2caccf9 refactor(analysis): add trace api wrapper
 ```
 
 ## Current User Workflow Rules
@@ -64,6 +63,9 @@ c7ea9b6 refactor(analysis): extract trace workflow controller
   changes the no-worktree constraint.
 - When a workstream is complete, merge locally into `main` if the user chooses
   option 1 from the finishing workflow.
+- For the current request, the user asked to write this session context file and
+  formulate a commit message. Do not assume they asked to commit unless they
+  explicitly confirm it.
 
 ## Environment Notes
 
@@ -84,15 +86,19 @@ c7ea9b6 refactor(analysis): extract trace workflow controller
 - Historical completed plan/spec files should not be recreated after their
   useful context is consolidated into this handoff and
   `docs/code-review-results-2026-05-03.md`.
-- Completed plan/spec files for the source-groups cleanup were removed in
-  `9ab78c8`.
+- The completed report-actions plan/spec files currently exist:
+  - `docs/superpowers/specs/2026-05-07-analysis-report-actions-design.md`
+  - `docs/superpowers/plans/2026-05-07-analysis-report-actions.md`
+- If continuing cleanup, decide whether to remove those completed plan/spec
+  files in a docs-only cleanup commit, following the policy above.
 - The active follow-up source is
   `docs/code-review-results-2026-05-03.md`.
 
 ## Completed In This Session
 
-The Analysis report start/cancel/delete cleanup workstream is complete, verified,
-merged into `main`, and its feature branch was deleted.
+The Analysis report start/cancel/delete cleanup workstream is complete,
+verified, merged into `main`, and its feature branch
+`analysis-report-actions-cleanup` was deleted.
 
 Implemented files:
 
@@ -104,6 +110,8 @@ Implemented files:
 - `src/routes/analysis/+page.svelte`
 - `docs/code-review-results-2026-05-03.md`
 - `docs/session-context-2026-05-03.md`
+- `docs/superpowers/specs/2026-05-07-analysis-report-actions-design.md`
+- `docs/superpowers/plans/2026-05-07-analysis-report-actions.md`
 
 Behavior extracted from `src/routes/analysis/+page.svelte`:
 
@@ -113,14 +121,14 @@ Behavior extracted from `src/routes/analysis/+page.svelte`:
 
 New frontend boundaries:
 
-- `src/lib/api/analysis-runs.ts` now centralizes typed Tauri command access for:
+- `src/lib/api/analysis-runs.ts` centralizes typed Tauri command access for:
   - listing saved and active runs;
   - loading run details;
   - listening to `analysis://run` events;
   - starting analysis reports;
   - cancelling active runs;
   - deleting saved runs.
-- `src/lib/analysis-run-workflow.ts` now centralizes framework-independent
+- `src/lib/analysis-run-workflow.ts` centralizes framework-independent
   orchestration for:
   - loading saved and active runs;
   - opening run detail/chat/trace state;
@@ -129,11 +137,15 @@ New frontend boundaries:
   - cancelling active runs;
   - validating, confirming, deleting, cleaning up, and reloading saved runs;
   - formatting action errors through injected `formatError`.
+- `src/lib/types/analysis.ts` now holds the shared
+  `AnalysisReportStartCommand` DTO.
 - `src/routes/analysis/+page.svelte` wires Svelte `$state` through
-  `applyRunWorkflowPatch` and delegates `runReport()`, `cancelActiveRun()`,
-  and `deleteSavedRun()` to the run workflow.
+  `applyRunWorkflowPatch` and delegates:
+  - `runReport()` to `runWorkflow.startReport(...)`;
+  - `cancelActiveRun()` to `runWorkflow.cancelRun(...)`;
+  - `deleteSavedRun()` to `runWorkflow.deleteSavedRun(...)`.
 
-Task commits:
+Report-actions task commits:
 
 ```text
 373352d docs(analysis): add report actions cleanup design
@@ -141,11 +153,12 @@ abc570e docs(analysis): add report actions cleanup plan
 30302b7 refactor(analysis): add report action api wrappers
 33e53fa refactor(analysis): move report actions into run workflow
 c4fe2e2 refactor(analysis): use report action workflow
+ad3115f docs(session): refresh report actions post-merge handoff
 ```
 
 ## Verification Performed
 
-Focused TDD verification:
+Focused TDD verification during report-actions work:
 
 ```text
 npm.cmd test -- src/lib/api/analysis-runs.test.ts
@@ -170,7 +183,7 @@ Route cleanup verification:
 rg "start_analysis_report|cancel_analysis_run|delete_analysis_run" src/routes/analysis/+page.svelte
 ```
 
-The route search returned no output after the route wiring task.
+The route search returned no output after route wiring.
 
 Full verification before merging `analysis-report-actions-cleanup`:
 
@@ -243,12 +256,21 @@ Important completed frontend boundaries:
 
 ## Current Review Document State
 
-`docs/code-review-results-2026-05-03.md` has been updated to record the report
-start/cancel/delete extraction as resolved and to remove
-`start_analysis_report`, `cancel_analysis_run`, and `delete_analysis_run` from
-the remaining raw route command surface.
+`docs/code-review-results-2026-05-03.md` records the report
+start/cancel/delete extraction as resolved and no longer lists
+`start_analysis_report`, `cancel_analysis_run`, or `delete_analysis_run` as raw
+route command surface.
 
-The remaining recommended follow-up order in that document is:
+Open findings in that review document:
+
+- Major: `src/routes/analysis/+page.svelte` still coordinates source group
+  create-update actions, template create-update actions, listener lifecycle, and
+  UI composition.
+- Moderate: remaining non-source frontend/backend contracts are still manually
+  mirrored beside Rust serde structs.
+- Moderate: error typing is still partial outside source boundaries.
+
+Recommended follow-up order in that document:
 
 1. Improve typed error conversion for remaining DB, Telegram, LLM, and
    validation paths.
@@ -256,9 +278,14 @@ The remaining recommended follow-up order in that document is:
 ## Remaining `/analysis` Cleanup Surface
 
 As of this handoff, `src/routes/analysis/+page.svelte` no longer owns raw Tauri
-command strings for report start/cancel/delete. The route still coordinates
-listener lifecycle, remaining template/group create-update actions, and UI
-composition.
+command strings for report start/cancel/delete.
+
+The route still coordinates:
+
+- listener lifecycle;
+- remaining template create-update actions;
+- remaining source group create-update actions;
+- UI composition.
 
 Trace, chat, workspace loading, source group/template deletion, report
 start/cancel/delete, Takeout import, NotebookLM export, source facade, and
@@ -293,8 +320,8 @@ Open tabs reported by the IDE include:
 - `docs/code-review-results-2026-05-03.md`
 - `docs/superpowers/plans/2026-05-07-analysis-report-actions.md`
 
-## Suggested Commit Message For This Handoff Edit
+## Suggested Commit Message For This Handoff Refresh
 
 ```text
-docs(session): refresh report actions post-merge handoff
+docs(session): refresh current cleanup handoff
 ```
