@@ -48,6 +48,10 @@ cleanup branch:
 - Analysis report start/cancel/delete command access and route-level
   orchestration are centralized in `src/lib/api/analysis-runs.ts` and
   `src/lib/analysis-run-workflow.ts`.
+- Boundary-first typed error conversion is complete for the remaining DB,
+  Telegram, LLM, and validation command boundaries. Shared helpers now cover
+  database, Telegram transport, and LLM network failures while preserving the
+  existing `{ kind, message }` frontend wire shape.
 
 Historical Superpowers plan/spec files for these completed workstreams were
 removed after this consolidation. Future files under `docs/superpowers/plans`
@@ -112,45 +116,45 @@ Suggested fix:
 - later consider generated TypeScript types from Rust if drift remains a
   recurring problem.
 
-### Moderate: Error typing is still partial outside source boundaries
+### Low: Some lower-level string errors remain by design
 
-Core source command and service boundaries now use explicit typed `AppError`
-constructors for source-local user-visible failures. Elsewhere, the backend
-still exposes `AppError` while some lower-level helpers return `Result<T,
-String>`. `src-tauri/src/error.rs` also still classifies arbitrary strings into
-error kinds by substring matching for compatibility paths.
+The DB, Telegram, LLM, and validation command boundaries now use explicit typed
+`AppError` mappings. A few lower-level and event-oriented paths still keep
+`Result<T, String>` intentionally, including LLM streamed event payloads and
+compatibility fallbacks through `From<String>` / `classify_message`.
 
 Impact:
 
-- outside the tightened source paths, changing wording can still change the
-  frontend-visible error kind;
-- tests for some non-source failure modes are weaker than the apparent typed API
-  suggests;
-- behavior is harder to reason about across DB, Telegram, LLM, and validation
-  paths that have not been tightened yet.
+- lower-level wording can still matter if a future command boundary forwards a
+  string through the compatibility classifier;
+- streaming/event payloads remain plain text, so they need small explicit
+  conversions when called from typed boundaries;
+- broader removal of internal string errors would be a hardening pass rather
+  than a current correctness blocker.
 
 Suggested fix:
 
-- keep `AppError` at command/service boundaries;
-- add small typed conversion helpers for remaining DB, Telegram, LLM, and
-  validation paths;
-- reduce reliance on message heuristics over time.
+- keep new command/service boundaries on explicit `AppError` constructors;
+- when touching lower-level helpers, avoid introducing new command-facing
+  `Result<T, String>` paths;
+- reduce `classify_message` fallback reliance opportunistically.
 
 ## Recent Verification
 
-Recent verification from the completed Analysis report action
-wrapper/controller workstream:
+Recent verification from the completed boundary-first typed error conversion
+workstream:
 
-- route cleanup search found no raw `start_analysis_report`,
-  `cancel_analysis_run`, or `delete_analysis_run` command
-  strings in `src/routes/analysis/+page.svelte`;
-- focused tests passed for `analysis-runs`, `analysis-run-workflow`, and
-  `analysis-state`;
-- `npm.cmd test` passed with 21 test files and 166 tests;
-- `npm.cmd run check` passed with 0 errors and 0 warnings;
-- `git diff --check` passed with exit code 0.
+- focused Cargo checks passed during implementation:
+  `cargo test error`, `cargo test accounts`, `cargo test analysis`,
+  `cargo test telegram`, and `cargo test llm`;
+- final full verification for this docs refresh is recorded in
+  `docs/session-context-2026-05-03.md`.
 
 ## Recommended Follow-Up Order
 
-1. Improve typed error conversion for remaining DB, Telegram, LLM, and
-   validation paths.
+1. Extract the remaining source group and template create-update workflows from
+   `src/routes/analysis/+page.svelte` if route-size pressure continues.
+2. Add typed frontend API wrappers or shared DTO modules for remaining compact
+   non-source Tauri command surfaces.
+3. Opportunistically reduce lower-level `Result<T, String>` and
+   `classify_message` fallback reliance when touching nearby backend code.
