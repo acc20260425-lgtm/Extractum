@@ -63,11 +63,13 @@ cleanup branch:
   group/template, LLM, and source command wrappers now live in domain type
   modules under `src/lib/types/*`; API wrappers no longer export those public
   input interfaces, while wrapper tests continue to pin command payload shapes.
+- Obsolete Superpowers plan/spec handoff artifacts for completed cleanup
+  workstreams were removed; the current cleanup state now lives in this review
+  document, the session handoff, and Git history.
 
-Historical Superpowers plan/spec files for some completed workstreams may remain
-as handoff artifacts. Future files under `docs/superpowers/plans` and
-`docs/superpowers/specs` should represent only active work unless retained
-explicitly for session recovery.
+Superpowers plan/spec directories should contain active work only. Completed
+cleanup sequencing is preserved in Git history and this review/handoff pair
+instead of stale task files.
 
 Deferred by design:
 
@@ -181,7 +183,7 @@ workstreams:
   `src/routes`, and `git diff --check`;
 - full frontend test suite also passed for the latest wrapper input contract
   audit: `npm.cmd test` with 22 test files and 187 tests;
-- final full verification for the latest docs refresh is recorded in
+- docs cleanup verification for the latest refresh is recorded in
   `docs/session-context-2026-05-03.md`.
 
 ## Recommended Follow-Up Order

@@ -9,16 +9,16 @@ the full chat transcript.
 Latest user request:
 
 ```text
-PLEASE IMPLEMENT THIS PLAN: Frontend DTO Contract Audit.
+Обнови документацию. Удали все неактуальное. Сформируй commit message
 ```
 
-The agreed scope is a narrow type-only frontend contract pass:
+Current docs cleanup scope:
 
-- centralize only shared/drift-prone wrapper input types in `src/lib/types/*`;
-- keep runtime behavior, Tauri command names, payload casing, and Rust
-  signatures unchanged;
-- do not move broad response/event DTOs;
-- keep Rust-to-TypeScript generation deferred.
+- obsolete completed Superpowers plan/spec handoff artifacts were removed;
+- the current cleanup source of truth is now this handoff plus
+  `docs/code-review-results-2026-05-03.md`;
+- completed implementation sequencing remains available through Git history;
+- future Superpowers plan/spec files should represent only active work.
 
 ## Repository And Environment
 
@@ -30,8 +30,7 @@ The agreed scope is a narrow type-only frontend contract pass:
 - Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 - Collaboration mode: Default mode.
-- Current working tree before the frontend DTO contract audit task: clean on
-  `main`.
+- Working tree was clean on `main` before the docs cleanup request.
 - Git writes such as `git add` and `git commit` often fail in the default
   sandbox with `.git/index.lock` permission errors. Rerunning the same git
   command with approval outside the sandbox has worked.
@@ -46,19 +45,20 @@ The agreed scope is a narrow type-only frontend contract pass:
 ## Active Workflow Rules
 
 - Do not create a git worktree.
-- Execute exactly one top-level implementation-plan task per user turn.
+- Execute exactly one top-level implementation task per user turn.
 - Commit at the end of each top-level task when the user asks to execute work.
 - Do not revert user changes.
 - Use `rg`/`rg --files` for search.
 - Use `apply_patch` for manual file edits.
 - For docs-only handoff updates, at minimum verify with `git diff --check` and
-  any targeted `rg` command that proves the documented claim.
+  a targeted `rg` command that proves the documented claim.
 
 ## Latest Git History
 
-Recent commits before the current frontend DTO contract audit commit:
+Recent commits before the docs cleanup commit:
 
 ```text
+646f742 refactor(api): centralize frontend contract types
 3e6b255 docs(session): refresh current handoff context
 1b95cfa docs(review): recalibrate frontend contract follow-up
 77dbdcb docs(session): refresh account api handoff
@@ -132,11 +132,6 @@ Current recommended follow-up order:
 
 ### Boundary-First Typed Error Conversion
 
-Source docs:
-
-- `docs/superpowers/specs/2026-05-07-typed-error-conversion-design.md`
-- `docs/superpowers/plans/2026-05-07-typed-error-conversion.md`
-
 Completed commits include:
 
 ```text
@@ -168,11 +163,6 @@ cargo test llm
 ```
 
 ### Analysis Editor Workflow Extraction
-
-Source docs:
-
-- `docs/superpowers/specs/2026-05-07-analysis-editor-workflow-design.md`
-- `docs/superpowers/plans/2026-05-07-analysis-editor-workflow.md`
 
 Completed commits:
 
@@ -206,11 +196,6 @@ npm.cmd run check
 ```
 
 ### Telegram Account API Wrappers
-
-Source docs:
-
-- `docs/superpowers/specs/2026-05-07-telegram-account-api-wrappers-design.md`
-- `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`
 
 Completed commits:
 
@@ -261,7 +246,13 @@ Results recorded in the previous handoff:
 
 ### Frontend DTO Contract Audit
 
-Implemented in the latest task:
+Completed commit:
+
+```text
+646f742 refactor(api): centralize frontend contract types
+```
+
+Implemented:
 
 - Public wrapper input contracts moved out of `$lib/api/*` and into domain type
   modules:
@@ -275,7 +266,7 @@ Implemented in the latest task:
   from API wrappers.
 - `AnalysisReportStartCommand.profileId` changed from `null` to `string | null`
   to match the Rust `Option<String>` command boundary.
-- `src/lib/api/analysis-runs.test.ts` now pins non-null `profileId` pass-through
+- `src/lib/api/analysis-runs.test.ts` pins non-null `profileId` pass-through
   for `start_analysis_report`.
 
 TDD note:
@@ -286,7 +277,7 @@ TDD note:
 - After implementation, the focused test and type-check passed outside the
   sandbox.
 
-Final verification for the latest implementation:
+Final verification for this implementation:
 
 ```powershell
 npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-runs.test.ts src/lib/api/analysis-chat.test.ts src/lib/api/analysis-source-groups.test.ts src/lib/api/llm.test.ts src/lib/api/sources.test.ts
@@ -304,6 +295,39 @@ Results:
 - Route-level raw Tauri command search returned no matches under `src/routes`
   with exit code 1.
 - `git diff --check` exited 0; LF/CRLF warnings were shown for edited files.
+
+### Documentation Cleanup
+
+Removed as obsolete completed implementation handoff artifacts:
+
+- typed error conversion plan/spec;
+- Analysis editor workflow plan/spec;
+- Analysis report actions plan/spec;
+- Telegram account API wrapper plan/spec.
+
+Current docs sources of truth:
+
+- `docs/code-review-results-2026-05-03.md`;
+- `docs/session-context-2026-05-03.md`.
+
+The deleted plan/spec files were historical execution artifacts for completed
+workstreams. They should not be restored unless a future session explicitly
+needs to reconstruct an old implementation plan from Git history.
+
+Verification for this docs-only cleanup:
+
+```powershell
+rg --files docs\superpowers
+rg -n "2026-05-0[7]-(typed-error-conversion|telegram-account-api-wrappers|analysis-report-actions|analysis-editor-workflow)" docs
+git diff --check
+```
+
+Results:
+
+- `rg --files docs\superpowers` returned no files with exit code 1.
+- The targeted stale plan/spec filename search returned no matches with exit
+  code 1.
+- `git diff --check` exited 0; LF/CRLF warnings were shown for edited docs.
 
 ## Route-Level Raw Tauri Command Status
 
@@ -375,13 +399,17 @@ src/lib/types/sources.ts
 
 ## IDE Notes
 
-Open tabs reported by the IDE at the start of the latest implementation turn:
+Open tabs reported by the IDE at the start of the docs cleanup turn:
 
 - `docs/code-review-results-2026-05-03.md`
-- `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`
+- a completed Telegram account API wrapper plan
+
+The second tab pointed at a completed historical plan that was removed during
+this cleanup; no exact deleted plan/spec file paths should remain in active
+docs.
 
 ## Proposed Commit Message
 
 ```text
-refactor(api): centralize frontend contract types
+docs(cleanup): remove stale implementation handoffs
 ```
