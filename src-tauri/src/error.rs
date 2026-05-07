@@ -50,6 +50,18 @@ impl AppError {
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(AppErrorKind::Internal, message)
     }
+
+    pub fn database(error: impl std::fmt::Display) -> Self {
+        Self::internal(format!("Database error: {error}"))
+    }
+
+    pub fn telegram_network(error: impl std::fmt::Display) -> Self {
+        Self::network(format!("Telegram request failed: {error}"))
+    }
+
+    pub fn llm_network(error: impl std::fmt::Display) -> Self {
+        Self::network(format!("LLM request failed: {error}"))
+    }
 }
 
 impl std::fmt::Display for AppError {
@@ -152,7 +164,7 @@ fn classify_message(message: &str) -> AppError {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_message, AppErrorKind};
+    use super::{classify_message, AppError, AppErrorKind};
 
     #[test]
     fn classify_message_treats_dialog_lookup_misses_as_not_found() {
@@ -178,5 +190,32 @@ mod tests {
         );
 
         assert_eq!(error.kind, AppErrorKind::Validation);
+    }
+
+    #[test]
+    fn database_helper_maps_to_internal() {
+        let error = AppError::database("connection closed");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert_eq!(error.message, "Database error: connection closed");
+    }
+
+    #[test]
+    fn telegram_network_helper_maps_to_network() {
+        let error = AppError::telegram_network("transport disconnected");
+
+        assert_eq!(error.kind, AppErrorKind::Network);
+        assert_eq!(
+            error.message,
+            "Telegram request failed: transport disconnected"
+        );
+    }
+
+    #[test]
+    fn llm_network_helper_maps_to_network() {
+        let error = AppError::llm_network("timeout");
+
+        assert_eq!(error.kind, AppErrorKind::Network);
+        assert_eq!(error.message, "LLM request failed: timeout");
     }
 }
