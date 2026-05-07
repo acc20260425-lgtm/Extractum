@@ -76,9 +76,12 @@ impl TelegramState {
     }
 }
 
-fn session_path(handle: &AppHandle, account_id: i64) -> Result<PathBuf, String> {
-    let app_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
+fn session_path(handle: &AppHandle, account_id: i64) -> AppResult<PathBuf> {
+    let app_dir = handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| AppError::internal(error.to_string()))?;
+    fs::create_dir_all(&app_dir).map_err(|error| AppError::internal(error.to_string()))?;
     Ok(app_dir.join(format!("telegram_{account_id}.session.json")))
 }
 
@@ -109,7 +112,7 @@ async fn save_session(
     handle: &AppHandle,
     account_id: i64,
     session: &Arc<MemorySession>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let home_dc = session.home_dc_id();
     let updates_state = session.updates_state().await;
     let mut dc_options = HashMap::new();
@@ -123,34 +126,35 @@ async fn save_session(
         dc_options,
         updates_state,
     };
-    let json = serde_json::to_string(&saved).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string(&saved)
+        .map_err(|error| AppError::internal(error.to_string()))?;
     let path = session_path(handle, account_id)?;
-    fs::write(path, json).map_err(|e| e.to_string())
+    fs::write(path, json).map_err(|error| AppError::internal(error.to_string()))
 }
 
-async fn list_account_credentials(handle: &AppHandle) -> Result<Vec<AccountCredentials>, String> {
+async fn list_account_credentials(handle: &AppHandle) -> AppResult<Vec<AccountCredentials>> {
     let pool = get_pool(handle).await?;
     sqlx::query_as("SELECT id, api_id, api_hash FROM accounts ORDER BY created_at ASC")
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::database)
 }
 
 async fn get_account_credentials(
     handle: &AppHandle,
     account_id: i64,
-) -> Result<AccountCredentials, String> {
+) -> AppResult<AccountCredentials> {
     let pool = get_pool(handle).await?;
     sqlx::query_as("SELECT id, api_id, api_hash FROM accounts WHERE id = ?")
         .bind(account_id)
         .fetch_optional(&pool)
         .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Account not found".to_string())
+        .map_err(AppError::database)?
+        .ok_or_else(|| AppError::not_found(format!("Account {account_id} not found")))
 }
 
-fn telegram_api_id(api_id: i64) -> Result<i32, String> {
-    i32::try_from(api_id).map_err(|_| "Telegram API ID is out of range".to_string())
+fn telegram_api_id(api_id: i64) -> AppResult<i32> {
+    i32::try_from(api_id).map_err(|_| AppError::validation("Telegram API ID is out of range"))
 }
 
 const TELEGRAM_ACCOUNT_STATUS_EVENT: &str = "telegram://account-status";
@@ -204,7 +208,7 @@ async fn init_account_client(
     account_id: i64,
     api_id: i32,
     api_hash: String,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
     set_account_status(handle, state, account_id, STATUS_RESTORING, None).await;
 
     let session = load_session(handle, account_id).await;
@@ -215,7 +219,10 @@ async fn init_account_client(
     });
 
     let client = Client::new(pool.handle);
-    let is_auth = client.is_authorized().await.map_err(|e| e.to_string())?;
+    let is_auth = client
+        .is_authorized()
+        .await
+        .map_err(AppError::telegram_network)?;
 
     let mut accounts = state.accounts.lock().await;
     accounts.insert(
@@ -240,7 +247,8 @@ async fn init_account_client(
     Ok(is_auth)
 }
 
-fn restore_failure_message(error: String) -> String {
+fn restore_failure_message(error: impl std::fmt::Display) -> String {
+    let error = error.to_string();
     if error.trim().is_empty() {
         "Unknown restore error".to_string()
     } else {
@@ -330,10 +338,10 @@ pub async fn tg_init(
                 &state,
                 account_id,
                 STATUS_RESTORE_FAILED,
-                Some(restore_failure_message(error.clone())),
+                Some(restore_failure_message(&error)),
             )
             .await;
-            Err(error.into())
+            Err(error)
         }
     }
 }
@@ -349,7 +357,10 @@ pub async fn tg_is_authenticated(
     };
 
     if let Some(client) = client {
-        Ok(client.is_authorized().await.map_err(|e| e.to_string())?)
+        Ok(client
+            .is_authorized()
+            .await
+            .map_err(AppError::telegram_network)?)
     } else {
         Ok(false)
     }
@@ -391,7 +402,7 @@ pub async fn tg_send_code(
         .client
         .request_login_code(&phone, &ac.api_hash.clone())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::telegram_network)?;
 
     ac.phone = Some(phone);
     ac.login_token = Some(token);
@@ -419,7 +430,7 @@ pub async fn tg_sign_in(
         ac.client
             .sign_in(token, &code)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::telegram_network)?;
         ac.login_token = None;
         Arc::clone(&ac.session)
     };
@@ -472,7 +483,7 @@ pub(crate) async fn get_authorized_runtime(
         .client
         .is_authorized()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::telegram_network)?
     {
         return Err(AppError::auth(format!(
             "Account {account_id} is not authenticated"
@@ -480,4 +491,19 @@ pub(crate) async fn get_authorized_runtime(
     }
 
     Ok(runtime)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::telegram_api_id;
+    use crate::error::AppErrorKind;
+
+    #[test]
+    fn telegram_api_id_out_of_range_returns_typed_validation_error() {
+        let error = telegram_api_id(i64::from(i32::MAX) + 1)
+            .expect_err("reject out-of-range api id");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Telegram API ID is out of range");
+    }
 }
