@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  AnalysisReportStartCommand,
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
@@ -25,6 +26,18 @@ export function listActiveAnalysisRuns() {
 
 export function getAnalysisRun(runId: number) {
   return invoke<AnalysisRunDetail | null>("get_analysis_run", { runId });
+}
+
+export function startAnalysisReport(command: AnalysisReportStartCommand) {
+  return invoke<number>("start_analysis_report", command);
+}
+
+export function cancelAnalysisRun(runId: number) {
+  return invoke<void>("cancel_analysis_run", { runId });
+}
+
+export function deleteAnalysisRun(runId: number) {
+  return invoke<void>("delete_analysis_run", { runId });
 }
 
 export function listenToAnalysisRunEvents(

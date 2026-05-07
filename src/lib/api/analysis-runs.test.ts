@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ANALYSIS_RUN_EVENT,
+  cancelAnalysisRun,
+  deleteAnalysisRun,
   getAnalysisRun,
   listActiveAnalysisRuns,
   listAnalysisRuns,
   listenToAnalysisRunEvents,
+  startAnalysisReport,
 } from "./analysis-runs";
 import type { AnalysisRunEvent } from "$lib/types/analysis";
 
@@ -48,6 +51,38 @@ describe("analysis run api wrappers", () => {
 
     await expect(getAnalysisRun(42)).resolves.toBeNull();
     expect(invokeMock).toHaveBeenLastCalledWith("get_analysis_run", { runId: 42 });
+  });
+
+  it("wraps analysis report start and destructive run actions", async () => {
+    invokeMock.mockResolvedValueOnce(77);
+    await expect(startAnalysisReport({
+      sourceId: 7,
+      sourceGroupId: null,
+      periodFrom: 1_776_038_400,
+      periodTo: 1_776_211_199,
+      outputLanguage: "Russian",
+      promptTemplateId: 5,
+      modelOverride: null,
+      profileId: null,
+    })).resolves.toBe(77);
+    expect(invokeMock).toHaveBeenLastCalledWith("start_analysis_report", {
+      sourceId: 7,
+      sourceGroupId: null,
+      periodFrom: 1_776_038_400,
+      periodTo: 1_776_211_199,
+      outputLanguage: "Russian",
+      promptTemplateId: 5,
+      modelOverride: null,
+      profileId: null,
+    });
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await expect(cancelAnalysisRun(77)).resolves.toBeUndefined();
+    expect(invokeMock).toHaveBeenLastCalledWith("cancel_analysis_run", { runId: 77 });
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await expect(deleteAnalysisRun(77)).resolves.toBeUndefined();
+    expect(invokeMock).toHaveBeenLastCalledWith("delete_analysis_run", { runId: 77 });
   });
 
   it("listens on the shared analysis run event name", async () => {

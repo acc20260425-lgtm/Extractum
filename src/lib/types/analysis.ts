@@ -61,6 +61,17 @@ export interface AnalysisRunDetail extends AnalysisRunSummary {
   error: string | null;
 }
 
+export interface AnalysisReportStartCommand {
+  sourceId: number | null;
+  sourceGroupId: number | null;
+  periodFrom: number;
+  periodTo: number;
+  outputLanguage: string;
+  promptTemplateId: number;
+  modelOverride: string | null;
+  profileId: null;
+}
+
 export interface AnalysisTraceRef {
   ref: string;
   item_id: number;

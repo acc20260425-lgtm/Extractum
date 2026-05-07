@@ -3,6 +3,7 @@ import type {
   AnalysisChunkSummaryEvent,
   AnalysisPromptTemplate,
   AnalysisChatTurn,
+  AnalysisReportStartCommand,
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
@@ -131,16 +132,6 @@ export type AnalysisReportStartState = {
   periodTo: string;
   outputLanguage: string;
   modelOverride: string;
-};
-export type AnalysisReportStartCommand = {
-  sourceId: number | null;
-  sourceGroupId: number | null;
-  periodFrom: number;
-  periodTo: number;
-  outputLanguage: string;
-  promptTemplateId: number;
-  modelOverride: string | null;
-  profileId: null;
 };
 export type AnalysisReportStartDecision =
   | { ok: true; command: AnalysisReportStartCommand }
