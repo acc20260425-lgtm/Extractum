@@ -2,7 +2,7 @@ use serde::Serialize;
 use tauri::AppHandle;
 
 use crate::db::get_pool;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::telegram::{clear_account_runtime, TelegramState};
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -22,7 +22,7 @@ pub async fn list_accounts(handle: AppHandle) -> AppResult<Vec<AccountRecord>> {
     )
     .fetch_all(&pool)
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(AppError::database)?)
 }
 
 #[tauri::command]
@@ -33,7 +33,7 @@ pub async fn get_account(handle: AppHandle, account_id: i64) -> AppResult<Option
             .bind(account_id)
             .fetch_optional(&pool)
             .await
-            .map_err(|e| e.to_string())?,
+            .map_err(AppError::database)?,
     )
 }
 
@@ -58,7 +58,7 @@ pub async fn create_account(
     .bind(now)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(AppError::database)?)
 }
 
 #[tauri::command]
@@ -69,7 +69,7 @@ pub async fn set_account_phone(handle: AppHandle, account_id: i64, phone: String
         .bind(account_id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
     Ok(())
 }
 
@@ -80,7 +80,7 @@ pub async fn clear_account_phone(handle: AppHandle, account_id: i64) -> AppResul
         .bind(account_id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
     Ok(())
 }
 
@@ -95,7 +95,7 @@ pub async fn delete_account(
         .bind(account_id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
     clear_account_runtime(&handle, &state, account_id, true).await;
     Ok(())
 }
