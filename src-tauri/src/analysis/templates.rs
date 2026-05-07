@@ -7,11 +7,13 @@ use super::models::AnalysisPromptTemplate;
 use super::store::ensure_builtin_report_template;
 use super::{now_secs, TEMPLATE_KIND_CHAT, TEMPLATE_KIND_REPORT};
 
-pub(crate) fn validate_template_kind(template_kind: &str) -> Result<String, String> {
+pub(crate) fn validate_template_kind(template_kind: &str) -> AppResult<String> {
     let normalized = template_kind.trim().to_ascii_lowercase();
     match normalized.as_str() {
         TEMPLATE_KIND_REPORT | TEMPLATE_KIND_CHAT => Ok(normalized),
-        _ => Err(format!("Unsupported template kind '{template_kind}'")),
+        _ => Err(AppError::validation(format!(
+            "Unsupported template kind '{template_kind}'"
+        ))),
     }
 }
 
@@ -19,17 +21,17 @@ fn validate_template_input(
     name: &str,
     template_kind: &str,
     body: &str,
-) -> Result<(String, String, String), String> {
+) -> AppResult<(String, String, String)> {
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err("Template name cannot be empty".to_string());
+        return Err(AppError::validation("Template name cannot be empty"));
     }
 
     let template_kind = validate_template_kind(template_kind)?;
 
     let body = body.trim().to_string();
     if body.is_empty() {
-        return Err("Template body cannot be empty".to_string());
+        return Err(AppError::validation("Template body cannot be empty"));
     }
 
     Ok((name, template_kind, body))
@@ -56,7 +58,7 @@ pub async fn list_analysis_prompt_templates(
         .bind(template_kind)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?)
+        .map_err(AppError::database)?)
     } else {
         Ok(sqlx::query_as::<_, AnalysisPromptTemplate>(
             r#"
@@ -67,7 +69,7 @@ pub async fn list_analysis_prompt_templates(
         )
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?)
+        .map_err(AppError::database)?)
     }
 }
 
@@ -104,7 +106,7 @@ pub async fn create_analysis_prompt_template(
     .bind(now)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(AppError::database)?)
 }
 
 #[tauri::command]
@@ -125,7 +127,7 @@ pub async fn update_analysis_prompt_template(
     .bind(template_id)
     .fetch_optional(&pool)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(AppError::database)?
     .ok_or_else(|| {
         AppError::not_found(format!("Analysis prompt template {template_id} not found"))
     })?;
@@ -165,7 +167,7 @@ pub async fn update_analysis_prompt_template(
     .bind(template_id)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(AppError::database)?)
 }
 
 #[tauri::command]
@@ -176,7 +178,7 @@ pub async fn delete_analysis_prompt_template(handle: AppHandle, template_id: i64
             .bind(template_id)
             .fetch_optional(&pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::database)?;
 
     let Some((_, is_builtin)) = template else {
         return Err(AppError::not_found(format!(
@@ -192,7 +194,7 @@ pub async fn delete_analysis_prompt_template(handle: AppHandle, template_id: i64
         .bind(template_id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
 
     Ok(())
 }

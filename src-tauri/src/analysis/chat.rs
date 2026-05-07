@@ -228,7 +228,7 @@ impl ChatEvent {
 async fn load_chat_messages_from_pool(
     pool: &Pool<Sqlite>,
     run_id: i64,
-) -> Result<Vec<AnalysisChatMessage>, String> {
+) -> AppResult<Vec<AnalysisChatMessage>> {
     sqlx::query_as(
         r#"
         SELECT id, run_id, role, content, created_at
@@ -240,7 +240,7 @@ async fn load_chat_messages_from_pool(
     .bind(run_id)
     .fetch_all(pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(AppError::database)
 }
 
 async fn persist_chat_exchange(
@@ -248,12 +248,12 @@ async fn persist_chat_exchange(
     run_id: i64,
     user_question: &str,
     assistant_answer: &str,
-) -> Result<(), String> {
+) -> AppResult<()> {
     validate_chat_role("user")?;
     validate_chat_role("assistant")?;
 
     let now = now_secs();
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
 
     sqlx::query(
         r#"
@@ -267,7 +267,7 @@ async fn persist_chat_exchange(
     .bind(now)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     sqlx::query(
         r#"
@@ -281,9 +281,9 @@ async fn persist_chat_exchange(
     .bind(now)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(AppError::database)?;
 
     Ok(())
 }
@@ -317,7 +317,7 @@ pub async fn clear_analysis_chat_messages(handle: AppHandle, run_id: i64) -> App
         .bind(run_id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
 
     Ok(())
 }

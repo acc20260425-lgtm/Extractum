@@ -10,10 +10,10 @@ use super::store::{ensure_sources_exist, fetch_source_group};
 pub(crate) fn normalize_source_group_input(
     name: &str,
     source_ids: Vec<i64>,
-) -> Result<(String, Vec<i64>), String> {
+) -> AppResult<(String, Vec<i64>)> {
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err("Source group name cannot be empty".to_string());
+        return Err(AppError::validation("Source group name cannot be empty"));
     }
 
     let mut source_ids = source_ids
@@ -24,7 +24,9 @@ pub(crate) fn normalize_source_group_input(
     source_ids.dedup();
 
     if source_ids.is_empty() {
-        return Err("Select at least one source for the group".to_string());
+        return Err(AppError::validation(
+            "Select at least one source for the group",
+        ));
     }
 
     Ok((name, source_ids))
@@ -42,7 +44,7 @@ pub async fn list_analysis_source_groups(handle: AppHandle) -> AppResult<Vec<Ana
     )
     .fetch_all(&pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     let mut groups = Vec::with_capacity(rows.len());
     for row in rows {
@@ -65,7 +67,7 @@ pub async fn create_analysis_source_group(
     ensure_sources_exist(&pool, &source_ids).await?;
 
     let now = now_secs();
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
 
     let group_id: i64 = sqlx::query_scalar(
         r#"
@@ -79,7 +81,7 @@ pub async fn create_analysis_source_group(
     .bind(now)
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     for source_id in source_ids {
         sqlx::query(
@@ -93,10 +95,10 @@ pub async fn create_analysis_source_group(
         .bind(now)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
     }
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(AppError::database)?;
 
     fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
         AppError::not_found(format!(
@@ -122,7 +124,7 @@ pub async fn update_analysis_source_group(
     .bind(group_id)
     .fetch_one(&pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
     if exists == 0 {
         return Err(AppError::not_found(format!(
             "Analysis source group {group_id} not found"
@@ -130,7 +132,7 @@ pub async fn update_analysis_source_group(
     }
 
     let now = now_secs();
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
 
     sqlx::query(
         r#"
@@ -144,13 +146,13 @@ pub async fn update_analysis_source_group(
     .bind(group_id)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     sqlx::query("DELETE FROM analysis_source_group_members WHERE group_id = ?")
         .bind(group_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
 
     for source_id in source_ids {
         sqlx::query(
@@ -164,10 +166,10 @@ pub async fn update_analysis_source_group(
         .bind(now)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
     }
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(AppError::database)?;
 
     fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
         AppError::not_found(format!(
@@ -183,7 +185,7 @@ pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> A
         .bind(group_id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::not_found(format!(

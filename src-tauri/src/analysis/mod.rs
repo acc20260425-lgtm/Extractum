@@ -108,24 +108,30 @@ fn emit_analysis_chat_event(handle: &AppHandle, event: &AnalysisChatEvent) {
     let _ = handle.emit(ANALYSIS_CHAT_EVENT, event);
 }
 
-fn validate_chat_turns(history: &[AnalysisChatTurn]) -> Result<(), String> {
+fn validate_chat_turns(history: &[AnalysisChatTurn]) -> AppResult<()> {
     for turn in history {
         match turn.role.as_str() {
             "user" | "assistant" => {}
-            other => return Err(format!("Unsupported chat turn role '{other}'")),
+            other => {
+                return Err(AppError::validation(format!(
+                    "Unsupported chat turn role '{other}'"
+                )))
+            }
         }
         if turn.content.trim().is_empty() {
-            return Err("Chat turns cannot be empty".to_string());
+            return Err(AppError::validation("Chat turns cannot be empty"));
         }
     }
 
     Ok(())
 }
 
-fn validate_chat_role(role: &str) -> Result<(), String> {
+fn validate_chat_role(role: &str) -> AppResult<()> {
     match role {
         "user" | "assistant" => Ok(()),
-        other => Err(format!("Unsupported chat role '{other}'")),
+        other => Err(AppError::validation(format!(
+            "Unsupported chat role '{other}'"
+        ))),
     }
 }
 
@@ -159,7 +165,7 @@ pub async fn list_analysis_sources(handle: AppHandle) -> AppResult<Vec<AnalysisS
     )
     .fetch_all(&pool)
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(AppError::database)?)
 }
 
 #[tauri::command]
@@ -218,7 +224,7 @@ pub async fn list_analysis_runs(
         .bind(limit)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::database)?
     } else if let Some(source_group_id) = source_group_id {
         sqlx::query_as(
             r#"
@@ -259,7 +265,7 @@ pub async fn list_analysis_runs(
         .bind(limit)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::database)?
     } else {
         sqlx::query_as(
             r#"
@@ -298,7 +304,7 @@ pub async fn list_analysis_runs(
         .bind(limit)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::database)?
     };
 
     Ok(rows.into_iter().map(map_run_summary).collect())
@@ -408,8 +414,13 @@ pub async fn resolve_analysis_trace_refs(
 mod tests {
     use super::groups::normalize_source_group_input;
     use super::store::ensure_builtin_report_template;
+    use super::templates::validate_template_kind;
     use super::trace::compress_trace_data;
-    use super::{decode_trace_data, AnalysisTraceData, AnalysisTraceRef, TEMPLATE_KIND_REPORT};
+    use super::{
+        decode_trace_data, validate_chat_role, AnalysisChatTurn, AnalysisTraceData,
+        AnalysisTraceRef, TEMPLATE_KIND_REPORT,
+    };
+    use crate::error::AppErrorKind;
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -511,5 +522,41 @@ mod tests {
 
         assert_eq!(name, "Core sources");
         assert_eq!(source_ids, vec![2, 4]);
+    }
+
+    #[test]
+    fn template_kind_validation_returns_typed_error() {
+        let error = validate_template_kind("summary").expect_err("reject unsupported kind");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Unsupported template kind 'summary'");
+    }
+
+    #[test]
+    fn source_group_input_validation_returns_typed_error() {
+        let error = normalize_source_group_input("  ", vec![1]).expect_err("reject empty name");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Source group name cannot be empty");
+    }
+
+    #[test]
+    fn chat_role_validation_returns_typed_error() {
+        let error = validate_chat_role("system").expect_err("reject unsupported role");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Unsupported chat role 'system'");
+    }
+
+    #[test]
+    fn chat_turn_validation_returns_typed_error() {
+        let history = vec![AnalysisChatTurn {
+            role: "user".to_string(),
+            content: "   ".to_string(),
+        }];
+        let error = super::validate_chat_turns(&history).expect_err("reject empty chat turn");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Chat turns cannot be empty");
     }
 }
