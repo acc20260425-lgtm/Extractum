@@ -8,15 +8,16 @@ Extractum cleanup work. It supersedes all earlier handoff contents in this file.
 ## Current Repository State
 
 - Repository root: `G:\Develop\Extractum`.
-- Current branch: `analysis-report-actions-cleanup`.
-- Working tree state after the final route wiring/docs task commit: clean.
+- Current branch: `main`.
+- Working tree state after this handoff edit: clean.
 - Git remotes: none configured.
 - Local feature branch `analysis-source-groups-cleanup` was merged into `main`
   with a fast-forward merge and then deleted.
+- Local feature branch `analysis-report-actions-cleanup` was merged into `main`
+  with a fast-forward merge and then deleted.
 - Local feature branch `analysis-workspace-loading` was previously merged into
   `main` with a fast-forward merge and then deleted.
-- Known local branches after cleanup: `main`, `desktop-ui`,
-  `analysis-report-actions-cleanup`.
+- Known local branches after cleanup: `main`, `desktop-ui`.
 - Shell: PowerShell on Windows.
 - Timezone: `Europe/Minsk`.
 - Current date in this session: Thursday, 2026-05-07.
@@ -25,6 +26,7 @@ Extractum cleanup work. It supersedes all earlier handoff contents in this file.
 Recent relevant history:
 
 ```text
+c4fe2e2 refactor(analysis): use report action workflow
 33e53fa refactor(analysis): move report actions into run workflow
 30302b7 refactor(analysis): add report action api wrappers
 abc570e docs(analysis): add report actions cleanup plan
@@ -89,9 +91,8 @@ c7ea9b6 refactor(analysis): extract trace workflow controller
 
 ## Completed In This Session
 
-The Analysis report start/cancel/delete cleanup workstream is complete on the
-local branch `analysis-report-actions-cleanup`. It has not yet been merged into
-`main`.
+The Analysis report start/cancel/delete cleanup workstream is complete, verified,
+merged into `main`, and its feature branch was deleted.
 
 Implemented files:
 
@@ -139,7 +140,7 @@ Task commits:
 abc570e docs(analysis): add report actions cleanup plan
 30302b7 refactor(analysis): add report action api wrappers
 33e53fa refactor(analysis): move report actions into run workflow
-current HEAD: refactor(analysis): use report action workflow
+c4fe2e2 refactor(analysis): use report action workflow
 ```
 
 ## Verification Performed
@@ -171,7 +172,7 @@ rg "start_analysis_report|cancel_analysis_run|delete_analysis_run" src/routes/an
 
 The route search returned no output after the route wiring task.
 
-Full verification on `analysis-report-actions-cleanup`:
+Full verification before merging `analysis-report-actions-cleanup`:
 
 ```text
 npm.cmd test
@@ -182,6 +183,22 @@ svelte-check found 0 errors and 0 warnings
 
 git diff --check
 exit code 0
+```
+
+Verification after fast-forward merge into `main`:
+
+```text
+npm.cmd test
+21 test files passed, 166 tests passed
+
+npm.cmd run check
+svelte-check found 0 errors and 0 warnings
+
+git diff --check
+exit code 0
+
+git status --short --branch
+## main
 ```
 
 ## Completed Historical Cleanup Workstreams
@@ -279,5 +296,5 @@ Open tabs reported by the IDE include:
 ## Suggested Commit Message For This Handoff Edit
 
 ```text
-refactor(analysis): use report action workflow
+docs(session): refresh report actions post-merge handoff
 ```
