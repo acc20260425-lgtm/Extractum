@@ -6,49 +6,57 @@ This file is the current restoration point for the Extractum cleanup session.
 It is intentionally self-contained so a future Codex session can resume without
 reading the full chat transcript.
 
-This file avoids non-ASCII text because an earlier handoff displayed encoding
-corruption for a Russian request in PowerShell output.
+This file is ASCII-only on purpose. Earlier Russian text in this handoff was
+displayed with mojibake in PowerShell output.
 
-Latest user request, summarized in English:
+## Latest User Request
 
-```text
-The user agreed to proceed with the recommended cleanup. The active workstream
-is the remaining response/event DTO drift audit. The current pass found
-Takeout phase drift and Telegram auth response type drift.
-```
-
-Commit message prepared for this turn if the current changes are committed:
+Current user request, summarized in English:
 
 ```text
-fix(api): align response DTO contracts
+Rewrite docs/session-context-2026-05-03.md with all information needed to
+restore the current session context. The file may be overwritten. Provide a
+commit message.
 ```
+
+Requested commit message for this handoff-only change:
+
+```text
+docs(session): refresh current handoff context
+```
+
+No commit has been created for this latest handoff refresh unless the current
+session explicitly does it after writing this file.
 
 ## Repository And Environment
 
 - Repository root: `G:\Develop\Extractum`.
-- Current branch: `main`.
+- Current branch at the start of this handoff refresh: `main`.
 - Git remotes: none configured.
+- Working tree at the start of this handoff refresh: clean.
 - Shell: PowerShell on Windows.
-- Timezone in the IDE environment: `Europe/Minsk`.
+- Timezone from IDE context: `Europe/Minsk`.
 - Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 - Collaboration mode: Default mode.
-- Current working tree before this response/event DTO audit pass: clean on
-  `main`.
-- Git writes such as `git add` and `git commit` often fail in the default
-  sandbox with `.git/index.lock` permission errors. Rerunning the same git
-  command with approval outside the sandbox has worked.
+
+Known environment behavior:
+
+- Git writes such as `git add` and `git commit` can fail in the default sandbox
+  with `.git/index.lock` permission errors. Rerunning the same git command with
+  approval outside the sandbox has worked.
 - Frontend verification commands can fail in the default sandbox with
   `spawn EPERM` because Vite, esbuild, or Svelte preprocessing needs child
   processes. Rerun the same command outside the sandbox if that happens.
+- `git diff --check` runs in the sandbox. LF/CRLF warnings can appear; exit
+  code 0 means whitespace is clean.
 - Cargo may need network only if dependencies are not already cached.
-- `git diff --check` runs in the sandbox. LF/CRLF warnings from Git can appear,
-  but exit code 0 means whitespace is clean.
-- There are no configured Git remotes, so local merge workflows skip `git pull`.
+- There are no Git remotes, so local merge workflows skip `git pull`.
 
 ## Active Working Rules
 
-- Do not create a git worktree for this cleanup stream.
+- Do not create a git worktree for this cleanup stream unless the user asks for
+  one.
 - Execute one top-level implementation/docs task per user turn.
 - Do not revert user changes.
 - Use `rg`/`rg --files` for search.
@@ -56,18 +64,26 @@ fix(api): align response DTO contracts
 - For docs-only handoff updates, at minimum verify with `git diff --check` and
   a targeted command that proves the documented claim.
 - Before claiming completion or committing, use the Superpowers
-  `verification-before-completion` skill. It was read in the previous docs
-  cleanup turn.
-- Relevant Superpowers skills available in this session include
-  `using-superpowers`, `verification-before-completion`,
-  `executing-plans`, `systematic-debugging`, `test-driven-development`,
-  `requesting-code-review`, and `finishing-a-development-branch`.
+  `verification-before-completion` skill.
+- Use TDD for behavior/code changes. Docs-only refreshes do not need TDD.
+
+Superpowers skills read or used during the recent session:
+
+- `superpowers:using-superpowers`
+- `superpowers:verification-before-completion`
+- `superpowers:test-driven-development`
+- `superpowers:brainstorming` was read earlier, but recent work was audit and
+  scoped refactoring rather than open-ended creative design.
+
+Subagents were not used because the user did not request delegation or parallel
+agent work.
 
 ## Current Git History
 
-Latest commits at the start of the current response/event DTO audit pass:
+Latest commits at the start of this handoff refresh:
 
 ```text
+a7e0647 fix(api): align response DTO contracts
 6fd2218 refactor(accounts): centralize status event listener
 60c8961 docs(session): refresh current session context
 525bc09 docs(cleanup): remove stale implementation handoffs
@@ -83,73 +99,144 @@ ee070e1 refactor(analysis): reuse account api wrappers
 1827552 docs(session): refresh analysis editor handoff
 5b0705c refactor(analysis): use editor workflow
 d8d641d refactor(analysis): move source group editor workflow
-3f6ebfa refactor(analysis): move template editor workflow
+3f6ebfa refactor(analysis): add editor api wrappers
 3fb3696 refactor(analysis): add editor api wrappers
 4ffc87b docs(analysis): add editor workflow extraction plan
 26d3781 docs(analysis): add editor workflow extraction design
-81c0b11 docs(session): refresh typed error cleanup handoff
-c2584d3 refactor(error): type llm command failures
-5bcd2ef refactor(error): type telegram failures
 ```
 
-Important note: commit `525bc09` deleted obsolete completed Superpowers plan
-and spec files. If a future session needs the exact old implementation plans,
-recover them from Git history rather than restoring them as active docs.
+Note: the `git log --oneline -20` command is the source for this list. If this
+handoff is committed, add that new commit to the top during the next refresh.
 
-## Docs Inventory
+## Recent User Flow
 
-Files currently present under `docs` at the start of this handoff rewrite:
+The current session began with the user asking to restore context from:
 
 ```text
-docs\takeout-source-import.md
-docs\session-context-2026-05-03.md
-docs\project.md
-docs\design-document.md
-docs\database-schema.md
-docs\codebase-audit-2026-05-05.md
-docs\code-review-results-2026-05-03.md
-docs\backlog.md
-docs\architecture-deep-dive.md
+docs/session-context-2026-05-03.md
 ```
 
-`docs/superpowers/plans` and `docs/superpowers/specs` no longer contain active
-files after commit `525bc09`.
+Context was restored from that file. At that moment:
 
-Current docs sources of truth for cleanup state:
+- branch was `main`;
+- working tree was clean;
+- recommended next workstream was the remaining response/event DTO drift audit;
+- the still-open maintainability concern was the Analysis route remaining a
+  high-context composition surface;
+- route-level raw Tauri command/event usage was already intended to stay clean.
 
-- `docs/code-review-results-2026-05-03.md`
-- `docs/session-context-2026-05-03.md`
+The user then typed `Cjukfcty/ Ltqcndeq`, which was interpreted as a Russian
+keyboard-layout typo for "Soglasen. Deistvui" / "I agree. Proceed." Work
+continued.
 
-## Current Review State
+## Completed Work In This Session
 
-Primary review document:
+### Commit 6fd2218
+
+Commit:
 
 ```text
-docs/code-review-results-2026-05-03.md
+6fd2218 refactor(accounts): centralize status event listener
 ```
 
-Review scope:
+Implemented:
 
-- Whole Extractum codebase.
-- Security findings intentionally out of scope.
-- Focus: maintainability, consistency, extensibility, testability, and avoiding
-  duplication.
-- CodeRabbit could not be used because `coderabbit --version` failed with
-  `Wsl/Service/E_ACCESSDENIED`; the review is manual.
+- `src/lib/api/accounts.ts` now owns `TELEGRAM_ACCOUNT_STATUS_EVENT`.
+- `src/lib/api/accounts.ts` now exposes `listenToAccountRuntimeStatus`.
+- `src/routes/accounts/+page.svelte` no longer imports
+  `@tauri-apps/api/event` directly for account status events.
+- `src/lib/api/accounts.test.ts` pins the shared
+  `telegram://account-status` event name and listener wrapper behavior.
+- Review and handoff docs were updated to record the cleaner route event
+  boundary.
 
-Resolved cleanup currently recorded in the review:
+TDD note:
+
+- RED was observed outside the sandbox:
+  `TypeError: listenToAccountRuntimeStatus is not a function`.
+- GREEN after implementation:
+  `npm.cmd test -- src/lib/api/accounts.test.ts` passed with 10 tests.
+
+Verification before commit:
+
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `npm.cmd test -- src/lib/api/accounts.test.ts`: 10 tests passed.
+- `rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src\routes`: no matches,
+  exit code 1.
+- `rg -n "@tauri-apps/api/event|listen<" src\routes`: no matches, exit code 1.
+- `git diff --check`: exit code 0 with LF/CRLF warnings only.
+- `rg -n "[^[:ascii:]]" docs\session-context-2026-05-03.md`: no matches,
+  exit code 1.
+- Post-commit `git status --short --branch`: `## main`.
+
+### Commit a7e0647
+
+Commit:
+
+```text
+a7e0647 fix(api): align response DTO contracts
+```
+
+Implemented:
+
+- `src/lib/types/sources.ts` now exports `TAKEOUT_IMPORT_PHASES`.
+- `TakeoutImportPhase` is derived from `TAKEOUT_IMPORT_PHASES`.
+- The stale frontend-only Takeout phase `refreshing_aux` was removed from the
+  type and from `src/lib/components/analysis/workspace-rail.svelte`.
+- `src/lib/api/takeout-import.test.ts` pins the frontend Takeout import phase
+  tuple to the Rust phases currently emitted from
+  `src-tauri/src/takeout_import/state.rs`.
+- `src/lib/api/accounts.ts` now returns:
+  - `Promise<string>` from `sendTelegramCode`;
+  - `Promise<boolean>` from `signInTelegramAccount`;
+  - `Promise<boolean>` from `logoutTelegramAccount`.
+- Those wrapper response types now match Rust commands:
+  - `tg_send_code -> AppResult<String>`;
+  - `tg_sign_in -> AppResult<bool>`;
+  - `tg_logout -> AppResult<bool>`.
+- `src/lib/api/accounts.test.ts` includes type-level assertions for these
+  response promises.
+- `docs/code-review-results-2026-05-03.md`,
+  `docs/session-context-2026-05-03.md`, and
+  `docs/takeout-source-import.md` were updated.
+
+TDD notes:
+
+- RED for Takeout phases:
+  `npm.cmd test -- src/lib/api/takeout-import.test.ts` first failed outside
+  the sandbox because `TAKEOUT_IMPORT_PHASES` was `undefined`.
+- RED for Telegram auth response types:
+  `npm.cmd run check` first failed on the new `expectTypeOf` assertions because
+  the wrappers still returned `Promise<void>` where Rust returns `String` and
+  `bool`.
+
+Verification before commit:
+
+- `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/takeout-import.test.ts`:
+  2 files passed, 15 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src\routes`: no matches,
+  exit code 1.
+- `rg -n "@tauri-apps/api/event|listen<" src\routes`: no matches, exit code 1.
+- `git diff --check`: exit code 0 with LF/CRLF warnings only.
+- `rg -n "[^[:ascii:]]" docs\session-context-2026-05-03.md`: no matches,
+  exit code 1.
+- Post-commit `git status --short --branch`: `## main`.
+
+## Consolidated Cleanup State
+
+Maintained in `docs/code-review-results-2026-05-03.md`:
 
 - Analysis run loading, opening, and run-event orchestration were extracted from
-  `src/routes/analysis/+page.svelte` into a tested workflow controller.
+  `src/routes/analysis/+page.svelte` into tested workflow controllers.
 - Core source workflows in `/analysis` now call `$lib/api/sources` instead of
   raw core source Tauri commands.
-- Source UI domain objects now use camelCase fields, and raw source DTO mapping
-  is centralized in `src/lib/api/sources.ts`.
+- Source UI domain objects use camelCase fields, with raw source DTO mapping
+  localized in `src/lib/api/sources.ts`.
 - `get_items` was replaced by the registered `list_source_items` command.
 - Source request DTOs use camelCase Tauri wire fields.
 - Telegram source-kind validation is centralized.
-- Source command and service boundaries use explicit `AppError` constructors
-  for source-local user-visible failures.
+- Source command and service boundaries use explicit `AppError` constructors.
 - Repeated source SQLite test setup is consolidated in
   `src-tauri/src/sources/test_support.rs`.
 - Takeout import command/event access is centralized in
@@ -165,470 +252,294 @@ Resolved cleanup currently recorded in the review:
 - Analysis account/status loading and analysis source metrics command access
   are centralized in `src/lib/api/analysis-workspace.ts` and
   `src/lib/analysis-workspace-workflow.ts`.
-- Telegram account and authentication command access is centralized in
-  `src/lib/api/accounts.ts`; the Accounts and Auth routes no longer invoke
-  those Tauri commands directly.
-- Telegram account runtime status event access is centralized in
-  `src/lib/api/accounts.ts`; the Accounts route no longer imports
-  `@tauri-apps/api/event` directly.
-- Telegram auth wrappers now expose the Rust response contracts for
-  `tg_send_code`, `tg_sign_in`, and `tg_logout` instead of hiding them as
-  `void`.
-- Analysis source group loading and template/group deletion command access and
-  route-level orchestration are centralized in
-  `src/lib/api/analysis-source-groups.ts` and
-  `src/lib/analysis-source-groups-workflow.ts`.
-- Analysis prompt-template and source-group create/update command access and
-  route-level orchestration are centralized in
-  `src/lib/api/analysis-source-groups.ts` and
+- Telegram account/auth command access and Telegram account runtime status
+  event access are centralized in `src/lib/api/accounts.ts`.
+- Accounts and Auth routes no longer call those Tauri APIs directly.
+- Telegram auth wrappers expose Rust response contracts instead of hiding them
+  as `void`.
+- Analysis source group/template command access and route-level orchestration
+  are centralized in `src/lib/api/analysis-source-groups.ts` and
   `src/lib/analysis-source-groups-workflow.ts`.
 - Analysis report start/cancel/delete command access and route-level
   orchestration are centralized in `src/lib/api/analysis-runs.ts` and
   `src/lib/analysis-run-workflow.ts`.
 - Boundary-first typed error conversion is complete for the remaining DB,
-  Telegram, LLM, and validation command boundaries. Shared helpers now cover
-  database, Telegram transport, and LLM network failures while preserving the
-  existing `{ kind, message }` frontend wire shape.
-- Shared frontend wrapper input contracts for Accounts, Analysis run/chat/source
-  group/template, LLM, and source command wrappers now live in domain type
-  modules under `src/lib/types/*`; API wrappers no longer export those public
-  input interfaces, while wrapper tests continue to pin command payload shapes.
-- Takeout import phases are now pinned in `TAKEOUT_IMPORT_PHASES`; the stale
-  frontend-only `refreshing_aux` phase was removed until Rust emits such a
-  phase.
-- Obsolete Superpowers plan/spec handoff artifacts for completed cleanup
-  workstreams were removed; current cleanup state lives in the review, this
-  session handoff, and Git history.
+  Telegram, LLM, and validation command boundaries.
+- Shared frontend wrapper input contracts for Accounts, Analysis
+  run/chat/source group/template, LLM, and source command wrappers live in
+  domain type modules under `src/lib/types/*`.
+- Takeout import phases are pinned in `TAKEOUT_IMPORT_PHASES`.
+- Obsolete Superpowers plan/spec handoff artifacts for completed workstreams
+  were removed in commit `525bc09`.
 
 Deferred by design:
 
 - Rust-to-TypeScript type generation.
-- Broad response/event DTO generation/consolidation; the latest targeted pass
-  fixed concrete drift without introducing generated Rust-to-TypeScript types.
-- Secure secret storage, as a separate security backlog item.
+- Broad response/event DTO generation/consolidation.
+- Secure secret storage.
 
-## Open Findings
+## Review Findings Still Worth Remembering
 
-### Major: Analysis Route Remains A High-Context Composition Surface
+From `docs/code-review-results-2026-05-03.md`:
 
-`src/routes/analysis/+page.svelte` is smaller than at the start of the review,
-and the remaining source group/template editor workflows are now delegated to
-the analysis source-groups workflow. The route still owns listener lifecycle,
-local Svelte state binding, and UI composition for the Analysis page.
+### Analysis Route Composition
 
-Suggested follow-up:
+`src/routes/analysis/+page.svelte` is smaller than before, but remains a
+high-context composition surface. It still owns listener lifecycle, local
+Svelte state binding, and UI composition for the Analysis page.
 
-- keep future changes routed through the existing API and workflow boundaries;
-- keep the route as a composition, state binding, and Svelte lifecycle layer;
-- only extract listener lifecycle later if it becomes a concrete source of
-  defects or test friction.
+Recommended handling:
 
-### Moderate: Remaining Response/Event DTOs Are Manually Mirrored
+- route future changes through existing API and workflow boundaries;
+- keep the route as composition/state/lifecycle glue;
+- extract listener lifecycle only if it becomes a concrete source of defects or
+  test friction.
 
-Compact frontend API wrappers now exist for analysis runs, Analysis chat,
-Analysis trace, Analysis workspace loading, Analysis source groups/templates,
-Takeout import, NotebookLM export, report start/cancel/delete actions, Telegram
-accounts/authentication/status events, and LLM cancellation. Route-level raw
-Tauri command and event API searches return no matches under `src/routes`.
+### Response/Event DTO Mirrors
 
-Shared wrapper input contracts for Accounts, Analysis run/chat/source
-group/template, LLM, and source wrapper commands are centralized in
-`src/lib/types/*`. `AnalysisReportStartCommand.profileId` matches the Rust
-`Option<String>` command boundary as `string | null`.
+Several frontend response/event DTOs are still manually maintained beside Rust
+serde structs. The latest targeted pass fixed two concrete drift cases:
 
-The latest targeted response/event pass aligned two concrete drift cases:
-Telegram auth wrappers now expose the Rust `String`/`bool` responses for
-`tg_send_code`, `tg_sign_in`, and `tg_logout`, and Takeout import phases are
-pinned through `TAKEOUT_IMPORT_PHASES` without the stale frontend-only
-`refreshing_aux` value.
+- Telegram auth wrapper response types;
+- stale Takeout `refreshing_aux` phase.
 
-Remaining risk: several frontend response/event DTOs are still manually
-maintained beside Rust serde structs.
+Recommended handling:
 
-Suggested follow-up:
+- re-audit DTO mirrors when Rust serde shapes change or multiple frontend
+  modules share a contract;
+- keep route files free of raw command/event access;
+- defer generated TypeScript types until DTO drift becomes recurring.
 
-- audit remaining manually mirrored response/event DTOs only when they show real
-  sharing or drift risk;
-- keep route files free of raw command access as new command surfaces are added;
-- later consider generated TypeScript types from Rust if drift remains a
-  recurring problem.
-
-### Low: Some Lower-Level String Errors Remain By Design
+### Lower-Level String Errors
 
 DB, Telegram, LLM, and validation command boundaries now use explicit typed
 `AppError` mappings. Some lower-level and event-oriented paths still keep
 `Result<T, String>` intentionally, including LLM streamed event payloads and
 compatibility fallbacks through `From<String>` / `classify_message`.
 
-Suggested follow-up:
+Recommended handling:
 
 - keep new command/service boundaries on explicit `AppError` constructors;
-- when touching lower-level helpers, avoid introducing new command-facing
-  `Result<T, String>` paths;
-- reduce `classify_message` fallback reliance opportunistically.
+- avoid introducing new command-facing `Result<T, String>` paths;
+- reduce fallback reliance opportunistically when touching nearby code.
 
-## Completed Cleanup Workstreams
+## Active Codebase Audit
 
-### Boundary-First Typed Error Conversion
-
-Completed commits include:
+The active IDE file is:
 
 ```text
-ae5bc7d refactor(error): add typed conversion helpers
-89a65a8 refactor(error): type account database failures
-8c9a073 refactor(error): type analysis validation failures
-5bcd2ef refactor(error): type telegram failures
-c2584d3 refactor(error): type llm command failures
-81c0b11 docs(session): refresh typed error cleanup handoff
+docs/codebase-audit-2026-05-05.md
 ```
 
-Implemented:
+That audit is newer and more product-risk-oriented than the maintainability
+review. It should drive the next substantial implementation work unless the
+user explicitly chooses otherwise.
 
-- Shared typed error helpers in `src-tauri/src/error.rs` for database, Telegram
-  transport, and LLM network failures.
-- Boundary-first typed conversions for account DB, Analysis validation/store,
-  Telegram runtime/client/session, and LLM command-boundary failures.
-- Existing frontend `{ kind, message }` error wire shape preserved.
+Top findings from that audit:
 
-Focused verification recorded during implementation:
+1. Critical: Analysis runs have no corpus or request budget.
+   - `src-tauri/src/analysis/corpus.rs` loads all matching rows and materializes
+     them with `fetch_all`.
+   - `src-tauri/src/analysis/report.rs` loads the full corpus before any budget
+     check and spawns one map task per chunk.
+   - Suggested fix: backend preflight count/estimate, configurable hard limits,
+     streamed or paged corpus loading, UI estimate/confirmation, tests around
+     budget boundaries.
 
-```powershell
-cd src-tauri
-cargo test error
-cargo test accounts
-cargo test analysis
-cargo test telegram
-cargo test llm
-```
+2. Critical: Account deletion bypasses active ingest coordination.
+   - `src-tauri/src/source_ingest.rs` coordinates source operations by
+     `source_id`.
+   - sync, Takeout import, and source deletion use that lock model.
+   - `src-tauri/src/accounts.rs::delete_account` deletes directly and clears
+     runtime state without acquiring source locks, cancelling Takeout jobs, or
+     checking `rows_affected`.
+   - Suggested fix: account deletion service, load linked sources in a
+     transaction, reject/cancel when work is active, check missing account,
+     backend tests.
 
-### Analysis Editor Workflow Extraction
+3. Major: Takeout imports leave unqualified partial corpus rows.
+   - Takeout inserts directly into the main `items` table during page
+     processing.
+   - Failed/cancelled jobs leave partial rows and do not advance
+     `last_sync_state`.
+   - Suggested fix: ingest batch provenance or staging, exclude incomplete
+     batches from analysis/export by default, solve migrated-history identity,
+     storage tests.
 
-Completed commits include:
+4. Major: The full verification baseline is not green or centralized.
+   - `cargo test` passed locally with 141 tests in the audit.
+   - `npm.cmd test` passed outside sandbox with 17 files and 136 tests in the
+     audit.
+   - `npm.cmd run check` passed outside sandbox with 0 errors/warnings in the
+     audit.
+   - `cargo clippy --all-targets -- -D warnings` failed with 19 errors in
+     `src-tauri/src/takeout_import/mod.rs`.
+   - Suggested fix: fix/justify clippy failures, add a root verification command
+     or script, add CI, keep live Telegram smoke separate.
+
+5. Major: Telegram crates are pinned through a moving git branch.
+   - `src-tauri/Cargo.toml` depends on `grammers-*` crates from
+     `https://github.com/Lonami/grammers` with `branch = "master"`.
+   - Lockfile pins one commit, but the manifest still points to a moving branch.
+   - Suggested fix: explicit `rev` or owned tagged fork/release, documented
+     upgrade procedure, small isolated upstream upgrade commits.
+
+Recommended fix order from the audit:
+
+1. Add analysis preflight budgets and hard run limits.
+2. Make account deletion coordinate with active ingest and analysis work.
+3. Introduce Takeout import batch provenance or staging.
+4. Fix clippy and add a full-project verification command plus CI.
+5. Pin the `grammers` dependency policy to an explicit revision or owned
+   release.
+
+## Current Suggested Next Work
+
+If the user says "continue" or "act" without further details, prefer the
+newer codebase audit's top risk:
 
 ```text
-26d3781 docs(analysis): add editor workflow extraction design
-4ffc87b docs(analysis): add editor workflow extraction plan
-3fb3696 refactor(analysis): add editor api wrappers
-3f6ebfa refactor(analysis): move template editor workflow
-d8d641d refactor(analysis): move source group editor workflow
-5b0705c refactor(analysis): use editor workflow
-1827552 docs(session): refresh analysis editor handoff
+Add analysis preflight budgets and hard run limits.
 ```
 
-Implemented:
+Recommended starting shape:
 
-- `src/lib/api/analysis-source-groups.ts` owns frontend command access for
-  Analysis source group and prompt-template commands.
-- `src/lib/analysis-source-groups-workflow.ts` owns template/group loading,
-  save/copy/delete orchestration, validation status handling, reload/selection
-  fallback, editor rebinding, busy flags, and formatted operation errors.
-- `src/routes/analysis/+page.svelte` delegates editor load/save/copy/delete
-  actions to the workflow and no longer invokes those editor Tauri commands
-  directly.
+1. Read `docs/codebase-audit-2026-05-05.md`.
+2. Inspect:
+   - `src-tauri/src/analysis/corpus.rs`;
+   - `src-tauri/src/analysis/report.rs`;
+   - `src-tauri/src/analysis/mod.rs`;
+   - `src/lib/api/analysis-runs.ts`;
+   - `src/lib/analysis-run-workflow.ts`;
+   - `src/routes/analysis/+page.svelte`;
+   - relevant analysis UI components under `src/lib/components/analysis`.
+3. Use TDD:
+   - backend tests for budget rejection at boundaries;
+   - tests for the preflight estimate shape;
+   - frontend wrapper/workflow tests if UI-facing preflight behavior is added.
+4. Keep the Analysis route as composition glue; place command access in
+   `$lib/api/*` and workflow behavior in `$lib/*-workflow.ts`.
+5. Verify with focused Rust tests, focused frontend tests, `npm.cmd run check`,
+   route raw Tauri searches, and `git diff --check`.
 
-Focused verification recorded during implementation:
-
-```powershell
-npm.cmd test -- src/lib/api/analysis-source-groups.test.ts
-npm.cmd test -- src/lib/analysis-source-groups-workflow.test.ts
-npm.cmd run check
-```
-
-### Telegram Account API Wrappers
-
-Completed commits include:
+Alternative if the user wants a smaller cleanup:
 
 ```text
-4e9f3df docs(accounts): add api wrapper cleanup design
-5a9278c docs(accounts): add api wrapper cleanup plan
-0d0778c refactor(accounts): add api wrappers
-ee070e1 refactor(analysis): reuse account api wrappers
-71a3aea refactor(accounts): use api wrappers in routes
-77dbdcb docs(session): refresh account api handoff
-1b95cfa docs(review): recalibrate frontend contract follow-up
+Opportunistically reduce lower-level Result<T, String> / classify_message
+fallback reliance when touching nearby backend code.
 ```
-
-Implemented:
-
-- `src/lib/api/accounts.ts` owns frontend command access for account CRUD and
-  Telegram authentication/runtime status commands.
-- `src/lib/api/accounts.ts` owns the Telegram account runtime status event name
-  and listener wrapper via `listenToAccountRuntimeStatus`.
-- `src/lib/api/accounts.test.ts` pins every account/auth command name and
-  payload shape, plus the shared `telegram://account-status` event name.
-- `src/lib/api/analysis-workspace.ts` reuses `accounts.ts` for workspace
-  account listing and account runtime status calls.
-- `src/routes/accounts/+page.svelte` and `src/routes/auth/[id]/+page.svelte`
-  delegate account/auth command access to `$lib/api/accounts`.
-- `src/routes/accounts/+page.svelte` delegates account status event access to
-  `$lib/api/accounts` instead of importing `@tauri-apps/api/event` directly.
-
-Current account status event TDD note:
-
-- A new `src/lib/api/accounts.test.ts` case failed outside the sandbox before
-  implementation with `TypeError: listenToAccountRuntimeStatus is not a
-  function`.
-- After implementation, `npm.cmd test -- src/lib/api/accounts.test.ts` passed
-  outside the sandbox with 10 tests.
-
-Focused verification recorded during implementation:
-
-```powershell
-npm.cmd test -- src/lib/api/accounts.test.ts
-npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-workspace.test.ts
-npm.cmd run check
-```
-
-Final full verification for the account API handoff:
-
-```powershell
-npm.cmd test
-npm.cmd run check
-git diff --check
-```
-
-Results recorded in the previous handoff:
-
-- `npm.cmd test`: initial sandbox run failed with `spawn EPERM`; rerun outside
-  sandbox passed with 22 test files and 186 tests.
-- `npm.cmd run check`: initial sandbox run failed with `spawn EPERM`; rerun
-  outside sandbox passed with 0 errors and 0 warnings.
-- `git diff --check`: exit code 0 with LF/CRLF warnings for edited docs only.
-
-### Frontend DTO Contract Audit
-
-Completed commit:
-
-```text
-646f742 refactor(api): centralize frontend contract types
-```
-
-Implemented:
-
-- Public wrapper input contracts moved out of `$lib/api/*` and into domain type
-  modules:
-  - `src/lib/types/accounts.ts`;
-  - `src/lib/types/analysis.ts`;
-  - `src/lib/types/llm.ts`;
-  - `src/lib/types/sources.ts`.
-- API wrappers still own command names, `invoke` calls, and mapper-local raw DTO
-  shapes.
-- Workflow modules now import shared input contracts from `$lib/types/*`, not
-  from API wrappers.
-- `AnalysisReportStartCommand.profileId` changed from `null` to `string | null`
-  to match the Rust `Option<String>` command boundary.
-- `src/lib/api/analysis-runs.test.ts` pins non-null `profileId` pass-through
-  for `start_analysis_report`.
-
-TDD note:
-
-- A failing `npm.cmd run check` was observed outside the sandbox before the
-  implementation: `Type 'string' is not assignable to type 'null'` in
-  `src/lib/api/analysis-runs.test.ts`.
-- After implementation, the focused test and type-check passed outside the
-  sandbox.
-
-Final verification for this implementation:
-
-```powershell
-npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-runs.test.ts src/lib/api/analysis-chat.test.ts src/lib/api/analysis-source-groups.test.ts src/lib/api/llm.test.ts src/lib/api/sources.test.ts
-npm.cmd run check
-rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
-git diff --check
-```
-
-Results:
-
-- Full frontend test suite passed outside the sandbox: 22 test files, 187
-  tests.
-- Targeted wrapper suite passed outside the sandbox: 6 test files, 35 tests.
-- `npm.cmd run check` passed outside the sandbox with 0 errors and 0 warnings.
-- Route-level raw Tauri command search returned no matches under `src/routes`
-  with exit code 1.
-- `git diff --check` exited 0; LF/CRLF warnings were shown for edited files.
-
-Current response/event DTO pass:
-
-- `src/lib/types/sources.ts` now exports `TAKEOUT_IMPORT_PHASES`, and
-  `TakeoutImportPhase` is derived from that tuple.
-- The stale frontend-only Takeout phase `refreshing_aux` was removed from the
-  type and from `src/lib/components/analysis/workspace-rail.svelte`.
-- `src/lib/api/takeout-import.test.ts` pins the frontend phase tuple to the
-  Rust phases currently emitted from `src-tauri/src/takeout_import/state.rs`.
-- `src/lib/api/accounts.ts` now returns `Promise<string>` from
-  `sendTelegramCode` and `Promise<boolean>` from `signInTelegramAccount` and
-  `logoutTelegramAccount`, matching the Rust `tg_send_code`, `tg_sign_in`, and
-  `tg_logout` commands.
-- `src/lib/api/accounts.test.ts` uses type-level assertions to keep those
-  wrapper response types aligned.
-
-Current TDD notes:
-
-- `npm.cmd test -- src/lib/api/takeout-import.test.ts` first failed outside
-  the sandbox because `TAKEOUT_IMPORT_PHASES` was `undefined`.
-- `npm.cmd run check` first failed on the new accounts type assertions because
-  the wrappers still returned `Promise<void>` where the Rust commands return
-  `String` and `bool`.
-
-### Documentation Cleanup
-
-Completed commit:
-
-```text
-525bc09 docs(cleanup): remove stale implementation handoffs
-```
-
-Removed as obsolete completed implementation handoff artifacts:
-
-- typed error conversion plan/spec;
-- Analysis editor workflow plan/spec;
-- Analysis report actions plan/spec;
-- Telegram account API wrapper plan/spec.
-
-Deleted file groups:
-
-```text
-docs/superpowers/plans/2026-05-07-analysis-editor-workflow.md
-docs/superpowers/plans/2026-05-07-analysis-report-actions.md
-docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md
-docs/superpowers/plans/2026-05-07-typed-error-conversion.md
-docs/superpowers/specs/2026-05-07-analysis-editor-workflow-design.md
-docs/superpowers/specs/2026-05-07-analysis-report-actions-design.md
-docs/superpowers/specs/2026-05-07-telegram-account-api-wrappers-design.md
-docs/superpowers/specs/2026-05-07-typed-error-conversion-design.md
-```
-
-Verification for that docs-only cleanup:
-
-```powershell
-rg --files docs\superpowers
-rg -n "2026-05-0[7]-(typed-error-conversion|telegram-account-api-wrappers|analysis-report-actions|analysis-editor-workflow)" docs
-git diff --check
-```
-
-Results:
-
-- `rg --files docs\superpowers` returned no files with exit code 1.
-- Targeted stale plan/spec filename search returned no matches with exit code 1.
-- `git diff --check` exited 0; LF/CRLF warnings were shown for edited docs.
-- The resulting working tree was clean.
 
 ## Route-Level Raw Tauri API Status
 
-Most recent targeted command check from the frontend DTO contract audit:
+Current expected invariant:
 
 ```powershell
 rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
-```
-
-The current response/event DTO pass should also keep this event API search
-clean:
-
-```powershell
 rg -n "@tauri-apps/api/event|listen<" src/routes
 ```
 
-Expected result:
+Expected result for both commands:
 
 ```text
 no output, exit code 1
 ```
 
-Conclusion: route-level raw Tauri command and event API access should remain
-absent under `src/routes`. Remaining `invoke` and `listen` calls are expected in
-`$lib/api/*` wrappers and their tests.
-
-## Current Suggested Next Work
-
-Recommended next workstream:
-
-```text
-No immediate response/event DTO drift follow-up is identified after the latest
-targeted pass.
-```
-
-Recommended shape:
-
-1. Do not add route command wrappers; that surface is already clean.
-2. Keep route event access behind API wrappers when shared Tauri events are
-   added or touched.
-3. Re-audit response/event DTO mirrors only when a Rust serde shape changes or
-   multiple frontend modules share the same contract.
-4. Keep raw source DTO mapping local to `src/lib/api/sources.ts`.
-5. Keep Rust-to-TypeScript generation deferred unless DTO drift becomes a
-   recurring problem.
-
-Known response/event type starting points:
-
-```text
-src/lib/types/accounts.ts
-src/lib/types/analysis.ts
-src/lib/types/llm.ts
-src/lib/types/sources.ts
-```
+Raw Tauri API access is expected in API wrappers under `src/lib/api/*`, not in
+route files.
 
 ## Important Files
 
-- Review/handoff:
-  - `docs/code-review-results-2026-05-03.md`
-  - `docs/session-context-2026-05-03.md`
-- Main route still worth treating carefully:
-  - `src/routes/analysis/+page.svelte`
-- Domain type modules:
-  - `src/lib/types/accounts.ts`
-  - `src/lib/types/analysis.ts`
-  - `src/lib/types/llm.ts`
-  - `src/lib/types/sources.ts`
-- API wrapper modules:
-  - `src/lib/api/accounts.ts`
-  - `src/lib/api/analysis-runs.ts`
-  - `src/lib/api/analysis-chat.ts`
-  - `src/lib/api/analysis-trace.ts`
-  - `src/lib/api/analysis-workspace.ts`
-  - `src/lib/api/analysis-source-groups.ts`
-  - `src/lib/api/llm.ts`
-  - `src/lib/api/sources.ts`
-  - `src/lib/api/takeout-import.ts`
-  - `src/lib/api/notebooklm-export.ts`
+Review and handoff:
 
-## IDE Notes
+- `docs/session-context-2026-05-03.md`
+- `docs/code-review-results-2026-05-03.md`
+- `docs/codebase-audit-2026-05-05.md`
+- `docs/takeout-source-import.md`
+
+Main route still worth treating carefully:
+
+- `src/routes/analysis/+page.svelte`
+
+Domain type modules:
+
+- `src/lib/types/accounts.ts`
+- `src/lib/types/analysis.ts`
+- `src/lib/types/llm.ts`
+- `src/lib/types/sources.ts`
+
+API wrapper modules:
+
+- `src/lib/api/accounts.ts`
+- `src/lib/api/analysis-runs.ts`
+- `src/lib/api/analysis-chat.ts`
+- `src/lib/api/analysis-trace.ts`
+- `src/lib/api/analysis-workspace.ts`
+- `src/lib/api/analysis-source-groups.ts`
+- `src/lib/api/llm.ts`
+- `src/lib/api/sources.ts`
+- `src/lib/api/takeout-import.ts`
+- `src/lib/api/notebooklm-export.ts`
+
+Analysis workflow modules:
+
+- `src/lib/analysis-run-workflow.ts`
+- `src/lib/analysis-chat-workflow.ts`
+- `src/lib/analysis-trace-workflow.ts`
+- `src/lib/analysis-workspace-workflow.ts`
+- `src/lib/analysis-source-groups-workflow.ts`
+
+Backend areas likely relevant to next work:
+
+- `src-tauri/src/analysis/corpus.rs`
+- `src-tauri/src/analysis/report.rs`
+- `src-tauri/src/analysis/mod.rs`
+- `src-tauri/src/source_ingest.rs`
+- `src-tauri/src/accounts.rs`
+- `src-tauri/src/takeout_import/mod.rs`
+- `src-tauri/src/takeout_import/state.rs`
+- `src-tauri/Cargo.toml`
+
+## Verification Baselines Mentioned In Docs
+
+Recent targeted verification from this session:
+
+- account status event wrapper pass:
+  `npm.cmd test -- src/lib/api/accounts.test.ts`, `npm.cmd run check`, route
+  raw Tauri command/event searches, `git diff --check`, ASCII handoff check;
+- response/event DTO drift pass:
+  `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/takeout-import.test.ts`,
+  `npm.cmd run check`, route raw Tauri command/event searches,
+  `git diff --check`, ASCII handoff check.
+
+From `docs/codebase-audit-2026-05-05.md`:
+
+- `cargo test`: passed, 141 tests.
+- `npm.cmd test`: sandbox failed with `spawn EPERM`; outside sandbox passed,
+  17 files and 136 tests.
+- `npm.cmd run check`: sandbox failed with `spawn EPERM`; outside sandbox
+  passed with 0 errors and 0 warnings.
+- `cargo clippy --all-targets -- -D warnings`: failed with 19 errors in
+  `src-tauri/src/takeout_import/mod.rs`.
+
+## Current IDE Notes
 
 Open tabs reported by the IDE for the latest user request:
 
+- `docs/codebase-audit-2026-05-05.md`
 - `docs/code-review-results-2026-05-03.md`
 
-## Current Turn Verification Plan
+## Verification Plan For This Handoff Refresh
 
-After the current response/event DTO audit pass, run:
+After overwriting this file, run:
 
 ```powershell
-npm.cmd test -- src/lib/api/accounts.test.ts
-npm.cmd test -- src/lib/api/takeout-import.test.ts
-npm.cmd run check
-rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
-rg -n "@tauri-apps/api/event|listen<" src/routes
 git diff --check
 rg -n "[^[:ascii:]]" docs/session-context-2026-05-03.md
 git status --short --branch
 ```
 
-Current turn verification results before commit:
+If committing this handoff refresh, use:
 
-- `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/takeout-import.test.ts`
-  passed outside the sandbox with 2 files and 15 tests.
-- `npm.cmd run check` passed outside the sandbox with 0 errors and 0 warnings.
-- Route-level raw Tauri command and event API searches under `src/routes`
-  returned no matches with exit code 1.
-- `git diff --check` exited 0; LF/CRLF warnings were shown for edited files.
-- `rg -n "[^[:ascii:]]" docs/session-context-2026-05-03.md` returned no
-  matches with exit code 1.
-
-Expected results:
-
-- The focused account API test exits 0 with 10 tests.
-- `npm.cmd run check` exits 0 with 0 errors and 0 warnings.
-- Both route-level raw Tauri API searches return no matches with exit code 1.
-- `git diff --check` exits 0, allowing LF/CRLF warnings.
-- Non-ASCII search returns no matches with exit code 1.
-- Status shows the account API wrapper, account route, review doc, and this
-  session handoff modified before commit.
+```text
+docs(session): refresh current handoff context
+```
