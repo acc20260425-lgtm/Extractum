@@ -5,8 +5,8 @@
 This file restores the current Codex session context for Extractum cleanup work.
 It supersedes all earlier handoff contents in this file.
 
-The current active turn is **Task 5: Refresh Review Docs and Session Handoff**
-from the Analysis editor workflow extraction plan. The implementation tasks are
+The current active turn is **Task 4: Refresh Review Docs and Session Handoff**
+from the Telegram account API wrappers plan. The implementation tasks are
 complete; this file and `docs/code-review-results-2026-05-03.md` are being
 refreshed to close the workstream.
 
@@ -27,17 +27,17 @@ refreshed to close the workstream.
   top-level implementation-plan task per user turn; commit at the end of each
   top-level task.
 - Working tree state for this task:
-  - before Task 5 edits: clean on `main`;
-  - during Task 5: only this handoff and the review document are intended to be
+  - before Task 4 edits: clean on `main`;
+  - during Task 4: only this handoff and the review document are intended to be
     modified;
-  - after the Task 5 commit, the working tree should be clean again.
+  - after the Task 4 commit, the working tree should be clean again.
 
 ## Current Workstream
 
 Workstream:
 
 ```text
-Analysis editor workflow extraction
+Telegram account API wrappers
 ```
 
 Status: implementation complete, docs refresh in progress.
@@ -45,84 +45,93 @@ Status: implementation complete, docs refresh in progress.
 Source docs:
 
 - Design/spec:
-  `docs/superpowers/specs/2026-05-07-analysis-editor-workflow-design.md`
+  `docs/superpowers/specs/2026-05-07-telegram-account-api-wrappers-design.md`
 - Implementation plan:
-  `docs/superpowers/plans/2026-05-07-analysis-editor-workflow.md`
+  `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`
 - Review source:
   `docs/code-review-results-2026-05-03.md`
 
 Completed commits:
 
 ```text
-26d3781 docs(analysis): add editor workflow extraction design
-4ffc87b docs(analysis): add editor workflow extraction plan
-3fb3696 refactor(analysis): add editor api wrappers
-3f6ebfa refactor(analysis): move template editor workflow
-d8d641d refactor(analysis): move source group editor workflow
-5b0705c refactor(analysis): use editor workflow
+4e9f3df docs(accounts): add api wrapper cleanup design
+5a9278c docs(accounts): add api wrapper cleanup plan
+0d0778c refactor(accounts): add api wrappers
+ee070e1 refactor(analysis): reuse account api wrappers
+71a3aea refactor(accounts): use api wrappers in routes
 ```
 
-Task 5 expected commit:
+Task 4 expected commit:
 
 ```text
-docs(session): refresh analysis editor handoff
+docs(session): refresh account api handoff
 ```
 
-## Completed Analysis Editor Scope
+## Completed Telegram Account API Scope
 
-The planned editor workflow extraction is now implemented.
+The planned Telegram account API wrapper extraction is now implemented.
 
 Preserved intentionally:
 
-- Analysis UI layout and component APIs;
-- backend Tauri command behavior and Rust DTOs;
-- route-owned Svelte state, derived selections, input bindings, and UI
-  composition;
-- `analysis-editor-state` as the pure command/status decision layer;
-- listener lifecycle in `src/routes/analysis/+page.svelte`.
+- backend Rust commands, database schema, and Tauri wire behavior;
+- Accounts and Auth route validation, navigation, modals, status text, and
+  lifecycle listeners;
+- existing Analysis workspace workflow public API;
+- generated Rust-to-TypeScript types remain deferred.
 
 Implemented:
 
-- `src/lib/api/analysis-source-groups.ts` now owns frontend command access for:
-  - `list_analysis_source_groups`;
-  - `list_analysis_prompt_templates`;
-  - `create_analysis_prompt_template`;
-  - `update_analysis_prompt_template`;
-  - `delete_analysis_prompt_template`;
-  - `create_analysis_source_group`;
-  - `update_analysis_source_group`;
-  - `delete_analysis_source_group`;
-- `src/lib/analysis-source-groups-workflow.ts` now owns:
-  - template loading;
-  - source group loading;
-  - template save/copy/delete orchestration;
-  - source group save/copy/delete orchestration;
-  - validation status handling via `analysis-editor-state`;
-  - reload, selection fallback, editor rebinding, busy flags, and formatted
-    operation errors;
-- `src/routes/analysis/+page.svelte` delegates editor load/save/copy/delete
-  actions to the workflow and no longer invokes the editor Tauri commands
-  directly.
+- `src/lib/api/accounts.ts` now owns frontend command access for:
+  - `list_accounts`;
+  - `get_account`;
+  - `create_account`;
+  - `delete_account`;
+  - `set_account_phone`;
+  - `clear_account_phone`;
+  - `tg_get_account_statuses`;
+  - `tg_init`;
+  - `tg_send_code`;
+  - `tg_sign_in`;
+  - `tg_logout`;
+- `src/lib/api/accounts.test.ts` pins every account/auth command name and
+  payload shape;
+- `src/lib/api/analysis-workspace.ts` reuses `accounts.ts` for workspace
+  account listing and account runtime status calls while keeping
+  `listAnalysisSources()` local to the Analysis workspace API;
+- `src/routes/accounts/+page.svelte` delegates account list/status/create/delete
+  command access to `$lib/api/accounts`;
+- `src/routes/auth/[id]/+page.svelte` delegates account load, Telegram
+  initialization, send-code, sign-in, phone persistence, logout, and phone
+  clearing command access to `$lib/api/accounts`.
 
 ## Verification Performed During Implementation
 
 Focused frontend checks passed before their corresponding commits:
 
 ```powershell
-npm.cmd test -- src/lib/api/analysis-source-groups.test.ts
-npm.cmd test -- src/lib/analysis-source-groups-workflow.test.ts
+npm.cmd test -- src/lib/api/accounts.test.ts
+npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-workspace.test.ts
 npm.cmd run check
 ```
 
-Route raw-command verification passed during Task 4:
+Route raw-command verification passed during Task 3:
 
 ```powershell
-rg -n "create_analysis_prompt_template|update_analysis_prompt_template|create_analysis_source_group|update_analysis_source_group|list_analysis_prompt_templates|invoke<" src/routes/analysis/+page.svelte
+rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes/accounts/+page.svelte 'src/routes/auth/[id]/+page.svelte'
 ```
 
 Result: no output, exit code 1.
 
-Final full verification for Task 5:
+Task 4 raw-command re-evaluation:
+
+```powershell
+rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes src/lib/api
+```
+
+Result: no account/auth route command access remains; remaining matches are in
+`$lib/api/*` wrappers and API wrapper tests.
+
+Final full verification for Task 4:
 
 ```powershell
 npm.cmd test
@@ -133,7 +142,7 @@ git diff --check
 Results:
 
 - `npm.cmd test`: initial sandbox run failed with `spawn EPERM`; rerun outside
-  sandbox passed with 21 test files and 179 tests.
+  sandbox passed with 22 test files and 186 tests.
 - `npm.cmd run check`: initial sandbox run failed with `spawn EPERM`; rerun
   outside sandbox passed with 0 errors and 0 warnings.
 - `git diff --check`: exit code 0. Git printed LF/CRLF normalization warnings
@@ -141,24 +150,22 @@ Results:
 
 ## Review Document State
 
-`docs/code-review-results-2026-05-03.md` has been updated in Task 5 to move
-template and source group create/update extraction into resolved work.
+`docs/code-review-results-2026-05-03.md` has been updated in Task 4 to move
+Telegram account/authentication command access into resolved work.
 
-The previous first recommended follow-up is resolved. The current recommended
-follow-up order is:
+The current recommended follow-up order is:
 
 1. Add typed frontend API wrappers or shared DTO modules for remaining compact
    non-source Tauri command surfaces.
 2. Opportunistically reduce lower-level `Result<T, String>` and
    `classify_message` fallback reliance when touching nearby backend code.
 
-## Remaining `/analysis` Cleanup Surface
+## Remaining Cleanup Surface
 
-`src/routes/analysis/+page.svelte` still coordinates:
+Known remaining route-level cleanup surface:
 
-- listener lifecycle;
-- local Svelte state and derived selections;
-- UI composition.
+- `src/routes/analysis/+page.svelte` still coordinates listener lifecycle,
+  local Svelte state and derived selections, and UI composition.
 
 Already extracted and complete:
 
@@ -171,6 +178,7 @@ Already extracted and complete:
 - Takeout import;
 - NotebookLM export;
 - source facade;
+- Telegram account/authentication command access;
 - analysis run workflow extraction.
 
 ## Environment Notes
@@ -191,4 +199,4 @@ Already extracted and complete:
 
 Open tabs reported by the IDE include:
 
-- `docs/superpowers/plans/2026-05-07-analysis-editor-workflow.md`
+- `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`

@@ -41,6 +41,9 @@ cleanup branch:
 - Analysis account/status loading and analysis source metrics command access are
   centralized in `src/lib/api/analysis-workspace.ts` and
   `src/lib/analysis-workspace-workflow.ts`.
+- Telegram account and authentication command access is centralized in
+  `src/lib/api/accounts.ts`; the Accounts and Auth routes no longer invoke
+  those Tauri commands directly.
 - Analysis source group loading and template/group deletion command access and
   route-level orchestration are centralized in
   `src/lib/api/analysis-source-groups.ts` and
@@ -96,7 +99,8 @@ Core source command strings and DTO mapping are centralized in
 `src/lib/api/sources.ts`, and compact frontend API wrappers now exist for
 analysis runs, Analysis chat, Analysis trace, Analysis workspace loading,
 Analysis source groups/templates, Takeout import, NotebookLM export, report
-start/cancel/delete actions, and LLM cancellation.
+start/cancel/delete actions, Telegram accounts/authentication, and LLM
+cancellation.
 
 Several remaining frontend TypeScript DTOs and raw Tauri command strings are
 still manually maintained beside Rust serde structs.
@@ -143,8 +147,9 @@ Suggested fix:
 
 ## Recent Verification
 
-Recent verification from the completed boundary-first typed error conversion
-and Analysis editor workflow extraction workstreams:
+Recent verification from the completed boundary-first typed error conversion,
+Analysis editor workflow extraction, and Telegram account API wrapper
+workstreams:
 
 - focused Cargo checks passed during implementation:
   `cargo test error`, `cargo test accounts`, `cargo test analysis`,
@@ -153,6 +158,11 @@ and Analysis editor workflow extraction workstreams:
   `npm.cmd test -- src/lib/api/analysis-source-groups.test.ts`,
   `npm.cmd test -- src/lib/analysis-source-groups-workflow.test.ts`, and
   `npm.cmd run check`;
+- focused frontend checks passed during the Telegram account API wrapper
+  workstream:
+  `npm.cmd test -- src/lib/api/accounts.test.ts`,
+  `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-workspace.test.ts`,
+  and `npm.cmd run check`;
 - final full verification for the latest docs refresh is recorded in
   `docs/session-context-2026-05-03.md`.
 
