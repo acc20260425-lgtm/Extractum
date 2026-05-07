@@ -71,6 +71,8 @@ type AnalysisRunWorkflowHarnessState = AnalysisRunWorkflowState & {
   loadingActiveRuns: boolean;
   loadingRunDetail: boolean;
   inspectorMode: "active" | "history" | "trace" | "chunks";
+  startingReport: boolean;
+  deletingRunIds: Record<number, boolean>;
   status: string;
 };
 
@@ -87,6 +89,8 @@ function createHarness(initial: Partial<AnalysisRunWorkflowHarnessState> = {}) {
     loadingActiveRuns: false,
     loadingRunDetail: false,
     inspectorMode: "history",
+    startingReport: false,
+    deletingRunIds: {},
     status: "",
     ...initial,
   };
@@ -100,8 +104,14 @@ function createHarness(initial: Partial<AnalysisRunWorkflowHarnessState> = {}) {
     syncRunSnapshot: vi.fn(),
     pruneLiveRuns: vi.fn(),
     applyRunEvent: vi.fn(),
+    startReport: vi.fn(),
+    cancelRun: vi.fn(),
+    deleteRun: vi.fn(),
+    confirm: vi.fn(),
     cancelChatSilently: vi.fn(),
     clearChatState: vi.fn(),
+    clearOpenedRunState: vi.fn(),
+    setInitialLiveRun: vi.fn(),
     loadChatMessages: vi.fn(),
     loadTrace: vi.fn(),
     clearTraceState: vi.fn(),
@@ -301,6 +311,167 @@ describe("analysis-run-workflow", () => {
     workflow.invalidateOpenRunRequests();
 
     expect(capturedGuard.isCurrent()).toBe(false);
+  });
+
+  it("reports report-start validation failures without invoking the api", async () => {
+    const { state, deps, workflow } = createHarness();
+
+    await workflow.startReport({
+      analysisScope: "single_source",
+      selectedSourceId: "",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "Russian",
+      modelOverride: "",
+    });
+
+    expect(state.status).toBe("Select a source first.");
+    expect(deps.startReport).not.toHaveBeenCalled();
+    expect(state.startingReport).toBe(false);
+  });
+
+  it("starts a report, resets focused state, tracks the queued run, and opens it", async () => {
+    const { state, deps, workflow } = createHarness({
+      activeChatRequestId: "chat-a",
+      activeChatRunId: 4,
+      currentRun: runDetail({ id: 4 }),
+    });
+    deps.startReport.mockResolvedValueOnce(77);
+    deps.listActiveRuns.mockResolvedValueOnce([runSummary({ id: 77, status: "queued" })]);
+    deps.getRun.mockResolvedValueOnce(runDetail({ id: 77, status: "queued" }));
+    deps.loadChatMessages.mockResolvedValueOnce(undefined);
+
+    await workflow.startReport({
+      analysisScope: "single_source",
+      selectedSourceId: "7",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: " Russian ",
+      modelOverride: " ",
+    });
+
+    expect(deps.cancelChatSilently).toHaveBeenCalled();
+    expect(deps.clearChatState).toHaveBeenCalled();
+    expect(deps.clearTraceState).toHaveBeenCalled();
+    expect(deps.patch).toHaveBeenCalledWith(expect.objectContaining({
+      currentRun: null,
+      inspectorMode: "active",
+      startingReport: true,
+    }));
+    expect(deps.startReport).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 7,
+      sourceGroupId: null,
+      outputLanguage: "Russian",
+      promptTemplateId: 5,
+      modelOverride: null,
+      profileId: null,
+    }));
+    expect(deps.setInitialLiveRun).toHaveBeenCalledWith(77);
+    expect(state.activeRunId).toBe(77);
+    expect(state.currentRun?.id).toBe(77);
+    expect(state.startingReport).toBe(false);
+  });
+
+  it("formats start report errors and clears the starting flag", async () => {
+    const { state, deps, workflow } = createHarness();
+    deps.startReport.mockRejectedValueOnce("model busy");
+
+    await workflow.startReport({
+      analysisScope: "source_group",
+      selectedSourceId: "",
+      selectedGroupId: "9",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "English",
+      modelOverride: "gemini-2.5-pro",
+    });
+
+    expect(state.status).toBe("Error starting the analysis report: model busy");
+    expect(state.startingReport).toBe(false);
+  });
+
+  it("cancels a run and reports cancellation status", async () => {
+    const { state, deps, workflow } = createHarness();
+    deps.cancelRun.mockResolvedValueOnce(undefined);
+
+    await workflow.cancelRun(77);
+
+    expect(deps.cancelRun).toHaveBeenCalledWith(77);
+    expect(state.status).toBe("Cancelling analysis run 77...");
+  });
+
+  it("formats cancel run errors", async () => {
+    const { state, deps, workflow } = createHarness();
+    deps.cancelRun.mockRejectedValueOnce("already stopped");
+
+    await workflow.cancelRun(77);
+
+    expect(state.status).toBe("Error cancelling the analysis run: already stopped");
+  });
+
+  it("blocks deleting active runs before confirmation", async () => {
+    const { state, deps, workflow } = createHarness();
+
+    await workflow.deleteSavedRun(runSummary({ id: 77, status: "running" }));
+
+    expect(state.status).toBe("Cancel or wait for this run before deleting it.");
+    expect(deps.confirm).not.toHaveBeenCalled();
+    expect(deps.deleteRun).not.toHaveBeenCalled();
+  });
+
+  it("does not delete a saved run when confirmation is cancelled", async () => {
+    const { deps, workflow } = createHarness();
+    deps.confirm.mockResolvedValueOnce(false);
+
+    await workflow.deleteSavedRun(runSummary({ id: 77, status: "completed" }));
+
+    expect(deps.confirm).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Delete saved run?",
+      confirmLabel: "Delete",
+      tone: "danger",
+    }));
+    expect(deps.deleteRun).not.toHaveBeenCalled();
+  });
+
+  it("deletes a saved run, clears focused state, reloads runs, and clears pending state", async () => {
+    const { state, deps, workflow } = createHarness({
+      runs: [runSummary({ id: 77, status: "completed" }), runSummary({ id: 78, status: "failed" })],
+      activeRuns: [runSummary({ id: 79, status: "queued" })],
+      activeRunId: 77,
+      currentRun: runDetail({ id: 77, status: "completed" }),
+      activeChatRequestId: "chat-a",
+      activeChatRunId: 77,
+    });
+    deps.confirm.mockResolvedValueOnce(true);
+    deps.deleteRun.mockResolvedValueOnce(undefined);
+    deps.listRuns.mockResolvedValueOnce([runSummary({ id: 78, status: "failed" })]);
+
+    await workflow.deleteSavedRun(runSummary({ id: 77, status: "completed" }));
+
+    expect(deps.cancelChatSilently).toHaveBeenCalled();
+    expect(deps.deleteRun).toHaveBeenCalledWith(77);
+    expect(state.runs.map((run) => run.id)).toEqual([78]);
+    expect(state.activeRuns.map((run) => run.id)).toEqual([79]);
+    expect(deps.clearOpenedRunState).toHaveBeenCalledWith(77);
+    expect(state.inspectorMode).toBe("history");
+    expect(state.status).toBe("Saved run 77 deleted.");
+    expect(state.deletingRunIds).toEqual({});
+  });
+
+  it("formats delete run errors and clears pending state", async () => {
+    const { state, deps, workflow } = createHarness();
+    deps.confirm.mockResolvedValueOnce(true);
+    deps.deleteRun.mockRejectedValueOnce("db locked");
+
+    await workflow.deleteSavedRun(runSummary({ id: 77, status: "completed" }));
+
+    expect(state.status).toBe("Error deleting the saved run: db locked");
+    expect(state.deletingRunIds).toEqual({});
   });
 
   it("applies run events and switches the inspector to chunks when chunk summaries arrive", () => {

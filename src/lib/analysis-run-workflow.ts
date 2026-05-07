@@ -1,10 +1,16 @@
 import {
   activeRunSyncDecision,
+  analysisReportStartCommand,
   isActiveRunStatus,
+  runDeletedStatus,
+  runDeletionDecision,
+  type AnalysisReportStartState,
+  type RunDeletionDialog,
 } from "$lib/analysis-state";
 import type { AnalysisHistoryScopeParams } from "$lib/analysis-scope-state";
 import type { ListAnalysisRunsInput } from "$lib/api/analysis-runs";
 import type {
+  AnalysisReportStartCommand,
   AnalysisRunDetail,
   AnalysisRunEvent,
   AnalysisRunSummary,
@@ -18,6 +24,9 @@ export interface AnalysisRunWorkflowState {
   currentRun: AnalysisRunDetail | null;
   activeChatRequestId: string | null;
   activeChatRunId: number | null;
+  runs: AnalysisRunSummary[];
+  activeRuns: AnalysisRunSummary[];
+  deletingRunIds: Record<number, boolean>;
 }
 
 export interface AnalysisRunRequestGuard {
@@ -33,6 +42,8 @@ export type AnalysisRunWorkflowPatch = Partial<{
   loadingRuns: boolean;
   loadingActiveRuns: boolean;
   loadingRunDetail: boolean;
+  startingReport: boolean;
+  deletingRunIds: Record<number, boolean>;
   status: string;
 }>;
 
@@ -45,8 +56,14 @@ export interface AnalysisRunWorkflowDeps {
   syncRunSnapshot(runId: number, runStatus: string): void;
   pruneLiveRuns(activeRunIds: number[], preserveRunId: number | null): void;
   applyRunEvent(payload: AnalysisRunEvent): void;
+  startReport(command: AnalysisReportStartCommand): Promise<number>;
+  cancelRun(runId: number): Promise<void>;
+  deleteRun(runId: number): Promise<void>;
+  confirm(options: RunDeletionDialog): Promise<boolean>;
   cancelChatSilently(): Promise<void>;
   clearChatState(): void;
+  clearOpenedRunState(runId: number): void;
+  setInitialLiveRun(runId: number): void;
   loadChatMessages(runId: number, guard?: AnalysisRunRequestGuard): Promise<void>;
   loadTrace(runId: number, guard?: AnalysisRunRequestGuard): Promise<void>;
   clearTraceState(): void;
@@ -174,6 +191,86 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
     }
   }
 
+  async function startReport(input: AnalysisReportStartState) {
+    const decision = analysisReportStartCommand(input);
+    if (!decision.ok) {
+      deps.patch({ status: decision.status });
+      return;
+    }
+
+    deps.patch({
+      startingReport: true,
+      inspectorMode: "active",
+      currentRun: null,
+    });
+
+    if (deps.getState().activeChatRequestId !== null) {
+      await deps.cancelChatSilently();
+    }
+    deps.clearChatState();
+    deps.clearTraceState();
+
+    try {
+      const runId = await deps.startReport(decision.command);
+      deps.setInitialLiveRun(runId);
+      deps.patch({ activeRunId: runId });
+      await Promise.all([loadActiveRuns(), openRun(runId)]);
+    } catch (error) {
+      deps.patch({ status: deps.formatError("starting the analysis report", error) });
+    } finally {
+      deps.patch({ startingReport: false });
+    }
+  }
+
+  async function cancelRun(runId: number) {
+    try {
+      await deps.cancelRun(runId);
+      deps.patch({ status: `Cancelling analysis run ${runId}...` });
+    } catch (error) {
+      deps.patch({ status: deps.formatError("cancelling the analysis run", error) });
+    }
+  }
+
+  async function deleteSavedRun(run: AnalysisRunSummary) {
+    const decision = runDeletionDecision(run);
+    if (!decision.ok) {
+      deps.patch({ status: decision.status });
+      return;
+    }
+
+    const confirmed = await deps.confirm(decision.dialog);
+    if (!confirmed) {
+      return;
+    }
+
+    deps.patch({
+      deletingRunIds: { ...deps.getState().deletingRunIds, [run.id]: true },
+    });
+
+    try {
+      const state = deps.getState();
+      if (state.activeChatRequestId !== null && state.activeChatRunId === run.id) {
+        await deps.cancelChatSilently();
+      }
+
+      await deps.deleteRun(run.id);
+      deps.patch({
+        runs: deps.getState().runs.filter((entry) => entry.id !== run.id),
+        activeRuns: deps.getState().activeRuns.filter((entry) => entry.id !== run.id),
+        inspectorMode: "history",
+        status: runDeletedStatus(run),
+      });
+      deps.clearOpenedRunState(run.id);
+      await loadRuns();
+    } catch (error) {
+      deps.patch({ status: deps.formatError("deleting the saved run", error) });
+    } finally {
+      const next = { ...deps.getState().deletingRunIds };
+      delete next[run.id];
+      deps.patch({ deletingRunIds: next });
+    }
+  }
+
   function handleRunEvent(payload: AnalysisRunEvent) {
     deps.applyRunEvent(payload);
 
@@ -232,6 +329,9 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
     loadRuns,
     loadActiveRuns,
     openRun,
+    startReport,
+    cancelRun,
+    deleteSavedRun,
     handleRunEvent,
     invalidateOpenRunRequests,
   };
