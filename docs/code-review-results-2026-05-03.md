@@ -45,6 +45,10 @@ cleanup branch:
   route-level orchestration are centralized in
   `src/lib/api/analysis-source-groups.ts` and
   `src/lib/analysis-source-groups-workflow.ts`.
+- Analysis prompt-template and source-group create/update command access and
+  route-level orchestration are centralized in
+  `src/lib/api/analysis-source-groups.ts` and
+  `src/lib/analysis-source-groups-workflow.ts`.
 - Analysis report start/cancel/delete command access and route-level
   orchestration are centralized in `src/lib/api/analysis-runs.ts` and
   `src/lib/analysis-run-workflow.ts`.
@@ -53,9 +57,10 @@ cleanup branch:
   database, Telegram transport, and LLM network failures while preserving the
   existing `{ kind, message }` frontend wire shape.
 
-Historical Superpowers plan/spec files for these completed workstreams were
-removed after this consolidation. Future files under `docs/superpowers/plans`
-and `docs/superpowers/specs` should represent only active work.
+Historical Superpowers plan/spec files for some completed workstreams may remain
+as handoff artifacts. Future files under `docs/superpowers/plans` and
+`docs/superpowers/specs` should represent only active work unless retained
+explicitly for session recovery.
 
 Deferred by design:
 
@@ -64,37 +69,34 @@ Deferred by design:
 
 ## Open Findings
 
-### Major: Analysis route still owns several non-run workflows
+### Major: Analysis route remains a high-context composition surface
 
 `src/routes/analysis/+page.svelte` is smaller than at the start of the review,
-but it still coordinates several feature areas directly. The remaining route
-responsibilities include source group create-update actions, template
-create-update actions, listener lifecycle, and UI composition. The previously
-remaining report start/cancel/delete actions are now delegated to the analysis
-run workflow.
+and the remaining source group/template editor workflows are now delegated to
+the analysis source-groups workflow. The route still owns listener lifecycle,
+local Svelte state binding, and UI composition for the Analysis page.
 
 Impact:
 
-- remaining create-update feature areas are still difficult to test in
-  isolation;
-- unrelated workflow state can still be touched by future analysis-page changes;
-- the route remains a high-context file for new analysis features.
+- lifecycle and composition changes still require care because the route is a
+  broad integration point;
+- unrelated UI state can still be touched by future analysis-page changes;
+- the route remains a high-context file for new Analysis UI features.
 
 Suggested follow-up:
 
-- extract remaining source group and template create-update surfaces in
-  similarly small slices if route-size pressure continues;
-- keep the route as a composition and Svelte lifecycle layer;
-- add focused tests around extracted wrappers/controllers before broader UI
-  refactors.
+- keep future changes routed through the existing API and workflow boundaries;
+- keep the route as a composition, state binding, and Svelte lifecycle layer;
+- only extract listener lifecycle later if it becomes a concrete source of
+  defects or test friction.
 
 ### Moderate: Remaining non-source frontend/backend contracts are manually mirrored
 
 Core source command strings and DTO mapping are centralized in
 `src/lib/api/sources.ts`, and compact frontend API wrappers now exist for
 analysis runs, Analysis chat, Analysis trace, Analysis workspace loading,
-Takeout import, NotebookLM export, report start/cancel/delete actions, and LLM
-cancellation.
+Analysis source groups/templates, Takeout import, NotebookLM export, report
+start/cancel/delete actions, and LLM cancellation.
 
 Several remaining frontend TypeScript DTOs and raw Tauri command strings are
 still manually maintained beside Rust serde structs.
@@ -142,19 +144,21 @@ Suggested fix:
 ## Recent Verification
 
 Recent verification from the completed boundary-first typed error conversion
-workstream:
+and Analysis editor workflow extraction workstreams:
 
 - focused Cargo checks passed during implementation:
   `cargo test error`, `cargo test accounts`, `cargo test analysis`,
   `cargo test telegram`, and `cargo test llm`;
-- final full verification for this docs refresh is recorded in
+- focused frontend checks passed during the editor workflow extraction:
+  `npm.cmd test -- src/lib/api/analysis-source-groups.test.ts`,
+  `npm.cmd test -- src/lib/analysis-source-groups-workflow.test.ts`, and
+  `npm.cmd run check`;
+- final full verification for the latest docs refresh is recorded in
   `docs/session-context-2026-05-03.md`.
 
 ## Recommended Follow-Up Order
 
-1. Extract the remaining source group and template create-update workflows from
-   `src/routes/analysis/+page.svelte` if route-size pressure continues.
-2. Add typed frontend API wrappers or shared DTO modules for remaining compact
+1. Add typed frontend API wrappers or shared DTO modules for remaining compact
    non-source Tauri command surfaces.
-3. Opportunistically reduce lower-level `Result<T, String>` and
+2. Opportunistically reduce lower-level `Result<T, String>` and
    `classify_message` fallback reliance when touching nearby backend code.
