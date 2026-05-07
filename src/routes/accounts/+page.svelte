@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { invoke } from "@tauri-apps/api/core";
+  import {
+    createAccount as createAccountRecord,
+    deleteAccount as deleteAccountRecord,
+    getAccountRuntimeStatuses,
+    listAccounts as listAccountRecords,
+  } from "$lib/api/accounts";
   import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -29,7 +34,7 @@
 
   async function loadAccounts() {
     try {
-      accounts = await invoke<AccountRecord[]>("list_accounts");
+      accounts = await listAccountRecords();
       await loadAccountStatuses();
     } catch (e) {
       status = formatAppError("loading accounts", e);
@@ -43,9 +48,7 @@
     }
 
     try {
-      const statuses = await invoke<AccountRuntimeStatus[]>("tg_get_account_statuses", {
-        accountIds: accounts.map((account) => account.id),
-      });
+      const statuses = await getAccountRuntimeStatuses(accounts.map((account) => account.id));
       accountStatuses = Object.fromEntries(
         statuses.map((runtimeStatus) => [runtimeStatus.account_id, runtimeStatus])
       );
@@ -96,7 +99,7 @@
     creating = true;
     status = "";
     try {
-      await invoke("create_account", {
+      await createAccountRecord({
         label: newLabel.trim(),
         apiId: parsedApiId,
         apiHash: newApiHash.trim(),
@@ -125,7 +128,7 @@
     if (!confirmed) return;
 
     try {
-      await invoke("delete_account", { accountId: account.id });
+      await deleteAccountRecord(account.id);
       await loadAccounts();
     } catch (e) {
       status = formatAppError("deleting the account", e);

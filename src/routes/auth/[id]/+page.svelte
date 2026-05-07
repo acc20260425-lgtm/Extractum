@@ -1,8 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
+  import {
+    clearAccountPhone,
+    getAccount,
+    initializeTelegramAccount,
+    logoutTelegramAccount,
+    sendTelegramCode,
+    setAccountPhone,
+    signInTelegramAccount,
+  } from "$lib/api/accounts";
   import { formatAppError } from "$lib/app-error";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -31,7 +39,7 @@
     }
 
     try {
-      const acc = await invoke<AccountRecord | null>("get_account", { accountId });
+      const acc = await getAccount(accountId);
       if (!acc) {
         status = "Account not found";
         return;
@@ -50,9 +58,7 @@
     loading = true;
     status = "Connecting...";
     try {
-      const isAuth = await invoke<boolean>("tg_init", {
-        accountId,
-      });
+      const isAuth = await initializeTelegramAccount(accountId);
       if (isAuth) {
         step = "done";
         status = "Already authenticated.";
@@ -72,7 +78,7 @@
     loading = true;
     status = "";
     try {
-      await invoke("tg_send_code", { accountId, phone });
+      await sendTelegramCode({ accountId, phone });
       step = "code";
     } catch (e) {
       status = formatAppError("sending the Telegram code", e);
@@ -85,8 +91,8 @@
     loading = true;
     status = "";
     try {
-      await invoke("tg_sign_in", { accountId, code });
-      await invoke("set_account_phone", { accountId, phone });
+      await signInTelegramAccount({ accountId, code });
+      await setAccountPhone({ accountId, phone });
       step = "done";
       status = "Signed in successfully.";
     } catch (e) {
@@ -99,8 +105,8 @@
   async function logout() {
     loading = true;
     try {
-      await invoke("tg_logout", { accountId });
-      await invoke("clear_account_phone", { accountId });
+      await logoutTelegramAccount(accountId);
+      await clearAccountPhone(accountId);
       phone = "";
       step = "phone";
       status = "";
