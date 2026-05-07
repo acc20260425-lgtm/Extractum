@@ -7,6 +7,7 @@ import {
   startTakeoutSourceImport,
 } from "./takeout-import";
 import type { TakeoutImportEvent } from "$lib/types/sources";
+import { TAKEOUT_IMPORT_PHASES } from "$lib/types/sources";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
@@ -87,5 +88,21 @@ describe("takeout import api wrapper", () => {
     listenMock.mock.calls[0][1](event);
 
     expect(handler).toHaveBeenCalledWith(event);
+  });
+
+  it("pins frontend takeout import phases to the Rust emitted phases", () => {
+    expect(TAKEOUT_IMPORT_PHASES).toEqual([
+      "queued",
+      "resolving_source",
+      "starting_takeout",
+      "validating_peer",
+      "loading_splits",
+      "counting",
+      "importing_history",
+      "finishing_takeout",
+      "completed",
+      "failed",
+      "cancelled",
+    ]);
   });
 });

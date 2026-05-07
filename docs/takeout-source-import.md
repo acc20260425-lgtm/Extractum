@@ -151,7 +151,7 @@ Takeout import does not download media bytes, thumbnails, previews, custom emoji
 
 Successful Takeout import updates `sources.last_sync_state` and `sources.last_synced_at` only after `finishTakeoutSession(success=true)` succeeds. Failed and cancelled jobs leave partial inserted rows in `items`, but they do not advance the source watermark.
 
-The current Takeout path finalizes source state and refreshed source metadata. The regular sync path still owns the forum-topic refresh helper; Takeout's `refreshing_aux` phase is reserved for a future parity step.
+The current Takeout path finalizes source state and refreshed source metadata. The regular sync path still owns the forum-topic refresh helper. If Takeout later gains a distinct forum-topic refresh step, add its emitted Rust phase and frontend `TakeoutImportPhase` value in the same change.
 
 ## 10. Current Validation Baseline
 

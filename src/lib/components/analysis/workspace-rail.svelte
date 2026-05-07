@@ -110,8 +110,6 @@
         return "importing history";
       case "finishing_takeout":
         return "finishing session";
-      case "refreshing_aux":
-        return "refreshing metadata";
       case "completed":
         return "complete";
       case "failed":

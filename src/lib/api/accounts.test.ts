@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   clearAccountPhone,
   createAccount,
@@ -131,15 +131,19 @@ describe("account api wrappers", () => {
   });
 
   it("sends a Telegram code and signs in with the expected payloads", async () => {
-    invokeMock.mockResolvedValueOnce(undefined);
-    await expect(sendTelegramCode({ accountId: 8, phone: "+123" })).resolves.toBeUndefined();
+    invokeMock.mockResolvedValueOnce("Code sent");
+    const sendCodeResult = sendTelegramCode({ accountId: 8, phone: "+123" });
+    expectTypeOf(sendCodeResult).toEqualTypeOf<Promise<string>>();
+    await expect(sendCodeResult).resolves.toBe("Code sent");
     expect(invokeMock).toHaveBeenLastCalledWith("tg_send_code", {
       accountId: 8,
       phone: "+123",
     });
 
-    invokeMock.mockResolvedValueOnce(undefined);
-    await expect(signInTelegramAccount({ accountId: 8, code: "12345" })).resolves.toBeUndefined();
+    invokeMock.mockResolvedValueOnce(true);
+    const signInResult = signInTelegramAccount({ accountId: 8, code: "12345" });
+    expectTypeOf(signInResult).toEqualTypeOf<Promise<boolean>>();
+    await expect(signInResult).resolves.toBe(true);
     expect(invokeMock).toHaveBeenLastCalledWith("tg_sign_in", {
       accountId: 8,
       code: "12345",
@@ -147,9 +151,11 @@ describe("account api wrappers", () => {
   });
 
   it("logs out a Telegram account with the expected payload", async () => {
-    invokeMock.mockResolvedValueOnce(undefined);
+    invokeMock.mockResolvedValueOnce(true);
 
-    await expect(logoutTelegramAccount(8)).resolves.toBeUndefined();
+    const logoutResult = logoutTelegramAccount(8);
+    expectTypeOf(logoutResult).toEqualTypeOf<Promise<boolean>>();
+    await expect(logoutResult).resolves.toBe(true);
 
     expect(invokeMock).toHaveBeenLastCalledWith("tg_logout", { accountId: 8 });
   });

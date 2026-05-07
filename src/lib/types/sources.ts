@@ -101,19 +101,21 @@ export type TakeoutImportStatus =
   | "failed"
   | "cancelled";
 
-export type TakeoutImportPhase =
-  | "queued"
-  | "resolving_source"
-  | "starting_takeout"
-  | "validating_peer"
-  | "loading_splits"
-  | "counting"
-  | "importing_history"
-  | "finishing_takeout"
-  | "refreshing_aux"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export const TAKEOUT_IMPORT_PHASES = [
+  "queued",
+  "resolving_source",
+  "starting_takeout",
+  "validating_peer",
+  "loading_splits",
+  "counting",
+  "importing_history",
+  "finishing_takeout",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
+
+export type TakeoutImportPhase = (typeof TAKEOUT_IMPORT_PHASES)[number];
 
 export interface TakeoutImportJobRecord {
   job_id: string;

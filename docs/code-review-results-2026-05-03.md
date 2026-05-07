@@ -44,6 +44,8 @@ cleanup branch:
 - Telegram account and authentication command access, plus Telegram account
   runtime status event access, is centralized in `src/lib/api/accounts.ts`; the
   Accounts and Auth routes no longer call those Tauri APIs directly.
+- Telegram auth wrappers expose the Rust `tg_send_code`, `tg_sign_in`, and
+  `tg_logout` response contracts instead of hiding those responses as `void`.
 - Analysis source group loading and template/group deletion command access and
   route-level orchestration are centralized in
   `src/lib/api/analysis-source-groups.ts` and
@@ -63,6 +65,9 @@ cleanup branch:
   group/template, LLM, and source command wrappers now live in domain type
   modules under `src/lib/types/*`; API wrappers no longer export those public
   input interfaces, while wrapper tests continue to pin command payload shapes.
+- Takeout import phases are pinned in `TAKEOUT_IMPORT_PHASES`, and the stale
+  frontend-only `refreshing_aux` value was removed until Rust emits such a
+  phase.
 - Obsolete Superpowers plan/spec handoff artifacts for completed cleanup
   workstreams were removed; the current cleanup state now lives in this review
   document, the session handoff, and Git history.
@@ -74,8 +79,8 @@ instead of stale task files.
 Deferred by design:
 
 - Rust-to-TypeScript type generation.
-- Broad response/event DTO consolidation; the latest pass intentionally
-  centralized wrapper input contracts only.
+- Broad response/event DTO generation/consolidation; the latest targeted pass
+  fixed concrete drift without introducing generated Rust-to-TypeScript types.
 - Secure secret storage, as a separate security backlog item.
 
 ## Open Findings
@@ -115,6 +120,12 @@ Shared wrapper input contracts for Accounts, Analysis run/chat/source
 group/template, LLM, and source wrapper commands are centralized in
 `src/lib/types/*`. `AnalysisReportStartCommand.profileId` now matches the Rust
 `Option<String>` command boundary as `string | null`.
+
+The latest targeted response/event pass aligned two concrete drift cases:
+Telegram auth wrappers now expose the Rust `String`/`bool` responses for
+`tg_send_code`, `tg_sign_in`, and `tg_logout`, and Takeout import phases are
+pinned through `TAKEOUT_IMPORT_PHASES` without the stale frontend-only
+`refreshing_aux` value.
 
 Several frontend response/event DTOs are still manually maintained beside Rust
 serde structs.
@@ -184,6 +195,10 @@ workstreams:
 - focused frontend checks passed during the Telegram account status event
   wrapper pass: `npm.cmd test -- src/lib/api/accounts.test.ts`, plus
   route-level raw Tauri command/event API searches under `src/routes`;
+- focused frontend checks passed during the response/event DTO drift pass:
+  `npm.cmd test -- src/lib/api/accounts.test.ts`,
+  `npm.cmd test -- src/lib/api/takeout-import.test.ts`, and
+  `npm.cmd run check`;
 - full frontend test suite also passed for the latest wrapper input contract
   audit: `npm.cmd test` with 22 test files and 187 tests;
 - docs cleanup verification for the latest refresh is recorded in
@@ -191,7 +206,7 @@ workstreams:
 
 ## Recommended Follow-Up Order
 
-1. Audit remaining manually mirrored response/event DTOs only when drift recurs
-   or shared usage makes consolidation worthwhile.
+1. Re-audit manually mirrored response/event DTOs only when Rust serde shapes
+   change or shared usage makes consolidation worthwhile.
 2. Opportunistically reduce lower-level `Result<T, String>` and
    `classify_message` fallback reliance when touching nearby backend code.

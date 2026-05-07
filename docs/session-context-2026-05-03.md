@@ -13,13 +13,14 @@ Latest user request, summarized in English:
 
 ```text
 The user agreed to proceed with the recommended cleanup. The active workstream
-is the remaining response/event DTO drift audit.
+is the remaining response/event DTO drift audit. The current pass found
+Takeout phase drift and Telegram auth response type drift.
 ```
 
 Commit message prepared for this turn if the current changes are committed:
 
 ```text
-refactor(accounts): centralize status event listener
+fix(api): align response DTO contracts
 ```
 
 ## Repository And Environment
@@ -32,7 +33,8 @@ refactor(accounts): centralize status event listener
 - Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 - Collaboration mode: Default mode.
-- Current working tree before this account status event pass: clean on `main`.
+- Current working tree before this response/event DTO audit pass: clean on
+  `main`.
 - Git writes such as `git add` and `git commit` often fail in the default
   sandbox with `.git/index.lock` permission errors. Rerunning the same git
   command with approval outside the sandbox has worked.
@@ -63,9 +65,10 @@ refactor(accounts): centralize status event listener
 
 ## Current Git History
 
-Latest commits at the start of the current account status event pass:
+Latest commits at the start of the current response/event DTO audit pass:
 
 ```text
+6fd2218 refactor(accounts): centralize status event listener
 60c8961 docs(session): refresh current session context
 525bc09 docs(cleanup): remove stale implementation handoffs
 646f742 refactor(api): centralize frontend contract types
@@ -168,6 +171,9 @@ Resolved cleanup currently recorded in the review:
 - Telegram account runtime status event access is centralized in
   `src/lib/api/accounts.ts`; the Accounts route no longer imports
   `@tauri-apps/api/event` directly.
+- Telegram auth wrappers now expose the Rust response contracts for
+  `tg_send_code`, `tg_sign_in`, and `tg_logout` instead of hiding them as
+  `void`.
 - Analysis source group loading and template/group deletion command access and
   route-level orchestration are centralized in
   `src/lib/api/analysis-source-groups.ts` and
@@ -187,6 +193,9 @@ Resolved cleanup currently recorded in the review:
   group/template, LLM, and source command wrappers now live in domain type
   modules under `src/lib/types/*`; API wrappers no longer export those public
   input interfaces, while wrapper tests continue to pin command payload shapes.
+- Takeout import phases are now pinned in `TAKEOUT_IMPORT_PHASES`; the stale
+  frontend-only `refreshing_aux` phase was removed until Rust emits such a
+  phase.
 - Obsolete Superpowers plan/spec handoff artifacts for completed cleanup
   workstreams were removed; current cleanup state lives in the review, this
   session handoff, and Git history.
@@ -194,8 +203,8 @@ Resolved cleanup currently recorded in the review:
 Deferred by design:
 
 - Rust-to-TypeScript type generation.
-- Broad response/event DTO consolidation; the latest contract pass intentionally
-  centralized wrapper input contracts only.
+- Broad response/event DTO generation/consolidation; the latest targeted pass
+  fixed concrete drift without introducing generated Rust-to-TypeScript types.
 - Secure secret storage, as a separate security backlog item.
 
 ## Open Findings
@@ -226,6 +235,12 @@ Shared wrapper input contracts for Accounts, Analysis run/chat/source
 group/template, LLM, and source wrapper commands are centralized in
 `src/lib/types/*`. `AnalysisReportStartCommand.profileId` matches the Rust
 `Option<String>` command boundary as `string | null`.
+
+The latest targeted response/event pass aligned two concrete drift cases:
+Telegram auth wrappers now expose the Rust `String`/`bool` responses for
+`tg_send_code`, `tg_sign_in`, and `tg_logout`, and Takeout import phases are
+pinned through `TAKEOUT_IMPORT_PHASES` without the stale frontend-only
+`refreshing_aux` value.
 
 Remaining risk: several frontend response/event DTOs are still manually
 maintained beside Rust serde structs.
@@ -432,6 +447,29 @@ Results:
   with exit code 1.
 - `git diff --check` exited 0; LF/CRLF warnings were shown for edited files.
 
+Current response/event DTO pass:
+
+- `src/lib/types/sources.ts` now exports `TAKEOUT_IMPORT_PHASES`, and
+  `TakeoutImportPhase` is derived from that tuple.
+- The stale frontend-only Takeout phase `refreshing_aux` was removed from the
+  type and from `src/lib/components/analysis/workspace-rail.svelte`.
+- `src/lib/api/takeout-import.test.ts` pins the frontend phase tuple to the
+  Rust phases currently emitted from `src-tauri/src/takeout_import/state.rs`.
+- `src/lib/api/accounts.ts` now returns `Promise<string>` from
+  `sendTelegramCode` and `Promise<boolean>` from `signInTelegramAccount` and
+  `logoutTelegramAccount`, matching the Rust `tg_send_code`, `tg_sign_in`, and
+  `tg_logout` commands.
+- `src/lib/api/accounts.test.ts` uses type-level assertions to keep those
+  wrapper response types aligned.
+
+Current TDD notes:
+
+- `npm.cmd test -- src/lib/api/takeout-import.test.ts` first failed outside
+  the sandbox because `TAKEOUT_IMPORT_PHASES` was `undefined`.
+- `npm.cmd run check` first failed on the new accounts type assertions because
+  the wrappers still returned `Promise<void>` where the Rust commands return
+  `String` and `bool`.
+
 ### Documentation Cleanup
 
 Completed commit:
@@ -483,7 +521,8 @@ Most recent targeted command check from the frontend DTO contract audit:
 rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
 ```
 
-Current account status event pass should also keep this event API search clean:
+The current response/event DTO pass should also keep this event API search
+clean:
 
 ```powershell
 rg -n "@tauri-apps/api/event|listen<" src/routes
@@ -504,7 +543,8 @@ absent under `src/routes`. Remaining `invoke` and `listen` calls are expected in
 Recommended next workstream:
 
 ```text
-Remaining response/event DTO drift audit
+No immediate response/event DTO drift follow-up is identified after the latest
+targeted pass.
 ```
 
 Recommended shape:
@@ -512,7 +552,7 @@ Recommended shape:
 1. Do not add route command wrappers; that surface is already clean.
 2. Keep route event access behind API wrappers when shared Tauri events are
    added or touched.
-3. Audit response/event DTO mirrors only when a Rust serde shape changes or
+3. Re-audit response/event DTO mirrors only when a Rust serde shape changes or
    multiple frontend modules share the same contract.
 4. Keep raw source DTO mapping local to `src/lib/api/sources.ts`.
 5. Keep Rust-to-TypeScript generation deferred unless DTO drift becomes a
@@ -556,17 +596,14 @@ src/lib/types/sources.ts
 Open tabs reported by the IDE for the latest user request:
 
 - `docs/code-review-results-2026-05-03.md`
-- `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`
-
-The second tab is stale after commit `525bc09`; the file was intentionally
-deleted as an obsolete completed plan. Use Git history to inspect it if needed.
 
 ## Current Turn Verification Plan
 
-After the current account status event wrapper pass, run:
+After the current response/event DTO audit pass, run:
 
 ```powershell
 npm.cmd test -- src/lib/api/accounts.test.ts
+npm.cmd test -- src/lib/api/takeout-import.test.ts
 npm.cmd run check
 rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
 rg -n "@tauri-apps/api/event|listen<" src/routes
@@ -574,6 +611,17 @@ git diff --check
 rg -n "[^[:ascii:]]" docs/session-context-2026-05-03.md
 git status --short --branch
 ```
+
+Current turn verification results before commit:
+
+- `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/takeout-import.test.ts`
+  passed outside the sandbox with 2 files and 15 tests.
+- `npm.cmd run check` passed outside the sandbox with 0 errors and 0 warnings.
+- Route-level raw Tauri command and event API searches under `src/routes`
+  returned no matches with exit code 1.
+- `git diff --check` exited 0; LF/CRLF warnings were shown for edited files.
+- `rg -n "[^[:ascii:]]" docs/session-context-2026-05-03.md` returned no
+  matches with exit code 1.
 
 Expected results:
 

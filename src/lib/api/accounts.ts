@@ -43,15 +43,15 @@ export function initializeTelegramAccount(accountId: number) {
 }
 
 export function sendTelegramCode(input: AccountPhoneInput) {
-  return invoke<void>("tg_send_code", { ...input });
+  return invoke<string>("tg_send_code", { ...input });
 }
 
 export function signInTelegramAccount(input: AccountCodeInput) {
-  return invoke<void>("tg_sign_in", { ...input });
+  return invoke<boolean>("tg_sign_in", { ...input });
 }
 
 export function logoutTelegramAccount(accountId: number) {
-  return invoke<void>("tg_logout", { accountId });
+  return invoke<boolean>("tg_logout", { accountId });
 }
 
 export function listenToAccountRuntimeStatus(
