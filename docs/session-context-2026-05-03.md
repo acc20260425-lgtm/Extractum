@@ -2,23 +2,27 @@
 
 ## Purpose
 
-This file is the current session handoff for Extractum cleanup work. It is
-intended to restore enough context for a future Codex session without reading
-the full chat transcript.
+This file is the current restoration point for the Extractum cleanup session.
+It is intentionally self-contained so a future Codex session can resume without
+reading the full chat transcript.
 
-Latest user request:
+This file was fully rewritten during the latest docs-only turn. It avoids
+non-ASCII text because the previous handoff displayed encoding corruption for a
+Russian request in PowerShell output.
+
+Latest user request, summarized in English:
 
 ```text
-Обнови документацию. Удали все неактуальное. Сформируй commit message
+Rewrite docs/session-context-2026-05-03.md with all information needed to
+restore the current session context. The file may be overwritten. Form a commit
+message.
 ```
 
-Current docs cleanup scope:
+Commit message prepared for this turn:
 
-- obsolete completed Superpowers plan/spec handoff artifacts were removed;
-- the current cleanup source of truth is now this handoff plus
-  `docs/code-review-results-2026-05-03.md`;
-- completed implementation sequencing remains available through Git history;
-- future Superpowers plan/spec files should represent only active work.
+```text
+docs(session): refresh current session context
+```
 
 ## Repository And Environment
 
@@ -30,7 +34,7 @@ Current docs cleanup scope:
 - Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 - Collaboration mode: Default mode.
-- Working tree was clean on `main` before the docs cleanup request.
+- Current working tree before this handoff rewrite: clean on `main`.
 - Git writes such as `git add` and `git commit` often fail in the default
   sandbox with `.git/index.lock` permission errors. Rerunning the same git
   command with approval outside the sandbox has worked.
@@ -42,22 +46,29 @@ Current docs cleanup scope:
   but exit code 0 means whitespace is clean.
 - There are no configured Git remotes, so local merge workflows skip `git pull`.
 
-## Active Workflow Rules
+## Active Working Rules
 
-- Do not create a git worktree.
-- Execute exactly one top-level implementation task per user turn.
-- Commit at the end of each top-level task when the user asks to execute work.
+- Do not create a git worktree for this cleanup stream.
+- Execute one top-level implementation/docs task per user turn.
 - Do not revert user changes.
 - Use `rg`/`rg --files` for search.
 - Use `apply_patch` for manual file edits.
 - For docs-only handoff updates, at minimum verify with `git diff --check` and
-  a targeted `rg` command that proves the documented claim.
+  a targeted command that proves the documented claim.
+- Before claiming completion or committing, use the Superpowers
+  `verification-before-completion` skill. It was read in the previous docs
+  cleanup turn.
+- Relevant Superpowers skills available in this session include
+  `using-superpowers`, `verification-before-completion`,
+  `executing-plans`, `systematic-debugging`, `test-driven-development`,
+  `requesting-code-review`, and `finishing-a-development-branch`.
 
-## Latest Git History
+## Current Git History
 
-Recent commits before the docs cleanup commit:
+Latest commits at the start of this handoff rewrite:
 
 ```text
+525bc09 docs(cleanup): remove stale implementation handoffs
 646f742 refactor(api): centralize frontend contract types
 3e6b255 docs(session): refresh current handoff context
 1b95cfa docs(review): recalibrate frontend contract follow-up
@@ -67,7 +78,45 @@ ee070e1 refactor(analysis): reuse account api wrappers
 0d0778c refactor(accounts): add api wrappers
 5a9278c docs(accounts): add api wrapper cleanup plan
 4e9f3df docs(accounts): add api wrapper cleanup design
+1827552 docs(session): refresh analysis editor handoff
+5b0705c refactor(analysis): use editor workflow
+d8d641d refactor(analysis): move source group editor workflow
+3f6ebfa refactor(analysis): move template editor workflow
+3fb3696 refactor(analysis): add editor api wrappers
+4ffc87b docs(analysis): add editor workflow extraction plan
+26d3781 docs(analysis): add editor workflow extraction design
+81c0b11 docs(session): refresh typed error cleanup handoff
+c2584d3 refactor(error): type llm command failures
+5bcd2ef refactor(error): type telegram failures
 ```
+
+Important note: commit `525bc09` deleted obsolete completed Superpowers plan
+and spec files. If a future session needs the exact old implementation plans,
+recover them from Git history rather than restoring them as active docs.
+
+## Docs Inventory
+
+Files currently present under `docs` at the start of this handoff rewrite:
+
+```text
+docs\takeout-source-import.md
+docs\session-context-2026-05-03.md
+docs\project.md
+docs\design-document.md
+docs\database-schema.md
+docs\codebase-audit-2026-05-05.md
+docs\code-review-results-2026-05-03.md
+docs\backlog.md
+docs\architecture-deep-dive.md
+```
+
+`docs/superpowers/plans` and `docs/superpowers/specs` no longer contain active
+files after commit `525bc09`.
+
+Current docs sources of truth for cleanup state:
+
+- `docs/code-review-results-2026-05-03.md`
+- `docs/session-context-2026-05-03.md`
 
 ## Current Review State
 
@@ -86,47 +135,120 @@ Review scope:
 - CodeRabbit could not be used because `coderabbit --version` failed with
   `Wsl/Service/E_ACCESSDENIED`; the review is manual.
 
-Current open findings:
+Resolved cleanup currently recorded in the review:
 
-1. **Major: Analysis route remains a high-context composition surface**
-   - `src/routes/analysis/+page.svelte` still owns listener lifecycle, local
-     Svelte state binding, and UI composition.
-   - Future Analysis changes should keep using existing API and workflow
-     boundaries.
-   - Listener lifecycle should only be extracted later if it becomes a concrete
-     source of defects or test friction.
+- Analysis run loading, opening, and run-event orchestration were extracted from
+  `src/routes/analysis/+page.svelte` into a tested workflow controller.
+- Core source workflows in `/analysis` now call `$lib/api/sources` instead of
+  raw core source Tauri commands.
+- Source UI domain objects now use camelCase fields, and raw source DTO mapping
+  is centralized in `src/lib/api/sources.ts`.
+- `get_items` was replaced by the registered `list_source_items` command.
+- Source request DTOs use camelCase Tauri wire fields.
+- Telegram source-kind validation is centralized.
+- Source command and service boundaries use explicit `AppError` constructors
+  for source-local user-visible failures.
+- Repeated source SQLite test setup is consolidated in
+  `src-tauri/src/sources/test_support.rs`.
+- Takeout import command/event access is centralized in
+  `src/lib/api/takeout-import.ts`.
+- NotebookLM export command/event access is centralized in
+  `src/lib/api/notebooklm-export.ts`.
+- Analysis chat command/event access and route-level orchestration are
+  centralized in `src/lib/api/analysis-chat.ts` and
+  `src/lib/analysis-chat-workflow.ts`.
+- Analysis trace command access and route-level orchestration are centralized in
+  `src/lib/api/analysis-trace.ts` and
+  `src/lib/analysis-trace-workflow.ts`.
+- Analysis account/status loading and analysis source metrics command access
+  are centralized in `src/lib/api/analysis-workspace.ts` and
+  `src/lib/analysis-workspace-workflow.ts`.
+- Telegram account and authentication command access is centralized in
+  `src/lib/api/accounts.ts`; the Accounts and Auth routes no longer invoke
+  those Tauri commands directly.
+- Analysis source group loading and template/group deletion command access and
+  route-level orchestration are centralized in
+  `src/lib/api/analysis-source-groups.ts` and
+  `src/lib/analysis-source-groups-workflow.ts`.
+- Analysis prompt-template and source-group create/update command access and
+  route-level orchestration are centralized in
+  `src/lib/api/analysis-source-groups.ts` and
+  `src/lib/analysis-source-groups-workflow.ts`.
+- Analysis report start/cancel/delete command access and route-level
+  orchestration are centralized in `src/lib/api/analysis-runs.ts` and
+  `src/lib/analysis-run-workflow.ts`.
+- Boundary-first typed error conversion is complete for the remaining DB,
+  Telegram, LLM, and validation command boundaries. Shared helpers now cover
+  database, Telegram transport, and LLM network failures while preserving the
+  existing `{ kind, message }` frontend wire shape.
+- Shared frontend wrapper input contracts for Accounts, Analysis run/chat/source
+  group/template, LLM, and source command wrappers now live in domain type
+  modules under `src/lib/types/*`; API wrappers no longer export those public
+  input interfaces, while wrapper tests continue to pin command payload shapes.
+- Obsolete Superpowers plan/spec handoff artifacts for completed cleanup
+  workstreams were removed; current cleanup state lives in the review, this
+  session handoff, and Git history.
 
-2. **Moderate: Remaining response/event frontend/backend DTOs are manually
-   mirrored**
-   - Core source command strings and DTO mapping are centralized in
-     `src/lib/api/sources.ts`.
-   - Compact frontend API wrappers exist for Analysis runs, Analysis chat,
-     Analysis trace, Analysis workspace loading, Analysis source
-     groups/templates, Takeout import, NotebookLM export, report
-     start/cancel/delete actions, Telegram accounts/authentication, and LLM
-     cancellation.
-   - Shared wrapper input contracts for Accounts, Analysis run/chat/source
-     group/template, LLM, and source wrappers now live in `src/lib/types/*`.
-   - `AnalysisReportStartCommand.profileId` is `string | null`, matching the
-     Rust `Option<String>` command boundary.
-   - A route-level raw Tauri command search returns no matches under
-     `src/routes`.
-   - Remaining risk is manually mirrored response/event DTO drift beside Rust
-     serde structs, not missing route wrappers or wrapper input drift.
+Deferred by design:
 
-3. **Low: Some lower-level string errors remain by design**
-   - DB, Telegram, LLM, and validation command boundaries now use explicit typed
-     `AppError` mappings.
-   - Some lower-level/event paths intentionally keep `Result<T, String>`,
-     including LLM streamed event payloads and compatibility fallbacks through
-     `From<String>` / `classify_message`.
+- Rust-to-TypeScript type generation.
+- Broad response/event DTO consolidation; the latest contract pass intentionally
+  centralized wrapper input contracts only.
+- Secure secret storage, as a separate security backlog item.
 
-Current recommended follow-up order:
+## Open Findings
 
-1. Audit remaining manually mirrored response/event DTOs only if drift recurs
-   or shared usage makes consolidation worthwhile.
-2. Opportunistically reduce lower-level `Result<T, String>` and
-   `classify_message` fallback reliance when touching nearby backend code.
+### Major: Analysis Route Remains A High-Context Composition Surface
+
+`src/routes/analysis/+page.svelte` is smaller than at the start of the review,
+and the remaining source group/template editor workflows are now delegated to
+the analysis source-groups workflow. The route still owns listener lifecycle,
+local Svelte state binding, and UI composition for the Analysis page.
+
+Suggested follow-up:
+
+- keep future changes routed through the existing API and workflow boundaries;
+- keep the route as a composition, state binding, and Svelte lifecycle layer;
+- only extract listener lifecycle later if it becomes a concrete source of
+  defects or test friction.
+
+### Moderate: Remaining Response/Event DTOs Are Manually Mirrored
+
+Compact frontend API wrappers now exist for analysis runs, Analysis chat,
+Analysis trace, Analysis workspace loading, Analysis source groups/templates,
+Takeout import, NotebookLM export, report start/cancel/delete actions, Telegram
+accounts/authentication, and LLM cancellation. Route-level raw Tauri command
+search returns no matches under `src/routes`.
+
+Shared wrapper input contracts for Accounts, Analysis run/chat/source
+group/template, LLM, and source wrapper commands are centralized in
+`src/lib/types/*`. `AnalysisReportStartCommand.profileId` matches the Rust
+`Option<String>` command boundary as `string | null`.
+
+Remaining risk: several frontend response/event DTOs are still manually
+maintained beside Rust serde structs.
+
+Suggested follow-up:
+
+- audit remaining manually mirrored response/event DTOs only when they show real
+  sharing or drift risk;
+- keep route files free of raw command access as new command surfaces are added;
+- later consider generated TypeScript types from Rust if drift remains a
+  recurring problem.
+
+### Low: Some Lower-Level String Errors Remain By Design
+
+DB, Telegram, LLM, and validation command boundaries now use explicit typed
+`AppError` mappings. Some lower-level and event-oriented paths still keep
+`Result<T, String>` intentionally, including LLM streamed event payloads and
+compatibility fallbacks through `From<String>` / `classify_message`.
+
+Suggested follow-up:
+
+- keep new command/service boundaries on explicit `AppError` constructors;
+- when touching lower-level helpers, avoid introducing new command-facing
+  `Result<T, String>` paths;
+- reduce `classify_message` fallback reliance opportunistically.
 
 ## Completed Cleanup Workstreams
 
@@ -164,7 +286,7 @@ cargo test llm
 
 ### Analysis Editor Workflow Extraction
 
-Completed commits:
+Completed commits include:
 
 ```text
 26d3781 docs(analysis): add editor workflow extraction design
@@ -197,7 +319,7 @@ npm.cmd run check
 
 ### Telegram Account API Wrappers
 
-Completed commits:
+Completed commits include:
 
 ```text
 4e9f3df docs(accounts): add api wrapper cleanup design
@@ -298,6 +420,12 @@ Results:
 
 ### Documentation Cleanup
 
+Completed commit:
+
+```text
+525bc09 docs(cleanup): remove stale implementation handoffs
+```
+
 Removed as obsolete completed implementation handoff artifacts:
 
 - typed error conversion plan/spec;
@@ -305,16 +433,20 @@ Removed as obsolete completed implementation handoff artifacts:
 - Analysis report actions plan/spec;
 - Telegram account API wrapper plan/spec.
 
-Current docs sources of truth:
+Deleted file groups:
 
-- `docs/code-review-results-2026-05-03.md`;
-- `docs/session-context-2026-05-03.md`.
+```text
+docs/superpowers/plans/2026-05-07-analysis-editor-workflow.md
+docs/superpowers/plans/2026-05-07-analysis-report-actions.md
+docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md
+docs/superpowers/plans/2026-05-07-typed-error-conversion.md
+docs/superpowers/specs/2026-05-07-analysis-editor-workflow-design.md
+docs/superpowers/specs/2026-05-07-analysis-report-actions-design.md
+docs/superpowers/specs/2026-05-07-telegram-account-api-wrappers-design.md
+docs/superpowers/specs/2026-05-07-typed-error-conversion-design.md
+```
 
-The deleted plan/spec files were historical execution artifacts for completed
-workstreams. They should not be restored unless a future session explicitly
-needs to reconstruct an old implementation plan from Git history.
-
-Verification for this docs-only cleanup:
+Verification for that docs-only cleanup:
 
 ```powershell
 rg --files docs\superpowers
@@ -325,13 +457,13 @@ git diff --check
 Results:
 
 - `rg --files docs\superpowers` returned no files with exit code 1.
-- The targeted stale plan/spec filename search returned no matches with exit
-  code 1.
+- Targeted stale plan/spec filename search returned no matches with exit code 1.
 - `git diff --check` exited 0; LF/CRLF warnings were shown for edited docs.
+- The resulting working tree was clean.
 
 ## Route-Level Raw Tauri Command Status
 
-Most recent targeted check:
+Most recent targeted check from the frontend DTO contract audit:
 
 ```powershell
 rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
@@ -399,17 +531,26 @@ src/lib/types/sources.ts
 
 ## IDE Notes
 
-Open tabs reported by the IDE at the start of the docs cleanup turn:
+Open tabs reported by the IDE for the latest user request:
 
 - `docs/code-review-results-2026-05-03.md`
-- a completed Telegram account API wrapper plan
+- `docs/superpowers/plans/2026-05-07-telegram-account-api-wrappers.md`
 
-The second tab pointed at a completed historical plan that was removed during
-this cleanup; no exact deleted plan/spec file paths should remain in active
-docs.
+The second tab is stale after commit `525bc09`; the file was intentionally
+deleted as an obsolete completed plan. Use Git history to inspect it if needed.
 
-## Proposed Commit Message
+## Current Turn Verification Plan
 
-```text
-docs(cleanup): remove stale implementation handoffs
+After rewriting this file, run:
+
+```powershell
+git diff --check
+rg -n "[^[:ascii:]]" docs/session-context-2026-05-03.md
+git status --short --branch
 ```
+
+Expected results:
+
+- `git diff --check` exits 0, allowing LF/CRLF warnings.
+- Non-ASCII search returns no matches with exit code 1.
+- Status shows only this session handoff file modified before commit.
