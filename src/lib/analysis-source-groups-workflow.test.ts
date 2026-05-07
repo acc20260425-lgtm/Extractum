@@ -37,7 +37,9 @@ function group(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGrou
 
 type HarnessState = AnalysisSourceGroupsWorkflowState & {
   groups: AnalysisSourceGroup[];
+  loadingTemplates: boolean;
   loadingGroups: boolean;
+  savingTemplate: boolean;
   deletingTemplate: boolean;
   deletingGroup: boolean;
   status: string;
@@ -53,7 +55,9 @@ function createHarness(initial: Partial<HarnessState> = {}) {
     selectedGroupId: "",
     editorBoundTemplateId: null,
     editorBoundGroupId: null,
+    loadingTemplates: false,
     loadingGroups: false,
+    savingTemplate: false,
     deletingTemplate: false,
     deletingGroup: false,
     status: "",
@@ -63,7 +67,10 @@ function createHarness(initial: Partial<HarnessState> = {}) {
   const deps = {
     getState: () => state,
     patch: vi.fn((patch: AnalysisSourceGroupsWorkflowPatch) => Object.assign(state, patch)),
+    listTemplates: vi.fn(),
     listGroups: vi.fn(),
+    createTemplate: vi.fn(),
+    updateTemplate: vi.fn(),
     deleteTemplate: vi.fn(),
     deleteGroup: vi.fn(),
     loadTemplates: vi.fn(),
@@ -117,6 +124,73 @@ describe("analysis-source-groups-workflow", () => {
 
     expect(state.status).toBe("Error loading source groups: db down");
     expect(state.loadingGroups).toBe(false);
+  });
+
+  it("patches status and skips update when template changes are invalid", async () => {
+    const { state, deps, workflow } = createHarness({ selectedTemplate: null });
+
+    await workflow.saveTemplateChanges("Name", "Body");
+
+    expect(state.status).toBe("Select a template first.");
+    expect(deps.updateTemplate).not.toHaveBeenCalled();
+    expect(state.savingTemplate).toBe(false);
+  });
+
+  it("updates a template, reloads templates, selects it, and rebinds the editor", async () => {
+    const current = template({ id: 42, name: "Custom" });
+    const updated = template({ id: 42, name: "Updated", body: "New body" });
+    const { state, deps, workflow } = createHarness({
+      selectedTemplate: current,
+      templates: [current],
+    });
+    deps.updateTemplate.mockResolvedValueOnce(updated);
+    deps.listTemplates.mockResolvedValueOnce([updated]);
+
+    await workflow.saveTemplateChanges(" Updated ", " New body ");
+
+    expect(deps.updateTemplate).toHaveBeenCalledWith({
+      templateId: 42,
+      name: "Updated",
+      body: "New body",
+    });
+    expect(deps.listTemplates).toHaveBeenCalledWith("report");
+    expect(state.templates).toEqual([updated]);
+    expect(state.selectedTemplateId).toBe("42");
+    expect(state.status).toBe("Template \"Updated\" saved.");
+    expect(deps.bindTemplateEditor).toHaveBeenCalledWith(updated);
+    expect(state.savingTemplate).toBe(false);
+  });
+
+  it("creates a template copy, reloads templates, selects it, and rebinds the editor", async () => {
+    const created = template({ id: 77, name: "Copy", body: "Copied body" });
+    const { state, deps, workflow } = createHarness();
+    deps.createTemplate.mockResolvedValueOnce(created);
+    deps.listTemplates.mockResolvedValueOnce([created]);
+
+    await workflow.saveTemplateCopy(" Copy ", " Copied body ");
+
+    expect(deps.createTemplate).toHaveBeenCalledWith({
+      name: "Copy",
+      templateKind: "report",
+      body: "Copied body",
+    });
+    expect(deps.listTemplates).toHaveBeenCalledWith("report");
+    expect(state.templates).toEqual([created]);
+    expect(state.selectedTemplateId).toBe("77");
+    expect(state.status).toBe("Template \"Copy\" created.");
+    expect(deps.bindTemplateEditor).toHaveBeenCalledWith(created);
+    expect(state.savingTemplate).toBe(false);
+  });
+
+  it("reports template save errors and clears saving state", async () => {
+    const current = template({ id: 42, name: "Custom" });
+    const { state, deps, workflow } = createHarness({ selectedTemplate: current });
+    deps.updateTemplate.mockRejectedValueOnce("backend down");
+
+    await workflow.saveTemplateChanges("Name", "Body");
+
+    expect(state.status).toBe("Error saving the template: backend down");
+    expect(state.savingTemplate).toBe(false);
   });
 
   it("patches status and skips confirmation when template deletion is invalid", async () => {
