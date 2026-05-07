@@ -6,22 +6,20 @@ This file is the current restoration point for the Extractum cleanup session.
 It is intentionally self-contained so a future Codex session can resume without
 reading the full chat transcript.
 
-This file was fully rewritten during the latest docs-only turn. It avoids
-non-ASCII text because the previous handoff displayed encoding corruption for a
-Russian request in PowerShell output.
+This file avoids non-ASCII text because an earlier handoff displayed encoding
+corruption for a Russian request in PowerShell output.
 
 Latest user request, summarized in English:
 
 ```text
-Rewrite docs/session-context-2026-05-03.md with all information needed to
-restore the current session context. The file may be overwritten. Form a commit
-message.
+The user agreed to proceed with the recommended cleanup. The active workstream
+is the remaining response/event DTO drift audit.
 ```
 
-Commit message prepared for this turn:
+Commit message prepared for this turn if the current changes are committed:
 
 ```text
-docs(session): refresh current session context
+refactor(accounts): centralize status event listener
 ```
 
 ## Repository And Environment
@@ -34,7 +32,7 @@ docs(session): refresh current session context
 - Current date in this session: Thursday, 2026-05-07.
 - Network access is restricted.
 - Collaboration mode: Default mode.
-- Current working tree before this handoff rewrite: clean on `main`.
+- Current working tree before this account status event pass: clean on `main`.
 - Git writes such as `git add` and `git commit` often fail in the default
   sandbox with `.git/index.lock` permission errors. Rerunning the same git
   command with approval outside the sandbox has worked.
@@ -65,9 +63,10 @@ docs(session): refresh current session context
 
 ## Current Git History
 
-Latest commits at the start of this handoff rewrite:
+Latest commits at the start of the current account status event pass:
 
 ```text
+60c8961 docs(session): refresh current session context
 525bc09 docs(cleanup): remove stale implementation handoffs
 646f742 refactor(api): centralize frontend contract types
 3e6b255 docs(session): refresh current handoff context
@@ -166,6 +165,9 @@ Resolved cleanup currently recorded in the review:
 - Telegram account and authentication command access is centralized in
   `src/lib/api/accounts.ts`; the Accounts and Auth routes no longer invoke
   those Tauri commands directly.
+- Telegram account runtime status event access is centralized in
+  `src/lib/api/accounts.ts`; the Accounts route no longer imports
+  `@tauri-apps/api/event` directly.
 - Analysis source group loading and template/group deletion command access and
   route-level orchestration are centralized in
   `src/lib/api/analysis-source-groups.ts` and
@@ -217,8 +219,8 @@ Suggested follow-up:
 Compact frontend API wrappers now exist for analysis runs, Analysis chat,
 Analysis trace, Analysis workspace loading, Analysis source groups/templates,
 Takeout import, NotebookLM export, report start/cancel/delete actions, Telegram
-accounts/authentication, and LLM cancellation. Route-level raw Tauri command
-search returns no matches under `src/routes`.
+accounts/authentication/status events, and LLM cancellation. Route-level raw
+Tauri command and event API searches return no matches under `src/routes`.
 
 Shared wrapper input contracts for Accounts, Analysis run/chat/source
 group/template, LLM, and source wrapper commands are centralized in
@@ -335,12 +337,24 @@ Implemented:
 
 - `src/lib/api/accounts.ts` owns frontend command access for account CRUD and
   Telegram authentication/runtime status commands.
+- `src/lib/api/accounts.ts` owns the Telegram account runtime status event name
+  and listener wrapper via `listenToAccountRuntimeStatus`.
 - `src/lib/api/accounts.test.ts` pins every account/auth command name and
-  payload shape.
+  payload shape, plus the shared `telegram://account-status` event name.
 - `src/lib/api/analysis-workspace.ts` reuses `accounts.ts` for workspace
   account listing and account runtime status calls.
 - `src/routes/accounts/+page.svelte` and `src/routes/auth/[id]/+page.svelte`
   delegate account/auth command access to `$lib/api/accounts`.
+- `src/routes/accounts/+page.svelte` delegates account status event access to
+  `$lib/api/accounts` instead of importing `@tauri-apps/api/event` directly.
+
+Current account status event TDD note:
+
+- A new `src/lib/api/accounts.test.ts` case failed outside the sandbox before
+  implementation with `TypeError: listenToAccountRuntimeStatus is not a
+  function`.
+- After implementation, `npm.cmd test -- src/lib/api/accounts.test.ts` passed
+  outside the sandbox with 10 tests.
 
 Focused verification recorded during implementation:
 
@@ -461,12 +475,18 @@ Results:
 - `git diff --check` exited 0; LF/CRLF warnings were shown for edited docs.
 - The resulting working tree was clean.
 
-## Route-Level Raw Tauri Command Status
+## Route-Level Raw Tauri API Status
 
-Most recent targeted check from the frontend DTO contract audit:
+Most recent targeted command check from the frontend DTO contract audit:
 
 ```powershell
 rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
+```
+
+Current account status event pass should also keep this event API search clean:
+
+```powershell
+rg -n "@tauri-apps/api/event|listen<" src/routes
 ```
 
 Expected result:
@@ -475,9 +495,9 @@ Expected result:
 no output, exit code 1
 ```
 
-Conclusion: route-level raw Tauri command access should remain absent under
-`src/routes`. Remaining `invoke` calls are expected in `$lib/api/*` wrappers
-and their tests.
+Conclusion: route-level raw Tauri command and event API access should remain
+absent under `src/routes`. Remaining `invoke` and `listen` calls are expected in
+`$lib/api/*` wrappers and their tests.
 
 ## Current Suggested Next Work
 
@@ -489,11 +509,13 @@ Remaining response/event DTO drift audit
 
 Recommended shape:
 
-1. Do not add route wrappers; that surface is already clean.
-2. Audit response/event DTO mirrors only when a Rust serde shape changes or
+1. Do not add route command wrappers; that surface is already clean.
+2. Keep route event access behind API wrappers when shared Tauri events are
+   added or touched.
+3. Audit response/event DTO mirrors only when a Rust serde shape changes or
    multiple frontend modules share the same contract.
-3. Keep raw source DTO mapping local to `src/lib/api/sources.ts`.
-4. Keep Rust-to-TypeScript generation deferred unless DTO drift becomes a
+4. Keep raw source DTO mapping local to `src/lib/api/sources.ts`.
+5. Keep Rust-to-TypeScript generation deferred unless DTO drift becomes a
    recurring problem.
 
 Known response/event type starting points:
@@ -541,9 +563,13 @@ deleted as an obsolete completed plan. Use Git history to inspect it if needed.
 
 ## Current Turn Verification Plan
 
-After rewriting this file, run:
+After the current account status event wrapper pass, run:
 
 ```powershell
+npm.cmd test -- src/lib/api/accounts.test.ts
+npm.cmd run check
+rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
+rg -n "@tauri-apps/api/event|listen<" src/routes
 git diff --check
 rg -n "[^[:ascii:]]" docs/session-context-2026-05-03.md
 git status --short --branch
@@ -551,6 +577,10 @@ git status --short --branch
 
 Expected results:
 
+- The focused account API test exits 0 with 10 tests.
+- `npm.cmd run check` exits 0 with 0 errors and 0 warnings.
+- Both route-level raw Tauri API searches return no matches with exit code 1.
 - `git diff --check` exits 0, allowing LF/CRLF warnings.
 - Non-ASCII search returns no matches with exit code 1.
-- Status shows only this session handoff file modified before commit.
+- Status shows the account API wrapper, account route, review doc, and this
+  session handoff modified before commit.

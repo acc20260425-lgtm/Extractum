@@ -41,9 +41,9 @@ cleanup branch:
 - Analysis account/status loading and analysis source metrics command access are
   centralized in `src/lib/api/analysis-workspace.ts` and
   `src/lib/analysis-workspace-workflow.ts`.
-- Telegram account and authentication command access is centralized in
-  `src/lib/api/accounts.ts`; the Accounts and Auth routes no longer invoke
-  those Tauri commands directly.
+- Telegram account and authentication command access, plus Telegram account
+  runtime status event access, is centralized in `src/lib/api/accounts.ts`; the
+  Accounts and Auth routes no longer call those Tauri APIs directly.
 - Analysis source group loading and template/group deletion command access and
   route-level orchestration are centralized in
   `src/lib/api/analysis-source-groups.ts` and
@@ -107,9 +107,9 @@ Core source command strings and DTO mapping are centralized in
 `src/lib/api/sources.ts`, and compact frontend API wrappers now exist for
 analysis runs, Analysis chat, Analysis trace, Analysis workspace loading,
 Analysis source groups/templates, Takeout import, NotebookLM export, report
-start/cancel/delete actions, Telegram accounts/authentication, and LLM
-cancellation. A route-level raw Tauri command search now returns no matches
-under `src/routes`.
+start/cancel/delete actions, Telegram accounts/authentication/status events,
+and LLM cancellation. Route-level raw Tauri command and event API searches now
+return no matches under `src/routes`.
 
 Shared wrapper input contracts for Accounts, Analysis run/chat/source
 group/template, LLM, and source wrapper commands are centralized in
@@ -181,6 +181,9 @@ workstreams:
   `npm.cmd test -- src/lib/api/accounts.test.ts src/lib/api/analysis-runs.test.ts src/lib/api/analysis-chat.test.ts src/lib/api/analysis-source-groups.test.ts src/lib/api/llm.test.ts src/lib/api/sources.test.ts`,
   `npm.cmd run check`, route-level raw Tauri command search under
   `src/routes`, and `git diff --check`;
+- focused frontend checks passed during the Telegram account status event
+  wrapper pass: `npm.cmd test -- src/lib/api/accounts.test.ts`, plus
+  route-level raw Tauri command/event API searches under `src/routes`;
 - full frontend test suite also passed for the latest wrapper input contract
   audit: `npm.cmd test` with 22 test files and 187 tests;
 - docs cleanup verification for the latest refresh is recorded in

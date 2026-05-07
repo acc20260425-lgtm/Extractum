@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AccountCodeInput,
   AccountPhoneInput,
@@ -6,6 +7,8 @@ import type {
   AccountRuntimeStatus,
   CreateAccountInput,
 } from "$lib/types/accounts";
+
+export const TELEGRAM_ACCOUNT_STATUS_EVENT = "telegram://account-status";
 
 export function listAccounts() {
   return invoke<AccountRecord[]>("list_accounts");
@@ -49,4 +52,10 @@ export function signInTelegramAccount(input: AccountCodeInput) {
 
 export function logoutTelegramAccount(accountId: number) {
   return invoke<void>("tg_logout", { accountId });
+}
+
+export function listenToAccountRuntimeStatus(
+  handler: (event: Event<AccountRuntimeStatus>) => void,
+): Promise<UnlistenFn> {
+  return listen<AccountRuntimeStatus>(TELEGRAM_ACCOUNT_STATUS_EVENT, handler);
 }

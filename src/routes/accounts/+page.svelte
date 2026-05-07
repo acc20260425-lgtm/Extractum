@@ -6,8 +6,8 @@
     deleteAccount as deleteAccountRecord,
     getAccountRuntimeStatuses,
     listAccounts as listAccountRecords,
+    listenToAccountRuntimeStatus,
   } from "$lib/api/accounts";
-  import { listen } from "@tauri-apps/api/event";
   import { formatAppError } from "$lib/app-error";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -19,10 +19,6 @@
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
-
-  interface RuntimeStatusEvent<T> {
-    payload: T;
-  }
 
   let accounts = $state<AccountRecord[]>([]);
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
@@ -140,7 +136,7 @@
     let detachListener: (() => void) | null = null;
 
     void loadAccounts();
-    void listen<AccountRuntimeStatus>("telegram://account-status", ({ payload }: RuntimeStatusEvent<AccountRuntimeStatus>) => {
+    void listenToAccountRuntimeStatus(({ payload }) => {
       if (disposed) return;
       accountStatuses = {
         ...accountStatuses,

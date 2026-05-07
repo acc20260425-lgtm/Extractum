@@ -7,22 +7,30 @@ import {
   getAccountRuntimeStatuses,
   initializeTelegramAccount,
   listAccounts,
+  listenToAccountRuntimeStatus,
   logoutTelegramAccount,
   sendTelegramCode,
   setAccountPhone,
   signInTelegramAccount,
+  TELEGRAM_ACCOUNT_STATUS_EVENT,
 } from "./accounts";
 import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
 
 const invokeMock = vi.hoisted(() => vi.fn());
+const listenMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: listenMock,
+}));
+
 describe("account api wrappers", () => {
   beforeEach(() => {
     invokeMock.mockReset();
+    listenMock.mockReset();
   });
 
   it("loads accounts with the registered command name", async () => {
@@ -144,5 +152,25 @@ describe("account api wrappers", () => {
     await expect(logoutTelegramAccount(8)).resolves.toBeUndefined();
 
     expect(invokeMock).toHaveBeenLastCalledWith("tg_logout", { accountId: 8 });
+  });
+
+  it("listens on the shared Telegram account status event name", async () => {
+    const unlisten = vi.fn();
+    const handler = vi.fn();
+    listenMock.mockResolvedValueOnce(unlisten);
+
+    await expect(listenToAccountRuntimeStatus(handler)).resolves.toBe(unlisten);
+    expect(TELEGRAM_ACCOUNT_STATUS_EVENT).toBe("telegram://account-status");
+    expect(listenMock).toHaveBeenCalledWith(TELEGRAM_ACCOUNT_STATUS_EVENT, expect.any(Function));
+
+    const event = {
+      payload: {
+        account_id: 1,
+        status: "ready",
+        message: null,
+      } satisfies AccountRuntimeStatus,
+    };
+    listenMock.mock.calls[0][1](event);
+    expect(handler).toHaveBeenCalledWith(event);
   });
 });
