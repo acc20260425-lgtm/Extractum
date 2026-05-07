@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
@@ -33,9 +32,14 @@
     listWorkspaceAccounts,
   } from "$lib/api/analysis-workspace";
   import {
+    createAnalysisPromptTemplate,
+    createAnalysisSourceGroup,
     deleteAnalysisPromptTemplate,
     deleteAnalysisSourceGroup,
+    listAnalysisPromptTemplates,
     listAnalysisSourceGroups,
+    updateAnalysisPromptTemplate,
+    updateAnalysisSourceGroup,
   } from "$lib/api/analysis-source-groups";
   import { cancelLlmRequest } from "$lib/api/llm";
   import {
@@ -135,17 +139,9 @@
     type NotebookLmExportProgressState,
   } from "$lib/analysis-state";
   import {
-    groupCopyCommand,
-    groupCreatedStatus,
     groupEditorStateFromGroup,
-    groupUpdateCommand,
-    groupUpdatedStatus,
     isGroupSourceSelected as groupSourceIsSelected,
-    templateCopyCommand,
-    templateCreatedStatus,
     templateEditorStateFromTemplate,
-    templateUpdateCommand,
-    templateUpdatedStatus,
     toggleGroupSourceSelection,
   } from "$lib/analysis-editor-state";
   import {
@@ -545,10 +541,14 @@
   }
 
   function applySourceGroupsWorkflowPatch(patch: AnalysisSourceGroupsWorkflowPatch) {
+    if ("templates" in patch) templates = patch.templates ?? [];
     if ("groups" in patch) groups = patch.groups ?? [];
     if ("selectedTemplateId" in patch) selectedTemplateId = patch.selectedTemplateId ?? "";
     if ("selectedGroupId" in patch) selectedGroupId = patch.selectedGroupId ?? "";
+    if ("loadingTemplates" in patch) loadingTemplates = patch.loadingTemplates ?? false;
     if ("loadingGroups" in patch) loadingGroups = patch.loadingGroups ?? false;
+    if ("savingTemplate" in patch) savingTemplate = patch.savingTemplate ?? false;
+    if ("savingGroup" in patch) savingGroup = patch.savingGroup ?? false;
     if ("deletingTemplate" in patch) deletingTemplate = patch.deletingTemplate ?? false;
     if ("deletingGroup" in patch) deletingGroup = patch.deletingGroup ?? false;
     if ("status" in patch && patch.status !== undefined) status = patch.status;
@@ -764,23 +764,7 @@
   }
 
   async function loadTemplates() {
-    loadingTemplates = true;
-    try {
-      templates = await invoke<AnalysisPromptTemplate[]>("list_analysis_prompt_templates", {
-        templateKind: "report",
-      });
-      if (!selectedTemplateId && templates.length > 0) {
-        selectedTemplateId = String(templates[0].id);
-      }
-      const current = selectedTemplate;
-      if (current && editorBoundTemplateId !== current.id) {
-        bindEditorToTemplate(current);
-      }
-    } catch (error) {
-      status = formatAppError("loading report templates", error);
-    } finally {
-      loadingTemplates = false;
-    }
+    await sourceGroupsWorkflow.loadTemplates();
   }
 
   async function loadGroups() {
@@ -799,7 +783,12 @@
       editorBoundGroupId,
     }),
     patch: applySourceGroupsWorkflowPatch,
+    listTemplates: listAnalysisPromptTemplates,
     listGroups: listAnalysisSourceGroups,
+    createTemplate: createAnalysisPromptTemplate,
+    updateTemplate: updateAnalysisPromptTemplate,
+    createGroup: createAnalysisSourceGroup,
+    updateGroup: updateAnalysisSourceGroup,
     deleteTemplate: deleteAnalysisPromptTemplate,
     deleteGroup: deleteAnalysisSourceGroup,
     loadTemplates,
@@ -1017,53 +1006,11 @@
   }
 
   async function saveTemplateChanges(nextName = templateName, nextBody = templateBody) {
-    const command = templateUpdateCommand(selectedTemplate, nextName, nextBody);
-    if (!command.ok) {
-      status = command.status;
-      return;
-    }
-
-    savingTemplate = true;
-    try {
-      const updated = await invoke<AnalysisPromptTemplate>("update_analysis_prompt_template", {
-        templateId: command.templateId,
-        name: command.name,
-        body: command.body,
-      });
-      status = templateUpdatedStatus(updated);
-      await loadTemplates();
-      selectedTemplateId = String(updated.id);
-      bindEditorToTemplate(updated);
-    } catch (error) {
-      status = formatAppError("saving the template", error);
-    } finally {
-      savingTemplate = false;
-    }
+    await sourceGroupsWorkflow.saveTemplateChanges(nextName, nextBody);
   }
 
   async function saveTemplateCopy(nextName = templateName, nextBody = templateBody) {
-    const command = templateCopyCommand(nextName, nextBody);
-    if (!command.ok) {
-      status = command.status;
-      return;
-    }
-
-    savingTemplate = true;
-    try {
-      const created = await invoke<AnalysisPromptTemplate>("create_analysis_prompt_template", {
-        name: command.name,
-        templateKind: "report",
-        body: command.body,
-      });
-      status = templateCreatedStatus(created);
-      await loadTemplates();
-      selectedTemplateId = String(created.id);
-      bindEditorToTemplate(created);
-    } catch (error) {
-      status = formatAppError("creating the template", error);
-    } finally {
-      savingTemplate = false;
-    }
+    await sourceGroupsWorkflow.saveTemplateCopy(nextName, nextBody);
   }
 
   async function deleteTemplate() {
@@ -1071,52 +1018,11 @@
   }
 
   async function saveGroupChanges() {
-    const command = groupUpdateCommand(selectedGroup, groupName, groupMemberSourceIds);
-    if (!command.ok) {
-      status = command.status;
-      return;
-    }
-
-    savingGroup = true;
-    try {
-      const updated = await invoke<AnalysisSourceGroup>("update_analysis_source_group", {
-        groupId: command.groupId,
-        name: command.name,
-        sourceIds: command.sourceIds,
-      });
-      status = groupUpdatedStatus(updated);
-      await loadGroups();
-      selectedGroupId = String(updated.id);
-      bindEditorToGroup(updated);
-    } catch (error) {
-      status = formatAppError("saving the source group", error);
-    } finally {
-      savingGroup = false;
-    }
+    await sourceGroupsWorkflow.saveGroupChanges(groupName, groupMemberSourceIds);
   }
 
   async function saveGroupCopy() {
-    const command = groupCopyCommand(groupName, groupMemberSourceIds);
-    if (!command.ok) {
-      status = command.status;
-      return;
-    }
-
-    savingGroup = true;
-    try {
-      const created = await invoke<AnalysisSourceGroup>("create_analysis_source_group", {
-        name: command.name,
-        sourceIds: command.sourceIds,
-      });
-      status = groupCreatedStatus(created);
-      await loadGroups();
-      selectedGroupId = String(created.id);
-      bindEditorToGroup(created);
-    } catch (error) {
-      status = formatAppError("creating the source group", error);
-    } finally {
-      savingGroup = false;
-    }
+    await sourceGroupsWorkflow.saveGroupCopy(groupName, groupMemberSourceIds);
   }
 
   async function deleteGroup() {
