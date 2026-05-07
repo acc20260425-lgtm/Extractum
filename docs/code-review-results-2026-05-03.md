@@ -100,25 +100,27 @@ Core source command strings and DTO mapping are centralized in
 analysis runs, Analysis chat, Analysis trace, Analysis workspace loading,
 Analysis source groups/templates, Takeout import, NotebookLM export, report
 start/cancel/delete actions, Telegram accounts/authentication, and LLM
-cancellation.
+cancellation. A route-level raw Tauri command search now returns no matches
+under `src/routes`.
 
-Several remaining frontend TypeScript DTOs and raw Tauri command strings are
-still manually maintained beside Rust serde structs.
+Several frontend TypeScript DTOs and wrapper input types are still manually
+maintained beside Rust serde structs.
 
 Impact:
 
 - DTO drift can still become silent runtime breakage on manually mirrored
   non-source contracts;
-- raw command names outside the extracted wrappers are harder to search and
-  refactor safely;
-- route files can still carry infrastructure detail they do not need.
+- wrapper-local command payloads still need focused tests whenever Rust command
+  structs change;
+- route files are cleaner, but frontend/backend contract drift remains a
+  possible maintenance cost.
 
 Suggested fix:
 
-- introduce typed `$lib/api/*` wrappers for the remaining compact Tauri command
-  surfaces;
-- move any remaining route-local DTOs to shared frontend type modules when they
-  become shared across wrappers/controllers;
+- audit the remaining manually mirrored `$lib/api/*` wrapper inputs and DTOs,
+  then consolidate the ones with real sharing or drift risk into shared
+  frontend type modules;
+- keep route files free of raw command access as new command surfaces are added;
 - later consider generated TypeScript types from Rust if drift remains a
   recurring problem.
 
@@ -168,7 +170,7 @@ workstreams:
 
 ## Recommended Follow-Up Order
 
-1. Add typed frontend API wrappers or shared DTO modules for remaining compact
-   non-source Tauri command surfaces.
+1. Audit remaining manually mirrored frontend DTOs and `$lib/api/*` wrapper
+   input types, then consolidate only the shared or drift-prone contracts.
 2. Opportunistically reduce lower-level `Result<T, String>` and
    `classify_message` fallback reliance when touching nearby backend code.

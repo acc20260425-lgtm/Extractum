@@ -5,10 +5,11 @@
 This file restores the current Codex session context for Extractum cleanup work.
 It supersedes all earlier handoff contents in this file.
 
-The current active turn is **Task 4: Refresh Review Docs and Session Handoff**
-from the Telegram account API wrappers plan. The implementation tasks are
-complete; this file and `docs/code-review-results-2026-05-03.md` are being
-refreshed to close the workstream.
+The current active turn is a **docs-only review follow-up recalibration** after
+the Telegram account API wrappers workstream. Route-level raw Tauri command
+access has been rechecked and is now absent under `src/routes`, so this file and
+`docs/code-review-results-2026-05-03.md` are being refreshed to make the next
+recommended follow-up more precise.
 
 ## Current Repository State
 
@@ -27,10 +28,10 @@ refreshed to close the workstream.
   top-level implementation-plan task per user turn; commit at the end of each
   top-level task.
 - Working tree state for this task:
-  - before Task 4 edits: clean on `main`;
-  - during Task 4: only this handoff and the review document are intended to be
-    modified;
-  - after the Task 4 commit, the working tree should be clean again.
+  - before the recalibration edits: clean on `main`;
+  - during this docs-only task: only this handoff and the review document are
+    intended to be modified;
+  - after the recalibration commit, the working tree should be clean again.
 
 ## Current Workstream
 
@@ -40,7 +41,7 @@ Workstream:
 Telegram account API wrappers
 ```
 
-Status: implementation complete, docs refresh in progress.
+Status: implementation complete, follow-up wording recalibration in progress.
 
 Source docs:
 
@@ -65,6 +66,12 @@ Task 4 expected commit:
 
 ```text
 docs(session): refresh account api handoff
+```
+
+Recalibration expected commit:
+
+```text
+docs(review): recalibrate frontend contract follow-up
 ```
 
 ## Completed Telegram Account API Scope
@@ -131,6 +138,15 @@ rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes src/lib/api
 Result: no account/auth route command access remains; remaining matches are in
 `$lib/api/*` wrappers and API wrapper tests.
 
+Post-workstream route raw-command re-evaluation:
+
+```powershell
+rg -n "\binvoke\s*(<|\()|@tauri-apps/api/core" src/routes
+```
+
+Result: no output, exit code 1. Route-level raw Tauri command access is absent
+under `src/routes`.
+
 Final full verification for Task 4:
 
 ```powershell
@@ -153,10 +169,12 @@ Results:
 `docs/code-review-results-2026-05-03.md` has been updated in Task 4 to move
 Telegram account/authentication command access into resolved work.
 
-The current recommended follow-up order is:
+The docs-only recalibration updates the moderate frontend/backend contract
+finding so it no longer treats wrapper creation as the next route cleanup. The
+current recommended follow-up order is:
 
-1. Add typed frontend API wrappers or shared DTO modules for remaining compact
-   non-source Tauri command surfaces.
+1. Audit remaining manually mirrored frontend DTOs and `$lib/api/*` wrapper
+   input types, then consolidate only the shared or drift-prone contracts.
 2. Opportunistically reduce lower-level `Result<T, String>` and
    `classify_message` fallback reliance when touching nearby backend code.
 
@@ -180,6 +198,8 @@ Already extracted and complete:
 - source facade;
 - Telegram account/authentication command access;
 - analysis run workflow extraction.
+
+Route-level raw Tauri command access is currently absent under `src/routes`.
 
 ## Environment Notes
 
