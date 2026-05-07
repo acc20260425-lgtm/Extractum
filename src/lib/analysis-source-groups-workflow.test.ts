@@ -40,6 +40,7 @@ type HarnessState = AnalysisSourceGroupsWorkflowState & {
   loadingTemplates: boolean;
   loadingGroups: boolean;
   savingTemplate: boolean;
+  savingGroup: boolean;
   deletingTemplate: boolean;
   deletingGroup: boolean;
   status: string;
@@ -58,6 +59,7 @@ function createHarness(initial: Partial<HarnessState> = {}) {
     loadingTemplates: false,
     loadingGroups: false,
     savingTemplate: false,
+    savingGroup: false,
     deletingTemplate: false,
     deletingGroup: false,
     status: "",
@@ -71,6 +73,8 @@ function createHarness(initial: Partial<HarnessState> = {}) {
     listGroups: vi.fn(),
     createTemplate: vi.fn(),
     updateTemplate: vi.fn(),
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(),
     deleteTemplate: vi.fn(),
     deleteGroup: vi.fn(),
     loadTemplates: vi.fn(),
@@ -242,6 +246,72 @@ describe("analysis-source-groups-workflow", () => {
     expect(state.selectedTemplateId).toBe("7");
     expect(deps.bindTemplateEditor).toHaveBeenCalledWith(fallback);
     expect(state.deletingTemplate).toBe(false);
+  });
+
+  it("patches status and skips update when group changes are invalid", async () => {
+    const { state, deps, workflow } = createHarness({ selectedGroup: null });
+
+    await workflow.saveGroupChanges("Name", [7]);
+
+    expect(state.status).toBe("Select a source group first.");
+    expect(deps.updateGroup).not.toHaveBeenCalled();
+    expect(state.savingGroup).toBe(false);
+  });
+
+  it("updates a group, reloads groups, selects it, and rebinds the editor", async () => {
+    const current = group({ id: 10, name: "Research" });
+    const updated = group({ id: 10, name: "Updated" });
+    const { state, deps, workflow } = createHarness({
+      selectedGroup: current,
+      groups: [current],
+    });
+    deps.updateGroup.mockResolvedValueOnce(updated);
+    deps.listGroups.mockResolvedValueOnce([updated]);
+
+    await workflow.saveGroupChanges(" Updated ", [7]);
+
+    expect(deps.updateGroup).toHaveBeenCalledWith({
+      groupId: 10,
+      name: "Updated",
+      sourceIds: [7],
+    });
+    expect(deps.listGroups).toHaveBeenCalledOnce();
+    expect(state.groups).toEqual([updated]);
+    expect(state.selectedGroupId).toBe("10");
+    expect(state.status).toBe("Source group \"Updated\" saved.");
+    expect(deps.bindGroupEditor).toHaveBeenLastCalledWith(updated);
+    expect(state.savingGroup).toBe(false);
+  });
+
+  it("creates a group copy, reloads groups, selects it, and rebinds the editor", async () => {
+    const created = group({ id: 33, name: "New group" });
+    const { state, deps, workflow } = createHarness();
+    deps.createGroup.mockResolvedValueOnce(created);
+    deps.listGroups.mockResolvedValueOnce([created]);
+
+    await workflow.saveGroupCopy(" New group ", [7]);
+
+    expect(deps.createGroup).toHaveBeenCalledWith({
+      name: "New group",
+      sourceIds: [7],
+    });
+    expect(deps.listGroups).toHaveBeenCalledOnce();
+    expect(state.groups).toEqual([created]);
+    expect(state.selectedGroupId).toBe("33");
+    expect(state.status).toBe("Source group \"New group\" created.");
+    expect(deps.bindGroupEditor).toHaveBeenLastCalledWith(created);
+    expect(state.savingGroup).toBe(false);
+  });
+
+  it("reports group save errors and clears saving state", async () => {
+    const current = group({ id: 10, name: "Research" });
+    const { state, deps, workflow } = createHarness({ selectedGroup: current });
+    deps.updateGroup.mockRejectedValueOnce("backend down");
+
+    await workflow.saveGroupChanges("Name", [7]);
+
+    expect(state.status).toBe("Error saving the source group: backend down");
+    expect(state.savingGroup).toBe(false);
   });
 
   it("deletes a group, reloads groups, and applies fallback selection", async () => {

@@ -1,7 +1,11 @@
 import {
+  groupCopyCommand,
+  groupCreatedStatus,
   groupDeleteDecision,
   groupDeletedStatus,
   groupFallbackSelection,
+  groupUpdateCommand,
+  groupUpdatedStatus,
   templateCopyCommand,
   templateCreatedStatus,
   templateDeleteDecision,
@@ -12,7 +16,9 @@ import {
 } from "$lib/analysis-editor-state";
 import type {
   CreateAnalysisPromptTemplateInput,
+  CreateAnalysisSourceGroupInput,
   UpdateAnalysisPromptTemplateInput,
+  UpdateAnalysisSourceGroupInput,
 } from "$lib/api/analysis-source-groups";
 import type { AnalysisPromptTemplate, AnalysisSourceGroup } from "$lib/types/analysis";
 
@@ -35,6 +41,7 @@ export type AnalysisSourceGroupsWorkflowPatch = Partial<{
   loadingTemplates: boolean;
   loadingGroups: boolean;
   savingTemplate: boolean;
+  savingGroup: boolean;
   deletingTemplate: boolean;
   deletingGroup: boolean;
   status: string;
@@ -55,6 +62,8 @@ export interface AnalysisSourceGroupsWorkflowDeps {
   listGroups(): Promise<AnalysisSourceGroup[]>;
   createTemplate(input: CreateAnalysisPromptTemplateInput): Promise<AnalysisPromptTemplate>;
   updateTemplate(input: UpdateAnalysisPromptTemplateInput): Promise<AnalysisPromptTemplate>;
+  createGroup(input: CreateAnalysisSourceGroupInput): Promise<AnalysisSourceGroup>;
+  updateGroup(input: UpdateAnalysisSourceGroupInput): Promise<AnalysisSourceGroup>;
   deleteTemplate(templateId: number): Promise<void>;
   deleteGroup(groupId: number): Promise<void>;
   loadTemplates(): Promise<void>;
@@ -176,6 +185,55 @@ export function createAnalysisSourceGroupsWorkflow(
     }
   }
 
+  async function saveGroupChanges(nextName: string, nextSourceIds: number[]) {
+    const command = groupUpdateCommand(deps.getState().selectedGroup, nextName, nextSourceIds);
+    if (!command.ok) {
+      deps.patch({ status: command.status });
+      return;
+    }
+
+    deps.patch({ savingGroup: true });
+    try {
+      const updated = await deps.updateGroup({
+        groupId: command.groupId,
+        name: command.name,
+        sourceIds: command.sourceIds,
+      });
+      deps.patch({ status: groupUpdatedStatus(updated) });
+      await loadGroups();
+      deps.patch({ selectedGroupId: String(updated.id) });
+      deps.bindGroupEditor(updated);
+    } catch (error) {
+      deps.patch({ status: deps.formatError("saving the source group", error) });
+    } finally {
+      deps.patch({ savingGroup: false });
+    }
+  }
+
+  async function saveGroupCopy(nextName: string, nextSourceIds: number[]) {
+    const command = groupCopyCommand(nextName, nextSourceIds);
+    if (!command.ok) {
+      deps.patch({ status: command.status });
+      return;
+    }
+
+    deps.patch({ savingGroup: true });
+    try {
+      const created = await deps.createGroup({
+        name: command.name,
+        sourceIds: command.sourceIds,
+      });
+      deps.patch({ status: groupCreatedStatus(created) });
+      await loadGroups();
+      deps.patch({ selectedGroupId: String(created.id) });
+      deps.bindGroupEditor(created);
+    } catch (error) {
+      deps.patch({ status: deps.formatError("creating the source group", error) });
+    } finally {
+      deps.patch({ savingGroup: false });
+    }
+  }
+
   async function deleteTemplate() {
     const decision = templateDeleteDecision(deps.getState().selectedTemplate);
     if (!decision.ok) {
@@ -248,6 +306,8 @@ export function createAnalysisSourceGroupsWorkflow(
     saveTemplateChanges,
     saveTemplateCopy,
     deleteTemplate,
+    saveGroupChanges,
+    saveGroupCopy,
     deleteGroup,
   };
 }
