@@ -235,6 +235,7 @@ function sourceRecord(overrides: Partial<Source>): Source {
   return {
     id: 1,
     sourceType: "telegram",
+    sourceSubtype: "channel",
     telegramSourceKind: "channel",
     accountId: null,
     externalId: "external-a",

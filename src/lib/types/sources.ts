@@ -1,5 +1,14 @@
 export type TelegramSourceKind = "channel" | "supergroup" | "group";
-export type SourceType = "telegram";
+export type SourceType = "telegram" | "youtube" | "rss" | "forum";
+export type SourceSubtype =
+  | TelegramSourceKind
+  | "video"
+  | "playlist"
+  | "feed"
+  | "thread"
+  | "board"
+  | "site";
+export type SourceContentLabel = "messages" | "videos" | "posts" | "items";
 export type InitialSyncMode = "recent_messages" | "recent_days";
 
 export type DialogKindFilter = "all" | TelegramSourceKind;
@@ -16,7 +25,8 @@ export interface TelegramDialogSource {
 export interface Source {
   id: number;
   sourceType: SourceType;
-  telegramSourceKind: TelegramSourceKind;
+  sourceSubtype: SourceSubtype | null;
+  telegramSourceKind: TelegramSourceKind | null;
   accountId: number | null;
   externalId: string;
   title: string | null;
@@ -26,6 +36,16 @@ export interface Source {
   isActive: boolean;
   createdAt: number;
   avatarDataUrl: string | null;
+}
+
+export interface SourceCapabilities {
+  canSync: boolean;
+  canDelete: boolean;
+  canImportArchive: boolean;
+  hasTopics: boolean;
+  requiresAccount: boolean;
+  hasMembershipState: boolean;
+  contentLabel: SourceContentLabel;
 }
 
 export interface SourceItem {

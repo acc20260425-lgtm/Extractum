@@ -1,5 +1,10 @@
 import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
 import type { Source } from "$lib/types/sources";
+import {
+  membershipLabel as sourceMembershipLabel,
+  sourceCapabilities,
+  sourceKindLabel as providerSourceKindLabel,
+} from "$lib/source-capabilities";
 
 export function accountLabel(
   accountId: number | null,
@@ -26,24 +31,12 @@ export function runtimeBadge(runtime: AccountRuntimeStatus | null) {
   return "";
 }
 
-export function sourceKindLabel(kind: string) {
-  switch (kind) {
-    case "channel":
-      return "channel";
-    case "supergroup":
-      return "supergroup";
-    case "group":
-      return "group";
-    default:
-      return "telegram";
-  }
+export function sourceKindLabel(source: Source) {
+  return providerSourceKindLabel(source);
 }
 
-export function membershipLabel(kind: string, isMember: boolean) {
-  if (kind === "channel") {
-    return isMember ? "subscribed" : "not subscribed";
-  }
-  return isMember ? "member" : "not a member";
+export function membershipLabel(source: Source) {
+  return sourceMembershipLabel(source);
 }
 
 export function sourceInitial(source: Source) {
@@ -54,6 +47,10 @@ export function sourceSyncDisabledReason(
   source: Source,
   accountStatuses: Record<number, AccountRuntimeStatus>,
 ) {
+  const capabilities = sourceCapabilities(source);
+  if (!capabilities.canSync) return "This source type is not syncable.";
+  if (!capabilities.requiresAccount) return null;
+
   const runtime = runtimeStatus(source.accountId, accountStatuses);
   if (source.accountId === null) return "Source is not linked to an account.";
   if (!runtime || runtime.status === "not_initialized") {

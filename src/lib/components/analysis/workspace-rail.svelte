@@ -57,8 +57,8 @@
     takeoutJobsBySource: Record<number, TakeoutImportJobRecord>;
     formatTimestamp: (value: number) => string;
     accountLabel: (accountId: number | null) => string;
-    sourceKindLabel: (kind: string) => string;
-    membershipLabel: (kind: string, isMember: boolean) => string;
+    sourceKindLabel: (source: Source) => string;
+    membershipLabel: (source: Source) => string;
     sourceInitial: (source: Source) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     runtimeBadge: (runtime: AccountRuntimeStatus | null) => string;
@@ -227,7 +227,7 @@
                 </div>
                 <div class="rail-copy-meta">
                   <span>{accountLabel(source.accountId)}</span>
-                  <span>{sourceKindLabel(source.telegramSourceKind)}</span>
+                  <span>{sourceKindLabel(source)}</span>
                   {#if metrics}
                     <span>{metrics.item_count} msgs</span>
                   {/if}
@@ -235,7 +235,7 @@
               </div>
             </button>
             <div class="rail-row-actions">
-              <Badge>{membershipLabel(source.telegramSourceKind, source.isMember)}</Badge>
+              <Badge>{membershipLabel(source)}</Badge>
               {#if runtimeStateBadge}
                 <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeStateBadge}</Badge>
               {/if}

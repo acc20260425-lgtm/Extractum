@@ -199,7 +199,7 @@
     }>;
     phaseLabel: (value: string) => string;
     accountLabel: (accountId: number | null) => string;
-    sourceKindLabel: (kind: string) => string;
+    sourceKindLabel: (source: Source) => string;
     sourceSyncDisabledReason: (source: Source) => string | null;
     startOfDayUnix: (value: string) => number;
     endOfDayUnix: (value: string) => number;
@@ -254,7 +254,7 @@
     </div>
     <div class="scope-hero-meta">
       {#if analysisScope === "single_source" && currentSource}
-        <Badge variant="info">{sourceKindLabel(currentSource.telegramSourceKind)}</Badge>
+        <Badge variant="info">{sourceKindLabel(currentSource)}</Badge>
         <Badge>{accountLabel(currentSource.accountId)}</Badge>
       {/if}
       {#if analysisScope === "source_group" && currentGroup}

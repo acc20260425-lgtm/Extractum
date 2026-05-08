@@ -27,8 +27,8 @@
     accountLabel: (id: number | null) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     syncDisabledReason: (source: Source) => string | null;
-    sourceKindLabel: (kind: string) => string;
-    membershipLabel: (kind: string, isMember: boolean) => string;
+    sourceKindLabel: (source: Source) => string;
+    membershipLabel: (source: Source) => string;
     formatDate: (timestamp: number) => string;
     onSelect: (sourceId: number) => void | Promise<void>;
     onSync: (sourceId: number) => void | Promise<void>;
@@ -70,7 +70,7 @@
       <span class="sub">{accountLabel(source.accountId)}</span>
     </button>
     <div class="channel-actions">
-      <Badge>{sourceKindLabel(source.telegramSourceKind)}</Badge>
+      <Badge>{sourceKindLabel(source)}</Badge>
       {#if source.lastSyncedAt !== null}
         <Badge>synced {formatDate(source.lastSyncedAt)}</Badge>
       {/if}
@@ -87,9 +87,9 @@
         {/if}
       {/if}
       {#if source.isMember}
-        <Badge variant="member">{membershipLabel(source.telegramSourceKind, source.isMember)}</Badge>
+        <Badge variant="member">{membershipLabel(source)}</Badge>
       {:else}
-        <Badge>{membershipLabel(source.telegramSourceKind, source.isMember)}</Badge>
+        <Badge>{membershipLabel(source)}</Badge>
       {/if}
       <Button
         size="sm"

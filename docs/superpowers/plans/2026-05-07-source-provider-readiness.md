@@ -65,7 +65,7 @@ If the tree is dirty, inspect the changes and do not overwrite user work.
 - Modify: `src/lib/analysis-source-state.ts`
 - Modify: `src/lib/analysis-source-state.test.ts`
 
-- [ ] **Step 1: Write the failing capability tests**
+- [x] **Step 1: Write the failing capability tests**
 
 Create `src/lib/source-capabilities.test.ts`:
 
@@ -208,7 +208,7 @@ it("does not require Telegram account runtime for non-syncable manual sources", 
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -224,7 +224,7 @@ Cannot find module './source-capabilities'
 
 The analysis-source-state test may also fail with TypeScript errors because `Source` does not yet have `sourceSubtype` and `telegramSourceKind` is not nullable.
 
-- [ ] **Step 3: Update source types**
+- [x] **Step 3: Update source types**
 
 In `src/lib/types/sources.ts`, replace the top source type section with:
 
@@ -277,7 +277,7 @@ export interface SourceCapabilities {
 }
 ```
 
-- [ ] **Step 4: Add capability helper implementation**
+- [x] **Step 4: Add capability helper implementation**
 
 Create `src/lib/source-capabilities.ts`:
 
@@ -389,7 +389,7 @@ export function membershipLabel(source: Source) {
 }
 ```
 
-- [ ] **Step 5: Update analysis source state to use capabilities**
+- [x] **Step 5: Update analysis source state to use capabilities**
 
 In `src/lib/analysis-source-state.ts`, add:
 
@@ -455,7 +455,7 @@ expect(membershipLabel(source({ telegramSourceKind: "group", sourceSubtype: "gro
 expect(membershipLabel(source({ telegramSourceKind: "group", sourceSubtype: "group", isMember: false }))).toBe("not a member");
 ```
 
-- [ ] **Step 6: Run focused frontend tests**
+- [x] **Step 6: Run focused frontend tests**
 
 Run:
 
@@ -469,7 +469,7 @@ Expected output:
 Test Files  2 passed
 ```
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 ```powershell
 git add src/lib/types/sources.ts src/lib/source-capabilities.ts src/lib/source-capabilities.test.ts src/lib/analysis-source-state.ts src/lib/analysis-source-state.test.ts

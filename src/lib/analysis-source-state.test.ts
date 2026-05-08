@@ -35,6 +35,7 @@ function source(overrides: Partial<Source>): Source {
   return {
     id: 1,
     sourceType: "telegram",
+    sourceSubtype: "channel",
     telegramSourceKind: "channel",
     accountId: 1,
     externalId: "@extractum",
@@ -78,15 +79,39 @@ describe("analysis-source-state", () => {
   });
 
   it("formats Telegram source kind and membership labels", () => {
-    expect(sourceKindLabel("channel")).toBe("channel");
-    expect(sourceKindLabel("supergroup")).toBe("supergroup");
-    expect(sourceKindLabel("group")).toBe("group");
-    expect(sourceKindLabel("unknown")).toBe("telegram");
+    expect(sourceKindLabel(source({
+      telegramSourceKind: "channel",
+      sourceSubtype: "channel",
+    }))).toBe("channel");
+    expect(sourceKindLabel(source({
+      telegramSourceKind: "supergroup",
+      sourceSubtype: "supergroup",
+    }))).toBe("supergroup");
+    expect(sourceKindLabel(source({
+      telegramSourceKind: "group",
+      sourceSubtype: "group",
+    }))).toBe("group");
 
-    expect(membershipLabel("channel", true)).toBe("subscribed");
-    expect(membershipLabel("channel", false)).toBe("not subscribed");
-    expect(membershipLabel("group", true)).toBe("member");
-    expect(membershipLabel("group", false)).toBe("not a member");
+    expect(membershipLabel(source({
+      telegramSourceKind: "channel",
+      sourceSubtype: "channel",
+      isMember: true,
+    }))).toBe("subscribed");
+    expect(membershipLabel(source({
+      telegramSourceKind: "channel",
+      sourceSubtype: "channel",
+      isMember: false,
+    }))).toBe("not subscribed");
+    expect(membershipLabel(source({
+      telegramSourceKind: "group",
+      sourceSubtype: "group",
+      isMember: true,
+    }))).toBe("member");
+    expect(membershipLabel(source({
+      telegramSourceKind: "group",
+      sourceSubtype: "group",
+      isMember: false,
+    }))).toBe("not a member");
   });
 
   it("derives a stable source initial from title, external id, or fallback", () => {
@@ -124,5 +149,15 @@ describe("analysis-source-state", () => {
       source({ accountId: 7 }),
       { 7: runtime({ account_id: 7, status: "ready" }) },
     )).toBeNull();
+  });
+
+  it("does not require Telegram account runtime for non-syncable manual sources", () => {
+    expect(sourceSyncDisabledReason(source({
+      sourceType: "youtube",
+      sourceSubtype: "video",
+      telegramSourceKind: null,
+      accountId: null,
+      isMember: false,
+    }), {})).toBe("This source type is not syncable.");
   });
 });
