@@ -170,6 +170,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/14.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "add provider source subtype",
+            sql: include_str!("../migrations/15.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -212,6 +218,26 @@ mod tests {
             "idx_telegram_forum_topics_source_topic",
             "idx_telegram_forum_topics_source_top_message",
             "idx_items_source_reply_to_top",
+        ] {
+            assert!(
+                migration.sql.contains(fragment),
+                "missing migration fragment {fragment}"
+            );
+        }
+    }
+
+    #[test]
+    fn includes_provider_source_subtype_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 15)
+            .expect("version 15 migration is registered");
+
+        for fragment in [
+            "ALTER TABLE sources ADD COLUMN source_subtype TEXT",
+            "SET source_subtype = telegram_source_kind",
+            "WHERE source_type = 'telegram'",
         ] {
             assert!(
                 migration.sql.contains(fragment),
