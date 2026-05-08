@@ -194,11 +194,16 @@ Recorded on 2026-05-08:
   - membership: `member`
 - Sync on private supergroup `WBChat` succeeded without re-login:
   - timestamp changed from `08.05.2026, 22:16:20` to `08.05.2026, 22:17:18`
+- Logout and re-login were exercised for account `1`.
+- After re-login, `telegram_1.session.json` was observed as a new encrypted envelope:
+  - `version`: `1`
+  - `algorithm`: `XChaCha20-Poly1305`
+  - contains `nonce` and `ciphertext`
+  - does not contain plaintext `home_dc`, `dc_options`, or `updates_state`
 - No `restore_failed` state or auth error was observed during this validation slice.
 
 Not yet validated in this slice:
 
-- logout cleanup removes the encrypted session file and session key;
 - account delete cleanup removes session file, session key, and API hash secret;
 - a separate private `channel` source case.
 
