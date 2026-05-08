@@ -6,12 +6,14 @@ This document describes the current local SQLite schema at a practical level.
 
 ### 1.1 `sources`
 
-Stores registered Telegram sources.
+Stores registered provider sources. Telegram is the only implemented ingest
+provider today, but the shared schema is provider-ready.
 
 Important fields:
 
 - `id`
 - `source_type`
+- `source_subtype`
 - `telegram_source_kind`
 - `external_id`
 - `title`
@@ -27,6 +29,22 @@ Important constraints / indexes:
 
 - unique source by `(account_id, source_type, telegram_source_kind, external_id)`
 
+`source_type` values currently supported by shared contracts:
+
+- `telegram`
+- `youtube`
+- `rss`
+- `forum`
+
+Only `telegram` has implemented ingest today.
+
+`source_subtype` is provider-local:
+
+- Telegram uses `channel`, `supergroup`, or `group`
+- future YouTube can use `video` or `playlist`
+- future RSS can use `feed`
+- future forums can use `thread`, `board`, or `site`
+
 `telegram_source_kind` values:
 
 - `channel`
@@ -36,13 +54,18 @@ Important constraints / indexes:
 Notes:
 
 - older rows that used `source_type = 'telegram_channel'` are migrated to `source_type = 'telegram'`;
+- migration `15.sql` adds `source_subtype` and backfills existing Telegram rows
+  from `telegram_source_kind`;
+- `telegram_source_kind` is a Telegram compatibility field and can be `NULL` for
+  future non-Telegram sources;
 - uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
 - uniqueness includes `telegram_source_kind` because Telegram bare ids are not enough to safely describe every peer shape.
 - `last_sync_state` and `last_synced_at` are advanced by normal sync and by successful Takeout import; failed or cancelled Takeout jobs leave these fields unchanged.
 
 ### 1.2 `items`
 
-Stores locally ingested Telegram messages.
+Stores locally ingested source items. Current rows are Telegram messages, but
+the table is the shared local corpus for future provider documents.
 
 Important fields:
 
@@ -274,13 +297,18 @@ Purpose:
 | 12 | `12.sql` | Scope source uniqueness by `account_id` |
 | 13 | `13.sql` | Add Telegram reply/thread/reaction context metadata to `items` |
 | 14 | `14.sql` | Add local `telegram_forum_topics` catalog and topic join indexes |
+| 15 | `15.sql` | Add provider-local `source_subtype` to `sources` and backfill Telegram rows |
 
 ## 4. Current behavior implications
 
 - the analysis workspace can render media-bearing and media-only items from `items`;
+- `sources` is provider-ready, but only Telegram source creation and sync are implemented today;
+- unsupported provider sync attempts return typed validation errors;
 - `/analysis` still loads only text-bearing corpus rows;
 - NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
+- new live analysis refs use local item identity (`s{source_id}-i{item_id}`);
+- legacy saved refs using Telegram message ids (`s{source_id}-m{message_id}`) remain readable;
 - `app_settings` still contains secrets temporarily, which remains a security debt.

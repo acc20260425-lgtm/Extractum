@@ -2,7 +2,10 @@
 
 ## 1. Goal
 
-Extractum is a desktop-first research tool for collecting Telegram source history into a local archive and running structured analysis over that archive.
+Extractum is a desktop-first research tool for collecting source history into a
+local archive and running structured analysis over that archive. Telegram is
+the only implemented ingest provider today, while the shared source and
+analysis layers are ready for future non-Telegram providers.
 
 The design goals are:
 
@@ -50,16 +53,24 @@ That lets the product preserve media-bearing and media-only posts today without 
 
 ### 3.1 Source model
 
-Each Telegram source is stored in `sources` with:
+Each source is stored in `sources` with:
 
+- `source_type`
+- `source_subtype`
 - `external_id`
 - `title`
-- `telegram_source_kind` (`channel`, `supergroup`, or `group`)
+- optional `telegram_source_kind` compatibility data (`channel`,
+  `supergroup`, or `group`)
 - optional compressed metadata
 - account linkage
 - sync state
 
-Source identity is scoped by account and kind. This matters because the same Telegram channel or group can exist in more than one local account, and Telegram bare ids can overlap across source kinds.
+Source identity is scoped by account, provider, kind, and external id. This
+matters because the same Telegram channel or group can exist in more than one
+local account, and Telegram bare ids can overlap across source kinds.
+
+Source UI actions are capability-driven. Sync, Takeout import, membership
+state, and topic controls are shown only for source families that support them.
 
 ### 3.2 Sync model
 
@@ -70,7 +81,10 @@ The first sync window is configurable through app settings:
 
 After the first sync, the app resumes from `last_sync_state`.
 
-`sync_source` remains the ordinary incremental ingest path. It is optimized for regular refreshes rather than full historical reconstruction.
+`sync_source` remains the ordinary incremental ingest path. It dispatches by
+provider and currently routes only Telegram sources into the implemented sync
+flow. Unsupported or not-yet-implemented provider sync attempts return typed
+validation errors.
 
 ### 3.3 Takeout import model
 
@@ -143,6 +157,8 @@ The intended behavior is:
 - follow-up chat for new runs reads the frozen snapshot first;
 - trace resolution for new runs resolves against the frozen snapshot first.
 
+New live corpus refs use local item identity (`s{source_id}-i{item_id}`), while
+legacy Telegram-shaped refs (`s{source_id}-m{message_id}`) remain readable.
 Legacy runs without snapshot data can still fall back to live items.
 
 ### 4.3 LLM provider profiles
@@ -243,6 +259,8 @@ Earlier planning documents treated the following as future work:
 - Telegram item context metadata
 - NotebookLM reply/thread/reaction metadata rendering
 - Takeout source import for existing sources with TDesktop-first pagination
+- provider-ready source records, capability-driven source UI, provider sync
+  dispatch, and provider-neutral analysis refs
 
 Those items are now implemented and should no longer be treated as future milestones.
 
@@ -251,6 +269,7 @@ Those items are now implemented and should no longer be treated as future milest
 The most meaningful remaining design questions are:
 
 - how to move secrets out of SQLite cleanly;
+- which concrete non-Telegram provider should be implemented first;
 - whether Telegram `api_hash` and session storage should move together or in separate steps;
 - whether private Telegram peer resolution should gain stronger cached identity data;
 - how to handle migrated supergroup history without corrupting `(source_id, external_id)` uniqueness;

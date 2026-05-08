@@ -28,6 +28,11 @@ Owns:
 
 ## 2. Telegram ingest flow
 
+The shared source layer is provider-ready: source records expose
+`source_type` and provider-local `source_subtype`, source UI actions are
+capability-driven, and `sync_source` dispatches by provider. Telegram is still
+the only implemented ingest provider.
+
 ### 2.1 Account lifecycle
 
 Accounts are stored locally and may restore their Telegram session on startup. The frontend observes runtime status and uses that to gate actions like sync.
@@ -170,7 +175,10 @@ Frozen snapshot storage solves three drift problems:
 
 ### 5.3 Legacy compatibility
 
-Older runs without snapshot rows can still fall back to live tables. This keeps upgrades non-breaking while making new runs more stable.
+New live corpus refs use local item identity (`s{source_id}-i{item_id}`).
+Legacy Telegram-shaped refs (`s{source_id}-m{message_id}`) are still accepted.
+Older runs without snapshot rows can still fall back to live tables. This keeps
+upgrades non-breaking while making new runs more stable.
 
 ## 6. LLM provider architecture
 
@@ -208,6 +216,8 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - Takeout import still needs broader live validation across supergroups, groups, private/left sources, and shifted export DC behavior;
 - migrated supergroup history is detected but not imported until the `(source_id, external_id)` collision policy is decided;
+- concrete YouTube, RSS, and forum ingestion are not implemented yet despite
+  the provider-ready source model;
 - the analysis layer has not yet become media-aware;
 - full Telegram Forum Topics and forward metadata are not modeled yet;
 - Telegram session storage may still deserve a more robust long-term format.

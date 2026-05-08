@@ -68,13 +68,16 @@ cleanup branch:
 - Takeout import phases are pinned in `TAKEOUT_IMPORT_PHASES`, and the stale
   frontend-only `refreshing_aux` value was removed until Rust emits such a
   phase.
-- Obsolete Superpowers plan/spec handoff artifacts for completed cleanup
-  workstreams were removed; the current cleanup state now lives in this review
-  document, the session handoff, and Git history.
+- Source provider readiness is complete: shared source records expose
+  provider-local subtypes, source UI actions are capability-driven, backend sync
+  dispatches by provider, new analysis refs use local item identity, and
+  migration `15.sql` is registered for existing databases.
+- Obsolete Superpowers plan/spec handoff artifacts for completed workstreams
+  are removed; current state lives in durable documentation and Git history.
 
 Superpowers plan/spec directories should contain active work only. Completed
-cleanup sequencing is preserved in Git history and this review/handoff pair
-instead of stale task files.
+cleanup sequencing is preserved in Git history and durable review/state
+documentation instead of stale task files.
 
 Deferred by design:
 
@@ -201,8 +204,11 @@ workstreams:
   `npm.cmd run check`;
 - full frontend test suite also passed for the latest wrapper input contract
   audit: `npm.cmd test` with 22 test files and 187 tests;
-- docs cleanup verification for the latest refresh is recorded in
-  `docs/session-context-2026-05-03.md`.
+- docs cleanup verification for the latest refresh is recorded in Git history;
+- source provider readiness verification passed with focused frontend tests,
+  `npm.cmd run check`, `cargo test sources::`, `cargo test analysis::`,
+  `cargo test migrations::`, route raw Tauri boundary searches, and
+  `git diff --check`.
 
 ## Recommended Follow-Up Order
 

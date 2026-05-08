@@ -12,14 +12,19 @@ This document is the shortest current-state snapshot of the repository.
 
 ## Product slice
 
-The app is a local Telegram ingest and analysis workspace.
+The app is a local source ingest and analysis workspace. Telegram is the only
+implemented ingest provider today, while the shared source model and analysis
+boundary are ready for future non-Telegram providers.
 
 Implemented:
 
 - Telegram account management and sign-in flow
 - startup session restore
 - source management for Telegram channels, supergroups, and groups
+- provider-ready source records with `source_type` and `source_subtype`
+- capability-driven source UI for sync, Takeout, membership, and topic actions
 - history sync into local SQLite
+- provider-dispatched source sync with Telegram as the implemented provider
 - Takeout source import for existing Telegram sources with TDesktop-first pagination
 - media-aware sync metadata for text-bearing and media-only items
 - Telegram reply/thread/reaction context metadata for newly synced items
@@ -32,10 +37,12 @@ Implemented:
 - configurable OpenAI-compatible `base_url` support in `/settings`
 - provider smoke testing from `/settings`
 - immutable saved run corpus snapshots
+- provider-neutral analysis refs for new live corpus rows
 - typed app errors across Tauri commands
 
 Not implemented yet:
 
+- concrete YouTube, RSS, or forum ingestion
 - secure storage for all secrets
 - full media download / previews
 - media-aware analysis beyond the current text-first corpus
@@ -120,8 +127,11 @@ Not implemented yet:
 ## Important persistence
 
 - `accounts`: local Telegram accounts and their current SQLite-backed credentials
-- `sources`: registered Telegram sources
-- `items`: ingested Telegram messages, media-aware metadata, and nullable Telegram context metadata for new rows
+- `sources`: registered provider sources; Telegram rows currently carry
+  Telegram compatibility fields and future providers can use provider-local
+  subtypes
+- `items`: ingested source items; currently Telegram messages with media-aware
+  metadata and nullable Telegram context metadata for new rows
 - no persistent table exists for Takeout import jobs; job records are in-memory runtime state
 - `app_settings`: app-level key/value storage, including active LLM profile, per-profile provider metadata, sync policy, and the current temporary LLM API keys
 - `analysis_runs`: saved report runs
@@ -132,6 +142,7 @@ Not implemented yet:
 
 - analysis corpus still requires text content;
 - media-only items are stored and visible, but not yet analyzed;
+- concrete non-Telegram ingestion commands are not implemented yet;
 - older item rows may have `NULL` Telegram context metadata because there is no background backfill;
 - LLM API keys still remain in `app_settings` for now;
 - Telegram `api_hash` still remains in SQLite-backed account storage for now;
