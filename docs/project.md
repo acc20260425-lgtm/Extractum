@@ -39,11 +39,12 @@ Implemented:
 - immutable saved run corpus snapshots
 - provider-neutral analysis refs for new live corpus rows
 - typed app errors across Tauri commands
+- OS secure storage for saved LLM API keys and Telegram `api_hash` values
 
 Not implemented yet:
 
 - concrete YouTube, RSS, or forum ingestion
-- secure storage for all secrets
+- secure storage or encryption for Telegram session JSON files
 - full media download / previews
 - media-aware analysis beyond the current text-first corpus
 - full Telegram Forum Topics browsing/export model
@@ -126,14 +127,14 @@ Not implemented yet:
 
 ## Important persistence
 
-- `accounts`: local Telegram accounts and their current SQLite-backed credentials
+- `accounts`: local Telegram account metadata; saved Telegram `api_hash` secrets live in OS secure storage
 - `sources`: registered provider sources; Telegram rows currently carry
   Telegram compatibility fields and future providers can use provider-local
   subtypes
 - `items`: ingested source items; currently Telegram messages with media-aware
   metadata and nullable Telegram context metadata for new rows
 - no persistent table exists for Takeout import jobs; job records are in-memory runtime state
-- `app_settings`: app-level key/value storage, including active LLM profile, per-profile provider metadata, sync policy, and the current temporary LLM API keys
+- `app_settings`: app-level key/value storage, including active LLM profile, per-profile non-secret provider metadata, and sync policy
 - `analysis_runs`: saved report runs
 - `analysis_run_messages`: frozen corpus snapshot for saved runs
 - `analysis_chat_messages`: follow-up chat history
@@ -144,8 +145,8 @@ Not implemented yet:
 - media-only items are stored and visible, but not yet analyzed;
 - concrete non-Telegram ingestion commands are not implemented yet;
 - older item rows may have `NULL` Telegram context metadata because there is no background backfill;
-- LLM API keys still remain in `app_settings` for now;
-- Telegram `api_hash` still remains in SQLite-backed account storage for now;
+- saved LLM API keys and Telegram `api_hash` values use OS secure storage;
+- Telegram session JSON files remain local app-data files and are not yet encrypted or migrated;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
 - Takeout import does not download media bytes and currently defers migrated supergroup history to avoid `(source_id, external_id)` collisions.
 

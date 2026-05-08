@@ -4,6 +4,7 @@ use tokio::time::{timeout, Duration};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::secret_store::SecretStoreState;
 
 mod gemini;
 mod openai_compat;
@@ -16,8 +17,8 @@ mod types;
 use gemini::list_gemini_models;
 use openai_compat::{list_openai_compat_models, OpenAiCompatProviderConfig};
 use profiles::{
-    load_profiles_state_from_pool, resolve_profile_from_pool, save_profile_to_pool,
-    set_active_profile_in_pool, validate_profile_id, validate_profile_input,
+    clear_profile_api_key, load_profiles_state_from_pool, resolve_profile_from_pool,
+    save_profile_to_pool, set_active_profile_in_pool, validate_profile_id, validate_profile_input,
 };
 pub(crate) use runner::{
     resolve_effective_model, run_llm_collect_with_profile, run_llm_stream_with_profile,
@@ -166,7 +167,8 @@ pub(crate) async fn resolve_profile_for_backend(
     requested_profile_id: Option<&str>,
 ) -> AppResult<ResolvedLlmProfile> {
     let pool = get_pool(handle).await?;
-    resolve_profile_from_pool(&pool, requested_profile_id).await
+    let secret_store = handle.state::<SecretStoreState>();
+    resolve_profile_from_pool(&pool, &secret_store, requested_profile_id).await
 }
 
 #[tauri::command]
@@ -177,18 +179,22 @@ pub async fn get_llm_request_snapshots(
 }
 
 #[tauri::command]
-pub async fn get_llm_profiles(handle: AppHandle) -> AppResult<LlmProfilesState> {
+pub async fn get_llm_profiles(
+    handle: AppHandle,
+    secret_store: tauri::State<'_, SecretStoreState>,
+) -> AppResult<LlmProfilesState> {
     let pool = get_pool(&handle).await?;
-    Ok(load_profiles_state_from_pool(&pool).await?)
+    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
 }
 
 #[tauri::command]
 pub async fn save_llm_profile(
     handle: AppHandle,
+    secret_store: tauri::State<'_, SecretStoreState>,
     profile_id: Option<String>,
     provider: String,
     default_model: String,
-    api_key: String,
+    api_key: Option<String>,
     base_url: Option<String>,
     set_active: Option<bool>,
 ) -> AppResult<LlmProfilesState> {
@@ -199,32 +205,47 @@ pub async fn save_llm_profile(
 
     save_profile_to_pool(
         &pool,
+        &secret_store,
         &profile_id,
         provider_kind.as_str(),
         &default_model,
-        api_key.trim(),
+        api_key.as_deref(),
         &base_url,
         set_active,
     )
     .await?;
 
-    Ok(load_profiles_state_from_pool(&pool).await?)
+    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
+}
+
+#[tauri::command]
+pub async fn clear_llm_profile_api_key(
+    handle: AppHandle,
+    secret_store: tauri::State<'_, SecretStoreState>,
+    profile_id: String,
+) -> AppResult<LlmProfilesState> {
+    let pool = get_pool(&handle).await?;
+    let profile_id = validate_profile_id(&profile_id)?;
+    clear_profile_api_key(&secret_store, &profile_id).await?;
+    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
 }
 
 #[tauri::command]
 pub async fn set_active_llm_profile(
     handle: AppHandle,
+    secret_store: tauri::State<'_, SecretStoreState>,
     profile_id: String,
 ) -> AppResult<LlmProfilesState> {
     let pool = get_pool(&handle).await?;
     let profile_id = validate_profile_id(&profile_id)?;
     set_active_profile_in_pool(&pool, &profile_id).await?;
-    Ok(load_profiles_state_from_pool(&pool).await?)
+    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
 }
 
 #[tauri::command]
 pub async fn list_llm_provider_models(
     handle: AppHandle,
+    secret_store: tauri::State<'_, SecretStoreState>,
     provider: String,
     profile_id: Option<String>,
     api_key: Option<String>,
@@ -244,7 +265,7 @@ pub async fn list_llm_provider_models(
 
     let saved_profile = if configured_key.is_none() || configured_base_url.is_none() {
         let pool = get_pool(&handle).await?;
-        Some(resolve_profile_from_pool(&pool, profile_id.as_deref()).await?)
+        Some(resolve_profile_from_pool(&pool, &secret_store, profile_id.as_deref()).await?)
     } else {
         None
     };

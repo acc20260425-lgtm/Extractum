@@ -41,7 +41,7 @@ pub struct LlmProfile {
     pub profile_id: String,
     pub provider: String,
     pub default_model: String,
-    pub api_key: String,
+    pub api_key_configured: bool,
     pub base_url: String,
 }
 

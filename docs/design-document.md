@@ -28,6 +28,7 @@ Rust owns:
 - session restore
 - migrations
 - SQLite access
+- OS secure storage access
 - compression
 - report orchestration
 
@@ -171,10 +172,12 @@ Each profile currently stores:
 - provider kind
 - default model
 - provider-specific `base_url` when relevant
+- an `api_key_configured` flag for frontend display
 
 The current runtime contract is:
 
 - one profile is marked active and used by default when a workflow does not pass an explicit profile id;
+- saved API keys are resolved only in the Rust backend from OS secure storage;
 - Gemini and OpenAI-compatible providers share the same backend request-resolution path;
 - OpenAI-compatible model listing and live requests both use the saved or currently edited `base_url`;
 - analysis runs persist `provider_profile`, `provider`, and `model` metadata so later review can see which profile produced the result.
@@ -243,10 +246,13 @@ This keeps SQLite reasonably small without introducing extra infrastructure.
 
 - active LLM profile selection
 - LLM provider profile metadata
-- temporary LLM `api_key` values
 - initial sync policy keys
 
-Secret storage is still a known follow-up.
+Saved LLM API keys and Telegram `api_hash` values are stored through the backend
+`secret_store` module in the OS credential store. Legacy plaintext values in
+`app_settings` or `accounts.api_hash` are migrated lazily: the backend writes
+the secure-store secret first and only then clears the SQLite value. If secure
+storage fails, the operation fails closed and leaves legacy plaintext untouched.
 
 ## 7. What changed since earlier planning
 
@@ -268,9 +274,7 @@ Those items are now implemented and should no longer be treated as future milest
 
 The most meaningful remaining design questions are:
 
-- how to move secrets out of SQLite cleanly;
 - which concrete non-Telegram provider should be implemented first;
-- whether Telegram `api_hash` and session storage should move together or in separate steps;
 - whether private Telegram peer resolution should gain stronger cached identity data;
 - how to handle migrated supergroup history without corrupting `(source_id, external_id)` uniqueness;
 - whether Takeout import should run the forum-topic auxiliary refresh after successful Takeout finish;

@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
 
 const STATUS_NOT_INITIALIZED: &str = "not_initialized";
 const STATUS_RESTORING: &str = "restoring";
@@ -27,7 +28,7 @@ struct SavedSession {
     updates_state: UpdatesState,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 struct AccountCredentials {
     id: i64,
     api_id: i64,
@@ -142,15 +143,58 @@ async fn list_account_credentials(handle: &AppHandle) -> AppResult<Vec<AccountCr
 
 async fn get_account_credentials(
     handle: &AppHandle,
+    secret_store: &SecretStoreState,
     account_id: i64,
 ) -> AppResult<AccountCredentials> {
     let pool = get_pool(handle).await?;
+    get_account_credentials_from_pool(&pool, secret_store, account_id).await
+}
+
+async fn get_account_credentials_from_pool(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    secret_store: &SecretStoreState,
+    account_id: i64,
+) -> AppResult<AccountCredentials> {
+    let credentials: AccountCredentials =
     sqlx::query_as("SELECT id, api_id, api_hash FROM accounts WHERE id = ?")
         .bind(account_id)
-        .fetch_optional(&pool)
+        .fetch_optional(pool)
         .await
         .map_err(AppError::database)?
-        .ok_or_else(|| AppError::not_found(format!("Account {account_id} not found")))
+        .ok_or_else(|| AppError::not_found(format!("Account {account_id} not found")))?;
+    resolve_account_credentials(pool, secret_store, credentials).await
+}
+
+async fn resolve_account_credentials(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    secret_store: &SecretStoreState,
+    mut credentials: AccountCredentials,
+) -> AppResult<AccountCredentials> {
+    let key = telegram_account_api_hash_secret(credentials.id);
+    if !credentials.api_hash.trim().is_empty() {
+        let api_hash = credentials.api_hash.trim().to_string();
+        secret_store.set_secret(key, api_hash.clone()).await?;
+        sqlx::query("UPDATE accounts SET api_hash = '' WHERE id = ?")
+            .bind(credentials.id)
+            .execute(pool)
+            .await
+            .map_err(AppError::database)?;
+        credentials.api_hash = api_hash;
+        return Ok(credentials);
+    }
+
+    let api_hash = secret_store
+        .get_secret(key)
+        .await?
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            AppError::auth(format!(
+                "Telegram API hash for account {} is missing from secure storage. Recreate the account credentials.",
+                credentials.id
+            ))
+        })?;
+    credentials.api_hash = api_hash;
+    Ok(credentials)
 }
 
 fn telegram_api_id(api_id: i64) -> AppResult<i32> {
@@ -258,6 +302,19 @@ fn restore_failure_message(error: impl std::fmt::Display) -> String {
 
 pub async fn restore_telegram_accounts(handle: AppHandle) {
     let state = handle.state::<TelegramState>();
+    let secret_store = handle.state::<SecretStoreState>();
+    let pool = match get_pool(&handle).await {
+        Ok(pool) => pool,
+        Err(error) => {
+            let message = format!("Failed to load accounts for Telegram restore: {error}");
+            eprintln!("{message}");
+            let _ = handle.emit(
+                TELEGRAM_RESTORE_FAILURE_EVENT,
+                &RestoreFailureEvent { message },
+            );
+            return;
+        }
+    };
     let accounts = match list_account_credentials(&handle).await {
         Ok(accounts) => accounts,
         Err(error) => {
@@ -276,6 +333,22 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
             set_account_status(&handle, &state, account.id, STATUS_NOT_INITIALIZED, None).await;
             continue;
         }
+
+        let account_id = account.id;
+        let account = match resolve_account_credentials(&pool, &secret_store, account).await {
+            Ok(account) => account,
+            Err(error) => {
+                set_account_status(
+                    &handle,
+                    &state,
+                    account_id,
+                    STATUS_RESTORE_FAILED,
+                    Some(restore_failure_message(error)),
+                )
+                .await;
+                continue;
+            }
+        };
 
         let init_result = init_account_client(
             &handle,
@@ -322,9 +395,10 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
 pub async fn tg_init(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    secret_store: tauri::State<'_, SecretStoreState>,
     account_id: i64,
 ) -> AppResult<bool> {
-    let credentials = get_account_credentials(&handle, account_id).await?;
+    let credentials = get_account_credentials(&handle, &secret_store, account_id).await?;
     let api_id = telegram_api_id(credentials.api_id)?;
 
     match init_account_client(&handle, &state, account_id, api_id, credentials.api_hash).await {
@@ -495,8 +569,57 @@ pub(crate) async fn get_authorized_runtime(
 
 #[cfg(test)]
 mod tests {
-    use super::telegram_api_id;
+    use super::{get_account_credentials_from_pool, telegram_api_id};
     use crate::error::AppErrorKind;
+    use crate::secret_store::tests::InMemorySecretStore;
+    use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
+    use std::sync::Arc;
+
+    async fn memory_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                label TEXT NOT NULL,
+                api_id INTEGER NOT NULL,
+                api_hash TEXT NOT NULL,
+                phone TEXT,
+                created_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create accounts");
+        pool
+    }
+
+    fn memory_secret_store() -> (Arc<InMemorySecretStore>, SecretStoreState) {
+        let store = Arc::new(InMemorySecretStore::new());
+        let state = SecretStoreState::new(store.clone());
+        (store, state)
+    }
+
+    async fn insert_account(pool: &sqlx::SqlitePool, api_hash: &str) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            "INSERT INTO accounts (label, api_id, api_hash, created_at) VALUES ('Personal', 12345, ?, 1000) RETURNING id",
+        )
+        .bind(api_hash)
+        .fetch_one(pool)
+        .await
+        .expect("insert account")
+    }
+
+    async fn stored_api_hash(pool: &sqlx::SqlitePool, account_id: i64) -> String {
+        sqlx::query_scalar::<_, String>("SELECT api_hash FROM accounts WHERE id = ?")
+            .bind(account_id)
+            .fetch_one(pool)
+            .await
+            .expect("read api_hash")
+    }
 
     #[test]
     fn telegram_api_id_out_of_range_returns_typed_validation_error() {
@@ -505,5 +628,61 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Telegram API ID is out of range");
+    }
+
+    #[tokio::test]
+    async fn legacy_api_hash_migrates_to_secret_store_and_blanks_column() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+        let account_id = insert_account(&pool, "legacy-hash").await;
+
+        let credentials = get_account_credentials_from_pool(&pool, &secret_store, account_id)
+            .await
+            .expect("load credentials");
+
+        assert_eq!(credentials.api_hash, "legacy-hash");
+        assert_eq!(stored_api_hash(&pool, account_id).await, "");
+        assert_eq!(
+            secret_store
+                .get_secret(telegram_account_api_hash_secret(account_id))
+                .await
+                .expect("read secret"),
+            Some("legacy-hash".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_api_hash_remains_when_secret_write_fails() {
+        let pool = memory_pool().await;
+        let (store, secret_store) = memory_secret_store();
+        store.fail_set("secure store unavailable");
+        let account_id = insert_account(&pool, "legacy-hash").await;
+
+        let error = get_account_credentials_from_pool(&pool, &secret_store, account_id)
+            .await
+            .expect_err("secret write should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert_eq!(error.message, "secure store unavailable");
+        assert_eq!(stored_api_hash(&pool, account_id).await, "legacy-hash");
+    }
+
+    #[tokio::test]
+    async fn missing_secure_api_hash_for_blank_legacy_account_is_auth_error() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+        let account_id = insert_account(&pool, "").await;
+
+        let error = get_account_credentials_from_pool(&pool, &secret_store, account_id)
+            .await
+            .expect_err("missing secret should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Auth);
+        assert_eq!(
+            error.message,
+            format!(
+                "Telegram API hash for account {account_id} is missing from secure storage. Recreate the account credentials."
+            )
+        );
     }
 }

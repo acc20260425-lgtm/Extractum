@@ -6,6 +6,9 @@ mod media;
 mod migrations;
 use migrations::{build_migrations, prepare_database};
 
+mod secret_store;
+use secret_store::SecretStoreState;
+
 mod accounts;
 use accounts::{
     clear_account_phone, create_account, delete_account, get_account, list_accounts,
@@ -38,8 +41,9 @@ use notebooklm_export::export_source_to_notebooklm;
 
 mod llm;
 use llm::{
-    ask_llm_stream, cancel_llm_request, get_llm_profiles, get_llm_request_snapshots,
-    list_llm_provider_models, save_llm_profile, set_active_llm_profile, LlmSchedulerState,
+    ask_llm_stream, cancel_llm_request, clear_llm_profile_api_key, get_llm_profiles,
+    get_llm_request_snapshots, list_llm_provider_models, save_llm_profile,
+    set_active_llm_profile, LlmSchedulerState,
 };
 
 mod analysis;
@@ -69,6 +73,7 @@ pub fn run() {
         .manage(TakeoutImportState::new())
         .manage(AnalysisState::new())
         .manage(LlmSchedulerState::new())
+        .manage(SecretStoreState::system())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(
@@ -122,6 +127,7 @@ pub fn run() {
             get_llm_profiles,
             get_llm_request_snapshots,
             save_llm_profile,
+            clear_llm_profile_api_key,
             set_active_llm_profile,
             list_llm_provider_models,
             ask_llm_stream,

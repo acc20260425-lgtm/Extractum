@@ -11,6 +11,7 @@ Owns:
 - Telegram integration
 - account runtime state and restore
 - SQLite access
+- OS secure storage access for saved credentials
 - migrations
 - compression / decompression
 - analysis orchestration
@@ -36,6 +37,11 @@ the only implemented ingest provider.
 ### 2.1 Account lifecycle
 
 Accounts are stored locally and may restore their Telegram session on startup. The frontend observes runtime status and uses that to gate actions like sync.
+
+Account metadata stays in SQLite, while saved Telegram `api_hash` values live in
+OS secure storage under `telegram.account.<account_id>.api_hash`. Legacy
+non-empty `accounts.api_hash` values migrate lazily and are blanked only after a
+successful secure-store write.
 
 ### 2.2 Source resolution
 
@@ -188,8 +194,9 @@ Runtime resolution works like this:
 
 1. load the requested profile id, or fall back to the active profile;
 2. normalize provider-specific settings such as OpenAI-compatible `base_url`;
-3. resolve the effective model from the profile default plus any per-request override;
-4. dispatch to the provider-specific runner.
+3. resolve the saved API key from OS secure storage when no temporary key was supplied;
+4. resolve the effective model from the profile default plus any per-request override;
+5. dispatch to the provider-specific runner.
 
 Current provider behavior:
 
@@ -200,6 +207,7 @@ The frontend `/settings` route mirrors that contract:
 
 - it can select existing profiles or create new ones;
 - it can save without activation or save and set active;
+- it receives only `api_key_configured`, never saved secret values;
 - it runs provider smoke tests only after saving the currently visible form, so the test uses the same profile state the user sees.
 
 This keeps analysis runs, provider tests, and follow-up chat aligned on one backend profile-resolution model.
@@ -212,7 +220,7 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 
 ## 8. Known architectural debt
 
-- LLM API keys still live in SQLite-backed settings and Telegram `api_hash` still lives in SQLite-backed account storage;
+- Telegram session JSON files remain local app-data files and may deserve encryption or a more robust long-term format;
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - Takeout import still needs broader live validation across supergroups, groups, private/left sources, and shifted export DC behavior;
 - migrated supergroup history is detected but not imported until the `(source_id, external_id)` collision policy is decided;

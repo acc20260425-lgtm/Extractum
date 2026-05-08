@@ -123,8 +123,8 @@ Currently used for:
 
 - active LLM profile selection
 - LLM provider profile metadata
-- temporary LLM API key storage
 - initial sync policy settings
+- legacy `llm.profile.<profile_id>.api_key` rows only as migration inputs when present
 
 Known active keys include:
 
@@ -132,9 +132,12 @@ Known active keys include:
 - `llm.profile.<profile_id>.provider`
 - `llm.profile.<profile_id>.default_model`
 - `llm.profile.<profile_id>.base_url`
-- `llm.profile.<profile_id>.api_key`
 - `sync.initial.mode`
 - `sync.initial.value`
+
+Saved LLM API keys live in OS secure storage under
+`llm.profile.<profile_id>.api_key`; the backend migrates old non-empty
+`app_settings` key rows after a successful secure-store write.
 
 ### 1.4 `telegram_forum_topics`
 
@@ -191,7 +194,8 @@ Important fields:
 
 Notes:
 
-- `api_hash` is still stored in SQLite today, which remains part of the current secret-storage debt;
+- `api_hash` is retained as a legacy `NOT NULL` placeholder column and is empty for newly created or migrated accounts;
+- saved Telegram `api_hash` values live in OS secure storage under `telegram.account.<account_id>.api_hash`;
 - session restore state is not stored in this table and instead lives in the app's per-account session files.
 
 ## 2. Analysis tables
@@ -311,4 +315,6 @@ Purpose:
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
 - new live analysis refs use local item identity (`s{source_id}-i{item_id}`);
 - legacy saved refs using Telegram message ids (`s{source_id}-m{message_id}`) remain readable;
-- `app_settings` still contains secrets temporarily, which remains a security debt.
+- saved LLM API keys and Telegram `api_hash` values are owned by OS secure storage, not SQLite;
+- old non-empty `llm.profile.*.api_key` and `accounts.api_hash` values are legacy migration inputs and are cleared only after successful secure-store writes;
+- Telegram session JSON files remain local app-data files and are the remaining secret-storage follow-up.

@@ -3,6 +3,7 @@
   import {
     askLlmStream,
     cancelLlmRequest,
+    clearLlmProfileApiKey,
     getLlmProfiles,
     listLlmProviderModels,
     listenToLlmResponses,
@@ -59,6 +60,7 @@
   let provider = $state("gemini");
   let defaultModel = $state("gemini-2.5-flash");
   let apiKey = $state("");
+  let apiKeyConfigured = $state(false);
   let baseUrl = $state("");
 
   let settingsStatus = $state("");
@@ -128,6 +130,10 @@
     return Boolean(defaultModel.trim() && normalizeProfileId(effectiveDraftProfileId()));
   }
 
+  function canRefreshModels() {
+    return Boolean(apiKey.trim() || (!creatingProfile && apiKeyConfigured));
+  }
+
   function setSettingsStatus(message: string) {
     settingsStatus = message;
     if (settingsStatusTimer !== null) {
@@ -169,7 +175,8 @@
     draftProfileId = profile.profile_id;
     provider = profile.provider;
     defaultModel = profile.default_model;
-    apiKey = profile.api_key;
+    apiKey = "";
+    apiKeyConfigured = profile.api_key_configured;
     baseUrl = profile.base_url;
     clearModelCatalog();
     clearTestResult();
@@ -197,6 +204,7 @@
     provider = "gemini";
     defaultModel = "gemini-2.5-flash";
     apiKey = "";
+    apiKeyConfigured = false;
     baseUrl = "";
     clearModelCatalog();
     clearTestResult();
@@ -208,7 +216,7 @@
       syncProfilesState(state);
 
       const currentProfile = state.profiles.find((profile) => profile.profile_id === state.active_profile);
-      if (currentProfile?.api_key.trim()) {
+      if (currentProfile?.api_key_configured) {
         void loadProviderModels(false);
       }
     } catch (error) {
@@ -317,7 +325,7 @@
         profileId: targetProfileId,
         provider,
         defaultModel,
-        apiKey,
+        apiKey: apiKey.trim() ? apiKey : null,
         baseUrl: providerSupportsBaseUrl() ? baseUrl : null,
         setActive,
       });
@@ -335,6 +343,23 @@
     } catch (error) {
       setSettingsStatus(formatAppError("saving LLM settings", error));
       return null;
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function clearSavedApiKey() {
+    if (creatingProfile || !selectedProfileId || !apiKeyConfigured) return;
+
+    saving = true;
+    settingsStatus = "";
+    try {
+      const state = await clearLlmProfileApiKey(selectedProfileId);
+      syncProfilesState(state, selectedProfileId);
+      apiKey = "";
+      setSettingsStatus(`Cleared API key for '${selectedProfileId}'.`);
+    } catch (error) {
+      setSettingsStatus(formatAppError("clearing the API key", error));
     } finally {
       saving = false;
     }
@@ -522,8 +547,8 @@
             <span class="page-eyebrow">Profiles</span>
             <h2>LLM profiles</h2>
             <p>
-              Manage reusable provider profiles for analysis and chat. API keys are still stored in
-              local SQLite until secure storage replaces this path.
+              Manage reusable provider profiles for analysis and chat. Saved API keys stay in OS
+              secure storage and never load back into this form.
             </p>
           </div>
         </div>
@@ -625,6 +650,9 @@
             autocomplete="off"
             oninput={(event) => (apiKey = (event.currentTarget as HTMLInputElement).value)}
           />
+          <span class="field-hint">
+            {apiKeyConfigured ? "Saved key configured. Leave blank to keep it." : "No saved key configured."}
+          </span>
         </label>
 
         <div class="actions">
@@ -637,9 +665,17 @@
           <Button
             variant="secondary"
             onclick={() => loadProviderModels()}
-            disabled={loadingModels || !apiKey.trim()}
+            disabled={loadingModels || !canRefreshModels()}
           >
             {loadingModels ? "Loading models..." : "Refresh models"}
+          </Button>
+          <Button
+            variant="danger-soft"
+            type="button"
+            onclick={clearSavedApiKey}
+            disabled={saving || creatingProfile || !apiKeyConfigured}
+          >
+            Clear API key
           </Button>
         </div>
 

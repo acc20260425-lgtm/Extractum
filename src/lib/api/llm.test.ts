@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   askLlmStream,
   cancelLlmRequest,
+  clearLlmProfileApiKey,
   getLlmProfiles,
   LLM_RESPONSE_EVENT,
   listLlmProviderModels,
@@ -37,7 +38,7 @@ describe("llm api wrappers", () => {
       profileId: "work",
       provider: "gemini",
       defaultModel: "gemini-2.5-flash",
-      apiKey: "key",
+      apiKey: null,
       baseUrl: "",
       setActive: true,
     });
@@ -45,9 +46,15 @@ describe("llm api wrappers", () => {
       profileId: "work",
       provider: "gemini",
       defaultModel: "gemini-2.5-flash",
-      apiKey: "key",
+      apiKey: null,
       baseUrl: "",
       setActive: true,
+    });
+
+    invokeMock.mockResolvedValueOnce({ active_profile: "work", profiles: [] });
+    await clearLlmProfileApiKey("work");
+    expect(invokeMock).toHaveBeenLastCalledWith("clear_llm_profile_api_key", {
+      profileId: "work",
     });
   });
 

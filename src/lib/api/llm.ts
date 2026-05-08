@@ -20,6 +20,10 @@ export function saveLlmProfile(input: SaveLlmProfileInput) {
   return invoke<LlmProfilesState>("save_llm_profile", { ...input });
 }
 
+export function clearLlmProfileApiKey(profileId: string) {
+  return invoke<LlmProfilesState>("clear_llm_profile_api_key", { profileId });
+}
+
 export function listLlmProviderModels(input: ListLlmProviderModelsInput) {
   return invoke<LlmProviderModel[]>("list_llm_provider_models", { ...input });
 }

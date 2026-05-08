@@ -7,7 +7,7 @@ export interface LlmProfile {
   profile_id: string;
   provider: string;
   default_model: string;
-  api_key: string;
+  api_key_configured: boolean;
   base_url: string;
 }
 
@@ -15,7 +15,7 @@ export interface SaveLlmProfileInput {
   profileId: LlmProfile["profile_id"];
   provider: LlmProfile["provider"];
   defaultModel: LlmProfile["default_model"];
-  apiKey: LlmProfile["api_key"];
+  apiKey: string | null;
   baseUrl: LlmProfile["base_url"] | null;
   setActive: boolean;
 }
