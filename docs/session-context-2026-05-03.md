@@ -6,74 +6,56 @@ This file captures enough context to resume the current Extractum session withou
 
 - Workspace: `G:\Develop\Extractum`
 - Shell: PowerShell
-- Current user timezone during session: `Europe/Minsk`
+- User timezone during session: `Europe/Minsk`
 - User language preference in this session: Russian
-- Important developer rules active in the session:
+- Current branch at capture time: `main`
+- Working tree at capture time: clean
+- Important active working rules:
   - use `rg` for search;
-  - use `apply_patch` for manual file edits;
+  - use `apply_patch` for manual edits;
   - do not revert user changes;
   - git index operations may require escalation because `.git/index.lock` can be blocked by sandbox permissions;
-  - when using Superpowers skills, follow their gates exactly.
+  - when Superpowers skills apply, follow their gates exactly.
 
-## Git State At Capture Time
+## Latest Git State
 
-Latest commits:
-
-```text
-4b57262 docs(security): design encrypted telegram sessions
-d14774a fix(db): tolerate migration line ending checksums
-d22aaf1 feat(security): store secrets in OS keyring
-cd9ce01 docs(session): capture secure storage planning context
-b026dc4 docs(security): plan secure secret storage
-fddd817 docs: refresh provider readiness state
-3fd0e63 fix(db): register source subtype migration
-b8728c1 docs(sources): complete provider readiness verification
-```
-
-Working tree at the time of capture:
+Latest commits at capture time:
 
 ```text
-?? docs/superpowers/plans/2026-05-08-telegram-session-storage.md
+08e8c79 docs(llm): address preflight policy review
+96c8b57 docs(llm): plan analysis preflight limits
+be8bd24 docs(llm): design analysis preflight limits
+1b797bf docs(validation): record telegram re-login session check
+6922606 docs(validation): record telegram runtime live results
+e867b1b docs(validation): plan telegram runtime live checks
+bc053e5 style: format telegram session store
+064a8d7 docs(security): document encrypted telegram sessions
+306b4c3 feat(security): use encrypted telegram sessions
+f87aef7 test(security): cover telegram session migration
+2fe1bf2 feat(security): encrypt telegram session files
+4307f2c feat(security): add telegram session key id
 ```
 
-This file is being overwritten after that status was collected, so after saving it the working tree should also include `docs/session-context-2026-05-03.md`.
+The encrypted Telegram session storage feature branch was merged fast-forward into `main` and deleted. The only other local branch observed earlier was `desktop-ui`.
 
-## Completed Work In This Session
+## Completed Secure Storage Work
 
-Secure storage implementation was completed and committed before this context capture:
+The earlier secure storage implementation is complete and merged:
 
-- `d22aaf1 feat(security): store secrets in OS keyring`
-- `d14774a fix(db): tolerate migration line ending checksums`
-- `4b57262 docs(security): design encrypted telegram sessions`
-
-Implemented secure storage behavior:
-
-- `src-tauri/src/secret_store.rs` was added.
-- Backend uses Rust `keyring` through `SecretStoreState`.
+- `src-tauri/src/secret_store.rs` owns OS secure storage through Rust `keyring`.
 - Service name: `org.ai.extractum`.
-- LLM API keys moved out of `app_settings`.
-- Telegram account `api_hash` values moved out of SQLite.
-- Stable secret IDs currently implemented:
+- LLM API keys are stored outside `app_settings`.
+- Telegram account `api_hash` values are stored outside SQLite.
+- Stable secret ids:
   - `llm.profile.<profile_id>.api_key`
   - `telegram.account.<account_id>.api_hash`
+  - `telegram.account.<account_id>.session_key`
 - Legacy plaintext values migrate lazily:
-  - write to keyring first;
-  - blank/delete plaintext only after secure write succeeds;
+  - write secure secret first;
+  - blank/delete plaintext only after successful secure write;
   - fail closed and leave legacy plaintext untouched if secure storage fails.
-- Frontend LLM profile records expose `api_key_configured`, not the saved key.
-- LLM settings password input stays empty on load.
-- `clear_llm_profile_api_key` command exists.
-- Account creation writes `api_hash` to keyring and stores `accounts.api_hash = ""`.
-- Account deletion removes the Telegram `api_hash` secret.
 
-Migration checksum fix:
-
-- The Tauri SQL plugin panicked because migration 15 had been modified by line-ending changes.
-- Fix commit `d14774a` added tolerance for CRLF/LF-only migration checksum differences.
-- `.gitattributes` now pins SQL migrations to LF.
-- `cargo run` no longer panicked on migration 15 after the fix.
-
-Verification already completed earlier for secure storage:
+Verified earlier:
 
 ```powershell
 cargo test secret_store::
@@ -87,91 +69,22 @@ git diff --check
 cargo run
 ```
 
-## Current Open Security Tail
+## Completed Telegram Session Encryption
 
-The remaining security item is Telegram session JSON storage.
+Telegram session JSON security tail is implemented and merged.
 
-Current code state before implementing the new plan:
+Core files:
 
-- `src-tauri/src/telegram.rs` still owns session persistence directly.
-- `SavedSession` contains:
-  - `home_dc`
-  - `dc_options`
-  - `updates_state`
-- Current file path helper stores sessions in Tauri app data:
-  - `telegram_<account_id>.session.json`
-- Current `load_session` reads plaintext JSON and falls back to `MemorySession::default()` on read/parse failure.
-- Current `save_session` serializes plaintext `SavedSession` JSON.
-- `clear_account_runtime` deletes the plaintext session file directly.
+- `src-tauri/src/telegram_session_store.rs`
+- `src-tauri/src/telegram.rs`
+- `src-tauri/src/accounts.rs`
+- `src-tauri/src/secret_store.rs`
+- `src-tauri/Cargo.toml`
 
-Relevant current functions in `src-tauri/src/telegram.rs`:
+Behavior:
 
-- `session_path(handle, account_id)`
-- `session_exists(handle, account_id)`
-- `load_session(handle, account_id) -> Arc<MemorySession>`
-- `save_session(handle, account_id, session)`
-- `clear_account_runtime(handle, state, account_id, sign_out)`
-- `init_account_client(handle, state, account_id, api_id, api_hash)`
-- `restore_telegram_accounts(handle)`
-- `tg_init(...)`
-- `tg_sign_in(...)`
-- `tg_logout(...)`
-
-## Superpowers Process State
-
-Skills used in the current flow:
-
-- `superpowers:brainstorming`
-- `superpowers:writing-plans`
-
-Brainstorming was followed:
-
-1. Explored code/docs.
-2. Proposed three approaches for Telegram session JSON:
-   - recommended: encrypted app-data envelope with per-account key in OS keyring;
-   - store the full session blob directly in keyring;
-   - keep plaintext and document the risk.
-3. User approved the recommended approach.
-4. Design spec was written and committed.
-
-Writing-plans was then used:
-
-- Plan was written to `docs/superpowers/plans/2026-05-08-telegram-session-storage.md`.
-- Plan passed a self-review for placeholders and consistency.
-- User had not yet chosen execution mode when this context file was requested.
-- The plan file is currently uncommitted.
-
-If continuing the Superpowers workflow, next ask or infer execution mode:
-
-- `Subagent-Driven` via `superpowers:subagent-driven-development` is recommended by the plan.
-- `Inline Execution` via `superpowers:executing-plans` is the other option.
-
-## Approved Telegram Session Storage Design
-
-Design file:
-
-- `docs/superpowers/specs/2026-05-08-telegram-session-storage-design.md`
-
-Design commit:
-
-- `4b57262 docs(security): design encrypted telegram sessions`
-
-Approved target:
-
-- Keep one session file per Telegram account.
-- Keep existing file path: `telegram_<account_id>.session.json`.
-- Replace plaintext contents with encrypted JSON envelope.
-- Store random 256-bit per-account session key in OS secure storage.
-- New secret ID:
-  - `telegram.account.<account_id>.session_key`
-- Generate session key on first encrypted save or legacy plaintext migration.
-- Use authenticated encryption.
-- Fail closed if encrypted file exists but key cannot be read.
-- Migrate plaintext JSON lazily after successful parse and successful keyring write.
-- Delete both session file and session key when account runtime is cleared with session deletion.
-- Do not store full Telegram session JSON directly in keyring.
-
-Encrypted file format:
+- Session files remain in app data as `telegram_<account_id>.session.json`.
+- File contents are encrypted JSON envelope:
 
 ```json
 {
@@ -182,161 +95,302 @@ Encrypted file format:
 }
 ```
 
-Associated data:
+- The encryption key is a random 256-bit per-account session key stored in OS secure storage under `telegram.account.<account_id>.session_key`.
+- Associated data:
 
 ```text
 org.ai.extractum.telegram.session.v1.account.<account_id>
 ```
 
-Dependency decision:
+- Crypto dependencies:
 
 ```toml
 chacha20poly1305 = { version = "0.10", features = ["std"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
 ```
 
-## Implementation Plan Summary
+- Legacy plaintext session JSON migrates lazily on load after successful parse and successful keyring write.
+- If encrypted file exists but key is missing, load fails closed instead of falling back to `MemorySession::default()`.
+- Wrong account id fails decryption through associated data.
+- Account logout clears session file and session key.
+- Account deletion clears runtime/session artifacts and then deletes the Telegram `api_hash` secret, surfacing cleanup errors after row/runtime cleanup.
 
-Plan file:
-
-- `docs/superpowers/plans/2026-05-08-telegram-session-storage.md`
-
-Plan status:
-
-- Created.
-- Self-reviewed.
-- Not committed yet at the time of capture.
-
-Plan goal:
-
-- Encrypt persisted Telegram session files while keeping the existing per-account app-data file model and lazily migrating plaintext session JSON.
-
-Architecture:
-
-- Add `src-tauri/src/telegram_session_store.rs`.
-- Move session path handling, `SavedSession` conversion, encryption, legacy migration, and deletion into that module.
-- `telegram.rs` should delegate all session file operations to the new module.
-- Session load should become fallible and surface persisted-session read/decrypt failures as `restore_failed`, not silently create an empty session.
-
-Planned tasks:
-
-1. Add crypto dependency and stable session key secret ID.
-   - Modify `src-tauri/Cargo.toml`.
-   - Modify `src-tauri/src/secret_store.rs`.
-   - Add `telegram_account_session_key_secret(account_id) -> "telegram.account.<id>.session_key"`.
-   - Commit message in plan: `feat(security): add telegram session key id`.
-
-2. Create Telegram session store with encrypted round-trip tests.
-   - Create `src-tauri/src/telegram_session_store.rs`.
-   - Modify `src-tauri/src/lib.rs` to add `mod telegram_session_store;`.
-   - Implement envelope, base64-url-no-pad helpers, `XChaCha20Poly1305`, key generation, atomic write, load/save/delete APIs.
-   - Commit message in plan: `feat(security): encrypt telegram session files`.
-
-3. Cover legacy migration and fail-closed behavior.
-   - Add tests for legacy plaintext migration, migration failure leaving plaintext unchanged, missing key fail-closed, wrong account associated-data failure, delete file+key.
-   - Commit message in plan: `test(security): cover telegram session migration`.
-
-4. Wire encrypted sessions into Telegram runtime.
-   - Modify `src-tauri/src/telegram.rs`.
-   - Modify `src-tauri/src/accounts.rs`.
-   - Remove local session helpers from `telegram.rs`.
-   - Pass `SecretStoreState` into session load/save/delete paths.
-   - Make `clear_account_runtime` return `AppResult<()>`.
-   - Update `tg_sign_in` to accept `secret_store` and save encrypted session.
-   - Update account deletion to surface secure-storage cleanup errors after DB/runtime cleanup.
-   - Commit message in plan: `feat(security): use encrypted telegram sessions`.
-
-5. Update documentation and backlog.
-   - Modify:
-     - `docs/backlog.md`
-     - `docs/project.md`
-     - `docs/design-document.md`
-     - `docs/architecture-deep-dive.md`
-     - `docs/database-schema.md`
-   - State that Telegram session files remain in app data but contents are encrypted with per-account OS-keyring-protected session keys.
-   - Commit message in plan: `docs(security): document encrypted telegram sessions`.
-
-6. Final verification.
-   - Run:
+Post-merge verification on `main`:
 
 ```powershell
-cargo test secret_store::
-cargo test telegram_session_store::
-cargo test telegram::
-cargo test accounts::
-cargo test migrations::
 cargo test
 npm.cmd test
 npm.cmd run check
 cargo fmt --check
 git diff --check
-cargo run
-git status --short
-git log --oneline -5
 ```
 
-## Important Code Notes For Implementation
+Observed results:
 
-Existing `src-tauri/src/secret_store.rs`:
+- `cargo test`: `184 passed`
+- `npm.cmd test`: `196 passed`
+- `npm.cmd run check`: `0 errors`, `0 warnings`
+- formatting and diff checks passed.
 
-- `SecretStoreState` wraps sync keyring calls in `tauri::async_runtime::spawn_blocking`.
-- Tests use `InMemorySecretStore`.
-- `InMemorySecretStore` supports:
-  - `fail_get(message)`
-  - `fail_set(message)`
-  - `fail_delete(message)`
-- Reuse this for session store tests.
+## Telegram Runtime Live Validation
 
-Current `src-tauri/src/accounts.rs` deletion flow:
+Validation checklist:
+
+- `docs/superpowers/plans/2026-05-08-telegram-runtime-live-validation.md`
+
+Recorded commits:
+
+- `e867b1b docs(validation): plan telegram runtime live checks`
+- `6922606 docs(validation): record telegram runtime live results`
+- `1b797bf docs(validation): record telegram re-login session check`
+
+Observed live results:
+
+- `telegram_1.session.json` was observed as encrypted envelope with:
+  - `version: 1`
+  - `algorithm: XChaCha20-Poly1305`
+  - `nonce`
+  - `ciphertext`
+  - no plaintext `home_dc`, `dc_options`, or `updates_state`
+- UI reached:
+  - `Account ready`
+  - `This account is ready to sync sources.`
+- Private supergroup source `WBChat` was visible:
+  - category `Life`
+  - kind `supergroup`
+  - `73102 msgs`
+  - membership `member`
+- Sync on private supergroup `WBChat` succeeded without re-login:
+  - timestamp changed from `08.05.2026, 22:16:20` to `08.05.2026, 22:17:18`
+- User confirmed `WBChat` is private.
+- User performed logout and re-login.
+- After re-login, `telegram_1.session.json` was again observed as encrypted envelope with no plaintext session fields.
+- No `restore_failed` state or auth error was observed during this validation slice.
+- User decided not to manually validate account delete cleanup. This remains covered by automated tests but skipped manually by decision.
+- Separate private `channel` case remains optional if a real case appears.
+
+During validation, the app later showed `Код ошибки: Out of Memory` on `/analysis`. Investigation showed:
+
+- `extractum.exe` was alive with modest memory usage;
+- Tauri backend responded through MCP;
+- WebView DOM/log/screenshot calls timed out;
+- Windows Application log and Crashpad reports did not show a fresh extractum/WebView crash;
+- likely WebView renderer page-kill/hang on `/analysis`, not Rust backend OOM.
+
+This OOM observation helped motivate the next LLM analysis preflight work.
+
+## Current LLM Concurrency / Analysis Preflight Track
+
+User selected variant 2 first, then refined it to variant 3:
+
+- scheduler policy refinement plus protection from large analysis runs;
+- hard caps plus preflight summary.
+
+Approved default limits:
+
+- `max_messages_per_run = 10_000`
+- `max_chunks_per_run = 80`
+- `max_estimated_input_chars_per_run = 1_500_000`
+- `max_background_requests_per_run = 80`
+
+Design spec:
+
+- `docs/superpowers/specs/2026-05-08-llm-concurrency-policy-design.md`
+- Commit: `be8bd24 docs(llm): design analysis preflight limits`
+
+Implementation plan:
+
+- `docs/superpowers/plans/2026-05-08-llm-concurrency-policy.md`
+- Commit: `96c8b57 docs(llm): plan analysis preflight limits`
+
+Review feedback was received from another LLM and accepted with modifications:
+
+- Commit: `08e8c79 docs(llm): address preflight policy review`
+- Design now explicitly records that the first preflight implementation still scans and decompresses eligible messages to estimate input chars.
+- This is a known limitation: it avoids creating a run row and spawning chunk workers for oversized work, but it does not avoid all corpus-read cost.
+- Future optimization can add item text length metadata and use `COUNT`/`SUM` without decompression.
+- Design now explicitly states that database/decompression errors during preflight fail before `analysis_runs` insertion.
+- Plan removes the dead `exceeds_background` check from `preflight_limit_error`; `max_background_requests_per_run` remains documented and reserved for future retry-aware budgeting.
+- Plan adds a shared `live_corpus_ref(source_id, item_id)` helper to keep `load_corpus_messages` and preflight ref accounting aligned.
+- Plan adds `preflight_ref_format_matches_corpus_loader_ref_format`.
+
+Current approved design summary:
+
+- Existing scheduler policy remains:
+  - `2` running LLM requests per `(provider, profile)`;
+  - interactive requests jump ahead of background requests inside the same scheduler key;
+  - requests with different provider/profile keys may run independently;
+  - cancellation remains request-scoped or run-scoped.
+- Analysis report runs get backend preflight before duplicate-run handling and run insertion.
+- Preflight reports:
+  - selected source ids;
+  - eligible text message count;
+  - estimated input chars;
+  - estimated chunks;
+  - configured limits.
+- Oversized scopes return `AppError::validation` before inserting an `analysis_runs` row.
+- Passing preflight emits early progress summary:
+
+```text
+Preflight passed: 2430 documents, 18 estimated chunks, 310000 estimated input characters.
+```
+
+## Current Implementation Plan Summary
+
+Plan file:
+
+- `docs/superpowers/plans/2026-05-08-llm-concurrency-policy.md`
+
+Tasks:
+
+1. Add pure preflight estimation helpers in `src-tauri/src/analysis/corpus.rs`.
+   - Add `AnalysisRunPreflightLimits`.
+   - Add `AnalysisRunPreflight`.
+   - Add `estimate_message_input_chars`.
+   - Add `live_corpus_ref`.
+   - Add `estimate_preflight_chunk_count`.
+   - Use TDD RED/GREEN.
+   - Commit message in plan: `feat(analysis): add report preflight policy types`.
+
+2. Add database-backed preflight in `src-tauri/src/analysis/corpus.rs`.
+   - Add tests:
+     - `preflight_counts_eligible_text_messages_for_sources`
+     - `preflight_ref_format_matches_corpus_loader_ref_format`
+     - `preflight_ignores_media_only_items_without_text_content`
+   - Implement `preflight_analysis_run`.
+   - Update `load_corpus_messages` to use `live_corpus_ref`.
+   - Commit message in plan: `feat(analysis): preflight report corpus size`.
+
+3. Enforce hard caps before run insertion.
+   - Add `preflight_limit_error`.
+   - Wire preflight into `start_analysis_report`.
+   - Call preflight after resolving source ids and before `find_active_duplicate_run`/`insert_analysis_run`.
+   - Add `preflight` to `ReportRunInput`.
+   - Emit preflight summary in `run_report_pipeline`.
+   - Commit message in plan: `feat(analysis): enforce report preflight limits`.
+
+4. Add integration-level report start coverage via pure validation helper.
+   - Add `validate_report_preflight`.
+   - Replace inline checks in `start_analysis_report` with `validate_report_preflight(&preflight)?`.
+   - Add tests:
+     - empty corpus rejected;
+     - oversized run rejected;
+     - within-limits run allowed.
+   - Commit message in plan: `test(analysis): cover report preflight validation`.
+
+5. Update docs.
+   - Modify:
+     - `docs/backlog.md`
+     - `docs/project.md`
+     - `docs/design-document.md`
+     - `docs/architecture-deep-dive.md`
+   - State scheduler concurrency is intentional and analysis runs are capped by backend preflight.
+   - Commit message in plan: `docs(llm): document report preflight limits`.
+
+6. Final verification.
+   - Run:
+
+```powershell
+cargo test analysis::corpus::
+cargo test analysis::report::
+cargo test llm::scheduler::
+cargo test
+npm.cmd test
+npm.cmd run check
+cargo fmt --check
+git diff --check
+git status --short
+git log --oneline -8
+```
+
+## Important Code Notes For Next Session
+
+Relevant files:
+
+- `src-tauri/src/analysis/corpus.rs`
+- `src-tauri/src/analysis/report.rs`
+- `src-tauri/src/analysis/mod.rs`
+- `src-tauri/src/analysis/store.rs`
+- `src-tauri/src/llm/scheduler.rs`
+
+Current code facts:
+
+- `ANALYSIS_CHUNK_TARGET_CHARS` is defined in `src-tauri/src/analysis/mod.rs` as `16_000`.
+- `report.rs` already imports it from `super`.
+- Current `load_corpus_messages` uses:
 
 ```rust
-delete_account_row_from_pool(&pool, account_id).await?;
-clear_account_runtime(&handle, &state, account_id, true).await;
-secret_store
-    .delete_secret(telegram_account_api_hash_secret(account_id))
-    .await
+r#ref: format!("s{}-i{}", row.source_id, row.id)
 ```
 
-Planned behavior:
+- The plan says to replace that with:
 
-- Delete DB row first.
-- Clear runtime and delete session file/session key.
-- Delete API hash secret.
-- Missing file/key should be no-op.
-- Non-missing secure-storage errors should surface after DB/runtime cleanup.
+```rust
+r#ref: live_corpus_ref(row.source_id, row.id)
+```
 
-Current `src-tauri/src/lib.rs`:
+- `start_analysis_report` currently:
+  - validates date/language/scope/template;
+  - resolves LLM profile and effective model;
+  - resolves source ids;
+  - checks duplicate active run;
+  - inserts an `analysis_runs` row;
+  - inserts active run id;
+  - spawns `run_report_pipeline`.
+- Preflight must be inserted after source ids are known and before duplicate-run handling / run insertion.
+- Current `run_report_pipeline` still loads full corpus and checks empty corpus after load. Keep that empty-corpus guard as defense in depth even after preflight rejects empty scopes earlier.
+- Current `run_map_phase` spawns one task per chunk. Scheduler limits concurrent execution, but task creation can still be large without preflight.
+- Current scheduler constant:
 
-- Already has `mod secret_store;`.
-- Already manages `SecretStoreState::system()`.
-- Add `mod telegram_session_store;` near `mod telegram;`.
-- No new frontend invoke handler is needed for session encryption.
+```rust
+const DEFAULT_CONCURRENCY_LIMIT: usize = 2;
+```
 
-Potential implementation gotchas captured during plan self-review:
+## Superpowers Process State
 
-- Do not use `UpdatesState::default()` in tests unless verified available. The plan uses `MemorySession::default()` and `memory_session_to_saved(&session).await` for sample data.
-- Check XChaCha nonce length before `XNonce::from_slice`.
-- Keep base64 as `URL_SAFE_NO_PAD`.
-- The new encrypted file stays JSON but must not contain plaintext keys like `home_dc` or `updates_state`.
-- `load_session_from_path` should parse encrypted envelope first, then legacy plaintext `SavedSession`.
-- If legacy migration cannot write the key or encrypted file, return error and leave plaintext file unchanged.
-- If encrypted file exists and key is missing, return auth/storage error; do not fall back to `MemorySession::default()`.
+Skills used in this flow:
+
+- `superpowers:using-superpowers`
+- `superpowers:brainstorming`
+- `superpowers:writing-plans`
+- `superpowers:executing-plans`
+- `superpowers:test-driven-development`
+- `superpowers:verification-before-completion`
+- `superpowers:systematic-debugging`
+- `superpowers:finishing-a-development-branch`
+- `superpowers:receiving-code-review`
+
+For next implementation:
+
+- Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to execute `docs/superpowers/plans/2026-05-08-llm-concurrency-policy.md`.
+- Use `superpowers:test-driven-development` because this is behavior change.
+- The plan is already approved and self-reviewed after external feedback.
 
 ## User Decisions
 
 User approved:
 
-- Finish the Telegram session JSON security tail next.
-- Use design option 1: encrypted envelope in app-data file with per-account key in OS keyring.
-- Design spec is OK.
+- finish Telegram session JSON security tail;
+- encrypted app-data envelope with per-account OS-keyring key;
+- merge that feature into `main`;
+- skip manual account delete validation;
+- move next to LLM concurrency policy refinement;
+- choose combined scheduler policy plus large analysis run protection;
+- use hard caps plus preflight summary;
+- use conservative default limits:
+  - `10_000` messages;
+  - `80` chunks;
+  - `1_500_000` estimated input chars;
+  - `80` background requests;
+- accept revised spec/plan after external LLM review.
 
-Latest user request before this file was written:
+Latest user request before this context file was written:
 
-- Overwrite `docs/session-context-2026-05-03.md` with all information needed to restore the current session context.
-- Form a commit message.
+- overwrite `docs/session-context-2026-05-03.md` with all information needed to restore the current session context;
+- form a commit message.
 
-Suggested commit message for this context update:
+Suggested commit message:
 
 ```text
-docs(session): capture encrypted session storage context
+docs(session): capture llm preflight planning context
 ```
