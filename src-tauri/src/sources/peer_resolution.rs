@@ -450,9 +450,10 @@ pub(super) fn decode_source_metadata(bytes: Option<&[u8]>) -> AppResult<SourceMe
 
 fn telegram_source_id_from_sync_target(source: &SourceSyncTarget) -> AppResult<i64> {
     if source.source_type != TELEGRAM_SOURCE_TYPE {
+        let subtype = source.source_subtype.as_deref().unwrap_or("unknown");
         return Err(AppError::validation(format!(
-            "Source {} has unsupported source_type '{}'",
-            source.id, source.source_type
+            "Source {} has unsupported source_type '{}' and source_subtype '{}'",
+            source.id, source.source_type, subtype
         )));
     }
 
@@ -792,6 +793,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
             telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
@@ -821,6 +823,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some(TELEGRAM_KIND_SUPERGROUP.to_string()),
             telegram_source_kind: TELEGRAM_KIND_SUPERGROUP.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
@@ -850,6 +853,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some(TELEGRAM_KIND_GROUP.to_string()),
             telegram_source_kind: TELEGRAM_KIND_GROUP.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
@@ -877,6 +881,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some("unsupported".to_string()),
             telegram_source_kind: "unsupported".to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
@@ -904,6 +909,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 7,
             source_type: "rss".to_string(),
+            source_subtype: Some("feed".to_string()),
             telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
@@ -923,6 +929,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
             telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "not-a-number".to_string(),
@@ -942,6 +949,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some(TELEGRAM_KIND_GROUP.to_string()),
             telegram_source_kind: TELEGRAM_KIND_GROUP.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),

@@ -909,8 +909,10 @@ git commit -m "refactor(analysis): gate source UI by capabilities"
 - Modify: `src-tauri/src/sources/types.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 - Modify: `src-tauri/src/sources/store.rs`
+- Modify: `src-tauri/src/sources/sync.rs` for source record fixture alignment.
+- Modify: `src-tauri/src/sources/peer_resolution.rs` for source sync target fixture alignment.
 
-- [ ] **Step 1: Write backend record tests first**
+- [x] **Step 1: Write backend record tests first**
 
 In `src-tauri/src/sources/types.rs`, extend the test module import:
 
@@ -973,7 +975,7 @@ fn source_record_parts_allow_non_telegram_source() {
 }
 ```
 
-- [ ] **Step 2: Run backend tests to verify failure**
+- [x] **Step 2: Run backend tests to verify failure**
 
 Run:
 
@@ -984,7 +986,7 @@ cargo test sources::
 
 Expected failure includes missing `SourceType::Youtube` and missing `source_record_from_row_parts` or missing `source_subtype` fields.
 
-- [ ] **Step 3: Add migration 15**
+- [x] **Step 3: Add migration 15**
 
 Create `src-tauri/migrations/15.sql`:
 
@@ -997,7 +999,7 @@ WHERE source_type = 'telegram'
   AND source_subtype IS NULL;
 ```
 
-- [ ] **Step 4: Update backend source types**
+- [x] **Step 4: Update backend source types**
 
 In `src-tauri/src/sources/types.rs`, add constants:
 
@@ -1055,7 +1057,7 @@ Add `source_subtype: Option<String>` to `SourceSyncTarget`, and add `source_subt
 
 Keep `SourceSyncTarget.telegram_source_kind` as `String` for this readiness pass so existing Telegram sync code stays narrow. If `load_source` sees a null Telegram kind for a Telegram source, it should return a validation error in Task 5 before Telegram sync uses it.
 
-- [ ] **Step 5: Update test support schema**
+- [x] **Step 5: Update test support schema**
 
 In `src-tauri/src/sources/test_support.rs`, change the sources table definition to:
 
@@ -1077,7 +1079,7 @@ CREATE TABLE sources (
 )
 ```
 
-- [ ] **Step 6: Update store queries and record mapping**
+- [x] **Step 6: Update store queries and record mapping**
 
 In `src-tauri/src/sources/store.rs`, update the `INSERT INTO sources` field list in `add_telegram_source` to include `source_subtype` immediately after `source_type`:
 
@@ -1148,7 +1150,7 @@ Replace the final `Ok(SourceRecord { ... })` in `source_record_from_row` with:
 Ok(source_record_from_row_parts(row, avatar_data_url))
 ```
 
-- [ ] **Step 7: Run sources backend tests**
+- [x] **Step 7: Run sources backend tests**
 
 Run:
 
@@ -1163,10 +1165,10 @@ Expected output:
 test result: ok.
 ```
 
-- [ ] **Step 8: Commit Task 4**
+- [x] **Step 8: Commit Task 4**
 
 ```powershell
-git add src-tauri/migrations/15.sql src-tauri/src/sources/types.rs src-tauri/src/sources/test_support.rs src-tauri/src/sources/store.rs
+git add src-tauri/migrations/15.sql src-tauri/src/sources/types.rs src-tauri/src/sources/test_support.rs src-tauri/src/sources/store.rs src-tauri/src/sources/sync.rs src-tauri/src/sources/peer_resolution.rs
 git commit -m "refactor(sources): expose provider subtype"
 ```
 

@@ -1,6 +1,9 @@
 use serde::Serialize;
 
 pub(crate) const TELEGRAM_SOURCE_TYPE: &str = "telegram";
+pub(crate) const YOUTUBE_SOURCE_TYPE: &str = "youtube";
+pub(crate) const RSS_SOURCE_TYPE: &str = "rss";
+pub(crate) const FORUM_SOURCE_TYPE: &str = "forum";
 pub(crate) const TELEGRAM_KIND_CHANNEL: &str = "channel";
 pub(crate) const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
 pub(crate) const TELEGRAM_KIND_GROUP: &str = "group";
@@ -9,12 +12,18 @@ pub(crate) const TELEGRAM_KIND_GROUP: &str = "group";
 #[serde(rename_all = "snake_case")]
 pub enum SourceType {
     Telegram,
+    Youtube,
+    Rss,
+    Forum,
 }
 
 impl SourceType {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Telegram => TELEGRAM_SOURCE_TYPE,
+            Self::Youtube => YOUTUBE_SOURCE_TYPE,
+            Self::Rss => RSS_SOURCE_TYPE,
+            Self::Forum => FORUM_SOURCE_TYPE,
         }
     }
 }
@@ -62,7 +71,8 @@ pub struct TelegramSourceInfo {
 pub struct SourceRecord {
     pub id: i64,
     pub source_type: String,
-    pub telegram_source_kind: String,
+    pub source_subtype: Option<String>,
+    pub telegram_source_kind: Option<String>,
     pub account_id: Option<i64>,
     pub external_id: String,
     pub title: Option<String>,
@@ -78,6 +88,7 @@ pub struct SourceRecord {
 pub(crate) struct SourceSyncTarget {
     pub(crate) id: i64,
     pub(crate) source_type: String,
+    pub(crate) source_subtype: Option<String>,
     pub(crate) telegram_source_kind: String,
     pub(crate) account_id: Option<i64>,
     pub(crate) external_id: String,
@@ -90,7 +101,8 @@ pub(crate) struct SourceSyncTarget {
 pub(super) struct SourceRecordRow {
     pub(super) id: i64,
     pub(super) source_type: String,
-    pub(super) telegram_source_kind: String,
+    pub(super) source_subtype: Option<String>,
+    pub(super) telegram_source_kind: Option<String>,
     pub(super) account_id: Option<i64>,
     pub(super) external_id: String,
     pub(super) title: Option<String>,
@@ -144,7 +156,27 @@ pub(super) fn now_secs() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::TelegramSourceKind;
+    use super::{SourceType, TelegramSourceKind};
+
+    #[test]
+    fn source_type_serializes_supported_provider_values() {
+        assert_eq!(
+            serde_json::to_string(&SourceType::Telegram).expect("serialize"),
+            "\"telegram\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SourceType::Youtube).expect("serialize"),
+            "\"youtube\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SourceType::Rss).expect("serialize"),
+            "\"rss\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SourceType::Forum).expect("serialize"),
+            "\"forum\""
+        );
+    }
 
     #[test]
     fn telegram_source_kind_parses_supported_values() {

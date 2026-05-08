@@ -16,7 +16,8 @@ pub(super) async fn memory_pool_with_sources() -> sqlx::SqlitePool {
         CREATE TABLE sources (
             id INTEGER PRIMARY KEY,
             source_type TEXT NOT NULL,
-            telegram_source_kind TEXT NOT NULL,
+            source_subtype TEXT,
+            telegram_source_kind TEXT,
             account_id INTEGER,
             external_id TEXT NOT NULL,
             title TEXT,

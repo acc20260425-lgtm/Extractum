@@ -252,6 +252,7 @@ mod tests {
         let source = SourceSyncTarget {
             id: 1,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
             telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
@@ -298,6 +299,7 @@ mod tests {
             INSERT INTO sources (
                 id,
                 source_type,
+                source_subtype,
                 telegram_source_kind,
                 account_id,
                 external_id,
@@ -309,11 +311,12 @@ mod tests {
                 is_member,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(1_i64)
         .bind(TELEGRAM_SOURCE_TYPE)
+        .bind(TELEGRAM_KIND_CHANNEL)
         .bind(TELEGRAM_KIND_CHANNEL)
         .bind(1_i64)
         .bind("12345")
@@ -340,7 +343,7 @@ mod tests {
         assert_eq!(last_sync_state, Some(9));
 
         let row: SourceRecordRow = sqlx::query_as(
-            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE id = ?",
+            "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE id = ?",
         )
         .bind(1_i64)
         .fetch_one(&pool)

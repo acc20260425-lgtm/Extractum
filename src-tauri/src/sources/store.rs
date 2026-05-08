@@ -87,7 +87,7 @@ pub(crate) async fn load_source(
     source_id: i64,
 ) -> AppResult<SourceSyncTarget> {
     sqlx::query_as(
-        "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
+        "SELECT id, source_type, source_subtype, COALESCE(telegram_source_kind, '') AS telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
     )
     .bind(source_id)
     .fetch_optional(pool)
@@ -135,6 +135,7 @@ pub async fn add_telegram_source(
         r#"
         INSERT INTO sources (
             source_type,
+            source_subtype,
             telegram_source_kind,
             external_id,
             title,
@@ -144,15 +145,17 @@ pub async fn add_telegram_source(
             account_id,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
         ON CONFLICT(account_id, source_type, telegram_source_kind, external_id) DO UPDATE SET
             title = excluded.title,
+            source_subtype = excluded.source_subtype,
             metadata_zstd = excluded.metadata_zstd,
             is_member = excluded.is_member,
             account_id = excluded.account_id
         RETURNING
             id,
             source_type,
+            source_subtype,
             telegram_source_kind,
             account_id,
             external_id,
@@ -166,6 +169,7 @@ pub async fn add_telegram_source(
         "#,
     )
     .bind(SourceType::Telegram.as_str())
+    .bind(&resolved.telegram_source_kind)
     .bind(&resolved.telegram_source_kind)
     .bind(&resolved.external_id)
     .bind(&resolved.title)
@@ -187,7 +191,7 @@ pub async fn list_sources(
     let pool = get_pool(&handle).await?;
     let rows: Vec<SourceRecordRow> = if let Some(aid) = account_id {
         sqlx::query_as(
-            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
+            "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
         )
         .bind(aid)
         .fetch_all(&pool)
@@ -195,7 +199,7 @@ pub async fn list_sources(
         .map_err(|e| AppError::internal(e.to_string()))?
     } else {
         sqlx::query_as(
-            "SELECT id, source_type, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
+            "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
         )
         .fetch_all(&pool)
         .await
@@ -207,16 +211,14 @@ pub async fn list_sources(
         .collect()
 }
 
-fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult<SourceRecord> {
-    let metadata = decode_source_metadata(row.metadata_zstd.as_deref())?;
-    let avatar_data_url = metadata
-        .avatar_cache_key
-        .as_deref()
-        .and_then(|cache_key| read_source_avatar_data_url(handle, cache_key));
-
-    Ok(SourceRecord {
+fn source_record_from_row_parts(
+    row: SourceRecordRow,
+    avatar_data_url: Option<String>,
+) -> SourceRecord {
+    SourceRecord {
         id: row.id,
         source_type: row.source_type,
+        source_subtype: row.source_subtype,
         telegram_source_kind: row.telegram_source_kind,
         account_id: row.account_id,
         external_id: row.external_id,
@@ -227,7 +229,17 @@ fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult
         is_active: row.is_active,
         created_at: row.created_at,
         avatar_data_url,
-    })
+    }
+}
+
+fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult<SourceRecord> {
+    let metadata = decode_source_metadata(row.metadata_zstd.as_deref())?;
+    let avatar_data_url = metadata
+        .avatar_cache_key
+        .as_deref()
+        .and_then(|cache_key| read_source_avatar_data_url(handle, cache_key));
+
+    Ok(source_record_from_row_parts(row, avatar_data_url))
 }
 
 #[cfg(test)]
@@ -235,6 +247,33 @@ mod tests {
     use super::*;
     use crate::error::AppErrorKind;
     use crate::sources::test_support::memory_pool_with_sources;
+
+    #[test]
+    fn source_record_parts_allow_non_telegram_source() {
+        let record = source_record_from_row_parts(
+            SourceRecordRow {
+                id: 10,
+                source_type: "youtube".to_string(),
+                source_subtype: Some("video".to_string()),
+                telegram_source_kind: None,
+                account_id: None,
+                external_id: "dQw4w9WgXcQ".to_string(),
+                title: Some("Demo video".to_string()),
+                metadata_zstd: None,
+                last_sync_state: None,
+                last_synced_at: None,
+                is_active: true,
+                is_member: false,
+                created_at: 1_700_500,
+            },
+            None,
+        );
+
+        assert_eq!(record.source_type, "youtube");
+        assert_eq!(record.source_subtype.as_deref(), Some("video"));
+        assert_eq!(record.telegram_source_kind, None);
+        assert_eq!(record.account_id, None);
+    }
 
     #[tokio::test]
     async fn load_source_returns_not_found_for_missing_source() {
