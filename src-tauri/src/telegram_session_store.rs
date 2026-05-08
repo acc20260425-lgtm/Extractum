@@ -181,7 +181,10 @@ async fn ensure_session_key(
     }
     let encoded = generate_session_key();
     secret_store
-        .set_secret(telegram_account_session_key_secret(account_id), encoded.clone())
+        .set_secret(
+            telegram_account_session_key_secret(account_id),
+            encoded.clone(),
+        )
         .await?;
     decode_base64(&encoded)
 }
@@ -362,7 +365,8 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let path = temp.path().join("telegram_7.session.json");
         let (store, secret_store) = memory_secret_store();
-        let legacy_json = serde_json::to_string(&sample_saved_session().await).expect("legacy json");
+        let legacy_json =
+            serde_json::to_string(&sample_saved_session().await).expect("legacy json");
         fs::write(&path, &legacy_json).expect("write legacy session");
         store.fail_set("secure store unavailable");
 
