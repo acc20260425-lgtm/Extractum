@@ -1,18 +1,16 @@
 use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use grammers_client::{client::LoginToken, Client};
 use grammers_mtsender::SenderPool;
-use grammers_session::types::{DcOption, UpdatesState};
-use grammers_session::{storages::MemorySession, Session, SessionData};
+use grammers_session::storages::MemorySession;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
+use crate::telegram_session_store;
 
 const STATUS_NOT_INITIALIZED: &str = "not_initialized";
 const STATUS_RESTORING: &str = "restoring";
@@ -20,13 +18,6 @@ const STATUS_READY: &str = "ready";
 const STATUS_REAUTH_REQUIRED: &str = "reauth_required";
 const STATUS_RESTORE_FAILED: &str = "restore_failed";
 const TELEGRAM_RESTORE_FAILURE_EVENT: &str = "telegram://restore-failure";
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct SavedSession {
-    home_dc: i32,
-    dc_options: HashMap<i32, DcOption>,
-    updates_state: UpdatesState,
-}
 
 #[derive(Debug, sqlx::FromRow)]
 struct AccountCredentials {
@@ -75,62 +66,6 @@ impl TelegramState {
             statuses: Mutex::new(HashMap::new()),
         }
     }
-}
-
-fn session_path(handle: &AppHandle, account_id: i64) -> AppResult<PathBuf> {
-    let app_dir = handle
-        .path()
-        .app_data_dir()
-        .map_err(|error| AppError::internal(error.to_string()))?;
-    fs::create_dir_all(&app_dir).map_err(|error| AppError::internal(error.to_string()))?;
-    Ok(app_dir.join(format!("telegram_{account_id}.session.json")))
-}
-
-fn session_exists(handle: &AppHandle, account_id: i64) -> bool {
-    session_path(handle, account_id)
-        .map(|path| path.exists())
-        .unwrap_or(false)
-}
-
-async fn load_session(handle: &AppHandle, account_id: i64) -> Arc<MemorySession> {
-    if let Ok(path) = session_path(handle, account_id) {
-        if let Ok(json) = fs::read_to_string(&path) {
-            if let Ok(saved) = serde_json::from_str::<SavedSession>(&json) {
-                let session_data = SessionData {
-                    home_dc: saved.home_dc,
-                    dc_options: saved.dc_options,
-                    peer_infos: HashMap::new(),
-                    updates_state: saved.updates_state,
-                };
-                return Arc::new(MemorySession::from(session_data));
-            }
-        }
-    }
-    Arc::new(MemorySession::default())
-}
-
-async fn save_session(
-    handle: &AppHandle,
-    account_id: i64,
-    session: &Arc<MemorySession>,
-) -> AppResult<()> {
-    let home_dc = session.home_dc_id();
-    let updates_state = session.updates_state().await;
-    let mut dc_options = HashMap::new();
-    for dc_id in 1..=5i32 {
-        if let Some(dc) = session.dc_option(dc_id) {
-            dc_options.insert(dc_id, dc);
-        }
-    }
-    let saved = SavedSession {
-        home_dc,
-        dc_options,
-        updates_state,
-    };
-    let json =
-        serde_json::to_string(&saved).map_err(|error| AppError::internal(error.to_string()))?;
-    let path = session_path(handle, account_id)?;
-    fs::write(path, json).map_err(|error| AppError::internal(error.to_string()))
 }
 
 async fn list_account_credentials(handle: &AppHandle) -> AppResult<Vec<AccountCredentials>> {
@@ -226,9 +161,10 @@ async fn set_account_status(
 pub async fn clear_account_runtime(
     handle: &AppHandle,
     state: &TelegramState,
+    secret_store: &SecretStoreState,
     account_id: i64,
     sign_out: bool,
-) {
+) -> AppResult<()> {
     let mut accounts = state.accounts.lock().await;
     if let Some(ac) = accounts.remove(&account_id) {
         if sign_out {
@@ -237,25 +173,22 @@ pub async fn clear_account_runtime(
     }
     drop(accounts);
 
-    if let Ok(path) = session_path(handle, account_id) {
-        if path.exists() {
-            let _ = fs::remove_file(path);
-        }
-    }
-
+    telegram_session_store::delete_session(handle, secret_store, account_id).await?;
     set_account_status(handle, state, account_id, STATUS_NOT_INITIALIZED, None).await;
+    Ok(())
 }
 
 async fn init_account_client(
     handle: &AppHandle,
     state: &TelegramState,
+    secret_store: &SecretStoreState,
     account_id: i64,
     api_id: i32,
     api_hash: String,
 ) -> AppResult<bool> {
     set_account_status(handle, state, account_id, STATUS_RESTORING, None).await;
 
-    let session = load_session(handle, account_id).await;
+    let session = telegram_session_store::load_session(handle, secret_store, account_id).await?;
     let pool = SenderPool::new(Arc::clone(&session), api_id);
 
     tokio::spawn(async move {
@@ -329,7 +262,7 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
     };
 
     for account in accounts {
-        if !session_exists(&handle, account.id) {
+        if !telegram_session_store::session_exists(&handle, account.id) {
             set_account_status(&handle, &state, account.id, STATUS_NOT_INITIALIZED, None).await;
             continue;
         }
@@ -353,6 +286,7 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
         let init_result = init_account_client(
             &handle,
             &state,
+            &secret_store,
             account.id,
             match telegram_api_id(account.api_id) {
                 Ok(api_id) => api_id,
@@ -401,7 +335,16 @@ pub async fn tg_init(
     let credentials = get_account_credentials(&handle, &secret_store, account_id).await?;
     let api_id = telegram_api_id(credentials.api_id)?;
 
-    match init_account_client(&handle, &state, account_id, api_id, credentials.api_hash).await {
+    match init_account_client(
+        &handle,
+        &state,
+        &secret_store,
+        account_id,
+        api_id,
+        credentials.api_hash,
+    )
+    .await
+    {
         Ok(is_auth) => Ok(is_auth),
         Err(error) => {
             let mut accounts = state.accounts.lock().await;
@@ -488,6 +431,7 @@ pub async fn tg_send_code(
 pub async fn tg_sign_in(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    secret_store: tauri::State<'_, SecretStoreState>,
     account_id: i64,
     code: String,
 ) -> AppResult<bool> {
@@ -509,7 +453,8 @@ pub async fn tg_sign_in(
         Arc::clone(&ac.session)
     };
 
-    save_session(&handle, account_id, &session_to_save).await?;
+    telegram_session_store::save_session(&handle, &secret_store, account_id, &session_to_save)
+        .await?;
     set_account_status(&handle, &state, account_id, STATUS_READY, None).await;
 
     Ok(true)
@@ -519,9 +464,10 @@ pub async fn tg_sign_in(
 pub async fn tg_logout(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    secret_store: tauri::State<'_, SecretStoreState>,
     account_id: i64,
 ) -> AppResult<bool> {
-    clear_account_runtime(&handle, &state, account_id, true).await;
+    clear_account_runtime(&handle, &state, &secret_store, account_id, true).await?;
     Ok(true)
 }
 

@@ -132,10 +132,14 @@ pub async fn delete_account(
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     delete_account_row_from_pool(&pool, account_id).await?;
-    clear_account_runtime(&handle, &state, account_id, true).await;
-    secret_store
+    let runtime_result =
+        clear_account_runtime(&handle, &state, &secret_store, account_id, true).await;
+    let api_hash_result = secret_store
         .delete_secret(telegram_account_api_hash_secret(account_id))
-        .await
+        .await;
+
+    runtime_result?;
+    api_hash_result
 }
 
 #[cfg(test)]
