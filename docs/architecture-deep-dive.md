@@ -43,6 +43,10 @@ OS secure storage under `telegram.account.<account_id>.api_hash`. Legacy
 non-empty `accounts.api_hash` values migrate lazily and are blanked only after a
 successful secure-store write.
 
+Telegram session files remain app-data files, but their contents are encrypted
+with per-account session keys stored in OS secure storage under
+`telegram.account.<account_id>.session_key`.
+
 ### 2.2 Source resolution
 
 Sources can be added:
@@ -220,7 +224,6 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 
 ## 8. Known architectural debt
 
-- Telegram session JSON files remain local app-data files and may deserve encryption or a more robust long-term format;
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - Takeout import still needs broader live validation across supergroups, groups, private/left sources, and shifted export DC behavior;
 - migrated supergroup history is detected but not imported until the `(source_id, external_id)` collision policy is decided;

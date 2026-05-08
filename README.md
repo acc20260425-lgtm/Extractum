@@ -112,7 +112,7 @@ Privacy warning: Only export chats and channels you are authorized to access. Be
 ## Current constraints
 
 - analysis remains text-first: media-only items are visible in the analysis workspace but are not yet part of the analysis corpus;
-- saved LLM API keys and Telegram `api_hash` values are stored in the OS secure credential store; Telegram session JSON files remain local app-data files;
+- saved LLM API keys and Telegram `api_hash` values are stored in the OS secure credential store; Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage;
 - peer resolution still falls back to dialog scanning when cached username metadata is insufficient.
 
 ## Architecture

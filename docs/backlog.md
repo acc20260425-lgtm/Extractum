@@ -1,6 +1,6 @@
 # Extractum Unified Backlog
 
-> **Updated:** 2026-05-03
+> **Updated:** 2026-05-08
 > **Working rule:** this file tracks open follow-up work only
 
 ---
@@ -18,7 +18,6 @@ Released work should stay in the codebase and in current-state documentation, no
 - Telegram runtime behavior still needs broader validation against real accounts and dialogs
 - private-source resolution is better defined but still needs more real-world validation
 - Takeout source import is shipped, but still needs broader live validation and a few parity follow-ups
-- Telegram session JSON files still live as local app-data files
 - LLM concurrency policy still needs refinement beyond the current request-scoped scheduling baseline
 - saved-run history still lacks richer filtering for larger archives
 - media download, preview, and media-aware analysis are still incomplete
@@ -44,7 +43,7 @@ Released work should stay in the codebase and in current-state documentation, no
 | Telegram runtime correctness | partially validated | validated on real accounts and dialogs |
 | Private source resolution | explicit rules exist, but runtime coverage is incomplete | predictable behavior for dialog-picked private sources |
 | Takeout source import | implemented for existing sources with TDesktop-first pagination and per-split descending fallback | validated across source kinds, private/left cases, and export DC behavior |
-| Secret storage | LLM keys and Telegram `api_hash` use OS secure storage; Telegram sessions remain JSON files | session storage decision and migration path |
+| Secret storage | LLM keys, Telegram `api_hash`, and Telegram session file contents use OS-backed protection | avoid logging secrets in backend errors, frontend status text, or debug output |
 | LLM concurrency | request isolation is in place, but limit policy is still coarse | predictable request scheduling with clearer limits |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
 | Media support | metadata-first only | optional download/preview and media-aware analysis |
@@ -190,7 +189,7 @@ Status: open.
 
 Priority: high.
 
-Goal: keep sensitive credentials out of SQLite-backed storage and finish the remaining session-storage decision.
+Goal: keep sensitive credentials out of SQLite-backed storage and protected at rest.
 
 Scope:
 
@@ -198,8 +197,9 @@ Scope:
 - [x] move Telegram `api_hash` values to account-scoped secure storage
 - [x] keep secrets profile-scoped or account-scoped as appropriate
 - [x] preserve existing settings through a lazy migration path
-- [ ] decide whether and how to encrypt or migrate Telegram session JSON files
+- [x] decide whether and how to encrypt or migrate Telegram session JSON files
 - [ ] avoid logging secrets in backend errors, frontend status text, or debug output
+- Telegram session files remain in app data as `telegram_<account_id>.session.json`, but contents are encrypted with per-account keys stored in OS secure storage.
 
 Acceptance criteria:
 
@@ -207,7 +207,7 @@ Acceptance criteria:
 - [x] existing configured keys can be migrated or re-entered without breaking the app
 - [x] `/settings` can still edit provider settings without exposing secrets unnecessarily
 - [x] Telegram account `api_hash` values are no longer trivially inspectable from the local database
-- [ ] Telegram session files have an explicit long-term storage decision
+- [x] Telegram session files have an explicit long-term storage decision
 
 #### 4.3. LLM Parallel Request Support
 
@@ -314,13 +314,12 @@ Goal: keep the verification baseline healthy as the remaining infrastructure wor
 
 1. finish the remaining Telegram runtime and private-source validation
 2. decide whether saved-run history now needs richer metadata/date filters before deeper Phase 4 work
-3. decide how to handle Telegram session JSON storage
-4. finish the remaining LLM concurrency policy work after the shipped request-scoped scheduling and cancellation baseline
+3. finish the remaining LLM concurrency policy work after the shipped request-scoped scheduling and cancellation baseline
 
 ### Next priority
 
-5. expand media download/preview and media-aware analysis
-6. tighten stabilization and test coverage around the new infrastructure
+4. expand media download/preview and media-aware analysis
+5. tighten stabilization and test coverage around the new infrastructure
 
 ---
 
@@ -332,7 +331,6 @@ If implementation resumes directly from this file, the recommended opening seque
 2. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
 3. validate the shipped Takeout import path across representative source kinds and fallback cases
 4. decide whether saved-run history now needs richer metadata/date filters before Phase 4
-5. decide how to handle Telegram session JSON storage
 
 ### Session Handoff
 
@@ -342,7 +340,7 @@ Current implementation checkpoint:
 
 Recommended next step:
 
-- decide how to handle Telegram session JSON storage if the team is staying on the Phase 4 track; after that, decide whether the remaining LLM concurrency work should be limited to better limit policy/configuration or deferred behind Telegram validation
+- decide whether the remaining LLM concurrency work should be limited to better limit policy/configuration or deferred behind Telegram validation
 
 ---
 

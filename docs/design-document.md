@@ -249,10 +249,13 @@ This keeps SQLite reasonably small without introducing extra infrastructure.
 - initial sync policy keys
 
 Saved LLM API keys and Telegram `api_hash` values are stored through the backend
-`secret_store` module in the OS credential store. Legacy plaintext values in
-`app_settings` or `accounts.api_hash` are migrated lazily: the backend writes
-the secure-store secret first and only then clears the SQLite value. If secure
-storage fails, the operation fails closed and leaves legacy plaintext untouched.
+`secret_store` module in the OS credential store. Telegram session files remain
+app-data files, but their contents are encrypted with per-account session keys
+stored in OS secure storage under `telegram.account.<account_id>.session_key`.
+Legacy plaintext values in `app_settings`, `accounts.api_hash`, or Telegram
+session files are migrated lazily: the backend writes the secure-store secret
+first and only then clears or replaces the legacy value. If secure storage
+fails, the operation fails closed and leaves legacy plaintext untouched.
 
 ## 7. What changed since earlier planning
 

@@ -196,7 +196,7 @@ Notes:
 
 - `api_hash` is retained as a legacy `NOT NULL` placeholder column and is empty for newly created or migrated accounts;
 - saved Telegram `api_hash` values live in OS secure storage under `telegram.account.<account_id>.api_hash`;
-- session restore state is not stored in this table and instead lives in the app's per-account session files.
+- session restore state is not stored in this table and instead lives in per-account app-data session files whose contents are encrypted with keys stored in OS secure storage under `telegram.account.<account_id>.session_key`.
 
 ## 2. Analysis tables
 
@@ -317,4 +317,4 @@ Purpose:
 - legacy saved refs using Telegram message ids (`s{source_id}-m{message_id}`) remain readable;
 - saved LLM API keys and Telegram `api_hash` values are owned by OS secure storage, not SQLite;
 - old non-empty `llm.profile.*.api_key` and `accounts.api_hash` values are legacy migration inputs and are cleared only after successful secure-store writes;
-- Telegram session JSON files remain local app-data files and are the remaining secret-storage follow-up.
+- Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`.

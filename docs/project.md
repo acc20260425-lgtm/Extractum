@@ -40,11 +40,11 @@ Implemented:
 - provider-neutral analysis refs for new live corpus rows
 - typed app errors across Tauri commands
 - OS secure storage for saved LLM API keys and Telegram `api_hash` values
+- encrypted Telegram session file contents with per-account OS secure storage keys
 
 Not implemented yet:
 
 - concrete YouTube, RSS, or forum ingestion
-- secure storage or encryption for Telegram session JSON files
 - full media download / previews
 - media-aware analysis beyond the current text-first corpus
 - full Telegram Forum Topics browsing/export model
@@ -128,6 +128,7 @@ Not implemented yet:
 ## Important persistence
 
 - `accounts`: local Telegram account metadata; saved Telegram `api_hash` secrets live in OS secure storage
+- Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`.
 - `sources`: registered provider sources; Telegram rows currently carry
   Telegram compatibility fields and future providers can use provider-local
   subtypes
@@ -146,7 +147,7 @@ Not implemented yet:
 - concrete non-Telegram ingestion commands are not implemented yet;
 - older item rows may have `NULL` Telegram context metadata because there is no background backfill;
 - saved LLM API keys and Telegram `api_hash` values use OS secure storage;
-- Telegram session JSON files remain local app-data files and are not yet encrypted or migrated;
+- Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
 - Takeout import does not download media bytes and currently defers migrated supergroup history to avoid `(source_id, external_id)` collisions.
 
