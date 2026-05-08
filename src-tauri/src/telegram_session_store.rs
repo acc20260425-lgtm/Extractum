@@ -231,11 +231,23 @@ pub(crate) async fn delete_session(
     account_id: i64,
 ) -> AppResult<()> {
     if let Ok(path) = session_path(handle, account_id) {
-        match fs::remove_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(AppError::internal(error.to_string())),
-        }
+        delete_session_from_path(&path, secret_store, account_id).await?;
+        return Ok(());
+    }
+    secret_store
+        .delete_secret(telegram_account_session_key_secret(account_id))
+        .await
+}
+
+async fn delete_session_from_path(
+    path: &Path,
+    secret_store: &SecretStoreState,
+    account_id: i64,
+) -> AppResult<()> {
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(AppError::internal(error.to_string())),
     }
     secret_store
         .delete_secret(telegram_account_session_key_secret(account_id))
@@ -324,5 +336,124 @@ mod tests {
             .expect("load encrypted session");
 
         assert_eq!(loaded.home_dc_id(), saved.home_dc);
+    }
+
+    #[tokio::test]
+    async fn legacy_plaintext_session_migrates_to_encrypted_file() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("telegram_7.session.json");
+        let (_store, secret_store) = memory_secret_store();
+        let saved = sample_saved_session().await;
+        let legacy_json = serde_json::to_string(&saved).expect("legacy json");
+        fs::write(&path, &legacy_json).expect("write legacy session");
+
+        let loaded = load_session_from_path(&path, &secret_store, 7)
+            .await
+            .expect("load legacy session");
+
+        assert_eq!(loaded.home_dc_id(), saved.home_dc);
+        let migrated = fs::read_to_string(&path).expect("read migrated session");
+        assert!(serde_json::from_str::<EncryptedSessionEnvelope>(&migrated).is_ok());
+        assert_ne!(migrated, legacy_json);
+    }
+
+    #[tokio::test]
+    async fn legacy_plaintext_session_remains_when_keyring_write_fails() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("telegram_7.session.json");
+        let (store, secret_store) = memory_secret_store();
+        let legacy_json = serde_json::to_string(&sample_saved_session().await).expect("legacy json");
+        fs::write(&path, &legacy_json).expect("write legacy session");
+        store.fail_set("secure store unavailable");
+
+        let error = match load_session_from_path(&path, &secret_store, 7).await {
+            Ok(_) => panic!("migration should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.message, "secure store unavailable");
+        assert_eq!(
+            fs::read_to_string(&path).expect("read legacy session"),
+            legacy_json
+        );
+    }
+
+    #[tokio::test]
+    async fn encrypted_session_load_fails_when_key_is_missing() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("telegram_7.session.json");
+        let (_writer_store, writer_secret_store) = memory_secret_store();
+        let (_reader_store, reader_secret_store) = memory_secret_store();
+
+        let saved = sample_saved_session().await;
+
+        write_encrypted_session_file(&path, &writer_secret_store, 7, &saved)
+            .await
+            .expect("write encrypted session");
+
+        let error = match load_session_from_path(&path, &reader_secret_store, 7).await {
+            Ok(_) => panic!("missing key should fail"),
+            Err(error) => error,
+        };
+
+        assert!(error
+            .message
+            .contains("Telegram session key for account 7 is missing"));
+    }
+
+    #[tokio::test]
+    async fn encrypted_session_load_fails_for_wrong_account_id() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("telegram_7.session.json");
+        let (_store, secret_store) = memory_secret_store();
+
+        let saved = sample_saved_session().await;
+
+        write_encrypted_session_file(&path, &secret_store, 7, &saved)
+            .await
+            .expect("write encrypted session");
+
+        let key = secret_store
+            .get_secret(telegram_account_session_key_secret(7))
+            .await
+            .expect("read session key")
+            .expect("session key exists");
+        secret_store
+            .set_secret(telegram_account_session_key_secret(8), key)
+            .await
+            .expect("copy key to wrong account");
+
+        let error = match load_session_from_path(&path, &secret_store, 8).await {
+            Ok(_) => panic!("wrong account aad should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.message, "Failed to decrypt Telegram session");
+    }
+
+    #[tokio::test]
+    async fn delete_session_from_path_removes_file_and_key() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("telegram_7.session.json");
+        let (_store, secret_store) = memory_secret_store();
+
+        let saved = sample_saved_session().await;
+
+        write_encrypted_session_file(&path, &secret_store, 7, &saved)
+            .await
+            .expect("write encrypted session");
+
+        delete_session_from_path(&path, &secret_store, 7)
+            .await
+            .expect("delete session");
+
+        assert!(!path.exists());
+        assert_eq!(
+            secret_store
+                .get_secret(telegram_account_session_key_secret(7))
+                .await
+                .expect("read session key"),
+            None
+        );
     }
 }
