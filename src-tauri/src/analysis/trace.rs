@@ -21,20 +21,26 @@ pub(crate) fn decode_trace_data(bytes: Option<&[u8]>) -> Result<AnalysisTraceDat
 
 pub(crate) fn normalize_ref(candidate: &str) -> Option<String> {
     let candidate = candidate.trim().trim_matches('[').trim_matches(']');
-    let (source_part, message_part) = candidate.split_once("-m")?;
-    if !source_part.starts_with('s') {
-        return None;
-    }
-    let source_digits = &source_part[1..];
-    if source_digits.is_empty()
-        || message_part.is_empty()
-        || !source_digits.chars().all(|c| c.is_ascii_digit())
-        || !message_part.chars().all(|c| c.is_ascii_digit())
-    {
-        return None;
+    for separator in ["-i", "-m"] {
+        let Some((source_part, item_part)) = candidate.split_once(separator) else {
+            continue;
+        };
+        if !source_part.starts_with('s') {
+            return None;
+        }
+        let source_digits = &source_part[1..];
+        if source_digits.is_empty()
+            || item_part.is_empty()
+            || !source_digits.chars().all(|c| c.is_ascii_digit())
+            || !item_part.chars().all(|c| c.is_ascii_digit())
+        {
+            return None;
+        }
+
+        return Some(format!("s{source_digits}{separator}{item_part}"));
     }
 
-    Some(format!("s{source_digits}-m{message_part}"))
+    None
 }
 
 pub(crate) fn extract_cited_refs(markdown: &str) -> Vec<String> {
@@ -99,7 +105,7 @@ pub(crate) fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> Anal
 
 #[cfg(test)]
 mod tests {
-    use super::{build_trace_refs, clip_excerpt};
+    use super::{build_trace_refs, clip_excerpt, normalize_ref};
     use crate::analysis::models::CorpusMessage;
 
     #[test]
@@ -129,5 +135,13 @@ mod tests {
 
         assert_eq!(trace_refs.len(), 1);
         assert!(trace_refs[0].excerpt.ends_with("..."));
+    }
+
+    #[test]
+    fn normalize_ref_accepts_item_refs_and_legacy_message_refs() {
+        assert_eq!(normalize_ref("[s12-i845]").as_deref(), Some("s12-i845"));
+        assert_eq!(normalize_ref("s12-m845").as_deref(), Some("s12-m845"));
+        assert_eq!(normalize_ref("s12-iabc"), None);
+        assert_eq!(normalize_ref("x12-i845"), None);
     }
 }

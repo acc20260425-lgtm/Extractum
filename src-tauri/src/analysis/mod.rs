@@ -136,7 +136,7 @@ fn validate_chat_role(role: &str) -> AppResult<()> {
 }
 
 fn default_report_template_body() -> &'static str {
-    r#"Create a grounded report over the provided Telegram messages.
+    r#"Create a grounded report over the provided source documents.
 
 Focus on:
 - the main topics and recurring themes
@@ -492,8 +492,17 @@ mod tests {
         .fetch_one(&pool)
         .await
         .expect("count report templates");
+        let body = sqlx::query_scalar::<_, String>(
+            "SELECT body FROM analysis_prompt_templates WHERE template_kind = ?",
+        )
+        .bind(TEMPLATE_KIND_REPORT)
+        .fetch_one(&pool)
+        .await
+        .expect("load report template body");
 
         assert_eq!(count, 1);
+        assert!(body.contains("source documents"));
+        assert!(!body.contains("Telegram messages"));
     }
 
     #[test]

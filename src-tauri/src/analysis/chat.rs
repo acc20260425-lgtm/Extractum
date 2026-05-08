@@ -111,7 +111,7 @@ fn clip_excerpt(content: &str, max_chars: usize) -> String {
 
 fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
     if messages.is_empty() {
-        return "No additional local message matches were found for the current question."
+        return "No additional local source document matches were found for the current question."
             .to_string();
     }
 
@@ -146,14 +146,14 @@ fn build_chat_request(params: ChatRequestParams<'_>) -> LlmChatRequest {
         LlmMessage {
             role: "system".to_string(),
             content: format!(
-                "You answer follow-up questions about a saved Telegram analysis report.\nAnswer in {}.\nUse markdown only.\nGround every important claim in the saved report or the provided message excerpts.\nWhen referring to message evidence, cite refs like [s12-m845].\nDo not invent facts beyond the saved report and provided excerpts.",
+                "You answer follow-up questions about a saved source analysis report.\nAnswer in {}.\nUse markdown only.\nGround every important claim in the saved report or the provided source document excerpts.\nWhen referring to source evidence, cite refs like [s12-i845].\nDo not invent facts beyond the saved report and provided excerpts.",
                 params.run.output_language
             ),
         },
         LlmMessage {
             role: "user".to_string(),
             content: format!(
-                "Saved report scope: {}\nSaved report period: {} to {}\n\nSaved report markdown:\n\n{}\n\nAdditional local message matches for the current question:\n\n{}",
+                "Saved report scope: {}\nSaved report period: {} to {}\n\nSaved report markdown:\n\n{}\n\nAdditional local source document matches for the current question:\n\n{}",
                 params.scope_label,
                 params.run.period_from,
                 params.run.period_to,
@@ -472,4 +472,86 @@ pub async fn ask_analysis_run_question(
     });
 
     Ok(request_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_chat_request, format_chat_context_messages, ChatRequestParams};
+    use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
+
+    fn sample_run() -> AnalysisRunDetail {
+        AnalysisRunDetail {
+            id: 42,
+            run_type: "report".to_string(),
+            scope_type: "single_source".to_string(),
+            source_id: Some(3),
+            source_title: Some("Source".to_string()),
+            source_group_id: None,
+            source_group_name: None,
+            scope_label: "Source".to_string(),
+            period_from: 10,
+            period_to: 20,
+            output_language: "English".to_string(),
+            prompt_template_id: Some(1),
+            prompt_template_name: Some("Default".to_string()),
+            prompt_template_version: 1,
+            provider_profile: "default".to_string(),
+            provider: "gemini".to_string(),
+            model: "gemini-2.5-flash".to_string(),
+            status: "completed".to_string(),
+            result_markdown: Some("Saved report".to_string()),
+            error: None,
+            has_trace_data: true,
+            created_at: 1_710_000_500,
+            completed_at: Some(1_710_000_600),
+            scope_label_snapshot: Some("Source".to_string()),
+        }
+    }
+
+    fn sample_message() -> CorpusMessage {
+        CorpusMessage {
+            item_id: 9,
+            source_id: 3,
+            external_id: "abc".to_string(),
+            published_at: 1_710_000_000,
+            author: Some("analyst".to_string()),
+            content: "A matching source document excerpt".to_string(),
+            r#ref: "s3-i9".to_string(),
+        }
+    }
+
+    #[test]
+    fn build_chat_request_uses_provider_neutral_source_document_wording() {
+        let message = sample_message();
+        let context_messages = vec![&message];
+        let request = build_chat_request(ChatRequestParams {
+            run: &sample_run(),
+            profile_id: "default".to_string(),
+            scope_label: "Source",
+            history: &[],
+            question: "What changed?",
+            report_markdown: "Saved report",
+            context_messages: &context_messages,
+            model_override: None,
+        });
+
+        assert!(request.messages[0]
+            .content
+            .contains("saved source analysis report"));
+        assert!(request.messages[0]
+            .content
+            .contains("source document excerpts"));
+        assert!(request.messages[0].content.contains("[s12-i845]"));
+        assert!(request.messages[1]
+            .content
+            .contains("Additional local source document matches"));
+    }
+
+    #[test]
+    fn empty_chat_context_uses_source_document_wording() {
+        let text = format_chat_context_messages(&[]);
+
+        assert!(text.contains("source document"));
+        assert!(!text.contains("message"));
+    }
 }

@@ -98,12 +98,12 @@ fn build_map_request(
         messages: vec![
             LlmMessage {
                 role: "system".to_string(),
-                content: "You analyze Telegram message excerpts. Return a strict JSON object only with keys: summary, topics, notable_points, candidate_refs. Do not wrap JSON in markdown fences. Use only refs that appear in the provided messages.".to_string(),
+                content: "You analyze source document excerpts. Return a strict JSON object only with keys: summary, topics, notable_points, candidate_refs. Do not wrap JSON in markdown fences. Use only refs that appear in the provided documents.".to_string(),
             },
             LlmMessage {
                 role: "user".to_string(),
                 content: format!(
-                    "Chunk {chunk_index} of {total_chunks}.\nSummarize the messages below for later reduction.\n\nMessages:\n\n{}",
+                    "Chunk {chunk_index} of {total_chunks}.\nSummarize the source documents below for later reduction.\n\nDocuments:\n\n{}",
                     format_chunk_corpus(messages)
                 ),
             },
@@ -254,7 +254,7 @@ fn build_reduce_request(params: ReduceRequestParams<'_>) -> LlmChatRequest {
             LlmMessage {
                 role: "system".to_string(),
                 content: format!(
-                    "You write grounded markdown reports over already-summarized Telegram messages.\nAnswer in {}.\nUse markdown only.\nEvery important conclusion must cite one or more refs like [s12-m845].\nDo not invent facts beyond the provided chunk summaries.",
+                    "You write grounded markdown reports over already-summarized source documents.\nAnswer in {}.\nUse markdown only.\nEvery important conclusion must cite one or more refs like [s12-i845].\nDo not invent facts beyond the provided chunk summaries.",
                     params.output_language
                 ),
             },
@@ -709,7 +709,7 @@ async fn run_report_pipeline(
     .map_err(ReportRunError::Failed)?;
 
     RunEvent::new(run_id, "started", "load_items")
-        .message("Loading synced messages from local storage...".to_string())
+        .message("Loading synced source documents from local storage...".to_string())
         .emit(&handle);
 
     let corpus = load_corpus_messages(&pool, &input.source_ids, input.period_from, input.period_to)
@@ -717,7 +717,8 @@ async fn run_report_pipeline(
         .map_err(ReportRunError::Failed)?;
     if corpus.is_empty() {
         return Err(ReportRunError::Failed(
-            "No synced messages were found for the selected analysis scope and period".to_string(),
+            "No synced source documents were found for the selected analysis scope and period"
+                .to_string(),
         ));
     }
     if handle
@@ -730,7 +731,7 @@ async fn run_report_pipeline(
 
     RunEvent::new(run_id, "progress", "chunking")
         .message(format!(
-            "Loaded {} messages. Preparing chunks...",
+            "Loaded {} source documents. Preparing chunks...",
             corpus.len()
         ))
         .emit(&handle);
@@ -1074,7 +1075,7 @@ mod tests {
     };
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
 
-    const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-m2"]}"#;
+    const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-i2"]}"#;
 
     fn sample_chunk_summary(label: &str) -> ChunkSummary {
         ChunkSummary {
@@ -1106,7 +1107,7 @@ mod tests {
             published_at: 1_700_000_000,
             author: Some("analyst".to_string()),
             content: "Important update from the source".to_string(),
-            r#ref: "s2-m42".to_string(),
+            r#ref: "s2-i1".to_string(),
         }
     }
 
@@ -1199,7 +1200,11 @@ mod tests {
 
         assert!(request.request_id.starts_with("analysis-map-55-2-"));
         assert_eq!(request.profile_id.as_deref(), Some("default"));
+        assert!(request.messages[0]
+            .content
+            .contains("source document excerpts"));
         assert!(request.messages[1].content.contains("Chunk 2 of 4."));
+        assert!(request.messages[1].content.contains("Documents:"));
     }
 
     #[test]
@@ -1221,6 +1226,7 @@ mod tests {
         assert!(request.request_id.starts_with("analysis-reduce-77-"));
         assert_eq!(request.profile_id.as_deref(), Some("profile-a"));
         assert_eq!(request.model_override.as_deref(), Some("model-x"));
+        assert!(request.messages[0].content.contains("[s12-i845]"));
         assert!(request.messages[1].content.contains("Chunk 1 summary"));
         assert!(request.messages[1].content.contains("Chunk 2 summary"));
     }

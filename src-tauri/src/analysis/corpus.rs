@@ -99,7 +99,7 @@ pub(crate) async fn load_corpus_messages(
                 external_id: row.external_id.clone(),
                 published_at: row.published_at,
                 author: row.author,
-                r#ref: format!("s{}-m{}", row.source_id, row.external_id),
+                r#ref: format!("s{}-i{}", row.source_id, row.id),
                 content,
             })
         })
@@ -162,9 +162,13 @@ pub(crate) async fn load_run_corpus_messages(
 mod tests {
     use sqlx::SqlitePool;
 
-    use super::{load_run_corpus_messages, load_run_snapshot_messages, resolve_run_source_ids};
+    use super::{
+        load_corpus_messages, load_run_corpus_messages, load_run_snapshot_messages,
+        resolve_run_source_ids,
+    };
     use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
+    use crate::compression::compress_text;
 
     fn sample_corpus() -> Vec<CorpusMessage> {
         vec![
@@ -473,5 +477,50 @@ mod tests {
         assert_eq!(corpus.len(), 2);
         assert_eq!(corpus[0].external_id, "100");
         assert_eq!(corpus[1].r#ref, "s4-m101");
+    }
+
+    #[tokio::test]
+    async fn live_corpus_refs_use_local_item_ids() {
+        let pool = snapshot_pool().await;
+        let first_content = compress_text("First live document").expect("compress first");
+        let second_content = compress_text("Second live document").expect("compress second");
+        sqlx::query(
+            r#"
+            INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(11_i64)
+        .bind(2_i64)
+        .bind("100")
+        .bind("Alice")
+        .bind(1_710_000_000_i64)
+        .bind(first_content)
+        .execute(&pool)
+        .await
+        .expect("insert first item");
+        sqlx::query(
+            r#"
+            INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(12_i64)
+        .bind(4_i64)
+        .bind("101")
+        .bind(Option::<String>::None)
+        .bind(1_710_000_100_i64)
+        .bind(second_content)
+        .execute(&pool)
+        .await
+        .expect("insert second item");
+
+        let corpus = load_corpus_messages(&pool, &[2, 4], 1_700_000_000_i64, 1_800_000_000_i64)
+            .await
+            .expect("load live corpus");
+
+        assert_eq!(corpus.len(), 2);
+        assert_eq!(corpus[0].r#ref, "s2-i11");
+        assert_eq!(corpus[1].r#ref, "s4-i12");
     }
 }

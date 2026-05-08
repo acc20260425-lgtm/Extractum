@@ -1349,7 +1349,7 @@ git commit -m "refactor(sources): dispatch sync by provider"
 - Modify: `src-tauri/src/analysis/chat.rs`
 - Modify: `src-tauri/src/analysis/mod.rs`
 
-- [ ] **Step 1: Write failing ref tests**
+- [x] **Step 1: Write failing ref tests**
 
 In `src-tauri/src/analysis/trace.rs`, update the test import:
 
@@ -1402,7 +1402,7 @@ Add an assertion in `build_reduce_request_keeps_run_scoped_request_and_profile`:
 assert!(request.messages[0].content.contains("[s12-i845]"));
 ```
 
-- [ ] **Step 2: Run analysis tests to verify failure**
+- [x] **Step 2: Run analysis tests to verify failure**
 
 Run:
 
@@ -1413,7 +1413,7 @@ cargo test analysis::
 
 Expected failure includes `normalize_ref("[s12-i845]")` returning `None` and prompt wording assertions failing.
 
-- [ ] **Step 3: Change live corpus refs**
+- [x] **Step 3: Change live corpus refs**
 
 In `src-tauri/src/analysis/corpus.rs`, replace:
 
@@ -1427,7 +1427,7 @@ with:
 r#ref: format!("s{}-i{}", row.source_id, row.id),
 ```
 
-- [ ] **Step 4: Accept new refs and preserve legacy refs**
+- [x] **Step 4: Accept new refs and preserve legacy refs**
 
 In `src-tauri/src/analysis/trace.rs`, replace `normalize_ref` with:
 
@@ -1457,7 +1457,7 @@ pub(crate) fn normalize_ref(candidate: &str) -> Option<String> {
 }
 ```
 
-- [ ] **Step 5: Update report prompt wording**
+- [x] **Step 5: Update report prompt wording**
 
 In `src-tauri/src/analysis/report.rs`, replace the map system prompt content with:
 
@@ -1495,7 +1495,7 @@ and:
 "Loaded {} source documents. Preparing chunks..."
 ```
 
-- [ ] **Step 6: Update chat and default template wording**
+- [x] **Step 6: Update chat and default template wording**
 
 In `src-tauri/src/analysis/chat.rs`, replace the system prompt in `build_chat_request` with:
 
@@ -1524,7 +1524,7 @@ Always keep the report concise, readable, and useful for later follow-up analysi
 }
 ```
 
-- [ ] **Step 7: Run analysis tests**
+- [x] **Step 7: Run analysis tests**
 
 Run:
 
@@ -1539,7 +1539,7 @@ Expected output:
 test result: ok.
 ```
 
-- [ ] **Step 8: Commit Task 6**
+- [x] **Step 8: Commit Task 6**
 
 ```powershell
 git add src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/trace.rs src-tauri/src/analysis/report.rs src-tauri/src/analysis/chat.rs src-tauri/src/analysis/mod.rs
