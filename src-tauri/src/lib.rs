@@ -16,6 +16,7 @@ use accounts::{
 };
 
 mod telegram;
+mod telegram_session_store;
 use telegram::{
     restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout,
     tg_send_code, tg_sign_in, TelegramState,
