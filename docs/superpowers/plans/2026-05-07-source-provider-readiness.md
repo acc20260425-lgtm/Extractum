@@ -1554,7 +1554,7 @@ git commit -m "refactor(analysis): use provider-neutral refs"
 - No required code changes.
 - Modify docs only if implementation discovers a durable caveat that should be recorded in `docs/code-review-results-2026-05-03.md`.
 
-- [ ] **Step 1: Run focused frontend tests**
+- [x] **Step 1: Run focused frontend tests**
 
 Run:
 
@@ -1568,7 +1568,7 @@ Expected output:
 Test Files  4 passed
 ```
 
-- [ ] **Step 2: Run frontend type and Svelte check**
+- [x] **Step 2: Run frontend type and Svelte check**
 
 Run:
 
@@ -1582,7 +1582,7 @@ Expected output:
 svelte-check found 0 errors and 0 warnings
 ```
 
-- [ ] **Step 3: Run focused backend tests**
+- [x] **Step 3: Run focused backend tests**
 
 Run:
 
@@ -1605,7 +1605,7 @@ Expected output for each test command:
 test result: ok.
 ```
 
-- [ ] **Step 4: Check route raw Tauri boundaries**
+- [x] **Step 4: Check route raw Tauri boundaries**
 
 Run from the repository root:
 
@@ -1620,7 +1620,7 @@ Expected result for each command:
 no output, exit code 1
 ```
 
-- [ ] **Step 5: Check whitespace**
+- [x] **Step 5: Check whitespace**
 
 Run:
 
@@ -1636,7 +1636,7 @@ exit code 0
 
 LF/CRLF warnings are acceptable if the command exits with 0.
 
-- [ ] **Step 6: Final commit if any verification-only docs changed**
+- [x] **Step 6: Final commit if any verification-only docs changed**
 
 If Task 7 changed docs, commit them:
 
@@ -1647,7 +1647,7 @@ git commit -m "docs(sources): record provider readiness follow-up"
 
 If Task 7 did not change files, do not create an empty commit.
 
-- [ ] **Step 7: Final status check**
+- [x] **Step 7: Final status check**
 
 Run:
 
