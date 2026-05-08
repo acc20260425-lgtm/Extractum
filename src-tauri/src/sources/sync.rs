@@ -43,6 +43,21 @@ struct IngestOutcome {
     max_message_id: i64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SyncProvider {
+    Telegram,
+}
+
+fn sync_provider_for_source(source: &SourceSyncTarget) -> AppResult<SyncProvider> {
+    match source.source_type.as_str() {
+        crate::sources::types::TELEGRAM_SOURCE_TYPE => Ok(SyncProvider::Telegram),
+        other => Err(AppError::validation(format!(
+            "Source {} with source_type '{}' is not syncable",
+            source.id, other
+        ))),
+    }
+}
+
 async fn determine_sync_policy(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source: &SourceSyncTarget,
@@ -206,6 +221,19 @@ pub async fn sync_source(
     let pool = get_pool(&handle).await?;
     let source = load_source(&pool, source_id).await?;
 
+    let provider = sync_provider_for_source(&source)?;
+    match provider {
+        SyncProvider::Telegram => sync_telegram_source(handle, state, source).await,
+    }
+}
+
+async fn sync_telegram_source(
+    handle: AppHandle,
+    state: tauri::State<'_, TelegramState>,
+    source: SourceSyncTarget,
+) -> AppResult<SyncResult> {
+    let pool = get_pool(&handle).await?;
+    let source_id = source.id;
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
@@ -237,7 +265,7 @@ pub async fn sync_source(
 
 #[cfg(test)]
 mod tests {
-    use super::{determine_sync_policy, finalize_sync};
+    use super::{determine_sync_policy, finalize_sync, sync_provider_for_source, SyncProvider};
     use crate::compression::{compress_json_bytes, decompress_bytes};
     use crate::sources::peer_resolution::decode_source_metadata;
     use crate::sources::store::load_source;
@@ -285,6 +313,48 @@ mod tests {
         assert!(incremental.initial_sync_settings.is_none());
         assert!(incremental.initial_sync_policy_applied.is_none());
         assert_eq!(incremental.initial_sync_cutoff, None);
+    }
+
+    #[test]
+    fn sync_provider_accepts_telegram_sources() {
+        let source = SourceSyncTarget {
+            id: 1,
+            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+            source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
+            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
+            account_id: Some(1),
+            external_id: "12345".to_string(),
+            title: Some("Example".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+
+        assert_eq!(
+            sync_provider_for_source(&source).unwrap(),
+            SyncProvider::Telegram
+        );
+    }
+
+    #[test]
+    fn sync_provider_rejects_manual_youtube_video_sources() {
+        let source = SourceSyncTarget {
+            id: 7,
+            source_type: "youtube".to_string(),
+            source_subtype: Some("video".to_string()),
+            telegram_source_kind: "".to_string(),
+            account_id: None,
+            external_id: "dQw4w9WgXcQ".to_string(),
+            title: Some("Demo video".to_string()),
+            metadata_zstd: None,
+            last_sync_state: None,
+        };
+
+        let error = sync_provider_for_source(&source).expect_err("manual video is not syncable");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("Source 7"));
+        assert!(error.message.contains("youtube"));
+        assert!(error.message.contains("not syncable"));
     }
 
     #[tokio::test]

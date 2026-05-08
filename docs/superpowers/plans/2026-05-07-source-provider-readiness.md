@@ -1180,7 +1180,7 @@ git commit -m "refactor(sources): expose provider subtype"
 - Modify: `src-tauri/src/sources/sync.rs`
 - Modify: `src-tauri/src/sources/types.rs` if Task 4 leaves a compile gap around `SourceSyncTarget`
 
-- [ ] **Step 1: Add dispatcher tests first**
+- [x] **Step 1: Add dispatcher tests first**
 
 In `src-tauri/src/sources/sync.rs`, extend the test module import:
 
@@ -1231,7 +1231,7 @@ fn sync_provider_rejects_manual_youtube_video_sources() {
 }
 ```
 
-- [ ] **Step 2: Run sync tests to verify failure**
+- [x] **Step 2: Run sync tests to verify failure**
 
 Run:
 
@@ -1242,7 +1242,7 @@ cargo test sources::sync
 
 Expected failure includes missing `SyncProvider` or `sync_provider_for_source`.
 
-- [ ] **Step 3: Implement pure dispatch decision**
+- [x] **Step 3: Implement pure dispatch decision**
 
 In `src-tauri/src/sources/sync.rs`, add near the local structs:
 
@@ -1263,7 +1263,7 @@ fn sync_provider_for_source(source: &SourceSyncTarget) -> AppResult<SyncProvider
 }
 ```
 
-- [ ] **Step 4: Use dispatch in `sync_source`**
+- [x] **Step 4: Use dispatch in `sync_source`**
 
 In `sync_source`, after loading `source`, add:
 
@@ -1316,7 +1316,7 @@ async fn sync_telegram_source(
 
 Keep the ingest lock acquisition in `sync_source`, before the dispatch, so delete/sync coordination remains unchanged.
 
-- [ ] **Step 5: Run sync tests**
+- [x] **Step 5: Run sync tests**
 
 Run:
 
@@ -1331,7 +1331,7 @@ Expected output:
 test result: ok.
 ```
 
-- [ ] **Step 6: Commit Task 5**
+- [x] **Step 6: Commit Task 5**
 
 ```powershell
 git add src-tauri/src/sources/sync.rs src-tauri/src/sources/types.rs
