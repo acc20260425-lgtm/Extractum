@@ -98,6 +98,10 @@ pub(crate) struct AnalysisRunPreflightLimits {
     pub max_messages_per_run: usize,
     pub max_chunks_per_run: usize,
     pub max_estimated_input_chars_per_run: usize,
+    /// Reserved for future retry-aware budgeting. Currently equals
+    /// `max_chunks_per_run` because each chunk creates exactly one
+    /// background request. Not checked in `preflight_limit_error` until
+    /// the values diverge.
     pub max_background_requests_per_run: usize,
 }
 
@@ -127,6 +131,10 @@ pub(crate) fn estimate_message_input_chars(
     author: Option<&str>,
 ) -> usize {
     content.len() + r#ref.len() + author.unwrap_or("").len() + 64
+}
+
+pub(crate) fn live_corpus_ref(source_id: i64, item_id: i64) -> String {
+    format!("s{source_id}-i{item_id}")
 }
 
 pub(crate) fn estimate_preflight_chunk_count(message_sizes: &[usize], max_chars: usize) -> usize {
@@ -175,7 +183,7 @@ git commit -m "feat(analysis): add report preflight policy types"
 **Files:**
 - Modify: `src-tauri/src/analysis/corpus.rs`
 
-- [ ] **Step 1: Add failing tests for preflight query behavior**
+- [ ] **Step 1: Add failing tests for preflight query behavior and ref consistency**
 
 Add tests in `src-tauri/src/analysis/corpus.rs` using the existing `snapshot_pool()` helper:
 
@@ -230,6 +238,31 @@ async fn preflight_counts_eligible_text_messages_for_sources() {
 }
 
 #[tokio::test]
+async fn preflight_ref_format_matches_corpus_loader_ref_format() {
+    let pool = snapshot_pool().await;
+    let content = compress_text("Test message").expect("compress");
+    sqlx::query(
+        "INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+         VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(11_i64)
+    .bind(2_i64)
+    .bind("100")
+    .bind(Option::<String>::None)
+    .bind(1_710_000_000_i64)
+    .bind(content)
+    .execute(&pool)
+    .await
+    .expect("insert item");
+
+    let corpus = load_corpus_messages(&pool, &[2], 1_700_000_000_i64, 1_800_000_000_i64)
+        .await
+        .expect("load corpus");
+
+    assert_eq!(corpus[0].r#ref, live_corpus_ref(corpus[0].source_id, corpus[0].item_id));
+}
+
+#[tokio::test]
 async fn preflight_ignores_media_only_items_without_text_content() {
     let pool = snapshot_pool().await;
     sqlx::query(
@@ -267,14 +300,20 @@ async fn preflight_ignores_media_only_items_without_text_content() {
 Run:
 
 ```powershell
-cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::preflight_ignores_media_only_items_without_text_content
+cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::preflight_ref_format_matches_corpus_loader_ref_format analysis::corpus::tests::preflight_ignores_media_only_items_without_text_content
 ```
 
-Expected before implementation: compile failure for missing `preflight_analysis_run`.
+Expected before implementation: compile failure for missing `preflight_analysis_run` or `live_corpus_ref`.
 
 - [ ] **Step 3: Implement preflight query**
 
-Add to `src-tauri/src/analysis/corpus.rs` near `load_corpus_messages`:
+First update `load_corpus_messages` to use the shared ref helper:
+
+```rust
+r#ref: live_corpus_ref(row.source_id, row.id),
+```
+
+Then add to `src-tauri/src/analysis/corpus.rs` near `load_corpus_messages`:
 
 ```rust
 pub(crate) async fn preflight_analysis_run(
@@ -334,7 +373,7 @@ pub(crate) async fn preflight_analysis_run(
                 .as_deref()
                 .ok_or_else(|| format!("Item {} is missing content", row.id))?,
         )?;
-        let r#ref = format!("s{}-i{}", row.source_id, row.id);
+        let r#ref = live_corpus_ref(row.source_id, row.id);
         let size = estimate_message_input_chars(&content, &r#ref, row.author.as_deref());
         estimated_input_chars += size;
         message_sizes.push(size);
@@ -357,7 +396,7 @@ pub(crate) async fn preflight_analysis_run(
 Run:
 
 ```powershell
-cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::preflight_ignores_media_only_items_without_text_content
+cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::preflight_ref_format_matches_corpus_loader_ref_format analysis::corpus::tests::preflight_ignores_media_only_items_without_text_content
 ```
 
 Expected: selected tests pass.
@@ -438,15 +477,15 @@ pub(crate) fn preflight_limit_error(preflight: &AnalysisRunPreflight) -> Option<
     let exceeds_chunks = preflight.estimated_chunks > preflight.limits.max_chunks_per_run;
     let exceeds_chars =
         preflight.estimated_input_chars > preflight.limits.max_estimated_input_chars_per_run;
-    let exceeds_background =
-        preflight.estimated_chunks > preflight.limits.max_background_requests_per_run;
 
-    if !(exceeds_messages || exceeds_chunks || exceeds_chars || exceeds_background) {
+    if !(exceeds_messages || exceeds_chunks || exceeds_chars) {
         return None;
     }
 
     Some(format!(
-        "Analysis scope is too large: {} documents, {} estimated chunks, {} estimated input characters. Narrow the period or choose a smaller source scope.",
+        "Analysis scope is too large: {} documents, {} estimated chunks, \
+         {} estimated input characters. \
+         Narrow the period or choose a smaller source scope.",
         preflight.message_count, preflight.estimated_chunks, preflight.estimated_input_chars
     ))
 }

@@ -57,6 +57,8 @@ message.content.len()
 
 The estimated chunk count should use `ANALYSIS_CHUNK_TARGET_CHARS` and the same boundary behavior as `chunk_messages`, but without cloning or retaining the full corpus longer than necessary.
 
+The first implementation still scans eligible rows and decompresses message text to estimate input characters. This is a known limitation: it avoids creating a run row and spawning chunk workers for oversized work, but it does not yet avoid all corpus-read cost. A future optimization can store text length metadata on `items` so preflight can use `COUNT` and `SUM` queries without decompressing every eligible message.
+
 If no eligible text messages are found, the existing user-facing validation should remain:
 
 ```text
@@ -105,6 +107,8 @@ The first implementation should not add settings UI. Limits should be constants 
 
 Preflight database errors should map to existing internal/database error behavior. Limit violations are user-correctable and should map to `AppError::validation`.
 
+If preflight returns a database or decompression error, `start_analysis_report` should fail before inserting an `analysis_runs` row. The user should not see a queued run that can never start.
+
 Cancellation behavior does not change. If a run is cancelled after preflight passes, run-scoped cancellation still cancels queued or running LLM requests and marks the run cancelled.
 
 ## Testing
@@ -138,7 +142,7 @@ The docs should state that LLM scheduler concurrency is intentionally `2` per `(
 
 - Settings UI for custom limits.
 - Provider-specific limit presets.
-- Full corpus streaming or paged chunk construction.
+- Full corpus streaming, paged chunk construction, or preflight scanning without decompression.
 - Tokenizer-accurate token counts.
 - Confirmation modal for large but allowed runs.
 - Retry-aware background request budgeting.
