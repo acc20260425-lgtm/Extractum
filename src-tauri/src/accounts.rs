@@ -84,7 +84,10 @@ pub(crate) async fn create_account_in_pool(
     .map_err(AppError::database)?;
 
     let secret_key = telegram_account_api_hash_secret(account.id);
-    if let Err(error) = secret_store.set_secret(secret_key.clone(), api_hash.trim()).await {
+    if let Err(error) = secret_store
+        .set_secret(secret_key.clone(), api_hash.trim())
+        .await
+    {
         let _ = tx.rollback().await;
         return Err(error);
     }
@@ -225,7 +228,10 @@ mod tests {
         .expect("create account");
 
         assert_eq!(account.label, "Personal");
-        assert_eq!(stored_api_hash(&pool, account.id).await, Some("".to_string()));
+        assert_eq!(
+            stored_api_hash(&pool, account.id).await,
+            Some("".to_string())
+        );
         assert_eq!(
             secret_store
                 .get_secret(telegram_account_api_hash_secret(account.id))

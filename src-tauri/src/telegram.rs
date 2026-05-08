@@ -127,8 +127,8 @@ async fn save_session(
         dc_options,
         updates_state,
     };
-    let json = serde_json::to_string(&saved)
-        .map_err(|error| AppError::internal(error.to_string()))?;
+    let json =
+        serde_json::to_string(&saved).map_err(|error| AppError::internal(error.to_string()))?;
     let path = session_path(handle, account_id)?;
     fs::write(path, json).map_err(|error| AppError::internal(error.to_string()))
 }
@@ -156,12 +156,12 @@ async fn get_account_credentials_from_pool(
     account_id: i64,
 ) -> AppResult<AccountCredentials> {
     let credentials: AccountCredentials =
-    sqlx::query_as("SELECT id, api_id, api_hash FROM accounts WHERE id = ?")
-        .bind(account_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(AppError::database)?
-        .ok_or_else(|| AppError::not_found(format!("Account {account_id} not found")))?;
+        sqlx::query_as("SELECT id, api_id, api_hash FROM accounts WHERE id = ?")
+            .bind(account_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::database)?
+            .ok_or_else(|| AppError::not_found(format!("Account {account_id} not found")))?;
     resolve_account_credentials(pool, secret_store, credentials).await
 }
 
@@ -623,8 +623,8 @@ mod tests {
 
     #[test]
     fn telegram_api_id_out_of_range_returns_typed_validation_error() {
-        let error = telegram_api_id(i64::from(i32::MAX) + 1)
-            .expect_err("reject out-of-range api id");
+        let error =
+            telegram_api_id(i64::from(i32::MAX) + 1).expect_err("reject out-of-range api id");
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Telegram API ID is out of range");

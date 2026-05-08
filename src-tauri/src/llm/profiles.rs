@@ -201,9 +201,7 @@ pub(super) async fn save_profile_to_pool(
     write_setting(pool, &profile_model_key(&profile_id), default_model).await?;
     if let Some(api_key) = api_key.map(str::trim).filter(|value| !value.is_empty()) {
         let key = llm_profile_api_key_secret(&profile_id);
-        secret_store
-            .set_secret(key.clone(), api_key)
-            .await?;
+        secret_store.set_secret(key.clone(), api_key).await?;
         delete_setting(pool, &key).await?;
     }
     write_setting(pool, &profile_base_url_key(&profile_id), base_url).await?;

@@ -16,6 +16,8 @@ async fn patch_migrations(db_path: &Path) {
 
     let url = format!("sqlite:{}", db_path.to_string_lossy());
     if let Ok(pool) = SqlitePool::connect(&url).await {
+        repair_line_ending_migration_checksums(&pool).await;
+
         let expected_checksum =
             Sha384::digest(include_str!("../migrations/2.sql").as_bytes()).to_vec();
         let has_v3 = sqlx::query_scalar::<_, i64>(
@@ -181,7 +183,8 @@ pub fn build_migrations() -> Vec<Migration> {
 
 #[cfg(test)]
 mod tests {
-    use super::build_migrations;
+    use super::{build_migrations, checksum_matches_line_ending_variant};
+    use sha2::{Digest, Sha384};
 
     #[test]
     fn includes_telegram_item_context_migration() {
@@ -244,5 +247,76 @@ mod tests {
                 "missing migration fragment {fragment}"
             );
         }
+    }
+
+    #[test]
+    fn checksum_match_accepts_line_ending_only_differences() {
+        let lf_sql = "ALTER TABLE sources ADD COLUMN source_subtype TEXT;\n\n";
+        let crlf_sql = lf_sql.replace('\n', "\r\n");
+        let applied_checksum = Sha384::digest(lf_sql.as_bytes()).to_vec();
+
+        assert!(checksum_matches_line_ending_variant(
+            &applied_checksum,
+            crlf_sql.as_str()
+        ));
+    }
+}
+
+fn sha384_bytes(value: &str) -> Vec<u8> {
+    Sha384::digest(value.as_bytes()).to_vec()
+}
+
+fn normalize_sql_lf(sql: &str) -> String {
+    sql.replace("\r\n", "\n")
+}
+
+fn normalize_sql_crlf(sql: &str) -> String {
+    normalize_sql_lf(sql).replace('\n', "\r\n")
+}
+
+fn checksum_matches_line_ending_variant(applied_checksum: &[u8], sql: &str) -> bool {
+    let current_checksum = sha384_bytes(sql);
+    if applied_checksum == current_checksum {
+        return true;
+    }
+
+    applied_checksum == sha384_bytes(&normalize_sql_lf(sql))
+        || applied_checksum == sha384_bytes(&normalize_sql_crlf(sql))
+}
+
+async fn repair_line_ending_migration_checksums(pool: &sqlx::SqlitePool) {
+    let migrations = build_migrations();
+
+    for migration in migrations {
+        let current_checksum = sha384_bytes(migration.sql);
+        let applied_checksum = sqlx::query_scalar::<_, Vec<u8>>(
+            "SELECT checksum FROM _sqlx_migrations WHERE version = ?",
+        )
+        .bind(migration.version)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten();
+
+        let Some(applied_checksum) = applied_checksum else {
+            continue;
+        };
+
+        if applied_checksum == current_checksum
+            || !checksum_matches_line_ending_variant(&applied_checksum, migration.sql)
+        {
+            continue;
+        }
+
+        let _ = sqlx::query(
+            "UPDATE _sqlx_migrations
+             SET description = ?, success = 1, checksum = ?
+             WHERE version = ?",
+        )
+        .bind(migration.description)
+        .bind(&current_checksum)
+        .bind(migration.version)
+        .execute(pool)
+        .await;
     }
 }
