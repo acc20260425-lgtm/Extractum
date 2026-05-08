@@ -1,204 +1,342 @@
-# Extractum Session Context
+# Session Context - 2026-05-08
 
-> Last updated: 2026-05-08
-> Purpose: restore the current Codex session context after compaction, restart, or handoff.
+This file captures enough context to resume the current Extractum session without relying on chat history.
 
 ## Environment
 
-- Repository: `G:\Develop\Extractum`
-- Branch: `main`
+- Workspace: `G:\Develop\Extractum`
 - Shell: PowerShell
-- User language: Russian. Prefer Russian for chat responses unless the user switches language.
-- Current user intent: preserve the current session context in this file and provide a commit message.
-- Current IDE active file: `docs/superpowers/specs/2026-05-08-secure-secret-storage-design.md`
-- Open tabs visible in IDE:
-  - `docs/superpowers/specs/2026-05-08-secure-secret-storage-design.md`
-  - `docs/superpowers/plans/2026-05-08-secure-secret-storage.md`
-  - `docs/superpowers/plans/2026-05-07-source-provider-readiness.md`
+- Current user timezone during session: `Europe/Minsk`
+- User language preference in this session: Russian
+- Important developer rules active in the session:
+  - use `rg` for search;
+  - use `apply_patch` for manual file edits;
+  - do not revert user changes;
+  - git index operations may require escalation because `.git/index.lock` can be blocked by sandbox permissions;
+  - when using Superpowers skills, follow their gates exactly.
 
-Note: `docs/superpowers/plans/2026-05-07-source-provider-readiness.md` was deleted earlier as a completed temporary plan artifact. The IDE tab may still be stale.
+## Git State At Capture Time
 
-## Active Instructions And Working Style
-
-- Use relevant Superpowers skills before acting. At minimum, start turns with `superpowers:using-superpowers`.
-- For implementation or bugfix work, use the relevant Superpowers workflow:
-  - `superpowers:test-driven-development` for code changes.
-  - `superpowers:systematic-debugging` for bugs or failing behavior.
-  - `superpowers:executing-plans` or `superpowers:subagent-driven-development` when executing a written plan.
-  - `superpowers:verification-before-completion` before claiming success.
-- Use `rg` or `rg --files` for search.
-- Use `apply_patch` for manual file edits.
-- Do not revert user changes.
-- Git commands that write the index can fail under sandbox permissions. If a necessary `git add` or `git commit` fails due to `.git/index.lock` or permissions, rerun the same command with escalation and a concise Russian justification.
-
-## Recent Completed Work
-
-Source provider readiness has been completed and merged into `main`.
-
-Important commits now on `main`:
-
-- `b026dc4 docs(security): plan secure secret storage`
-- `fddd817 docs: refresh provider readiness state`
-- `3fd0e63 fix(db): register source subtype migration`
-- `b8728c1 docs(sources): complete provider readiness verification`
-- `eca5676 refactor(analysis): use provider-neutral refs`
-- `2371fd0 refactor(sources): dispatch sync by provider`
-- `2e43070 docs(session): refresh source provider readiness context`
-- `1a4dcb7 refactor(sources): expose provider subtype`
-- `677d561 refactor(analysis): gate source UI by capabilities`
-
-Previously fixed bug:
-
-- User saw `Error loading workspace sources: error returned from database: (code: 1) no such column: source_subtype`.
-- Root cause: `src-tauri/migrations/15.sql` existed but migration v15 was not registered in `src-tauri/src/migrations.rs`.
-- Fix committed as `3fd0e63`.
-
-Provider-readiness verification that passed after merge:
-
-- `npm.cmd test -- src/lib/source-capabilities.test.ts src/lib/analysis-source-state.test.ts src/lib/api/sources.test.ts src/lib/analysis-state.test.ts`
-- `npm.cmd run check`
-- `cargo test sources::`
-- `cargo test analysis::`
-- `cargo test migrations::`
-- `git diff --check`
-
-## Current Working Tree State
-
-After secure-storage planning was saved, the plan/spec files were committed as:
+Latest commits:
 
 ```text
+4b57262 docs(security): design encrypted telegram sessions
+d14774a fix(db): tolerate migration line ending checksums
+d22aaf1 feat(security): store secrets in OS keyring
+cd9ce01 docs(session): capture secure storage planning context
 b026dc4 docs(security): plan secure secret storage
+fddd817 docs: refresh provider readiness state
+3fd0e63 fix(db): register source subtype migration
+b8728c1 docs(sources): complete provider readiness verification
 ```
 
-Current `git status --short --branch --untracked-files=all` before staging this file shows:
+Working tree at the time of capture:
 
 ```text
-## main
-?? docs/session-context-2026-05-03.md
+?? docs/superpowers/plans/2026-05-08-telegram-session-storage.md
 ```
 
-That means the only current working-tree change is this recreated handoff file. No implementation code has been changed for secure storage yet.
+This file is being overwritten after that status was collected, so after saving it the working tree should also include `docs/session-context-2026-05-03.md`.
 
-## Secure Secret Storage Planning
+## Completed Work In This Session
 
-User asked to discuss and plan Secure Secret Storage. The planning outcome is saved in:
+Secure storage implementation was completed and committed before this context capture:
 
-- `docs/superpowers/specs/2026-05-08-secure-secret-storage-design.md`
-- `docs/superpowers/plans/2026-05-08-secure-secret-storage.md`
+- `d22aaf1 feat(security): store secrets in OS keyring`
+- `d14774a fix(db): tolerate migration line ending checksums`
+- `4b57262 docs(security): design encrypted telegram sessions`
 
-Locked decisions:
+Implemented secure storage behavior:
 
-- Scope: LLM API keys plus Telegram `api_hash`.
-- Out of scope for this implementation: Telegram session JSON migration/encryption.
-- Backend: Rust `keyring` crate using OS credential storage.
+- `src-tauri/src/secret_store.rs` was added.
+- Backend uses Rust `keyring` through `SecretStoreState`.
 - Service name: `org.ai.extractum`.
-- Secret IDs:
+- LLM API keys moved out of `app_settings`.
+- Telegram account `api_hash` values moved out of SQLite.
+- Stable secret IDs currently implemented:
   - `llm.profile.<profile_id>.api_key`
   - `telegram.account.<account_id>.api_hash`
-- Migration policy:
-  - lazy automatic migration from old plaintext SQLite values;
+- Legacy plaintext values migrate lazily:
   - write to keyring first;
-  - only after successful keyring write, delete or blank plaintext SQLite value;
-  - if keyring fails, fail closed and leave legacy plaintext untouched.
-- LLM UI semantics:
-  - frontend no longer receives saved key values;
-  - `LlmProfile` exposes `api_key_configured: boolean`;
-  - empty API key field on save preserves the existing key;
-  - typing a new key replaces it;
-  - add `Clear API key` only for LLM profiles.
-- Telegram semantics:
-  - `create_account` writes `api_hash` to keyring and stores `accounts.api_hash = ""`;
-  - restore/init/sign-in read `api_hash` through backend secure storage;
-  - deleting an account removes its Telegram keyring secret.
-- Documentation updates are included in the same implementation task.
+  - blank/delete plaintext only after secure write succeeds;
+  - fail closed and leave legacy plaintext untouched if secure storage fails.
+- Frontend LLM profile records expose `api_key_configured`, not the saved key.
+- LLM settings password input stays empty on load.
+- `clear_llm_profile_api_key` command exists.
+- Account creation writes `api_hash` to keyring and stores `accounts.api_hash = ""`.
+- Account deletion removes the Telegram `api_hash` secret.
 
-Planned dependency:
+Migration checksum fix:
 
-```toml
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
-```
+- The Tauri SQL plugin panicked because migration 15 had been modified by line-ending changes.
+- Fix commit `d14774a` added tolerance for CRLF/LF-only migration checksum differences.
+- `.gitattributes` now pins SQL migrations to LF.
+- `cargo run` no longer panicked on migration 15 after the fix.
 
-Planned new backend module:
-
-- `src-tauri/src/secret_store.rs`
-
-Planned backend trait shape:
-
-```rust
-pub(crate) trait SecretStore: Send + Sync {
-    fn get_secret(&self, key: &str) -> AppResult<Option<String>>;
-    fn set_secret(&self, key: &str, value: &str) -> AppResult<()>;
-    fn delete_secret(&self, key: &str) -> AppResult<()>;
-}
-```
-
-Important implementation note:
-
-- `keyring` operations are synchronous, so async command paths should call them through `tauri::async_runtime::spawn_blocking`.
-- Rust tests must use a mock/in-memory secret store and must not depend on real OS credential storage.
-
-## Planned Secure Storage Files To Touch
-
-Likely implementation files:
-
-- `src-tauri/Cargo.toml`
-- `src-tauri/src/lib.rs`
-- `src-tauri/src/secret_store.rs`
-- `src-tauri/src/llm/types.rs`
-- `src-tauri/src/llm/profiles.rs`
-- `src-tauri/src/llm/mod.rs`
-- `src-tauri/src/accounts.rs`
-- `src-tauri/src/telegram.rs`
-- `src/lib/types/llm.ts`
-- `src/lib/api/llm.ts`
-- `src/lib/api/llm.test.ts`
-- `src/routes/settings/+page.svelte`
-- `README.md`
-- `docs/project.md`
-- `docs/database-schema.md`
-- `docs/design-document.md`
-- `docs/architecture-deep-dive.md`
-- `docs/backlog.md`
-
-Implementation should follow the saved plan rather than this context file if details differ.
-
-## Planned Verification For Secure Storage Implementation
-
-Use these commands after implementation:
+Verification already completed earlier for secure storage:
 
 ```powershell
-npm.cmd test
-npm.cmd run check
+cargo test secret_store::
 cargo test llm::
 cargo test accounts::
 cargo test telegram::
 cargo test migrations::
+npm.cmd test
+npm.cmd run check
 git diff --check
+cargo run
 ```
 
-For the current documentation-only planning state, previous verification already run:
+## Current Open Security Tail
 
-- placeholder scan on the secure storage plan/spec found no unresolved placeholders;
-- trailing-whitespace scan on the secure storage plan/spec found no matches;
-- `git diff --check` returned exit code 0.
+The remaining security item is Telegram session JSON storage.
 
-## Suggested Commit Messages
+Current code state before implementing the new plan:
 
-The current working tree contains only this session context file, so use:
+- `src-tauri/src/telegram.rs` still owns session persistence directly.
+- `SavedSession` contains:
+  - `home_dc`
+  - `dc_options`
+  - `updates_state`
+- Current file path helper stores sessions in Tauri app data:
+  - `telegram_<account_id>.session.json`
+- Current `load_session` reads plaintext JSON and falls back to `MemorySession::default()` on read/parse failure.
+- Current `save_session` serializes plaintext `SavedSession` JSON.
+- `clear_account_runtime` deletes the plaintext session file directly.
+
+Relevant current functions in `src-tauri/src/telegram.rs`:
+
+- `session_path(handle, account_id)`
+- `session_exists(handle, account_id)`
+- `load_session(handle, account_id) -> Arc<MemorySession>`
+- `save_session(handle, account_id, session)`
+- `clear_account_runtime(handle, state, account_id, sign_out)`
+- `init_account_client(handle, state, account_id, api_id, api_hash)`
+- `restore_telegram_accounts(handle)`
+- `tg_init(...)`
+- `tg_sign_in(...)`
+- `tg_logout(...)`
+
+## Superpowers Process State
+
+Skills used in the current flow:
+
+- `superpowers:brainstorming`
+- `superpowers:writing-plans`
+
+Brainstorming was followed:
+
+1. Explored code/docs.
+2. Proposed three approaches for Telegram session JSON:
+   - recommended: encrypted app-data envelope with per-account key in OS keyring;
+   - store the full session blob directly in keyring;
+   - keep plaintext and document the risk.
+3. User approved the recommended approach.
+4. Design spec was written and committed.
+
+Writing-plans was then used:
+
+- Plan was written to `docs/superpowers/plans/2026-05-08-telegram-session-storage.md`.
+- Plan passed a self-review for placeholders and consistency.
+- User had not yet chosen execution mode when this context file was requested.
+- The plan file is currently uncommitted.
+
+If continuing the Superpowers workflow, next ask or infer execution mode:
+
+- `Subagent-Driven` via `superpowers:subagent-driven-development` is recommended by the plan.
+- `Inline Execution` via `superpowers:executing-plans` is the other option.
+
+## Approved Telegram Session Storage Design
+
+Design file:
+
+- `docs/superpowers/specs/2026-05-08-telegram-session-storage-design.md`
+
+Design commit:
+
+- `4b57262 docs(security): design encrypted telegram sessions`
+
+Approved target:
+
+- Keep one session file per Telegram account.
+- Keep existing file path: `telegram_<account_id>.session.json`.
+- Replace plaintext contents with encrypted JSON envelope.
+- Store random 256-bit per-account session key in OS secure storage.
+- New secret ID:
+  - `telegram.account.<account_id>.session_key`
+- Generate session key on first encrypted save or legacy plaintext migration.
+- Use authenticated encryption.
+- Fail closed if encrypted file exists but key cannot be read.
+- Migrate plaintext JSON lazily after successful parse and successful keyring write.
+- Delete both session file and session key when account runtime is cleared with session deletion.
+- Do not store full Telegram session JSON directly in keyring.
+
+Encrypted file format:
+
+```json
+{
+  "version": 1,
+  "algorithm": "XChaCha20-Poly1305",
+  "nonce": "<base64-url-no-pad nonce>",
+  "ciphertext": "<base64-url-no-pad ciphertext>"
+}
+```
+
+Associated data:
 
 ```text
-docs(session): capture secure storage planning context
+org.ai.extractum.telegram.session.v1.account.<account_id>
 ```
 
-## Next Recommended Step
+Dependency decision:
 
-Commit the documentation artifacts, then start implementation from:
+```toml
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+```
+
+## Implementation Plan Summary
+
+Plan file:
+
+- `docs/superpowers/plans/2026-05-08-telegram-session-storage.md`
+
+Plan status:
+
+- Created.
+- Self-reviewed.
+- Not committed yet at the time of capture.
+
+Plan goal:
+
+- Encrypt persisted Telegram session files while keeping the existing per-account app-data file model and lazily migrating plaintext session JSON.
+
+Architecture:
+
+- Add `src-tauri/src/telegram_session_store.rs`.
+- Move session path handling, `SavedSession` conversion, encryption, legacy migration, and deletion into that module.
+- `telegram.rs` should delegate all session file operations to the new module.
+- Session load should become fallible and surface persisted-session read/decrypt failures as `restore_failed`, not silently create an empty session.
+
+Planned tasks:
+
+1. Add crypto dependency and stable session key secret ID.
+   - Modify `src-tauri/Cargo.toml`.
+   - Modify `src-tauri/src/secret_store.rs`.
+   - Add `telegram_account_session_key_secret(account_id) -> "telegram.account.<id>.session_key"`.
+   - Commit message in plan: `feat(security): add telegram session key id`.
+
+2. Create Telegram session store with encrypted round-trip tests.
+   - Create `src-tauri/src/telegram_session_store.rs`.
+   - Modify `src-tauri/src/lib.rs` to add `mod telegram_session_store;`.
+   - Implement envelope, base64-url-no-pad helpers, `XChaCha20Poly1305`, key generation, atomic write, load/save/delete APIs.
+   - Commit message in plan: `feat(security): encrypt telegram session files`.
+
+3. Cover legacy migration and fail-closed behavior.
+   - Add tests for legacy plaintext migration, migration failure leaving plaintext unchanged, missing key fail-closed, wrong account associated-data failure, delete file+key.
+   - Commit message in plan: `test(security): cover telegram session migration`.
+
+4. Wire encrypted sessions into Telegram runtime.
+   - Modify `src-tauri/src/telegram.rs`.
+   - Modify `src-tauri/src/accounts.rs`.
+   - Remove local session helpers from `telegram.rs`.
+   - Pass `SecretStoreState` into session load/save/delete paths.
+   - Make `clear_account_runtime` return `AppResult<()>`.
+   - Update `tg_sign_in` to accept `secret_store` and save encrypted session.
+   - Update account deletion to surface secure-storage cleanup errors after DB/runtime cleanup.
+   - Commit message in plan: `feat(security): use encrypted telegram sessions`.
+
+5. Update documentation and backlog.
+   - Modify:
+     - `docs/backlog.md`
+     - `docs/project.md`
+     - `docs/design-document.md`
+     - `docs/architecture-deep-dive.md`
+     - `docs/database-schema.md`
+   - State that Telegram session files remain in app data but contents are encrypted with per-account OS-keyring-protected session keys.
+   - Commit message in plan: `docs(security): document encrypted telegram sessions`.
+
+6. Final verification.
+   - Run:
+
+```powershell
+cargo test secret_store::
+cargo test telegram_session_store::
+cargo test telegram::
+cargo test accounts::
+cargo test migrations::
+cargo test
+npm.cmd test
+npm.cmd run check
+cargo fmt --check
+git diff --check
+cargo run
+git status --short
+git log --oneline -5
+```
+
+## Important Code Notes For Implementation
+
+Existing `src-tauri/src/secret_store.rs`:
+
+- `SecretStoreState` wraps sync keyring calls in `tauri::async_runtime::spawn_blocking`.
+- Tests use `InMemorySecretStore`.
+- `InMemorySecretStore` supports:
+  - `fail_get(message)`
+  - `fail_set(message)`
+  - `fail_delete(message)`
+- Reuse this for session store tests.
+
+Current `src-tauri/src/accounts.rs` deletion flow:
+
+```rust
+delete_account_row_from_pool(&pool, account_id).await?;
+clear_account_runtime(&handle, &state, account_id, true).await;
+secret_store
+    .delete_secret(telegram_account_api_hash_secret(account_id))
+    .await
+```
+
+Planned behavior:
+
+- Delete DB row first.
+- Clear runtime and delete session file/session key.
+- Delete API hash secret.
+- Missing file/key should be no-op.
+- Non-missing secure-storage errors should surface after DB/runtime cleanup.
+
+Current `src-tauri/src/lib.rs`:
+
+- Already has `mod secret_store;`.
+- Already manages `SecretStoreState::system()`.
+- Add `mod telegram_session_store;` near `mod telegram;`.
+- No new frontend invoke handler is needed for session encryption.
+
+Potential implementation gotchas captured during plan self-review:
+
+- Do not use `UpdatesState::default()` in tests unless verified available. The plan uses `MemorySession::default()` and `memory_session_to_saved(&session).await` for sample data.
+- Check XChaCha nonce length before `XNonce::from_slice`.
+- Keep base64 as `URL_SAFE_NO_PAD`.
+- The new encrypted file stays JSON but must not contain plaintext keys like `home_dc` or `updates_state`.
+- `load_session_from_path` should parse encrypted envelope first, then legacy plaintext `SavedSession`.
+- If legacy migration cannot write the key or encrypted file, return error and leave plaintext file unchanged.
+- If encrypted file exists and key is missing, return auth/storage error; do not fall back to `MemorySession::default()`.
+
+## User Decisions
+
+User approved:
+
+- Finish the Telegram session JSON security tail next.
+- Use design option 1: encrypted envelope in app-data file with per-account key in OS keyring.
+- Design spec is OK.
+
+Latest user request before this file was written:
+
+- Overwrite `docs/session-context-2026-05-03.md` with all information needed to restore the current session context.
+- Form a commit message.
+
+Suggested commit message for this context update:
 
 ```text
-docs/superpowers/plans/2026-05-08-secure-secret-storage.md
+docs(session): capture encrypted session storage context
 ```
-
-Recommended execution skill when implementation starts:
-
-- `superpowers:executing-plans` for inline execution; or
-- `superpowers:subagent-driven-development` if the user explicitly asks for subagents.
