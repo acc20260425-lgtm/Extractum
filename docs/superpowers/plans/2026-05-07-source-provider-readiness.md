@@ -484,7 +484,7 @@ git commit -m "refactor(sources): add provider capabilities"
 - Modify: `src/lib/api/sources.ts`
 - Modify: `src/lib/api/sources.test.ts`
 
-- [ ] **Step 1: Write failing mapping tests**
+- [x] **Step 1: Write failing mapping tests**
 
 In `src/lib/api/sources.test.ts`, update existing raw Telegram fixtures to include:
 
@@ -541,7 +541,7 @@ it("maps non-Telegram source fields without requiring telegram_source_kind", asy
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -551,7 +551,7 @@ npm.cmd test -- src/lib/api/sources.test.ts
 
 Expected failure includes a mismatch where `sourceSubtype` is absent and `telegramSourceKind` is not `null`.
 
-- [ ] **Step 3: Update raw source mapping**
+- [x] **Step 3: Update raw source mapping**
 
 In `src/lib/api/sources.ts`, add `SourceSubtype` to the type import:
 
@@ -601,7 +601,7 @@ function mapSource(source: RawSource): Source {
 }
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run:
 
@@ -615,7 +615,7 @@ Expected output:
 Test Files  1 passed
 ```
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```powershell
 git add src/lib/api/sources.ts src/lib/api/sources.test.ts

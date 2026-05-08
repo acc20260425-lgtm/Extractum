@@ -23,6 +23,7 @@ describe("sources api wrappers", () => {
       {
         id: 7,
         source_type: "telegram",
+        source_subtype: "channel",
         telegram_source_kind: "channel",
         account_id: 2,
         external_id: "123",
@@ -40,6 +41,7 @@ describe("sources api wrappers", () => {
       {
         id: 7,
         sourceType: "telegram",
+        sourceSubtype: "channel",
         telegramSourceKind: "channel",
         accountId: 2,
         externalId: "123",
@@ -59,6 +61,7 @@ describe("sources api wrappers", () => {
     invokeMock.mockResolvedValueOnce({
       id: 8,
       source_type: "telegram",
+      source_subtype: "supergroup",
       telegram_source_kind: "supergroup",
       account_id: 3,
       external_id: "456",
@@ -85,6 +88,43 @@ describe("sources api wrappers", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("add_telegram_source", {
       request: { accountId: 3, sourceRef: "456", expectedKind: "supergroup" },
     });
+  });
+
+  it("maps non-Telegram source fields without requiring telegram_source_kind", async () => {
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: 10,
+        source_type: "youtube",
+        source_subtype: "video",
+        account_id: null,
+        external_id: "dQw4w9WgXcQ",
+        title: "Demo video",
+        last_sync_state: null,
+        last_synced_at: null,
+        is_member: false,
+        is_active: true,
+        created_at: 1_700_500,
+        avatar_data_url: null,
+      },
+    ]);
+
+    await expect(listSources(null)).resolves.toEqual([
+      {
+        id: 10,
+        sourceType: "youtube",
+        sourceSubtype: "video",
+        telegramSourceKind: null,
+        accountId: null,
+        externalId: "dQw4w9WgXcQ",
+        title: "Demo video",
+        lastSyncState: null,
+        lastSyncedAt: null,
+        isMember: false,
+        isActive: true,
+        createdAt: 1_700_500,
+        avatarDataUrl: null,
+      },
+    ]);
   });
 
   it("saves sync settings with camel case request fields", async () => {

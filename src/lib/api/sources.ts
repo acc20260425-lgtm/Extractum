@@ -7,6 +7,7 @@ import type {
   Source,
   SourceForumTopic,
   SourceItem,
+  SourceSubtype,
   SyncSettings,
   SyncSourceResult,
   TelegramDialogSource,
@@ -37,7 +38,8 @@ interface RawTelegramDialogSource {
 interface RawSource {
   id: number;
   source_type: Source["sourceType"];
-  telegram_source_kind: TelegramSourceKind;
+  source_subtype?: SourceSubtype | null;
+  telegram_source_kind?: TelegramSourceKind | null;
   account_id: number | null;
   external_id: string;
   title: string | null;
@@ -172,8 +174,8 @@ function mapSource(source: RawSource): Source {
   return {
     id: source.id,
     sourceType: source.source_type,
-    sourceSubtype: source.telegram_source_kind,
-    telegramSourceKind: source.telegram_source_kind,
+    sourceSubtype: source.source_subtype ?? source.telegram_source_kind ?? null,
+    telegramSourceKind: source.telegram_source_kind ?? null,
     accountId: source.account_id,
     externalId: source.external_id,
     title: source.title,
