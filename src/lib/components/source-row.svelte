@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import { membershipLabel, sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { Source } from "$lib/types/sources";
 
@@ -13,8 +14,6 @@
     accountLabel,
     runtimeStatus,
     syncDisabledReason,
-    sourceKindLabel,
-    membershipLabel,
     formatDate,
     onSelect,
     onSync,
@@ -27,14 +26,15 @@
     accountLabel: (id: number | null) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     syncDisabledReason: (source: Source) => string | null;
-    sourceKindLabel: (source: Source) => string;
-    membershipLabel: (source: Source) => string;
     formatDate: (timestamp: number) => string;
     onSelect: (sourceId: number) => void | Promise<void>;
     onSync: (sourceId: number) => void | Promise<void>;
     onDelete: (sourceId: number) => void | Promise<void>;
   } = $props();
 
+  const capabilities = $derived(sourceCapabilities(source));
+  const kindLabel = $derived(sourceKindLabel(source));
+  const sourceMembershipLabel = $derived(membershipLabel(source));
   const syncReason = $derived(syncDisabledReason(source));
   const sourceRuntimeStatus = $derived(runtimeStatus(source.accountId));
   const runtimeBadgeLabel = $derived(
@@ -70,11 +70,11 @@
       <span class="sub">{accountLabel(source.accountId)}</span>
     </button>
     <div class="channel-actions">
-      <Badge>{sourceKindLabel(source)}</Badge>
+      <Badge>{kindLabel}</Badge>
       {#if source.lastSyncedAt !== null}
         <Badge>synced {formatDate(source.lastSyncedAt)}</Badge>
       {/if}
-      {#if source.accountId !== null}
+      {#if capabilities.requiresAccount && source.accountId !== null}
         {#if runtimeBadgeLabel}
           <Badge
             variant="warning"
@@ -86,19 +86,19 @@
           </Badge>
         {/if}
       {/if}
-      {#if source.isMember}
-        <Badge variant="member">{membershipLabel(source)}</Badge>
-      {:else}
-        <Badge>{membershipLabel(source)}</Badge>
+      {#if capabilities.hasMembershipState && sourceMembershipLabel}
+        <Badge variant={source.isMember ? "member" : undefined}>{sourceMembershipLabel}</Badge>
       {/if}
-      <Button
-        size="sm"
-        onclick={() => onSync(source.id)}
-        disabled={syncing || deleting || syncReason !== null}
-        title={syncReason ?? undefined}
-      >
-        {syncing ? "Syncing..." : "Sync"}
-      </Button>
+      {#if capabilities.canSync}
+        <Button
+          size="sm"
+          onclick={() => onSync(source.id)}
+          disabled={syncing || deleting || syncReason !== null}
+          title={syncReason ?? undefined}
+        >
+          {syncing ? "Syncing..." : "Sync"}
+        </Button>
+      {/if}
       <Button size="sm" variant="danger-soft" onclick={() => onDelete(source.id)} disabled={deleting || syncing}>
         {deleting ? "Deleting..." : "Delete"}
       </Button>

@@ -1,4 +1,5 @@
 import { endOfDayUnix, runTargetLabel, startOfDayUnix } from "$lib/analysis-utils";
+import { sourceCapabilities } from "$lib/source-capabilities";
 import type {
   AnalysisChunkSummaryEvent,
   AnalysisPromptTemplate,
@@ -724,7 +725,7 @@ export function currentTopicFilter(
 }
 
 export function shouldShowTopicSelector(
-  source: Pick<Source, "telegramSourceKind"> | null,
+  source: Source | null,
   analysisScope: "single_source" | "source_group",
   loadingSourceTopics: boolean,
   topics: SourceForumTopic[],
@@ -734,7 +735,7 @@ export function shouldShowTopicSelector(
   }
 
   if (loadingSourceTopics) {
-    return source.telegramSourceKind === "supergroup";
+    return sourceCapabilities(source).hasTopics;
   }
 
   return hasRealForumTopics(topics);

@@ -634,7 +634,7 @@ git commit -m "refactor(sources): map provider source fields"
 - Modify: `src/lib/components/analysis/workspace-main.svelte`
 - Modify: `src/routes/analysis/+page.svelte`
 
-- [ ] **Step 1: Write failing topic selector tests**
+- [x] **Step 1: Write failing topic selector tests**
 
 In `src/lib/analysis-state.test.ts`, update `sourceRecord` with:
 
@@ -676,7 +676,7 @@ const channel = sourceRecord({
 });
 ```
 
-- [ ] **Step 2: Run analysis-state tests to verify failure**
+- [x] **Step 2: Run analysis-state tests to verify failure**
 
 Run:
 
@@ -686,7 +686,7 @@ npm.cmd test -- src/lib/analysis-state.test.ts
 
 Expected failure references `shouldShowTopicSelector` still accepting `Pick<Source, "telegramSourceKind">`.
 
-- [ ] **Step 3: Update topic selector logic**
+- [x] **Step 3: Update topic selector logic**
 
 In `src/lib/analysis-state.ts`, add:
 
@@ -715,7 +715,7 @@ export function shouldShowTopicSelector(
 }
 ```
 
-- [ ] **Step 4: Update `source-row.svelte` to use capabilities**
+- [x] **Step 4: Update `source-row.svelte` to use capabilities**
 
 In `src/lib/components/source-row.svelte`, import helpers:
 
@@ -765,7 +765,7 @@ Replace the kind and membership badge block with:
 {/if}
 ```
 
-- [ ] **Step 5: Update `workspace-rail.svelte` props and actions**
+- [x] **Step 5: Update `workspace-rail.svelte` props and actions**
 
 In `src/lib/components/analysis/workspace-rail.svelte`, import helpers:
 
@@ -846,7 +846,7 @@ Wrap the Takeout button/cancel block with:
 {/if}
 ```
 
-- [ ] **Step 6: Update `workspace-main.svelte` source labels**
+- [x] **Step 6: Update `workspace-main.svelte` source labels**
 
 In `src/lib/components/analysis/workspace-main.svelte`, import:
 
@@ -866,13 +866,13 @@ with:
 <Badge variant="info">{sourceKindLabel(currentSource)}</Badge>
 ```
 
-- [ ] **Step 7: Update route prop passing**
+- [x] **Step 7: Update route prop passing**
 
 In `src/routes/analysis/+page.svelte`, remove `sourceKindLabel` and `membershipLabel` from the `analysis-source-state` import and from `<WorkspaceRail>` and `<WorkspaceMain>` props.
 
 Keep `sourceSyncDisabledReason` unchanged as the route-local wrapper around `getSourceSyncDisabledReason`.
 
-- [ ] **Step 8: Run focused frontend tests and Svelte check**
+- [x] **Step 8: Run focused frontend tests and Svelte check**
 
 Run:
 
@@ -893,7 +893,7 @@ and:
 svelte-check found 0 errors and 0 warnings
 ```
 
-- [ ] **Step 9: Commit Task 3**
+- [x] **Step 9: Commit Task 3**
 
 ```powershell
 git add src/lib/analysis-state.ts src/lib/analysis-state.test.ts src/lib/components/source-row.svelte src/lib/components/analysis/workspace-rail.svelte src/lib/components/analysis/workspace-main.svelte src/routes/analysis/+page.svelte

@@ -11,6 +11,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import { sourceKindLabel } from "$lib/source-capabilities";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
     AnalysisChatTurn,
@@ -94,7 +95,6 @@
     reportLines,
     phaseLabel,
     accountLabel,
-    sourceKindLabel,
     sourceSyncDisabledReason,
     startOfDayUnix,
     endOfDayUnix,
@@ -199,7 +199,6 @@
     }>;
     phaseLabel: (value: string) => string;
     accountLabel: (accountId: number | null) => string;
-    sourceKindLabel: (source: Source) => string;
     sourceSyncDisabledReason: (source: Source) => string | null;
     startOfDayUnix: (value: string) => number;
     endOfDayUnix: (value: string) => number;

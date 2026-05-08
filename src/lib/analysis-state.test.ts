@@ -852,14 +852,14 @@ describe("analysis-state", () => {
   });
 
   it("shows topic selector only for single-source supergroup topic workflows", () => {
-    const supergroup = { telegramSourceKind: "supergroup" } satisfies Pick<
-      Source,
-      "telegramSourceKind"
-    >;
-    const channel = { telegramSourceKind: "channel" } satisfies Pick<
-      Source,
-      "telegramSourceKind"
-    >;
+    const supergroup = sourceRecord({
+      sourceSubtype: "supergroup",
+      telegramSourceKind: "supergroup",
+    });
+    const channel = sourceRecord({
+      sourceSubtype: "channel",
+      telegramSourceKind: "channel",
+    });
     const topics = [
       topic({ kind: "uncategorized", key: "uncategorized", topicId: null }),
       topic({ key: "topic-1", topicId: 1 }),
@@ -874,6 +874,31 @@ describe("analysis-state", () => {
     expect(shouldShowTopicSelector(supergroup, "single_source", false, [
       topic({ kind: "uncategorized", topicId: null }),
     ])).toBe(false);
+  });
+
+  it("uses source capabilities for topic selector loading state", () => {
+    const youtubeVideo = sourceRecord({
+      sourceType: "youtube",
+      sourceSubtype: "video",
+      telegramSourceKind: null,
+      accountId: null,
+      isMember: false,
+    });
+    const forumThread = sourceRecord({
+      sourceType: "forum",
+      sourceSubtype: "thread",
+      telegramSourceKind: null,
+      accountId: null,
+      isMember: false,
+    });
+    const supergroup = sourceRecord({
+      sourceSubtype: "supergroup",
+      telegramSourceKind: "supergroup",
+    });
+
+    expect(shouldShowTopicSelector(youtubeVideo, "single_source", true, [])).toBe(false);
+    expect(shouldShowTopicSelector(forumThread, "single_source", true, [])).toBe(true);
+    expect(shouldShowTopicSelector(supergroup, "single_source", true, [])).toBe(true);
   });
 
   it("maps matching NotebookLM export events to progress state", () => {

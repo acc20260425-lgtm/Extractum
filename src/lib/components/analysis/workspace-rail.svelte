@@ -2,6 +2,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import { membershipLabel, sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
   import type { Source, TakeoutImportJobRecord } from "$lib/types/sources";
@@ -25,8 +26,6 @@
     takeoutJobsBySource,
     formatTimestamp,
     accountLabel,
-    sourceKindLabel,
-    membershipLabel,
     sourceInitial,
     runtimeStatus,
     runtimeBadge,
@@ -57,8 +56,6 @@
     takeoutJobsBySource: Record<number, TakeoutImportJobRecord>;
     formatTimestamp: (value: number) => string;
     accountLabel: (accountId: number | null) => string;
-    sourceKindLabel: (source: Source) => string;
-    membershipLabel: (source: Source) => string;
     sourceInitial: (source: Source) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     runtimeBadge: (runtime: AccountRuntimeStatus | null) => string;
@@ -197,6 +194,9 @@
         {#each filteredSourceCatalog as source (source.id)}
           {@const metrics = sourceMetrics[source.id]}
           {@const syncReason = sourceSyncDisabledReason(source)}
+          {@const capabilities = sourceCapabilities(source)}
+          {@const kindLabel = sourceKindLabel(source)}
+          {@const sourceMembershipLabel = membershipLabel(source)}
           {@const runtime = runtimeStatus(source.accountId)}
           {@const runtimeStateBadge = runtimeBadge(runtime)}
           {@const isSelected = analysisScope === "single_source" && selectedSourceId === String(source.id)}
@@ -227,7 +227,7 @@
                 </div>
                 <div class="rail-copy-meta">
                   <span>{accountLabel(source.accountId)}</span>
-                  <span>{sourceKindLabel(source)}</span>
+                  <span>{kindLabel}</span>
                   {#if metrics}
                     <span>{metrics.item_count} msgs</span>
                   {/if}
@@ -235,7 +235,9 @@
               </div>
             </button>
             <div class="rail-row-actions">
-              <Badge>{membershipLabel(source)}</Badge>
+              {#if capabilities.hasMembershipState && sourceMembershipLabel}
+                <Badge>{sourceMembershipLabel}</Badge>
+              {/if}
               {#if runtimeStateBadge}
                 <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeStateBadge}</Badge>
               {/if}
@@ -244,34 +246,38 @@
                   {takeoutPhaseLabel(takeoutJob)}
                 </Badge>
               {/if}
-              <Button
-                size="sm"
-                variant="secondary"
-                onclick={() => onSyncSource(source.id)}
-                disabled={!!syncingIds[source.id] || deleting || takeoutActive || syncReason !== null}
-                title={takeoutActive ? "Takeout import is active." : syncReason ?? undefined}
-              >
-                {syncingIds[source.id] ? "Syncing..." : "Sync"}
-              </Button>
-              {#if takeoutActive && takeoutJob}
+              {#if capabilities.canSync}
                 <Button
                   size="sm"
                   variant="secondary"
-                  onclick={() => onCancelTakeoutImport(takeoutJob.job_id)}
-                  disabled={takeoutJob.status === "cancel_requested"}
+                  onclick={() => onSyncSource(source.id)}
+                  disabled={!!syncingIds[source.id] || deleting || takeoutActive || syncReason !== null}
+                  title={takeoutActive ? "Takeout import is active." : syncReason ?? undefined}
                 >
-                  {takeoutJob.status === "cancel_requested" ? "Cancelling..." : "Cancel"}
+                  {syncingIds[source.id] ? "Syncing..." : "Sync"}
                 </Button>
-              {:else}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onclick={() => onStartTakeoutImport(source.id)}
-                  disabled={startingTakeout || deleting || !!syncingIds[source.id] || syncReason !== null}
-                  title={syncReason ?? undefined}
-                >
-                  {startingTakeout ? "Starting..." : "Takeout"}
-                </Button>
+              {/if}
+              {#if capabilities.canImportArchive}
+                {#if takeoutActive && takeoutJob}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onclick={() => onCancelTakeoutImport(takeoutJob.job_id)}
+                    disabled={takeoutJob.status === "cancel_requested"}
+                  >
+                    {takeoutJob.status === "cancel_requested" ? "Cancelling..." : "Cancel"}
+                  </Button>
+                {:else}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onclick={() => onStartTakeoutImport(source.id)}
+                    disabled={startingTakeout || deleting || !!syncingIds[source.id] || syncReason !== null}
+                    title={syncReason ?? undefined}
+                  >
+                    {startingTakeout ? "Starting..." : "Takeout"}
+                  </Button>
+                {/if}
               {/if}
               <Button
                 size="sm"

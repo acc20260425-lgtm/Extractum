@@ -154,11 +154,9 @@
   } from "$lib/analysis-scope-state";
   import {
     accountLabel as formatAccountLabel,
-    membershipLabel,
     runtimeBadge,
     runtimeStatus as getRuntimeStatus,
     sourceInitial,
-    sourceKindLabel,
     sourceSyncDisabledReason as getSourceSyncDisabledReason,
   } from "$lib/analysis-source-state";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
@@ -1195,8 +1193,6 @@
     {takeoutJobsBySource}
     {formatTimestamp}
     {accountLabel}
-    {sourceKindLabel}
-    {membershipLabel}
     {sourceInitial}
     {runtimeStatus}
     {runtimeBadge}
@@ -1269,7 +1265,6 @@
     {reportLines}
     {phaseLabel}
     {accountLabel}
-    {sourceKindLabel}
     {sourceSyncDisabledReason}
     {startOfDayUnix}
     {endOfDayUnix}
