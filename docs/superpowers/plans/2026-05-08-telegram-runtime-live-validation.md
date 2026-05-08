@@ -178,11 +178,28 @@ Capture:
 
 ## Completion Notes
 
-After validation, record:
+Recorded on 2026-05-08:
 
-- migrated session file account ids;
-- restore statuses observed;
-- private source cases that passed;
-- failures with exact command/UI steps and messages.
+- `telegram_1.session.json` was observed as an encrypted envelope:
+  - `version`: `1`
+  - `algorithm`: `XChaCha20-Poly1305`
+  - contains `nonce` and `ciphertext`
+  - does not contain plaintext `home_dc`, `dc_options`, or `updates_state`
+- Account restore reached UI status: `Account ready`.
+- UI showed: `This account is ready to sync sources.`
+- Private supergroup source `WBChat` was visible as:
+  - category: `Life`
+  - kind: `supergroup`
+  - message count: `73102 msgs`
+  - membership: `member`
+- Sync on private supergroup `WBChat` succeeded without re-login:
+  - timestamp changed from `08.05.2026, 22:16:20` to `08.05.2026, 22:17:18`
+- No `restore_failed` state or auth error was observed during this validation slice.
+
+Not yet validated in this slice:
+
+- logout cleanup removes the encrypted session file and session key;
+- account delete cleanup removes session file, session key, and API hash secret;
+- a separate private `channel` source case.
 
 If failures are found, create a separate debugging task before changing code.
