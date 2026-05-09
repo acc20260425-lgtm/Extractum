@@ -161,7 +161,7 @@ pub(crate) struct YoutubeComment {
     pub(crate) author: Option<String>,
     pub(crate) author_channel_id: Option<String>,
     pub(crate) author_channel_url: Option<String>,
-    pub(crate) published_at: Option<String>,
+    pub(crate) published_at: i64,
     pub(crate) text: String,
     pub(crate) like_count: Option<i64>,
     pub(crate) is_pinned: Option<bool>,

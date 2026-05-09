@@ -8,7 +8,9 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::{decode_media_metadata, encode_media_metadata, ExtractedItemPayload};
 
-use super::types::{now_secs, StoredItemRow, ITEM_KIND_YOUTUBE_TRANSCRIPT};
+use super::types::{
+    now_secs, StoredItemRow, ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
+};
 use query::load_item_rows_from_pool;
 
 mod query;
@@ -204,6 +206,67 @@ pub(crate) async fn upsert_youtube_transcript_item(
     .map_err(AppError::database)
 }
 
+pub(crate) async fn upsert_youtube_comment_item(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    source_id: i64,
+    comment: &crate::youtube::dto::YoutubeComment,
+) -> AppResult<i64> {
+    let content_zstd = compress_text(&comment.text).map_err(AppError::internal)?;
+    let raw_data_json =
+        serde_json::to_vec(comment).map_err(|e| AppError::internal(e.to_string()))?;
+    let raw_data_zstd = compress_json_bytes(&raw_data_json).map_err(AppError::internal)?;
+    let external_id = format!("comment:{}", comment.comment_id);
+
+    sqlx::query_scalar(
+        r#"
+        INSERT INTO items (
+            source_id,
+            external_id,
+            item_kind,
+            author,
+            published_at,
+            ingested_at,
+            content_zstd,
+            raw_data_zstd,
+            content_kind,
+            has_media,
+            media_kind,
+            media_metadata_zstd,
+            reply_to_msg_id,
+            reply_to_peer_kind,
+            reply_to_peer_id,
+            reply_to_top_id,
+            reaction_count
+        )
+        VALUES (?, ?, ?, ?, ?, strftime('%s','now'), ?, ?, 'text_only', 0, NULL, NULL, NULL, NULL, NULL, NULL, ?)
+        ON CONFLICT(source_id, external_id) DO UPDATE SET
+            item_kind = excluded.item_kind,
+            author = excluded.author,
+            published_at = excluded.published_at,
+            ingested_at = excluded.ingested_at,
+            content_zstd = excluded.content_zstd,
+            raw_data_zstd = excluded.raw_data_zstd,
+            content_kind = excluded.content_kind,
+            has_media = excluded.has_media,
+            media_kind = excluded.media_kind,
+            media_metadata_zstd = excluded.media_metadata_zstd,
+            reaction_count = excluded.reaction_count
+        RETURNING id
+        "#,
+    )
+    .bind(source_id)
+    .bind(external_id)
+    .bind(ITEM_KIND_YOUTUBE_COMMENT)
+    .bind(comment.author.as_deref())
+    .bind(comment.published_at)
+    .bind(content_zstd)
+    .bind(raw_data_zstd)
+    .bind(comment.like_count)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
 #[tauri::command]
 pub async fn list_source_items(
     handle: AppHandle,
@@ -322,8 +385,8 @@ pub(super) fn build_raw_payload(
 mod tests {
     use super::{
         decode_media_metadata, encode_media_metadata, insert_source_item, reply_peer_context, tl,
-        upsert_youtube_transcript_item, ForumTopicFilter, SourceItemInsert, StoredItemRow,
-        TelegramItemContext,
+        upsert_youtube_comment_item, upsert_youtube_transcript_item, ForumTopicFilter,
+        SourceItemInsert, StoredItemRow, TelegramItemContext,
     };
     use crate::compression::{compress_text, decompress_bytes, decompress_text};
     use crate::media::{
@@ -525,6 +588,81 @@ mod tests {
             decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
             serde_json::to_vec(&serde_json::json!({ "version": 2 })).expect("json")
         );
+    }
+
+    #[tokio::test]
+    async fn upsert_youtube_comment_item_updates_existing_text_and_reaction_count() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        let mut tx = pool.begin().await.expect("begin transaction");
+
+        let mut comment = crate::youtube::dto::YoutubeComment {
+            comment_id: "Ugabc".to_string(),
+            parent_comment_id: None,
+            is_reply: false,
+            author: Some("Alice".to_string()),
+            author_channel_id: Some("UCalice".to_string()),
+            author_channel_url: Some("https://www.youtube.com/@alice".to_string()),
+            published_at: 1_700_000_000,
+            text: "old comment".to_string(),
+            like_count: Some(3),
+            is_pinned: Some(false),
+            is_hearted: Some(false),
+            raw_payload: serde_json::json!({ "id": "Ugabc", "text": "old comment" }),
+        };
+        let first_id = upsert_youtube_comment_item(&mut tx, 1, &comment)
+            .await
+            .expect("insert comment");
+
+        comment.text = "new comment".to_string();
+        comment.like_count = Some(9);
+        comment.raw_payload = serde_json::json!({ "id": "Ugabc", "text": "new comment" });
+        let second_id = upsert_youtube_comment_item(&mut tx, 1, &comment)
+            .await
+            .expect("update comment");
+        tx.commit().await.expect("commit");
+
+        assert_eq!(first_id, second_id);
+
+        let row: StoredItemRow = sqlx::query_as(
+            r#"
+            SELECT
+                id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
+                media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
+            FROM items
+            WHERE id = ?
+            "#,
+        )
+        .bind(first_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load comment item");
+
+        let reaction_count: Option<i64> =
+            sqlx::query_scalar("SELECT reaction_count FROM items WHERE id = ?")
+                .bind(first_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load reaction count");
+
+        assert_eq!(row.external_id, "comment:Ugabc");
+        assert_eq!(row.item_kind, "youtube_comment");
+        assert_eq!(row.author.as_deref(), Some("Alice"));
+        assert_eq!(row.published_at, 1_700_000_000);
+        assert_eq!(row.content_kind, CONTENT_KIND_TEXT_ONLY);
+        assert!(!row.has_media);
+        assert_eq!(reaction_count, Some(9));
+        assert_eq!(
+            decompress_text(&row.content_zstd.expect("content")).expect("decode content"),
+            "new comment"
+        );
+
+        let raw: serde_json::Value = serde_json::from_slice(
+            &decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
+        )
+        .expect("decode raw json");
+        assert_eq!(raw["comment_id"], "Ugabc");
+        assert_eq!(raw["raw_payload"]["text"], "new comment");
     }
 
     #[test]

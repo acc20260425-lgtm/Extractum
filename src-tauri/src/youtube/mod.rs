@@ -1,4 +1,5 @@
 pub(crate) mod captions;
+pub(crate) mod comments;
 pub(crate) mod dto;
 pub(crate) mod errors;
 pub(crate) mod jobs;

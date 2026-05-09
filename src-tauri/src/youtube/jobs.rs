@@ -8,13 +8,14 @@ use crate::compression::decompress_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{
-    load_source, upsert_youtube_playlist_source, upsert_youtube_transcript_item,
-    upsert_youtube_video_source, SourceSyncTarget,
+    load_source, upsert_youtube_comment_item, upsert_youtube_playlist_source,
+    upsert_youtube_transcript_item, upsert_youtube_video_source, SourceSyncTarget,
 };
 
 use super::captions::{
     fetch_transcript_for_video, replace_transcript_segments, transcript_external_id,
 };
+use super::comments::{fetch_comments_for_video, DEFAULT_MAX_COMMENTS_PER_VIDEO};
 use super::dto::{YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata};
 use super::metadata::{fetch_playlist_metadata, fetch_video_metadata};
 use super::playlist::upsert_playlist_items;
@@ -462,7 +463,11 @@ async fn run_source_job_steps(
         sync_youtube_transcript(handle, sync_source_id).await?;
     }
     if options.comments {
-        warnings.push("Comment sync is deferred until YouTube comments are available.".to_string());
+        update_and_emit_source_job(handle, state, job_id, |job| {
+            job.message = Some("Syncing YouTube comments.".to_string());
+        })
+        .await;
+        warnings.extend(sync_youtube_comments(handle, sync_source_id).await?);
     }
 
     Ok(warnings)
@@ -577,6 +582,36 @@ async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResul
     replace_transcript_segments(&mut tx, item_id, source_id, &transcript).await?;
     mark_source_synced(&mut tx, source_id).await?;
     tx.commit().await.map_err(AppError::database)
+}
+
+async fn sync_youtube_comments(handle: &AppHandle, source_id: i64) -> AppResult<Vec<String>> {
+    let pool = get_pool(handle).await?;
+    let mut source = load_source(&pool, source_id).await?;
+    ensure_youtube_source(&source)?;
+    if source.source_subtype.as_deref() != Some("video") {
+        return Err(AppError::validation(format!(
+            "Source {source_id} is not a YouTube video source"
+        )));
+    }
+
+    if decode_video_metadata(&source).is_none() {
+        sync_youtube_metadata(handle, source_id).await?;
+        source = load_source(&pool, source_id).await?;
+    }
+
+    let metadata = decode_video_metadata(&source).ok_or_else(|| {
+        AppError::validation(format!("Source {source_id} has no YouTube video metadata"))
+    })?;
+    let comments =
+        fetch_comments_for_video(&metadata, DEFAULT_MAX_COMMENTS_PER_VIDEO, now_secs()).await?;
+
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    for comment in &comments.comments {
+        upsert_youtube_comment_item(&mut tx, source_id, comment).await?;
+    }
+    mark_source_synced(&mut tx, source_id).await?;
+    tx.commit().await.map_err(AppError::database)?;
+    Ok(comments.warnings)
 }
 
 async fn mark_source_synced(
@@ -907,6 +942,29 @@ mod tests {
 
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].job_id, third.job_id);
+    }
+
+    #[test]
+    fn source_job_type_uses_comments_specific_type_for_comments_only_video_sync() {
+        let comments_only = YoutubeSyncOptions {
+            metadata: false,
+            transcripts: false,
+            comments: true,
+        };
+        let full = YoutubeSyncOptions {
+            metadata: true,
+            transcripts: true,
+            comments: true,
+        };
+
+        assert_eq!(
+            super::source_job_type_for_source_options(Some("video"), &comments_only),
+            SourceJobType::YoutubeVideoCommentsSync
+        );
+        assert_eq!(
+            super::source_job_type_for_source_options(Some("video"), &full),
+            SourceJobType::YoutubeVideoFullSync
+        );
     }
 
     #[tokio::test]
