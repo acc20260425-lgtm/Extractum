@@ -57,7 +57,7 @@ describe("source capabilities", () => {
     }))).toBe("supergroup");
   });
 
-  it("describes manual YouTube videos without Telegram assumptions", () => {
+  it("syncs manual YouTube videos without Telegram assumptions", () => {
     const video = source({
       sourceType: "youtube",
       sourceSubtype: "video",
@@ -68,7 +68,7 @@ describe("source capabilities", () => {
     });
 
     expect(sourceCapabilities(video)).toEqual({
-      canSync: false,
+      canSync: true,
       canDelete: true,
       canImportArchive: false,
       hasTopics: false,
@@ -80,7 +80,7 @@ describe("source capabilities", () => {
     expect(membershipLabel(video)).toBe("");
   });
 
-  it("keeps YouTube playlists unsyncable until YouTube jobs are wired", () => {
+  it("syncs YouTube playlists through YouTube jobs", () => {
     const playlist = source({
       sourceType: "youtube",
       sourceSubtype: "playlist",
@@ -90,7 +90,7 @@ describe("source capabilities", () => {
     });
 
     expect(sourceCapabilities(playlist)).toMatchObject({
-      canSync: false,
+      canSync: true,
       requiresAccount: false,
       contentLabel: "videos",
     });

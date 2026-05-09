@@ -882,16 +882,30 @@
   }
 
   async function syncSelectedSource(sourceId: number) {
+    const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
     syncingIds = sourceActionPending(syncingIds, sourceId);
     try {
-      const result = await syncSource(sourceId);
-      status = sourceSyncStatus(result);
+      if (!source) {
+        throw new Error("Source is not loaded.");
+      }
 
-      await Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
+      if (source.sourceType === "youtube") {
+        await syncYoutubeSource(sourceId, {
+          metadata: true,
+          transcripts: source.sourceSubtype === "video",
+          comments: false,
+        });
+        status = "YouTube sync started.";
+      } else {
+        const result = await syncSource(sourceId);
+        status = sourceSyncStatus(result);
 
-      if (selectedSourceId === String(sourceId)) {
-        await loadSourceTopics(sourceId, { preserveSelection: true });
-        await loadItems(sourceId);
+        await Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
+
+        if (selectedSourceId === String(sourceId)) {
+          await loadSourceTopics(sourceId, { preserveSelection: true });
+          await loadItems(sourceId);
+        }
       }
     } catch (error) {
       status = formatAppError("syncing the source", error);

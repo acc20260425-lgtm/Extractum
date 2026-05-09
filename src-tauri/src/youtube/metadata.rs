@@ -8,6 +8,97 @@ use super::dto::{
     YoutubeVideoForm, YoutubeVideoMetadata,
 };
 use super::url::{YoutubeParsedUrl, YoutubeUrlKind};
+use super::ytdlp::run_ytdlp;
+
+pub(crate) const PLAYLIST_METADATA_PAGE_SIZE: i64 = 200;
+
+pub(crate) async fn fetch_video_metadata(
+    canonical_url: &str,
+    video_form: YoutubeVideoForm,
+) -> AppResult<YoutubeVideoMetadata> {
+    let parsed = super::url::parse_youtube_url(canonical_url)?;
+    let output = run_ytdlp(&video_metadata_args(canonical_url)).await?;
+    let json = ytdlp_stdout_json(&output.stdout)?;
+    video_metadata_from_ytdlp(json, &parsed, video_form)
+}
+
+pub(crate) async fn fetch_playlist_metadata(
+    playlist_url: &str,
+) -> AppResult<YoutubePlaylistMetadata> {
+    let mut start = 1_i64;
+    let mut base: Option<YoutubePlaylistMetadata> = None;
+    let mut all_items = Vec::new();
+
+    loop {
+        let end = start + PLAYLIST_METADATA_PAGE_SIZE - 1;
+        let range = format!("{start}-{end}");
+        let mut page = fetch_playlist_metadata_page(playlist_url, &range).await?;
+        let page_len = page.items.len();
+
+        if base.is_none() {
+            base = Some(YoutubePlaylistMetadata {
+                items: Vec::new(),
+                ..page.clone()
+            });
+        }
+
+        if page.items.is_empty() {
+            break;
+        }
+
+        all_items.append(&mut page.items);
+        if page_len % PLAYLIST_METADATA_PAGE_SIZE as usize != 0 {
+            break;
+        }
+        start = end + 1;
+    }
+
+    let mut metadata = base
+        .ok_or_else(|| AppError::validation("YouTube playlist metadata returned no page data"))?;
+    metadata.items = all_items;
+    if let Value::Object(object) = &mut metadata.raw_metadata_json {
+        object.insert(
+            "entries".to_string(),
+            Value::Array(
+                metadata
+                    .items
+                    .iter()
+                    .map(|item| item.raw_metadata_json.clone())
+                    .collect(),
+            ),
+        );
+    }
+    Ok(metadata)
+}
+
+pub(crate) async fn fetch_playlist_metadata_page(
+    playlist_url: &str,
+    range: &str,
+) -> AppResult<YoutubePlaylistMetadata> {
+    let parsed = super::url::parse_youtube_url(playlist_url)?;
+    let output = run_ytdlp(&playlist_metadata_page_args(playlist_url, range)).await?;
+    let json = ytdlp_stdout_json(&output.stdout)?;
+    playlist_metadata_from_ytdlp(json, &parsed)
+}
+
+pub(crate) fn video_metadata_args(canonical_url: &str) -> Vec<String> {
+    vec![
+        "--dump-single-json".to_string(),
+        "--skip-download".to_string(),
+        canonical_url.to_string(),
+    ]
+}
+
+pub(crate) fn playlist_metadata_page_args(canonical_url: &str, range: &str) -> Vec<String> {
+    vec![
+        "--dump-single-json".to_string(),
+        "--flat-playlist".to_string(),
+        "--skip-download".to_string(),
+        "--playlist-items".to_string(),
+        range.to_string(),
+        canonical_url.to_string(),
+    ]
+}
 
 pub(crate) fn video_metadata_from_ytdlp(
     value: Value,
@@ -340,13 +431,18 @@ fn optional_seconds_to_ms(value: Option<&Value>) -> i64 {
     value.map(seconds_to_ms).unwrap_or_default()
 }
 
+fn ytdlp_stdout_json(stdout: &str) -> AppResult<Value> {
+    serde_json::from_str(stdout.trim())
+        .map_err(|error| AppError::validation(format!("yt-dlp returned invalid JSON: {error}")))
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
     use super::{
-        playlist_metadata_from_ytdlp, playlist_preview_from_metadata, video_metadata_from_ytdlp,
-        video_preview_from_metadata,
+        playlist_metadata_from_ytdlp, playlist_metadata_page_args, playlist_preview_from_metadata,
+        video_metadata_from_ytdlp, video_preview_from_metadata,
     };
     use crate::youtube::dto::{YoutubeAvailabilityStatus, YoutubeVideoForm};
     use crate::youtube::url::{parse_youtube_url, YoutubeParsedUrl};
@@ -495,6 +591,27 @@ mod tests {
         assert_eq!(preview.external_id, "PLabc123");
         assert_eq!(preview.playlist_video_count, Some(75));
         assert_eq!(preview.warnings.len(), 1);
+    }
+
+    #[test]
+    fn playlist_metadata_page_args_use_adjacent_playlist_range() {
+        let args =
+            playlist_metadata_page_args("https://www.youtube.com/playlist?list=PLabc123", "1-200");
+
+        assert_eq!(
+            args,
+            vec![
+                "--dump-single-json",
+                "--flat-playlist",
+                "--skip-download",
+                "--playlist-items",
+                "1-200",
+                "https://www.youtube.com/playlist?list=PLabc123"
+            ]
+        );
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--playlist-items", "1-200"]));
     }
 
     #[test]

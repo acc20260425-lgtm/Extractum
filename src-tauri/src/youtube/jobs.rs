@@ -4,9 +4,16 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
+use crate::compression::decompress_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
-use crate::sources::load_source;
+use crate::sources::{
+    load_source, upsert_youtube_playlist_source, upsert_youtube_video_source, SourceSyncTarget,
+};
+
+use super::dto::{YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata};
+use super::metadata::{fetch_playlist_metadata, fetch_video_metadata};
+use super::playlist::upsert_playlist_items;
 
 pub(crate) const SOURCE_JOB_EVENT: &str = "sources://source-job";
 
@@ -78,6 +85,7 @@ struct SourceJobStateInner {
     jobs: HashMap<String, SourceJobRecord>,
     active_by_key: HashMap<SourceJobKey, String>,
     key_by_job_id: HashMap<String, SourceJobKey>,
+    options_by_job_id: HashMap<String, YoutubeSyncOptions>,
     cancel_requested: HashSet<String>,
 }
 
@@ -97,7 +105,7 @@ impl SourceJobState {
         source_id: i64,
         job_type: SourceJobType,
         related_source_id: Option<i64>,
-        _options: YoutubeSyncOptions,
+        options: YoutubeSyncOptions,
     ) -> AppResult<SourceJobRecord> {
         let key = SourceJobKey {
             source_id,
@@ -130,14 +138,21 @@ impl SourceJobState {
 
         inner.active_by_key.insert(key.clone(), job_id.clone());
         inner.key_by_job_id.insert(job_id.clone(), key);
+        inner.options_by_job_id.insert(job_id.clone(), options);
         inner.jobs.insert(job_id, record.clone());
         Ok(record)
     }
 
-    pub(crate) async fn list_jobs(
-        &self,
-        filter: SourceJobListFilter,
-    ) -> Vec<SourceJobRecord> {
+    pub(crate) async fn job_options(&self, job_id: &str) -> Option<YoutubeSyncOptions> {
+        self.inner
+            .lock()
+            .await
+            .options_by_job_id
+            .get(job_id)
+            .cloned()
+    }
+
+    pub(crate) async fn list_jobs(&self, filter: SourceJobListFilter) -> Vec<SourceJobRecord> {
         let limit = filter.limit.unwrap_or(100).min(500);
         let mut jobs = self
             .inner
@@ -208,6 +223,7 @@ impl SourceJobState {
         if let Some(key) = inner.key_by_job_id.remove(job_id) {
             inner.active_by_key.remove(&key);
         }
+        inner.options_by_job_id.remove(job_id);
         inner.cancel_requested.remove(job_id);
         inner.jobs.get(job_id).cloned()
     }
@@ -346,30 +362,148 @@ pub(crate) struct RetryablePlaylistVideoRow {
 
 async fn run_source_job(handle: AppHandle, job_id: String) {
     let state = handle.state::<SourceJobState>();
-    if let Some(record) = state
+    let Some(record) = state
         .update_job(&job_id, |job| {
             job.status = SourceJobStatus::Running;
             job.message = Some("Source job running.".to_string());
         })
         .await
-    {
-        emit_source_job_event(&handle, &record);
-    }
+    else {
+        return;
+    };
+    emit_source_job_event(&handle, &record);
 
     if state.is_cancel_requested(&job_id).await {
         finish_cancelled_job(&handle, &state, &job_id).await;
         return;
     }
 
-    if let Some(record) = state
-        .finish_job(&job_id, |job| {
-            job.status = SourceJobStatus::Succeeded;
-            job.message = Some("Source job completed.".to_string());
-        })
+    let options = state
+        .job_options(&job_id)
         .await
-    {
-        emit_source_job_event(&handle, &record);
+        .unwrap_or(YoutubeSyncOptions {
+            metadata: false,
+            transcripts: false,
+            comments: false,
+        });
+    let result = run_source_job_steps(&handle, &state, &job_id, record.source_id, &options).await;
+
+    match result {
+        Ok(warnings) => {
+            if let Some(record) = state
+                .finish_job(&job_id, |job| {
+                    job.status = SourceJobStatus::Succeeded;
+                    job.message = Some("Source job completed.".to_string());
+                    job.warnings = warnings;
+                })
+                .await
+            {
+                emit_source_job_event(&handle, &record);
+            }
+        }
+        Err(error) if state.is_cancel_requested(&job_id).await => {
+            finish_cancelled_job(&handle, &state, &job_id).await;
+            let _ = error;
+        }
+        Err(error) => {
+            if let Some(record) = state
+                .finish_job(&job_id, |job| {
+                    job.status = SourceJobStatus::Failed;
+                    job.message = None;
+                    job.error = Some(error.to_string());
+                })
+                .await
+            {
+                emit_source_job_event(&handle, &record);
+            }
+        }
     }
+}
+
+async fn run_source_job_steps(
+    handle: &AppHandle,
+    state: &SourceJobState,
+    job_id: &str,
+    source_id: i64,
+    options: &YoutubeSyncOptions,
+) -> AppResult<Vec<String>> {
+    let mut warnings = Vec::new();
+    if options.metadata {
+        update_and_emit_source_job(handle, state, job_id, |job| {
+            job.message = Some("Refreshing YouTube metadata.".to_string());
+        })
+        .await;
+        sync_youtube_metadata(handle, source_id).await?;
+    }
+
+    if state.is_cancel_requested(job_id).await {
+        return Err(AppError::validation("Source job cancelled"));
+    }
+
+    if options.transcripts {
+        warnings
+            .push("Transcript sync is deferred until transcript ingest is available.".to_string());
+    }
+    if options.comments {
+        warnings.push("Comment sync is deferred until YouTube comments are available.".to_string());
+    }
+
+    Ok(warnings)
+}
+
+async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<()> {
+    let pool = get_pool(handle).await?;
+    let source = load_source(&pool, source_id).await?;
+    ensure_youtube_source(&source)?;
+
+    enum MetadataSyncPayload {
+        Video(YoutubeVideoMetadata),
+        Playlist(YoutubePlaylistMetadata),
+    }
+
+    let payload = match source.source_subtype.as_deref() {
+        Some("playlist") => MetadataSyncPayload::Playlist(
+            fetch_playlist_metadata(&playlist_canonical_url(&source)).await?,
+        ),
+        _ => {
+            let existing = decode_video_metadata(&source);
+            let canonical_url = existing
+                .as_ref()
+                .map(|metadata| metadata.canonical_url.clone())
+                .unwrap_or_else(|| video_canonical_url(&source));
+            let video_form = existing
+                .as_ref()
+                .map(|metadata| metadata.video_form.clone())
+                .unwrap_or(YoutubeVideoForm::Regular);
+            MetadataSyncPayload::Video(fetch_video_metadata(&canonical_url, video_form).await?)
+        }
+    };
+
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    match payload {
+        MetadataSyncPayload::Playlist(metadata) => {
+            let refreshed_source_id = upsert_youtube_playlist_source(&mut tx, &metadata).await?;
+            upsert_playlist_items(&mut tx, refreshed_source_id, &metadata).await?;
+            mark_source_synced(&mut tx, refreshed_source_id).await?;
+        }
+        MetadataSyncPayload::Video(metadata) => {
+            let refreshed_source_id = upsert_youtube_video_source(&mut tx, &metadata).await?;
+            mark_source_synced(&mut tx, refreshed_source_id).await?;
+        }
+    }
+    tx.commit().await.map_err(AppError::database)
+}
+
+async fn mark_source_synced(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<()> {
+    sqlx::query("UPDATE sources SET last_synced_at = strftime('%s','now') WHERE id = ?")
+        .bind(source_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(AppError::database)?;
+    Ok(())
 }
 
 async fn run_retry_playlist_job(handle: AppHandle, job_id: String) {
@@ -497,6 +631,38 @@ fn ensure_youtube_source(source: &crate::sources::SourceSyncTarget) -> AppResult
     Ok(())
 }
 
+fn video_canonical_url(source: &SourceSyncTarget) -> String {
+    format!("https://www.youtube.com/watch?v={}", source.external_id)
+}
+
+fn playlist_canonical_url(source: &SourceSyncTarget) -> String {
+    decode_playlist_metadata(source)
+        .map(|metadata| metadata.canonical_url)
+        .unwrap_or_else(|| {
+            format!(
+                "https://www.youtube.com/playlist?list={}",
+                source.external_id
+            )
+        })
+}
+
+fn decode_video_metadata(source: &SourceSyncTarget) -> Option<YoutubeVideoMetadata> {
+    decode_youtube_metadata(source.metadata_zstd.as_deref())
+}
+
+fn decode_playlist_metadata(source: &SourceSyncTarget) -> Option<YoutubePlaylistMetadata> {
+    decode_youtube_metadata(source.metadata_zstd.as_deref())
+}
+
+fn decode_youtube_metadata<T>(metadata_zstd: Option<&[u8]>) -> Option<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let metadata = metadata_zstd?;
+    let json = decompress_bytes(metadata).ok()?;
+    serde_json::from_slice(&json).ok()
+}
+
 fn emit_source_job_event(handle: &AppHandle, record: &SourceJobRecord) {
     let _ = handle.emit(SOURCE_JOB_EVENT, record);
 }
@@ -533,11 +699,21 @@ mod tests {
         };
 
         let first = state
-            .create_job(7, SourceJobType::YoutubeVideoMetadataSync, None, options.clone())
+            .create_job(
+                7,
+                SourceJobType::YoutubeVideoMetadataSync,
+                None,
+                options.clone(),
+            )
             .await
             .expect("create first job");
         let duplicate = state
-            .create_job(7, SourceJobType::YoutubeVideoMetadataSync, None, options.clone())
+            .create_job(
+                7,
+                SourceJobType::YoutubeVideoMetadataSync,
+                None,
+                options.clone(),
+            )
             .await
             .expect_err("duplicate job scope should fail");
         let transcript = state
@@ -560,7 +736,12 @@ mod tests {
         };
 
         let first = state
-            .create_job(1, SourceJobType::YoutubeVideoMetadataSync, None, options.clone())
+            .create_job(
+                1,
+                SourceJobType::YoutubeVideoMetadataSync,
+                None,
+                options.clone(),
+            )
             .await
             .expect("create first job");
         state
@@ -570,7 +751,12 @@ mod tests {
             .await
             .expect("finish first job");
         let second = state
-            .create_job(2, SourceJobType::YoutubeVideoMetadataSync, None, options.clone())
+            .create_job(
+                2,
+                SourceJobType::YoutubeVideoMetadataSync,
+                None,
+                options.clone(),
+            )
             .await
             .expect("create second job");
         state
