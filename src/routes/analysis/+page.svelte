@@ -1010,7 +1010,7 @@
         await syncYoutubeSource(sourceId, {
           metadata: true,
           transcripts: source.sourceSubtype === "video",
-          comments: false,
+          comments: source.sourceSubtype === "video",
         });
         status = "YouTube sync started.";
       } else {
