@@ -161,11 +161,85 @@ pub(crate) async fn load_corpus_messages(
                 external_id: row.external_id.clone(),
                 published_at: row.published_at,
                 author: row.author,
-                r#ref: format!("s{}-i{}", row.source_id, row.id),
+                r#ref: live_corpus_ref(row.source_id, row.id),
                 content,
             })
         })
         .collect()
+}
+
+pub(crate) async fn preflight_analysis_run(
+    pool: &Pool<Sqlite>,
+    source_ids: &[i64],
+    period_from: i64,
+    period_to: i64,
+    chunk_target_chars: usize,
+    limits: AnalysisRunPreflightLimits,
+) -> Result<AnalysisRunPreflight, String> {
+    if source_ids.is_empty() {
+        return Ok(AnalysisRunPreflight {
+            source_ids: Vec::new(),
+            message_count: 0,
+            estimated_input_chars: 0,
+            estimated_chunks: 0,
+            limits,
+        });
+    }
+
+    let mut query = QueryBuilder::<Sqlite>::new(
+        "SELECT id, source_id, author, content_zstd FROM items WHERE content_zstd IS NOT NULL AND published_at >= ",
+    );
+    query.push_bind(period_from);
+    query.push(" AND published_at <= ");
+    query.push_bind(period_to);
+    query.push(" AND source_id IN (");
+
+    {
+        let mut separated = query.separated(", ");
+        for source_id in source_ids {
+            separated.push_bind(source_id);
+        }
+    }
+
+    query.push(") ORDER BY published_at ASC, id ASC");
+
+    #[derive(sqlx::FromRow)]
+    struct PreflightRow {
+        id: i64,
+        source_id: i64,
+        author: Option<String>,
+        content_zstd: Option<Vec<u8>>,
+    }
+
+    let rows: Vec<PreflightRow> = query
+        .build_query_as()
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut message_sizes = Vec::with_capacity(rows.len());
+    let mut estimated_input_chars = 0usize;
+    for row in rows {
+        let content = decompress_text(
+            row.content_zstd
+                .as_deref()
+                .ok_or_else(|| format!("Item {} is missing content", row.id))?,
+        )?;
+        let r#ref = live_corpus_ref(row.source_id, row.id);
+        let size = estimate_message_input_chars(&content, &r#ref, row.author.as_deref());
+        estimated_input_chars += size;
+        message_sizes.push(size);
+    }
+
+    let estimated_chunks = estimate_preflight_chunk_count(&message_sizes, chunk_target_chars);
+
+    Ok(AnalysisRunPreflight {
+        source_ids: source_ids.to_vec(),
+        message_count: message_sizes.len(),
+        estimated_input_chars,
+        estimated_chunks,
+        limits,
+    })
 }
 
 pub(crate) async fn load_run_snapshot_messages(
@@ -225,9 +299,9 @@ mod tests {
     use sqlx::SqlitePool;
 
     use super::{
-        estimate_message_input_chars, estimate_preflight_chunk_count, load_corpus_messages,
-        load_run_corpus_messages, load_run_snapshot_messages, resolve_run_source_ids,
-        AnalysisRunPreflightLimits,
+        estimate_message_input_chars, estimate_preflight_chunk_count, live_corpus_ref,
+        load_corpus_messages, load_run_corpus_messages, load_run_snapshot_messages,
+        preflight_analysis_run, resolve_run_source_ids, AnalysisRunPreflightLimits,
     };
     use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
@@ -625,5 +699,114 @@ mod tests {
         assert_eq!(corpus.len(), 2);
         assert_eq!(corpus[0].r#ref, "s2-i11");
         assert_eq!(corpus[1].r#ref, "s4-i12");
+    }
+
+    #[tokio::test]
+    async fn preflight_counts_eligible_text_messages_for_sources() {
+        let pool = snapshot_pool().await;
+        let first_content = compress_text("First live document").expect("compress first");
+        let second_content = compress_text("Second live document").expect("compress second");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(11_i64)
+        .bind(2_i64)
+        .bind("100")
+        .bind("Alice")
+        .bind(1_710_000_000_i64)
+        .bind(first_content)
+        .execute(&pool)
+        .await
+        .expect("insert first item");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(12_i64)
+        .bind(4_i64)
+        .bind("101")
+        .bind(Option::<String>::None)
+        .bind(1_710_000_100_i64)
+        .bind(second_content)
+        .execute(&pool)
+        .await
+        .expect("insert second item");
+
+        let preflight = preflight_analysis_run(
+            &pool,
+            &[2, 4],
+            1_700_000_000_i64,
+            1_800_000_000_i64,
+            16_000,
+            AnalysisRunPreflightLimits::default(),
+        )
+        .await
+        .expect("preflight");
+
+        assert_eq!(preflight.source_ids, vec![2, 4]);
+        assert_eq!(preflight.message_count, 2);
+        assert_eq!(preflight.estimated_chunks, 1);
+        assert!(preflight.estimated_input_chars > 0);
+    }
+
+    #[tokio::test]
+    async fn preflight_ref_format_matches_corpus_loader_ref_format() {
+        let pool = snapshot_pool().await;
+        let content = compress_text("Test message").expect("compress");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(11_i64)
+        .bind(2_i64)
+        .bind("100")
+        .bind(Option::<String>::None)
+        .bind(1_710_000_000_i64)
+        .bind(content)
+        .execute(&pool)
+        .await
+        .expect("insert item");
+
+        let corpus = load_corpus_messages(&pool, &[2], 1_700_000_000_i64, 1_800_000_000_i64)
+            .await
+            .expect("load corpus");
+
+        assert_eq!(
+            corpus[0].r#ref,
+            live_corpus_ref(corpus[0].source_id, corpus[0].item_id)
+        );
+    }
+
+    #[tokio::test]
+    async fn preflight_ignores_media_only_items_without_text_content() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+             VALUES (?, ?, ?, ?, ?, NULL)",
+        )
+        .bind(11_i64)
+        .bind(2_i64)
+        .bind("100")
+        .bind("Alice")
+        .bind(1_710_000_000_i64)
+        .execute(&pool)
+        .await
+        .expect("insert media-only item");
+
+        let preflight = preflight_analysis_run(
+            &pool,
+            &[2],
+            1_700_000_000_i64,
+            1_800_000_000_i64,
+            16_000,
+            AnalysisRunPreflightLimits::default(),
+        )
+        .await
+        .expect("preflight");
+
+        assert_eq!(preflight.message_count, 0);
+        assert_eq!(preflight.estimated_chunks, 0);
+        assert_eq!(preflight.estimated_input_chars, 0);
     }
 }
