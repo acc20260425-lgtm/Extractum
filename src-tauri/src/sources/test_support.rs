@@ -1,4 +1,4 @@
-pub(super) async fn memory_pool() -> sqlx::SqlitePool {
+pub(crate) async fn memory_pool() -> sqlx::SqlitePool {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")
         .await
         .expect("connect memory sqlite");
@@ -9,7 +9,7 @@ pub(super) async fn memory_pool() -> sqlx::SqlitePool {
     pool
 }
 
-pub(super) async fn memory_pool_with_sources() -> sqlx::SqlitePool {
+pub(crate) async fn memory_pool_with_sources() -> sqlx::SqlitePool {
     let pool = memory_pool().await;
     sqlx::query(
         r#"
@@ -36,7 +36,7 @@ pub(super) async fn memory_pool_with_sources() -> sqlx::SqlitePool {
     pool
 }
 
-pub(super) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePool {
+pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePool {
     let pool = memory_pool_with_sources().await;
     sqlx::query(
         r#"

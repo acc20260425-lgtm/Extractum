@@ -5,7 +5,7 @@ mod settings;
 mod store;
 mod sync;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 mod topics;
 mod types;
 
@@ -29,7 +29,9 @@ pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind
 
 pub(crate) use items::{insert_source_item, SourceItemInsert, TelegramItemContext};
 pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
-pub(crate) use store::load_source;
+pub(crate) use store::{
+    load_source, load_source_record, upsert_youtube_playlist_source, upsert_youtube_video_source,
+};
 pub(crate) use sync::finalize_sync;
 pub(crate) use types::{
     SourceSyncTarget, ITEM_KIND_TELEGRAM_MESSAGE, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,

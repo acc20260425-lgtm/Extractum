@@ -1,14 +1,25 @@
 use serde_json::Value;
+use tauri::AppHandle;
 
+use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::sources::{
+    load_source_record, upsert_youtube_playlist_source, upsert_youtube_video_source, SourceRecord,
+};
 
-use super::dto::{YoutubePreview, YoutubeVideoForm};
+use super::dto::{YoutubePlaylistMetadata, YoutubePreview, YoutubeVideoForm, YoutubeVideoMetadata};
 use super::metadata::{
     playlist_metadata_from_ytdlp, playlist_preview_from_metadata, video_metadata_from_ytdlp,
     video_preview_from_metadata,
 };
+use super::playlist::upsert_playlist_items;
 use super::url::{parse_youtube_url, YoutubeParsedUrl, YoutubeUrlKind};
 use super::ytdlp::{preview_playlist_args, preview_video_args, run_ytdlp};
+
+pub(crate) enum YoutubeFetchedMetadata {
+    Video(YoutubeVideoMetadata),
+    Playlist(YoutubePlaylistMetadata),
+}
 
 #[tauri::command]
 pub async fn preview_youtube_source(url: String) -> AppResult<YoutubePreview> {
@@ -16,7 +27,38 @@ pub async fn preview_youtube_source(url: String) -> AppResult<YoutubePreview> {
     fetch_preview(parsed).await
 }
 
+#[tauri::command]
+pub async fn add_youtube_source(handle: AppHandle, url: String) -> AppResult<SourceRecord> {
+    let parsed = parse_youtube_url(&url)?;
+    let metadata = fetch_metadata(parsed).await?;
+    let pool = get_pool(&handle).await?;
+    let mut tx = pool.begin().await.map_err(|e| AppError::database(e))?;
+
+    let source_id = match metadata {
+        YoutubeFetchedMetadata::Video(metadata) => {
+            upsert_youtube_video_source(&mut tx, &metadata).await?
+        }
+        YoutubeFetchedMetadata::Playlist(metadata) => {
+            let playlist_source_id = upsert_youtube_playlist_source(&mut tx, &metadata).await?;
+            upsert_playlist_items(&mut tx, playlist_source_id, &metadata).await?;
+            playlist_source_id
+        }
+    };
+
+    tx.commit().await.map_err(|e| AppError::database(e))?;
+    load_source_record(&handle, &pool, source_id).await
+}
+
 pub(crate) async fn fetch_preview(parsed: YoutubeParsedUrl) -> AppResult<YoutubePreview> {
+    let metadata = fetch_metadata(parsed).await?;
+
+    Ok(match metadata {
+        YoutubeFetchedMetadata::Video(metadata) => video_preview_from_metadata(&metadata),
+        YoutubeFetchedMetadata::Playlist(metadata) => playlist_preview_from_metadata(&metadata),
+    })
+}
+
+pub(crate) async fn fetch_metadata(parsed: YoutubeParsedUrl) -> AppResult<YoutubeFetchedMetadata> {
     let args = match parsed.kind {
         YoutubeUrlKind::Playlist { .. } => preview_playlist_args(&parsed.canonical_url),
         YoutubeUrlKind::Video { .. }
@@ -26,23 +68,35 @@ pub(crate) async fn fetch_preview(parsed: YoutubeParsedUrl) -> AppResult<Youtube
     let output = run_ytdlp(&args).await?;
     let json = ytdlp_stdout_json(&output.stdout)?;
 
-    preview_from_ytdlp_json(&parsed, json)
+    metadata_from_ytdlp_json(&parsed, json)
 }
 
 pub(crate) fn preview_from_ytdlp_json(
     parsed: &YoutubeParsedUrl,
     value: Value,
 ) -> AppResult<YoutubePreview> {
+    let metadata = metadata_from_ytdlp_json(parsed, value)?;
+
+    Ok(match metadata {
+        YoutubeFetchedMetadata::Video(metadata) => video_preview_from_metadata(&metadata),
+        YoutubeFetchedMetadata::Playlist(metadata) => playlist_preview_from_metadata(&metadata),
+    })
+}
+
+pub(crate) fn metadata_from_ytdlp_json(
+    parsed: &YoutubeParsedUrl,
+    value: Value,
+) -> AppResult<YoutubeFetchedMetadata> {
     match parsed.kind {
         YoutubeUrlKind::Playlist { .. } => {
             let metadata = playlist_metadata_from_ytdlp(value, parsed)?;
-            Ok(playlist_preview_from_metadata(&metadata))
+            Ok(YoutubeFetchedMetadata::Playlist(metadata))
         }
         YoutubeUrlKind::Video { .. }
         | YoutubeUrlKind::Short { .. }
         | YoutubeUrlKind::Live { .. } => {
             let metadata = video_metadata_from_ytdlp(value, parsed, video_form(parsed))?;
-            Ok(video_preview_from_metadata(&metadata))
+            Ok(YoutubeFetchedMetadata::Video(metadata))
         }
     }
 }

@@ -1,10 +1,12 @@
 use tauri::AppHandle;
 use tokio::time::{Duration, Instant};
 
+use crate::compression::compress_json_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::telegram::TelegramState;
+use crate::youtube::dto::{YoutubePlaylistMetadata, YoutubeVideoMetadata};
 
 use super::avatar::{
     cache_source_avatar, peer_photo_data_url_with_timeout, read_source_avatar_data_url,
@@ -16,7 +18,7 @@ use super::peer_resolution::{
 };
 use super::types::{
     now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, SourceType, TelegramSourceInfo,
-    TelegramSourceKind,
+    TelegramSourceKind, TELEGRAM_SOURCE_TYPE,
 };
 
 #[derive(serde::Deserialize)]
@@ -94,6 +96,103 @@ pub(crate) async fn load_source(
     .await
     .map_err(|e| AppError::internal(e.to_string()))?
     .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))
+}
+
+pub(crate) async fn load_source_record(
+    handle: &AppHandle,
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<SourceRecord> {
+    let row: SourceRecordRow = sqlx::query_as(
+        "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE id = ?",
+    )
+    .bind(source_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?
+    .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))?;
+
+    source_record_from_row(handle, row)
+}
+
+pub(crate) async fn upsert_youtube_video_source(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    metadata: &YoutubeVideoMetadata,
+) -> AppResult<i64> {
+    let metadata_zstd = encode_youtube_metadata(metadata)?;
+    let now = now_secs();
+
+    sqlx::query_scalar(
+        r#"
+        INSERT INTO sources (
+            source_type,
+            source_subtype,
+            telegram_source_kind,
+            account_id,
+            external_id,
+            title,
+            metadata_zstd,
+            is_active,
+            is_member,
+            created_at
+        )
+        VALUES ('youtube', 'video', NULL, NULL, ?, ?, ?, 1, 0, ?)
+        ON CONFLICT(source_type, source_subtype, external_id)
+        WHERE source_type = 'youtube' AND source_subtype = 'video'
+        DO UPDATE SET
+            title = excluded.title,
+            metadata_zstd = excluded.metadata_zstd,
+            is_active = 1
+        RETURNING id
+        "#,
+    )
+    .bind(&metadata.video_id)
+    .bind(&metadata.title)
+    .bind(metadata_zstd)
+    .bind(now)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|e| AppError::database(e))
+}
+
+pub(crate) async fn upsert_youtube_playlist_source(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    metadata: &YoutubePlaylistMetadata,
+) -> AppResult<i64> {
+    let metadata_zstd = encode_youtube_metadata(metadata)?;
+    let now = now_secs();
+
+    sqlx::query_scalar(
+        r#"
+        INSERT INTO sources (
+            source_type,
+            source_subtype,
+            telegram_source_kind,
+            account_id,
+            external_id,
+            title,
+            metadata_zstd,
+            is_active,
+            is_member,
+            created_at
+        )
+        VALUES ('youtube', 'playlist', NULL, NULL, ?, ?, ?, 1, 0, ?)
+        ON CONFLICT(source_type, source_subtype, external_id)
+        WHERE source_type = 'youtube' AND source_subtype = 'playlist'
+        DO UPDATE SET
+            title = excluded.title,
+            metadata_zstd = excluded.metadata_zstd,
+            is_active = 1
+        RETURNING id
+        "#,
+    )
+    .bind(&metadata.playlist_id)
+    .bind(&metadata.title)
+    .bind(metadata_zstd)
+    .bind(now)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|e| AppError::database(e))
 }
 
 #[tauri::command]
@@ -233,13 +332,26 @@ fn source_record_from_row_parts(
 }
 
 fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult<SourceRecord> {
-    let metadata = decode_source_metadata(row.metadata_zstd.as_deref())?;
-    let avatar_data_url = metadata
-        .avatar_cache_key
+    let avatar_cache_key = source_avatar_cache_key_from_row(&row)?;
+    let avatar_data_url = avatar_cache_key
         .as_deref()
         .and_then(|cache_key| read_source_avatar_data_url(handle, cache_key));
 
     Ok(source_record_from_row_parts(row, avatar_data_url))
+}
+
+fn source_avatar_cache_key_from_row(row: &SourceRecordRow) -> AppResult<Option<String>> {
+    if row.source_type != TELEGRAM_SOURCE_TYPE {
+        return Ok(None);
+    }
+
+    let metadata = decode_source_metadata(row.metadata_zstd.as_deref())?;
+    Ok(metadata.avatar_cache_key)
+}
+
+fn encode_youtube_metadata(metadata: &impl serde::Serialize) -> AppResult<Vec<u8>> {
+    let json = serde_json::to_vec(metadata).map_err(|e| AppError::internal(e.to_string()))?;
+    compress_json_bytes(&json).map_err(AppError::internal)
 }
 
 #[cfg(test)]
@@ -273,6 +385,32 @@ mod tests {
         assert_eq!(record.source_subtype.as_deref(), Some("video"));
         assert_eq!(record.telegram_source_kind, None);
         assert_eq!(record.account_id, None);
+    }
+
+    #[test]
+    fn avatar_cache_key_skips_non_telegram_metadata() {
+        let metadata_zstd = crate::compression::compress_json_bytes(
+            br#"{"youtube":{"video_id":"abc123","title":"Demo"}}"#,
+        )
+        .expect("compress youtube metadata");
+
+        let row = SourceRecordRow {
+            id: 10,
+            source_type: "youtube".to_string(),
+            source_subtype: Some("video".to_string()),
+            telegram_source_kind: None,
+            account_id: None,
+            external_id: "abc123".to_string(),
+            title: Some("Demo".to_string()),
+            metadata_zstd: Some(metadata_zstd),
+            last_sync_state: None,
+            last_synced_at: None,
+            is_active: true,
+            is_member: false,
+            created_at: 1,
+        };
+
+        assert_eq!(source_avatar_cache_key_from_row(&row).unwrap(), None);
     }
 
     #[tokio::test]
