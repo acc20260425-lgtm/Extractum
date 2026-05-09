@@ -10,6 +10,7 @@
     listenToAccountRuntimeStatus,
   } from "$lib/api/accounts";
   import { formatAppError } from "$lib/app-error";
+  import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -28,6 +29,7 @@
   let newApiId = $state("");
   let newApiHash = $state("");
   let creating = $state(false);
+  let accountDialogOpen = $state(false);
 
   async function loadAccounts() {
     try {
@@ -85,6 +87,10 @@
     return account.phone ? "Re-auth" : "Sign in";
   }
 
+  function closeAccountDialog() {
+    accountDialogOpen = false;
+  }
+
   async function createAccount() {
     if (!newLabel.trim() || !newApiId.trim() || !newApiHash.trim()) return;
     const parsedApiId = Number.parseInt(newApiId.trim(), 10);
@@ -105,6 +111,7 @@
       newApiId = "";
       newApiHash = "";
       await loadAccounts();
+      closeAccountDialog();
     } catch (e) {
       status = formatAppError("creating the account", e);
     } finally {
@@ -191,11 +198,17 @@
             <h2>Configured accounts</h2>
             <p>Open auth, check runtime state, and keep sync-capable accounts healthy.</p>
           </div>
-          <Badge variant="neutral">{accounts.length} total</Badge>
+          <div class="panel-header-actions">
+            <Badge variant="neutral">{accounts.length} total</Badge>
+            <Button size="sm" variant="secondary" onclick={() => (accountDialogOpen = true)}>
+              <Plus size={13} aria-hidden="true" />
+              Add
+            </Button>
+          </div>
         </div>
 
         {#if accounts.length === 0}
-          <EmptyState description="No accounts yet. Add one from the panel on the right." />
+          <EmptyState description="No accounts yet. Add one from the button above." />
         {:else}
           <ul class="list">
             {#each accounts as acc (acc.id)}
@@ -243,70 +256,51 @@
         {/if}
       </section>
     </div>
-
-    <div class="page-stack">
-      <section class="desk-panel desk-panel-subtle">
-        <div class="panel-header">
-          <div class="panel-header-copy">
-            <span class="page-eyebrow">Add account</span>
-            <h2>New Telegram account</h2>
-            <p>
-              Get API credentials at
-              <a href="https://my.telegram.org" target="_blank" rel="noreferrer">my.telegram.org</a>
-              and add them here before starting sign-in.
-            </p>
-          </div>
-        </div>
-
-        <div class="form-stack">
-          <label>Label
-            <Input
-              type="text"
-              value={newLabel}
-              placeholder="Personal"
-              oninput={(event) => (newLabel = (event.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
-          <label>API ID
-            <Input
-              type="text"
-              value={newApiId}
-              placeholder="1234567"
-              oninput={(event) => (newApiId = (event.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
-          <label>API Hash
-            <Input
-              type="text"
-              value={newApiHash}
-              placeholder="abcdef..."
-              oninput={(event) => (newApiHash = (event.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
-        </div>
-
-        <div class="desk-divider"></div>
-
-        <div class="action-row">
-          <Button onclick={createAccount} disabled={creating || !newLabel || !newApiId || !newApiHash}>
-            <Plus size={15} aria-hidden="true" />
-            {creating ? "Creating..." : "Add account"}
-          </Button>
-        </div>
-      </section>
-
-      <section class="desk-panel desk-panel-subtle notes-panel">
-        <div class="panel-header-copy">
-          <span class="page-eyebrow">Flow notes</span>
-          <h3>How this fits the workspace</h3>
-          <p>
-            Accounts stay outside the main analysis canvas, but keep the same compact split:
-            catalog on the left, utility panel on the right.
-          </p>
-        </div>
-      </section>
-    </div>
   </div>
+
+  <DesktopDialog
+    open={accountDialogOpen}
+    title="New Telegram account"
+    description="Get API credentials at my.telegram.org and add them here before starting sign-in."
+    width="32rem"
+    onClose={closeAccountDialog}
+  >
+    <div class="form-stack">
+      <label>Label
+        <Input
+          type="text"
+          value={newLabel}
+          placeholder="Personal"
+          oninput={(event) => (newLabel = (event.currentTarget as HTMLInputElement).value)}
+        />
+      </label>
+      <label>API ID
+        <Input
+          type="text"
+          value={newApiId}
+          placeholder="1234567"
+          oninput={(event) => (newApiId = (event.currentTarget as HTMLInputElement).value)}
+        />
+      </label>
+      <label>API Hash
+        <Input
+          type="text"
+          value={newApiHash}
+          placeholder="abcdef..."
+          oninput={(event) => (newApiHash = (event.currentTarget as HTMLInputElement).value)}
+        />
+      </label>
+    </div>
+
+    <div class="desk-divider"></div>
+
+    <div class="action-row">
+      <Button onclick={createAccount} disabled={creating || !newLabel || !newApiId || !newApiHash}>
+        <Plus size={15} aria-hidden="true" />
+        {creating ? "Creating..." : "Add account"}
+      </Button>
+    </div>
+  </DesktopDialog>
 </section>
 
 <style>
@@ -404,6 +398,14 @@
     flex-shrink: 0;
   }
 
+  .panel-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .form-stack {
     display: flex;
     flex-direction: column;
@@ -418,16 +420,8 @@
     color: var(--muted);
   }
 
-  .panel-header-copy a {
-    color: var(--primary);
-  }
-
   :global(.page-status) {
     margin-bottom: 0;
-  }
-
-  .notes-panel h3 {
-    margin: 0;
   }
 
   @media (max-width: 800px) {
