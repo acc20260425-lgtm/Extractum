@@ -30,3 +30,10 @@ Direct MCP/webview command calls return backend snake_case payloads; the Svelte 
 ## Defects Found
 
 - Cancellation race: if the user requested cancellation while an uninterruptible provider call completed successfully, `finish_job` could overwrite `cancel_requested` with `succeeded`. Fixed by making `SourceJobState::finish_job` preserve cancellation as the final terminal status. Regression test: `youtube::jobs::tests::job_state_finishes_cancel_requested_jobs_as_cancelled`.
+
+## MVP Boundaries Confirmed
+
+- `yt-dlp` must be installed and available on `PATH`.
+- The MVP stores YouTube metadata, transcript text/timestamps, comments, and playlist membership; it does not download audio or video binaries.
+- Auth-gated content requires cookies configured in Settings.
+- YouTube source jobs are in memory and are not resumed after app restart.

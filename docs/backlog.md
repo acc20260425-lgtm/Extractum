@@ -8,9 +8,11 @@
 - Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
 - Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
 - Takeout source import is shipped but still needs broader live validation, incomplete-batch provenance, and a migrated-history identity decision.
+- YouTube source MVP is shipped, but live-provider coverage still needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Saved-run history works, but large archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
 - NotebookLM export is single-source and local-only; optional link enrichment, source-group export, forward metadata, and richer forum-topic grouping remain open.
+- YouTube-specific NotebookLM export enrichment is not implemented yet; the existing generic NotebookLM export remains shipped for Telegram sources.
 - Full Telegram Forum Topics browsing/export and forward metadata are not modeled yet.
 - Stabilization needs a current Rust lint baseline, repeatable full-project verification, and a dependency pinning policy for `grammers`.
 - Secret storage is implemented, but logs and user-facing error surfaces still need a focused secret-leak audit.
@@ -30,6 +32,7 @@
 | Telegram runtime validation | partially validated | predictable behavior across real supported dialogs and accounts |
 | Account deletion coordination | account row/runtime cleanup exists | deletion cannot race active ingest or analysis work |
 | Takeout source import | MVP shipped | validated across source kinds with explicit incomplete-import provenance |
+| YouTube source ingest | MVP shipped | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | global/current-scope history shipped | fast narrowing for large saved-run histories |
 | Media support | metadata only | optional download/preview and controlled media-aware analysis |
 | NotebookLM export | single-source Markdown export shipped | optional enrichment and source-group export if needed |
@@ -111,7 +114,24 @@ Priority: medium.
 - [ ] decide whether export needs full Forum Topics names/grouping beyond stored `reply_to_top_id`
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 4.6 Media Download, Preview, And Analysis
+### 4.6 YouTube Source Follow-Ups
+
+Priority: medium.
+
+- [ ] add YouTube-specific NotebookLM export enrichment with transcript segment timestamps, canonical video links, and playlist membership metadata in export output
+- [ ] add speech-to-text fallback for videos without captions
+- [ ] add live chat ingest
+- [ ] support media-aware analysis over thumbnails or downloaded media if a future setting explicitly allows media downloads
+- [ ] make YouTube source jobs persistent/resumable across app restart
+- [ ] broaden manual/live validation for auto-caption-only, no-caption, active live, upcoming, private/member/age/geo-gated, and large playlist sources
+
+Acceptance:
+
+- Future YouTube export enhancements do not regress the existing generic NotebookLM export.
+- No media download or speech-to-text path runs without explicit user opt-in.
+- Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
+
+### 4.7 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -129,7 +149,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 4.7 Stabilization
+### 4.8 Stabilization
 
 Priority: medium.
 
@@ -157,9 +177,10 @@ Priority: medium.
 2. Close account-deletion coordination before more long-running ingest expansion.
 3. Validate Takeout import across representative source kinds and decide incomplete-import provenance.
 4. Decide whether saved-run history needs richer filters before media expansion.
-5. Continue media download/preview and media-aware analysis design.
-6. Tighten verification, CI, and dependency pinning.
+5. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
+6. Continue media download/preview and media-aware analysis design.
+7. Tighten verification, CI, and dependency pinning.
 
 ## 7. Session Handoff
 
-Start from the open items above. Do not resurrect completed Superpowers plans for secure storage, encrypted Telegram sessions, LLM preflight/concurrency, or `loadRunsForScope`; those are already represented in current-state docs and Git history.
+Start from the open items above. Do not resurrect completed Superpowers plans for secure storage, encrypted Telegram sessions, LLM preflight/concurrency, `loadRunsForScope`, or the YouTube Sources MVP; those are already represented in current-state docs and Git history.

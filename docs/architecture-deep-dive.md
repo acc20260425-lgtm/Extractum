@@ -9,6 +9,7 @@ The repository is intentionally split into two strong responsibilities.
 Owns:
 
 - Telegram integration
+- YouTube integration through `yt-dlp`
 - account runtime state and restore
 - SQLite access
 - OS secure storage access for saved credentials
@@ -31,8 +32,7 @@ Owns:
 
 The shared source layer is provider-ready: source records expose
 `source_type` and provider-local `source_subtype`, source UI actions are
-capability-driven, and `sync_source` dispatches by provider. Telegram is still
-the only implemented ingest provider.
+capability-driven, and provider-specific commands dispatch by provider.
 
 ### 2.1 Account lifecycle
 
@@ -123,7 +123,54 @@ Current source-kind behavior:
 
 Takeout import writes to the same `items` table and does not download media bytes, thumbnails, custom emoji documents, or Telegram Desktop export assets. Failed and cancelled jobs may leave partial rows, but they do not update `last_sync_state`.
 
-## 3. Item model
+## 3. YouTube ingest flow
+
+The `src-tauri/src/youtube/` module owns YouTube preview, source creation, metadata sync, transcript sync, comment sync, playlist membership sync, settings, cookies, runtime status, and read-only detail DTOs.
+
+### 3.1 yt-dlp boundary
+
+YouTube integration shells out to `yt-dlp`; Extractum does not embed a YouTube API client and does not download audio or video binaries in the MVP.
+
+The boundary is intentionally narrow:
+
+- preview and metadata commands use JSON output from `yt-dlp`;
+- captions request transcript files and parse them into one `youtube_transcript` item plus `youtube_transcript_segments`;
+- comments request bounded comment JSON and store `youtube_comment` items;
+- playlist metadata is flattened into `youtube_playlist_items`;
+- the runtime check command runs `yt-dlp --version` with a short timeout so the UI can show a missing-`yt-dlp` reason before starting a job.
+
+Auth-gated content uses cookies from OS secure storage. When enabled in Settings, raw cookies are validated as Netscape cookie text, stored through `SecretStoreState`, and written only to a temporary backend file for the lifetime of the `yt-dlp` process. Cookies are not returned through IPC and should not appear in command args, logs, job records, or errors.
+
+### 3.2 Source jobs
+
+YouTube sync jobs are represented by `SourceJobState` in memory and emitted through `sources://source-job` events. Jobs cover video metadata, transcript, comments, full video sync, playlist metadata, playlist full sync, and single playlist video sync.
+
+MVP restart behavior is explicit: active YouTube jobs are not restored after app restart, no attempt is made to resume an interrupted `yt-dlp` process, and the user can start a fresh sync after restart. Completed database writes from before shutdown remain visible.
+
+Cancellation is cooperative around provider calls. If a cancel request races with a successful provider finish, `finish_job` preserves `cancelled` as the terminal state so the UI does not get stuck on a stale pending job.
+
+### 3.3 Playlist expansion
+
+Playlist source rows store playlist metadata in `sources.metadata_zstd`; membership rows live in `youtube_playlist_items`.
+
+Available playlist entries can link to materialized video sources through `video_source_id`. Unlinked, removed, private, auth-gated, age-restricted, geo-blocked, deleted, or unknown-unavailable rows remain visible in playlist detail but are excluded from the analysis corpus unless they become linked video sources later.
+
+Analysis over a YouTube playlist expands linked `video_source_id` rows, then loads transcript segments, optional synthetic descriptions, and optional comments based on the selected YouTube corpus mode.
+
+### 3.4 Timestamp evidence and detail commands
+
+YouTube transcript segments preserve `start_ms`, optional `end_ms`, selected caption language, track kind, and auto-caption flag. Analysis trace refs can resolve segment evidence into YouTube URLs with timestamp parameters.
+
+Read-only detail commands provide the analysis workspace with provider-aware state without introducing new persistence:
+
+- `get_youtube_runtime_status`
+- `list_youtube_source_summaries`
+- `get_youtube_video_detail`
+- `get_youtube_playlist_detail`
+
+These commands aggregate status from `sources`, `items`, `youtube_transcript_segments`, `youtube_playlist_items`, and in-memory source jobs.
+
+## 4. Item model
 
 The current `items` model is intentionally richer than the current analysis corpus.
 
@@ -135,6 +182,7 @@ Stored dimensions include:
 - `has_media`;
 - `media_kind`;
 - compressed media metadata.
+- provider item kind (`telegram_message`, `youtube_transcript`, or `youtube_comment`);
 - nullable Telegram context metadata:
   - `reply_to_msg_id`;
   - `reply_to_peer_kind`;
@@ -146,7 +194,9 @@ This allows the main analysis workspace to present a more faithful archive even 
 
 Context metadata is not backfilled. Older rows and rows where Telegram did not expose the relevant fields keep `NULL` values.
 
-## 4. NotebookLM export architecture
+YouTube transcript segment rows are not duplicated into `items.content_zstd`; the transcript item stores the selected transcript text, while `youtube_transcript_segments` stores timestamped evidence for analysis and trace links.
+
+## 5. NotebookLM export architecture
 
 NotebookLM export reads only local SQLite state. It does not call Telegram, LLM providers, link preview services, or media download paths.
 
@@ -160,9 +210,9 @@ Exported message metadata can include:
 - thread id;
 - aggregate reaction count.
 
-## 5. Analysis architecture
+## 6. Analysis architecture
 
-### 5.1 Report generation
+### 6.1 Report generation
 
 The report flow:
 
@@ -175,7 +225,7 @@ The report flow:
 7. persist result + trace data
 8. persist frozen snapshot
 
-### 5.2 Saved run semantics
+### 6.2 Saved run semantics
 
 The saved run model is snapshot-first for new runs.
 
@@ -185,14 +235,16 @@ Frozen snapshot storage solves three drift problems:
 - source-group membership drift;
 - evidence drift during follow-up chat / trace resolution.
 
-### 5.3 Legacy compatibility
+### 6.3 Legacy compatibility
 
 New live corpus refs use local item identity (`s{source_id}-i{item_id}`).
 Legacy Telegram-shaped refs (`s{source_id}-m{message_id}`) are still accepted.
 Older runs without snapshot rows can still fall back to live tables. This keeps
 upgrades non-breaking while making new runs more stable.
 
-## 6. LLM provider architecture
+YouTube corpus loading adds timestamp-aware refs for transcript segments and synthetic refs for description text. Saved run snapshots preserve YouTube item kind, source type/subtype, and metadata needed for trace resolution after the live source changes.
+
+## 7. LLM provider architecture
 
 The `src-tauri/src/llm/` module is now profile-oriented.
 
@@ -220,29 +272,32 @@ This keeps analysis runs, provider tests, and follow-up chat aligned on one back
 
 LLM scheduling allows two running requests per `(provider, profile)` and prioritizes interactive requests over background work. Analysis report runs run a backend preflight before run creation and are capped at `10_000` messages, `80` estimated chunks, `1_500_000` estimated input characters, and `80` background requests.
 
-## 7. Error boundary
+## 8. Error boundary
 
 The backend now exposes structured `AppError` values. The frontend normalizes them through `src/lib/app-error.ts`.
 
 This is intentionally minimal: the app gets better UX than raw strings without introducing a large error framework.
 
-## 8. Known architectural debt
+## 9. Known architectural debt
 
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - Takeout import still needs broader live validation across supergroups, groups, private/left sources, and shifted export DC behavior;
 - migrated supergroup history is detected but not imported until the `(source_id, external_id)` collision policy is decided;
-- concrete YouTube, RSS, and forum ingestion are not implemented yet despite
-  the provider-ready source model;
+- RSS and forum ingestion are not implemented yet despite the provider-ready source model;
+- YouTube needs broader live validation for active livestreams, upcoming videos, auto-caption-only videos, no-caption videos, private/member/age/geo-gated content, and large playlists;
+- YouTube jobs are not persistent or resumable across app restart;
+- YouTube-specific NotebookLM export enrichment is not implemented yet;
 - the analysis layer has not yet become media-aware;
 - full Telegram Forum Topics and forward metadata are not modeled yet;
 - Telegram session storage may still deserve a more robust long-term format.
 
-## 9. Practical entry points
+## 10. Practical entry points
 
 If you are changing ingest:
 
 - `src-tauri/src/sources.rs`
 - `src-tauri/src/source_ingest.rs`
+- `src-tauri/src/youtube/`
 - `src-tauri/src/takeout_import.rs`
 - `src-tauri/src/takeout_import/raw_parse.rs`
 - `src/routes/analysis/+page.svelte`
@@ -258,6 +313,15 @@ If you are changing analysis:
 
 - `src-tauri/src/analysis/`
 - `src/routes/analysis/+page.svelte`
+
+If you are changing YouTube runtime, sync, auth, or detail UI:
+
+- `src-tauri/src/youtube/`
+- `src/lib/api/youtube-detail.ts`
+- `src/lib/api/source-jobs.ts`
+- `src/lib/components/analysis/youtube-source-detail.svelte`
+- `src/lib/components/analysis/youtube-playlist-detail.svelte`
+- `src/routes/settings/+page.svelte`
 
 If you are changing LLM settings or provider behavior:
 

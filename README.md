@@ -1,6 +1,6 @@
 # Extractum
 
-Extractum is a desktop-first Telegram source ingest and analysis workspace built with:
+Extractum is a desktop-first source ingest and analysis workspace built with:
 
 - `SvelteKit 2 + Svelte 5 + TypeScript`
 - `Tauri 2 + Rust`
@@ -10,7 +10,9 @@ The current product slice is a local-first MVP for:
 
 - managing Telegram accounts and sessions;
 - adding Telegram channels, supergroups, and groups as sources;
+- adding YouTube videos and playlists as sources;
 - syncing source history into local SQLite storage;
+- syncing YouTube metadata, transcripts, and comments into local SQLite storage;
 - importing Telegram Takeout history for existing sources;
 - browsing synced items in the `/analysis` workspace;
 - running provider-backed analysis reports in `/analysis`;
@@ -29,8 +31,13 @@ The current product slice is a local-first MVP for:
 
 - sources are stored in `sources`;
 - Telegram sources carry a `telegram_source_kind` of `channel`, `supergroup`, or `group`;
-- source uniqueness is scoped by account, source type, kind, and external id;
+- YouTube sources carry a provider-local `source_subtype` of `video` or `playlist`;
+- Telegram source uniqueness is scoped by account, source type, kind, and external id;
+- YouTube video and playlist uniqueness is scoped by source type, subtype, and external id;
 - synced Telegram messages are stored in `items`;
+- synced YouTube transcripts and comments are stored in `items` with provider item kinds;
+- YouTube transcript timing is stored in `youtube_transcript_segments`;
+- YouTube playlist membership is stored in `youtube_playlist_items`;
 - new synced Telegram messages store minimal local context when Telegram exposes it:
   - reply target message id;
   - reply target peer kind/id;
@@ -41,6 +48,8 @@ The current product slice is a local-first MVP for:
   - `recent_days(N)`
 - subsequent syncs continue from `last_sync_state`.
 - Takeout source import can fill older local history for an existing source without creating a second source record.
+
+YouTube source support requires `yt-dlp` to be installed and available on `PATH`. Extractum does not download YouTube audio or video binaries in the MVP; it calls `yt-dlp` for metadata, captions, comments, and playlist entries only. Auth-gated YouTube content requires cookies configured in `/settings`. YouTube sync jobs are in memory in the MVP and are not resumed after app restart.
 
 ### Media-aware item metadata
 
@@ -78,6 +87,7 @@ The settings flow now manages reusable LLM provider profiles:
 Analysis currently works on already-synced local data only.
 
 - reports can be generated for a single source or a saved source group;
+- YouTube reports can use transcript-only, transcript+description, or transcript+description+comments corpus modes;
 - analysis and follow-up chat resolve the active LLM profile by default unless a workflow passes an explicit profile id;
 - prompt templates are versioned and stored locally;
 - source groups are stored locally;
@@ -86,6 +96,7 @@ Analysis currently works on already-synced local data only.
 - saved runs include result markdown, trace data, chat history, and a frozen corpus snapshot;
 - follow-up chat for new runs reads the saved snapshot rather than the live `items` table.
 - backend preflight rejects empty or oversized analysis scopes before creating a run.
+- YouTube trace refs preserve timestamp evidence links for transcript segments.
 
 This means saved runs are now intended to be stable artifacts rather than live views over changing data.
 
@@ -115,14 +126,17 @@ Privacy warning: Only export chats and channels you are authorized to access. Be
 ## Current constraints
 
 - analysis remains text-first: media-only items are visible in the analysis workspace but are not yet part of the analysis corpus;
+- YouTube support is metadata/text only and does not download audio or video binaries;
+- YouTube source jobs are process-local and in memory; after app restart, active jobs are not resumed and the user can start a fresh sync;
 - saved LLM API keys and Telegram `api_hash` values are stored in the OS secure credential store; Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage;
+- YouTube cookies, when enabled in Settings, are stored in OS secure storage and are written only to temporary backend cookie files for `yt-dlp`;
 - peer resolution still falls back to dialog scanning when cached username metadata is insufficient.
 
 ## Architecture
 
 The project follows a practical split:
 
-- Rust backend owns Telegram access, session restore, migrations, SQLite I/O, compression, and analysis orchestration.
+- Rust backend owns Telegram access, YouTube `yt-dlp` orchestration, session restore, migrations, SQLite I/O, compression, secure storage, and analysis orchestration.
 - Svelte frontend owns route flow, UI state, forms, filtering, and user-facing workflows.
 
 The backend is intentionally thin in UI concerns, while the frontend is intentionally thin in infrastructure concerns.
@@ -132,7 +146,7 @@ The backend is intentionally thin in UI concerns, while the frontend is intentio
 - `/accounts`: create/delete accounts, inspect runtime status
 - `/auth/[id]`: Telegram sign-in and logout
 - `/sources`: lightweight compatibility route that points people to the main workspace
-- `/settings`: manage reusable LLM provider profiles, active profile selection, model refresh, and live provider smoke tests
+- `/settings`: manage reusable LLM provider profiles, active profile selection, model refresh, live provider smoke tests, and YouTube cookie/settings controls
 - `/analysis`: source browsing and sync, reports, source groups, active runs, saved run history, follow-up chat, trace inspection
 
 ## Storage overview
@@ -149,6 +163,8 @@ Main tables:
 - `analysis_source_group_members`
 - `analysis_chat_messages`
 - `analysis_run_messages`
+- `youtube_playlist_items`
+- `youtube_transcript_segments`
 
 Recent schema additions:
 
@@ -159,6 +175,7 @@ Recent schema additions:
 - migration `13.sql`: Telegram reply/thread/reaction context metadata on `items`
 - migration `14.sql`: local Telegram Forum Topics catalog
 - migration `15.sql`: provider-local source subtype
+- migration `16.sql`: YouTube source foundation, provider item kinds, playlist rows, transcript segments, YouTube analysis snapshots, source-group provider type, and YouTube settings defaults
 
 ## Error model
 
