@@ -55,6 +55,7 @@ Part 6 commits already created:
 7b05bb3 feat: polish youtube source workspace
 b42a21d feat: complete youtube workspace controls
 fcb4469 fix: harden youtube source workflows
+f78694d docs: document youtube source MVP
 ```
 
 Files changed by Task 4:
@@ -68,7 +69,7 @@ Files changed by Task 4:
   - `docs/session-context-2026-05-03.md`
 - The Part 6 plan file still needs checkbox updates before final closeout.
 
-Task 4 target commit message:
+Task 4 commit:
 
 ```text
 docs: document youtube source MVP
@@ -221,9 +222,9 @@ Observed results:
 - `git diff --check`: no whitespace errors; CRLF warnings only.
 - `git diff --cached --check`: clean.
 
-## Task 4 In Progress
+## Task 4 Completed
 
-Task 4 documentation edits are complete in the working tree and ready for the docs commit.
+Task 4 documentation edits were completed and committed in `f78694d docs: document youtube source MVP`.
 
 Task 4 goal:
 
@@ -266,16 +267,16 @@ git diff -- README.md docs/database-schema.md docs/architecture-deep-dive.md doc
 
 Expected: docs describe the implemented MVP, restart behavior, runtime requirement, schema additions, architecture additions, and future work clearly.
 
-Task 4 still needs staging/commit if this file is restored before the commit:
+Task 4 commit command used:
 
 ```powershell
 git add README.md docs/database-schema.md docs/architecture-deep-dive.md docs/backlog.md docs/youtube-manual-verification.md docs/session-context-2026-05-03.md
 git commit -m "docs: document youtube source MVP"
 ```
 
-## Final Verification Still Needed
+## Final Verification Completed
 
-After Task 4 docs and the Part 6 plan checkbox update, rerun the full gate:
+Fresh final verification was run after Task 4 docs and before the Part 6 plan checkbox update. The plan update is documentation-only; `git diff --check` was rerun afterward.
 
 ```powershell
 cd src-tauri
@@ -288,7 +289,20 @@ npm.cmd run build
 git diff --check
 ```
 
-Then inspect `git status --short`.
+Observed final results:
+
+- `cargo test --lib`: 285 passed.
+- `cargo clippy --all-targets -- -D warnings`: passed.
+- `npm.cmd test`: 27 files, 215 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `npm.cmd run build`: passed.
+- `git diff --check`: clean after the plan update; CRLF warnings only.
+
+Part 6 plan checkbox update:
+
+- `docs/superpowers/plans/2026-05-09-youtube-sources-06-ui-hardening-docs.md` has no remaining unchecked checklist items.
+- Manual matrix caveat remains documented in both the plan and `docs/youtube-manual-verification.md`: some live-provider scenarios are `Partial pass` or `Not run`.
+- Plan completion still needs a final commit if this file is restored before that commit.
 
 ## Operational Notes
 

@@ -1,6 +1,6 @@
-# YouTube Sources Part 6: UI Polish, Hardening, and Docs Implementation Plan
+﻿# YouTube Sources Part 6: UI Polish, Hardening, and Docs Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Finish the YouTube MVP user experience, run the manual hardening matrix with pass/fail criteria, and document the new provider.
 
@@ -51,16 +51,16 @@ After this part:
 - Modify: `src/lib/analysis-scope-state.ts`
 - Modify: `src/lib/analysis-scope-state.test.ts`
 
-- [ ] Execute this task in two internal checkpoints so runtime/detail contracts stabilize before the Svelte wiring lands:
+- [x] Execute this task in two internal checkpoints so runtime/detail contracts stabilize before the Svelte wiring lands:
 
 ```text
 Checkpoint A: runtime status command, detail DTOs, backend detail queries, frontend API wrappers, and their tests.
 Checkpoint B: source row/workspace/detail components, provider-aware labels, and analysis state wiring.
 ```
 
-- [ ] Apply the approved UI-library policy to new UI only. Use `@lucide/svelte` for icon buttons and status/action affordances inside new YouTube components or new local UI wrappers. Use `bits-ui` through new local wrappers for tabs, tooltips, popovers, dropdown menus, or switches when native markup would require custom focus/keyboard behavior. Do not import new UI dependencies directly into existing workspace components, and do not replace existing `Button`, `Input`, `Select`, `Badge`, `PanelHeader`, or `StatusMessage` with a full external UI kit.
+- [x] Apply the approved UI-library policy to new UI only. Use `@lucide/svelte` for icon buttons and status/action affordances inside new YouTube components or new local UI wrappers. Use `bits-ui` through new local wrappers for tabs, tooltips, popovers, dropdown menus, or switches when native markup would require custom focus/keyboard behavior. Do not import new UI dependencies directly into existing workspace components, and do not replace existing `Button`, `Input`, `Select`, `Badge`, `PanelHeader`, or `StatusMessage` with a full external UI kit.
 
-- [ ] Add a runtime status command so sync disable reasons can mention missing `yt-dlp` before the user starts a job.
+- [x] Add a runtime status command so sync disable reasons can mention missing `yt-dlp` before the user starts a job.
 
 In `src-tauri/src/youtube/runtime.rs`:
 
@@ -130,7 +130,7 @@ pub async fn get_youtube_runtime_status() -> AppResult<YoutubeRuntimeStatusDto> 
 
 Register `runtime` in `youtube/mod.rs` and register `get_youtube_runtime_status` in `src-tauri/src/lib.rs`.
 
-- [ ] Add read-only detail DTOs in `src-tauri/src/youtube/detail.rs` and matching TypeScript types in `src/lib/types/youtube.ts`.
+- [x] Add read-only detail DTOs in `src-tauri/src/youtube/detail.rs` and matching TypeScript types in `src/lib/types/youtube.ts`.
 
 Rust DTO shape:
 
@@ -291,7 +291,7 @@ export interface YoutubePlaylistDetail {
 }
 ```
 
-- [ ] Implement detail commands in `src-tauri/src/youtube/detail.rs`:
+- [x] Implement detail commands in `src-tauri/src/youtube/detail.rs`:
 
 ```rust
 #[tauri::command]
@@ -341,7 +341,7 @@ otherwise -> not_synced
 
 The MVP may ignore failed job state in SQL because source jobs are in memory; the frontend can display the latest failed `SourceJobRecord` beside the persisted status.
 
-- [ ] Add frontend API wrappers in `src/lib/api/youtube-detail.ts`:
+- [x] Add frontend API wrappers in `src/lib/api/youtube-detail.ts`:
 
 ```ts
 import { invoke } from "@tauri-apps/api/core";
@@ -369,7 +369,7 @@ export function getYoutubePlaylistDetail(sourceId: number) {
 }
 ```
 
-- [ ] Add explicit API tests in `src/lib/api/youtube-detail.test.ts`:
+- [x] Add explicit API tests in `src/lib/api/youtube-detail.test.ts`:
 
 ```ts
 it("checks youtube runtime status", async () => {
@@ -404,7 +404,7 @@ it("loads youtube video and playlist detail", async () => {
 });
 ```
 
-- [ ] Update `src/lib/analysis-source-state.ts` so `sourceSyncDisabledReason` accepts YouTube runtime state:
+- [x] Update `src/lib/analysis-source-state.ts` so `sourceSyncDisabledReason` accepts YouTube runtime state:
 
 ```ts
 import type { YoutubeRuntimeStatus } from "$lib/types/youtube";
@@ -445,7 +445,7 @@ expect(sourceSyncDisabledReason(youtubeVideoSource, {}, {
 })).toBeNull();
 ```
 
-- [ ] Update `src/lib/analysis-scope-state.ts` to remove Telegram-only wording:
+- [x] Update `src/lib/analysis-scope-state.ts` to remove Telegram-only wording:
 
 ```ts
 if (metrics) {
@@ -456,7 +456,7 @@ return "This source is available in the workspace but has no synced item count y
 
 Update `analysis-scope-state.test.ts` expected strings from `synced messages` to `synced items`.
 
-- [ ] Make `src/lib/components/source-row.svelte` and `workspace-rail.svelte` accept optional YouTube summaries.
+- [x] Make `src/lib/components/source-row.svelte` and `workspace-rail.svelte` accept optional YouTube summaries.
 
 Props to add:
 
@@ -473,7 +473,7 @@ Display rules:
 - Thumbnail image source is `youtubeSummary.thumbnailUrl ?? source.avatarDataUrl`; fallback is `sourceInitial(source)`.
 - Use `sourceCapabilities(source).contentLabel` for count labels instead of hard-coded `msgs`.
 
-- [ ] Define the single props contract for `src/lib/components/analysis/youtube-source-detail.svelte`:
+- [x] Define the single props contract for `src/lib/components/analysis/youtube-source-detail.svelte`:
 
 ```ts
 import type { SourceJobRecord } from "$lib/types/sources";
@@ -521,7 +521,7 @@ Data displayed:
 - Comments: `detail.summary.comments.label`, item count, last synced timestamp.
 - Jobs: active and recent jobs filtered to this `source.id`.
 
-- [ ] Define the single props contract for `src/lib/components/analysis/youtube-playlist-detail.svelte`:
+- [x] Define the single props contract for `src/lib/components/analysis/youtube-playlist-detail.svelte`:
 
 ```ts
 import type { SourceJobRecord } from "$lib/types/sources";
@@ -569,7 +569,7 @@ unavailable_unknown
 
 - Prefer icon buttons with tooltips for `open source`, `sync this video`, `retry this video`, and `cancel job` actions. Implement them through new local UI wrappers backed by `@lucide/svelte` and, where useful, `bits-ui` tooltip primitives.
 
-- [ ] Wire `workspace-main.svelte`:
+- [x] Wire `workspace-main.svelte`:
 
 ```text
 currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "video"
@@ -584,7 +584,7 @@ otherwise
 
 Keep Telegram/RSS/forum `SourceContextPanel` behavior unchanged except for provider-aware labels.
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 cd src-tauri
@@ -596,7 +596,7 @@ npm run check
 
 Expected: runtime and detail DTO tests pass, YouTube sync is disabled when `yt-dlp` is unavailable, scope summaries say synced items, and Svelte typecheck passes.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```powershell
 git add src-tauri/src/youtube src-tauri/src/lib.rs src/lib/types/youtube.ts src/lib/api/youtube-detail.ts src/lib/api/youtube-detail.test.ts src/lib/components src/lib/analysis-source-state.ts src/lib/analysis-source-state.test.ts src/lib/analysis-scope-state.ts src/lib/analysis-scope-state.test.ts
@@ -619,7 +619,7 @@ git commit -m "feat: polish youtube source workspace"
 - Modify: `src/lib/analysis-state.test.ts`
 - Modify: `src/lib/types/analysis.ts`
 
-- [ ] Extend `src/lib/api/source-jobs.ts` with the Part 3 commands that were not exposed in the first job wiring:
+- [x] Extend `src/lib/api/source-jobs.ts` with the Part 3 commands that were not exposed in the first job wiring:
 
 ```ts
 export function syncYoutubePlaylistVideo(
@@ -648,7 +648,7 @@ export function cancelSourceJob(jobId: string) {
 
 Add `source-jobs.test.ts` assertions that each wrapper sends the exact camelCase argument names above.
 
-- [ ] Map video job controls to exact commands:
+- [x] Map video job controls to exact commands:
 
 ```text
 sync metadata
@@ -666,7 +666,7 @@ cancel current job
 
 Only show `cancel current job` for jobs whose status is `queued`, `running`, or `cancel_requested`; disable the button while status is `cancel_requested`.
 
-- [ ] Map playlist job controls to exact commands:
+- [x] Map playlist job controls to exact commands:
 
 ```text
 sync all playlist videos
@@ -681,7 +681,7 @@ cancel current playlist job
 
 `sync all playlist videos` means: refresh playlist metadata, create/link any child video sources, and sync transcripts for linked child videos through the Part 3 playlist full-sync path. It does not fetch comments by default; comments remain an explicit video-level action to avoid a surprising large comment crawl.
 
-- [ ] Map per-video playlist row actions:
+- [x] Map per-video playlist row actions:
 
 ```text
 open source
@@ -704,7 +704,7 @@ retry this video
 
 `retry this video` is a single-row retry, not the aggregate `retryFailedYoutubePlaylistVideos` command.
 
-- [ ] Add YouTube corpus mode selector for YouTube scopes only.
+- [x] Add YouTube corpus mode selector for YouTube scopes only.
 
 TypeScript state:
 
@@ -733,7 +733,7 @@ startAnalysisReport({
 
 Telegram scopes ignore the field backend-side, but frontend still sends the default value to keep the command shape stable.
 
-- [ ] Hide Telegram topic controls for YouTube sources with concrete component changes:
+- [x] Hide Telegram topic controls for YouTube sources with concrete component changes:
 
 ```text
 src/routes/analysis/+page.svelte
@@ -757,7 +757,7 @@ expect(shouldShowTopicSelector(youtubeVideoSource, "single_source", false, [])).
 expect(currentTopicFilter("__all_topics__", [])).toBeNull();
 ```
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 npm test -- source-jobs analysis-run-workflow analysis-state analysis-source-state analysis-scope-state
@@ -766,7 +766,7 @@ npm run check
 
 Expected: wrapper tests prove exact command mappings, YouTube controls render only for YouTube scopes, Telegram topic controls remain unchanged for Telegram supergroups, and YouTube sources do not load or display forum topic controls.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```powershell
 git add src/routes/analysis/+page.svelte src/lib/components/analysis src/lib/api/source-jobs.ts src/lib/api/source-jobs.test.ts src/lib/analysis-state.ts src/lib/analysis-state.test.ts src/lib/types/analysis.ts
@@ -783,7 +783,9 @@ git commit -m "feat: complete youtube workspace controls"
 - Add focused automated tests next to the changed code for every defect that can be reproduced without live YouTube/network access.
 - If a defect depends on live provider behavior, add a concise manual verification note to `docs/youtube-manual-verification.md`.
 
-- [ ] Create or update `docs/youtube-manual-verification.md` with a table containing these columns:
+Manual scenario outcomes are recorded in `docs/youtube-manual-verification.md`. Some live-provider cases are intentionally documented as `Partial pass` or `Not run` because no stable fixture/profile was exercised in this pass.
+
+- [x] Create or update `docs/youtube-manual-verification.md` with a table containing these columns:
 
 ```text
 Scenario
@@ -794,7 +796,7 @@ Result
 Notes
 ```
 
-- [ ] Test public video with manual captions.
+- [x] Test public video with manual captions.
 
 Pass criteria:
 
@@ -805,7 +807,7 @@ Pass criteria:
 - Video detail shows captions state `synced`.
 - Analysis with `transcript_only` can start.
 
-- [ ] Test public video with auto captions.
+- [x] Test public video with auto captions.
 
 Pass criteria:
 
@@ -813,7 +815,7 @@ Pass criteria:
 - Caption metadata records `auto`.
 - Video detail still shows captions state `synced`.
 
-- [ ] Test video with no captions.
+- [x] Test video with no captions.
 
 Pass criteria:
 
@@ -822,7 +824,7 @@ Pass criteria:
 - Video detail shows captions state `unavailable`.
 - Analysis preflight either excludes the source or returns a clear validation error instead of sending an empty transcript.
 
-- [ ] Test Shorts URL.
+- [x] Test Shorts URL.
 
 Pass criteria:
 
@@ -830,7 +832,7 @@ Pass criteria:
 - Add dedupes against the same canonical video id.
 - Detail view direct link opens the canonical YouTube URL.
 
-- [ ] Test live URL.
+- [x] Test live URL.
 
 Pass criteria:
 
@@ -838,7 +840,7 @@ Pass criteria:
 - Transcript sync does not spin indefinitely.
 - UI shows an availability badge and any provider warning.
 
-- [ ] Test upcoming or live-ended source if available.
+- [x] Test upcoming or live-ended source if available.
 
 Pass criteria:
 
@@ -846,7 +848,7 @@ Pass criteria:
 - Live-ended transcript-pending videos are marked `live_ended_transcript_pending`.
 - Retry controls are enabled only for statuses listed as retryable in Part 3.
 
-- [ ] Test public playlist.
+- [x] Test public playlist.
 
 Pass criteria:
 
@@ -856,7 +858,7 @@ Pass criteria:
 - Linked child videos count matches `video_source_id IS NOT NULL` active rows.
 - `sync all playlist videos` starts one playlist full-sync job.
 
-- [ ] Test playlist with removed/private/unavailable entries.
+- [x] Test playlist with removed/private/unavailable entries.
 
 Pass criteria:
 
@@ -865,7 +867,7 @@ Pass criteria:
 - Unlinked rows do not appear in analysis corpus.
 - Playlist detail displays unavailable count.
 
-- [ ] Test direct video first, then playlist containing the same video.
+- [x] Test direct video first, then playlist containing the same video.
 
 Pass criteria:
 
@@ -873,7 +875,7 @@ Pass criteria:
 - No duplicate video source is created.
 - `open source` from the playlist row selects the existing video source.
 
-- [ ] Test comments-heavy video with cancellation.
+- [x] Test comments-heavy video with cancellation.
 
 Pass criteria:
 
@@ -882,7 +884,7 @@ Pass criteria:
 - Partial comment rows, if any, remain valid `youtube_comment` items.
 - UI clears active pending state after terminal job status.
 
-- [ ] Test saved analysis run, then resync transcript in a different caption language.
+- [x] Test saved analysis run, then resync transcript in a different caption language.
 
 Pass criteria:
 
@@ -890,7 +892,7 @@ Pass criteria:
 - New transcript sync updates live source items without mutating saved run snapshot rows.
 - Timestamp trace links from the saved run still resolve.
 
-- [ ] Test app restart during active YouTube job.
+- [x] Test app restart during active YouTube job.
 
 Expected MVP behavior:
 
@@ -901,7 +903,7 @@ Expected MVP behavior:
 - The user can start a new sync job for the same source after restart.
 - No attempt is made in this MVP to resume an interrupted `yt-dlp` process.
 
-- [ ] For every defect fixed, add one of:
+- [x] For every defect fixed, add one of:
 
 ```text
 unit/component/API test for deterministic behavior
@@ -909,7 +911,7 @@ Rust unit test for parser/query/state behavior
 manual verification note in docs/youtube-manual-verification.md for live-provider-only behavior
 ```
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 cd src-tauri
@@ -923,7 +925,7 @@ npm run build
 
 Expected: all automated checks pass, including clippy, and the manual matrix contains pass/fail notes for every scenario.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```powershell
 git add src-tauri src docs/youtube-manual-verification.md
@@ -942,7 +944,7 @@ git commit -m "fix: harden youtube source workflows"
 - Modify: `docs/backlog.md`
 - Modify: `docs/youtube-manual-verification.md`
 
-- [ ] Add README notes:
+- [x] Add README notes:
 
 ```text
 yt-dlp must be installed and available on PATH for YouTube source support.
@@ -951,7 +953,7 @@ Auth-gated content requires YouTube cookies configured in Settings.
 YouTube sync jobs are in memory in the MVP and are not resumed after app restart.
 ```
 
-- [ ] Document schema additions:
+- [x] Document schema additions:
 
 ```text
 items.item_kind
@@ -962,7 +964,7 @@ analysis_source_groups.source_type
 YouTube partial unique indexes on sources
 ```
 
-- [ ] Document architecture additions:
+- [x] Document architecture additions:
 
 ```text
 youtube/ Rust module
@@ -974,7 +976,7 @@ secure cookie handling
 read-only YouTube detail/summary commands
 ```
 
-- [ ] Move future YouTube work to backlog without implying existing NotebookLM export is post-MVP.
+- [x] Move future YouTube work to backlog without implying existing NotebookLM export is post-MVP.
 
 Backlog entries:
 
@@ -988,7 +990,7 @@ Persistent/resumable YouTube source jobs across app restart.
 
 Do not move the existing generic NotebookLM export feature to backlog; it already exists and must keep working for Telegram sources.
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 git diff -- README.md docs/database-schema.md docs/architecture-deep-dive.md docs/backlog.md docs/youtube-manual-verification.md
@@ -996,7 +998,7 @@ git diff -- README.md docs/database-schema.md docs/architecture-deep-dive.md doc
 
 Expected: docs describe the implemented MVP, restart behavior, runtime requirement, schema additions, and future work clearly.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```powershell
 git add README.md docs/database-schema.md docs/architecture-deep-dive.md docs/backlog.md docs/youtube-manual-verification.md
@@ -1007,7 +1009,7 @@ git commit -m "docs: document youtube source MVP"
 
 ## Final Verification
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 cd src-tauri
@@ -1019,7 +1021,7 @@ npm run check
 npm run build
 ```
 
-- [ ] Confirm the MVP acceptance checklist:
+- [x] Confirm the MVP acceptance checklist:
 
 ```text
 preview video
