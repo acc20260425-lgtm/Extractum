@@ -682,6 +682,10 @@
             <Eraser size={15} aria-hidden="true" />
             Clear API key
           </Button>
+          <Button variant="secondary" type="button" onclick={openTestDialog}>
+            <Terminal size={15} aria-hidden="true" />
+            Open test
+          </Button>
         </div>
 
         {#if modelsStatus}
@@ -724,59 +728,6 @@
     </div>
 
     <div class="page-stack">
-      <section class="desk-panel desk-panel-subtle">
-        <div class="panel-header">
-          <div class="panel-header-copy">
-            <span class="page-eyebrow">Provider test</span>
-            <h2>Smoke test</h2>
-            <p>
-              Run a real request with the profile open in the form. The test saves the draft first,
-              then uses the stored provider, model, key, and base URL.
-            </p>
-          </div>
-        </div>
-
-        <SurfaceCard className="summary-strip">
-          <div class="summary-copy">
-            <span class="summary-label">Prompt draft</span>
-            <p>{testPrompt}</p>
-          </div>
-          <div class="summary-meta">
-            {#if provider || defaultModel}
-              <MetaPill>{providerModelLine()}</MetaPill>
-            {/if}
-            {#if testUsage}
-              <MetaPill>{usageLine(testUsage)}</MetaPill>
-            {/if}
-            {#if testing}
-              <Button variant="danger-soft" onclick={cancelTest}>
-                <Square size={15} aria-hidden="true" /> Cancel test
-              </Button>
-            {/if}
-            <Button variant="secondary" onclick={openTestDialog}>
-              <Terminal size={15} aria-hidden="true" />
-              {testOutput || testing ? "Open test console" : "Open test"}
-            </Button>
-          </div>
-        </SurfaceCard>
-
-        {#if testStatus}
-          <StatusMessage
-            tone={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error") ? "error" : "default"}
-          >
-            {testStatus}
-          </StatusMessage>
-        {/if}
-
-        <SurfaceCard title="Latest response" meta={testing ? "streaming..." : ""} compact className="output-surface">
-          {#if testOutput}
-            <pre>{testOutput}</pre>
-          {:else}
-            <EmptyState description="No output yet. Open the test console to run a prompt." />
-          {/if}
-        </SurfaceCard>
-      </section>
-
       <section class="desk-panel desk-panel-subtle provider-notes">
         <div class="panel-header-copy">
           <span class="page-eyebrow">Operator note</span>
@@ -822,6 +773,14 @@
         <MetaPill>{providerModelLine()}</MetaPill>
       {/if}
     </div>
+
+    {#if testStatus}
+      <StatusMessage
+        tone={testStatus.startsWith("Provider test failed") || testStatus.startsWith("Error") ? "error" : "default"}
+      >
+        {testStatus}
+      </StatusMessage>
+    {/if}
 
     <SurfaceCard
       title="Streaming output"
@@ -907,46 +866,6 @@
     overflow-wrap: anywhere;
   }
 
-  :global(.ui-surface-card.summary-strip) {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: flex-start;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 72%, transparent), transparent);
-  }
-
-  .summary-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    min-width: 0;
-  }
-
-  .summary-label {
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  .summary-copy p {
-    margin: 0;
-    color: var(--text);
-    line-height: 1.5;
-    white-space: pre-wrap;
-  }
-
-  .summary-meta {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
-
   :global(.page-status) {
     margin-bottom: 0;
   }
@@ -987,7 +906,6 @@
       grid-template-columns: 1fr;
     }
 
-    :global(.ui-surface-card.summary-strip),
     .modal-actions {
       flex-direction: column;
       align-items: stretch;
