@@ -32,5 +32,6 @@ pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
 pub(crate) use store::load_source;
 pub(crate) use sync::finalize_sync;
 pub(crate) use types::{
-    SourceSyncTarget, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    SourceSyncTarget, ITEM_KIND_TELEGRAM_MESSAGE, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+    TELEGRAM_KIND_SUPERGROUP,
 };

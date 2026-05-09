@@ -19,7 +19,7 @@ use super::settings::{
 };
 use super::store::load_source;
 use super::topics::refresh_forum_topics;
-use super::types::{now_secs, SourceSyncTarget};
+use super::types::{now_secs, SourceSyncTarget, ITEM_KIND_TELEGRAM_MESSAGE};
 
 #[derive(Serialize)]
 pub struct SyncResult {
@@ -147,6 +147,7 @@ async fn persist_items(
             source.id,
             SourceItemInsert {
                 external_id: message_id.to_string(),
+                item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
                 author,
                 published_at,
                 payload: item_payload,

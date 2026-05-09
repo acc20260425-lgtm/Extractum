@@ -52,6 +52,7 @@ export interface SourceItem {
   id: number;
   sourceId: number;
   externalId: string;
+  itemKind: string;
   author: string | null;
   publishedAt: number;
   content: string | null;

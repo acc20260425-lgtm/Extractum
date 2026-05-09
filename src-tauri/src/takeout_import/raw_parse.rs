@@ -5,7 +5,7 @@ use crate::media::{
     derive_content_kind, derive_document_media_kind, media_label, DocumentSignals,
     ExtractedItemPayload, ExtractedMediaPayload, ItemMediaMetadata,
 };
-use crate::sources::{SourceItemInsert, TelegramItemContext};
+use crate::sources::{SourceItemInsert, TelegramItemContext, ITEM_KIND_TELEGRAM_MESSAGE};
 
 pub(crate) fn parse_raw_message(
     source_title: &Option<String>,
@@ -46,6 +46,7 @@ pub(crate) fn parse_raw_message(
 
     Ok(Some(SourceItemInsert {
         external_id: message.id.to_string(),
+        item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
         author,
         published_at: i64::from(message.date),
         payload,

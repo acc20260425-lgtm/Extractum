@@ -7,6 +7,9 @@ pub(crate) const FORUM_SOURCE_TYPE: &str = "forum";
 pub(crate) const TELEGRAM_KIND_CHANNEL: &str = "channel";
 pub(crate) const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
 pub(crate) const TELEGRAM_KIND_GROUP: &str = "group";
+pub(crate) const ITEM_KIND_TELEGRAM_MESSAGE: &str = "telegram_message";
+pub(crate) const ITEM_KIND_YOUTUBE_TRANSCRIPT: &str = "youtube_transcript";
+pub(crate) const ITEM_KIND_YOUTUBE_COMMENT: &str = "youtube_comment";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -119,6 +122,7 @@ pub(super) struct StoredItemRow {
     pub(super) id: i64,
     pub(super) source_id: i64,
     pub(super) external_id: String,
+    pub(super) item_kind: String,
     pub(super) author: Option<String>,
     pub(super) published_at: i64,
     pub(super) content_kind: String,
@@ -156,7 +160,10 @@ pub(super) fn now_secs() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{SourceType, TelegramSourceKind};
+    use super::{
+        SourceType, TelegramSourceKind, ITEM_KIND_TELEGRAM_MESSAGE, ITEM_KIND_YOUTUBE_COMMENT,
+        ITEM_KIND_YOUTUBE_TRANSCRIPT,
+    };
 
     #[test]
     fn source_type_serializes_supported_provider_values() {
@@ -204,5 +211,12 @@ mod tests {
     fn telegram_source_kind_serializes_as_existing_wire_value() {
         let value = serde_json::to_string(&TelegramSourceKind::Supergroup).expect("serialize");
         assert_eq!(value, "\"supergroup\"");
+    }
+
+    #[test]
+    fn item_kind_constants_match_persisted_wire_values() {
+        assert_eq!(ITEM_KIND_TELEGRAM_MESSAGE, "telegram_message");
+        assert_eq!(ITEM_KIND_YOUTUBE_TRANSCRIPT, "youtube_transcript");
+        assert_eq!(ITEM_KIND_YOUTUBE_COMMENT, "youtube_comment");
     }
 }

@@ -22,6 +22,7 @@ pub(super) async fn load_item_rows_from_pool(
             items.id,
             items.source_id,
             items.external_id,
+            items.item_kind,
             items.author,
             items.published_at,
             items.content_kind,
@@ -118,16 +119,17 @@ mod tests {
             sqlx::query(
                 r#"
                 INSERT INTO items (
-                    id, source_id, external_id, author, published_at, ingested_at, content_zstd,
+                    id, source_id, external_id, item_kind, author, published_at, ingested_at, content_zstd,
                     raw_data_zstd, content_kind, has_media, media_kind, media_metadata_zstd,
                     reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
                     reaction_count
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
             )
             .bind(id)
             .bind(1_i64)
             .bind(external_id)
+            .bind("telegram_message")
             .bind("alice")
             .bind(published_at)
             .bind(published_at)
@@ -151,6 +153,7 @@ mod tests {
             .await
             .expect("load all rows");
         assert_eq!(rows.len(), 5);
+        assert!(rows.iter().all(|row| row.item_kind == "telegram_message"));
         assert_eq!(rows[0].forum_topic_id, Some(200));
         assert_eq!(rows[0].forum_topic_top_message_id, Some(700));
         assert_eq!(rows[1].forum_topic_id, Some(200));

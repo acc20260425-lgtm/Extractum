@@ -18,6 +18,7 @@ pub struct ItemRecord {
     pub id: i64,
     pub source_id: i64,
     pub external_id: String,
+    pub item_kind: String,
     pub author: Option<String>,
     pub published_at: i64,
     pub content: Option<String>,
@@ -54,6 +55,7 @@ pub struct ListSourceItemsRequest {
 
 pub(crate) struct SourceItemInsert {
     pub(crate) external_id: String,
+    pub(crate) item_kind: String,
     pub(crate) author: Option<String>,
     pub(crate) published_at: i64,
     pub(crate) payload: ExtractedItemPayload,
@@ -101,6 +103,7 @@ pub(crate) async fn insert_source_item(
         INSERT INTO items (
             source_id,
             external_id,
+            item_kind,
             author,
             published_at,
             ingested_at,
@@ -116,12 +119,13 @@ pub(crate) async fn insert_source_item(
             reply_to_top_id,
             reaction_count
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(source_id, external_id) DO NOTHING
         "#,
     )
     .bind(source_id)
     .bind(&item.external_id)
+    .bind(&item.item_kind)
     .bind(&item.author)
     .bind(item.published_at)
     .bind(now_secs())
@@ -168,6 +172,7 @@ fn item_record_from_row(row: StoredItemRow) -> AppResult<ItemRecord> {
         id: row.id,
         source_id: row.source_id,
         external_id: row.external_id,
+        item_kind: row.item_kind,
         author: row.author,
         published_at: row.published_at,
         content: row
@@ -268,6 +273,7 @@ mod tests {
         CONTENT_KIND_TEXT_WITH_MEDIA,
     };
     use crate::sources::test_support::memory_pool_with_source_items_and_topics;
+    use crate::sources::types::ITEM_KIND_TELEGRAM_MESSAGE;
 
     #[test]
     fn forum_topic_filter_deserializes_camel_case_topic_id() {
@@ -318,6 +324,7 @@ mod tests {
             1,
             SourceItemInsert {
                 external_id: "42".to_string(),
+                item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
                 author: Some("alice".to_string()),
                 published_at: 1234,
                 payload: ExtractedItemPayload {
@@ -347,6 +354,7 @@ mod tests {
             1,
             SourceItemInsert {
                 external_id: "42".to_string(),
+                item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
                 author: None,
                 published_at: 9999,
                 payload: ExtractedItemPayload {
@@ -365,7 +373,7 @@ mod tests {
         let row: StoredItemRow = sqlx::query_as(
             r#"
             SELECT
-                id, source_id, external_id, author, published_at, content_kind, has_media,
+                id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
                 media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
                 NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
             FROM items
@@ -379,6 +387,7 @@ mod tests {
         .expect("load inserted item");
 
         assert_eq!(row.source_id, 1);
+        assert_eq!(row.item_kind, ITEM_KIND_TELEGRAM_MESSAGE);
         assert_eq!(row.author.as_deref(), Some("alice"));
         assert_eq!(row.published_at, 1234);
         assert_eq!(row.content_kind, CONTENT_KIND_TEXT_WITH_MEDIA);

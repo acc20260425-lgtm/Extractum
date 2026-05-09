@@ -55,6 +55,7 @@ interface RawSourceItem {
   id: number;
   source_id: number;
   external_id: string;
+  item_kind: string;
   author: string | null;
   published_at: number;
   content: string | null;
@@ -193,6 +194,7 @@ function mapSourceItem(item: RawSourceItem): SourceItem {
     id: item.id,
     sourceId: item.source_id,
     externalId: item.external_id,
+    itemKind: item.item_kind,
     author: item.author,
     publishedAt: item.published_at,
     content: item.content,
