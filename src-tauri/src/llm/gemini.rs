@@ -1,11 +1,16 @@
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
+use tokio::time::{sleep, Duration};
 
 use super::streaming::{find_event_boundary, parse_sse_data};
 use super::{resolve_effective_model, LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderModel};
 use super::{LlmUsage, ResolvedLlmProfile};
 
 const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
+const GEMINI_STREAM_MAX_ATTEMPTS: usize = 3;
+const GEMINI_RETRY_DELAY_MS: u64 = 600;
+const GEMINI_TRANSIENT_ERROR_HINT: &str =
+    "This is a temporary Gemini server error; retry the request or switch models if it persists.";
 
 #[derive(Serialize)]
 struct GeminiGenerateContentRequest {
@@ -161,13 +166,11 @@ fn map_usage(usage: &GeminiUsageMetadata) -> LlmUsage {
 }
 
 fn format_google_error(status: reqwest::StatusCode, body: &str) -> String {
-    if let Ok(parsed) = serde_json::from_str::<GoogleApiErrorEnvelope>(body) {
+    let message = if let Ok(parsed) = serde_json::from_str::<GoogleApiErrorEnvelope>(body) {
         let code = parsed.error.code.unwrap_or(i64::from(status.as_u16()));
         let status_label = parsed.error.status.unwrap_or_else(|| status.to_string());
-        return format!("{status_label} ({code}): {}", parsed.error.message);
-    }
-
-    if body.trim().is_empty() {
+        format!("{status_label} ({code}): {}", parsed.error.message)
+    } else if body.trim().is_empty() {
         format!("Gemini request failed with HTTP {}", status.as_u16())
     } else {
         format!(
@@ -175,11 +178,21 @@ fn format_google_error(status: reqwest::StatusCode, body: &str) -> String {
             status.as_u16(),
             body.trim()
         )
+    };
+
+    if is_retryable_google_status(status) {
+        format!("{message} {GEMINI_TRANSIENT_ERROR_HINT}")
+    } else {
+        message
     }
 }
 
 fn strip_gemini_model_prefix(name: &str) -> String {
     name.strip_prefix("models/").unwrap_or(name).to_string()
+}
+
+fn is_retryable_google_status(status: reqwest::StatusCode) -> bool {
+    matches!(status.as_u16(), 500 | 503 | 504)
 }
 
 fn map_gemini_model(model: GeminiModel) -> LlmProviderModel {
@@ -217,20 +230,43 @@ where
     let request_body = build_gemini_request(&request.messages)?;
     let url = format!("{GEMINI_API_BASE}/models/{model}:streamGenerateContent?alt=sse");
     let client = HttpClient::new();
-    let response = client
-        .post(url)
-        .header("x-goog-api-key", profile.api_key.as_str())
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut response = None;
+    let mut last_retryable_error = None;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format_google_error(status, &body));
+    for attempt in 1..=GEMINI_STREAM_MAX_ATTEMPTS {
+        let candidate = client
+            .post(url.clone())
+            .header("x-goog-api-key", profile.api_key.as_str())
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if candidate.status().is_success() {
+            response = Some(candidate);
+            break;
+        }
+
+        let status = candidate.status();
+        let body = candidate.text().await.unwrap_or_default();
+        let error = format_google_error(status, &body);
+
+        if is_retryable_google_status(status) && attempt < GEMINI_STREAM_MAX_ATTEMPTS {
+            last_retryable_error = Some(error);
+            sleep(Duration::from_millis(
+                GEMINI_RETRY_DELAY_MS * attempt as u64,
+            ))
+            .await;
+            continue;
+        }
+
+        return Err(error);
     }
+
+    let response = response.ok_or_else(|| {
+        last_retryable_error.unwrap_or_else(|| "Gemini request failed before streaming".to_string())
+    })?;
 
     let mut response = response;
     let mut buffer = Vec::new();
@@ -363,10 +399,11 @@ pub(super) async fn list_gemini_models(api_key: &str) -> Result<Vec<LlmProviderM
 #[cfg(test)]
 mod tests {
     use super::{
-        build_gemini_request, extract_text, map_gemini_model, map_usage, GeminiContent,
-        GeminiGenerateContentResponse, GeminiModel, GeminiPart,
+        build_gemini_request, extract_text, format_google_error, map_gemini_model, map_usage,
+        GeminiContent, GeminiGenerateContentResponse, GeminiModel, GeminiPart,
     };
     use crate::llm::LlmMessage;
+    use reqwest::StatusCode;
 
     #[test]
     fn gemini_request_mapping_keeps_system_history_and_roles() {
@@ -432,5 +469,18 @@ mod tests {
         assert!(model
             .supported_generation_methods
             .contains(&"generateContent".to_string()));
+    }
+
+    #[test]
+    fn gemini_server_error_message_includes_transient_recovery_hint() {
+        let body =
+            r#"{"error":{"code":500,"message":"Internal error encountered.","status":"INTERNAL"}}"#;
+
+        let error = format_google_error(StatusCode::INTERNAL_SERVER_ERROR, body);
+
+        assert_eq!(
+            error,
+            "INTERNAL (500): Internal error encountered. This is a temporary Gemini server error; retry the request or switch models if it persists."
+        );
     }
 }
