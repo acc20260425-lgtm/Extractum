@@ -45,6 +45,7 @@ pub(crate) enum SourceJobStatus {
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum SourceJobType {
     YoutubeVideoMetadataSync,
     YoutubeVideoTranscriptSync,
@@ -170,13 +171,13 @@ impl SourceJobState {
             .filter(|job| {
                 filter
                     .source_id
-                    .map_or(true, |source_id| job.source_id == source_id)
+                    .is_none_or(|source_id| job.source_id == source_id)
             })
             .filter(|job| {
                 filter
                     .status
                     .as_ref()
-                    .map_or(true, |status| job.status == *status)
+                    .is_none_or(|status| job.status == *status)
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -222,9 +223,15 @@ impl SourceJobState {
         F: FnOnce(&mut SourceJobRecord),
     {
         let mut inner = self.inner.lock().await;
+        let cancel_requested = inner.cancel_requested.contains(job_id);
         {
             let job = inner.jobs.get_mut(job_id)?;
             update(job);
+            if cancel_requested {
+                job.status = SourceJobStatus::Cancelled;
+                job.message = Some("Source job cancelled.".to_string());
+                job.error = None;
+            }
             job.finished_at = Some(now_secs());
         }
         if let Some(key) = inner.key_by_job_id.remove(job_id) {
@@ -363,6 +370,7 @@ pub(crate) async fn retryable_playlist_video_rows(
 
 #[derive(Clone, Debug, sqlx::FromRow)]
 pub(crate) struct RetryablePlaylistVideoRow {
+    #[allow(dead_code)]
     pub(crate) video_id: String,
     pub(crate) video_source_id: Option<i64>,
 }
@@ -958,6 +966,35 @@ mod tests {
 
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].job_id, third.job_id);
+    }
+
+    #[tokio::test]
+    async fn job_state_finishes_cancel_requested_jobs_as_cancelled() {
+        let state = SourceJobState::new();
+        let options = YoutubeSyncOptions {
+            metadata: false,
+            transcripts: false,
+            comments: true,
+        };
+        let job = state
+            .create_job(7, SourceJobType::YoutubeVideoCommentsSync, None, options)
+            .await
+            .expect("create comments job");
+
+        state
+            .request_cancel(&job.job_id)
+            .await
+            .expect("request cancel");
+        let finished = state
+            .finish_job(&job.job_id, |job| {
+                job.status = SourceJobStatus::Succeeded;
+                job.message = Some("Source job completed.".to_string());
+            })
+            .await
+            .expect("finish job");
+
+        assert_eq!(finished.status, SourceJobStatus::Cancelled);
+        assert_eq!(finished.message.as_deref(), Some("Source job cancelled."));
     }
 
     #[test]

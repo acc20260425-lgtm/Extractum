@@ -654,7 +654,7 @@ fn caption_status(
 ) -> YoutubeContentStatusDto {
     let state = if counts.item_count > 0 {
         YoutubeContentSyncState::Synced
-    } else if availability_status.map_or(false, captions_unavailable_for_status) {
+    } else if availability_status.is_some_and(captions_unavailable_for_status) {
         YoutubeContentSyncState::Unavailable
     } else {
         YoutubeContentSyncState::NotSynced

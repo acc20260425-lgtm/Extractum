@@ -144,12 +144,9 @@ struct ParsedTraceRef {
 
 fn parse_structured_ref(reference: &str) -> Option<ParsedTraceRef> {
     let reference = normalize_ref(reference)?;
-    let Some((source_part, item_part)) = reference
+    let (source_part, item_part) = reference
         .split_once("-i")
-        .or_else(|| reference.split_once("-m"))
-    else {
-        return None;
-    };
+        .or_else(|| reference.split_once("-m"))?;
     let source_id = source_part.strip_prefix('s')?.parse::<i64>().ok()?;
     let (item_digits, timestamp_ms) = match item_part.split_once('@') {
         Some((digits, suffix)) => {

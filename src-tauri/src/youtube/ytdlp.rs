@@ -168,11 +168,9 @@ mod tests {
                 "https://www.youtube.com/playlist?list=PLabc123"
             ]
         );
-        assert_eq!(
-            args.windows(2)
-                .any(|pair| pair == ["--playlist-items", "1-50"]),
-            true
-        );
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--playlist-items", "1-50"]));
     }
 
     #[test]

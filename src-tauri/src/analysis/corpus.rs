@@ -6,6 +6,7 @@ use super::models::{
     AnalysisRunDetail, CorpusMessage, StoredAnalysisItemRow, StoredRunSnapshotRow,
 };
 use super::store::fetch_source_group;
+#[cfg(test)]
 use super::{ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP};
 use crate::compression::{compress_json_bytes, decompress_bytes, decompress_text};
 use crate::error::{AppError, AppResult};
@@ -43,6 +44,7 @@ pub(crate) struct AnalysisRunPreflight {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum YoutubeCorpusMode {
     TranscriptOnly,
     TranscriptDescription,
@@ -83,6 +85,7 @@ pub(crate) struct CorpusLoadRequest {
 pub(crate) struct ResolvedAnalysisSources {
     pub(crate) source_type: String,
     pub(crate) source_ids: Vec<i64>,
+    #[allow(dead_code)]
     pub(crate) skipped_unlinked_playlist_items: usize,
 }
 
@@ -254,6 +257,7 @@ pub(crate) async fn resolve_analysis_sources(
     })
 }
 
+#[cfg(test)]
 pub(crate) async fn resolve_run_source_ids(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,

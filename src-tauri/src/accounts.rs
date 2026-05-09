@@ -19,24 +19,22 @@ pub struct AccountRecord {
 #[tauri::command]
 pub async fn list_accounts(handle: AppHandle) -> AppResult<Vec<AccountRecord>> {
     let pool = get_pool(&handle).await?;
-    Ok(sqlx::query_as(
+    sqlx::query_as(
         "SELECT id, label, api_id, phone, created_at FROM accounts ORDER BY created_at ASC",
     )
     .fetch_all(&pool)
     .await
-    .map_err(AppError::database)?)
+    .map_err(AppError::database)
 }
 
 #[tauri::command]
 pub async fn get_account(handle: AppHandle, account_id: i64) -> AppResult<Option<AccountRecord>> {
     let pool = get_pool(&handle).await?;
-    Ok(
-        sqlx::query_as("SELECT id, label, api_id, phone, created_at FROM accounts WHERE id = ?")
-            .bind(account_id)
-            .fetch_optional(&pool)
-            .await
-            .map_err(AppError::database)?,
-    )
+    sqlx::query_as("SELECT id, label, api_id, phone, created_at FROM accounts WHERE id = ?")
+        .bind(account_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(AppError::database)
 }
 
 #[tauri::command]

@@ -72,7 +72,7 @@ pub(crate) async fn upsert_playlist_items(
         .bind(now)
         .execute(&mut **tx)
         .await
-        .map_err(|e| AppError::database(e))?;
+        .map_err(AppError::database)?;
     }
 
     mark_missing_playlist_items_removed(tx, playlist_source_id, &seen_video_ids, now).await
@@ -98,7 +98,7 @@ async fn mark_missing_playlist_items_removed(
         .bind(playlist_source_id)
         .execute(&mut **tx)
         .await
-        .map_err(|e| AppError::database(e))?;
+        .map_err(AppError::database)?;
         return Ok(());
     }
 
@@ -124,7 +124,7 @@ async fn mark_missing_playlist_items_removed(
         .build()
         .execute(&mut **tx)
         .await
-        .map_err(|e| AppError::database(e))?;
+        .map_err(AppError::database)?;
 
     Ok(())
 }

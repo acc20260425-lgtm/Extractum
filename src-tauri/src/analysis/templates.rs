@@ -84,7 +84,7 @@ pub async fn create_analysis_prompt_template(
     let (name, template_kind, body) = validate_template_input(&name, &template_kind, &body)?;
     let now = now_secs();
 
-    Ok(sqlx::query_as::<_, AnalysisPromptTemplate>(
+    sqlx::query_as::<_, AnalysisPromptTemplate>(
         r#"
         INSERT INTO analysis_prompt_templates (
             name,
@@ -106,7 +106,7 @@ pub async fn create_analysis_prompt_template(
     .bind(now)
     .fetch_one(&pool)
     .await
-    .map_err(AppError::database)?)
+    .map_err(AppError::database)
 }
 
 #[tauri::command]
@@ -149,7 +149,7 @@ pub async fn update_analysis_prompt_template(
     }
 
     let now = now_secs();
-    Ok(sqlx::query_as::<_, AnalysisPromptTemplate>(
+    sqlx::query_as::<_, AnalysisPromptTemplate>(
         r#"
         UPDATE analysis_prompt_templates
         SET
@@ -167,7 +167,7 @@ pub async fn update_analysis_prompt_template(
     .bind(template_id)
     .fetch_one(&pool)
     .await
-    .map_err(AppError::database)?)
+    .map_err(AppError::database)
 }
 
 #[tauri::command]

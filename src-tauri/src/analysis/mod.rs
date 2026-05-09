@@ -149,7 +149,7 @@ Always keep the report concise, readable, and useful for later follow-up analysi
 #[tauri::command]
 pub async fn list_analysis_sources(handle: AppHandle) -> AppResult<Vec<AnalysisSourceOption>> {
     let pool = get_pool(&handle).await?;
-    Ok(sqlx::query_as(
+    sqlx::query_as(
         r#"
         SELECT
             sources.id,
@@ -166,7 +166,7 @@ pub async fn list_analysis_sources(handle: AppHandle) -> AppResult<Vec<AnalysisS
     )
     .fetch_all(&pool)
     .await
-    .map_err(AppError::database)?)
+    .map_err(AppError::database)
 }
 
 #[tauri::command]

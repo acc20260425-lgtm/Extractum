@@ -213,7 +213,7 @@ pub(crate) fn playlist_preview_from_metadata(metadata: &YoutubePlaylistMetadata)
     if previewed_count >= 50
         && metadata
             .video_count
-            .map_or(true, |video_count| video_count > previewed_count)
+            .is_none_or(|video_count| video_count > previewed_count)
     {
         warnings.push("Preview only includes the first 50 playlist videos.".to_string());
     }
@@ -540,8 +540,8 @@ mod tests {
             preview.availability_status,
             YoutubeAvailabilityStatus::Available
         );
-        assert_eq!(preview.captions_estimate.as_ref().unwrap().has_manual, true);
-        assert_eq!(preview.captions_estimate.as_ref().unwrap().has_auto, true);
+        assert!(preview.captions_estimate.as_ref().unwrap().has_manual);
+        assert!(preview.captions_estimate.as_ref().unwrap().has_auto);
     }
 
     #[test]

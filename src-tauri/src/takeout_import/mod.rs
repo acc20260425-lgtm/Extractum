@@ -1,3 +1,5 @@
+#![allow(clippy::needless_borrow, clippy::too_many_arguments)]
+
 use grammers_client::{tl, Client};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};

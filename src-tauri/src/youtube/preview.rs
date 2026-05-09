@@ -48,7 +48,7 @@ pub async fn add_youtube_source(
     let pool = get_pool(&handle).await?;
     let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
     let metadata = fetch_metadata(parsed, cookies).await?;
-    let mut tx = pool.begin().await.map_err(|e| AppError::database(e))?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
 
     let source_id = match metadata {
         YoutubeFetchedMetadata::Video(metadata) => {
@@ -61,7 +61,7 @@ pub async fn add_youtube_source(
         }
     };
 
-    tx.commit().await.map_err(|e| AppError::database(e))?;
+    tx.commit().await.map_err(AppError::database)?;
     load_source_record(&handle, &pool, source_id).await
 }
 
@@ -100,6 +100,7 @@ pub(crate) async fn fetch_metadata(
     metadata_from_ytdlp_json(&parsed, json)
 }
 
+#[cfg(test)]
 pub(crate) fn preview_from_ytdlp_json(
     parsed: &YoutubeParsedUrl,
     value: Value,

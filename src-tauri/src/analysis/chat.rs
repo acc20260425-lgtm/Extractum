@@ -300,7 +300,7 @@ pub async fn list_analysis_chat_messages(
             "Analysis run {run_id} not found"
         )));
     }
-    Ok(load_chat_messages_from_pool(&pool, run_id).await?)
+    load_chat_messages_from_pool(&pool, run_id).await
 }
 
 #[tauri::command]

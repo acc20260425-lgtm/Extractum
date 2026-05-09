@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 use sha2::{Digest, Sha384};
 use std::path::{Path, PathBuf};
 use tauri_plugin_sql::{Migration, MigrationKind};

@@ -184,10 +184,14 @@ pub async fn get_llm_profiles(
     secret_store: tauri::State<'_, SecretStoreState>,
 ) -> AppResult<LlmProfilesState> {
     let pool = get_pool(&handle).await?;
-    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
+    load_profiles_state_from_pool(&pool, &secret_store).await
 }
 
 #[tauri::command]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command signature is the frontend IPC contract."
+)]
 pub async fn save_llm_profile(
     handle: AppHandle,
     secret_store: tauri::State<'_, SecretStoreState>,
@@ -215,7 +219,7 @@ pub async fn save_llm_profile(
     )
     .await?;
 
-    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
+    load_profiles_state_from_pool(&pool, &secret_store).await
 }
 
 #[tauri::command]
@@ -227,7 +231,7 @@ pub async fn clear_llm_profile_api_key(
     let pool = get_pool(&handle).await?;
     let profile_id = validate_profile_id(&profile_id)?;
     clear_profile_api_key(&secret_store, &profile_id).await?;
-    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
+    load_profiles_state_from_pool(&pool, &secret_store).await
 }
 
 #[tauri::command]
@@ -239,7 +243,7 @@ pub async fn set_active_llm_profile(
     let pool = get_pool(&handle).await?;
     let profile_id = validate_profile_id(&profile_id)?;
     set_active_profile_in_pool(&pool, &profile_id).await?;
-    Ok(load_profiles_state_from_pool(&pool, &secret_store).await?)
+    load_profiles_state_from_pool(&pool, &secret_store).await
 }
 
 #[tauri::command]

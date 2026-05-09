@@ -423,14 +423,14 @@ fn find_track(
     tracks
         .iter()
         .find(|track| {
-            language.map_or(true, |language| {
+            language.is_none_or(|language| {
                 track
                     .language
                     .as_deref()
-                    .map_or(false, |candidate| language_matches(candidate, language))
+                    .is_some_and(|candidate| language_matches(candidate, language))
             }) && track_kind
                 .as_ref()
-                .map_or(true, |kind| track.track_kind == *kind)
+                .is_none_or(|kind| track.track_kind == *kind)
         })
         .cloned()
 }
@@ -722,7 +722,7 @@ mod tests {
             .expect("replace segments");
         tx.commit().await.expect("commit");
 
-        let rows: Vec<(
+        type SegmentRow = (
             i64,
             i64,
             Option<i64>,
@@ -731,7 +731,8 @@ mod tests {
             Option<String>,
             String,
             i64,
-        )> = sqlx::query_as(
+        );
+        let rows: Vec<SegmentRow> = sqlx::query_as(
             r#"
                 SELECT
                     segment_index,

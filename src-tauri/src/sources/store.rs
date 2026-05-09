@@ -152,7 +152,7 @@ pub(crate) async fn upsert_youtube_video_source(
     .bind(now)
     .fetch_one(&mut **tx)
     .await
-    .map_err(|e| AppError::database(e))
+    .map_err(AppError::database)
 }
 
 pub(crate) async fn upsert_youtube_playlist_source(
@@ -192,7 +192,7 @@ pub(crate) async fn upsert_youtube_playlist_source(
     .bind(now)
     .fetch_one(&mut **tx)
     .await
-    .map_err(|e| AppError::database(e))
+    .map_err(AppError::database)
 }
 
 #[tauri::command]

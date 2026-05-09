@@ -185,6 +185,10 @@ async fn read_profile_api_key(
         .unwrap_or_default())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Profile persistence mirrors the editable settings form fields."
+)]
 pub(super) async fn save_profile_to_pool(
     pool: &Pool<Sqlite>,
     secret_store: &SecretStoreState,
