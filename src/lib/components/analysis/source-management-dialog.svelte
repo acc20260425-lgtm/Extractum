@@ -5,6 +5,7 @@
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import YoutubeSourceAddPanel from "$lib/components/analysis/youtube-source-add-panel.svelte";
   import { addTelegramSource, listTelegramSources } from "$lib/api/sources";
   import { formatAppError } from "$lib/app-error";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
@@ -42,6 +43,7 @@
   let manualRef = $state("");
   let manualKind = $state<TelegramSourceKind | "auto">("auto");
   let localStatus = $state("");
+  let activeProvider = $state<"telegram" | "youtube">("telegram");
 
   const readyAccounts = $derived.by(() =>
     accounts.filter((account) => accountStatuses[account.id]?.status === "ready"),
@@ -202,11 +204,36 @@
 <DesktopDialog
   {open}
   title="Manage sources"
-  description="Add Telegram channels, supergroups, and groups from a signed-in account."
+  description="Add Telegram and YouTube sources."
   width="58rem"
   onClose={onClose}
 >
   <div class="source-manager">
+    <div class="provider-tabs" role="tablist" aria-label="Source providers">
+      <Button
+        variant="secondary"
+        selected={activeProvider === "telegram"}
+        role="tab"
+        ariaSelected={activeProvider === "telegram"}
+        ariaControls="telegram-source-panel"
+        onclick={() => (activeProvider = "telegram")}
+      >
+        Telegram
+      </Button>
+      <Button
+        variant="secondary"
+        selected={activeProvider === "youtube"}
+        role="tab"
+        ariaSelected={activeProvider === "youtube"}
+        ariaControls="youtube-source-panel"
+        onclick={() => (activeProvider = "youtube")}
+      >
+        YouTube
+      </Button>
+    </div>
+
+    {#if activeProvider === "telegram"}
+      <div id="telegram-source-panel" class="provider-panel" role="tabpanel">
     <div class="manager-toolbar">
       <label>Account
         <Select
@@ -363,6 +390,12 @@
         {/if}
       </div>
     </section>
+      </div>
+    {:else}
+      <div id="youtube-source-panel" class="provider-panel" role="tabpanel">
+        <YoutubeSourceAddPanel {onSourcesChanged} {onStatus} />
+      </div>
+    {/if}
   </div>
 </DesktopDialog>
 
@@ -386,6 +419,24 @@
     grid-template-columns: minmax(0, 1.2fr) minmax(11rem, 0.55fr) auto;
     gap: 0.7rem;
     align-items: end;
+  }
+
+  .provider-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  }
+
+  .provider-tabs :global(.ui-button) {
+    min-width: 7rem;
+  }
+
+  .provider-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
   }
 
   .manual-section,

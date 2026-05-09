@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  addYoutubeSource,
   addTelegramSource,
   listSourceForumTopics,
   listSourceItems,
   listSources,
+  previewYoutubeSource,
   saveSyncSettings,
 } from "./sources";
 
@@ -87,6 +89,61 @@ describe("sources api wrappers", () => {
     });
     expect(invokeMock).toHaveBeenLastCalledWith("add_telegram_source", {
       request: { accountId: 3, sourceRef: "456", expectedKind: "supergroup" },
+    });
+  });
+
+  it("previews youtube sources with a url argument", async () => {
+    invokeMock.mockResolvedValueOnce({
+      kind: "video",
+      external_id: "abc123",
+      canonical_url: "https://www.youtube.com/watch?v=abc123",
+      title: "Demo",
+      channel_title: "Channel",
+      channel_id: "UC1",
+      channel_handle: "@channel",
+      channel_url: "https://www.youtube.com/@channel",
+      thumbnail_url: null,
+      duration_seconds: 120,
+      published_at: "2026-05-01",
+      playlist_video_count: null,
+      captions_estimate: null,
+      availability_status: "available",
+      warnings: [],
+    });
+
+    await expect(previewYoutubeSource("https://youtu.be/abc123")).resolves.toMatchObject({
+      kind: "video",
+      externalId: "abc123",
+      canonicalUrl: "https://www.youtube.com/watch?v=abc123",
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("preview_youtube_source", {
+      url: "https://youtu.be/abc123",
+    });
+  });
+
+  it("adds youtube sources with a url argument", async () => {
+    invokeMock.mockResolvedValueOnce({
+      id: 10,
+      source_type: "youtube",
+      source_subtype: "video",
+      account_id: null,
+      external_id: "abc123",
+      title: "Demo",
+      last_sync_state: null,
+      last_synced_at: null,
+      is_member: false,
+      is_active: true,
+      created_at: 1,
+      avatar_data_url: null,
+    });
+
+    await expect(addYoutubeSource("https://youtu.be/abc123")).resolves.toMatchObject({
+      id: 10,
+      sourceType: "youtube",
+      externalId: "abc123",
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("add_youtube_source", {
+      url: "https://youtu.be/abc123",
     });
   });
 

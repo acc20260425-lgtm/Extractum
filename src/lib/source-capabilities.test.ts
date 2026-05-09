@@ -80,7 +80,7 @@ describe("source capabilities", () => {
     expect(membershipLabel(video)).toBe("");
   });
 
-  it("describes future YouTube playlists as syncable videos", () => {
+  it("keeps YouTube playlists unsyncable until YouTube jobs are wired", () => {
     const playlist = source({
       sourceType: "youtube",
       sourceSubtype: "playlist",
@@ -90,7 +90,7 @@ describe("source capabilities", () => {
     });
 
     expect(sourceCapabilities(playlist)).toMatchObject({
-      canSync: true,
+      canSync: false,
       requiresAccount: false,
       contentLabel: "videos",
     });

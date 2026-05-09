@@ -31,7 +31,7 @@ export function sourceCapabilities(source: Source): SourceCapabilities {
 
   if (source.sourceType === "youtube") {
     return {
-      canSync: source.sourceSubtype === "playlist",
+      canSync: false,
       canDelete: true,
       canImportArchive: false,
       hasTopics: false,

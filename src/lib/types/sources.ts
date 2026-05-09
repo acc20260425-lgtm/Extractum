@@ -10,6 +10,20 @@ export type SourceSubtype =
   | "site";
 export type SourceContentLabel = "messages" | "videos" | "posts" | "items";
 export type InitialSyncMode = "recent_messages" | "recent_days";
+export type YoutubePreviewKind = "video" | "playlist";
+export type YoutubeAvailabilityStatus =
+  | "available"
+  | "upcoming"
+  | "live_now"
+  | "live_ended_transcript_pending"
+  | "no_captions"
+  | "private_or_auth_required"
+  | "members_only"
+  | "age_restricted"
+  | "geo_blocked"
+  | "deleted"
+  | "removed_from_playlist"
+  | "unavailable_unknown";
 
 export type DialogKindFilter = "all" | TelegramSourceKind;
 
@@ -76,6 +90,30 @@ export interface AddTelegramSourceInput {
   accountId: number;
   sourceRef: string;
   expectedKind: TelegramSourceKind | null;
+}
+
+export interface YoutubeCaptionsEstimate {
+  hasManual: boolean;
+  hasAuto: boolean;
+  languages: string[];
+}
+
+export interface YoutubePreview {
+  kind: YoutubePreviewKind;
+  externalId: string;
+  canonicalUrl: string;
+  title: string | null;
+  channelTitle: string | null;
+  channelId: string | null;
+  channelHandle: string | null;
+  channelUrl: string | null;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  publishedAt: string | null;
+  playlistVideoCount: number | null;
+  captionsEstimate: YoutubeCaptionsEstimate | null;
+  availabilityStatus: YoutubeAvailabilityStatus;
+  warnings: string[];
 }
 
 export interface ListSourceItemsInput {

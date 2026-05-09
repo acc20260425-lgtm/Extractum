@@ -12,12 +12,17 @@ import type {
   SyncSourceResult,
   TelegramDialogSource,
   TelegramSourceKind,
+  YoutubeAvailabilityStatus,
+  YoutubePreview,
+  YoutubePreviewKind,
 } from "$lib/types/sources";
 
 const SOURCE_COMMANDS = {
   listSources: "list_sources",
   listTelegramSources: "list_telegram_sources",
   addTelegramSource: "add_telegram_source",
+  previewYoutubeSource: "preview_youtube_source",
+  addYoutubeSource: "add_youtube_source",
   deleteSource: "delete_source",
   getSyncSettings: "get_sync_settings",
   saveSyncSettings: "save_sync_settings",
@@ -71,6 +76,30 @@ interface RawSourceItem {
   forum_topic_top_message_id: number | null;
 }
 
+interface RawYoutubeCaptionsEstimate {
+  has_manual: boolean;
+  has_auto: boolean;
+  languages: string[];
+}
+
+interface RawYoutubePreview {
+  kind: YoutubePreviewKind;
+  external_id: string;
+  canonical_url: string;
+  title: string | null;
+  channel_title: string | null;
+  channel_id: string | null;
+  channel_handle: string | null;
+  channel_url: string | null;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  published_at: string | null;
+  playlist_video_count: number | null;
+  captions_estimate: RawYoutubeCaptionsEstimate | null;
+  availability_status: YoutubeAvailabilityStatus;
+  warnings: string[];
+}
+
 interface RawSourceForumTopic {
   kind: "topic" | "uncategorized";
   key: string;
@@ -120,6 +149,16 @@ export function addTelegramSource(input: AddTelegramSourceInput) {
       expectedKind: input.expectedKind,
     },
   }).then(mapSource);
+}
+
+export function previewYoutubeSource(url: string) {
+  return invoke<RawYoutubePreview>(SOURCE_COMMANDS.previewYoutubeSource, { url }).then(
+    mapYoutubePreview,
+  );
+}
+
+export function addYoutubeSource(url: string) {
+  return invoke<RawSource>(SOURCE_COMMANDS.addYoutubeSource, { url }).then(mapSource);
 }
 
 export function deleteSource(sourceId: number) {
@@ -208,6 +247,32 @@ function mapSourceItem(item: RawSourceItem): SourceItem {
     forumTopicId: item.forum_topic_id,
     forumTopicTitle: item.forum_topic_title,
     forumTopicTopMessageId: item.forum_topic_top_message_id,
+  };
+}
+
+function mapYoutubePreview(preview: RawYoutubePreview): YoutubePreview {
+  return {
+    kind: preview.kind,
+    externalId: preview.external_id,
+    canonicalUrl: preview.canonical_url,
+    title: preview.title,
+    channelTitle: preview.channel_title,
+    channelId: preview.channel_id,
+    channelHandle: preview.channel_handle,
+    channelUrl: preview.channel_url,
+    thumbnailUrl: preview.thumbnail_url,
+    durationSeconds: preview.duration_seconds,
+    publishedAt: preview.published_at,
+    playlistVideoCount: preview.playlist_video_count,
+    captionsEstimate: preview.captions_estimate
+      ? {
+          hasManual: preview.captions_estimate.has_manual,
+          hasAuto: preview.captions_estimate.has_auto,
+          languages: preview.captions_estimate.languages,
+        }
+      : null,
+    availabilityStatus: preview.availability_status,
+    warnings: preview.warnings,
   };
 }
 
