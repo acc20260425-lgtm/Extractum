@@ -22,15 +22,17 @@ The user did not explicitly ask to commit this documentation update.
 Suggested commit message for this documentation update:
 
 ```text
-docs: refresh session context after youtube part 4
+docs: refresh session context after youtube part 5
 ```
 
 ## Current IDE Context
 
 Latest IDE context reported by the user:
 
-- Active file: `docs/superpowers/plans/2026-05-09-youtube-sources-04-comments-and-analysis.md`
-- Open tab: `docs/superpowers/plans/2026-05-09-youtube-sources-04-comments-and-analysis.md`
+- Active file: `docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md`
+- Open tabs:
+  - `docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md`
+  - `docs/superpowers/plans/2026-05-09-youtube-sources-04-comments-and-analysis.md`
 
 ## Workflow And Session Rules
 
@@ -41,6 +43,7 @@ Latest IDE context reported by the user:
   - `superpowers:test-driven-development`
   - `superpowers:systematic-debugging`
   - `superpowers:verification-before-completion`
+  - `superpowers:finishing-a-development-branch`
 - Do not spawn subagents unless the user explicitly asks for delegation or parallel agents.
 - Work is being done directly on `main`.
 - Use `rg` / `rg --files` for search.
@@ -57,450 +60,481 @@ Before this documentation rewrite, `git status --short` returned no output.
 Latest commits before this documentation rewrite:
 
 ```text
+46a10d9 docs: mark youtube part 5 complete
+67dd93a fix: write youtube cookies with netscape header
+54ee015 feat: use youtube cookies for yt-dlp runs
+3c03cca feat: add youtube settings UI
+08012d0 feat: add youtube settings commands
+45e1c30 feat: store youtube cookies securely
+d103aea docs: refresh session context after youtube part 4
 52891eb fix: add youtube sources on upgraded databases
 a861fe0 docs: refresh session context after youtube part 4 task 4
 87f12b2 feat: resolve youtube timestamp evidence
 3e4f890 feat: load youtube analysis corpus
 d55aa90 feat: enforce provider-specific analysis groups
-138b6c1 docs: refresh session context after youtube part 4 task 1
-3707090 feat: ingest youtube comments
-50ac301 test: update youtube sync disabled expectation
 ```
 
-After this request, `docs/session-context-2026-05-03.md` is modified and should be the only intended documentation change unless the user also asks to update the plan checkboxes.
+After this request, `docs/session-context-2026-05-03.md` is modified and should be the only intended change unless the user asks for additional documentation cleanup or a commit.
 
 ## Important Status Summary
 
-YouTube Sources Part 4 is functionally complete:
+YouTube Sources Part 4 and Part 5 are functionally complete.
 
-- Task 1: comments ingest completed and committed.
-- Task 2: provider-safe analysis groups completed and committed.
-- Task 3: YouTube corpus loading and playlist expansion completed and committed.
-- Task 4: timestamp trace refs and run snapshots completed and committed.
-- Manual verification for Part 4 was completed.
-- A real manual-verification bug for upgraded databases was found, fixed with TDD, verified, and committed.
+Part 4 completed:
 
-Important caveat:
+- Comments ingest.
+- Provider-safe analysis groups.
+- YouTube corpus loading and playlist expansion.
+- Timestamp trace refs and saved run snapshots.
+- Manual verification.
+- Legacy upgraded-database fix for `sources.telegram_source_kind NOT NULL`.
 
-- The active Part 4 markdown plan file still has unchecked checklist boxes. The implementation and manual verification are complete, but the plan document itself has not been physically marked complete.
+Part 5 completed:
+
+- Optional YouTube cookie/auth storage through `SecretStoreState`.
+- Validated Netscape cookie input with sanitized errors.
+- Auth/non-auth `yt-dlp` execution with temporary cookie files and bounded timeouts.
+- YouTube settings commands backed by `app_settings`.
+- Dedicated frontend YouTube settings API module.
+- Settings UI panel mounted on `/settings`.
+- Real manual verification, including an authenticated preview path.
+- Part 5 plan checkboxes physically marked complete.
+
+Important caveats:
+
+- The Part 4 plan file may still have unchecked boxes from an earlier doc caveat, even though Part 4 implementation and manual verification are complete.
+- Part 5 plan file is fully checked off.
+- The Tauri dev app was started during Part 5 manual verification and may still be running. Check before starting another instance.
 
 ## Active Plan
 
-Active plan file:
+Current completed plan file:
 
 ```text
-docs/superpowers/plans/2026-05-09-youtube-sources-04-comments-and-analysis.md
+docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md
 ```
 
-Goal of Part 4:
+Part 5 goal:
 
-- Sync YouTube comments.
-- Make YouTube videos, playlists, and YouTube-only groups analyzable.
-- Prevent provider-mixed analysis groups.
-- Expand playlists into canonical child video sources for analysis.
-- Support YouTube corpus modes.
-- Store stable run snapshots with metadata.
-- Resolve timestamp trace refs and synthetic description refs.
+- Add optional YouTube auth/cookie support.
+- Add user-configurable YouTube sync settings.
+- Keep non-secret settings in `app_settings`.
+- Keep raw cookies only in OS secure storage and temporary backend files.
+- Never expose raw cookies through IPC, logs, command args, app errors, job records, or UI.
 
-## Part 4 Task 1: Comments Ingest
+Next plan candidate:
+
+```text
+docs/superpowers/plans/2026-05-09-youtube-sources-06-ui-hardening-docs.md
+```
+
+## Part 5 Task 1: Cookie Secret Boundary
 
 Commit:
 
 ```text
-3707090 feat: ingest youtube comments
+45e1c30 feat: store youtube cookies securely
 ```
 
 Implemented:
 
-- Created `src-tauri/src/youtube/comments.rs`.
-- Added `comments` module.
-- Added bounded comments fetch:
+- Created `src-tauri/src/youtube/cookies.rs`.
+- Added `pub(crate) fn youtube_default_cookies_secret() -> String`.
+- Stable secret key:
 
 ```text
-yt-dlp --dump-single-json --write-comments --skip-download --extractor-args youtube:max_comments=<limit> <video_url>
+youtube.auth.default.cookies
 ```
 
-- Added `DEFAULT_MAX_COMMENTS_PER_VIDEO = 1_000`.
-- Normalized top-level comments and replies into `YoutubeComment`.
-- Timestamp policy:
-  - accept numeric timestamp;
-  - accept string timestamp;
-  - fallback to video timestamp;
-  - fallback to sync start timestamp;
-  - warn on missing or unparseable comment timestamp.
-- Added `upsert_youtube_comment_item`.
-- Persisted YouTube comments as:
-  - `item_kind = youtube_comment`
-  - `external_id = comment:<comment_id>`
-  - `content_kind = text_only`
-  - `reaction_count = like_count`
-- Stored parent id, reply state, like count, pinned state, creator reaction, author metadata, and raw provider payload in compressed raw data.
-- Comment upsert updates existing rows instead of duplicating.
-- Jobs run comments only when `YoutubeSyncOptions.comments = true`.
+- Added `cookies` module in `src-tauri/src/youtube/mod.rs`.
+- Implemented:
+  - `read_youtube_cookies`
+  - `save_youtube_cookies`
+  - `clear_youtube_cookies`
+  - `validate_netscape_cookie_file`
+- Validation policy:
+  - Reject empty or whitespace-only cookie text.
+  - Accept blank lines.
+  - Accept comments/header lines.
+  - Treat `#HttpOnly_` rows as cookie rows after stripping only that prefix.
+  - Require exactly 7 tab-separated fields.
+  - Require non-empty domain and cookie name.
+  - Require `TRUE`/`FALSE` for include-subdomains and secure.
+  - Require path starting with `/`.
+  - Require integer `expires`.
+  - Allow empty cookie value.
+  - Do not reject non-YouTube domains.
+- Validation errors include line number and reason but never echo cookie value or line content.
+- Extended `src-tauri/src/youtube/ytdlp.rs` with:
+  - `YtdlpRunOptions { timeout, cookies }`
+  - `run_ytdlp_with_options`
+  - `ytdlp_command_args`
+- `run_ytdlp(args)` still uses the existing 30s preview timeout and no cookies.
+- Cookie content is written to a temporary file and passed as `--cookies <temp-path>`.
+- Raw cookies are not placed on the process command line.
+- Temp file is kept alive until the child process exits or times out.
 
-Verification at completion:
+Task 1 tests added:
+
+- Cookie validation accepts Netscape rows and `#HttpOnly_` rows.
+- Cookie validation accepts empty cookie values.
+- Cookie validation rejects empty text and comments-only files.
+- Invalid cookie errors do not contain `secret-value`.
+- `InMemorySecretStore` read/write/delete roundtrip.
+- Invalid cookie text is rejected before saving.
+- Authenticated command args include `--cookies <temp-path>` but not cookie names or values.
+
+Task 1 verification:
 
 ```powershell
 cd src-tauri
-cargo test youtube::comments --lib
-cargo test youtube::jobs --lib
-cargo test sources::items --lib
-cargo test --lib
+cargo test youtube::cookies --lib
+cargo test secret_store --lib
+cargo test youtube::ytdlp --lib
+git diff --check
 ```
 
-Known results:
+Known results at Task 1 completion:
 
-- `youtube::comments`: 5 passed.
-- `youtube::jobs`: 4 passed.
-- `sources::items`: 8 passed.
-- Full `cargo test --lib`: 244 passed.
+- `youtube::cookies`: 7 passed.
+- `secret_store`: 8 passed.
+- `youtube::ytdlp`: 3 passed at Task 1 time.
+- `git diff --check`: no whitespace errors.
 
-## Part 4 Task 2: Provider-Safe Analysis Groups
+Note:
+
+- The plan's literal `cargo test youtube::cookies secret_store --lib` command is not directly valid for Cargo because Cargo accepts one test filter. The checks were run as separate filters.
+
+## Part 5 Task 2: YouTube Settings Commands
 
 Commit:
 
 ```text
-d55aa90 feat: enforce provider-specific analysis groups
+08012d0 feat: add youtube settings commands
 ```
 
 Implemented backend:
 
-- Added `source_type` to:
-  - `AnalysisSourceOption`
-  - `AnalysisSourceGroup`
-  - `AnalysisSourceGroupRow`
-- Updated `list_analysis_sources` to select `sources.source_type`.
-- Updated `fetch_source_group` to load group `source_type`.
-- Updated create/update analysis group commands to accept `source_type`.
-- Added validation helper in `src-tauri/src/analysis/groups.rs`:
+- Created `src-tauri/src/youtube/settings.rs`.
+- Added `settings` module in `src-tauri/src/youtube/mod.rs`.
+- Registered commands in `src-tauri/src/lib.rs`.
+- Defined app setting keys:
+  - `youtube.auth.enabled`
+  - `youtube.captions.preferred_language`
+  - `youtube.sync.delay_between_requests_ms`
+  - `youtube.sync.max_parallel_video_syncs`
+  - `youtube.sync.max_parallel_comment_syncs`
+  - `youtube.sync.pause_on_auth_challenge`
+  - `youtube.sync.daily_soft_limit`
+  - `youtube.sync.retry_backoff_ms`
+  - `youtube.sync.stop_after_consecutive_failures`
+- Added DTOs:
+  - `YoutubeSettingsDto`
+  - `YoutubeAuthStatusDto`
+- DTOs serialize with camelCase for IPC.
+- Default settings:
 
-```rust
-async fn validate_group_source_type(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    group_source_type: &str,
-    source_ids: &[i64],
-) -> AppResult<()>
+```text
+authEnabled = false
+preferredCaptionsLanguage = original
+delayBetweenRequestsMs = 1000
+maxParallelVideoSyncs = 1
+maxParallelCommentSyncs = 1
+pauseOnAuthChallenge = true
+dailySoftLimit = 0
+retryBackoffMs = 3000
+stopAfterConsecutiveFailures = 3
 ```
 
-- Validation allows only `telegram` or `youtube`.
-- Validation rejects sources whose `sources.source_type` does not match the group type.
-- Validation runs after `ensure_sources_exist` and before the write transaction.
-- In-memory test schemas were updated for `analysis_source_groups.source_type`.
+- Validation ranges:
+  - preferred captions language: `original` or 2-32 ASCII letters/digits/hyphen/underscore chars.
+  - delay: `0..=60000`.
+  - max parallel video syncs: `1..=4`.
+  - max parallel comment syncs: `1..=2`.
+  - daily soft limit: `0..=10000`.
+  - retry backoff: `0..=300000`.
+  - stop after consecutive failures: `1..=50`.
+- Preferred captions language is normalized to lowercase unless it is `original`.
+- Settings read policy:
+  - Missing rows use defaults.
+  - Invalid stored bool/int values return validation errors naming the setting key.
+  - Loaded settings are validated before return.
+- Settings write policy:
+  - Validate whole DTO before writing anything.
+  - Persist bools as `true`/`false`.
+  - Persist integers as decimal strings.
+  - Persist normalized captions language.
+- Added helpers:
+  - `default_youtube_settings`
+  - `load_youtube_settings_from_pool`
+  - `save_youtube_settings_to_pool`
+  - `youtube_auth_status_from_state`
+  - `save_youtube_cookies_to_state`
+  - `clear_youtube_auth_in_state`
+- Added auth status messages:
+  - `Auth disabled`
+  - `Cookies stored`
+  - `No cookies configured`
+- Commands:
+  - `get_youtube_settings`
+  - `save_youtube_settings`
+  - `get_youtube_auth_status`
+  - `save_youtube_cookies`
+  - `clear_youtube_auth`
 
 Implemented frontend:
 
-- Added `AnalysisGroupSourceType`.
-- Added `source_type` to analysis source/group TS types.
-- Added `sourceType` to create/update group inputs.
-- Group editor has a Telegram/YouTube type select.
-- Group editor filters candidate sources by selected provider.
-- Route state keeps `groupSourceType`.
-- Selecting an existing group copies its `source_type`.
-- Starting a new group defaults to `telegram`.
-- Save calls pass group type.
+- Created `src/lib/types/youtube.ts`.
+- Created `src/lib/api/youtube-settings.ts`.
+- Created `src/lib/api/youtube-settings.test.ts`.
+- Frontend wrappers:
+  - `getYoutubeSettings`
+  - `saveYoutubeSettings`
+  - `getYoutubeAuthStatus`
+  - `saveYoutubeCookies`
+  - `clearYoutubeAuth`
+- YouTube settings wrappers intentionally live outside `src/lib/api/sources.ts`.
 
-Task 2 RED checks:
+Task 2 tests added:
 
-- `cargo test analysis::groups --lib` initially failed because provider validation was missing.
-- Vitest workflow test initially failed because `sourceType` was not passed.
+- Defaults load when `app_settings` rows are missing.
+- Out-of-range values are rejected.
+- Preferred captions language normalizes.
+- DTO serializes with camelCase keys.
+- Settings roundtrip through `app_settings`.
+- Invalid settings do not partially write.
+- Invalid stored settings return validation errors with key names.
+- Saving cookies enables auth; clearing auth disables it.
+- Vitest contract tests for all wrapper commands and payload shapes.
 
-Task 2 final verification:
-
-```powershell
-cd src-tauri
-cargo test analysis::groups --lib
-cargo test analysis::store --lib
-cd ..
-npm.cmd test -- analysis-source-groups
-npm.cmd run check
-```
-
-Results:
-
-- `analysis::groups`: 3 passed.
-- `analysis::store`: 3 passed.
-- `analysis-source-groups`: 24 passed.
-- `svelte-check found 0 errors and 0 warnings`.
-
-Svelte autofixer:
-
-- Ran on `source-group-editor.svelte`.
-- No issues.
-
-## Part 4 Task 3: YouTube Corpus Loading And Playlist Expansion
-
-Commit:
-
-```text
-3e4f890 feat: load youtube analysis corpus
-```
-
-Implemented backend:
-
-- Added `YoutubeCorpusMode`:
-  - `TranscriptOnly`
-  - `TranscriptDescription`
-  - `TranscriptDescriptionComments`
-- Wire values:
-  - `transcript_only`
-  - `transcript_description`
-  - `transcript_description_comments`
-- Added `YoutubeCorpusMode::from_wire`.
-- Added `CorpusLoadRequest`.
-- Added `ResolvedAnalysisSources`.
-- Added provider-aware resolver:
-  - Telegram single source -> direct source id.
-  - Telegram group -> direct member source ids.
-  - YouTube single video -> direct video source id.
-  - YouTube single playlist -> linked non-removed `youtube_playlist_items.video_source_id`.
-  - YouTube group -> direct videos plus expanded playlist children.
-  - Excludes `video_source_id IS NULL`.
-  - Excludes removed playlist rows.
-  - Counts skipped unlinked playlist rows in `skipped_unlinked_playlist_items`.
-  - If YouTube expansion yields zero ids, returns validation error:
-
-```text
-No linked YouTube videos are available for analysis in this scope
-```
-
-- Replaced raw `source_ids` corpus path with provider-aware `CorpusLoadRequest`.
-- Corpus item kind filters:
-  - Telegram -> `telegram_message`
-  - YouTube transcript modes -> `youtube_transcript`
-  - YouTube comments mode -> `youtube_transcript` and `youtube_comment`
-- Added synthetic YouTube description messages when mode includes descriptions and metadata has a non-empty description inside the analysis period.
-- Synthetic description shape:
-  - `item_id = 0`
-  - `external_id = description:<video_id>`
-  - `ref = s<source_id>-i0`
-- `preflight_analysis_run` now calls the same corpus loader used by execution.
-- `ReportRunInput` carries `corpus_request`.
-- `start_analysis_report` accepts `youtube_corpus_mode`.
-
-Implemented frontend:
-
-- Added TS `YoutubeCorpusMode`.
-- Added `youtubeCorpusMode` to `AnalysisReportStartCommand`.
-- Added `youtubeCorpusMode` to analysis start state.
-- Route state defaults to `transcript_description`.
-- YouTube corpus select added for YouTube single-source/group scopes.
-- Updated `workspace-main.svelte`.
-- Updated `run-controls.svelte`.
-- Updated analysis run workflow/API/state tests.
-
-Task 3 RED checks:
-
-- `cargo test analysis::corpus --lib` failed before implementation due missing resolver/request/mode and old loader signatures.
-
-Task 3 final verification:
+Task 2 verification:
 
 ```powershell
 cd src-tauri
-cargo test analysis::corpus --lib
-cargo test analysis::report --lib
+cargo test youtube::settings --lib
+cargo test youtube::cookies --lib
+cargo test secret_store --lib
 cd ..
-npm.cmd test -- analysis-run-workflow analysis-state analysis-runs
+npm.cmd test -- youtube-settings
 npm.cmd run check
 git diff --check
 ```
 
-Results:
+Known results at Task 2 completion:
 
-- `analysis::corpus`: 19 passed.
-- `analysis::report`: 12 passed.
-- TS tests: 3 files passed, 65 tests passed.
+- `youtube::settings`: 8 passed.
+- `youtube::cookies`: 7 passed.
+- `secret_store`: 8 passed.
+- `youtube-settings` Vitest: 4 passed.
 - `svelte-check found 0 errors and 0 warnings`.
-- `git diff --check` had no whitespace errors.
+- `git diff --check`: no whitespace errors.
 
-Svelte autofixer:
-
-- Ran on `run-controls.svelte`.
-- No issues.
-
-## Part 4 Task 4: Timestamp Trace Refs And Run Snapshots
+## Part 5 Task 3: Settings UI
 
 Commit:
 
 ```text
-87f12b2 feat: resolve youtube timestamp evidence
+3c03cca feat: add youtube settings UI
 ```
 
-Implemented Rust model changes:
+Implemented:
 
-- Extended `AnalysisTraceRef` with:
-  - `youtube_url: Option<String>`
-  - `youtube_timestamp_seconds: Option<i64>`
-  - `youtube_display_label: Option<String>`
-  - `is_synthetic: bool`
-- Extended `StoredAnalysisItemRow` with:
-  - `item_kind`
-  - `source_type`
-  - `source_subtype`
-  - `metadata_zstd`
-- Extended `StoredRunSnapshotRow` with the same fields.
-- Extended `CorpusMessage` with the same snapshot metadata fields.
+- Created `src/lib/components/settings/youtube-settings-panel.svelte`.
+- Mounted `YoutubeSettingsPanel` from `src/routes/settings/+page.svelte`.
+- Used existing local UI components as baseline:
+  - `Badge`
+  - `Button`
+  - `CheckboxRow`
+  - `Input`
+  - `StatusMessage`
+- Did not add new UI dependencies.
+- On mount, panel loads settings and auth status via:
 
-Implemented Rust store/corpus changes:
-
-- `persist_run_snapshot` inserts:
-  - `item_kind`
-  - `source_type`
-  - `source_subtype`
-  - `metadata_zstd`
-- `load_run_snapshot_messages` selects those fields and restores them into `CorpusMessage`.
-- Live item loader joins `sources` and selects:
-  - `items.item_kind`
-  - `sources.source_type`
-  - `sources.source_subtype`
-  - `items.media_metadata_zstd AS metadata_zstd`
-- Added segment-level YouTube transcript loading from `youtube_transcript_segments`.
-- YouTube transcript corpus messages now use refs like:
-
-```text
-s<source_id>-i<transcript_item_id>@<segment_start_ms>ms
+```ts
+const [loadedSettings, loadedAuthStatus] = await Promise.all([
+  getYoutubeSettings(),
+  getYoutubeAuthStatus(),
+]);
 ```
 
-- Added segment metadata JSON compression with at least:
-  - `video_id`
-  - `canonical_url`
-  - `title`
-  - `channel_title`
-  - `channel_handle`
-  - `caption_language`
-  - `caption_track_kind`
-  - `segment_start_ms`
-  - `segment_end_ms`
-  - `item_kind = youtube_transcript`
-- Synthetic YouTube descriptions now set:
-  - `item_id = 0`
-  - `item_kind = youtube_description`
-  - `source_type = youtube`
-  - `source_subtype = video`
-  - `metadata_zstd` with YouTube metadata.
+- UI controls include:
+  - Enable YouTube auth.
+  - Paste/update cookies.
+  - Save cookies.
+  - Cancel cookie edit.
+  - Clear YouTube auth.
+  - Preferred captions language.
+  - Delay between requests.
+  - Max parallel video syncs.
+  - Max parallel comment syncs.
+  - Pause on auth challenge.
+  - Daily soft limit.
+  - Retry backoff.
+  - Stop after consecutive failures.
+  - Save settings.
+  - Reload.
+- Cookie textarea is hidden by default.
+- If cookies are stored, the panel shows only status and an `Update cookies` control.
+- Stored cookie text is never rendered back into an input.
+- Pasted cookies only live in local component state before save.
+- After successful cookie save, the textarea state is cleared and auth status is reloaded.
+- Empty/whitespace cookie textarea disables the save-cookies button; backend still validates and rejects empty direct IPC calls.
+- Clear auth sets local `authEnabled` false after command returns.
+- Numeric input constraints match backend ranges.
 
-Implemented Rust trace changes:
+Svelte autofixer:
 
-- `build_trace_refs` resolves exact refs first.
-- Fallback matches same `source_id` and `item_id`, keeping old `sN-iM` and `sN-mM` refs working.
-- Timestamp refs parse `@<ms>ms`.
-- `youtube_timestamp_seconds` is `ms / 1000`.
-- `youtube_url` appends `t=<seconds>`.
-- `youtube_display_label` formats as:
-  - `Video title at 12:34` when title exists.
-  - `YouTube at 12:34` otherwise.
-- `is_synthetic = true` when:
-  - `message.item_id == 0`, or
-  - `message.item_kind == Some("youtube_description")`.
+- Ran on `youtube-settings-panel.svelte`.
+- Ran on `src/routes/settings/+page.svelte`.
+- No issues.
 
-Implemented TypeScript/frontend changes:
-
-- Extended `AnalysisTraceRef` in `src/lib/types/analysis.ts` with:
-  - `youtube_url: string | null`
-  - `youtube_timestamp_seconds: number | null`
-  - `youtube_display_label: string | null`
-  - `is_synthetic: boolean`
-- Updated trace fixtures in:
-  - `src/lib/analysis-state.test.ts`
-  - `src/lib/analysis-trace-workflow.test.ts`
-  - `src/lib/api/analysis-trace.test.ts`
-- Added regression test in `analysis-trace-workflow.test.ts`:
-  - saved synthetic YouTube description ref has `item_id = 0` and `is_synthetic = true`;
-  - remains selectable;
-  - does not call `resolveRefs`.
-- Updated `trace-panel.svelte` to render:
-  - YouTube link when `youtube_url` exists.
-  - `youtube_display_label` when available.
-  - `Saved synthetic evidence` for synthetic refs.
-
-Task 4 final verification:
+Task 3 verification:
 
 ```powershell
-cd src-tauri
-cargo test analysis::trace --lib
-cargo test analysis::corpus --lib
-cargo test analysis::store --lib
-cd ..
-npm.cmd test -- analysis-trace analysis-trace-workflow
+npm.cmd test -- youtube-settings
 npm.cmd run check
-git diff --cached --check
+git diff --check
 ```
 
-Results:
+Known results:
 
-- `analysis::trace`: 7 passed.
-- `analysis::corpus`: 19 passed.
-- `analysis::store`: 3 passed.
-- `analysis-trace` and `analysis-trace-workflow`: 13 tests passed.
-- `svelte-check`: 0 errors and 0 warnings.
-- `git diff --cached --check`: clean.
+- `youtube-settings` Vitest: 4 passed.
+- `svelte-check found 0 errors and 0 warnings`.
+- `git diff --check`: no whitespace errors.
 
-Svelte autofixer:
-
-- Ran on `trace-panel.svelte`.
-- No issues.
-
-## Legacy Database YouTube Source Fix
+## Cross-Cutting Part 5 Auth Path
 
 Commit:
 
 ```text
-52891eb fix: add youtube sources on upgraded databases
+54ee015 feat: use youtube cookies for yt-dlp runs
 ```
 
-Manual verification found a real bug on an upgraded database:
+Reason:
 
-```text
-NOT NULL constraint failed: sources.telegram_source_kind
-```
+- After Task 3, a review before manual verification found that `run_ytdlp_with_options` existed but real preview/sync paths still used unauthenticated `run_ytdlp`.
+- The implementation was extended so stored cookies are actually used by real YouTube paths when auth is enabled.
 
-Root cause:
+Implemented:
 
-- Old migration made `sources.telegram_source_kind TEXT NOT NULL DEFAULT 'channel'`.
-- YouTube upsert inserted `NULL` for this Telegram compatibility column.
-- Fresh test schemas did not expose the bug.
-
-TDD tests added in `src-tauri/src/sources/store.rs`:
-
-- `source_record_parts_hides_non_telegram_compatibility_kind`
-- `upsert_youtube_video_source_handles_legacy_not_null_telegram_kind`
-- `upsert_youtube_playlist_source_handles_legacy_not_null_telegram_kind`
-
-RED result:
-
-- `cargo test sources::store::tests --lib` failed on the three new tests.
-
-Fix:
-
-- YouTube source upsert now inserts `telegram_source_kind = ''` for video/playlist rows so legacy NOT NULL databases work.
-- `source_record_from_row_parts` hides non-Telegram compatibility kind by returning `telegram_source_kind: None` when `source_type != "telegram"`.
+- Added `load_youtube_auth_cookies_from_state(pool, secrets)` in `src-tauri/src/youtube/settings.rs`.
+- Helper returns `None` when `youtube.auth.enabled = false`.
+- Helper returns stored cookie text only when auth is enabled.
+- `preview_youtube_source` and `add_youtube_source` now accept `AppHandle` and `SecretStoreState`.
+- Preview/add source load cookie text from settings/secret state and call `run_ytdlp_with_options`.
+- `fetch_video_metadata`, `fetch_playlist_metadata`, and `fetch_playlist_metadata_page` accept `cookies: Option<String>`.
+- `fetch_transcript_for_video` accepts `cookies: Option<String>`.
+- `fetch_comments_for_video` accepts `cookies: Option<String>`.
+- Background YouTube sync jobs load cookies via `handle.state::<SecretStoreState>()` and pass them to:
+  - metadata sync,
+  - transcript sync,
+  - comments sync,
+  - playlist metadata sync.
+- Added named timeout constants near callers:
+  - `YOUTUBE_METADATA_TIMEOUT`
+  - `YOUTUBE_CAPTION_DOWNLOAD_TIMEOUT`
+  - `YOUTUBE_COMMENTS_FETCH_TIMEOUT`
+- These currently use the existing 30s preview timeout constant, keeping all auth paths bounded.
+- Added test:
+  - auth cookies load only when auth is enabled.
 
 Verification:
 
 ```powershell
 cd src-tauri
-cargo test sources::store::tests --lib
-cargo fmt
-cargo test sources::store --lib
+cargo test youtube::settings --lib
 cargo test youtube::preview --lib
+cargo test youtube::metadata --lib
+cargo test youtube::captions --lib
+cargo test youtube::comments --lib
 cargo test youtube::jobs --lib
-cargo test --lib
+cargo test youtube::ytdlp --lib
+git diff --check
 ```
 
-Results:
+Known results:
 
-- `sources::store::tests`: 6 passed.
-- `sources::store`: passed.
-- `youtube::preview`: passed.
-- `youtube::jobs`: passed.
-- Full `cargo test --lib`: 261 passed.
+- `youtube::settings`: 9 passed.
+- `youtube::preview`: 2 passed.
+- `youtube::metadata`: 5 passed.
+- `youtube::captions`: 9 passed.
+- `youtube::comments`: 5 passed.
+- `youtube::jobs`: 4 passed.
+- `youtube::ytdlp`: 3 passed at that checkpoint.
+- `git diff --check`: no whitespace errors.
 
-## Manual Verification Of Part 4
+## Part 5 Manual Verification Bug Fix
 
-Manual verification was performed with the Tauri MCP bridge and the app running at:
+Commit:
 
 ```text
-http://localhost:1420/analysis
+67dd93a fix: write youtube cookies with netscape header
 ```
+
+Manual verification found a real bug:
+
+```text
+YouTube preview failed: '<temp path>' does not look like a Netscape format cookies file
+```
+
+Root cause:
+
+- The app validation intentionally accepted a bare valid Netscape cookie row.
+- `yt-dlp` requires the temp cookie file to include the standard Netscape header.
+- The app wrote the bare row unchanged into the temp file.
+
+Fix:
+
+- Added `ytdlp_cookie_file_content(cookies: &str) -> String`.
+- If the user-provided cookie text already contains `# Netscape HTTP Cookie File`, it is preserved unchanged.
+- If the header is missing, the app prepends:
+
+```text
+# Netscape HTTP Cookie File
+```
+
+- `run_ytdlp_with_options` writes the normalized file content to the temporary file.
+
+Tests:
+
+- `cookie_file_content_adds_netscape_header_when_missing`
+- `cookie_file_content_preserves_existing_netscape_header`
+
+RED/GREEN:
+
+- New regression test first failed because `ytdlp_cookie_file_content` did not exist.
+- After implementation, `cargo test youtube::ytdlp --lib` passed.
+
+Verification:
+
+```powershell
+cd src-tauri
+cargo test youtube::ytdlp --lib
+git diff --check
+```
+
+Known results:
+
+- `youtube::ytdlp`: 5 passed.
+- `git diff --check`: no whitespace errors.
+
+## Part 5 Plan Completion Docs
+
+Commit:
+
+```text
+46a10d9 docs: mark youtube part 5 complete
+```
+
+Implemented:
+
+- Updated `docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md`.
+- Marked all Task 1, Task 2, Task 3, and Manual Verification checkboxes complete.
+- `rg "^- \[ \]" docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md -n` returned no matches.
+
+## Manual Verification Of Part 5
+
+Manual verification was performed with Tauri MCP bridge and the dev app.
 
 Tauri app id:
 
@@ -520,215 +554,131 @@ The dev app was started with:
 Start-Process -FilePath npm.cmd -ArgumentList @('run','tauri','--','dev') -WorkingDirectory 'G:\Develop\Extractum' -WindowStyle Hidden
 ```
 
-The app and bridge may or may not still be running in a future session. Check before using:
+The app may still be running. Check with:
 
 ```text
 mcp__tauri__.driver_session status
 ```
 
-`yt-dlp` was verified:
-
-```powershell
-yt-dlp --version
-```
-
-Result:
+Manual verification URL:
 
 ```text
-2026.03.17
+http://localhost:1420/settings
 ```
 
-### Video Used For Reliable Manual Verification
-
-Initial test video:
-
-```text
-https://www.youtube.com/watch?v=dQw4w9WgXcQ
-```
-
-Notes:
-
-- Preview worked.
-- After the legacy DB fix, adding the source worked as source id `28`.
-- Full sync failed on comments with `yt-dlp preview timed out after 30 seconds`, likely due comment volume on a popular video.
-
-Reliable test video:
+Reliable public preview video:
 
 ```text
 https://www.youtube.com/watch?v=M7lc1UVf-VE
 ```
 
-Source:
+Manual checks completed:
 
-- Source id: `30`
-- Title: `YouTube Developers Live: Embedded Web Player Customization`
-- Preview available.
-- Manual and auto captions available.
+- Cleared YouTube auth through `clear_youtube_auth`.
+- Confirmed response:
 
-Full sync for source `30`:
-
-- Metadata + transcript + comments succeeded.
-- Job id: `source-job-2`
-- Status: `succeeded`
-- DB counts:
-  - `youtube_transcript`: 1 item
-  - transcript segments: 466
-  - `youtube_comment`: 94 items
-- Reply-like comment ids were present, including ids with dot suffixes.
-
-Comments-only resync:
-
-- Job id: `source-job-3`
-- Status: `succeeded`
-- `youtube_comment` count remained 94, confirming idempotent upsert behavior.
-
-### Provider-Safe Analysis Group Verification
-
-Created YouTube group:
-
-- Group id: `1`
-- Name: `Manual Verification YouTube`
-- Member source: `30`
-
-Telegram source used for negative test:
-
-- Source id: `17`
-- Title: `chat aigenis invest`
-
-Attempt to update group with `[17, 30]` was rejected:
-
-```text
-Source 17 has type 'telegram' and cannot be added to a 'youtube' analysis group
+```json
+{"enabled":false,"hasCookies":false,"message":"Auth disabled"}
 ```
 
-Membership before and after rejection remained only source `30`.
-
-### Analysis Mode Verification
-
-Run settings:
-
-- Source: `30`
-- Period: `1360000000` to `1778331400`
-- Template id: `1`
-- Profile: `test_profile`
-- Provider: `omniroute`
-- Model: `gemini/gemini-3-flash-preview`
-
-Runs:
-
-- Run `54`: `transcript_only`
-  - Status: completed.
-  - Snapshot: 466 `youtube_transcript` docs.
-- Run `55`: `transcript_description`
-  - Status: completed.
-  - Snapshot: 466 `youtube_transcript` docs + 1 `youtube_description`.
-- Run `56`: `transcript_description_comments`
-  - Status: completed.
-  - Snapshot: 466 transcript docs + 1 description + 94 comment docs.
-  - Report included transcript refs and comment refs, for example `s30-i134725`.
-
-### Playlist Expansion Verification
-
-Created local synthetic manual playlist source:
-
-- Source id: `32`
-- Title: `Manual Verification Playlist`
-
-Inserted playlist rows:
-
-- Linked row:
-  - `video_source_id = 30`
-  - `video_id = 'M7lc1UVf-VE'`
-- Unlinked row:
-  - `video_source_id = NULL`
-  - `video_id = 'manual-unlinked-video'`
-  - `availability_status = 'no_captions'`
-
-Run:
-
-- Run `57`
-- Scope: playlist source `32`
-- Mode: `transcript_only`
-- Status: completed.
-
-Result:
-
-- Snapshot contained only source `30` transcript docs.
-- Query for `external_id LIKE '%manual-unlinked-video%'` returned count 0.
-- No empty documents were created for `video_source_id IS NULL`.
-
-### Saved-Run Stability Verification
-
-Before resync, resolved refs for run `56`:
-
-- Timestamp ref:
-  - Ref: `s30-i134703@14030ms`
-  - `youtube_url`: `https://www.youtube.com/watch?v=M7lc1UVf-VE&t=14`
-  - `youtube_timestamp_seconds`: `14`
-  - Display label ended with `at 0:14`.
-- Synthetic description ref:
-  - Ref: `s30-i0`
-  - `item_id = 0`
-  - `is_synthetic = true`
-  - Saved excerpt came from description.
-  - `youtube_url` was base video URL.
-
-Then source `30` was resynced with transcripts and comments:
-
-- Job id: `source-job-4`
-- Status: `succeeded`
-
-After resync:
-
-- Current source items remained:
-  - 94 comments
-  - 1 transcript item
-- Run `56` snapshot remained:
-  - 94 comments
-  - 1 description
-  - 466 transcript docs
-- Same timestamp and synthetic refs resolved identically after resync.
-
-### Trace UI Verification
-
-Run `54` trace panel:
-
-- Timestamp ref `s30-i134703@14030ms` rendered with YouTube link:
+- Previewed public video without auth; preview succeeded.
+- Direct IPC save with whitespace cookie text returned validation error:
 
 ```text
-https://www.youtube.com/watch?v=M7lc1UVf-VE&t=14
+YouTube cookies cannot be empty; use clear_youtube_auth to remove stored cookies
 ```
 
-To force a synthetic description citation, prompt template id `2` was created:
-
-- Name: `Manual YouTube description trace`
-- Body:
+- Direct IPC save with malformed space-separated cookie text returned sanitized validation error:
 
 ```text
-Create a very short report using only the YouTube video description document. Cite the description evidence ref exactly once. Do not cite transcript or comment refs.
+Invalid YouTube cookie file at line 1: expected 7 tab-separated fields
 ```
 
-Run:
+- Confirmed malformed error did not contain `secret-value`.
+- Saved valid cookie text:
 
-- Run `58`
-- Mode: `transcript_description`
-- Template id: `2`
-- Status: completed.
-- Result cited `[s30-i0]`.
+```text
+.youtube.com	TRUE	/	TRUE	1893456000	SID	secret-value
+```
 
-Trace panel for run `58` showed:
+- Confirmed `save_youtube_cookies` response:
 
-- `s30-i0`
-- Link: `https://www.youtube.com/watch?v=M7lc1UVf-VE`
-- Text: `Saved synthetic evidence`
-- Saved excerpt from YouTube description
-- No source-item lookup was needed because `item_id = 0`.
+```json
+{"enabled":true,"hasCookies":true,"message":"Cookies stored"}
+```
 
-## Local Data Created During Manual Verification
+- Confirmed `get_youtube_auth_status` response:
 
-The following data was created in the user's local app/database during manual verification. Do not delete it unless the user asks.
+```json
+{"enabled":true,"hasCookies":true,"message":"Cookies stored"}
+```
 
-- YouTube source `28`: Rick Astley test video, added after legacy DB fix.
+- Reloaded `/settings`.
+- Confirmed UI showed `Cookies stored`.
+- Confirmed UI did not contain `secret-value`.
+- Confirmed no textarea values existed after reload until editing cookies.
+- Clicked `Update cookies`; textarea appeared empty and `Save cookies` was disabled while empty.
+- Authenticated preview initially failed due missing Netscape header; that was fixed in commit `67dd93a`.
+- After fix, authenticated preview succeeded with stored cookies.
+- Cleared auth again.
+- Confirmed final auth status and settings:
+
+```json
+{
+  "settings": {
+    "authEnabled": false,
+    "dailySoftLimit": 0,
+    "delayBetweenRequestsMs": 1000,
+    "maxParallelCommentSyncs": 1,
+    "maxParallelVideoSyncs": 1,
+    "pauseOnAuthChallenge": true,
+    "preferredCaptionsLanguage": "original",
+    "retryBackoffMs": 3000,
+    "stopAfterConsecutiveFailures": 3
+  },
+  "status": {
+    "enabled": false,
+    "hasCookies": false,
+    "message": "Auth disabled"
+  }
+}
+```
+
+- Reloaded `/settings`.
+- Confirmed UI showed `Auth disabled`.
+- Confirmed UI did not contain `secret-value`.
+
+Notes:
+
+- The manual cookie used for verification was a fake value (`secret-value`) with a valid Netscape shape. It was cleared at the end.
+- IPC monitor did not capture command logs in this session (`ipc_get_captured` returned `[]`), so the `--cookies <temp-path>` behavior was verified through code, unit tests, and the real authenticated preview path after fixing the temp file header.
+- The preview timeout policy was verified by code path: authenticated preview uses `YTDLP_PREVIEW_TIMEOUT` through `run_ytdlp_with_options`, same as unauthenticated preview.
+
+## Final Verification For Part 5
+
+Fresh final verification after all Part 5 commits:
+
+```powershell
+cd src-tauri
+cargo test --lib
+cd ..
+npm.cmd test -- youtube-settings
+npm.cmd run check
+git status --short
+```
+
+Results:
+
+- `cargo test --lib`: 280 passed, 0 failed.
+- `npm.cmd test -- youtube-settings`: 1 test file passed, 4 tests passed.
+- `npm.cmd run check`: `svelte-check found 0 errors and 0 warnings`.
+- `git status --short`: no output before this session-context rewrite.
+
+## Current Local Data / Runtime State
+
+Existing local data from Part 4 manual verification still exists unless the user deleted it:
+
+- YouTube source `28`: Rick Astley test video.
 - YouTube source `30`: `YouTube Developers Live: Embedded Web Player Customization`.
 - YouTube playlist source `32`: `Manual Verification Playlist`.
 - Analysis group `1`: `Manual Verification YouTube`.
@@ -736,44 +686,33 @@ The following data was created in the user's local app/database during manual ve
 - Analysis runs `54`, `55`, `56`, `57`, `58`.
 - Source jobs including `source-job-2`, `source-job-3`, `source-job-4`.
 
-## Part 4 Completion Answer Already Given
+Part 5 local data:
 
-When the user asked whether Part 4 was fully complete, the answer given was:
+- Fake manual cookie value used for verification was saved temporarily and cleared at the end.
+- Final checked auth state was:
+  - `authEnabled = false`
+  - `hasCookies = false`
+  - message `Auth disabled`
+- Tauri dev app may still be running from manual verification.
 
-- Yes, functionally Part 4 is fully complete.
-- Code implementation, automated verification, manual verification, and the upgraded-database fix are done.
-- The only documentation caveat is that the markdown plan checkboxes were still not physically updated, and this session context needed refreshing.
+Do not delete local verification data unless the user asks.
 
 ## Recommended Next Steps
 
-If the user wants documentation cleanup:
+If the user wants to commit this session-context rewrite:
 
-1. Update `docs/superpowers/plans/2026-05-09-youtube-sources-04-comments-and-analysis.md` to mark Part 4 tasks and manual verification complete.
-2. Commit this session context update and optional plan checkbox update.
+```powershell
+git add docs/session-context-2026-05-03.md
+git commit -m "docs: refresh session context after youtube part 5"
+```
 
 If the user wants implementation to continue:
 
-1. Move to Part 5.
-2. Read `docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md`.
+1. Move to Part 6.
+2. Read `docs/superpowers/plans/2026-05-09-youtube-sources-06-ui-hardening-docs.md`.
 3. Use `superpowers:executing-plans`.
 4. Use `superpowers:test-driven-development` for behavior changes.
-5. Keep one commit per task if the user continues the previous working style.
-
-## Part 5 Reminder: Auth And Settings
-
-Plan file:
-
-```text
-docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md
-```
-
-Key reminders:
-
-- Raw cookies are allowed only inside backend code that writes temporary cookie files.
-- Raw cookies must never appear in logs, IPC responses, job records/events, or `AppError.message`.
-- Settings UI must never render stored cookie text back into an input.
-- Existing `run_ytdlp(args)` keeps 30s preview timeout without cookies.
-- Authenticated paths use explicit bounded timeouts.
+5. Keep one commit per task if continuing the previous working style.
 
 ## Part 6 Reminder: UI Hardening And Docs
 
@@ -783,45 +722,51 @@ Plan file:
 docs/superpowers/plans/2026-05-09-youtube-sources-06-ui-hardening-docs.md
 ```
 
-Key reminders:
+Known reminders from earlier context:
 
 - Add runtime/detail APIs:
   - `src-tauri/src/youtube/runtime.rs`
   - `src-tauri/src/youtube/detail.rs`
-- `get_youtube_runtime_status` runs `yt-dlp --version` with a 5s timeout.
+- `get_youtube_runtime_status` should run `yt-dlp --version` with a 5s timeout.
 - Source summaries should use provider-neutral `synced items`, not `synced messages`.
 - Hide Telegram topic controls for YouTube sources.
 
-## Verification Command Reference
+## Useful Verification Commands
 
-Useful backend commands:
+Backend:
 
 ```powershell
 cd src-tauri
+cargo test youtube::cookies --lib
+cargo test youtube::settings --lib
+cargo test youtube::ytdlp --lib
+cargo test youtube::preview --lib
+cargo test youtube::metadata --lib
+cargo test youtube::captions --lib
+cargo test youtube::comments --lib
+cargo test youtube::jobs --lib
 cargo test analysis::groups --lib
 cargo test analysis::store --lib
 cargo test analysis::corpus --lib
 cargo test analysis::report --lib
 cargo test analysis::trace --lib
-cargo test youtube::comments --lib
-cargo test youtube::preview --lib
-cargo test youtube::jobs --lib
 cargo test sources::items --lib
 cargo test sources::store --lib
 cargo test --lib
 ```
 
-Useful frontend commands:
+Frontend:
 
 ```powershell
 cd g:\Develop\Extractum
+npm.cmd test -- youtube-settings
 npm.cmd test -- analysis-source-groups
 npm.cmd test -- analysis-run-workflow analysis-state analysis-runs
 npm.cmd test -- analysis-trace analysis-trace-workflow
 npm.cmd run check
 ```
 
-Whitespace checks:
+Whitespace:
 
 ```powershell
 git diff --check
@@ -846,4 +791,9 @@ node --trace-uncaught ./node_modules/vitest/vitest.mjs run <path-or-filter> --re
 - Do not use `item_id = 0` as a database item id.
 - Keep old refs `sN-iM` and `sN-mM` working.
 - Keep raw cookie values out of logs, events, errors, command args, and IPC responses.
+- Stored cookie text must never render back into the settings UI.
+- `save_youtube_settings` must not read or write raw cookie content.
+- `get_youtube_auth_status` may check only whether cookies exist.
+- `load_youtube_auth_cookies_from_state` is the backend boundary for reading raw cookies for temp-file execution.
+- `yt-dlp` temp cookie files need a Netscape header even when the user pasted only valid cookie rows.
 - YouTube jobs are in memory for the MVP; restart does not restore them.
