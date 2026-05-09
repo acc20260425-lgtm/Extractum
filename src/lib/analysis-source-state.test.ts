@@ -151,13 +151,13 @@ describe("analysis-source-state", () => {
     )).toBeNull();
   });
 
-  it("does not require Telegram account runtime for non-syncable manual sources", () => {
+  it("does not require Telegram account runtime for syncable manual YouTube sources", () => {
     expect(sourceSyncDisabledReason(source({
       sourceType: "youtube",
       sourceSubtype: "video",
       telegramSourceKind: null,
       accountId: null,
       isMember: false,
-    }), {})).toBe("This source type is not syncable.");
+    }), {})).toBeNull();
   });
 });
