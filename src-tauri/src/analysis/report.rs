@@ -13,7 +13,10 @@ use crate::llm::{
     LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
 };
 
-use super::corpus::load_corpus_messages;
+use super::corpus::{
+    load_corpus_messages, preflight_analysis_run, preflight_limit_error, AnalysisRunPreflight,
+    AnalysisRunPreflightLimits,
+};
 use super::models::{
     AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary,
     CorpusMessage,
@@ -362,6 +365,7 @@ struct ReportRunInput {
     prompt_template: AnalysisPromptTemplate,
     model_override: Option<String>,
     profile_id: Option<String>,
+    preflight: AnalysisRunPreflight,
 }
 
 struct ReportPipelineContext {
@@ -709,7 +713,12 @@ async fn run_report_pipeline(
     .map_err(ReportRunError::Failed)?;
 
     RunEvent::new(run_id, "started", "load_items")
-        .message("Loading synced source documents from local storage...".to_string())
+        .message(format!(
+            "Preflight passed: {} documents, {} estimated chunks, {} estimated input characters.",
+            input.preflight.message_count,
+            input.preflight.estimated_chunks,
+            input.preflight.estimated_input_chars
+        ))
         .emit(&handle);
 
     let corpus = load_corpus_messages(&pool, &input.source_ids, input.period_from, input.period_to)
@@ -980,6 +989,27 @@ pub async fn start_analysis_report(
             )
         };
 
+    let preflight = preflight_analysis_run(
+        &pool,
+        &source_ids,
+        period_from,
+        period_to,
+        ANALYSIS_CHUNK_TARGET_CHARS,
+        AnalysisRunPreflightLimits::default(),
+    )
+    .await
+    .map_err(AppError::database)?;
+
+    if preflight.message_count == 0 {
+        return Err(AppError::validation(
+            "No synced source documents were found for the selected analysis scope and period",
+        ));
+    }
+
+    if let Some(error) = preflight_limit_error(&preflight) {
+        return Err(AppError::validation(error));
+    }
+
     if let Some(existing_run_id) = find_active_duplicate_run(
         &pool,
         &DuplicateRunLookup {
@@ -1048,6 +1078,7 @@ pub async fn start_analysis_report(
                 prompt_template,
                 model_override,
                 profile_id,
+                preflight,
             },
         )
         .await

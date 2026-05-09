@@ -242,6 +242,24 @@ pub(crate) async fn preflight_analysis_run(
     })
 }
 
+pub(crate) fn preflight_limit_error(preflight: &AnalysisRunPreflight) -> Option<String> {
+    let exceeds_messages = preflight.message_count > preflight.limits.max_messages_per_run;
+    let exceeds_chunks = preflight.estimated_chunks > preflight.limits.max_chunks_per_run;
+    let exceeds_chars =
+        preflight.estimated_input_chars > preflight.limits.max_estimated_input_chars_per_run;
+
+    if !(exceeds_messages || exceeds_chunks || exceeds_chars) {
+        return None;
+    }
+
+    Some(format!(
+        "Analysis scope is too large: {} documents, {} estimated chunks, \
+         {} estimated input characters. \
+         Narrow the period or choose a smaller source scope.",
+        preflight.message_count, preflight.estimated_chunks, preflight.estimated_input_chars
+    ))
+}
+
 pub(crate) async fn load_run_snapshot_messages(
     pool: &Pool<Sqlite>,
     run_id: i64,
@@ -301,7 +319,8 @@ mod tests {
     use super::{
         estimate_message_input_chars, estimate_preflight_chunk_count, live_corpus_ref,
         load_corpus_messages, load_run_corpus_messages, load_run_snapshot_messages,
-        preflight_analysis_run, resolve_run_source_ids, AnalysisRunPreflightLimits,
+        preflight_analysis_run, preflight_limit_error, resolve_run_source_ids,
+        AnalysisRunPreflight, AnalysisRunPreflightLimits,
     };
     use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
@@ -509,6 +528,37 @@ mod tests {
         assert_eq!(limits.max_chunks_per_run, 80);
         assert_eq!(limits.max_estimated_input_chars_per_run, 1_500_000);
         assert_eq!(limits.max_background_requests_per_run, 80);
+    }
+
+    #[test]
+    fn preflight_limit_error_reports_all_scale_dimensions() {
+        let preflight = AnalysisRunPreflight {
+            source_ids: vec![1],
+            message_count: 73_102,
+            estimated_input_chars: 6_200_000,
+            estimated_chunks: 381,
+            limits: AnalysisRunPreflightLimits::default(),
+        };
+
+        let error = preflight_limit_error(&preflight).expect("limit error");
+
+        assert!(error.contains("73102 documents"));
+        assert!(error.contains("381 estimated chunks"));
+        assert!(error.contains("6200000 estimated input characters"));
+        assert!(error.contains("Narrow the period or choose a smaller source scope"));
+    }
+
+    #[test]
+    fn preflight_limit_error_allows_runs_within_limits() {
+        let preflight = AnalysisRunPreflight {
+            source_ids: vec![1],
+            message_count: 1_000,
+            estimated_input_chars: 100_000,
+            estimated_chunks: 10,
+            limits: AnalysisRunPreflightLimits::default(),
+        };
+
+        assert_eq!(preflight_limit_error(&preflight), None);
     }
 
     #[tokio::test]
