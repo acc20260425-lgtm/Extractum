@@ -40,7 +40,7 @@ Svelte owns:
 - forms and filters
 - workflow composition
 
-The current frontend workflow is workspace-first: source browsing, sync actions, reports, trace inspection, and follow-up chat are centered in `/analysis`, while `/sources` remains a lightweight compatibility route.
+The current frontend workflow is workspace-first: source browsing, sync actions, reports, trace inspection, and follow-up chat are centered in `/analysis`. The legacy `/sources` route remains only as a compatibility redirect to `/analysis`.
 
 Svelte 5 `$effect` blocks should keep their dependency surface narrow. An
 effect tracks synchronous `$state` and `$derived` reads, including reads inside

@@ -69,8 +69,8 @@ Not implemented yet:
   - sign in
   - log out
 - `/sources`
-  - lightweight compatibility route
-  - points older entry paths to the main analysis workspace
+  - compatibility redirect for older entry paths
+  - sends users to the main analysis workspace
 - `/settings`
   - manage reusable LLM provider profiles
   - set the active profile used by default

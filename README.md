@@ -146,7 +146,7 @@ The backend is intentionally thin in UI concerns, while the frontend is intentio
 
 - `/accounts`: create/delete accounts, inspect runtime status
 - `/auth/[id]`: Telegram sign-in and logout
-- `/sources`: lightweight compatibility route that points people to the main workspace
+- `/sources`: compatibility redirect to the main analysis workspace
 - `/settings`: manage reusable LLM provider profiles, active profile selection, model refresh, live provider smoke tests, and YouTube cookie/settings controls
 - `/analysis`: source browsing and sync, reports, source groups, active runs, saved run history, follow-up chat, trace inspection
 

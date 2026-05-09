@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Database, LayoutDashboard, Moon, Settings, Sun, UserRound } from "@lucide/svelte";
+  import { LayoutDashboard, Moon, Settings, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import Button from "$lib/components/ui/Button.svelte";
@@ -35,13 +35,6 @@
       icon: UserRound,
       active: (pathname: string) =>
         pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
-    },
-    {
-      href: "/sources",
-      label: "Sources",
-      caption: "Channels and sync",
-      icon: Database,
-      active: (pathname: string) => pathname.startsWith("/sources"),
     },
     {
       href: "/settings",
@@ -88,13 +81,6 @@
         {/each}
       </nav>
 
-      <div class="sidebar-utility">
-        <a href="/sources" class:active={page.url.pathname.startsWith("/sources")}>
-          <span class="nav-label">Sources</span>
-          <span class="nav-caption">Compatibility view</span>
-        </a>
-      </div>
-
       <div class="sidebar-footer">
         <div class="footer-copy">
           <span class="footer-label">Workspace mode</span>
@@ -122,8 +108,6 @@
               Account management
             {:else if page.url.pathname.startsWith("/settings")}
               Settings
-            {:else if page.url.pathname.startsWith("/sources")}
-              Sources compatibility view
             {:else}
               Extractum
             {/if}
@@ -420,8 +404,7 @@
     gap: 0.15rem;
   }
 
-  .sidebar-nav a,
-  .sidebar-utility a {
+  .sidebar-nav a {
     display: flex;
     flex-direction: column;
     gap: 0.18rem;
@@ -440,15 +423,13 @@
     min-width: 0;
   }
 
-  .sidebar-nav a:hover,
-  .sidebar-utility a:hover {
+  .sidebar-nav a:hover {
     color: var(--text);
     background: color-mix(in srgb, var(--panel-hover) 72%, transparent);
     border-color: color-mix(in srgb, var(--border) 72%, transparent);
   }
 
-  .sidebar-nav a.active,
-  .sidebar-utility a.active {
+  .sidebar-nav a.active {
     color: var(--text);
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--primary) 12%, var(--panel)), color-mix(in srgb, var(--primary) 7%, var(--panel)));
@@ -469,18 +450,8 @@
   }
 
   .sidebar-nav a.active .nav-caption,
-  .sidebar-nav a:hover .nav-caption,
-  .sidebar-utility a.active .nav-caption,
-  .sidebar-utility a:hover .nav-caption {
+  .sidebar-nav a:hover .nav-caption {
     color: color-mix(in srgb, var(--muted) 72%, var(--text));
-  }
-
-  .sidebar-utility {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    padding-top: 0.25rem;
-    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   }
 
   .sidebar-footer {

@@ -306,7 +306,7 @@ If you are changing ingest:
 
 Detailed Takeout ingest notes live in `docs/takeout-source-import.md`.
 
-If you are only changing the legacy compatibility route:
+If you are only changing the legacy `/sources` redirect:
 
 - `src/routes/sources/+page.svelte`
 
