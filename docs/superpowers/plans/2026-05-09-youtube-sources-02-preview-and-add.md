@@ -51,7 +51,9 @@ Implementation requirements:
 - Pass arguments as separate values.
 - Do not invoke a shell.
 - Map missing binary to `AppError::validation("yt-dlp is not available on PATH")`.
-- Wrap process execution with `tokio::time::timeout`. Use a conservative preview timeout such as 30 seconds.
+- Define `const YTDLP_PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);` in `ytdlp.rs`.
+- Wrap process execution with `tokio::time::timeout(YTDLP_PREVIEW_TIMEOUT, ...)`.
+- Keep the preview timeout exactly 30 seconds. Part 5 reuses this same preview contract for authenticated and unauthenticated `yt-dlp` runs.
 - If the process exits with a non-zero status, map stderr through `youtube::errors`:
   - private/auth/members/age/geo text -> `AppError::auth`.
   - unavailable/deleted/not found text -> `AppError::not_found` or a preview availability status when raw JSON is still available.

@@ -263,6 +263,13 @@ git commit -m "feat: store youtube cookies securely"
 - Create: `src/lib/api/youtube-settings.ts`
 - Create: `src/lib/api/youtube-settings.test.ts`
 
+- [ ] Execute this task in two internal checkpoints so the settings contract stays reviewable:
+
+```text
+Checkpoint A: Rust DTOs, validation, app_settings helpers, shared internal helpers, Tauri commands, and Rust tests.
+Checkpoint B: TypeScript types, frontend API wrappers, and Vitest contract tests.
+```
+
 - [ ] Add `settings` module to `src-tauri/src/youtube/mod.rs`.
 
 - [ ] In `src-tauri/src/youtube/settings.rs`, define explicit app setting keys matching the migration added in Part 1:

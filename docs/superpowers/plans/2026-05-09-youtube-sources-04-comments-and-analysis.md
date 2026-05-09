@@ -19,6 +19,7 @@ After this part:
 - Telegram and YouTube sources cannot mix in one group.
 - Saved analysis runs remain stable after later transcript/comment resyncs.
 - Timestamp refs resolve to YouTube-aware trace entries.
+- Focused manual verification covers live comments ingest, provider-safe analysis scopes, and saved-run/trace stability before moving to Part 5.
 
 ---
 
@@ -683,6 +684,7 @@ git commit -m "feat: load youtube analysis corpus"
 - Modify: `src-tauri/src/analysis/corpus.rs`
 - Modify: `src/lib/types/analysis.ts`
 - Modify: `src/lib/api/analysis-trace.ts`
+- Modify: `src/lib/analysis-trace-workflow.test.ts`
 
 - [ ] Extend `CorpusMessage` with optional snapshot metadata fields:
 
@@ -876,7 +878,7 @@ For a ref like `s12-i400@754000ms`:
 
 For old refs `s12-i400` and `s12-m400`, keep existing behavior and set all YouTube fields to `None` unless the matched `CorpusMessage` has YouTube metadata.
 
-Set `is_synthetic = true` when the matched `CorpusMessage.item_id == 0` or `item_kind == Some("youtube_description")`. For synthetic refs, `AnalysisTraceRef.item_id` remains `0` for backward-compatible shape, but it must be documented and treated as “no database row”. Add a frontend test or component assertion that trace display does not attempt to load source items by `item_id`.
+Set `is_synthetic = true` when the matched `CorpusMessage.item_id == 0` or `item_kind == Some("youtube_description")`. For synthetic refs, `AnalysisTraceRef.item_id` remains `0` for backward-compatible shape, but it must be documented and treated as "no database row". Add a focused regression test in `src/lib/analysis-trace-workflow.test.ts` that loads or resolves a synthetic YouTube description ref with `item_id: 0` and `is_synthetic: true`, keeps it selectable in trace state, and proves the trace workflow does not require a source-item lookup keyed by `item_id` to display the saved excerpt. Do not add a `listSourceItems`-style lookup in `trace-panel.svelte` or `src/routes/analysis/+page.svelte` for synthetic refs.
 
 - [ ] Keep old `s12-i400` and legacy `s12-m400` refs working.
 
@@ -897,7 +899,7 @@ build_trace_refs marks youtube_description refs with item_id 0 as is_synthetic
 cd src-tauri
 cargo test analysis::trace analysis::corpus analysis::store --lib
 cd ..
-npm test -- analysis-trace
+npm test -- analysis-trace analysis-trace-workflow
 npm run check
 ```
 
@@ -906,6 +908,23 @@ Expected: saved run snapshots include YouTube metadata and timestamp trace refs 
 - [ ] Commit:
 
 ```powershell
-git add src-tauri/src/analysis src/lib/types/analysis.ts src/lib/api/analysis-trace.ts
+git add src-tauri/src/analysis src/lib/types/analysis.ts src/lib/api/analysis-trace.ts src/lib/analysis-trace-workflow.test.ts
 git commit -m "feat: resolve youtube timestamp evidence"
 ```
+
+---
+
+## Manual Verification
+
+- [ ] Sync comments for a public video that already has transcript data and confirm top-level comments plus replies appear as `youtube_comment` items. Rerun comment sync and confirm the item count stays stable instead of duplicating rows.
+- [ ] Create a YouTube-only analysis group and confirm adding a Telegram source is rejected with a validation error before any group membership write occurs.
+- [ ] Run analysis for one YouTube video in all three corpus modes:
+  - `transcript_only`
+  - `transcript_description`
+  - `transcript_description_comments`
+
+Confirm preflight and actual execution reflect the expected document set for each mode.
+
+- [ ] Run analysis for a playlist that includes at least one unavailable or unlinked row and confirm only linked, non-removed child video sources enter the corpus. The run must not create empty documents for `video_source_id IS NULL` rows.
+- [ ] Save a YouTube analysis run, resync transcript or comments, then reopen the saved run and confirm the old snapshot excerpt, metadata, and trace resolution remain unchanged.
+- [ ] Open both a timestamp trace ref and a synthetic description ref. Confirm the timestamp ref produces a YouTube URL with `t=<seconds>`, and confirm the synthetic ref renders the saved excerpt without any source-item lookup using `item_id = 0`.

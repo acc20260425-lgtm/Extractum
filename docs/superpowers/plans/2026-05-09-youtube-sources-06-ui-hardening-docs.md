@@ -46,6 +46,13 @@ After this part:
 - Modify: `src/lib/analysis-scope-state.ts`
 - Modify: `src/lib/analysis-scope-state.test.ts`
 
+- [ ] Execute this task in two internal checkpoints so runtime/detail contracts stabilize before the Svelte wiring lands:
+
+```text
+Checkpoint A: runtime status command, detail DTOs, backend detail queries, frontend API wrappers, and their tests.
+Checkpoint B: source row/workspace/detail components, provider-aware labels, and analysis state wiring.
+```
+
 - [ ] Add a runtime status command so sync disable reasons can mention missing `yt-dlp` before the user starts a job.
 
 In `src-tauri/src/youtube/runtime.rs`:
