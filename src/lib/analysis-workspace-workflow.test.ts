@@ -51,6 +51,7 @@ function metric(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOp
   return {
     id: 7,
     account_id: 1,
+    source_type: "telegram",
     title: "Source",
     item_count: 12,
     last_synced_at: 100,

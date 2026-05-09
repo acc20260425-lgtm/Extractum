@@ -246,7 +246,7 @@ pub(crate) async fn fetch_source_group(
 ) -> Result<Option<AnalysisSourceGroup>, String> {
     let group = sqlx::query_as::<_, AnalysisSourceGroupRow>(
         r#"
-        SELECT id, name, created_at, updated_at
+        SELECT id, name, source_type, created_at, updated_at
         FROM analysis_source_groups
         WHERE id = ?
         "#,
@@ -282,6 +282,7 @@ pub(crate) async fn fetch_source_group(
     Ok(Some(AnalysisSourceGroup {
         id: group.id,
         name: group.name,
+        source_type: group.source_type,
         members,
         created_at: group.created_at,
         updated_at: group.updated_at,

@@ -26,6 +26,7 @@ describe("analysis source groups api wrappers", () => {
     const groups: AnalysisSourceGroup[] = [{
       id: 10,
       name: "Research",
+      source_type: "telegram",
       members: [{
         source_id: 7,
         source_title: "Source",
@@ -127,6 +128,7 @@ describe("analysis source groups api wrappers", () => {
     const created: AnalysisSourceGroup = {
       id: 12,
       name: "New group",
+      source_type: "youtube",
       members: [],
       created_at: 100,
       updated_at: 100,
@@ -135,11 +137,13 @@ describe("analysis source groups api wrappers", () => {
 
     await expect(createAnalysisSourceGroup({
       name: "New group",
+      sourceType: "youtube",
       sourceIds: [3, 7],
     })).resolves.toEqual(created);
 
     expect(invokeMock).toHaveBeenLastCalledWith("create_analysis_source_group", {
       name: "New group",
+      sourceType: "youtube",
       sourceIds: [3, 7],
     });
   });
@@ -148,6 +152,7 @@ describe("analysis source groups api wrappers", () => {
     const updated: AnalysisSourceGroup = {
       id: 12,
       name: "Updated group",
+      source_type: "telegram",
       members: [],
       created_at: 100,
       updated_at: 200,
@@ -157,12 +162,14 @@ describe("analysis source groups api wrappers", () => {
     await expect(updateAnalysisSourceGroup({
       groupId: 12,
       name: "Updated group",
+      sourceType: "telegram",
       sourceIds: [7],
     })).resolves.toEqual(updated);
 
     expect(invokeMock).toHaveBeenLastCalledWith("update_analysis_source_group", {
       groupId: 12,
       name: "Updated group",
+      sourceType: "telegram",
       sourceIds: [7],
     });
   });

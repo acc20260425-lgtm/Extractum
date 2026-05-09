@@ -17,6 +17,7 @@ import {
 import type {
   AnalysisPromptTemplate,
   AnalysisPromptTemplateKind,
+  AnalysisGroupSourceType,
   AnalysisSourceGroup,
   CreateAnalysisPromptTemplateInput,
   CreateAnalysisSourceGroupInput,
@@ -187,7 +188,11 @@ export function createAnalysisSourceGroupsWorkflow(
     }
   }
 
-  async function saveGroupChanges(nextName: string, nextSourceIds: number[]) {
+  async function saveGroupChanges(
+    nextName: string,
+    nextSourceIds: number[],
+    nextSourceType: AnalysisGroupSourceType,
+  ) {
     const command = groupUpdateCommand(deps.getState().selectedGroup, nextName, nextSourceIds);
     if (!command.ok) {
       deps.patch({ status: command.status });
@@ -199,6 +204,7 @@ export function createAnalysisSourceGroupsWorkflow(
       const updated = await deps.updateGroup({
         groupId: command.groupId,
         name: command.name,
+        sourceType: nextSourceType,
         sourceIds: command.sourceIds,
       });
       deps.patch({ status: groupUpdatedStatus(updated) });
@@ -212,7 +218,11 @@ export function createAnalysisSourceGroupsWorkflow(
     }
   }
 
-  async function saveGroupCopy(nextName: string, nextSourceIds: number[]) {
+  async function saveGroupCopy(
+    nextName: string,
+    nextSourceIds: number[],
+    nextSourceType: AnalysisGroupSourceType,
+  ) {
     const command = groupCopyCommand(nextName, nextSourceIds);
     if (!command.ok) {
       deps.patch({ status: command.status });
@@ -223,6 +233,7 @@ export function createAnalysisSourceGroupsWorkflow(
     try {
       const created = await deps.createGroup({
         name: command.name,
+        sourceType: nextSourceType,
         sourceIds: command.sourceIds,
       });
       deps.patch({ status: groupCreatedStatus(created) });

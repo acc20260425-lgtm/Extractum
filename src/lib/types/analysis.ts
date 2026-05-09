@@ -1,6 +1,10 @@
+export type AnalysisGroupSourceType = "telegram" | "youtube";
+export type AnalysisSourceOptionType = "telegram" | "youtube" | "rss" | "forum";
+
 export interface AnalysisSourceOption {
   id: number;
   account_id: number | null;
+  source_type: AnalysisSourceOptionType;
   title: string | null;
   item_count: number;
   last_synced_at: number | null;
@@ -28,6 +32,7 @@ export interface AnalysisSourceGroupMember {
 export interface AnalysisSourceGroup {
   id: number;
   name: string;
+  source_type: AnalysisGroupSourceType;
   members: AnalysisSourceGroupMember[];
   created_at: number;
   updated_at: number;
@@ -169,6 +174,7 @@ export interface UpdateAnalysisPromptTemplateInput {
 
 export interface CreateAnalysisSourceGroupInput {
   name: string;
+  sourceType: AnalysisGroupSourceType;
   sourceIds: number[];
 }
 

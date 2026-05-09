@@ -254,6 +254,7 @@ function sourceGroup(overrides: Partial<AnalysisSourceGroup>): AnalysisSourceGro
   return {
     id: 1,
     name: "Research",
+    source_type: "telegram",
     members: [],
     created_at: 100,
     updated_at: 100,

@@ -36,6 +36,7 @@ function metric(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOp
   return {
     id: 1,
     account_id: 1,
+    source_type: "telegram",
     title: "Extractum",
     item_count: 42,
     last_synced_at: 200,
@@ -47,6 +48,7 @@ function group(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGrou
   return {
     id: 7,
     name: "Research group",
+    source_type: "telegram",
     members: [
       { source_id: 1, source_title: "Extractum", item_count: 42 },
       { source_id: 2, source_title: "Signals", item_count: 13 },

@@ -17,6 +17,7 @@ describe("analysis workspace api wrappers", () => {
     const sources: AnalysisSourceOption[] = [{
       id: 7,
       account_id: 1,
+      source_type: "telegram",
       title: "Source",
       item_count: 12,
       last_synced_at: 100,

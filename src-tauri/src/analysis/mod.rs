@@ -154,12 +154,13 @@ pub async fn list_analysis_sources(handle: AppHandle) -> AppResult<Vec<AnalysisS
         SELECT
             sources.id,
             sources.account_id,
+            sources.source_type,
             sources.title,
             COUNT(items.content_zstd) AS item_count,
             sources.last_synced_at
         FROM sources
         LEFT JOIN items ON items.source_id = sources.id
-        GROUP BY sources.id, sources.account_id, sources.title, sources.last_synced_at
+        GROUP BY sources.id, sources.account_id, sources.source_type, sources.title, sources.last_synced_at
         ORDER BY sources.created_at DESC
         "#,
     )

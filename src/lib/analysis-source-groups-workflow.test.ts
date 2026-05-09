@@ -24,6 +24,7 @@ function group(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGrou
   return {
     id: 10,
     name: "Research",
+    source_type: "telegram",
     members: [{
       source_id: 7,
       source_title: "Source",
@@ -251,7 +252,7 @@ describe("analysis-source-groups-workflow", () => {
   it("patches status and skips update when group changes are invalid", async () => {
     const { state, deps, workflow } = createHarness({ selectedGroup: null });
 
-    await workflow.saveGroupChanges("Name", [7]);
+    await workflow.saveGroupChanges("Name", [7], "telegram");
 
     expect(state.status).toBe("Select a source group first.");
     expect(deps.updateGroup).not.toHaveBeenCalled();
@@ -268,11 +269,12 @@ describe("analysis-source-groups-workflow", () => {
     deps.updateGroup.mockResolvedValueOnce(updated);
     deps.listGroups.mockResolvedValueOnce([updated]);
 
-    await workflow.saveGroupChanges(" Updated ", [7]);
+    await workflow.saveGroupChanges(" Updated ", [7], "youtube");
 
     expect(deps.updateGroup).toHaveBeenCalledWith({
       groupId: 10,
       name: "Updated",
+      sourceType: "youtube",
       sourceIds: [7],
     });
     expect(deps.listGroups).toHaveBeenCalledOnce();
@@ -289,10 +291,11 @@ describe("analysis-source-groups-workflow", () => {
     deps.createGroup.mockResolvedValueOnce(created);
     deps.listGroups.mockResolvedValueOnce([created]);
 
-    await workflow.saveGroupCopy(" New group ", [7]);
+    await workflow.saveGroupCopy(" New group ", [7], "telegram");
 
     expect(deps.createGroup).toHaveBeenCalledWith({
       name: "New group",
+      sourceType: "telegram",
       sourceIds: [7],
     });
     expect(deps.listGroups).toHaveBeenCalledOnce();
@@ -308,7 +311,7 @@ describe("analysis-source-groups-workflow", () => {
     const { state, deps, workflow } = createHarness({ selectedGroup: current });
     deps.updateGroup.mockRejectedValueOnce("backend down");
 
-    await workflow.saveGroupChanges("Name", [7]);
+    await workflow.saveGroupChanges("Name", [7], "telegram");
 
     expect(state.status).toBe("Error saving the source group: backend down");
     expect(state.savingGroup).toBe(false);

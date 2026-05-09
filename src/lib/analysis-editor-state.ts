@@ -1,4 +1,8 @@
-import type { AnalysisPromptTemplate, AnalysisSourceGroup } from "$lib/types/analysis";
+import type {
+  AnalysisGroupSourceType,
+  AnalysisPromptTemplate,
+  AnalysisSourceGroup,
+} from "$lib/types/analysis";
 
 export type TemplateEditorState = {
   editorBoundTemplateId: number | null;
@@ -9,6 +13,7 @@ export type TemplateEditorState = {
 export type GroupEditorState = {
   editorBoundGroupId: number | null;
   groupName: string;
+  groupSourceType: AnalysisGroupSourceType;
   groupMemberSourceIds: number[];
 };
 
@@ -61,6 +66,7 @@ export function groupEditorStateFromGroup(
     return {
       editorBoundGroupId: null,
       groupName: "",
+      groupSourceType: "telegram",
       groupMemberSourceIds: [],
     };
   }
@@ -68,6 +74,7 @@ export function groupEditorStateFromGroup(
   return {
     editorBoundGroupId: group.id,
     groupName: group.name,
+    groupSourceType: group.source_type,
     groupMemberSourceIds: group.members.map((member) => member.source_id),
   };
 }

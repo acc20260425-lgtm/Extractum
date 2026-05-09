@@ -5,6 +5,7 @@ use sqlx::FromRow;
 pub struct AnalysisSourceOption {
     pub id: i64,
     pub account_id: Option<i64>,
+    pub source_type: String,
     pub title: Option<String>,
     pub item_count: i64,
     pub last_synced_at: Option<i64>,
@@ -33,6 +34,7 @@ pub struct AnalysisSourceGroupMember {
 pub struct AnalysisSourceGroup {
     pub id: i64,
     pub name: String,
+    pub source_type: String,
     pub members: Vec<AnalysisSourceGroupMember>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -139,6 +141,7 @@ pub(crate) struct AnalysisRunRow {
 pub(crate) struct AnalysisSourceGroupRow {
     pub(crate) id: i64,
     pub(crate) name: String,
+    pub(crate) source_type: String,
     pub(crate) created_at: i64,
     pub(crate) updated_at: i64,
 }

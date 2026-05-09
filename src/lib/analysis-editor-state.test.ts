@@ -39,6 +39,7 @@ function group(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGrou
   return {
     id: 7,
     name: "Research group",
+    source_type: "telegram",
     members: [
       { source_id: 3, source_title: "Gamma", item_count: 30 },
       { source_id: 1, source_title: "Alpha", item_count: 10 },
@@ -74,14 +75,16 @@ describe("analysis-editor-state", () => {
     expect(groupEditorStateFromGroup(null)).toEqual({
       editorBoundGroupId: null,
       groupName: "",
+      groupSourceType: "telegram",
       groupMemberSourceIds: [],
     });
   });
 
   it("creates a group editor snapshot from group members in stored order", () => {
-    expect(groupEditorStateFromGroup(group())).toEqual({
+    expect(groupEditorStateFromGroup(group({ source_type: "youtube" }))).toEqual({
       editorBoundGroupId: 7,
       groupName: "Research group",
+      groupSourceType: "youtube",
       groupMemberSourceIds: [3, 1],
     });
   });

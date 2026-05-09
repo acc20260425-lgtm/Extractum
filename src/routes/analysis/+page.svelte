@@ -167,6 +167,7 @@
   } from "$lib/analysis-source-state";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
+    AnalysisGroupSourceType,
     AnalysisChatTurn,
     AnalysisPromptTemplate,
     AnalysisRunDetail,
@@ -236,6 +237,7 @@
   let savingTemplate = $state(false);
   let deletingTemplate = $state(false);
   let groupName = $state("");
+  let groupSourceType = $state<AnalysisGroupSourceType>("telegram");
   let groupMemberSourceIds = $state<number[]>([]);
   let editorBoundGroupId = $state<number | null>(null);
   let savingGroup = $state(false);
@@ -678,6 +680,7 @@
     const next = groupEditorStateFromGroup(group);
     editorBoundGroupId = next.editorBoundGroupId;
     groupName = next.groupName;
+    groupSourceType = next.groupSourceType;
     groupMemberSourceIds = next.groupMemberSourceIds;
   }
 
@@ -687,6 +690,13 @@
 
   function toggleGroupSource(sourceId: number) {
     groupMemberSourceIds = toggleGroupSourceSelection(groupMemberSourceIds, sourceId);
+  }
+
+  function changeGroupSourceType(value: AnalysisGroupSourceType) {
+    groupSourceType = value;
+    groupMemberSourceIds = groupMemberSourceIds.filter(
+      (sourceId) => sourceMetrics[sourceId]?.source_type === value,
+    );
   }
 
   function traceRefOrigin(ref: string) {
@@ -1066,11 +1076,11 @@
   }
 
   async function saveGroupChanges() {
-    await sourceGroupsWorkflow.saveGroupChanges(groupName, groupMemberSourceIds);
+    await sourceGroupsWorkflow.saveGroupChanges(groupName, groupMemberSourceIds, groupSourceType);
   }
 
   async function saveGroupCopy() {
-    await sourceGroupsWorkflow.saveGroupCopy(groupName, groupMemberSourceIds);
+    await sourceGroupsWorkflow.saveGroupCopy(groupName, groupMemberSourceIds, groupSourceType);
   }
 
   async function deleteGroup() {
@@ -1325,6 +1335,7 @@
     {deletingTemplate}
     {groups}
     {groupName}
+    {groupSourceType}
     {groupMemberSourceIds}
     {selectedGroup}
     {savingGroup}
@@ -1375,6 +1386,7 @@
     onDeleteTemplate={() => void deleteTemplate()}
     onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
     onChangeGroupName={(value) => (groupName = value)}
+    onChangeGroupSourceType={changeGroupSourceType}
     onToggleGroupSource={toggleGroupSource}
     onStartNewGroup={startNewGroup}
     onSaveGroupCopy={() => void saveGroupCopy()}

@@ -14,6 +14,7 @@
   import { sourceKindLabel } from "$lib/source-capabilities";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
+    AnalysisGroupSourceType,
     AnalysisChatTurn,
     AnalysisPromptTemplate,
     AnalysisRunDetail,
@@ -82,6 +83,7 @@
     deletingTemplate,
     groups,
     groupName,
+    groupSourceType,
     groupMemberSourceIds,
     selectedGroup,
     savingGroup,
@@ -128,6 +130,7 @@
     onDeleteTemplate,
     onChangeSelectedGroupId,
     onChangeGroupName,
+    onChangeGroupSourceType,
     onToggleGroupSource,
     onStartNewGroup,
     onSaveGroupCopy,
@@ -178,6 +181,7 @@
     deletingTemplate: boolean;
     groups: AnalysisSourceGroup[];
     groupName: string;
+    groupSourceType: AnalysisGroupSourceType;
     groupMemberSourceIds: number[];
     selectedGroup: AnalysisSourceGroup | null;
     savingGroup: boolean;
@@ -232,6 +236,7 @@
     onDeleteTemplate: () => void;
     onChangeSelectedGroupId: (value: string) => void;
     onChangeGroupName: (value: string) => void;
+    onChangeGroupSourceType: (value: AnalysisGroupSourceType) => void;
     onToggleGroupSource: (sourceId: number) => void;
     onStartNewGroup: () => void;
     onSaveGroupCopy: () => void;
@@ -512,6 +517,7 @@
       selectedGroupId={selectedGroupId}
       {selectedGroup}
       {groupName}
+      {groupSourceType}
       {groupMemberSourceIds}
       sources={sourceMetricsList}
       {savingGroup}
@@ -520,6 +526,7 @@
       {isGroupSourceSelected}
       onChangeSelectedGroupId={onChangeSelectedGroupId}
       onChangeGroupName={onChangeGroupName}
+      onChangeGroupSourceType={onChangeGroupSourceType}
       onToggleSource={onToggleGroupSource}
       onStartNewGroup={onStartNewGroup}
       onSaveGroupCopy={onSaveGroupCopy}

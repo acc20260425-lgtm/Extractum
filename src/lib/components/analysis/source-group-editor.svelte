@@ -6,7 +6,11 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
-  import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
+  import type {
+    AnalysisGroupSourceType,
+    AnalysisSourceGroup,
+    AnalysisSourceOption,
+  } from "$lib/types/analysis";
 
   let {
     compact = false,
@@ -14,6 +18,7 @@
     selectedGroupId,
     selectedGroup,
     groupName,
+    groupSourceType,
     groupMemberSourceIds,
     sources,
     savingGroup,
@@ -22,6 +27,7 @@
     isGroupSourceSelected,
     onChangeSelectedGroupId,
     onChangeGroupName,
+    onChangeGroupSourceType,
     onToggleSource,
     onStartNewGroup,
     onSaveGroupCopy,
@@ -33,6 +39,7 @@
     selectedGroupId: string;
     selectedGroup: AnalysisSourceGroup | null;
     groupName: string;
+    groupSourceType: AnalysisGroupSourceType;
     groupMemberSourceIds: number[];
     sources: AnalysisSourceOption[];
     savingGroup: boolean;
@@ -41,6 +48,7 @@
     isGroupSourceSelected: (sourceId: number) => boolean;
     onChangeSelectedGroupId: (value: string) => void;
     onChangeGroupName: (value: string) => void;
+    onChangeGroupSourceType: (value: AnalysisGroupSourceType) => void;
     onToggleSource: (sourceId: number) => void;
     onStartNewGroup: () => void;
     onSaveGroupCopy: () => void | Promise<void>;
@@ -49,6 +57,7 @@
   } = $props();
 
   let editorOpen = $state(false);
+  const candidateSources = $derived(sources.filter((source) => source.source_type === groupSourceType));
 
   function openNewGroupEditor() {
     onStartNewGroup();
@@ -155,11 +164,11 @@
             <span class="selected-count">{groupMemberSourceIds.length} selected</span>
           </div>
 
-          {#if sources.length === 0}
+          {#if candidateSources.length === 0}
             <EmptyState description="No synced sources available for grouping yet." />
           {:else}
             <div class="member-list">
-              {#each sources as source (source.id)}
+              {#each candidateSources as source (source.id)}
                 <CheckboxRow
                   checked={isGroupSourceSelected(source.id)}
                   disabled={true}
@@ -193,17 +202,27 @@
       />
     </label>
 
+    <label>Group type
+      <select
+        value={groupSourceType}
+        onchange={(event) => onChangeGroupSourceType((event.currentTarget as HTMLSelectElement).value as AnalysisGroupSourceType)}
+      >
+        <option value="telegram">Telegram</option>
+        <option value="youtube">YouTube</option>
+      </select>
+    </label>
+
     <div class="group-members modal-members">
       <div class="members-header">
         <h4>Members</h4>
         <span class="selected-count">{groupMemberSourceIds.length} selected</span>
       </div>
 
-      {#if sources.length === 0}
+      {#if candidateSources.length === 0}
         <EmptyState description="No synced sources available for grouping yet." />
       {:else}
         <div class="member-list">
-          {#each sources as source (source.id)}
+          {#each candidateSources as source (source.id)}
             <CheckboxRow
               checked={isGroupSourceSelected(source.id)}
               title={source.title ?? `Source ${source.id}`}
