@@ -62,6 +62,11 @@ $effect(() => {
 });
 ```
 
+The current `untrack(() => loadRuns())` wrapper should be removed from this
+history effect as part of the refactor. Once `loadRunsForScope(params)` avoids
+`deps.getState()`, the effect's only intended reactive read is the explicit
+`historyScopeParams` read above, so `untrack` is no longer needed there.
+
 If a local route wrapper is preferred for consistency, it must accept `params`
 as an argument and must not call the broad `loadRuns()` wrapper from inside the
 effect.
@@ -94,6 +99,8 @@ Add or update tests before implementation:
    - update the guard so the history effect uses the explicit-scope loader.
    - reject direct `void loadRuns();` in the history effect.
    - reject calling the broad wrapper from the history effect.
+   - no longer require `untrack` for this history effect once the explicit loader
+     is in place.
 
 3. Run:
 
@@ -107,6 +114,7 @@ git diff --check
 
 - The history-scope `$effect` no longer calls the broad saved-run loader wrapper.
 - `loadRunsForScope(params)` has no hidden `deps.getState()` dependency.
+- The history-scope `$effect` no longer needs or uses `untrack`.
 - Existing saved-run refresh behavior is unchanged from the user's perspective.
 - Analysis tests and Svelte check pass.
 - The WebView OOM investigation report remains accurate; update it if the code
@@ -116,5 +124,6 @@ git diff --check
 
 - Do not introduce a general static analyzer for `$effect` usage.
 - Do not refactor unrelated analysis workflows.
-- Do not remove `untrack` from other code paths unless the implementation makes
-  it clearly unnecessary and the regression guard is updated accordingly.
+- Do not remove `untrack` from unrelated code paths. This task only removes the
+  history-effect `untrack` if `loadRunsForScope(params)` has no hidden
+  `deps.getState()` dependency and the regression guard is updated accordingly.
