@@ -16,6 +16,10 @@ pub(crate) fn telegram_account_session_key_secret(account_id: i64) -> String {
     format!("telegram.account.{account_id}.session_key")
 }
 
+pub(crate) fn youtube_default_cookies_secret() -> String {
+    "youtube.auth.default.cookies".to_string()
+}
+
 pub(crate) trait SecretStore: Send + Sync {
     fn get_secret(&self, key: &str) -> AppResult<Option<String>>;
     fn set_secret(&self, key: &str, value: &str) -> AppResult<()>;
@@ -170,6 +174,10 @@ pub(crate) mod tests {
         assert_eq!(
             telegram_account_session_key_secret(42),
             "telegram.account.42.session_key"
+        );
+        assert_eq!(
+            youtube_default_cookies_secret(),
+            "youtube.auth.default.cookies"
         );
     }
 
