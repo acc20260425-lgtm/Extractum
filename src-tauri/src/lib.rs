@@ -37,6 +37,8 @@ use sources::{
     list_source_items, list_sources, list_telegram_sources, save_sync_settings, sync_source,
 };
 
+mod youtube;
+
 mod notebooklm_export;
 use notebooklm_export::export_source_to_notebooklm;
 
