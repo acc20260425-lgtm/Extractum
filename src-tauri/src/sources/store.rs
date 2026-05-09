@@ -136,7 +136,7 @@ pub(crate) async fn upsert_youtube_video_source(
             is_member,
             created_at
         )
-        VALUES ('youtube', 'video', NULL, NULL, ?, ?, ?, 1, 0, ?)
+        VALUES ('youtube', 'video', '', NULL, ?, ?, ?, 1, 0, ?)
         ON CONFLICT(source_type, source_subtype, external_id)
         WHERE source_type = 'youtube' AND source_subtype = 'video'
         DO UPDATE SET
@@ -176,7 +176,7 @@ pub(crate) async fn upsert_youtube_playlist_source(
             is_member,
             created_at
         )
-        VALUES ('youtube', 'playlist', NULL, NULL, ?, ?, ?, 1, 0, ?)
+        VALUES ('youtube', 'playlist', '', NULL, ?, ?, ?, 1, 0, ?)
         ON CONFLICT(source_type, source_subtype, external_id)
         WHERE source_type = 'youtube' AND source_subtype = 'playlist'
         DO UPDATE SET
@@ -314,11 +314,17 @@ fn source_record_from_row_parts(
     row: SourceRecordRow,
     avatar_data_url: Option<String>,
 ) -> SourceRecord {
+    let telegram_source_kind = if row.source_type == TELEGRAM_SOURCE_TYPE {
+        row.telegram_source_kind
+    } else {
+        None
+    };
+
     SourceRecord {
         id: row.id,
         source_type: row.source_type,
         source_subtype: row.source_subtype,
-        telegram_source_kind: row.telegram_source_kind,
+        telegram_source_kind,
         account_id: row.account_id,
         external_id: row.external_id,
         title: row.title,
@@ -359,6 +365,10 @@ mod tests {
     use super::*;
     use crate::error::AppErrorKind;
     use crate::sources::test_support::memory_pool_with_sources;
+    use crate::youtube::dto::{
+        YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
+    };
+    use serde_json::json;
 
     #[test]
     fn source_record_parts_allow_non_telegram_source() {
@@ -385,6 +395,31 @@ mod tests {
         assert_eq!(record.source_subtype.as_deref(), Some("video"));
         assert_eq!(record.telegram_source_kind, None);
         assert_eq!(record.account_id, None);
+    }
+
+    #[test]
+    fn source_record_parts_hides_non_telegram_compatibility_kind() {
+        let record = source_record_from_row_parts(
+            SourceRecordRow {
+                id: 10,
+                source_type: "youtube".to_string(),
+                source_subtype: Some("video".to_string()),
+                telegram_source_kind: Some("channel".to_string()),
+                account_id: None,
+                external_id: "dQw4w9WgXcQ".to_string(),
+                title: Some("Demo video".to_string()),
+                metadata_zstd: None,
+                last_sync_state: None,
+                last_synced_at: None,
+                is_active: true,
+                is_member: false,
+                created_at: 1_700_500,
+            },
+            None,
+        );
+
+        assert_eq!(record.source_type, "youtube");
+        assert_eq!(record.telegram_source_kind, None);
     }
 
     #[test]
@@ -422,5 +457,143 @@ mod tests {
         };
 
         assert_eq!(error.kind, AppErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn upsert_youtube_video_source_handles_legacy_not_null_telegram_kind() {
+        let pool = legacy_not_null_telegram_kind_pool().await;
+        let mut tx = pool.begin().await.expect("begin tx");
+
+        let source_id = upsert_youtube_video_source(&mut tx, &youtube_video_metadata())
+            .await
+            .expect("upsert youtube video");
+        tx.commit().await.expect("commit");
+
+        let row: (String, String, Option<String>, String) = sqlx::query_as(
+            "SELECT source_type, source_subtype, telegram_source_kind, external_id FROM sources WHERE id = ?",
+        )
+        .bind(source_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load source");
+
+        assert_eq!(row.0, "youtube");
+        assert_eq!(row.1, "video");
+        assert_eq!(row.2.as_deref(), Some(""));
+        assert_eq!(row.3, "dQw4w9WgXcQ");
+    }
+
+    #[tokio::test]
+    async fn upsert_youtube_playlist_source_handles_legacy_not_null_telegram_kind() {
+        let pool = legacy_not_null_telegram_kind_pool().await;
+        let mut tx = pool.begin().await.expect("begin tx");
+
+        let source_id = upsert_youtube_playlist_source(&mut tx, &youtube_playlist_metadata())
+            .await
+            .expect("upsert youtube playlist");
+        tx.commit().await.expect("commit");
+
+        let row: (String, String, Option<String>, String) = sqlx::query_as(
+            "SELECT source_type, source_subtype, telegram_source_kind, external_id FROM sources WHERE id = ?",
+        )
+        .bind(source_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load source");
+
+        assert_eq!(row.0, "youtube");
+        assert_eq!(row.1, "playlist");
+        assert_eq!(row.2.as_deref(), Some(""));
+        assert_eq!(row.3, "PLdemo");
+    }
+
+    async fn legacy_not_null_telegram_kind_pool() -> sqlx::SqlitePool {
+        let pool = crate::sources::test_support::memory_pool().await;
+        sqlx::query(
+            r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY,
+                source_type TEXT NOT NULL,
+                source_subtype TEXT,
+                telegram_source_kind TEXT NOT NULL DEFAULT 'channel',
+                account_id INTEGER,
+                external_id TEXT NOT NULL,
+                title TEXT,
+                metadata_zstd BLOB,
+                last_sync_state INTEGER,
+                last_synced_at INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                is_member INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create legacy sources");
+        sqlx::query(
+            r#"
+            CREATE UNIQUE INDEX idx_sources_unique_youtube_video
+            ON sources(source_type, source_subtype, external_id)
+            WHERE source_type = 'youtube' AND source_subtype = 'video'
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create video index");
+        sqlx::query(
+            r#"
+            CREATE UNIQUE INDEX idx_sources_unique_youtube_playlist
+            ON sources(source_type, source_subtype, external_id)
+            WHERE source_type = 'youtube' AND source_subtype = 'playlist'
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create playlist index");
+        pool
+    }
+
+    fn youtube_video_metadata() -> YoutubeVideoMetadata {
+        YoutubeVideoMetadata {
+            video_id: "dQw4w9WgXcQ".to_string(),
+            canonical_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string(),
+            title: Some("Demo video".to_string()),
+            channel_title: Some("Demo channel".to_string()),
+            channel_id: Some("channel-1".to_string()),
+            channel_handle: Some("@demo".to_string()),
+            channel_url: Some("https://www.youtube.com/@demo".to_string()),
+            author_display: Some("Demo channel".to_string()),
+            published_at: Some("2009-10-25".to_string()),
+            duration_seconds: Some(213),
+            description: Some("Demo description".to_string()),
+            thumbnail_url: None,
+            tags: Vec::new(),
+            chapters: Vec::new(),
+            view_count: Some(1),
+            like_count: Some(1),
+            comment_count: Some(1),
+            category: Some("Music".to_string()),
+            video_form: YoutubeVideoForm::Regular,
+            availability_status: YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: json!({ "id": "dQw4w9WgXcQ" }),
+        }
+    }
+
+    fn youtube_playlist_metadata() -> YoutubePlaylistMetadata {
+        YoutubePlaylistMetadata {
+            playlist_id: "PLdemo".to_string(),
+            canonical_url: "https://www.youtube.com/playlist?list=PLdemo".to_string(),
+            title: Some("Demo playlist".to_string()),
+            channel_title: Some("Demo channel".to_string()),
+            channel_id: Some("channel-1".to_string()),
+            channel_handle: Some("@demo".to_string()),
+            channel_url: Some("https://www.youtube.com/@demo".to_string()),
+            thumbnail_url: None,
+            video_count: Some(0),
+            items: Vec::new(),
+            availability_status: YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: json!({ "id": "PLdemo" }),
+        }
     }
 }
