@@ -38,6 +38,7 @@ use sources::{
 };
 
 mod youtube;
+use youtube::preview::preview_youtube_source;
 
 mod notebooklm_export;
 use notebooklm_export::export_source_to_notebooklm;
@@ -154,7 +155,8 @@ pub fn run() {
             clear_analysis_chat_messages,
             ask_analysis_run_question,
             start_analysis_report,
-            cancel_analysis_run
+            cancel_analysis_run,
+            preview_youtube_source
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
