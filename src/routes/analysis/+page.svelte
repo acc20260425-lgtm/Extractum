@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
@@ -1038,7 +1038,7 @@
       return;
     }
 
-    void loadRuns();
+    void untrack(() => loadRuns());
   });
 
   $effect(() => {
