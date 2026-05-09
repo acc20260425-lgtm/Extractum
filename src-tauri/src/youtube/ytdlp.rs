@@ -42,12 +42,14 @@ pub(crate) async fn run_ytdlp_with_options(
 ) -> AppResult<YtdlpOutput> {
     let cookie_file = if let Some(cookies) = options.cookies {
         validate_netscape_cookie_file(&cookies)?;
+        let cookie_file_content = ytdlp_cookie_file_content(&cookies);
         let mut file = NamedTempFile::new().map_err(|error| {
             AppError::internal(format!("Failed to create YouTube cookie file: {error}"))
         })?;
-        file.write_all(cookies.as_bytes()).map_err(|error| {
-            AppError::internal(format!("Failed to write YouTube cookie file: {error}"))
-        })?;
+        file.write_all(cookie_file_content.as_bytes())
+            .map_err(|error| {
+                AppError::internal(format!("Failed to write YouTube cookie file: {error}"))
+            })?;
         file.flush().map_err(|error| {
             AppError::internal(format!("Failed to write YouTube cookie file: {error}"))
         })?;
@@ -92,6 +94,18 @@ fn ytdlp_command_args(args: &[String], cookies_path: Option<&Path>) -> Vec<Strin
     command_args
 }
 
+fn ytdlp_cookie_file_content(cookies: &str) -> String {
+    let has_netscape_header = cookies.lines().any(|line| {
+        line.trim()
+            .eq_ignore_ascii_case("# Netscape HTTP Cookie File")
+    });
+    if has_netscape_header {
+        cookies.to_string()
+    } else {
+        format!("# Netscape HTTP Cookie File\n{cookies}")
+    }
+}
+
 fn timeout_message(timeout: Duration) -> String {
     if timeout == YTDLP_PREVIEW_TIMEOUT {
         "yt-dlp preview timed out after 30 seconds".to_string()
@@ -121,7 +135,9 @@ pub(crate) fn preview_playlist_args(canonical_url: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{preview_playlist_args, preview_video_args, ytdlp_command_args};
+    use super::{
+        preview_playlist_args, preview_video_args, ytdlp_command_args, ytdlp_cookie_file_content,
+    };
 
     #[test]
     fn preview_video_args_use_dump_json_without_shell_fragments() {
@@ -173,5 +189,23 @@ mod tests {
             .any(|pair| { pair == ["--cookies", "C:\\Temp\\extractum-youtube-cookies.txt"] }));
         assert!(!command_args.iter().any(|arg| arg.contains("SID")));
         assert!(!command_args.iter().any(|arg| arg.contains("secret-value")));
+    }
+
+    #[test]
+    fn cookie_file_content_adds_netscape_header_when_missing() {
+        let content = ytdlp_cookie_file_content(
+            ".youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value\n",
+        );
+
+        assert!(content.starts_with("# Netscape HTTP Cookie File\n"));
+        assert!(content.contains(".youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value"));
+    }
+
+    #[test]
+    fn cookie_file_content_preserves_existing_netscape_header() {
+        let cookies =
+            "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value\n";
+
+        assert_eq!(ytdlp_cookie_file_content(cookies), cookies);
     }
 }
