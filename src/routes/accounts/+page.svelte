@@ -190,77 +190,73 @@
     </StatusMessage>
   {/if}
 
-  <div class="page-grid">
-    <div class="page-stack">
-      <section class="desk-panel account-catalog">
-        <div class="panel-header">
-          <div class="panel-header-copy">
-            <span class="page-eyebrow">Workspace access</span>
-            <h2>Configured accounts</h2>
-            <p>Open auth, check runtime state, and keep sync-capable accounts healthy.</p>
-          </div>
-          <div class="panel-header-actions">
-            <Badge variant="neutral">{accounts.length} total</Badge>
-            <Button size="sm" variant="secondary" onclick={() => (accountDialogOpen = true)}>
-              <Plus size={13} aria-hidden="true" />
-              Add
-            </Button>
-          </div>
+  <div class="page-stack">
+    <section class="desk-panel account-catalog">
+      <div class="panel-header">
+        <div class="panel-header-copy">
+          <span class="page-eyebrow">Workspace access</span>
+          <h2>Configured accounts</h2>
+          <p>Open auth, check runtime state, and keep sync-capable accounts healthy.</p>
         </div>
+        <div class="panel-header-actions">
+          <Badge variant="neutral">{accounts.length} total</Badge>
+          <Button size="sm" variant="secondary" onclick={() => (accountDialogOpen = true)}>
+            <Plus size={13} aria-hidden="true" />
+            Add
+          </Button>
+        </div>
+      </div>
 
-        {#if accounts.length === 0}
-          <EmptyState description="No accounts yet. Add one from the button above." />
-        {:else}
-          <ul class="list">
-            {#each accounts as acc (acc.id)}
-              {@const runtime = runtimeStatus(acc.id)}
-              <li>
-                <SurfaceCard className="account-row">
-                  <div class="row-main">
-                    <div class="identity">
-                      <div class="identity-mark" aria-hidden="true">
-                        {acc.label.trim().charAt(0).toUpperCase() || "A"}
-                      </div>
-                      <div class="info">
-                        <div class="title-row">
-                          <span class="label">{acc.label}</span>
-                          <Badge
-                            variant={runtimeBadgeVariant(runtime)}
-                            title={runtime?.status === "restore_failed" && runtime.message ? runtime.message : undefined}
-                          >
-                            {runtimeBadge(runtime)}
-                          </Badge>
-                        </div>
-                        <div class="meta-row">
-                          <span class="sub">{acc.phone ?? "not signed in"}</span>
-                          <span class="sub">API ID {acc.api_id}</span>
-                        </div>
-                        {#if runtime?.message && runtime.status !== "ready"}
-                          <p class="runtime-note">{runtime.message}</p>
-                        {/if}
-                      </div>
+      {#if accounts.length === 0}
+        <EmptyState description="No accounts yet. Add one from the button above." />
+      {:else}
+        <ul class="list">
+          {#each accounts as acc (acc.id)}
+            {@const runtime = runtimeStatus(acc.id)}
+            <li>
+              <SurfaceCard className="account-row">
+                <div class="row-main">
+                  <div class="identity">
+                    <div class="identity-mark" aria-hidden="true">
+                      {acc.label.trim().charAt(0).toUpperCase() || "A"}
                     </div>
-                    <div class="actions">
-                      <Button variant="secondary" size="sm" onclick={() => goto(`/auth/${acc.id}`)}>
-                        <LogIn size={13} aria-hidden="true" />
-                        {authActionLabel(acc)}
-                      </Button>
-                      <Button variant="danger-soft" size="sm" onclick={() => deleteAccount(acc)}>
-                        <Trash2 size={13} aria-hidden="true" /> Delete
-                      </Button>
+                    <div class="info">
+                      <div class="title-row">
+                        <span class="label">{acc.label}</span>
+                        <Badge
+                          variant={runtimeBadgeVariant(runtime)}
+                          title={runtime?.status === "restore_failed" && runtime.message ? runtime.message : undefined}
+                        >
+                          {runtimeBadge(runtime)}
+                        </Badge>
+                      </div>
+                      <div class="meta-row">
+                        <span class="sub">{acc.phone ?? "not signed in"}</span>
+                        <span class="sub">API ID {acc.api_id}</span>
+                      </div>
+                      {#if runtime?.message && runtime.status !== "ready"}
+                        <p class="runtime-note">{runtime.message}</p>
+                      {/if}
                     </div>
                   </div>
-                </SurfaceCard>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
-    </div>
+                  <div class="actions">
+                    <Button variant="secondary" size="sm" onclick={() => goto(`/auth/${acc.id}`)}>
+                      <LogIn size={13} aria-hidden="true" />
+                      {authActionLabel(acc)}
+                    </Button>
+                    <Button variant="danger-soft" size="sm" onclick={() => deleteAccount(acc)}>
+                      <Trash2 size={13} aria-hidden="true" /> Delete
+                    </Button>
+                  </div>
+                </div>
+              </SurfaceCard>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
 
-    <div class="page-stack">
-      <YoutubeSettingsPanel />
-    </div>
+    <YoutubeSettingsPanel />
   </div>
 
   <DesktopDialog
