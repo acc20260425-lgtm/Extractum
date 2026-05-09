@@ -17,6 +17,7 @@
   import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
+  import YoutubeSettingsPanel from "$lib/components/settings/youtube-settings-panel.svelte";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import { openConfirmModal } from "$lib/modals";
   import { pushErrorToast } from "$lib/toasts";
@@ -170,11 +171,11 @@
 <section class="page-shell">
   <header class="page-hero">
     <div class="page-hero-copy">
-      <span class="page-eyebrow">Telegram accounts</span>
+      <span class="page-eyebrow">Source access</span>
       <h1>Accounts</h1>
       <p>
-        Manage Telegram identities used for sync and analysis. Each account keeps its own API
-        credentials, auth state, and linked sources.
+        Manage source identities and authentication used for sync and analysis. Telegram accounts
+        and YouTube auth stay here as workspace access.
       </p>
     </div>
     <div class="page-hero-meta">
@@ -255,6 +256,10 @@
           </ul>
         {/if}
       </section>
+    </div>
+
+    <div class="page-stack">
+      <YoutubeSettingsPanel />
     </div>
   </div>
 

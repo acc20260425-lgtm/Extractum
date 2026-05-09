@@ -31,7 +31,7 @@
     {
       href: "/accounts",
       label: "Accounts",
-      caption: "Telegram access",
+      caption: "Source access",
       icon: UserRound,
       active: (pathname: string) =>
         pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
@@ -105,7 +105,7 @@
             {#if page.url.pathname.startsWith("/analysis")}
               Analysis workspace
             {:else if page.url.pathname.startsWith("/accounts") || page.url.pathname.startsWith("/auth")}
-              Account management
+              Source access
             {:else if page.url.pathname.startsWith("/settings")}
               Settings
             {:else}
