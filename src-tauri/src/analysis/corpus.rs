@@ -7,6 +7,68 @@ use super::store::fetch_source_group;
 use super::{ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP};
 use crate::compression::decompress_text;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AnalysisRunPreflightLimits {
+    pub max_messages_per_run: usize,
+    pub max_chunks_per_run: usize,
+    pub max_estimated_input_chars_per_run: usize,
+    /// Reserved for future retry-aware budgeting. Currently equals
+    /// `max_chunks_per_run` because each chunk creates exactly one
+    /// background request.
+    pub max_background_requests_per_run: usize,
+}
+
+impl Default for AnalysisRunPreflightLimits {
+    fn default() -> Self {
+        Self {
+            max_messages_per_run: 10_000,
+            max_chunks_per_run: 80,
+            max_estimated_input_chars_per_run: 1_500_000,
+            max_background_requests_per_run: 80,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AnalysisRunPreflight {
+    pub source_ids: Vec<i64>,
+    pub message_count: usize,
+    pub estimated_input_chars: usize,
+    pub estimated_chunks: usize,
+    pub limits: AnalysisRunPreflightLimits,
+}
+
+pub(crate) fn estimate_message_input_chars(
+    content: &str,
+    r#ref: &str,
+    author: Option<&str>,
+) -> usize {
+    content.len() + r#ref.len() + author.unwrap_or("").len() + 64
+}
+
+pub(crate) fn live_corpus_ref(source_id: i64, item_id: i64) -> String {
+    format!("s{source_id}-i{item_id}")
+}
+
+pub(crate) fn estimate_preflight_chunk_count(message_sizes: &[usize], max_chars: usize) -> usize {
+    let mut chunks = 0usize;
+    let mut current_chars = 0usize;
+
+    for size in message_sizes {
+        if current_chars > 0 && current_chars + size > max_chars {
+            chunks += 1;
+            current_chars = 0;
+        }
+        current_chars += size;
+    }
+
+    if current_chars > 0 {
+        chunks += 1;
+    }
+
+    chunks
+}
+
 pub(crate) async fn resolve_run_source_ids(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,
@@ -163,8 +225,9 @@ mod tests {
     use sqlx::SqlitePool;
 
     use super::{
-        load_corpus_messages, load_run_corpus_messages, load_run_snapshot_messages,
-        resolve_run_source_ids,
+        estimate_message_input_chars, estimate_preflight_chunk_count, load_corpus_messages,
+        load_run_corpus_messages, load_run_snapshot_messages, resolve_run_source_ids,
+        AnalysisRunPreflightLimits,
     };
     use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
@@ -332,6 +395,46 @@ mod tests {
             completed_at: Some(1_710_000_600),
             scope_label_snapshot: Some("Frozen group".to_string()),
         }
+    }
+
+    #[test]
+    fn estimated_message_chars_match_report_chunk_accounting() {
+        let message = CorpusMessage {
+            item_id: 11,
+            source_id: 2,
+            external_id: "100".to_string(),
+            published_at: 1_710_000_000,
+            author: Some("Alice".to_string()),
+            content: "First live document".to_string(),
+            r#ref: "s2-i11".to_string(),
+        };
+
+        assert_eq!(
+            estimate_message_input_chars(
+                &message.content,
+                &message.r#ref,
+                message.author.as_deref()
+            ),
+            message.content.len() + message.r#ref.len() + "Alice".len() + 64
+        );
+    }
+
+    #[test]
+    fn estimated_chunk_count_matches_chunk_boundary_behavior() {
+        assert_eq!(estimate_preflight_chunk_count(&[], 16_000), 0);
+        assert_eq!(estimate_preflight_chunk_count(&[8_000, 7_000], 16_000), 1);
+        assert_eq!(estimate_preflight_chunk_count(&[8_000, 9_000], 16_000), 2);
+        assert_eq!(estimate_preflight_chunk_count(&[20_000], 16_000), 1);
+    }
+
+    #[test]
+    fn default_preflight_limits_are_conservative() {
+        let limits = AnalysisRunPreflightLimits::default();
+
+        assert_eq!(limits.max_messages_per_run, 10_000);
+        assert_eq!(limits.max_chunks_per_run, 80);
+        assert_eq!(limits.max_estimated_input_chars_per_run, 1_500_000);
+        assert_eq!(limits.max_background_requests_per_run, 80);
     }
 
     #[tokio::test]
