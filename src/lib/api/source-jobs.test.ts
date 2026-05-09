@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  cancelSourceJob,
   listSourceJobs,
   listenToSourceJobEvents,
+  retryFailedYoutubePlaylistVideos,
+  syncYoutubePlaylistVideo,
   syncYoutubeSource,
 } from "./source-jobs";
 
@@ -58,6 +61,63 @@ describe("source job api wrappers", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("sync_youtube_source", {
       sourceId: 7,
       options: { metadata: true, transcripts: true, comments: false },
+    });
+  });
+
+  it("starts a single playlist video sync with camelCase ids", async () => {
+    const record = {
+      job_id: "source-job-2",
+      source_id: 10,
+      related_source_id: 20,
+      job_type: "youtube_playlist_video_sync",
+      status: "queued",
+      message: "queued",
+      progress_current: null,
+      progress_total: null,
+      started_at: 1,
+      finished_at: null,
+      warnings: [],
+      error: null,
+    };
+    const options = { metadata: true, transcripts: true, comments: false };
+    invokeMock.mockResolvedValueOnce(record);
+
+    await expect(syncYoutubePlaylistVideo(10, 20, options)).resolves.toEqual(record);
+
+    expect(invokeMock).toHaveBeenLastCalledWith("sync_youtube_playlist_video", {
+      playlistSourceId: 10,
+      videoSourceId: 20,
+      options,
+    });
+  });
+
+  it("retries failed playlist videos and cancels source jobs", async () => {
+    const options = { metadata: false, transcripts: true, comments: false };
+    invokeMock.mockResolvedValueOnce({
+      job_id: "source-job-3",
+      source_id: 10,
+      related_source_id: null,
+      job_type: "youtube_playlist_full_sync",
+      status: "queued",
+      message: "queued",
+      progress_current: null,
+      progress_total: null,
+      started_at: 1,
+      finished_at: null,
+      warnings: [],
+      error: null,
+    });
+
+    await retryFailedYoutubePlaylistVideos(10, options);
+    expect(invokeMock).toHaveBeenLastCalledWith("retry_failed_youtube_playlist_videos", {
+      sourceId: 10,
+      options,
+    });
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await cancelSourceJob("source-job-3");
+    expect(invokeMock).toHaveBeenLastCalledWith("cancel_source_job", {
+      jobId: "source-job-3",
     });
   });
 

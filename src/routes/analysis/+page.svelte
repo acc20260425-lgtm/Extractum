@@ -966,6 +966,9 @@
   }
 
   async function runReport() {
+    const isYoutubeAnalysisScope =
+      (analysisScope === "single_source" && currentSource()?.sourceType === "youtube") ||
+      (analysisScope === "source_group" && currentGroup()?.source_type === "youtube");
     await runWorkflow.startReport({
       analysisScope,
       selectedSourceId,
@@ -975,7 +978,7 @@
       periodTo,
       outputLanguage,
       modelOverride,
-      youtubeCorpusMode,
+      youtubeCorpusMode: isYoutubeAnalysisScope ? youtubeCorpusMode : "transcript_description",
     });
   }
 
