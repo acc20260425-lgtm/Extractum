@@ -7,6 +7,7 @@
     AnalysisPromptTemplate,
     AnalysisSourceGroup,
     AnalysisSourceOption,
+    YoutubeCorpusMode,
   } from "$lib/types/analysis";
 
   let {
@@ -17,6 +18,7 @@
     periodFrom,
     periodTo,
     outputLanguage,
+    youtubeCorpusMode,
     modelOverride,
     sources,
     groups,
@@ -36,6 +38,7 @@
     onChangePeriodFrom,
     onChangePeriodTo,
     onChangeOutputLanguage,
+    onChangeYoutubeCorpusMode,
     onChangeSelectedTemplateId,
     onChangeModelOverride,
     onRunReport,
@@ -47,6 +50,7 @@
     periodFrom: string;
     periodTo: string;
     outputLanguage: string;
+    youtubeCorpusMode: YoutubeCorpusMode;
     modelOverride: string;
     sources: AnalysisSourceOption[];
     groups: AnalysisSourceGroup[];
@@ -66,6 +70,7 @@
     onChangePeriodFrom: (value: string) => void;
     onChangePeriodTo: (value: string) => void;
     onChangeOutputLanguage: (value: string) => void;
+    onChangeYoutubeCorpusMode: (value: YoutubeCorpusMode) => void;
     onChangeSelectedTemplateId: (value: string) => void;
     onChangeModelOverride: (value: string) => void;
     onRunReport: () => void | Promise<void>;
@@ -75,6 +80,17 @@
     if (launching || !selectedTemplateId) return false;
     return analysisScope === "single_source" ? !!selectedSourceId : !!selectedGroupId;
   }
+
+  const selectedSource = $derived(
+    sources.find((source) => source.id === Number(selectedSourceId)) ?? null,
+  );
+  const selectedGroup = $derived(
+    groups.find((group) => group.id === Number(selectedGroupId)) ?? null,
+  );
+  const isYoutubeScope = $derived(
+    (analysisScope === "single_source" && selectedSource?.source_type === "youtube") ||
+      (analysisScope === "source_group" && selectedGroup?.source_type === "youtube"),
+  );
 </script>
 
 <Card>
@@ -172,6 +188,19 @@
         oninput={(event) => onChangeOutputLanguage((event.currentTarget as HTMLInputElement).value)}
       />
     </label>
+
+    {#if isYoutubeScope}
+      <label>YouTube corpus
+        <Select
+          value={youtubeCorpusMode}
+          onchange={(event) => onChangeYoutubeCorpusMode((event.currentTarget as HTMLSelectElement).value as YoutubeCorpusMode)}
+        >
+          <option value="transcript_only">Transcript</option>
+          <option value="transcript_description">Transcript + description</option>
+          <option value="transcript_description_comments">Transcript + description + comments</option>
+        </Select>
+      </label>
+    {/if}
 
     <label>Prompt template
       <Select

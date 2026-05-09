@@ -22,6 +22,7 @@
     AnalysisSourceGroup,
     AnalysisSourceOption,
     ReportSegment,
+    YoutubeCorpusMode,
   } from "$lib/types/analysis";
   import type {
     SourceForumTopic,
@@ -51,6 +52,7 @@
     loadingTemplates,
     templates,
     outputLanguage,
+    youtubeCorpusMode,
     modelOverride,
     startingReport,
     selectedSourceId,
@@ -106,6 +108,7 @@
     onChangePeriodTo,
     onChangeSelectedTemplateId,
     onChangeOutputLanguage,
+    onChangeYoutubeCorpusMode,
     onChangeModelOverride,
     onRunReport,
     onSyncCurrentSource,
@@ -149,6 +152,7 @@
     loadingTemplates: boolean;
     templates: AnalysisPromptTemplate[];
     outputLanguage: string;
+    youtubeCorpusMode: YoutubeCorpusMode;
     modelOverride: string;
     startingReport: boolean;
     selectedSourceId: string;
@@ -212,6 +216,7 @@
     onChangePeriodTo: (value: string) => void;
     onChangeSelectedTemplateId: (value: string) => void;
     onChangeOutputLanguage: (value: string) => void;
+    onChangeYoutubeCorpusMode: (value: YoutubeCorpusMode) => void;
     onChangeModelOverride: (value: string) => void;
     onRunReport: () => void;
     onSyncCurrentSource: (sourceId: number) => void;
@@ -246,6 +251,10 @@
 
   const sourceContextKey = $derived(
     `${analysisScope}:${currentSource?.id ?? "none"}:${currentGroup?.id ?? "none"}:${currentRun?.id ?? "idle"}`,
+  );
+  const isYoutubeScope = $derived(
+    (analysisScope === "single_source" && currentSource?.sourceType === "youtube") ||
+      (analysisScope === "source_group" && currentGroup?.source_type === "youtube"),
   );
 </script>
 
@@ -340,6 +349,18 @@
           oninput={(event) => onChangeOutputLanguage((event.currentTarget as HTMLInputElement).value)}
         />
       </label>
+      {#if isYoutubeScope}
+        <label>YouTube corpus
+          <Select
+            value={youtubeCorpusMode}
+            onchange={(event) => onChangeYoutubeCorpusMode((event.currentTarget as HTMLSelectElement).value as YoutubeCorpusMode)}
+          >
+            <option value="transcript_only">Transcript</option>
+            <option value="transcript_description">Transcript + description</option>
+            <option value="transcript_description_comments">Transcript + description + comments</option>
+          </Select>
+        </label>
+      {/if}
     </div>
 
     <div class="controls-bottom">

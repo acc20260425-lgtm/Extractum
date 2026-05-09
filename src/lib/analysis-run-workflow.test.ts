@@ -371,6 +371,7 @@ describe("analysis-run-workflow", () => {
       periodTo: "2026-05-03",
       outputLanguage: "Russian",
       modelOverride: "",
+      youtubeCorpusMode: "transcript_description",
     });
 
     expect(state.status).toBe("Select a source first.");
@@ -398,6 +399,7 @@ describe("analysis-run-workflow", () => {
       periodTo: "2026-05-03",
       outputLanguage: " Russian ",
       modelOverride: " ",
+      youtubeCorpusMode: "transcript_description_comments",
     });
 
     expect(deps.cancelChatSilently).toHaveBeenCalled();
@@ -415,6 +417,7 @@ describe("analysis-run-workflow", () => {
       promptTemplateId: 5,
       modelOverride: null,
       profileId: null,
+      youtubeCorpusMode: "transcript_description_comments",
     }));
     expect(deps.setInitialLiveRun).toHaveBeenCalledWith(77);
     expect(state.activeRunId).toBe(77);
@@ -435,6 +438,7 @@ describe("analysis-run-workflow", () => {
       periodTo: "2026-05-03",
       outputLanguage: "English",
       modelOverride: "gemini-2.5-pro",
+      youtubeCorpusMode: "transcript_only",
     });
 
     expect(state.status).toBe("Error starting the analysis report: model busy");

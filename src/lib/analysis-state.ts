@@ -11,6 +11,7 @@ import type {
   AnalysisSourceGroup,
   AnalysisTraceData,
   AnalysisTraceRef,
+  YoutubeCorpusMode,
 } from "$lib/types/analysis";
 import type {
   ForumTopicFilter,
@@ -133,6 +134,7 @@ export type AnalysisReportStartState = {
   periodTo: string;
   outputLanguage: string;
   modelOverride: string;
+  youtubeCorpusMode: YoutubeCorpusMode;
 };
 export type AnalysisReportStartDecision =
   | { ok: true; command: AnalysisReportStartCommand }
@@ -427,6 +429,7 @@ export function analysisReportStartCommand(
       promptTemplateId: Number(state.selectedTemplateId),
       modelOverride: modelOverride ? modelOverride : null,
       profileId: null,
+      youtubeCorpusMode: state.youtubeCorpusMode,
     },
   };
 }

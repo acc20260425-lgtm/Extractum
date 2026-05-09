@@ -176,6 +176,7 @@
     AnalysisSourceGroup,
     AnalysisSourceOption,
     AnalysisTraceData,
+    YoutubeCorpusMode,
   } from "$lib/types/analysis";
   import type {
     ForumTopicFilter,
@@ -230,6 +231,7 @@
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
+  let youtubeCorpusMode = $state<YoutubeCorpusMode>("transcript_description");
   let modelOverride = $state("");
   let templateName = $state("");
   let templateBody = $state("");
@@ -872,6 +874,7 @@
       periodTo,
       outputLanguage,
       modelOverride,
+      youtubeCorpusMode,
     });
   }
 
@@ -1303,6 +1306,7 @@
     {loadingTemplates}
     {templates}
     {outputLanguage}
+    {youtubeCorpusMode}
     {modelOverride}
     {startingReport}
     {selectedSourceId}
@@ -1358,6 +1362,7 @@
     onChangePeriodTo={(value) => (periodTo = value)}
     onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
     onChangeOutputLanguage={(value) => (outputLanguage = value)}
+    onChangeYoutubeCorpusMode={(value) => (youtubeCorpusMode = value)}
     onChangeModelOverride={(value) => (modelOverride = value)}
     onRunReport={() => void runReport()}
     onSyncCurrentSource={(sourceId) => void syncSelectedSource(sourceId)}

@@ -74,6 +74,11 @@ export interface ListAnalysisRunsInput {
   limit: number;
 }
 
+export type YoutubeCorpusMode =
+  | "transcript_only"
+  | "transcript_description"
+  | "transcript_description_comments";
+
 export interface AnalysisReportStartCommand {
   sourceId: number | null;
   sourceGroupId: number | null;
@@ -83,6 +88,7 @@ export interface AnalysisReportStartCommand {
   promptTemplateId: number;
   modelOverride: string | null;
   profileId: string | null;
+  youtubeCorpusMode: YoutubeCorpusMode;
 }
 
 export interface AnalysisTraceRef {

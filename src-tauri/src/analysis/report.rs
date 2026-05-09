@@ -14,8 +14,8 @@ use crate::llm::{
 };
 
 use super::corpus::{
-    load_corpus_messages, preflight_analysis_run, preflight_limit_error, AnalysisRunPreflight,
-    AnalysisRunPreflightLimits,
+    load_corpus_messages, preflight_analysis_run, preflight_limit_error, resolve_analysis_sources,
+    AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
 };
 use super::models::{
     AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary,
@@ -358,7 +358,7 @@ fn finish_map_phase(
 struct ReportRunInput {
     run_id: i64,
     scope_label: String,
-    source_ids: Vec<i64>,
+    corpus_request: CorpusLoadRequest,
     period_from: i64,
     period_to: i64,
     output_language: String,
@@ -735,7 +735,7 @@ async fn run_report_pipeline(
         ))
         .emit(&handle);
 
-    let corpus = load_corpus_messages(&pool, &input.source_ids, input.period_from, input.period_to)
+    let corpus = load_corpus_messages(&pool, &input.corpus_request)
         .await
         .map_err(ReportRunError::Failed)?;
     if corpus.is_empty() {
@@ -920,6 +920,7 @@ pub async fn start_analysis_report(
     prompt_template_id: i64,
     model_override: Option<String>,
     profile_id: Option<String>,
+    youtube_corpus_mode: Option<String>,
 ) -> AppResult<i64> {
     if period_from > period_to {
         return Err(AppError::validation(
@@ -948,8 +949,10 @@ pub async fn start_analysis_report(
 
     let resolved_profile = resolve_profile_for_backend(&handle, profile_id.as_deref()).await?;
     let effective_model = resolve_effective_model(&resolved_profile, model_override.as_deref())?;
+    let youtube_corpus_mode = YoutubeCorpusMode::from_wire(youtube_corpus_mode.as_deref())
+        .map_err(AppError::validation)?;
 
-    let (scope_type, resolved_source_id, resolved_group_id, scope_label, source_ids) =
+    let (scope_type, resolved_source_id, resolved_group_id, scope_label) =
         if let Some(source_id) = source_id {
             let source_exists =
                 sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)")
@@ -976,7 +979,6 @@ pub async fn start_analysis_report(
                 Some(source_id),
                 None,
                 source_title,
-                vec![source_id],
             )
         } else {
             let group_id = source_group_id.expect("validated source_group_id");
@@ -995,19 +997,22 @@ pub async fn start_analysis_report(
                 None,
                 Some(group.id),
                 group.name.clone(),
-                group
-                    .members
-                    .into_iter()
-                    .map(|member| member.source_id)
-                    .collect::<Vec<_>>(),
             )
         };
 
-    let preflight = preflight_analysis_run(
-        &pool,
-        &source_ids,
+    let resolved_sources =
+        resolve_analysis_sources(&pool, resolved_source_id, resolved_group_id).await?;
+    let corpus_request = CorpusLoadRequest {
+        source_type: resolved_sources.source_type.clone(),
+        source_ids: resolved_sources.source_ids.clone(),
         period_from,
         period_to,
+        youtube_corpus_mode,
+    };
+
+    let preflight = preflight_analysis_run(
+        &pool,
+        &corpus_request,
         ANALYSIS_CHUNK_TARGET_CHARS,
         AnalysisRunPreflightLimits::default(),
     )
@@ -1077,7 +1082,7 @@ pub async fn start_analysis_report(
             ReportRunInput {
                 run_id,
                 scope_label,
-                source_ids,
+                corpus_request,
                 period_from,
                 period_to,
                 output_language,

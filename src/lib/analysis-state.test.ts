@@ -538,6 +538,7 @@ describe("analysis-state", () => {
       periodTo: "2026-05-03",
       outputLanguage: "Russian",
       modelOverride: "",
+      youtubeCorpusMode: "transcript_description" as const,
     };
 
     expect(analysisReportStartCommand({ ...base, selectedSourceId: "" })).toEqual({
@@ -584,6 +585,7 @@ describe("analysis-state", () => {
       periodTo: "2026-05-03",
       outputLanguage: " Russian ",
       modelOverride: " ",
+      youtubeCorpusMode: "transcript_description_comments",
     })).toEqual({
       ok: true,
       command: {
@@ -595,6 +597,7 @@ describe("analysis-state", () => {
         promptTemplateId: 5,
         modelOverride: null,
         profileId: null,
+        youtubeCorpusMode: "transcript_description_comments",
       },
     });
 
@@ -607,12 +610,14 @@ describe("analysis-state", () => {
       periodTo: "2026-05-03",
       outputLanguage: "English",
       modelOverride: "gemini-2.5-pro",
+      youtubeCorpusMode: "transcript_only",
     })).toMatchObject({
       ok: true,
       command: {
         sourceId: null,
         sourceGroupId: 9,
         modelOverride: "gemini-2.5-pro",
+        youtubeCorpusMode: "transcript_only",
       },
     });
   });
