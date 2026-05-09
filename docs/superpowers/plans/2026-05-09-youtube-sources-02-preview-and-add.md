@@ -308,6 +308,8 @@ git commit -m "feat: save youtube sources"
 - Modify: `src/lib/source-capabilities.ts`
 - Modify: `src/lib/components/analysis/source-management-dialog.svelte`
 - Create: `src/lib/components/analysis/youtube-source-add-panel.svelte`
+- Modify if this task first uses an approved UI dependency: `package.json`
+- Modify if this task first uses an approved UI dependency: `package-lock.json`
 
 - [ ] Add `YoutubePreview`, `YoutubePreviewKind`, and `YoutubeAvailabilityStatus` types to `src/lib/types/sources.ts`.
 
@@ -392,6 +394,8 @@ YouTube
 - [ ] Keep the current Telegram account/dialog/manual add flow under the Telegram tab.
 
 - [ ] Move YouTube-specific state and UI into `youtube-source-add-panel.svelte` instead of doubling the size of `source-management-dialog.svelte`.
+
+- [ ] Apply the approved UI-library policy only inside the new YouTube panel or new local UI wrappers. The existing `source-management-dialog.svelte` should keep its current visual system; if icons are useful for preview/add/warning affordances, use `@lucide/svelte` in the new panel rather than introducing a full UI kit.
 
 Panel state:
 

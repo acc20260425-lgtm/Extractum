@@ -6,7 +6,7 @@
 
 **Architecture:** The MVP is split into independent implementation parts. Each part ends with a project state that builds, passes its focused tests, and either preserves existing Telegram behavior or exposes one complete YouTube capability.
 
-**Tech Stack:** Tauri 2, Rust 2021, sqlx SQLite, zstd, Svelte 5, Vitest, `yt-dlp`.
+**Tech Stack:** Tauri 2, Rust 2021, sqlx SQLite, zstd, Svelte 5, Vitest, `yt-dlp`, approved targeted UI dependencies for new components only.
 
 ---
 
@@ -40,9 +40,31 @@ Every part has its own focused verification commands. In addition, use these gat
 - The app compiles.
 - Existing Telegram source add/sync/list behavior still works.
 - New YouTube UI is hidden or disabled until its backend command exists.
+- New UI dependencies are introduced only inside new Svelte components or new local UI wrappers created for this MVP.
 - No command creates partial transcript/comment data outside a transaction.
 - Any persistent schema change is covered by a migration registration test.
 - Any live YouTube behavior has fixture-based unit coverage plus a manual verification note.
+
+---
+
+## Frontend UI Library Policy
+
+The YouTube MVP should keep Extractum's existing local UI system as the visual source of truth. Do not replace or restyle existing shared components with a full external UI kit.
+
+Allowed targeted additions:
+
+- `@lucide/svelte` for icons in new action buttons, status rows, and provider-specific controls.
+- `bits-ui` for accessible headless primitives in new components, especially tabs, tooltips, popovers, dropdown menus, switches, and complex dialog behavior.
+- `@tanstack/svelte-table` only if a new table component needs real sorting, filtering, keyboardable row selection, or column state. Do not use it for simple lists.
+- `paneforge` only if a new workspace shell requires resizable panes. Do not introduce it for static panel layouts.
+
+Guardrails:
+
+- Wrap external primitives behind local components in `src/lib/components/ui` when they will be reused.
+- Keep styling in local CSS and existing design tokens (`--panel`, `--border`, `--text`, `--primary`, etc.).
+- Do not add Tailwind-first UI kits such as Skeleton, DaisyUI, or Flowbite for this MVP.
+- Do not retrofit existing components solely to use a new library. Existing components may render new YouTube child components, but direct imports from new UI dependencies should stay inside new components or new local wrappers created for this MVP.
+- Include `package.json` and `package-lock.json` changes in the same task commit that first uses a new UI dependency.
 
 ---
 
@@ -139,4 +161,5 @@ End state:
 - [ ] Public preview works without auth when possible.
 - [ ] Cookie secrets are stored only in OS secure storage.
 - [ ] `yt-dlp` receives cookies only through temporary files.
+- [ ] New YouTube UI uses approved targeted UI dependencies only through new components or local wrappers.
 - [ ] Full Rust and frontend verification passes.

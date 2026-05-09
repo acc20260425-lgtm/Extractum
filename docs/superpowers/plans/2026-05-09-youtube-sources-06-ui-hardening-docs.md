@@ -6,7 +6,7 @@
 
 **Architecture:** Add read-only YouTube runtime/detail APIs on top of the storage created in Parts 1-5, then wire provider-aware UI components to those DTOs. This part must not add new persistence concepts: captions/comments status comes from `items`, `youtube_transcript_segments`, `youtube_playlist_items`, source metadata, and in-memory source jobs.
 
-**Tech Stack:** Svelte 5, Tauri 2, Vitest, Rust test suite, sqlx SQLite, `yt-dlp`.
+**Tech Stack:** Svelte 5, Tauri 2, Vitest, Rust test suite, sqlx SQLite, `yt-dlp`, targeted headless UI primitives for new components only.
 
 ---
 
@@ -35,6 +35,11 @@ After this part:
 - Modify: `src/lib/types/youtube.ts`
 - Create: `src/lib/api/youtube-detail.ts`
 - Create: `src/lib/api/youtube-detail.test.ts`
+- Modify if this task first uses an approved UI dependency: `package.json`
+- Modify if this task first uses an approved UI dependency: `package-lock.json`
+- Create if useful as local wrappers for new YouTube UI: `src/lib/components/ui/IconButton.svelte`
+- Create if useful as local wrappers for new YouTube UI: `src/lib/components/ui/Tooltip.svelte`
+- Create if useful as local wrappers for new YouTube UI: `src/lib/components/ui/Tabs.svelte`
 - Modify: `src/lib/components/source-row.svelte`
 - Create: `src/lib/components/analysis/youtube-source-detail.svelte`
 - Create: `src/lib/components/analysis/youtube-playlist-detail.svelte`
@@ -52,6 +57,8 @@ After this part:
 Checkpoint A: runtime status command, detail DTOs, backend detail queries, frontend API wrappers, and their tests.
 Checkpoint B: source row/workspace/detail components, provider-aware labels, and analysis state wiring.
 ```
+
+- [ ] Apply the approved UI-library policy to new UI only. Use `@lucide/svelte` for icon buttons and status/action affordances inside new YouTube components or new local UI wrappers. Use `bits-ui` through new local wrappers for tabs, tooltips, popovers, dropdown menus, or switches when native markup would require custom focus/keyboard behavior. Do not import new UI dependencies directly into existing workspace components, and do not replace existing `Button`, `Input`, `Select`, `Badge`, `PanelHeader`, or `StatusMessage` with a full external UI kit.
 
 - [ ] Add a runtime status command so sync disable reasons can mention missing `yt-dlp` before the user starts a job.
 
@@ -505,6 +512,8 @@ Comments
 Jobs
 ```
 
+- Implement tabs through a local `Tabs.svelte` wrapper over `bits-ui` or through existing accessible markup if no dependency has been introduced yet. Keep tab state local to this new component.
+
 Data displayed:
 
 - Overview: title, channel, handle, published date, duration, availability, canonical link.
@@ -557,6 +566,8 @@ live_ended_transcript_pending
 no_captions
 unavailable_unknown
 ```
+
+- Prefer icon buttons with tooltips for `open source`, `sync this video`, `retry this video`, and `cancel job` actions. Implement them through new local UI wrappers backed by `@lucide/svelte` and, where useful, `bits-ui` tooltip primitives.
 
 - [ ] Wire `workspace-main.svelte`:
 

@@ -772,8 +772,12 @@ git commit -m "feat: add youtube settings commands"
 - Create: `src/lib/components/settings/youtube-settings-panel.svelte`
 - Modify: `src/lib/api/youtube-settings.ts`
 - Modify: `src/lib/types/youtube.ts`
+- Modify if this task first uses an approved UI dependency: `package.json`
+- Modify if this task first uses an approved UI dependency: `package-lock.json`
 
 - [ ] Add a focused `src/lib/components/settings/youtube-settings-panel.svelte` component and mount it from `/settings` instead of putting all YouTube settings state directly in `src/routes/settings/+page.svelte`.
+
+- [ ] Apply the approved UI-library policy only inside the new settings panel or new local UI wrappers. Keep the existing `/settings` route and existing shared UI components as the visual baseline. `@lucide/svelte` may be used for auth/cookie/save/clear action icons. `bits-ui` may be used for a headless switch or tooltip only if it avoids custom accessibility code; otherwise keep native inputs and the existing local `Input`, `Textarea`, `CheckboxRow`, `Button`, `Badge`, and `StatusMessage` components.
 
 - [ ] On panel mount, load both:
 
