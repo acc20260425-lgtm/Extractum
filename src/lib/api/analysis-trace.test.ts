@@ -19,6 +19,10 @@ function traceRef(overrides: Partial<AnalysisTraceRef> = {}): AnalysisTraceRef {
     external_id: "100",
     published_at: 1_700_000,
     excerpt: "Saved excerpt",
+    youtube_url: null,
+    youtube_timestamp_seconds: null,
+    youtube_display_label: null,
+    is_synthetic: false,
     ...overrides,
   };
 }

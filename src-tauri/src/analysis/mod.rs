@@ -516,6 +516,10 @@ mod tests {
                 external_id: "845".to_string(),
                 published_at: 1_710_000_000,
                 excerpt: "Example quote".to_string(),
+                youtube_url: None,
+                youtube_timestamp_seconds: None,
+                youtube_display_label: None,
+                is_synthetic: false,
             }],
         };
 

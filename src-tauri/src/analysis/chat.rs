@@ -517,6 +517,10 @@ mod tests {
             author: Some("analyst".to_string()),
             content: "A matching source document excerpt".to_string(),
             r#ref: "s3-i9".to_string(),
+            item_kind: Some("telegram_message".to_string()),
+            source_type: Some("telegram".to_string()),
+            source_subtype: None,
+            metadata_zstd: None,
         }
     }
 

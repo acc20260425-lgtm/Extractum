@@ -55,6 +55,10 @@ function traceRef(overrides: Partial<AnalysisTraceRef> = {}): AnalysisTraceRef {
     external_id: "100",
     published_at: 100,
     excerpt: "Saved excerpt",
+    youtube_url: null,
+    youtube_timestamp_seconds: null,
+    youtube_display_label: null,
+    is_synthetic: false,
     ...overrides,
   };
 }
@@ -219,6 +223,30 @@ describe("analysis-trace-workflow", () => {
     expect(state.resolvedTraceRefs).toEqual(["ref-a"]);
     expect(state.selectedTraceRef).toBe("ref-a");
     expect(state.inspectorMode).toBe("trace");
+  });
+
+  it("keeps synthetic youtube description refs selectable from saved trace data", async () => {
+    const synthetic = traceRef({
+      ref: "s12-i0",
+      item_id: 0,
+      source_id: 12,
+      external_id: "description:video123",
+      excerpt: "Saved synthetic description excerpt",
+      youtube_url: "https://www.youtube.com/watch?v=video123",
+      youtube_display_label: "Video title",
+      is_synthetic: true,
+    });
+    const { state, deps, workflow } = createHarness();
+    deps.getTrace.mockResolvedValueOnce(traceData([synthetic]));
+
+    await workflow.loadTrace(7);
+    await workflow.focusTraceRef("s12-i0");
+
+    expect(deps.resolveRefs).not.toHaveBeenCalled();
+    expect(state.selectedTraceRef).toBe("s12-i0");
+    expect(state.traceData.refs[0]).toEqual(synthetic);
+    expect(state.traceData.refs[0].item_id).toBe(0);
+    expect(state.traceData.refs[0].is_synthetic).toBe(true);
   });
 
   it("reports status when resolving a missing ref fails", async () => {

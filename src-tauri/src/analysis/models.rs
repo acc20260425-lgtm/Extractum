@@ -48,6 +48,10 @@ pub struct AnalysisTraceRef {
     pub external_id: String,
     pub published_at: i64,
     pub excerpt: String,
+    pub youtube_url: Option<String>,
+    pub youtube_timestamp_seconds: Option<i64>,
+    pub youtube_display_label: Option<String>,
+    pub is_synthetic: bool,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -191,6 +195,10 @@ pub(crate) struct StoredAnalysisItemRow {
     pub(crate) author: Option<String>,
     pub(crate) published_at: i64,
     pub(crate) content_zstd: Option<Vec<u8>>,
+    pub(crate) item_kind: Option<String>,
+    pub(crate) source_type: Option<String>,
+    pub(crate) source_subtype: Option<String>,
+    pub(crate) metadata_zstd: Option<Vec<u8>>,
 }
 
 #[derive(FromRow)]
@@ -202,6 +210,10 @@ pub(crate) struct StoredRunSnapshotRow {
     pub(crate) published_at: i64,
     pub(crate) r#ref: String,
     pub(crate) content_zstd: Vec<u8>,
+    pub(crate) item_kind: Option<String>,
+    pub(crate) source_type: Option<String>,
+    pub(crate) source_subtype: Option<String>,
+    pub(crate) metadata_zstd: Option<Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -213,6 +225,10 @@ pub(crate) struct CorpusMessage {
     pub(crate) author: Option<String>,
     pub(crate) content: String,
     pub(crate) r#ref: String,
+    pub(crate) item_kind: Option<String>,
+    pub(crate) source_type: Option<String>,
+    pub(crate) source_subtype: Option<String>,
+    pub(crate) metadata_zstd: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

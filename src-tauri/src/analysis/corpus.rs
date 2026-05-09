@@ -7,7 +7,7 @@ use super::models::{
 };
 use super::store::fetch_source_group;
 use super::{ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP};
-use crate::compression::{decompress_bytes, decompress_text};
+use crate::compression::{compress_json_bytes, decompress_bytes, decompress_text};
 use crate::error::{AppError, AppResult};
 use crate::youtube::dto::YoutubeVideoMetadata;
 
@@ -307,13 +307,67 @@ pub(crate) async fn load_corpus_messages(
         return Ok(Vec::new());
     }
 
+    let mut messages = match request.source_type.as_str() {
+        "telegram" => {
+            load_item_messages(pool, request, "items.item_kind = 'telegram_message'").await?
+        }
+        "youtube" => {
+            let mut messages = load_youtube_transcript_segment_messages(pool, request).await?;
+            if request.youtube_corpus_mode.includes_comments() {
+                messages.extend(
+                    load_item_messages(pool, request, "items.item_kind = 'youtube_comment'")
+                        .await?,
+                );
+            }
+            messages
+        }
+        other => {
+            return Err(format!("Unsupported analysis corpus source_type '{other}'"));
+        }
+    };
+
+    if request.source_type == "youtube" && request.youtube_corpus_mode.includes_description() {
+        messages.extend(load_youtube_description_messages(pool, request).await?);
+    }
+
+    messages.sort_by(|left, right| {
+        left.published_at
+            .cmp(&right.published_at)
+            .then_with(|| left.source_id.cmp(&right.source_id))
+            .then_with(|| left.r#ref.cmp(&right.r#ref))
+    });
+
+    Ok(messages)
+}
+
+async fn load_item_messages(
+    pool: &Pool<Sqlite>,
+    request: &CorpusLoadRequest,
+    item_kind_filter: &str,
+) -> Result<Vec<CorpusMessage>, String> {
     let mut query = QueryBuilder::<Sqlite>::new(
-        "SELECT id, source_id, external_id, author, published_at, content_zstd FROM items WHERE content_zstd IS NOT NULL AND published_at >= ",
+        r#"
+        SELECT
+            items.id,
+            items.source_id,
+            items.external_id,
+            items.author,
+            items.published_at,
+            items.content_zstd,
+            items.item_kind,
+            sources.source_type,
+            sources.source_subtype,
+            items.media_metadata_zstd AS metadata_zstd
+        FROM items
+        JOIN sources ON sources.id = items.source_id
+        WHERE items.content_zstd IS NOT NULL
+          AND items.published_at >=
+        "#,
     );
     query.push_bind(request.period_from);
-    query.push(" AND published_at <= ");
+    query.push(" AND items.published_at <= ");
     query.push_bind(request.period_to);
-    query.push(" AND source_id IN (");
+    query.push(" AND items.source_id IN (");
 
     {
         let mut separated = query.separated(", ");
@@ -323,22 +377,9 @@ pub(crate) async fn load_corpus_messages(
     }
 
     query.push(")");
-    match request.source_type.as_str() {
-        "telegram" => {
-            query.push(" AND item_kind = 'telegram_message'");
-        }
-        "youtube" if request.youtube_corpus_mode.includes_comments() => {
-            query.push(" AND item_kind IN ('youtube_transcript', 'youtube_comment')");
-        }
-        "youtube" => {
-            query.push(" AND item_kind = 'youtube_transcript'");
-        }
-        other => {
-            return Err(format!("Unsupported analysis corpus source_type '{other}'"));
-        }
-    }
-
-    query.push(" ORDER BY published_at ASC, id ASC");
+    query.push(" AND ");
+    query.push(item_kind_filter);
+    query.push(" ORDER BY items.published_at ASC, items.id ASC");
 
     let rows: Vec<StoredAnalysisItemRow> = query
         .build_query_as()
@@ -346,8 +387,7 @@ pub(crate) async fn load_corpus_messages(
         .await
         .map_err(|e| e.to_string())?;
 
-    let mut messages = rows
-        .into_iter()
+    rows.into_iter()
         .map(|row| {
             let content = decompress_text(
                 row.content_zstd
@@ -363,21 +403,98 @@ pub(crate) async fn load_corpus_messages(
                 author: row.author,
                 r#ref: live_corpus_ref(row.source_id, row.id),
                 content,
+                item_kind: row.item_kind,
+                source_type: row.source_type,
+                source_subtype: row.source_subtype,
+                metadata_zstd: row.metadata_zstd,
             })
         })
-        .collect::<Result<Vec<_>, String>>()?;
+        .collect()
+}
 
-    if request.source_type == "youtube" && request.youtube_corpus_mode.includes_description() {
-        messages.extend(load_youtube_description_messages(pool, request).await?);
-        messages.sort_by(|left, right| {
-            left.published_at
-                .cmp(&right.published_at)
-                .then_with(|| left.source_id.cmp(&right.source_id))
-                .then_with(|| left.r#ref.cmp(&right.r#ref))
-        });
+#[derive(sqlx::FromRow)]
+struct YoutubeTranscriptSegmentRow {
+    item_id: i64,
+    source_id: i64,
+    external_id: String,
+    author: Option<String>,
+    published_at: i64,
+    source_external_id: String,
+    source_title: Option<String>,
+    source_metadata_zstd: Option<Vec<u8>>,
+    start_ms: i64,
+    end_ms: Option<i64>,
+    text: String,
+    caption_language: Option<String>,
+    caption_track_kind: Option<String>,
+}
+
+async fn load_youtube_transcript_segment_messages(
+    pool: &Pool<Sqlite>,
+    request: &CorpusLoadRequest,
+) -> Result<Vec<CorpusMessage>, String> {
+    let mut query = QueryBuilder::<Sqlite>::new(
+        r#"
+        SELECT
+            items.id AS item_id,
+            items.source_id,
+            items.external_id,
+            items.author,
+            items.published_at,
+            sources.external_id AS source_external_id,
+            sources.title AS source_title,
+            sources.metadata_zstd AS source_metadata_zstd,
+            segments.start_ms,
+            segments.end_ms,
+            segments.text,
+            segments.caption_language,
+            segments.caption_track_kind
+        FROM items
+        JOIN sources ON sources.id = items.source_id
+        JOIN youtube_transcript_segments segments ON segments.item_id = items.id
+        WHERE items.published_at >=
+        "#,
+    );
+    query.push_bind(request.period_from);
+    query.push(" AND items.published_at <= ");
+    query.push_bind(request.period_to);
+    query.push(" AND items.source_id IN (");
+
+    {
+        let mut separated = query.separated(", ");
+        for source_id in &request.source_ids {
+            separated.push_bind(source_id);
+        }
     }
 
-    Ok(messages)
+    query.push(")");
+    query.push(" AND items.item_kind = 'youtube_transcript'");
+    query.push(" ORDER BY items.published_at ASC, items.id ASC, segments.segment_index ASC");
+
+    let rows: Vec<YoutubeTranscriptSegmentRow> = query
+        .build_query_as()
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    rows.into_iter()
+        .map(|row| {
+            let metadata_zstd = youtube_segment_metadata_zstd(&row)?;
+            Ok(CorpusMessage {
+                item_id: row.item_id,
+                source_id: row.source_id,
+                external_id: row.external_id,
+                published_at: row.published_at,
+                author: row.author,
+                content: row.text,
+                r#ref: format!("s{}-i{}@{}ms", row.source_id, row.item_id, row.start_ms),
+                item_kind: Some("youtube_transcript".to_string()),
+                source_type: Some("youtube".to_string()),
+                source_subtype: Some("video".to_string()),
+                metadata_zstd: Some(metadata_zstd),
+            })
+        })
+        .collect()
 }
 
 #[derive(sqlx::FromRow)]
@@ -452,13 +569,73 @@ async fn load_youtube_description_messages(
             source_id: row.id,
             external_id: format!("description:{}", metadata.video_id),
             published_at,
-            author: metadata.channel_title,
+            author: metadata.channel_title.clone(),
             content,
             r#ref: format!("s{}-i0", row.id),
+            item_kind: Some("youtube_description".to_string()),
+            source_type: Some("youtube".to_string()),
+            source_subtype: Some("video".to_string()),
+            metadata_zstd: Some(youtube_description_metadata_zstd(&metadata)?),
         });
     }
 
     Ok(messages)
+}
+
+fn youtube_segment_metadata_zstd(row: &YoutubeTranscriptSegmentRow) -> Result<Vec<u8>, String> {
+    let source_metadata = row
+        .source_metadata_zstd
+        .as_deref()
+        .and_then(|bytes| decode_youtube_video_metadata(bytes).ok());
+
+    let video_id = source_metadata
+        .as_ref()
+        .map(|metadata| metadata.video_id.as_str())
+        .unwrap_or(row.source_external_id.as_str());
+    let canonical_url = source_metadata
+        .as_ref()
+        .map(|metadata| metadata.canonical_url.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(ToString::to_string)
+        .unwrap_or_else(|| format!("https://www.youtube.com/watch?v={video_id}"));
+    let title = source_metadata
+        .as_ref()
+        .and_then(|metadata| metadata.title.as_deref())
+        .or(row.source_title.as_deref());
+    let channel_title = source_metadata
+        .as_ref()
+        .and_then(|metadata| metadata.channel_title.as_deref());
+    let channel_handle = source_metadata
+        .as_ref()
+        .and_then(|metadata| metadata.channel_handle.as_deref());
+
+    let metadata = serde_json::json!({
+        "video_id": video_id,
+        "canonical_url": canonical_url,
+        "title": title,
+        "channel_title": channel_title,
+        "channel_handle": channel_handle,
+        "caption_language": &row.caption_language,
+        "caption_track_kind": &row.caption_track_kind,
+        "segment_start_ms": row.start_ms,
+        "segment_end_ms": row.end_ms,
+        "item_kind": "youtube_transcript",
+    });
+    let json = serde_json::to_vec(&metadata).map_err(|e| e.to_string())?;
+    compress_json_bytes(&json)
+}
+
+fn youtube_description_metadata_zstd(metadata: &YoutubeVideoMetadata) -> Result<Vec<u8>, String> {
+    let description_metadata = serde_json::json!({
+        "video_id": &metadata.video_id,
+        "canonical_url": &metadata.canonical_url,
+        "title": &metadata.title,
+        "channel_title": &metadata.channel_title,
+        "channel_handle": &metadata.channel_handle,
+        "item_kind": "youtube_description",
+    });
+    let json = serde_json::to_vec(&description_metadata).map_err(|e| e.to_string())?;
+    compress_json_bytes(&json)
 }
 
 fn decode_youtube_video_metadata(bytes: &[u8]) -> Result<YoutubeVideoMetadata, String> {
@@ -559,7 +736,11 @@ pub(crate) async fn load_run_snapshot_messages(
             author,
             published_at,
             ref,
-            content_zstd
+            content_zstd,
+            item_kind,
+            source_type,
+            source_subtype,
+            metadata_zstd
         FROM analysis_run_messages
         WHERE run_id = ?
         ORDER BY published_at ASC, ref ASC
@@ -580,6 +761,10 @@ pub(crate) async fn load_run_snapshot_messages(
                 author: row.author,
                 content: decompress_text(&row.content_zstd)?,
                 r#ref: row.r#ref,
+                item_kind: row.item_kind,
+                source_type: row.source_type,
+                source_subtype: row.source_subtype,
+                metadata_zstd: row.metadata_zstd,
             })
         })
         .collect()
@@ -633,6 +818,15 @@ mod tests {
                 author: Some("Alice".to_string()),
                 content: "First frozen message".to_string(),
                 r#ref: "s2-m100".to_string(),
+                item_kind: Some("youtube_transcript".to_string()),
+                source_type: Some("youtube".to_string()),
+                source_subtype: Some("video".to_string()),
+                metadata_zstd: Some(
+                    compress_json_bytes(
+                        br#"{"video_id":"video2","item_kind":"youtube_transcript"}"#,
+                    )
+                    .expect("compress metadata"),
+                ),
             },
             CorpusMessage {
                 item_id: 12,
@@ -642,6 +836,10 @@ mod tests {
                 author: None,
                 content: "Second frozen message".to_string(),
                 r#ref: "s4-m101".to_string(),
+                item_kind: Some("telegram_message".to_string()),
+                source_type: Some("telegram".to_string()),
+                source_subtype: None,
+                metadata_zstd: None,
             },
         ]
     }
@@ -666,6 +864,16 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create sources");
+        sqlx::query(
+            r#"
+            INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+            VALUES (2, 'telegram', 'channel', 'telegram-2', 'Telegram 2'),
+                   (4, 'telegram', 'channel', 'telegram-4', 'Telegram 4')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert default telegram sources");
 
         sqlx::query(
             r#"
@@ -676,7 +884,8 @@ mod tests {
                 item_kind TEXT NOT NULL DEFAULT 'telegram_message',
                 author TEXT,
                 published_at INTEGER NOT NULL,
-                content_zstd BLOB
+                content_zstd BLOB,
+                media_metadata_zstd BLOB
             )
             "#,
         )
@@ -728,6 +937,29 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create youtube playlist items");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE youtube_transcript_segments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                segment_index INTEGER NOT NULL,
+                start_ms INTEGER NOT NULL,
+                end_ms INTEGER,
+                text TEXT NOT NULL,
+                chapter_index INTEGER,
+                caption_language TEXT,
+                caption_track_kind TEXT,
+                is_auto_generated INTEGER NOT NULL DEFAULT 0,
+                metadata_zstd BLOB,
+                UNIQUE(item_id, segment_index)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create youtube transcript segments");
 
         sqlx::query(
             r#"
@@ -827,6 +1059,48 @@ mod tests {
         compress_json_bytes(&json).expect("compress youtube metadata")
     }
 
+    async fn insert_youtube_video_source(pool: &SqlitePool, source_id: i64) {
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd)
+             VALUES (?, 'youtube', 'video', ?, ?, ?)",
+        )
+        .bind(source_id)
+        .bind(format!("video{source_id}"))
+        .bind(format!("Video {source_id}"))
+        .bind(youtube_metadata_zstd(
+            &format!("video{source_id}"),
+            &format!("Video {source_id}"),
+            None,
+        ))
+        .execute(pool)
+        .await
+        .expect("insert youtube video source");
+    }
+
+    async fn insert_youtube_transcript_segment(
+        pool: &SqlitePool,
+        item_id: i64,
+        source_id: i64,
+        start_ms: i64,
+        text: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO youtube_transcript_segments (
+                item_id, source_id, segment_index, start_ms, end_ms, text,
+                caption_language, caption_track_kind, is_auto_generated
+             )
+             VALUES (?, ?, 0, ?, ?, ?, 'en', 'manual', 0)",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(start_ms)
+        .bind(start_ms + 1_000)
+        .bind(text)
+        .execute(pool)
+        .await
+        .expect("insert youtube transcript segment");
+    }
+
     fn sample_run() -> AnalysisRunDetail {
         AnalysisRunDetail {
             id: 1,
@@ -866,6 +1140,10 @@ mod tests {
             author: Some("Alice".to_string()),
             content: "First live document".to_string(),
             r#ref: "s2-i11".to_string(),
+            item_kind: Some("telegram_message".to_string()),
+            source_type: Some("telegram".to_string()),
+            source_subtype: None,
+            metadata_zstd: None,
         };
 
         assert_eq!(
@@ -1069,6 +1347,10 @@ mod tests {
 
         assert_eq!(corpus.len(), 2);
         assert_eq!(corpus[0].external_id, "100");
+        assert_eq!(corpus[0].item_kind.as_deref(), Some("youtube_transcript"));
+        assert_eq!(corpus[0].source_type.as_deref(), Some("youtube"));
+        assert_eq!(corpus[0].source_subtype.as_deref(), Some("video"));
+        assert!(corpus[0].metadata_zstd.is_some());
         assert_eq!(corpus[1].r#ref, "s4-m101");
     }
 
@@ -1306,6 +1588,7 @@ mod tests {
     #[tokio::test]
     async fn load_corpus_messages_filters_youtube_transcript_only_to_transcripts() {
         let pool = snapshot_pool().await;
+        insert_youtube_video_source(&pool, 20).await;
         let transcript = compress_text("Transcript text").expect("compress transcript");
         let comment = compress_text("Comment text").expect("compress comment");
         sqlx::query(
@@ -1329,6 +1612,7 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert youtube items");
+        insert_youtube_transcript_segment(&pool, 21, 20, 754_000, "Transcript text").await;
 
         let corpus = load_corpus_messages(
             &pool,
@@ -1339,11 +1623,13 @@ mod tests {
 
         assert_eq!(corpus.len(), 1);
         assert_eq!(corpus[0].external_id, "transcript:v1:en:manual");
+        assert_eq!(corpus[0].r#ref, "s20-i21@754000ms");
     }
 
     #[tokio::test]
     async fn load_corpus_messages_includes_youtube_comment_only_in_comments_mode() {
         let pool = snapshot_pool().await;
+        insert_youtube_video_source(&pool, 20).await;
         let transcript = compress_text("Transcript text").expect("compress transcript");
         let comment = compress_text("Comment text").expect("compress comment");
         sqlx::query(
@@ -1367,6 +1653,7 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert youtube items");
+        insert_youtube_transcript_segment(&pool, 21, 20, 754_000, "Transcript text").await;
 
         let without_comments = load_corpus_messages(
             &pool,
@@ -1506,6 +1793,7 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert youtube items");
+        insert_youtube_transcript_segment(&pool, 21, 20, 754_000, "Transcript text").await;
 
         for mode in [
             YoutubeCorpusMode::TranscriptOnly,

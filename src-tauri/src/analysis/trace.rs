@@ -1,6 +1,7 @@
 use std::io::Cursor;
 
 use super::models::{AnalysisTraceData, AnalysisTraceRef, CorpusMessage};
+use crate::compression::decompress_bytes;
 
 const TRACE_EXCERPT_MAX_CHARS: usize = 480;
 
@@ -112,7 +113,10 @@ pub(crate) fn build_trace_refs(refs: &[String], corpus: &[CorpusMessage]) -> Vec
     let mut trace_refs = Vec::new();
 
     for reference in refs {
-        if let Some(message) = corpus.iter().find(|message| message.r#ref == *reference) {
+        if let Some(message) = find_trace_message(reference, corpus) {
+            let parsed_ref = parse_structured_ref(reference);
+            let (youtube_url, youtube_timestamp_seconds, youtube_display_label) =
+                youtube_trace_fields(reference, message, parsed_ref.as_ref());
             trace_refs.push(AnalysisTraceRef {
                 r#ref: reference.clone(),
                 item_id: message.item_id,
@@ -120,11 +124,147 @@ pub(crate) fn build_trace_refs(refs: &[String], corpus: &[CorpusMessage]) -> Vec
                 external_id: message.external_id.clone(),
                 published_at: message.published_at,
                 excerpt: clip_excerpt(&message.content, TRACE_EXCERPT_MAX_CHARS),
+                youtube_url,
+                youtube_timestamp_seconds,
+                youtube_display_label,
+                is_synthetic: is_synthetic_message(message),
             });
         }
     }
 
     trace_refs
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ParsedTraceRef {
+    source_id: i64,
+    item_id: i64,
+    timestamp_ms: Option<i64>,
+}
+
+fn parse_structured_ref(reference: &str) -> Option<ParsedTraceRef> {
+    let reference = normalize_ref(reference)?;
+    let Some((source_part, item_part)) = reference
+        .split_once("-i")
+        .or_else(|| reference.split_once("-m"))
+    else {
+        return None;
+    };
+    let source_id = source_part.strip_prefix('s')?.parse::<i64>().ok()?;
+    let (item_digits, timestamp_ms) = match item_part.split_once('@') {
+        Some((digits, suffix)) => {
+            let suffix = suffix.strip_suffix("ms")?;
+            let start = suffix
+                .split_once('-')
+                .map(|(start, _)| start)
+                .unwrap_or(suffix);
+            (digits, Some(start.parse::<i64>().ok()?))
+        }
+        None => (item_part, None),
+    };
+    let item_id = item_digits.parse::<i64>().ok()?;
+
+    Some(ParsedTraceRef {
+        source_id,
+        item_id,
+        timestamp_ms,
+    })
+}
+
+fn find_trace_message<'a>(
+    reference: &str,
+    corpus: &'a [CorpusMessage],
+) -> Option<&'a CorpusMessage> {
+    if let Some(message) = corpus.iter().find(|message| message.r#ref == reference) {
+        return Some(message);
+    }
+
+    let parsed = parse_structured_ref(reference)?;
+    corpus
+        .iter()
+        .find(|message| message.source_id == parsed.source_id && message.item_id == parsed.item_id)
+}
+
+fn is_synthetic_message(message: &CorpusMessage) -> bool {
+    message.item_id == 0 || message.item_kind.as_deref() == Some("youtube_description")
+}
+
+fn youtube_trace_fields(
+    reference: &str,
+    message: &CorpusMessage,
+    parsed_ref: Option<&ParsedTraceRef>,
+) -> (Option<String>, Option<i64>, Option<String>) {
+    let Some(metadata) = message
+        .metadata_zstd
+        .as_deref()
+        .and_then(decode_metadata_json)
+    else {
+        return (None, None, None);
+    };
+
+    let Some(canonical_url) = metadata
+        .get("canonical_url")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return (None, None, None);
+    };
+
+    let timestamp_ms = parsed_ref
+        .and_then(|parsed| parsed.timestamp_ms)
+        .or_else(|| parse_structured_ref(&message.r#ref).and_then(|parsed| parsed.timestamp_ms))
+        .or_else(|| {
+            metadata
+                .get("segment_start_ms")
+                .and_then(|value| value.as_i64())
+        });
+    let timestamp_seconds = timestamp_ms.map(|value| value / 1000);
+
+    let title = metadata
+        .get("title")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty());
+    let youtube_url = match timestamp_seconds {
+        Some(seconds) => Some(append_youtube_timestamp(canonical_url, seconds)),
+        None => Some(canonical_url.to_string()),
+    };
+    let youtube_display_label = match (title, timestamp_seconds) {
+        (Some(title), Some(seconds)) => {
+            Some(format!("{title} at {}", format_youtube_timestamp(seconds)))
+        }
+        (None, Some(seconds)) => Some(format!("YouTube at {}", format_youtube_timestamp(seconds))),
+        (Some(title), None) => Some(title.to_string()),
+        (None, None) if reference.starts_with('s') => Some("YouTube".to_string()),
+        (None, None) => None,
+    };
+
+    (youtube_url, timestamp_seconds, youtube_display_label)
+}
+
+fn decode_metadata_json(bytes: &[u8]) -> Option<serde_json::Value> {
+    let decoded = decompress_bytes(bytes).ok()?;
+    serde_json::from_slice(&decoded).ok()
+}
+
+fn append_youtube_timestamp(canonical_url: &str, seconds: i64) -> String {
+    let separator = if canonical_url.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
+    format!("{canonical_url}{separator}t={seconds}")
+}
+
+fn format_youtube_timestamp(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let seconds = seconds % 60;
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
 }
 
 pub(crate) fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> AnalysisTraceData {
@@ -138,6 +278,39 @@ pub(crate) fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> Anal
 mod tests {
     use super::{build_trace_refs, clip_excerpt, normalize_ref};
     use crate::analysis::models::CorpusMessage;
+    use crate::compression::compress_json_bytes;
+
+    fn metadata_zstd(value: serde_json::Value) -> Vec<u8> {
+        let json = serde_json::to_vec(&value).expect("serialize metadata");
+        compress_json_bytes(&json).expect("compress metadata")
+    }
+
+    fn youtube_segment_message() -> CorpusMessage {
+        CorpusMessage {
+            item_id: 400,
+            source_id: 12,
+            external_id: "transcript:video123:en:manual".to_string(),
+            published_at: 1_710_000_000,
+            author: Some("Channel".to_string()),
+            content: "Segment text".to_string(),
+            r#ref: "s12-i400@754000ms".to_string(),
+            item_kind: Some("youtube_transcript".to_string()),
+            source_type: Some("youtube".to_string()),
+            source_subtype: Some("video".to_string()),
+            metadata_zstd: Some(metadata_zstd(serde_json::json!({
+                "video_id": "video123",
+                "canonical_url": "https://www.youtube.com/watch?v=video123",
+                "title": "Video title",
+                "channel_title": "Channel",
+                "channel_handle": "@channel",
+                "caption_language": "en",
+                "caption_track_kind": "manual",
+                "segment_start_ms": 754000,
+                "segment_end_ms": 790000,
+                "item_kind": "youtube_transcript"
+            }))),
+        }
+    }
 
     #[test]
     fn clip_excerpt_truncates_on_char_boundary() {
@@ -160,6 +333,10 @@ mod tests {
             author: None,
             content: "Индекс рынка акций ".repeat(40),
             r#ref: "s1-m1".to_string(),
+            item_kind: Some("telegram_message".to_string()),
+            source_type: Some("telegram".to_string()),
+            source_subtype: None,
+            metadata_zstd: None,
         }];
 
         let trace_refs = build_trace_refs(&refs, &corpus);
@@ -184,5 +361,90 @@ mod tests {
         assert_eq!(normalize_ref("s12-i400@790000-754000ms"), None);
         assert_eq!(normalize_ref("s12-iabc"), None);
         assert_eq!(normalize_ref("x12-i845"), None);
+    }
+
+    #[test]
+    fn build_trace_refs_resolves_exact_youtube_timestamp_refs() {
+        let refs = vec!["s12-i400@754000ms".to_string()];
+        let corpus = vec![youtube_segment_message()];
+
+        let trace_refs = build_trace_refs(&refs, &corpus);
+
+        assert_eq!(trace_refs.len(), 1);
+        assert_eq!(trace_refs[0].r#ref, "s12-i400@754000ms");
+        assert_eq!(trace_refs[0].youtube_timestamp_seconds, Some(754));
+        assert_eq!(
+            trace_refs[0].youtube_url.as_deref(),
+            Some("https://www.youtube.com/watch?v=video123&t=754")
+        );
+        assert_eq!(
+            trace_refs[0].youtube_display_label.as_deref(),
+            Some("Video title at 12:34")
+        );
+        assert!(!trace_refs[0].is_synthetic);
+    }
+
+    #[test]
+    fn build_trace_refs_falls_back_to_base_item_refs() {
+        let refs = vec!["s12-i400".to_string(), "s12-m400".to_string()];
+        let corpus = vec![youtube_segment_message()];
+
+        let trace_refs = build_trace_refs(&refs, &corpus);
+
+        assert_eq!(trace_refs.len(), 2);
+        assert_eq!(trace_refs[0].item_id, 400);
+        assert_eq!(trace_refs[1].item_id, 400);
+    }
+
+    #[test]
+    fn analysis_trace_ref_serializes_youtube_fields_as_null_for_telegram_refs() {
+        let reference = crate::analysis::models::AnalysisTraceRef {
+            r#ref: "s1-i2".to_string(),
+            item_id: 2,
+            source_id: 1,
+            external_id: "2".to_string(),
+            published_at: 1_710_000_000,
+            excerpt: "Telegram excerpt".to_string(),
+            youtube_url: None,
+            youtube_timestamp_seconds: None,
+            youtube_display_label: None,
+            is_synthetic: false,
+        };
+
+        let json = serde_json::to_value(reference).expect("serialize trace ref");
+
+        assert!(json["youtube_url"].is_null());
+        assert!(json["youtube_timestamp_seconds"].is_null());
+        assert!(json["youtube_display_label"].is_null());
+        assert_eq!(json["is_synthetic"], false);
+    }
+
+    #[test]
+    fn build_trace_refs_marks_youtube_description_refs_as_synthetic() {
+        let refs = vec!["s12-i0".to_string()];
+        let corpus = vec![CorpusMessage {
+            item_id: 0,
+            source_id: 12,
+            external_id: "description:video123".to_string(),
+            published_at: 1_710_000_000,
+            author: Some("Channel".to_string()),
+            content: "Synthetic description".to_string(),
+            r#ref: "s12-i0".to_string(),
+            item_kind: Some("youtube_description".to_string()),
+            source_type: Some("youtube".to_string()),
+            source_subtype: Some("video".to_string()),
+            metadata_zstd: Some(metadata_zstd(serde_json::json!({
+                "video_id": "video123",
+                "canonical_url": "https://www.youtube.com/watch?v=video123",
+                "title": "Video title",
+                "item_kind": "youtube_description"
+            }))),
+        }];
+
+        let trace_refs = build_trace_refs(&refs, &corpus);
+
+        assert_eq!(trace_refs.len(), 1);
+        assert_eq!(trace_refs[0].item_id, 0);
+        assert!(trace_refs[0].is_synthetic);
     }
 }

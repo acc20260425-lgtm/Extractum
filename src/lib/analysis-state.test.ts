@@ -177,6 +177,10 @@ function traceRef(overrides: Partial<AnalysisTraceRef>): AnalysisTraceRef {
     external_id: "external-a",
     published_at: 100,
     excerpt: "excerpt",
+    youtube_url: null,
+    youtube_timestamp_seconds: null,
+    youtube_display_label: null,
+    is_synthetic: false,
     ...overrides,
   };
 }

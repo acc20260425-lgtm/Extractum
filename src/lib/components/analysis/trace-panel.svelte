@@ -73,6 +73,19 @@
             <strong>{selectedTrace.ref}</strong>
             <span>Source {selectedTrace.source_id} / message {selectedTrace.external_id}</span>
             <span>{formatTimestamp(selectedTrace.published_at)}</span>
+            {#if selectedTrace.youtube_url}
+              <a
+                class="youtube-link"
+                href={selectedTrace.youtube_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {selectedTrace.youtube_display_label ?? "Open on YouTube"}
+              </a>
+            {/if}
+            {#if selectedTrace.is_synthetic}
+              <span>Saved synthetic evidence</span>
+            {/if}
           </div>
           <blockquote>{selectedTrace.excerpt}</blockquote>
         </div>
@@ -148,9 +161,19 @@
   }
 
   .trace-link span,
-  .trace-meta span {
+  .trace-meta span,
+  .youtube-link {
     color: var(--muted);
     font-size: 0.82rem;
+  }
+
+  .youtube-link {
+    color: var(--primary);
+    text-decoration: none;
+  }
+
+  .youtube-link:hover {
+    text-decoration: underline;
   }
 
   .trace-detail {

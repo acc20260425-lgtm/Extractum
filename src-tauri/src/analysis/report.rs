@@ -1152,6 +1152,10 @@ mod tests {
             author: Some("analyst".to_string()),
             content: "Important update from the source".to_string(),
             r#ref: "s2-i1".to_string(),
+            item_kind: Some("telegram_message".to_string()),
+            source_type: Some("telegram".to_string()),
+            source_subtype: None,
+            metadata_zstd: None,
         }
     }
 

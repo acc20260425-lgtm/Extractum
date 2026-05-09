@@ -457,9 +457,13 @@ pub(crate) async fn persist_run_snapshot(
                 author,
                 published_at,
                 ref,
-                content_zstd
+                content_zstd,
+                item_kind,
+                source_type,
+                source_subtype,
+                metadata_zstd
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(run_id)
@@ -470,6 +474,10 @@ pub(crate) async fn persist_run_snapshot(
         .bind(message.published_at)
         .bind(&message.r#ref)
         .bind(content_zstd)
+        .bind(message.item_kind.as_deref())
+        .bind(message.source_type.as_deref())
+        .bind(message.source_subtype.as_deref())
+        .bind(message.metadata_zstd.as_deref())
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

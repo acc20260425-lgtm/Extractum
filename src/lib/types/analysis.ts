@@ -98,6 +98,10 @@ export interface AnalysisTraceRef {
   external_id: string;
   published_at: number;
   excerpt: string;
+  youtube_url: string | null;
+  youtube_timestamp_seconds: number | null;
+  youtube_display_label: string | null;
+  is_synthetic: boolean;
 }
 
 export interface AnalysisTraceData {
