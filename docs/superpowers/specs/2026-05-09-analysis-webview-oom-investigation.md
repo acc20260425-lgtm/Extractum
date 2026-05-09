@@ -13,7 +13,8 @@ became unresponsive or crashed.
 
 The root cause was a Svelte 5 `$effect` that called `loadRuns()` directly. The
 call synchronously entered the run-loading workflow, whose `deps.getState()`
-read a broader route-state object than the effect intended. Because Svelte
+constructed a broader route-state object than the effect intended. Constructing
+that object synchronously read route `$state`, including `runs`. Because Svelte
 tracks synchronous state reads inside functions called by an effect, the effect
 subscribed to `runs` in addition to `historyScopeParams`. When the loader later
 patched `runs`, the effect re-ran and scheduled another load, causing repeated
@@ -56,6 +57,12 @@ Initial MCP connection showed:
 - DOM was small, around 487-578 elements.
 - The WebView JS heap and renderer process memory were very large.
 - The Rust backend memory stayed low.
+
+The failure appeared intermittent because the loop only became relevant when the
+analysis history scope was ready. If `historyScopeParams` was `null`, the effect
+cleared `runs` and returned. Once the route had a selected global/source/group
+history scope, the effect entered `loadRuns()` and exposed the accidental
+dependency on `runs`.
 
 ## Evidence Collected
 
@@ -161,11 +168,12 @@ Svelte 5 tracks state and derived values synchronously read inside `$effect`,
 including reads that happen indirectly through called functions.
 
 `loadRuns()` delegates to the analysis run workflow. That workflow starts by
-calling `deps.getState()`, and the route-level `getState` function builds an
-object containing `historyScopeParams`, `activeRunId`, `currentRun`, `runs`,
-`activeRuns`, and deletion state. Because the call happened inside the effect's
-tracking context, all of those synchronous reads were eligible to become effect
-dependencies.
+calling `deps.getState()`, and the route-level `getState` function constructs an
+object from `historyScopeParams`, `activeRunId`, `currentRun`, `runs`,
+`activeRuns`, and deletion state. The important part is the synchronous reads
+that happen while constructing the object; that is when Svelte can register
+dependencies. Because the call happened inside the effect's tracking context,
+all of those reads were eligible to become effect dependencies.
 
 The feedback edge was `runs`: the effect accidentally subscribed to it, then the
 loader later patched `runs` after `listRuns` returned. That patch re-triggered
@@ -173,6 +181,28 @@ the effect, which scheduled another run load. The resulting dependency loop
 caused repeated reactive work and large retained JS heap on `/analysis`.
 
 The intended dependency is only `historyScopeParams`.
+
+## Route Effect Audit
+
+The current `$effect` blocks in `src/routes/analysis/+page.svelte` were checked
+after identifying the root cause:
+
+- The saved-run history effect was the risky pattern: `$effect` -> `loadRuns()`
+  -> workflow `deps.getState()` -> route `$state` reads -> later patch of
+  `runs`.
+- The template editor binding effect reads `selectedTemplate` and
+  `editorBoundTemplateId`, then writes editor form state only when the selected
+  template id changes. It does not call a workflow `getState`.
+- The source-group editor binding effect mirrors the template pattern and is
+  guarded by `editorBoundGroupId`.
+- The status timer effect reads and writes timer/status state, but it is bounded
+  by clearing the previous timeout and only schedules one timeout per status
+  message.
+
+No other analysis-route effect currently has the `$effect` -> workflow
+`deps.getState()` pattern that caused this OOM. Future effects that call route
+workflow functions should either keep synchronous reads intentionally narrow or
+wrap incidental reads in `untrack`.
 
 ## Fix
 
@@ -302,12 +332,14 @@ Risk is low:
 
 ## Follow-Up Recommendations
 
-1. Review other `$effect` blocks that call functions which read and write route
-   state. Similar cases may need `untrack` or a different lifecycle pattern.
+1. When adding new `$effect` blocks, treat calls into route workflow functions as
+   high-risk if they synchronously call `deps.getState()` and later patch any of
+   the same route state. Similar cases may need `untrack` or a different
+   lifecycle pattern.
 2. Consider moving one-shot data loads to explicit event handlers or lifecycle
    flows where possible, keeping `$effect` for narrow dependency-driven work.
-3. Add a lightweight developer note about Svelte 5 `$effect` dependency tracking
-   in the frontend architecture docs if this pattern appears elsewhere.
+3. Keep the frontend architecture note on Svelte 5 `$effect` dependency tracking
+   updated if more route workflow patterns are added.
 
 ## Suggested Commit Message
 
