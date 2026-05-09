@@ -372,6 +372,7 @@ mod tests {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_id INTEGER NOT NULL,
                 external_id TEXT NOT NULL,
+                item_kind TEXT NOT NULL DEFAULT 'telegram_message',
                 author TEXT,
                 published_at INTEGER NOT NULL,
                 content_zstd BLOB
@@ -387,6 +388,7 @@ mod tests {
             CREATE TABLE analysis_source_groups (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
+                source_type TEXT NOT NULL DEFAULT 'telegram',
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )
@@ -450,6 +452,10 @@ mod tests {
                 published_at INTEGER NOT NULL,
                 ref TEXT NOT NULL,
                 content_zstd BLOB NOT NULL,
+                item_kind TEXT,
+                source_type TEXT,
+                source_subtype TEXT,
+                metadata_zstd BLOB,
                 PRIMARY KEY (run_id, ref)
             )
             "#,

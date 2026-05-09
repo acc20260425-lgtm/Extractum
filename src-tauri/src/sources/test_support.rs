@@ -44,6 +44,7 @@ pub(super) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePo
             id INTEGER PRIMARY KEY,
             source_id INTEGER NOT NULL,
             external_id TEXT NOT NULL,
+            item_kind TEXT NOT NULL DEFAULT 'telegram_message',
             author TEXT,
             published_at INTEGER NOT NULL,
             ingested_at INTEGER NOT NULL,

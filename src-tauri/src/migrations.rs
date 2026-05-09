@@ -178,6 +178,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/15.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "add youtube source foundation",
+            sql: include_str!("../migrations/16.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -241,6 +247,34 @@ mod tests {
             "ALTER TABLE sources ADD COLUMN source_subtype TEXT",
             "SET source_subtype = telegram_source_kind",
             "WHERE source_type = 'telegram'",
+        ] {
+            assert!(
+                migration.sql.contains(fragment),
+                "missing migration fragment {fragment}"
+            );
+        }
+    }
+
+    #[test]
+    fn includes_youtube_source_foundation_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 16)
+            .expect("version 16 migration is registered");
+
+        for fragment in [
+            "ALTER TABLE items ADD COLUMN item_kind TEXT NOT NULL DEFAULT 'telegram_message'",
+            "CREATE TABLE IF NOT EXISTS youtube_playlist_items",
+            "CHECK (availability_status IN",
+            "CREATE TABLE IF NOT EXISTS youtube_transcript_segments",
+            "ALTER TABLE analysis_run_messages ADD COLUMN item_kind TEXT",
+            "ALTER TABLE analysis_run_messages ADD COLUMN source_type TEXT",
+            "ALTER TABLE analysis_run_messages ADD COLUMN source_subtype TEXT",
+            "ALTER TABLE analysis_run_messages ADD COLUMN metadata_zstd BLOB",
+            "ALTER TABLE analysis_source_groups ADD COLUMN source_type TEXT NOT NULL DEFAULT 'telegram'",
+            "idx_sources_unique_youtube_video",
+            "idx_sources_unique_youtube_playlist",
         ] {
             assert!(
                 migration.sql.contains(fragment),
