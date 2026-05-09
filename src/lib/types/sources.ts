@@ -152,6 +152,46 @@ export interface SyncSettings {
   initialSyncValue: number;
 }
 
+export type SourceJobStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancel_requested"
+  | "cancelled";
+
+export type SourceJobType =
+  | "youtube_video_metadata_sync"
+  | "youtube_video_transcript_sync"
+  | "youtube_video_comments_sync"
+  | "youtube_video_full_sync"
+  | "youtube_playlist_metadata_sync"
+  | "youtube_playlist_full_sync"
+  | "youtube_playlist_video_sync";
+
+export interface YoutubeSyncOptions {
+  metadata: boolean;
+  transcripts: boolean;
+  comments: boolean;
+}
+
+export interface SourceJobRecord {
+  job_id: string;
+  source_id: number;
+  related_source_id: number | null;
+  job_type: SourceJobType;
+  status: SourceJobStatus;
+  message: string | null;
+  progress_current: number | null;
+  progress_total: number | null;
+  started_at: number;
+  finished_at: number | null;
+  warnings: string[];
+  error: string | null;
+}
+
+export type SourceJobEvent = SourceJobRecord;
+
 export type TakeoutImportStatus =
   | "queued"
   | "running"

@@ -49,6 +49,12 @@
     startTakeoutSourceImport,
   } from "$lib/api/takeout-import";
   import {
+    listSourceJobs,
+    listenToSourceJobEvents,
+    syncYoutubeSource,
+    type SourceJobRecord,
+  } from "$lib/api/source-jobs";
+  import {
     exportSourceToNotebookLm,
     listenToNotebookLmExportEvents,
   } from "$lib/api/notebooklm-export";
@@ -256,6 +262,7 @@
   let deletingSourceIds = $state<Record<number, boolean>>({});
   let startingTakeoutSourceIds = $state<Record<number, boolean>>({});
   let takeoutJobsBySource = $state<Record<number, TakeoutImportJobRecord>>({});
+  let sourceJobsBySource = $state<Record<number, SourceJobRecord[]>>({});
   let deletingRunIds = $state<Record<number, boolean>>({});
   let sourceManagerOpen = $state(false);
   let exportDialogOpen = $state(false);
@@ -305,6 +312,22 @@
       const sourceId = decision.reloadSelectedSourceId;
       void loadSourceTopics(sourceId, { preserveSelection: true }).then(() => loadItems(sourceId));
     }
+  }
+
+  function isActiveSourceJob(job: SourceJobRecord) {
+    return job.status === "queued" || job.status === "running" || job.status === "cancel_requested";
+  }
+
+  function applySourceJob(job: SourceJobRecord) {
+    sourceJobsBySource = {
+      ...sourceJobsBySource,
+      [job.source_id]: [
+        job,
+        ...(sourceJobsBySource[job.source_id] ?? []).filter(
+          (existing) => existing.job_id !== job.job_id,
+        ),
+      ],
+    };
   }
 
   function currentSource() {
@@ -800,6 +823,19 @@
     await runWorkflow.loadRuns();
   }
 
+  async function loadSourceJobs() {
+    try {
+      for (const job of await listSourceJobs({ limit: 100 })) {
+        applySourceJob(job);
+        if (isActiveSourceJob(job)) {
+          syncingIds = sourceActionPending(syncingIds, job.source_id);
+        }
+      }
+    } catch (error) {
+      status = formatAppError("loading source jobs", error);
+    }
+  }
+
   async function loadActiveRuns() {
     await runWorkflow.loadActiveRuns();
   }
@@ -1077,6 +1113,7 @@
     let detachChatListener: (() => void) | null = null;
     let detachNotebookLmExportListener: (() => void) | null = null;
     let detachTakeoutImportListener: (() => void) | null = null;
+    let detachSourceJobListener: (() => void) | null = null;
 
     void loadAccounts();
     void loadSourceCatalog().then(() => {
@@ -1090,6 +1127,7 @@
     void loadGroups();
     void loadActiveRuns();
     void loadTakeoutImportJobs();
+    void loadSourceJobs();
 
     void listenToAnalysisRunEvents(({ payload }) => {
       if (disposed) {
@@ -1147,6 +1185,23 @@
       detachTakeoutImportListener = unlisten;
     });
 
+    void listenToSourceJobEvents((job) => {
+      if (disposed) {
+        return;
+      }
+
+      applySourceJob(job);
+      syncingIds = isActiveSourceJob(job)
+        ? sourceActionPending(syncingIds, job.source_id)
+        : clearSourceActionPending(syncingIds, job.source_id);
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+        return;
+      }
+      detachSourceJobListener = unlisten;
+    });
+
     return () => {
       disposed = true;
       if (statusTimer) {
@@ -1164,6 +1219,9 @@
       }
       if (detachTakeoutImportListener !== null) {
         detachTakeoutImportListener();
+      }
+      if (detachSourceJobListener !== null) {
+        detachSourceJobListener();
       }
     };
   });

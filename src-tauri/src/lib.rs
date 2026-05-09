@@ -38,6 +38,10 @@ use sources::{
 };
 
 mod youtube;
+use youtube::jobs::{
+    cancel_source_job, list_source_jobs, retry_failed_youtube_playlist_videos,
+    sync_youtube_playlist_video, sync_youtube_source, SourceJobState,
+};
 use youtube::preview::{add_youtube_source, preview_youtube_source};
 
 mod notebooklm_export;
@@ -75,6 +79,7 @@ pub fn run() {
         .manage(TelegramState::new())
         .manage(SourceIngestLocks::new())
         .manage(TakeoutImportState::new())
+        .manage(SourceJobState::new())
         .manage(AnalysisState::new())
         .manage(LlmSchedulerState::new())
         .manage(SecretStoreState::system())
@@ -157,7 +162,12 @@ pub fn run() {
             start_analysis_report,
             cancel_analysis_run,
             preview_youtube_source,
-            add_youtube_source
+            add_youtube_source,
+            sync_youtube_source,
+            sync_youtube_playlist_video,
+            cancel_source_job,
+            list_source_jobs,
+            retry_failed_youtube_playlist_videos
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
