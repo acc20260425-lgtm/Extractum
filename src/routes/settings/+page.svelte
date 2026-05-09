@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Eraser, Play, RefreshCw, Save, Square, Terminal } from "@lucide/svelte";
   import { onMount } from "svelte";
   import {
     askLlmStream,
@@ -658,9 +659,11 @@
 
         <div class="actions">
           <Button onclick={() => saveProfile(true)} disabled={saving || !canSaveProfile()}>
+            <Save size={15} aria-hidden="true" />
             {saving ? "Saving..." : "Save and set active"}
           </Button>
           <Button variant="secondary" onclick={() => saveProfile(false)} disabled={saving || !canSaveProfile()}>
+            <Save size={15} aria-hidden="true" />
             Save only
           </Button>
           <Button
@@ -668,6 +671,7 @@
             onclick={() => loadProviderModels()}
             disabled={loadingModels || !canRefreshModels()}
           >
+            <RefreshCw size={15} aria-hidden="true" />
             {loadingModels ? "Loading models..." : "Refresh models"}
           </Button>
           <Button
@@ -676,6 +680,7 @@
             onclick={clearSavedApiKey}
             disabled={saving || creatingProfile || !apiKeyConfigured}
           >
+            <Eraser size={15} aria-hidden="true" />
             Clear API key
           </Button>
         </div>
@@ -747,9 +752,12 @@
               <MetaPill>{usageLine(testUsage)}</MetaPill>
             {/if}
             {#if testing}
-              <Button variant="danger-soft" onclick={cancelTest}>Cancel test</Button>
+              <Button variant="danger-soft" onclick={cancelTest}>
+                <Square size={15} aria-hidden="true" /> Cancel test
+              </Button>
             {/if}
             <Button variant="secondary" onclick={openTestDialog}>
+              <Terminal size={15} aria-hidden="true" />
               {testOutput || testing ? "Open test console" : "Open test"}
             </Button>
           </div>
@@ -806,10 +814,13 @@
 
     <div class="actions modal-actions">
       <Button onclick={runTest} disabled={testing || !testPrompt.trim() || !canSaveProfile()}>
+        <Play size={15} aria-hidden="true" />
         {testing ? "Streaming..." : "Run test"}
       </Button>
       {#if testing}
-        <Button variant="danger-soft" type="button" onclick={cancelTest}>Cancel</Button>
+        <Button variant="danger-soft" type="button" onclick={cancelTest}>
+          <Square size={15} aria-hidden="true" /> Cancel
+        </Button>
       {/if}
       {#if provider || defaultModel}
         <MetaPill>{providerModelLine()}</MetaPill>

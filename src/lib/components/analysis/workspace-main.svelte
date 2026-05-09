@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Download, Play, RefreshCw } from "@lucide/svelte";
   import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
   import NotebookLmExportDialog, {
     type NotebookLmExportForm,
@@ -406,6 +407,7 @@
       </label>
       <div class="controls-actions">
         <Button onclick={onRunReport} disabled={startingReport || !selectedTemplateId || (analysisScope === "single_source" ? !selectedSourceId : !selectedGroupId)}>
+          <Play size={15} aria-hidden="true" />
           {startingReport ? "Starting..." : "Run report"}
         </Button>
         {#if analysisScope === "single_source" && currentSource}
@@ -414,6 +416,7 @@
             onclick={onOpenNotebookLmExport}
             disabled={exportingNotebookLm}
           >
+            <Download size={15} aria-hidden="true" />
             {exportingNotebookLm ? "Exporting..." : "Export for NotebookLM"}
           </Button>
           <Button
@@ -422,6 +425,7 @@
             disabled={!!syncingIds[currentSource.id] || sourceSyncDisabledReason(currentSource) !== null}
             title={sourceSyncDisabledReason(currentSource) ?? undefined}
           >
+            <RefreshCw size={15} aria-hidden="true" />
             {syncingIds[currentSource.id] ? "Syncing..." : "Sync source"}
           </Button>
         {/if}

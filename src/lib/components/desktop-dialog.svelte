@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { X } from "@lucide/svelte";
   import { tick } from "svelte";
   import { cubicOut } from "svelte/easing";
   import { fade, scale } from "svelte/transition";
@@ -133,8 +134,10 @@
           type="button"
           onclick={onClose}
           ariaLabel="Close dialog"
+          title="Close dialog"
+          iconOnly={true}
         >
-          Close
+          <X size={16} aria-hidden="true" />
         </Button>
       </header>
 

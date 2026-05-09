@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Eye, Plus } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -132,6 +133,7 @@
       />
     </label>
     <Button onclick={previewYoutube} disabled={!canPreview}>
+      <Eye size={15} aria-hidden="true" />
       {previewingYoutube ? "Previewing..." : "Preview"}
     </Button>
   </div>
@@ -192,6 +194,7 @@
         <div class="preview-actions">
           <span class="canonical-url">{youtubePreview.canonicalUrl}</span>
           <Button onclick={addYoutube} disabled={!canAdd}>
+            <Plus size={15} aria-hidden="true" />
             {addingYoutube ? "Adding..." : "Add source"}
           </Button>
         </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { RefreshCw, Trash2 } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
@@ -113,10 +114,12 @@
           disabled={syncing || deleting || syncReason !== null}
           title={syncReason ?? undefined}
         >
+          <RefreshCw size={13} aria-hidden="true" />
           {syncing ? "Syncing..." : "Sync"}
         </Button>
       {/if}
       <Button size="sm" variant="danger-soft" onclick={() => onDelete(source.id)} disabled={deleting || syncing}>
+        <Trash2 size={13} aria-hidden="true" />
         {deleting ? "Deleting..." : "Delete"}
       </Button>
     </div>

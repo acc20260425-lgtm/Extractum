@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { X } from "@lucide/svelte";
   import { dismissToast, toasts } from "$lib/toasts";
 </script>
 
@@ -12,7 +13,7 @@
         aria-label="Dismiss notification"
         onclick={() => dismissToast(toast.id)}
       >
-        ×
+        <X size={15} aria-hidden="true" />
       </button>
     </section>
   {/each}
@@ -70,6 +71,9 @@
 
   .toast-close {
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);

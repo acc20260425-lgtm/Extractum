@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Archive, ExternalLink, Plus, RefreshCw, Square, Trash2 } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -210,7 +211,9 @@
         <span>Sources</span>
         <small>{filteredSourceCatalog.length}</small>
       </div>
-      <Button size="sm" variant="secondary" onclick={onOpenSourceManager}>Add</Button>
+      <Button size="sm" variant="secondary" onclick={onOpenSourceManager}>
+        <Plus size={13} aria-hidden="true" /> Add
+      </Button>
     </div>
     <div class="rail-list">
       {#if loadingSourceCatalog}
@@ -289,7 +292,9 @@
                   </Badge>
                 {/if}
                 {#if youtubeSummary.canonicalUrl}
-                  <a class="youtube-link" href={youtubeSummary.canonicalUrl} target="_blank" rel="noreferrer">YouTube</a>
+                  <a class="youtube-link" href={youtubeSummary.canonicalUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink size={12} aria-hidden="true" /> YouTube
+                  </a>
                 {/if}
               {/if}
               {#if runtimeStateBadge}
@@ -308,6 +313,7 @@
                   disabled={!!syncingIds[source.id] || deleting || takeoutActive || syncReason !== null}
                   title={takeoutActive ? "Takeout import is active." : syncReason ?? undefined}
                 >
+                  <RefreshCw size={13} aria-hidden="true" />
                   {syncingIds[source.id] ? "Syncing..." : "Sync"}
                 </Button>
               {/if}
@@ -319,6 +325,7 @@
                     onclick={() => onCancelTakeoutImport(takeoutJob.job_id)}
                     disabled={takeoutJob.status === "cancel_requested"}
                   >
+                    <Square size={13} aria-hidden="true" />
                     {takeoutJob.status === "cancel_requested" ? "Cancelling..." : "Cancel"}
                   </Button>
                 {:else}
@@ -329,6 +336,7 @@
                     disabled={startingTakeout || deleting || !!syncingIds[source.id] || syncReason !== null}
                     title={syncReason ?? undefined}
                   >
+                    <Archive size={13} aria-hidden="true" />
                     {startingTakeout ? "Starting..." : "Takeout"}
                   </Button>
                 {/if}
@@ -340,6 +348,7 @@
                 disabled={deleting || !!syncingIds[source.id] || takeoutActive}
                 title={takeoutActive ? "Takeout import is active." : undefined}
               >
+                <Trash2 size={13} aria-hidden="true" />
                 {deleting ? "Deleting..." : "Delete"}
               </Button>
             </div>
@@ -617,6 +626,9 @@
   }
 
   .youtube-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
     text-decoration: none;
   }
 

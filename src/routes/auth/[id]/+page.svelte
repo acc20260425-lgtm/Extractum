@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ArrowLeft, LogIn, LogOut, PanelRightOpen, Send } from "@lucide/svelte";
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
@@ -123,7 +124,9 @@
 </script>
 
 <div class="back-row">
-  <Button variant="ghost" size="sm" onclick={() => goto("/accounts")}>&larr; Accounts</Button>
+  <Button variant="ghost" size="sm" onclick={() => goto("/accounts")}>
+    <ArrowLeft size={14} aria-hidden="true" /> Accounts
+  </Button>
 </div>
 
 <section class="page-shell">
@@ -202,6 +205,7 @@
           </div>
           <div class="action-row">
             <Button onclick={sendCode} disabled={loading || !phone}>
+              <Send size={15} aria-hidden="true" />
               {loading ? "Sending..." : "Send code"}
             </Button>
           </div>
@@ -218,9 +222,12 @@
           </div>
           <div class="action-row">
             <Button onclick={signIn} disabled={loading || !code}>
+              <LogIn size={15} aria-hidden="true" />
               {loading ? "Signing in..." : "Sign in"}
             </Button>
-            <Button variant="secondary" onclick={() => (step = "phone")}>Back</Button>
+            <Button variant="secondary" onclick={() => (step = "phone")}>
+              <ArrowLeft size={15} aria-hidden="true" /> Back
+            </Button>
           </div>
         {:else}
           <SurfaceCard className="auth-success">
@@ -235,8 +242,12 @@
             </div>
           </SurfaceCard>
           <div class="action-row">
-            <Button onclick={() => goto("/analysis")}>Open workspace</Button>
-            <Button variant="danger-soft" onclick={logout} disabled={loading}>Logout</Button>
+            <Button onclick={() => goto("/analysis")}>
+              <PanelRightOpen size={15} aria-hidden="true" /> Open workspace
+            </Button>
+            <Button variant="danger-soft" onclick={logout} disabled={loading}>
+              <LogOut size={15} aria-hidden="true" /> Logout
+            </Button>
           </div>
         {/if}
       </section>

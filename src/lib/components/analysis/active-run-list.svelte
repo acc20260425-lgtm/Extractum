@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PanelRightOpen, RefreshCw, Square } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -49,7 +50,9 @@
       title="Active Runs"
       subtitle="Queued and running reports stay separate from saved history."
     >
-      <Button variant="secondary" onclick={onRefresh}>Refresh</Button>
+      <Button variant="secondary" onclick={onRefresh}>
+        <RefreshCw size={15} aria-hidden="true" /> Refresh
+      </Button>
     </PanelHeader>
 
     {#if loadingActiveRuns}
@@ -77,8 +80,12 @@
               </p>
             </div>
             <div class="run-actions">
-              <Button variant="secondary" onclick={() => onOpenRun(run.id)}>Open</Button>
-              <Button variant="danger-soft" onclick={() => onCancelRun(run.id)}>Cancel</Button>
+              <Button variant="secondary" onclick={() => onOpenRun(run.id)}>
+                <PanelRightOpen size={15} aria-hidden="true" /> Open
+              </Button>
+              <Button variant="danger-soft" onclick={() => onCancelRun(run.id)}>
+                <Square size={15} aria-hidden="true" /> Cancel
+              </Button>
             </div>
           </li>
         {/each}

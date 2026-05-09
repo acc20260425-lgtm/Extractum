@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Cookie, RefreshCw, Save, Trash2, X } from "@lucide/svelte";
   import { onMount } from "svelte";
   import {
     clearYoutubeAuth,
@@ -196,6 +197,7 @@
         </div>
         <div class="cookie-actions">
           <Button variant="secondary" size="sm" onclick={startCookieEdit} disabled={loading || savingCookies}>
+            <Cookie size={13} aria-hidden="true" />
             {authStatus?.hasCookies ? "Update cookies" : "Paste/update cookies"}
           </Button>
           <Button
@@ -204,6 +206,7 @@
             onclick={clearAuth}
             disabled={loading || clearingAuth || !authStatus?.hasCookies}
           >
+            <Trash2 size={13} aria-hidden="true" />
             {clearingAuth ? "Clearing..." : "Clear YouTube auth"}
           </Button>
         </div>
@@ -222,9 +225,11 @@
         </label>
         <div class="actions">
           <Button onclick={saveCookies} disabled={!canSaveCookies}>
+            <Save size={15} aria-hidden="true" />
             {savingCookies ? "Saving..." : "Save cookies"}
           </Button>
           <Button variant="secondary" onclick={cancelCookieEdit} disabled={savingCookies}>
+            <X size={15} aria-hidden="true" />
             Cancel cookie edit
           </Button>
         </div>
@@ -336,9 +341,11 @@
 
   <div class="actions">
     <Button onclick={saveSettings} disabled={loading || savingSettings}>
+      <Save size={15} aria-hidden="true" />
       {savingSettings ? "Saving..." : "Save settings"}
     </Button>
     <Button variant="secondary" onclick={loadPanel} disabled={loading || savingSettings}>
+      <RefreshCw size={15} aria-hidden="true" />
       Reload
     </Button>
   </div>

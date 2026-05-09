@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Check, Plus, RefreshCw, Send, Video } from "@lucide/svelte";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -218,6 +219,7 @@
         ariaControls="telegram-source-panel"
         onclick={() => (activeProvider = "telegram")}
       >
+        <Send size={15} aria-hidden="true" />
         Telegram
       </Button>
       <Button
@@ -228,6 +230,7 @@
         ariaControls="youtube-source-panel"
         onclick={() => (activeProvider = "youtube")}
       >
+        <Video size={15} aria-hidden="true" />
         YouTube
       </Button>
     </div>
@@ -275,6 +278,7 @@
         onclick={loadDialogSources}
         disabled={!selectedAccountReady || loadingDialogs || addingSourceKey !== null}
       >
+        <RefreshCw size={15} aria-hidden="true" />
         {loadingDialogs ? "Refreshing..." : "Refresh"}
       </Button>
     </div>
@@ -323,6 +327,7 @@
           onclick={addManualSource}
           disabled={!selectedAccountReady || !manualRef.trim() || addingSourceKey !== null}
         >
+          <Plus size={15} aria-hidden="true" />
           {addingSourceKey === "manual" ? "Adding..." : "Add"}
         </Button>
       </div>
@@ -383,6 +388,11 @@
                 onclick={() => addDialogSource(source)}
                 disabled={alreadyAdded || addingSourceKey !== null}
               >
+                {#if alreadyAdded}
+                  <Check size={13} aria-hidden="true" />
+                {:else}
+                  <Plus size={13} aria-hidden="true" />
+                {/if}
                 {alreadyAdded ? "Added" : addingSourceKey === key ? "Adding..." : "Add"}
               </Button>
             </article>

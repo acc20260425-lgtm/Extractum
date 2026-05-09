@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Download, FolderOpen, X } from "@lucide/svelte";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import CheckboxRow from "$lib/components/ui/CheckboxRow.svelte";
@@ -120,6 +121,7 @@
         />
       </label>
       <Button variant="secondary" onclick={onChooseFolder} disabled={exporting}>
+        <FolderOpen size={15} aria-hidden="true" />
         Choose
       </Button>
     </div>
@@ -244,8 +246,11 @@
     {/if}
 
     <div class="actions">
-      <Button variant="ghost" onclick={onClose} disabled={exporting}>Close</Button>
+      <Button variant="ghost" onclick={onClose} disabled={exporting}>
+        <X size={15} aria-hidden="true" /> Close
+      </Button>
       <Button onclick={onExport} disabled={exporting || !source || !form.outputDir.trim()}>
+        <Download size={15} aria-hidden="true" />
         {exporting ? "Exporting..." : "Export"}
       </Button>
     </div>

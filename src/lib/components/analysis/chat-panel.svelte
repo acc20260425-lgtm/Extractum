@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Eraser, SendHorizontal, Square } from "@lucide/svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -82,9 +83,12 @@
       {#if currentRun && currentRun.status === "completed"}
         <div class="chat-actions">
           {#if canCancelChat}
-            <Button variant="danger-soft" type="button" onclick={onCancelChat}>Cancel answer</Button>
+            <Button variant="danger-soft" type="button" onclick={onCancelChat}>
+              <Square size={15} aria-hidden="true" /> Cancel answer
+            </Button>
           {/if}
           <Button variant="secondary" onclick={onClearChat} disabled={chatting || clearingChat}>
+            <Eraser size={15} aria-hidden="true" />
             {clearingChat ? "Clearing..." : "Clear chat"}
           </Button>
         </div>
@@ -160,6 +164,7 @@
             Ask for clarification, prioritization, contradictions, or evidence-backed summaries.
           </span>
           <Button onclick={onAskQuestion} disabled={chatting || loadingChat || !chatQuestion.trim() || currentRun.status !== "completed"}>
+            <SendHorizontal size={15} aria-hidden="true" />
             {chatting ? "Answering..." : "Ask"}
           </Button>
         </div>

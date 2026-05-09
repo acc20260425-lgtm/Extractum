@@ -16,6 +16,7 @@
     size = "md",
     disabled = false,
     selected = false,
+    iconOnly = false,
     id,
     role,
     title,
@@ -33,6 +34,7 @@
     size?: ButtonSize;
     disabled?: boolean;
     selected?: boolean;
+    iconOnly?: boolean;
     id?: string;
     role?: string;
     title?: string;
@@ -58,7 +60,7 @@
   aria-selected={ariaSelected}
   aria-controls={ariaControls}
   tabindex={tabIndex}
-  class={`ui-button ${variant} ${size} ${selected ? "selected" : ""} ${className}`.trim()}
+  class={`ui-button ${variant} ${size} ${selected ? "selected" : ""} ${iconOnly ? "icon-only" : ""} ${className}`.trim()}
   onclick={onclick}
 >
   {@render children?.()}
@@ -96,6 +98,17 @@
   .ui-button.sm {
     padding: 0.3rem 0.7rem;
     font-size: 0.8rem;
+  }
+
+  .ui-button.icon-only {
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+  }
+
+  .ui-button.icon-only.sm {
+    width: 1.9rem;
+    height: 1.9rem;
   }
 
   .ui-button.primary {

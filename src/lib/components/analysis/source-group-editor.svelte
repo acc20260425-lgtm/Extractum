@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CopyPlus, Plus, Save, SquarePen, Trash2, X } from "@lucide/svelte";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -89,6 +90,7 @@
       </div>
       <div class="group-actions">
         <Button variant="secondary" size="sm" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
+          <Plus size={13} aria-hidden="true" />
           New
         </Button>
         <Button
@@ -97,9 +99,11 @@
           onclick={openSelectedGroupEditor}
           disabled={savingGroup || deletingGroup || (!selectedGroup && !groupName.trim() && groupMemberSourceIds.length === 0)}
         >
+          <SquarePen size={13} aria-hidden="true" />
           Edit
         </Button>
         <Button variant="danger-soft" size="sm" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
+          <Trash2 size={13} aria-hidden="true" />
           {deletingGroup ? "Deleting..." : "Delete"}
         </Button>
       </div>
@@ -114,6 +118,7 @@
       >
         <div class="group-actions">
           <Button variant="secondary" onclick={openNewGroupEditor} disabled={savingGroup || deletingGroup}>
+            <Plus size={15} aria-hidden="true" />
             New group
           </Button>
           <Button
@@ -121,9 +126,11 @@
             onclick={openSelectedGroupEditor}
             disabled={savingGroup || deletingGroup || (!selectedGroup && !groupName.trim() && groupMemberSourceIds.length === 0)}
           >
+            <SquarePen size={15} aria-hidden="true" />
             {selectedGroup ? "Edit group" : "Open editor"}
           </Button>
           <Button variant="danger-soft" onclick={onDeleteGroup} disabled={savingGroup || deletingGroup || !selectedGroup}>
+            <Trash2 size={15} aria-hidden="true" />
             {deletingGroup ? "Deleting..." : "Delete"}
           </Button>
         </div>
@@ -236,9 +243,11 @@
 
     <footer class="modal-actions">
       <Button variant="secondary" type="button" onclick={closeEditor}>
+        <X size={15} aria-hidden="true" />
         Cancel
       </Button>
       <Button variant="secondary" type="button" onclick={onSaveGroupCopy} disabled={savingGroup || deletingGroup}>
+        <CopyPlus size={15} aria-hidden="true" />
         {savingGroup ? "Saving..." : "Save as new"}
       </Button>
       <Button
@@ -246,6 +255,7 @@
         onclick={onSaveGroupChanges}
         disabled={savingGroup || deletingGroup || !selectedGroup}
       >
+        <Save size={15} aria-hidden="true" />
         {savingGroup ? "Saving..." : "Save changes"}
       </Button>
     </footer>

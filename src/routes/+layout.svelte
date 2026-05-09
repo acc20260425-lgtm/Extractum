@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Database, LayoutDashboard, Moon, Settings, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import Button from "$lib/components/ui/Button.svelte";
@@ -24,12 +25,14 @@
       href: "/analysis",
       label: "Workspace",
       caption: "Sources, reports, chat",
+      icon: LayoutDashboard,
       active: (pathname: string) => pathname.startsWith("/analysis") || pathname === "/",
     },
     {
       href: "/accounts",
       label: "Accounts",
       caption: "Telegram access",
+      icon: UserRound,
       active: (pathname: string) =>
         pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
     },
@@ -37,12 +40,14 @@
       href: "/sources",
       label: "Sources",
       caption: "Channels and sync",
+      icon: Database,
       active: (pathname: string) => pathname.startsWith("/sources"),
     },
     {
       href: "/settings",
       label: "Settings",
       caption: "Models and app",
+      icon: Settings,
       active: (pathname: string) => pathname.startsWith("/settings"),
     },
   ];
@@ -69,11 +74,15 @@
 
       <nav class="sidebar-nav" aria-label="Primary">
         {#each navItems as item (item.href)}
+          {@const NavIcon = item.icon}
           <a
             href={item.href}
             class:active={item.active(page.url.pathname)}
           >
-            <span class="nav-label">{item.label}</span>
+            <span class="nav-row">
+              <NavIcon size={16} aria-hidden="true" />
+              <span class="nav-label">{item.label}</span>
+            </span>
             <span class="nav-caption">{item.caption}</span>
           </a>
         {/each}
@@ -92,6 +101,11 @@
           <strong>NotebookLM x Telegram</strong>
         </div>
         <Button className="theme-toggle" variant="secondary" type="button" onclick={toggleTheme}>
+          {#if theme === "light"}
+            <Moon size={15} aria-hidden="true" />
+          {:else}
+            <Sun size={15} aria-hidden="true" />
+          {/if}
           {theme === "light" ? "Dark theme" : "Light theme"}
         </Button>
       </div>
@@ -417,6 +431,13 @@
     text-decoration: none;
     transition: background 0.2s, color 0.2s, border-color 0.2s;
     border: 1px solid transparent;
+  }
+
+  .nav-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
   }
 
   .sidebar-nav a:hover,

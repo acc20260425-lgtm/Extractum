@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Square } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -105,7 +106,9 @@
       subtitle={reportSubtitle()}
     >
       {#if canCancelCurrentRun}
-        <Button variant="danger-soft" type="button" onclick={onCancelCurrentRun}>Cancel run</Button>
+        <Button variant="danger-soft" type="button" onclick={onCancelCurrentRun}>
+          <Square size={15} aria-hidden="true" /> Cancel run
+        </Button>
       {/if}
     </PanelHeader>
 

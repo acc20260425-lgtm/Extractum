@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PanelRightOpen, RefreshCw, Trash2 } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -76,7 +77,9 @@
           </Button>
           <Button variant="secondary" selected={runFilter === "failed"} onclick={() => onChangeFilter("failed")}>Failed</Button>
         </div>
-        <Button variant="secondary" onclick={onRefresh}>Refresh</Button>
+        <Button variant="secondary" onclick={onRefresh}>
+          <RefreshCw size={15} aria-hidden="true" /> Refresh
+        </Button>
       </div>
     </PanelHeader>
 
@@ -110,9 +113,10 @@
             </div>
             <div class="run-actions">
               <Button variant="secondary" onclick={() => onOpenRun(run.id)} disabled={deletingRunIds[run.id]}>
-                Open
+                <PanelRightOpen size={15} aria-hidden="true" /> Open
               </Button>
               <Button variant="danger-soft" onclick={() => onDeleteRun(run)} disabled={deletingRunIds[run.id]}>
+                <Trash2 size={15} aria-hidden="true" />
                 {deletingRunIds[run.id] ? "Deleting..." : "Delete"}
               </Button>
             </div>

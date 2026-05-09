@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LogIn, Plus, Trash2 } from "@lucide/svelte";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import {
@@ -227,9 +228,12 @@
                     </div>
                     <div class="actions">
                       <Button variant="secondary" size="sm" onclick={() => goto(`/auth/${acc.id}`)}>
+                        <LogIn size={13} aria-hidden="true" />
                         {authActionLabel(acc)}
                       </Button>
-                      <Button variant="danger-soft" size="sm" onclick={() => deleteAccount(acc)}>Delete</Button>
+                      <Button variant="danger-soft" size="sm" onclick={() => deleteAccount(acc)}>
+                        <Trash2 size={13} aria-hidden="true" /> Delete
+                      </Button>
                     </div>
                   </div>
                 </SurfaceCard>
@@ -285,6 +289,7 @@
 
         <div class="action-row">
           <Button onclick={createAccount} disabled={creating || !newLabel || !newApiId || !newApiHash}>
+            <Plus size={15} aria-hidden="true" />
             {creating ? "Creating..." : "Add account"}
           </Button>
         </div>

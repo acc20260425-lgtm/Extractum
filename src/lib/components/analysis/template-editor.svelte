@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CopyPlus, Plus, Save, SquarePen, Trash2, X } from "@lucide/svelte";
   import DesktopDialog from "$lib/components/desktop-dialog.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -75,6 +76,7 @@
       </div>
       <div class="template-actions">
         <Button variant="secondary" size="sm" onclick={() => openEditor("new")} disabled={savingTemplate || deletingTemplate}>
+          <Plus size={13} aria-hidden="true" />
           New
         </Button>
         <Button
@@ -83,6 +85,7 @@
           onclick={() => openEditor("edit")}
           disabled={savingTemplate || deletingTemplate || (!selectedTemplate && !templateName.trim() && !templateBody.trim())}
         >
+          <SquarePen size={13} aria-hidden="true" />
           Edit
         </Button>
         <Button
@@ -91,6 +94,7 @@
           onclick={onDeleteTemplate}
           disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
         >
+          <Trash2 size={13} aria-hidden="true" />
           {deletingTemplate ? "Deleting..." : "Delete"}
         </Button>
       </div>
@@ -107,6 +111,7 @@
       >
         <div class="template-actions">
           <Button variant="secondary" onclick={() => openEditor("new")} disabled={savingTemplate || deletingTemplate}>
+            <Plus size={15} aria-hidden="true" />
             New template
           </Button>
           <Button
@@ -114,6 +119,7 @@
             onclick={() => openEditor("edit")}
             disabled={savingTemplate || deletingTemplate || (!selectedTemplate && !templateName.trim() && !templateBody.trim())}
           >
+            <SquarePen size={15} aria-hidden="true" />
             {selectedTemplate ? "Edit template" : "Open editor"}
           </Button>
           <Button
@@ -121,6 +127,7 @@
             onclick={onDeleteTemplate}
             disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
           >
+            <Trash2 size={15} aria-hidden="true" />
             {deletingTemplate ? "Deleting..." : "Delete"}
           </Button>
         </div>
@@ -177,19 +184,22 @@
 
     <footer class="modal-actions">
       <Button variant="secondary" type="button" onclick={closeEditor}>
+        <X size={15} aria-hidden="true" />
         Cancel
       </Button>
       <Button variant="secondary" type="button" onclick={saveCopy} disabled={savingTemplate || deletingTemplate}>
+        <CopyPlus size={15} aria-hidden="true" />
         {savingTemplate ? "Saving..." : editorMode === "new" ? "Create template" : "Save as copy"}
       </Button>
       {#if editorMode === "edit"}
         <Button
           type="button"
-          onclick={saveChanges}
-          disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
-        >
-          {savingTemplate ? "Saving..." : "Save changes"}
-        </Button>
+        onclick={saveChanges}
+        disabled={savingTemplate || deletingTemplate || !canEditSelectedTemplate()}
+      >
+        <Save size={15} aria-hidden="true" />
+        {savingTemplate ? "Saving..." : "Save changes"}
+      </Button>
       {/if}
     </footer>
   </div>
