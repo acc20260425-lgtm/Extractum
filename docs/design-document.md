@@ -267,23 +267,7 @@ session files are migrated lazily: the backend writes the secure-store secret
 first and only then clears or replaces the legacy value. If secure storage
 fails, the operation fails closed and leaves legacy plaintext untouched.
 
-## 7. What changed since earlier planning
-
-Earlier planning documents treated the following as future work:
-
-- media-aware sync metadata
-- immutable saved run snapshots
-- typed app errors
-- configurable initial sync policy
-- Telegram item context metadata
-- NotebookLM reply/thread/reaction metadata rendering
-- Takeout source import for existing sources with TDesktop-first pagination
-- provider-ready source records, capability-driven source UI, provider sync
-  dispatch, and provider-neutral analysis refs
-
-Those items are now implemented and should no longer be treated as future milestones.
-
-## 8. Open design work
+## 7. Open design work
 
 The most meaningful remaining design questions are:
 

@@ -11,6 +11,7 @@ The current product slice is a local-first MVP for:
 - managing Telegram accounts and sessions;
 - adding Telegram channels, supergroups, and groups as sources;
 - syncing source history into local SQLite storage;
+- importing Telegram Takeout history for existing sources;
 - browsing synced items in the `/analysis` workspace;
 - running provider-backed analysis reports in `/analysis`;
 - asking follow-up questions against saved analysis runs.
@@ -39,6 +40,7 @@ The current product slice is a local-first MVP for:
   - `recent_messages(N)`
   - `recent_days(N)`
 - subsequent syncs continue from `last_sync_state`.
+- Takeout source import can fill older local history for an existing source without creating a second source record.
 
 ### Media-aware item metadata
 
@@ -83,6 +85,7 @@ Analysis currently works on already-synced local data only.
 - saved runs default to global history and can also be narrowed back to the current scope;
 - saved runs include result markdown, trace data, chat history, and a frozen corpus snapshot;
 - follow-up chat for new runs reads the saved snapshot rather than the live `items` table.
+- backend preflight rejects empty or oversized analysis scopes before creating a run.
 
 This means saved runs are now intended to be stable artifacts rather than live views over changing data.
 
@@ -154,6 +157,8 @@ Recent schema additions:
 - migration `11.sql`: Telegram source kind
 - migration `12.sql`: account-scoped source uniqueness
 - migration `13.sql`: Telegram reply/thread/reaction context metadata on `items`
+- migration `14.sql`: local Telegram Forum Topics catalog
+- migration `15.sql`: provider-local source subtype
 
 ## Error model
 
@@ -175,18 +180,3 @@ The frontend normalizes these errors through `src/lib/app-error.ts` instead of r
 3. `docs/database-schema.md`
 4. `docs/design-document.md`
 5. `docs/backlog.md`
-
-## Status of the backlog
-
-The old backlog items for:
-
-- functional hardening;
-- media-aware sync metadata;
-- immutable saved run snapshot semantics;
-- typed application errors;
-- configurable initial sync policy;
-- reusable LLM provider profiles and OpenAI-compatible `base_url` configuration;
-- Telegram item context metadata for new sync rows;
-- NotebookLM rendering of local reply/thread/reaction metadata
-
-are completed. The active open backlog now lives in `docs/backlog.md`.

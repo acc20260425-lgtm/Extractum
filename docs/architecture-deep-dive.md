@@ -168,10 +168,12 @@ The report flow:
 
 1. resolve scope
 2. load prompt template
-3. load corpus
-4. call the provider
-5. persist result + trace data
-6. persist frozen snapshot
+3. run backend preflight for message count, estimated chunks, estimated input characters, and request caps
+4. create the run only if preflight passes
+5. load corpus
+6. call the provider
+7. persist result + trace data
+8. persist frozen snapshot
 
 ### 5.2 Saved run semantics
 

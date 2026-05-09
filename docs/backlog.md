@@ -1,350 +1,165 @@
-# Extractum Unified Backlog
+# Extractum Backlog
 
-> **Updated:** 2026-05-08
-> **Working rule:** this file tracks open follow-up work only
+> **Updated:** 2026-05-09
+> **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
----
+## 1. Open Gaps
 
-## 1. Purpose
+- Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
+- Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
+- Takeout source import is shipped but still needs broader live validation, incomplete-batch provenance, and a migrated-history identity decision.
+- Saved-run history works, but large archives need richer narrowing by source, group, profile/model, template, and date.
+- Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
+- NotebookLM export is single-source and local-only; optional link enrichment, source-group export, forward metadata, and richer forum-topic grouping remain open.
+- Full Telegram Forum Topics browsing/export and forward metadata are not modeled yet.
+- Stabilization needs a current Rust lint baseline, repeatable full-project verification, and a dependency pinning policy for `grammers`.
+- Secret storage is implemented, but logs and user-facing error surfaces still need a focused secret-leak audit.
 
-This backlog tracks open technical and product work only.
-
-Released work should stay in the codebase and in current-state documentation, not in the active backlog.
-
----
-
-## 2. Main Open Gaps
-
-- Telegram runtime behavior still needs broader validation against real accounts and dialogs
-- private-source resolution is better defined but still needs more real-world validation
-- Takeout source import is shipped, but still needs broader live validation and a few parity follow-ups
-- saved-run history still lacks richer filtering for larger archives
-- media download, preview, and media-aware analysis are still incomplete
-- NotebookLM export is shipped for single synced sources; optional link enrichment and source-group export remain follow-up work
-- full Telegram Forum Topics browsing/export and forward metadata are not modeled yet
-
----
-
-## 3. Planning Principles
+## 2. Planning Principles
 
 1. Keep architecture pragmatic and local to the current codebase.
-2. Prioritize work that reduces correctness and operability risk.
+2. Prioritize correctness, data integrity, and operability risks before UI polish.
 3. Validate Telegram behavior against real data when static reading is insufficient.
-4. Prefer tests for pure logic, storage rules, and request lifecycle boundaries.
-5. Treat secret handling and request isolation as higher priority than aesthetic refactors.
+4. Prefer tests for pure logic, storage rules, request lifecycle boundaries, and route workflow regressions.
+5. Keep completed Superpowers plans/specs out of active docs; preserve them through Git history instead.
 
----
-
-## 4. Active Goal Areas
+## 3. Active Work Areas
 
 | Area | Current state | Target |
-|---|---|---|
-| Telegram runtime correctness | partially validated | validated on real accounts and dialogs |
-| Private source resolution | explicit rules exist, but runtime coverage is incomplete | predictable behavior for dialog-picked private sources |
-| Takeout source import | implemented for existing sources with TDesktop-first pagination and per-split descending fallback | validated across source kinds, private/left cases, and export DC behavior |
-| Secret storage | LLM keys, Telegram `api_hash`, and Telegram session file contents use OS-backed protection | avoid logging secrets in backend errors, frontend status text, or debug output |
-| LLM concurrency | request isolation and analysis preflight caps are documented | configurable or differentiated limits only if future provider behavior requires them |
-| Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
-| Media support | metadata-first only | optional download/preview and media-aware analysis |
-| NotebookLM export | single-source local Markdown export with progress events and local reply/thread/reaction metadata is shipped | optional link enrichment and source-group export |
-| Stabilization | partially recorded | repeatable verification baseline and broader tests |
+| --- | --- | --- |
+| Telegram runtime validation | partially validated | predictable behavior across real supported dialogs and accounts |
+| Account deletion coordination | account row/runtime cleanup exists | deletion cannot race active ingest or analysis work |
+| Takeout source import | MVP shipped | validated across source kinds with explicit incomplete-import provenance |
+| Saved runs UX | global/current-scope history shipped | fast narrowing for large saved-run histories |
+| Media support | metadata only | optional download/preview and controlled media-aware analysis |
+| NotebookLM export | single-source Markdown export shipped | optional enrichment and source-group export if needed |
+| Stabilization | ad hoc verification | repeatable baseline plus dependency upgrade policy |
+| Secret safety | OS secure storage shipped | no accidental secret exposure in logs, status text, or debug output |
 
----
+## 4. Open Roadmap
 
-## 5. Active Roadmap
-
-### Phase 0. Baseline And Sanity Check
-
-Status: partial.
-
-Goal: confirm the exact current verification baseline before broader implementation continues.
-
-- [ ] record current `cargo clippy` status
-
-Current notes:
-
-- 2026-05-02: `cargo test` passes locally with `90 passed; 0 failed`
-- 2026-05-02: `npm.cmd run check` passes with `0 errors and 0 warnings` when Svelte preprocessing is allowed to spawn `esbuild`
-
----
-
-### Phase 1. NotebookLM Export Follow-Ups
-
-Status: MVP shipped.
-
-Priority: medium.
-
-Current state is documented in `README.md`, `docs/design-document.md`, and `docs/architecture-deep-dive.md`.
-
-Open follow-ups:
-
-- [ ] add optional link enrichment with explicit user opt-in and cache
-- [ ] add export for source groups if the analysis group workflow needs it
-- [ ] render forward context after sync starts persisting forward metadata
-- [ ] decide whether NotebookLM export needs full Forum Topics names/grouping beyond the stored `reply_to_top_id`
-- [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
-
----
-
-### Phase 2. Telegram Runtime And Private-Source Validation
-
-Status: partial.
+### 4.1 Telegram Runtime And Private-Source Validation
 
 Priority: high.
 
-Goal: verify Telegram source-kind handling and private-source resolution against real accounts and dialogs.
-
-Open checks:
-
 - [ ] verify that `list_telegram_sources` returns broadcast channels, supergroups, and regular small groups
-- [ ] verify that adding from the dialog list stores the expected `telegram_source_kind`
+- [ ] verify that adding from the dialog list stores the expected `telegram_source_kind` and peer identity metadata
 - [ ] verify that sync works for `channel`, `supergroup`, and `group`
 - [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
-- [ ] validate that dialog-picked private `channel` and `supergroup` sources continue syncing through stored identity when Telegram exposes sufficient peer data
+- [ ] validate dialog-picked private `channel` and `supergroup` sources through the stored-identity path
 - [ ] validate cross-account isolation on two real Telegram accounts
 
-Acceptance criteria:
+Acceptance:
 
-- [ ] the Add Source dialog shows channels, supergroups, and groups with correct labels
-- [ ] a source added from account A does not affect the same source added from account B
-- [ ] sync inserts messages for each supported kind without resolving to the wrong peer
-- [ ] private dialog-picked `channel` and `supergroup` sources resolve predictably through stored identity when Telegram provides sufficient data
+- Add Source shows channels, supergroups, and groups with correct labels.
+- A source added from account A does not affect the same source added from account B.
+- Sync inserts messages for each supported kind without resolving to the wrong peer.
+- Private dialog-picked sources resolve predictably when Telegram provides sufficient peer data.
 
-Current notes:
-
-- runtime spot-checks on April 27, 2026 already validated public `channel` and `supergroup` flows plus typed `validation` / `not_found` errors
-- no real legacy small `group` has been validated yet
-- dialog-list add flow still needs explicit UI-level validation rather than only command-level checks
-
----
-
-### Phase 2.5. Takeout Source Import Follow-Ups
-
-Status: MVP shipped.
+### 4.2 Account Deletion Coordination
 
 Priority: high.
 
-Current state is documented in `docs/takeout-source-import.md` and the implementation notes in `reference/takeout_source_import_plan.md`.
+- [ ] reject or cancel account deletion when any owned source has active sync, Takeout import, or delete work
+- [ ] decide whether account deletion should cancel owned analysis/LLM work or block until it finishes
+- [ ] return `not_found` when deleting a missing account
+- [ ] add backend tests for missing-account deletion and account deletion with active source work
 
-Open checks:
+Acceptance:
+
+- Account deletion cannot cascade-delete source/item rows underneath active ingest tasks.
+- Runtime and secure-storage cleanup still happens after a valid delete.
+- Missing account deletion reports a typed `not_found` error.
+
+### 4.3 Takeout Source Import Follow-Ups
+
+Priority: high.
 
 - [ ] validate Takeout import on representative public channels, supergroups, and small groups
-- [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup test case
-- [ ] validate shifted export DC behavior on a real session and confirm the warning path when fallback to home DC is used
+- [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
+- [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
+- [ ] decide and implement incomplete-import provenance, such as `ingest_batches`, item batch ids, or staging/promotion
 - [ ] decide how to handle migrated small-group history without corrupting `(source_id, external_id)` uniqueness
-- [ ] decide whether Takeout import should run the forum-topic auxiliary refresh after successful Takeout finish
+- [ ] decide whether Takeout import should refresh the forum-topic catalog after successful finish
 
-Acceptance criteria:
+Acceptance:
 
-- [ ] successful Takeout import updates `last_sync_state` and `last_synced_at`
-- [ ] failed or cancelled Takeout import leaves partial rows but does not advance source sync state
-- [ ] export DC fallback and only-my-messages fallback warnings are visible in job state
-- [ ] per-split TDesktop pagination fallback remains covered by tests and documented in code comments
+- Successful Takeout import updates `last_sync_state` and `last_synced_at`.
+- Failed or cancelled Takeout imports are distinguishable from complete history.
+- Export DC fallback and only-my-messages fallback warnings remain visible in job state.
+- Migrated supergroup history has a safe identity policy before import is enabled.
 
-Current notes:
-
-- Takeout history pagination is TDesktop-first, with per-split `DescendingFallback` only for empty-first-page or non-advancing cursor safety
-- a live public-channel run imported without a descending fallback warning
-- migrated supergroup history is detected but deliberately deferred because item ids can collide under the current uniqueness key
-
----
-
-### Phase 3. Saved Runs Discoverability
-
-Status: partial.
+### 4.4 Saved Runs Discoverability
 
 Priority: medium.
 
-Goal: make previous analysis runs easy to narrow down once archives become large.
+- [ ] add historical search/filtering by source, source group, provider, profile, model, template, and date
 
-Open work:
+Acceptance:
 
-- [ ] add richer historical search/filtering by source, source group, provider, profile, model, template, and date
+- Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-Acceptance criteria:
-
-- [ ] large saved-run histories can be narrowed quickly without reconstructing the original run context
-
-Current notes:
-
-- Saved Runs already default to global history
-- `Current scope` history filtering is already available
-- queued and running runs already live in a separate `Active Runs` panel
-- historical run summaries already prefer frozen `scope_label` snapshots
-
----
-
-### Phase 4. LLM Security And Concurrency
-
-Status: partial.
-
-Goal: make the LLM subsystem safer and more robust under parallel load.
-
-#### 4.2. Secure Secret Storage
-
-Status: open.
-
-Priority: high.
-
-Goal: keep sensitive credentials out of SQLite-backed storage and protected at rest.
-
-Scope:
-
-- [x] move LLM API keys to a secure store appropriate for Tauri desktop apps
-- [x] move Telegram `api_hash` values to account-scoped secure storage
-- [x] keep secrets profile-scoped or account-scoped as appropriate
-- [x] preserve existing settings through a lazy migration path
-- [x] decide whether and how to encrypt or migrate Telegram session JSON files
-- [ ] avoid logging secrets in backend errors, frontend status text, or debug output
-- Telegram session files remain in app data as `telegram_<account_id>.session.json`, but contents are encrypted with per-account keys stored in OS secure storage.
-
-Acceptance criteria:
-
-- [x] new LLM provider keys are not persisted in plain SQLite
-- [x] existing configured keys can be migrated or re-entered without breaking the app
-- [x] `/settings` can still edit provider settings without exposing secrets unnecessarily
-- [x] Telegram account `api_hash` values are no longer trivially inspectable from the local database
-- [x] Telegram session files have an explicit long-term storage decision
-
-#### 4.3. LLM Parallel Request Support
-
-Status: partial.
+### 4.5 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
-Goal: support multiple LLM requests at the same time without mixing stream state, progress state, or UI output.
+- [ ] add optional link enrichment with explicit user opt-in and cache
+- [ ] add source-group export if the analysis group workflow needs it
+- [ ] render forward context after sync persists forward metadata
+- [ ] decide whether export needs full Forum Topics names/grouping beyond stored `reply_to_top_id`
+- [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-Scope:
-
-- [x] decide whether per-provider and per-profile concurrency limits need explicit configuration beyond the current shared default
-- [x] cap analysis report runs before chunk workers are spawned
-
-Acceptance criteria:
-
-- [x] concurrency limits are intentional and documented
-- [x] request scheduling remains predictable under mixed interactive and background load
-- [x] oversized analysis scopes fail fast with a validation error before creating an analysis run
-
-Current notes:
-
-- LLM scheduler concurrency is intentionally `2` running requests per `(provider, profile)`.
-- Interactive requests jump ahead of background requests in the same scheduler key.
-- Analysis report runs are capped by backend preflight limits: `10_000` messages, `80` chunks, `1_500_000` estimated input characters, and `80` background requests per run.
-
----
-
-### Phase 5. Media Expansion
-
-Status: open.
-
-Goal: extend the current media-aware ingest into a fuller archival and analysis workflow.
-
-#### 5.1. Media Download And Preview
-
-Status: open.
+### 4.6 Media Download, Preview, And Analysis
 
 Priority: medium.
-
-Goal: extend media-aware ingest from metadata-only storage to optional binary media download and preview.
-
-Scope:
 
 - [ ] decide storage layout for downloaded media files
 - [ ] add download policy controls so media does not unexpectedly consume disk
 - [ ] render safe previews for common media types
-- [ ] preserve existing metadata-only behavior as the default or fallback
-- [ ] handle missing or deleted Telegram media gracefully
-
-Acceptance criteria:
-
-- [ ] users can opt into downloading media for selected sources or items
-- [ ] downloaded media is stored outside SQLite with stable metadata references
-- [ ] the analysis workspace can preview common downloaded media types
-
-#### 5.2. Media-Aware Analysis
-
-Status: open.
-
-Priority: medium.
-
-Goal: let analysis workflows account for media-bearing and media-only items in a controlled way.
-
-Scope:
-
 - [ ] define how media metadata should appear in text-only prompts
 - [ ] decide whether downloaded media can be sent to multimodal providers
 - [ ] add citation semantics for media evidence
-- [ ] update trace resolution and report viewer to handle media refs
 - [ ] keep text-only analysis available for providers without multimodal support
 
-Acceptance criteria:
+Acceptance:
 
-- [ ] reports can mention relevant media metadata with clear citations
-- [ ] media-only items do not silently disappear when the selected analysis mode supports them
-- [ ] non-multimodal providers degrade predictably
+- Users can opt into downloading media for selected sources or items.
+- Downloaded media is stored outside SQLite with stable metadata references.
+- Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
----
+### 4.7 Stabilization
 
-### Phase 6. Stabilization
+Priority: medium.
 
-Status: open.
-
-Goal: keep the verification baseline healthy as the remaining infrastructure work lands.
-
-- [ ] run `cargo clippy`
+- [ ] record current `cargo clippy --all-targets -- -D warnings` status and fix or explicitly allow remaining warnings
+- [ ] add a single documented full-project verification command or script
+- [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
+- [ ] pin `grammers-*` dependencies to an explicit `rev` or owned release policy
 - [ ] add frontend tests for `analysis-utils.ts` and `app-error.ts`
-- [ ] verify that Telegram and LLM event-driven UI flows still behave correctly after the next major backend changes
+- [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
+- [ ] audit backend errors, frontend status text, and debug output for accidental credential exposure
 
----
-
-## 6. Explicit Non-Goals
+## 5. Explicit Non-Goals
 
 | Idea | Decision | Why |
-|---|---|---|
+| --- | --- | --- |
 | Hexagonal architecture rewrite | do not do | too heavy for current scale |
 | Telegram trait abstraction mainly for tests | do not do | too much indirection for weak payoff |
 | Service-heavy frontend architecture | do not do | poor fit for this Svelte app |
 | E2E-first expansion before core stabilization | do not do | lower ROI than targeted storage and logic tests right now |
 | Splitting every large file automatically | do not do | only split where it lowers risk or unlocks backlog work |
 
----
+## 6. Execution Priority
 
-## 7. Execution Priority
+1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
+2. Close account-deletion coordination before more long-running ingest expansion.
+3. Validate Takeout import across representative source kinds and decide incomplete-import provenance.
+4. Decide whether saved-run history needs richer filters before media expansion.
+5. Continue media download/preview and media-aware analysis design.
+6. Tighten verification, CI, and dependency pinning.
 
-### Near-term priority
+## 7. Session Handoff
 
-1. finish the remaining Telegram runtime and private-source validation
-2. decide whether saved-run history now needs richer metadata/date filters before deeper Phase 4 work
-3. decide whether saved-run history now needs richer metadata/date filters before deeper media work
-
-### Next priority
-
-4. expand media download/preview and media-aware analysis
-5. tighten stabilization and test coverage around the new infrastructure
-
----
-
-## 8. Immediate Next Steps
-
-If implementation resumes directly from this file, the recommended opening sequence is:
-
-1. validate the remaining Telegram runtime cases on real accounts and dialogs
-2. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
-3. validate the shipped Takeout import path across representative source kinds and fallback cases
-4. continue media download/preview and media-aware analysis design when the saved-run filtering question is settled
-
-### Session Handoff
-
-Current implementation checkpoint:
-
-- current work should start from the open items above, not from already-shipped profile, snapshot, UI-separation, or LLM preflight work
-
-Recommended next step:
-
-- decide whether saved-run history now needs richer metadata/date filters before media expansion
-
----
-
-**Status:** active open backlog
+Start from the open items above. Do not resurrect completed Superpowers plans for secure storage, encrypted Telegram sessions, LLM preflight/concurrency, or `loadRunsForScope`; those are already represented in current-state docs and Git history.

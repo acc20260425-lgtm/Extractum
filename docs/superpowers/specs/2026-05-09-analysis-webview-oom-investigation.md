@@ -345,7 +345,7 @@ Risk is low:
 - Static checks and analysis tests pass.
 - Live memory behavior changed from unbounded growth to stable memory usage.
 
-## Follow-Up Recommendations
+## Prevention Notes
 
 1. When adding new `$effect` blocks, treat calls into route workflow functions as
    high-risk if they synchronously call `deps.getState()` and later patch any of
@@ -355,23 +355,3 @@ Risk is low:
    flows where possible, keeping `$effect` for narrow dependency-driven work.
 3. Keep the frontend architecture note on Svelte 5 `$effect` dependency tracking
    updated if more route workflow patterns are added.
-
-## Suggested Commit Message
-
-```text
-refactor(analysis): make saved-run loading scope explicit
-
-Add loadRunsForScope(params) so the analysis history effect can pass its
-intended dependency directly instead of entering the broad loadRuns()
-wrapper inside Svelte tracking.
-
-Keep loadRuns() as the convenience wrapper for event-driven refreshes.
-Update the route regression guard to require the explicit-scope loader
-and to reject the old broad wrapper from the history effect.
-
-Verification:
-- npm.cmd test -- analysis-run-workflow analysis-route-effects
-- npm.cmd run check
-- npm.cmd test -- analysis
-- git diff --check
-```
