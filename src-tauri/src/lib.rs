@@ -43,6 +43,10 @@ use youtube::jobs::{
     sync_youtube_playlist_video, sync_youtube_source, SourceJobState,
 };
 use youtube::preview::{add_youtube_source, preview_youtube_source};
+use youtube::settings::{
+    clear_youtube_auth, get_youtube_auth_status, get_youtube_settings, save_youtube_cookies,
+    save_youtube_settings,
+};
 
 mod notebooklm_export;
 use notebooklm_export::export_source_to_notebooklm;
@@ -167,7 +171,12 @@ pub fn run() {
             sync_youtube_playlist_video,
             cancel_source_job,
             list_source_jobs,
-            retry_failed_youtube_playlist_videos
+            retry_failed_youtube_playlist_videos,
+            get_youtube_settings,
+            save_youtube_settings,
+            get_youtube_auth_status,
+            save_youtube_cookies,
+            clear_youtube_auth
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

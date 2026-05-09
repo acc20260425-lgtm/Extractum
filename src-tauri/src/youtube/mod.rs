@@ -7,5 +7,6 @@ pub(crate) mod jobs;
 pub(crate) mod metadata;
 pub(crate) mod playlist;
 pub(crate) mod preview;
+pub(crate) mod settings;
 pub(crate) mod url;
 pub(crate) mod ytdlp;
