@@ -133,6 +133,7 @@ export type AnalysisReportStartState = {
   periodFrom: string;
   periodTo: string;
   outputLanguage: string;
+  profileId: string | null;
   modelOverride: string;
   youtubeCorpusMode: YoutubeCorpusMode;
 };
@@ -417,6 +418,7 @@ export function analysisReportStartCommand(
   }
 
   const modelOverride = state.modelOverride.trim();
+  const profileId = state.profileId?.trim() || null;
 
   return {
     ok: true,
@@ -428,7 +430,7 @@ export function analysisReportStartCommand(
       outputLanguage,
       promptTemplateId: Number(state.selectedTemplateId),
       modelOverride: modelOverride ? modelOverride : null,
-      profileId: null,
+      profileId,
       youtubeCorpusMode: state.youtubeCorpusMode,
     },
   };

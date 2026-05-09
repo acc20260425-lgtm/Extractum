@@ -25,6 +25,7 @@ export interface AnalysisChatWorkflowState {
   chatting: boolean;
   activeChatRequestId: string | null;
   activeChatRunId: number | null;
+  profileId: string | null;
   modelOverride: string;
 }
 
@@ -144,7 +145,7 @@ export function createAnalysisChatWorkflow(deps: AnalysisChatWorkflowDeps) {
         runId: run.id,
         question,
         modelOverride: state.modelOverride.trim() ? state.modelOverride.trim() : null,
-        profileId: null,
+        profileId: state.profileId?.trim() || null,
       });
       deps.patch({ activeChatRequestId: requestId });
     } catch (error) {

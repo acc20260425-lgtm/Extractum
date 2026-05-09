@@ -370,6 +370,7 @@ describe("analysis-run-workflow", () => {
       periodFrom: "2026-05-01",
       periodTo: "2026-05-03",
       outputLanguage: "Russian",
+      profileId: null,
       modelOverride: "",
       youtubeCorpusMode: "transcript_description",
     });
@@ -398,6 +399,7 @@ describe("analysis-run-workflow", () => {
       periodFrom: "2026-05-01",
       periodTo: "2026-05-03",
       outputLanguage: " Russian ",
+      profileId: "research",
       modelOverride: " ",
       youtubeCorpusMode: "transcript_description_comments",
     });
@@ -416,7 +418,7 @@ describe("analysis-run-workflow", () => {
       outputLanguage: "Russian",
       promptTemplateId: 5,
       modelOverride: null,
-      profileId: null,
+      profileId: "research",
       youtubeCorpusMode: "transcript_description_comments",
     }));
     expect(deps.setInitialLiveRun).toHaveBeenCalledWith(77);
@@ -437,6 +439,7 @@ describe("analysis-run-workflow", () => {
       periodFrom: "2026-05-01",
       periodTo: "2026-05-03",
       outputLanguage: "English",
+      profileId: null,
       modelOverride: "gemini-2.5-pro",
       youtubeCorpusMode: "transcript_only",
     });

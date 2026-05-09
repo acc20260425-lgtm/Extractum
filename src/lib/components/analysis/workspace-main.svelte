@@ -27,6 +27,7 @@
     ReportSegment,
     YoutubeCorpusMode,
   } from "$lib/types/analysis";
+  import type { LlmProfile, LlmProviderModel } from "$lib/types/llm";
   import type {
     SourceForumTopic,
     SourceItem,
@@ -58,7 +59,14 @@
     templates,
     outputLanguage,
     youtubeCorpusMode,
-    modelOverride,
+    llmProfiles,
+    activeLlmProfile,
+    selectedLlmProfileId,
+    selectedLlmModel,
+    customModelOverride,
+    llmProviderModels,
+    loadingLlmProviderModels,
+    llmModelStatus,
     startingReport,
     selectedSourceId,
     selectedGroupId,
@@ -118,7 +126,9 @@
     onChangeSelectedTemplateId,
     onChangeOutputLanguage,
     onChangeYoutubeCorpusMode,
-    onChangeModelOverride,
+    onChangeLlmProfile,
+    onChangeLlmModel,
+    onChangeCustomModelOverride,
     onRunReport,
     onSyncCurrentSource,
     onSyncYoutubeMetadata,
@@ -171,7 +181,14 @@
     templates: AnalysisPromptTemplate[];
     outputLanguage: string;
     youtubeCorpusMode: YoutubeCorpusMode;
-    modelOverride: string;
+    llmProfiles: LlmProfile[];
+    activeLlmProfile: string;
+    selectedLlmProfileId: string;
+    selectedLlmModel: string;
+    customModelOverride: string;
+    llmProviderModels: LlmProviderModel[];
+    loadingLlmProviderModels: boolean;
+    llmModelStatus: string;
     startingReport: boolean;
     selectedSourceId: string;
     selectedGroupId: string;
@@ -239,7 +256,9 @@
     onChangeSelectedTemplateId: (value: string) => void;
     onChangeOutputLanguage: (value: string) => void;
     onChangeYoutubeCorpusMode: (value: YoutubeCorpusMode) => void;
-    onChangeModelOverride: (value: string) => void;
+    onChangeLlmProfile: (value: string) => void;
+    onChangeLlmModel: (value: string) => void;
+    onChangeCustomModelOverride: (value: string) => void;
     onRunReport: () => void;
     onSyncCurrentSource: (sourceId: number) => void;
     onSyncYoutubeMetadata: (sourceId: number) => void | Promise<void>;
@@ -280,12 +299,19 @@
     onDeleteGroup: () => void;
   } = $props();
 
+  const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
+  const CUSTOM_MODEL_OPTION = "__custom_model__";
+
   const sourceContextKey = $derived(
     `${analysisScope}:${currentSource?.id ?? "none"}:${currentGroup?.id ?? "none"}:${currentRun?.id ?? "idle"}`,
   );
   const isYoutubeScope = $derived(
     (analysisScope === "single_source" && currentSource?.sourceType === "youtube") ||
       (analysisScope === "source_group" && currentGroup?.source_type === "youtube"),
+  );
+  const selectedRunProfile = $derived(
+    llmProfiles.find((profile) => profile.profile_id === (selectedLlmProfileId || activeLlmProfile)) ??
+      null,
   );
   const currentSourceContentLabel = $derived(currentSource ? sourceCapabilities(currentSource).contentLabel : "items");
 </script>
@@ -396,15 +422,55 @@
     </div>
 
     <div class="controls-bottom">
-      <label class="model-field">Model override
-        <Input
-          type="text"
-          value={modelOverride}
-          placeholder="Use active profile default model"
-          ariaLabel="Model override"
-          oninput={(event) => onChangeModelOverride((event.currentTarget as HTMLInputElement).value)}
-        />
-      </label>
+      <div class="run-model-controls">
+        <label>LLM profile
+          <Select
+            value={selectedLlmProfileId}
+            onchange={(event) => onChangeLlmProfile((event.currentTarget as HTMLSelectElement).value)}
+          >
+            <option value="">Use active profile ({activeLlmProfile || "default"})</option>
+            {#each llmProfiles as profile (profile.profile_id)}
+              <option value={profile.profile_id}>
+                {profile.profile_id} - {profile.provider}/{profile.default_model}
+              </option>
+            {/each}
+          </Select>
+        </label>
+
+        <label>Model
+          <Select
+            value={selectedLlmModel}
+            disabled={loadingLlmProviderModels}
+            onchange={(event) => onChangeLlmModel((event.currentTarget as HTMLSelectElement).value)}
+          >
+            <option value={PROFILE_DEFAULT_MODEL_OPTION}>
+              Profile default{selectedRunProfile?.default_model ? ` - ${selectedRunProfile.default_model}` : ""}
+            </option>
+            {#each llmProviderModels as model (model.model)}
+              <option value={model.model}>{model.display_name} - {model.model}</option>
+            {/each}
+            <option value={CUSTOM_MODEL_OPTION}>Custom model...</option>
+          </Select>
+        </label>
+
+        {#if selectedLlmModel === CUSTOM_MODEL_OPTION}
+          <label>Custom model
+            <Input
+              type="text"
+              value={customModelOverride}
+              placeholder="gemini-2.5-pro"
+              ariaLabel="Custom model"
+              oninput={(event) => onChangeCustomModelOverride((event.currentTarget as HTMLInputElement).value)}
+            />
+          </label>
+        {/if}
+
+        {#if llmModelStatus}
+          <span class:error={llmModelStatus.startsWith("Error")} class="model-status">
+            {llmModelStatus}
+          </span>
+        {/if}
+      </div>
       <div class="controls-actions">
         <Button onclick={onRunReport} disabled={startingReport || !selectedTemplateId || (analysisScope === "single_source" ? !selectedSourceId : !selectedGroupId)}>
           <Play size={15} aria-hidden="true" />
@@ -750,9 +816,24 @@
     flex-wrap: wrap;
   }
 
-  .model-field {
-    flex: 1 1 18rem;
-    min-width: 16rem;
+  .run-model-controls {
+    flex: 1 1 30rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    align-items: end;
+    min-width: min(100%, 24rem);
+  }
+
+  .model-status {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+
+  .error {
+    color: var(--danger);
   }
 
   label {
@@ -893,7 +974,8 @@
       grid-template-columns: 1fr;
     }
 
-    .model-field {
+    .run-model-controls {
+      grid-template-columns: 1fr;
       min-width: 0;
     }
 

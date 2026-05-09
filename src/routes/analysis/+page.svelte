@@ -41,7 +41,11 @@
     updateAnalysisPromptTemplate,
     updateAnalysisSourceGroup,
   } from "$lib/api/analysis-source-groups";
-  import { cancelLlmRequest } from "$lib/api/llm";
+  import {
+    cancelLlmRequest,
+    getLlmProfiles,
+    listLlmProviderModels,
+  } from "$lib/api/llm";
   import {
     cancelTakeoutSourceImport,
     listTakeoutSourceImportJobs,
@@ -176,6 +180,7 @@
   } from "$lib/analysis-source-state";
   import { sourceCapabilities } from "$lib/source-capabilities";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
+  import type { LlmProfile, LlmProviderModel } from "$lib/types/llm";
   import type {
     AnalysisGroupSourceType,
     AnalysisChatTurn,
@@ -207,6 +212,8 @@
   import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
 
   type InspectorMode = "active" | "history" | "trace" | "chunks";
+  const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
+  const CUSTOM_MODEL_OPTION = "__custom_model__";
 
   function createNotebookLmExportId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -225,6 +232,12 @@
   let youtubeSummaries = $state<Record<number, YoutubeSourceSummary>>({});
   let youtubeVideoDetail = $state<YoutubeVideoDetail | null>(null);
   let youtubePlaylistDetail = $state<YoutubePlaylistDetail | null>(null);
+  let llmProfiles = $state<LlmProfile[]>([]);
+  let activeLlmProfile = $state("default");
+  let selectedLlmProfileId = $state("");
+  let selectedLlmModel = $state(PROFILE_DEFAULT_MODEL_OPTION);
+  let customModelOverride = $state("");
+  let llmProviderModels = $state<LlmProviderModel[]>([]);
   let templates = $state<AnalysisPromptTemplate[]>([]);
   let runs = $state<AnalysisRunSummary[]>([]);
   let activeRuns = $state<AnalysisRunSummary[]>([]);
@@ -234,6 +247,7 @@
   let loadingItems = $state(false);
   let loadingSourceTopics = $state(false);
   let loadingYoutubeDetail = $state(false);
+  let loadingLlmProviderModels = $state(false);
   let loadingTemplates = $state(false);
   let loadingRuns = $state(false);
   let loadingActiveRuns = $state(false);
@@ -253,7 +267,7 @@
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
   let youtubeCorpusMode = $state<YoutubeCorpusMode>("transcript_description");
-  let modelOverride = $state("");
+  let llmModelStatus = $state("");
   let templateName = $state("");
   let templateBody = $state("");
   let editorBoundTemplateId = $state<number | null>(null);
@@ -307,6 +321,7 @@
     overwriteExisting: false,
   });
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
+  let llmModelsRequestKey = "";
 
   function isErrorStatus(value: string) {
     return value.startsWith("Error") || value.startsWith("Analysis failed");
@@ -401,6 +416,109 @@
 
   function sourceSyncDisabledReason(source: Source) {
     return getSourceSyncDisabledReason(source, accountStatuses, youtubeRuntimeStatus);
+  }
+
+  function dedupeProviderModels(models: LlmProviderModel[]) {
+    const unique: LlmProviderModel[] = [];
+    for (const model of models) {
+      if (!unique.some((entry) => entry.model === model.model)) {
+        unique.push(model);
+      }
+    }
+    return unique;
+  }
+
+  function runProfileId() {
+    return selectedLlmProfileId.trim() || null;
+  }
+
+  function runModelOverride() {
+    if (selectedLlmModel === CUSTOM_MODEL_OPTION) {
+      return customModelOverride.trim();
+    }
+    if (selectedLlmModel === PROFILE_DEFAULT_MODEL_OPTION) {
+      return "";
+    }
+    return selectedLlmModel;
+  }
+
+  function profileForModelLookup() {
+    const profileId = selectedLlmProfileId || activeLlmProfile || llmProfiles[0]?.profile_id;
+    return llmProfiles.find((profile) => profile.profile_id === profileId) ?? llmProfiles[0] ?? null;
+  }
+
+  async function loadRunProviderModels() {
+    const profile = profileForModelLookup();
+    if (!profile) {
+      llmProviderModels = [];
+      llmModelStatus = "";
+      loadingLlmProviderModels = false;
+      return;
+    }
+
+    const requestKey = `${profile.profile_id}:${profile.provider}:${profile.default_model}`;
+    llmModelsRequestKey = requestKey;
+    loadingLlmProviderModels = true;
+    llmModelStatus = "";
+
+    try {
+      const models = await listLlmProviderModels({
+        provider: profile.provider,
+        profileId: profile.profile_id,
+      });
+      if (llmModelsRequestKey !== requestKey) {
+        return;
+      }
+      llmProviderModels = dedupeProviderModels(models);
+      if (
+        selectedLlmModel !== PROFILE_DEFAULT_MODEL_OPTION &&
+        selectedLlmModel !== CUSTOM_MODEL_OPTION &&
+        !llmProviderModels.some((model) => model.model === selectedLlmModel)
+      ) {
+        selectedLlmModel = PROFILE_DEFAULT_MODEL_OPTION;
+      }
+    } catch (error) {
+      if (llmModelsRequestKey !== requestKey) {
+        return;
+      }
+      llmProviderModels = [];
+      llmModelStatus = formatAppError(`loading ${profile.provider} models`, error);
+    } finally {
+      if (llmModelsRequestKey === requestKey) {
+        loadingLlmProviderModels = false;
+      }
+    }
+  }
+
+  async function loadLlmProfiles() {
+    try {
+      const state = await getLlmProfiles();
+      llmProfiles = state.profiles;
+      activeLlmProfile = state.active_profile || "default";
+      if (
+        selectedLlmProfileId &&
+        !state.profiles.some((profile) => profile.profile_id === selectedLlmProfileId)
+      ) {
+        selectedLlmProfileId = "";
+      }
+      await loadRunProviderModels();
+    } catch (error) {
+      status = formatAppError("loading LLM profiles", error);
+    }
+  }
+
+  function changeLlmProfile(value: string) {
+    selectedLlmProfileId = value;
+    selectedLlmModel = PROFILE_DEFAULT_MODEL_OPTION;
+    customModelOverride = "";
+    void loadRunProviderModels();
+  }
+
+  function changeLlmModel(value: string) {
+    selectedLlmModel = value;
+    if (value !== CUSTOM_MODEL_OPTION) {
+      customModelOverride = "";
+    }
   }
 
   function applyTraceWorkflowPatch(patch: AnalysisTraceWorkflowPatch) {
@@ -619,7 +737,8 @@
       chatting,
       activeChatRequestId,
       activeChatRunId,
-      modelOverride,
+      profileId: runProfileId(),
+      modelOverride: runModelOverride(),
     }),
     patch: applyChatWorkflowPatch,
     listMessages: listAnalysisChatMessages,
@@ -977,7 +1096,8 @@
       periodFrom,
       periodTo,
       outputLanguage,
-      modelOverride,
+      profileId: runProfileId(),
+      modelOverride: runModelOverride(),
       youtubeCorpusMode: isYoutubeAnalysisScope ? youtubeCorpusMode : "transcript_description",
     });
   }
@@ -1367,6 +1487,7 @@
     void loadTemplates();
     void loadGroups();
     void loadActiveRuns();
+    void loadLlmProfiles();
     void loadYoutubeRuntimeStatus();
     void loadTakeoutImportJobs();
     void loadSourceJobs();
@@ -1531,7 +1652,14 @@
     {templates}
     {outputLanguage}
     {youtubeCorpusMode}
-    {modelOverride}
+    {llmProfiles}
+    {activeLlmProfile}
+    {selectedLlmProfileId}
+    {selectedLlmModel}
+    {customModelOverride}
+    {llmProviderModels}
+    {loadingLlmProviderModels}
+    {llmModelStatus}
     {startingReport}
     {selectedSourceId}
     {selectedGroupId}
@@ -1591,7 +1719,9 @@
     onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
     onChangeOutputLanguage={(value) => (outputLanguage = value)}
     onChangeYoutubeCorpusMode={(value) => (youtubeCorpusMode = value)}
-    onChangeModelOverride={(value) => (modelOverride = value)}
+    onChangeLlmProfile={changeLlmProfile}
+    onChangeLlmModel={changeLlmModel}
+    onChangeCustomModelOverride={(value) => (customModelOverride = value)}
     onRunReport={() => void runReport()}
     onSyncCurrentSource={(sourceId) => void syncSelectedSource(sourceId)}
     onSyncYoutubeMetadata={(sourceId) => void syncYoutubeMetadata(sourceId)}

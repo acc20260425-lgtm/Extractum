@@ -90,6 +90,7 @@ function createHarness(initial: Partial<HarnessState> = {}) {
     chatting: false,
     activeChatRequestId: null,
     activeChatRunId: null,
+    profileId: null,
     modelOverride: "",
     loadingChat: false,
     clearingChat: false,
@@ -183,6 +184,7 @@ describe("analysis-chat-workflow", () => {
     const { state, deps, workflow } = createHarness({
       chatQuestion: "  What changed?  ",
       chatMessages: [turn("assistant", "Ready")],
+      profileId: "research",
       modelOverride: " gemini-2.5-flash ",
     });
     deps.askQuestion.mockResolvedValueOnce("request-1");
@@ -202,7 +204,7 @@ describe("analysis-chat-workflow", () => {
       runId: 7,
       question: "What changed?",
       modelOverride: "gemini-2.5-flash",
-      profileId: null,
+      profileId: "research",
     });
   });
 
