@@ -20,6 +20,7 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
+  import YoutubeSettingsPanel from "$lib/components/settings/youtube-settings-panel.svelte";
   import type { LlmProfile, LlmProfilesState, LlmProviderModel, LlmUsage } from "$lib/types/llm";
 
   interface ProviderOption {
@@ -719,6 +720,8 @@
     </div>
 
     <div class="page-stack">
+      <YoutubeSettingsPanel />
+
       <section class="desk-panel desk-panel-subtle">
         <div class="panel-header">
           <div class="panel-header-copy">
