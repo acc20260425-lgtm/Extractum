@@ -290,6 +290,17 @@ pub(crate) async fn youtube_auth_status_from_state(
     })
 }
 
+pub(crate) async fn load_youtube_auth_cookies_from_state(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    secrets: &SecretStoreState,
+) -> AppResult<Option<String>> {
+    let settings = load_youtube_settings_from_pool(pool).await?;
+    if !settings.auth_enabled {
+        return Ok(None);
+    }
+    cookies::read_youtube_cookies(secrets).await
+}
+
 pub(crate) async fn save_youtube_cookies_to_state(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     secrets: &SecretStoreState,
@@ -376,7 +387,8 @@ mod tests {
     use crate::sources::test_support::memory_pool;
 
     use super::{
-        clear_youtube_auth_in_state, default_youtube_settings, load_youtube_settings_from_pool,
+        clear_youtube_auth_in_state, default_youtube_settings,
+        load_youtube_auth_cookies_from_state, load_youtube_settings_from_pool,
         save_youtube_cookies_to_state, save_youtube_settings_to_pool, validate_youtube_settings,
     };
 
@@ -512,5 +524,38 @@ mod tests {
         assert!(!cleared.enabled);
         assert!(!cleared.has_cookies);
         assert_eq!(cleared.message, "Auth disabled");
+    }
+
+    #[tokio::test]
+    async fn auth_cookies_load_only_when_auth_is_enabled() {
+        let pool = memory_pool().await;
+        let store = Arc::new(InMemorySecretStore::new());
+        let secrets = SecretStoreState::new(store);
+        let cookies = ".youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret-value\n".to_string();
+
+        save_youtube_cookies_to_state(&pool, &secrets, cookies.clone())
+            .await
+            .expect("save cookies");
+        assert_eq!(
+            load_youtube_auth_cookies_from_state(&pool, &secrets)
+                .await
+                .expect("load enabled cookies"),
+            Some(cookies)
+        );
+
+        let mut settings = load_youtube_settings_from_pool(&pool)
+            .await
+            .expect("load settings");
+        settings.auth_enabled = false;
+        save_youtube_settings_to_pool(&pool, &settings)
+            .await
+            .expect("disable auth");
+
+        assert_eq!(
+            load_youtube_auth_cookies_from_state(&pool, &secrets)
+                .await
+                .expect("load disabled cookies"),
+            None
+        );
     }
 }

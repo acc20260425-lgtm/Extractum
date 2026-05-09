@@ -24,6 +24,7 @@ pub(crate) struct YtdlpRunOptions {
     pub(crate) cookies: Option<String>,
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_ytdlp(args: &[String]) -> AppResult<YtdlpOutput> {
     run_ytdlp_with_options(
         args,

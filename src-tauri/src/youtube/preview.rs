@@ -3,6 +3,7 @@ use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::secret_store::SecretStoreState;
 use crate::sources::{
     load_source_record, upsert_youtube_playlist_source, upsert_youtube_video_source, SourceRecord,
 };
@@ -13,8 +14,12 @@ use super::metadata::{
     video_preview_from_metadata,
 };
 use super::playlist::upsert_playlist_items;
+use super::settings::load_youtube_auth_cookies_from_state;
 use super::url::{parse_youtube_url, YoutubeParsedUrl, YoutubeUrlKind};
-use super::ytdlp::{preview_playlist_args, preview_video_args, run_ytdlp};
+use super::ytdlp::{
+    preview_playlist_args, preview_video_args, run_ytdlp_with_options, YtdlpRunOptions,
+    YTDLP_PREVIEW_TIMEOUT,
+};
 
 pub(crate) enum YoutubeFetchedMetadata {
     Video(YoutubeVideoMetadata),
@@ -22,16 +27,27 @@ pub(crate) enum YoutubeFetchedMetadata {
 }
 
 #[tauri::command]
-pub async fn preview_youtube_source(url: String) -> AppResult<YoutubePreview> {
+pub async fn preview_youtube_source(
+    handle: AppHandle,
+    secrets: tauri::State<'_, SecretStoreState>,
+    url: String,
+) -> AppResult<YoutubePreview> {
     let parsed = parse_youtube_url(&url)?;
-    fetch_preview(parsed).await
+    let pool = get_pool(&handle).await?;
+    let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
+    fetch_preview(parsed, cookies).await
 }
 
 #[tauri::command]
-pub async fn add_youtube_source(handle: AppHandle, url: String) -> AppResult<SourceRecord> {
+pub async fn add_youtube_source(
+    handle: AppHandle,
+    secrets: tauri::State<'_, SecretStoreState>,
+    url: String,
+) -> AppResult<SourceRecord> {
     let parsed = parse_youtube_url(&url)?;
-    let metadata = fetch_metadata(parsed).await?;
     let pool = get_pool(&handle).await?;
+    let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
+    let metadata = fetch_metadata(parsed, cookies).await?;
     let mut tx = pool.begin().await.map_err(|e| AppError::database(e))?;
 
     let source_id = match metadata {
@@ -49,8 +65,11 @@ pub async fn add_youtube_source(handle: AppHandle, url: String) -> AppResult<Sou
     load_source_record(&handle, &pool, source_id).await
 }
 
-pub(crate) async fn fetch_preview(parsed: YoutubeParsedUrl) -> AppResult<YoutubePreview> {
-    let metadata = fetch_metadata(parsed).await?;
+pub(crate) async fn fetch_preview(
+    parsed: YoutubeParsedUrl,
+    cookies: Option<String>,
+) -> AppResult<YoutubePreview> {
+    let metadata = fetch_metadata(parsed, cookies).await?;
 
     Ok(match metadata {
         YoutubeFetchedMetadata::Video(metadata) => video_preview_from_metadata(&metadata),
@@ -58,14 +77,24 @@ pub(crate) async fn fetch_preview(parsed: YoutubeParsedUrl) -> AppResult<Youtube
     })
 }
 
-pub(crate) async fn fetch_metadata(parsed: YoutubeParsedUrl) -> AppResult<YoutubeFetchedMetadata> {
+pub(crate) async fn fetch_metadata(
+    parsed: YoutubeParsedUrl,
+    cookies: Option<String>,
+) -> AppResult<YoutubeFetchedMetadata> {
     let args = match parsed.kind {
         YoutubeUrlKind::Playlist { .. } => preview_playlist_args(&parsed.canonical_url),
         YoutubeUrlKind::Video { .. }
         | YoutubeUrlKind::Short { .. }
         | YoutubeUrlKind::Live { .. } => preview_video_args(&parsed.canonical_url),
     };
-    let output = run_ytdlp(&args).await?;
+    let output = run_ytdlp_with_options(
+        &args,
+        YtdlpRunOptions {
+            timeout: YTDLP_PREVIEW_TIMEOUT,
+            cookies,
+        },
+    )
+    .await?;
     let json = ytdlp_stdout_json(&output.stdout)?;
 
     metadata_from_ytdlp_json(&parsed, json)

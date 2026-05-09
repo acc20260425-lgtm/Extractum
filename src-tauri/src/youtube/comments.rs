@@ -1,11 +1,14 @@
+use std::time::Duration;
+
 use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
 
 use super::dto::{YoutubeComment, YoutubeVideoMetadata};
-use super::ytdlp::run_ytdlp;
+use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
 
 pub(crate) const DEFAULT_MAX_COMMENTS_PER_VIDEO: usize = 1_000;
+pub(crate) const YOUTUBE_COMMENTS_FETCH_TIMEOUT: Duration = YTDLP_PREVIEW_TIMEOUT;
 
 pub(crate) struct YoutubeCommentsIngest {
     pub(crate) comments: Vec<YoutubeComment>,
@@ -16,8 +19,16 @@ pub(crate) async fn fetch_comments_for_video(
     metadata: &YoutubeVideoMetadata,
     max_comments: usize,
     sync_started_at: i64,
+    cookies: Option<String>,
 ) -> AppResult<YoutubeCommentsIngest> {
-    let output = run_ytdlp(&comments_fetch_args(&metadata.canonical_url, max_comments)).await?;
+    let output = run_ytdlp_with_options(
+        &comments_fetch_args(&metadata.canonical_url, max_comments),
+        YtdlpRunOptions {
+            timeout: YOUTUBE_COMMENTS_FETCH_TIMEOUT,
+            cookies,
+        },
+    )
+    .await?;
     let json = ytdlp_stdout_json(&output.stdout)?;
     normalize_comments_from_ytdlp(json, max_comments, sync_started_at)
 }

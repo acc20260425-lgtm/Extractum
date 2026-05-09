@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -10,12 +11,15 @@ use super::dto::{
     YoutubeCaptionTrack, YoutubeCaptionTrackKind, YoutubeTranscript, YoutubeTranscriptSegment,
     YoutubeVideoMetadata,
 };
-use super::ytdlp::run_ytdlp;
+use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
+
+pub(crate) const YOUTUBE_CAPTION_DOWNLOAD_TIMEOUT: Duration = YTDLP_PREVIEW_TIMEOUT;
 
 pub(crate) async fn fetch_transcript_for_video(
     metadata: &YoutubeVideoMetadata,
     preferred_language: Option<&str>,
     override_language: Option<&str>,
+    cookies: Option<String>,
 ) -> AppResult<YoutubeTranscript> {
     let tracks = caption_tracks_from_metadata(metadata);
     let track = select_caption_track(
@@ -36,7 +40,14 @@ pub(crate) async fn fetch_transcript_for_video(
     let output_template = temp_dir.path().join("%(id)s.%(ext)s");
     let output_template = output_template.to_string_lossy().to_string();
     let args = caption_download_args(&metadata.canonical_url, language, &output_template);
-    run_ytdlp(&args).await?;
+    run_ytdlp_with_options(
+        &args,
+        YtdlpRunOptions {
+            timeout: YOUTUBE_CAPTION_DOWNLOAD_TIMEOUT,
+            cookies,
+        },
+    )
+    .await?;
 
     let caption_file = find_caption_payload(temp_dir.path())?;
     let payload = fs::read_to_string(&caption_file)

@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 use crate::compression::decompress_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::secret_store::SecretStoreState;
 use crate::sources::{
     load_source, upsert_youtube_comment_item, upsert_youtube_playlist_source,
     upsert_youtube_transcript_item, upsert_youtube_video_source, SourceSyncTarget,
@@ -19,6 +20,7 @@ use super::comments::{fetch_comments_for_video, DEFAULT_MAX_COMMENTS_PER_VIDEO};
 use super::dto::{YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata};
 use super::metadata::{fetch_playlist_metadata, fetch_video_metadata};
 use super::playlist::upsert_playlist_items;
+use super::settings::load_youtube_auth_cookies_from_state;
 
 pub(crate) const SOURCE_JOB_EVENT: &str = "sources://source-job";
 
@@ -477,6 +479,8 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
     let pool = get_pool(handle).await?;
     let source = load_source(&pool, source_id).await?;
     ensure_youtube_source(&source)?;
+    let secrets = handle.state::<SecretStoreState>();
+    let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
 
     enum MetadataSyncPayload {
         Video(YoutubeVideoMetadata),
@@ -485,7 +489,7 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
 
     let payload = match source.source_subtype.as_deref() {
         Some("playlist") => MetadataSyncPayload::Playlist(
-            fetch_playlist_metadata(&playlist_canonical_url(&source)).await?,
+            fetch_playlist_metadata(&playlist_canonical_url(&source), cookies).await?,
         ),
         _ => {
             let existing = decode_video_metadata(&source);
@@ -497,7 +501,9 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
                 .as_ref()
                 .map(|metadata| metadata.video_form.clone())
                 .unwrap_or(YoutubeVideoForm::Regular);
-            MetadataSyncPayload::Video(fetch_video_metadata(&canonical_url, video_form).await?)
+            MetadataSyncPayload::Video(
+                fetch_video_metadata(&canonical_url, video_form, cookies).await?,
+            )
         }
     };
 
@@ -535,10 +541,13 @@ async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResul
         AppError::validation(format!("Source {source_id} has no YouTube video metadata"))
     })?;
     let preferred_language = load_preferred_caption_language(&pool).await?;
+    let secrets = handle.state::<SecretStoreState>();
+    let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
     let transcript = fetch_transcript_for_video(
         &metadata,
         Some(preferred_language.as_str()),
         caption_language_override(&metadata).as_deref(),
+        cookies,
     )
     .await?;
     if transcript.segments.is_empty() {
@@ -602,8 +611,15 @@ async fn sync_youtube_comments(handle: &AppHandle, source_id: i64) -> AppResult<
     let metadata = decode_video_metadata(&source).ok_or_else(|| {
         AppError::validation(format!("Source {source_id} has no YouTube video metadata"))
     })?;
-    let comments =
-        fetch_comments_for_video(&metadata, DEFAULT_MAX_COMMENTS_PER_VIDEO, now_secs()).await?;
+    let secrets = handle.state::<SecretStoreState>();
+    let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
+    let comments = fetch_comments_for_video(
+        &metadata,
+        DEFAULT_MAX_COMMENTS_PER_VIDEO,
+        now_secs(),
+        cookies,
+    )
+    .await?;
 
     let mut tx = pool.begin().await.map_err(AppError::database)?;
     for comment in &comments.comments {
