@@ -2,7 +2,7 @@
 
 Date: 2026-05-09
 Area: Tauri WebView / Svelte analysis workspace
-Status: Root cause found and patched locally
+Status: Root cause found, fixed, and committed
 
 ## Summary
 
@@ -11,14 +11,15 @@ WebView renderer process. The Rust backend stayed small and healthy, while the
 `msedgewebview2` renderer grew into multi-gigabyte memory usage and eventually
 became unresponsive or crashed.
 
-The root cause was a Svelte 5 `$effect` that called `loadRuns()` directly. Because
-Svelte tracks synchronous state reads inside functions called by an effect, the
-effect subscribed to additional state read by the run-loading workflow. The
-workflow also patches route state (`loadingRuns`, `runs`, and related state),
-which caused repeated reactive work and rapid JS heap growth on the analysis
-page.
+The root cause was a Svelte 5 `$effect` that called `loadRuns()` directly. The
+call synchronously entered the run-loading workflow, whose `deps.getState()`
+read a broader route-state object than the effect intended. Because Svelte
+tracks synchronous state reads inside functions called by an effect, the effect
+subscribed to `runs` in addition to `historyScopeParams`. When the loader later
+patched `runs`, the effect re-ran and scheduled another load, causing repeated
+reactive work and rapid JS heap growth on the analysis page.
 
-The local fix wraps the asynchronous `loadRuns()` call in `untrack`, keeping the
+The fix wraps the asynchronous `loadRuns()` call in `untrack`, keeping the
 effect dependent only on `historyScopeParams`:
 
 ```ts
@@ -134,8 +135,9 @@ active compute.
 ### IPC Monitoring
 
 IPC monitoring did not show a flood of backend commands such as
-`list_analysis_runs`. This reduced confidence in a backend polling loop as the
-primary cause.
+`list_analysis_runs`. This reduced confidence in a backend-driven polling loop
+as the primary cause. It did not rule out frontend-triggered repeated loads; it
+only made the backend unlikely to be the source of the loop.
 
 The issue was therefore narrowed to frontend reactivity/runtime memory, not
 backend request volume.
@@ -158,11 +160,17 @@ $effect(() => {
 Svelte 5 tracks state and derived values synchronously read inside `$effect`,
 including reads that happen indirectly through called functions.
 
-`loadRuns()` delegates to the analysis run workflow. That workflow reads current
-route/workflow state and patches route state while loading saved runs. Because
-the call happened inside the effect's tracking context, the effect subscribed to
-more state than intended. The resulting dependency loop caused repeated reactive
-work and large retained JS heap on `/analysis`.
+`loadRuns()` delegates to the analysis run workflow. That workflow starts by
+calling `deps.getState()`, and the route-level `getState` function builds an
+object containing `historyScopeParams`, `activeRunId`, `currentRun`, `runs`,
+`activeRuns`, and deletion state. Because the call happened inside the effect's
+tracking context, all of those synchronous reads were eligible to become effect
+dependencies.
+
+The feedback edge was `runs`: the effect accidentally subscribed to it, then the
+loader later patched `runs` after `listRuns` returned. That patch re-triggered
+the effect, which scheduled another run load. The resulting dependency loop
+caused repeated reactive work and large retained JS heap on `/analysis`.
 
 The intended dependency is only `historyScopeParams`.
 
@@ -273,6 +281,9 @@ JS heap used:  about 17 MB
 Renderer working set: about 172.8 MB
 Renderer private memory: about 131.7 MB
 ```
+
+No automated test currently asserts renderer memory stability. The regression
+was validated with the live MCP memory check above.
 
 ## Files Changed
 
