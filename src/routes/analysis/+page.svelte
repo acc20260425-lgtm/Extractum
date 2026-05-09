@@ -51,9 +51,18 @@
   import {
     listSourceJobs,
     listenToSourceJobEvents,
+    cancelSourceJob,
+    retryFailedYoutubePlaylistVideos,
+    syncYoutubePlaylistVideo,
     syncYoutubeSource,
     type SourceJobRecord,
   } from "$lib/api/source-jobs";
+  import {
+    getYoutubePlaylistDetail,
+    getYoutubeRuntimeStatus,
+    getYoutubeVideoDetail,
+    listYoutubeSourceSummaries,
+  } from "$lib/api/youtube-detail";
   import {
     exportSourceToNotebookLm,
     listenToNotebookLmExportEvents,
@@ -165,6 +174,7 @@
     sourceInitial,
     sourceSyncDisabledReason as getSourceSyncDisabledReason,
   } from "$lib/analysis-source-state";
+  import { sourceCapabilities } from "$lib/source-capabilities";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type {
     AnalysisGroupSourceType,
@@ -188,6 +198,12 @@
     TakeoutImportEvent,
     TakeoutImportJobRecord,
   } from "$lib/types/sources";
+  import type {
+    YoutubePlaylistDetail,
+    YoutubeRuntimeStatus,
+    YoutubeSourceSummary,
+    YoutubeVideoDetail,
+  } from "$lib/types/youtube";
   import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
 
   type InspectorMode = "active" | "history" | "trace" | "chunks";
@@ -205,6 +221,10 @@
   let sourceTopics = $state<SourceForumTopic[]>([]);
   let accounts = $state<AccountRecord[]>([]);
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
+  let youtubeRuntimeStatus = $state<YoutubeRuntimeStatus | null>(null);
+  let youtubeSummaries = $state<Record<number, YoutubeSourceSummary>>({});
+  let youtubeVideoDetail = $state<YoutubeVideoDetail | null>(null);
+  let youtubePlaylistDetail = $state<YoutubePlaylistDetail | null>(null);
   let templates = $state<AnalysisPromptTemplate[]>([]);
   let runs = $state<AnalysisRunSummary[]>([]);
   let activeRuns = $state<AnalysisRunSummary[]>([]);
@@ -213,6 +233,7 @@
   let loadingSourceCatalog = $state(false);
   let loadingItems = $state(false);
   let loadingSourceTopics = $state(false);
+  let loadingYoutubeDetail = $state(false);
   let loadingTemplates = $state(false);
   let loadingRuns = $state(false);
   let loadingActiveRuns = $state(false);
@@ -314,7 +335,13 @@
 
     if (decision.reloadSelectedSourceId !== null) {
       const sourceId = decision.reloadSelectedSourceId;
-      void loadSourceTopics(sourceId, { preserveSelection: true }).then(() => loadItems(sourceId));
+      const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
+      void Promise.all([
+        source && sourceCapabilities(source).hasTopics
+          ? loadSourceTopics(sourceId, { preserveSelection: true })
+          : Promise.resolve(),
+        loadItems(sourceId),
+      ]);
     }
   }
 
@@ -340,6 +367,11 @@
 
   function currentSourceMetric() {
     return currentAnalysisSourceMetric(currentSource(), sourceMetrics);
+  }
+
+  function currentSourceJobs() {
+    const source = currentSource();
+    return source ? sourceJobsBySource[source.id] ?? [] : [];
   }
 
   function currentGroup() {
@@ -368,7 +400,7 @@
   }
 
   function sourceSyncDisabledReason(source: Source) {
-    return getSourceSyncDisabledReason(source, accountStatuses);
+    return getSourceSyncDisabledReason(source, accountStatuses, youtubeRuntimeStatus);
   }
 
   function applyTraceWorkflowPatch(patch: AnalysisTraceWorkflowPatch) {
@@ -719,6 +751,35 @@
 
   async function loadSourceCatalog() {
     await workspaceWorkflow.loadSourceCatalog();
+    await loadYoutubeSummaries();
+  }
+
+  async function loadYoutubeRuntimeStatus() {
+    try {
+      youtubeRuntimeStatus = await getYoutubeRuntimeStatus();
+    } catch (error) {
+      status = formatAppError("checking YouTube runtime", error);
+    }
+  }
+
+  async function loadYoutubeSummaries() {
+    const sourceIds = sourceCatalog
+      .filter((source) => source.sourceType === "youtube")
+      .map((source) => source.id);
+    if (sourceIds.length === 0) {
+      youtubeSummaries = {};
+      return;
+    }
+
+    try {
+      const summaries = await listYoutubeSourceSummaries(sourceIds);
+      youtubeSummaries = Object.fromEntries(
+        summaries.map((summary) => [summary.sourceId, summary]),
+      );
+    } catch (error) {
+      youtubeSummaries = {};
+      status = formatAppError("loading YouTube summaries", error);
+    }
   }
 
   async function loadTakeoutImportJobs() {
@@ -734,6 +795,14 @@
     sourceId: number,
     { preserveSelection = false }: { preserveSelection?: boolean } = {},
   ) {
+    const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
+    if (source && !sourceCapabilities(source).hasTopics) {
+      sourceTopics = [];
+      selectedTopicKey = "__all_topics__";
+      loadingSourceTopics = false;
+      return;
+    }
+
     const preferredKey = preserveSelection ? selectedTopicKey : "__all_topics__";
     loadingSourceTopics = true;
     try {
@@ -751,12 +820,13 @@
 
   async function loadItems(sourceId: number) {
     loadingItems = true;
+    const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
     try {
       sourceItems = await listSourceItems({
         sourceId,
         limit: 120,
         beforePublishedAt: null,
-        topicFilter: currentTopicFilter(),
+        topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null,
       });
     } catch (error) {
       sourceItems = [];
@@ -768,12 +838,22 @@
 
   async function selectSource(sourceId: number) {
     const next = analysisSourceSelectionState(sourceId);
+    const source = sourceCatalog.find((candidate) => candidate.id === sourceId) ?? null;
     analysisScope = next.analysisScope;
     selectedSourceId = next.selectedSourceId;
     selectedTopicKey = next.selectedTopicKey;
     inspectorMode = next.inspectorMode;
-    await loadSourceTopics(sourceId);
-    await loadItems(sourceId);
+    youtubeVideoDetail = null;
+    youtubePlaylistDetail = null;
+    if (!source || !sourceCapabilities(source).hasTopics) {
+      sourceTopics = [];
+      selectedTopicKey = "__all_topics__";
+    }
+    await Promise.all([
+      source && sourceCapabilities(source).hasTopics ? loadSourceTopics(sourceId) : Promise.resolve(),
+      loadItems(sourceId),
+      source?.sourceType === "youtube" ? loadYoutubeDetail(source) : Promise.resolve(),
+    ]);
   }
 
   function selectGroup(groupId: number) {
@@ -782,6 +862,8 @@
     selectedGroupId = next.selectedGroupId;
     sourceTopics = next.sourceTopics;
     selectedTopicKey = next.selectedTopicKey;
+    youtubeVideoDetail = null;
+    youtubePlaylistDetail = null;
     inspectorMode = next.inspectorMode;
   }
 
@@ -793,6 +875,25 @@
     selectedTopicKey = nextKey;
     if (selectedSourceId) {
       await loadItems(Number(selectedSourceId));
+    }
+  }
+
+  async function loadYoutubeDetail(source: Source) {
+    loadingYoutubeDetail = true;
+    try {
+      if (source.sourceSubtype === "playlist") {
+        youtubePlaylistDetail = await getYoutubePlaylistDetail(source.id);
+        youtubeVideoDetail = null;
+      } else {
+        youtubeVideoDetail = await getYoutubeVideoDetail(source.id);
+        youtubePlaylistDetail = null;
+      }
+    } catch (error) {
+      youtubeVideoDetail = null;
+      youtubePlaylistDetail = null;
+      status = formatAppError("loading YouTube detail", error);
+    } finally {
+      loadingYoutubeDetail = false;
     }
   }
 
@@ -916,14 +1017,111 @@
         await Promise.all([loadSourceCatalog(), loadActiveRuns(), loadRuns()]);
 
         if (selectedSourceId === String(sourceId)) {
-          await loadSourceTopics(sourceId, { preserveSelection: true });
-          await loadItems(sourceId);
+          await Promise.all([
+            sourceCapabilities(source).hasTopics
+              ? loadSourceTopics(sourceId, { preserveSelection: true })
+              : Promise.resolve(),
+            loadItems(sourceId),
+          ]);
         }
       }
     } catch (error) {
       status = formatAppError("syncing the source", error);
     } finally {
       syncingIds = clearSourceActionPending(syncingIds, sourceId);
+    }
+  }
+
+  async function startYoutubeJob(
+    sourceId: number,
+    action: () => Promise<SourceJobRecord>,
+    successMessage: string,
+  ) {
+    syncingIds = sourceActionPending(syncingIds, sourceId);
+    try {
+      const job = await action();
+      applySourceJob(job);
+      status = successMessage;
+    } catch (error) {
+      status = formatAppError("starting YouTube source job", error);
+      syncingIds = clearSourceActionPending(syncingIds, sourceId);
+    }
+  }
+
+  async function syncYoutubeMetadata(sourceId: number) {
+    await startYoutubeJob(
+      sourceId,
+      () => syncYoutubeSource(sourceId, { metadata: true, transcripts: false, comments: false }),
+      "YouTube metadata sync started.",
+    );
+  }
+
+  async function syncYoutubeTranscript(sourceId: number) {
+    await startYoutubeJob(
+      sourceId,
+      () => syncYoutubeSource(sourceId, { metadata: false, transcripts: true, comments: false }),
+      "YouTube transcript sync started.",
+    );
+  }
+
+  async function syncYoutubeComments(sourceId: number) {
+    await startYoutubeJob(
+      sourceId,
+      () => syncYoutubeSource(sourceId, { metadata: false, transcripts: false, comments: true }),
+      "YouTube comments sync started.",
+    );
+  }
+
+  async function syncYoutubePlaylist(sourceId: number) {
+    await startYoutubeJob(
+      sourceId,
+      () => syncYoutubeSource(sourceId, { metadata: true, transcripts: true, comments: false }),
+      "YouTube playlist sync started.",
+    );
+  }
+
+  async function retryYoutubePlaylist(sourceId: number) {
+    await startYoutubeJob(
+      sourceId,
+      () => retryFailedYoutubePlaylistVideos(sourceId, {
+        metadata: false,
+        transcripts: true,
+        comments: false,
+      }),
+      "YouTube playlist retry started.",
+    );
+  }
+
+  async function syncYoutubePlaylistVideoRow(playlistSourceId: number, videoSourceId: number) {
+    await startYoutubeJob(
+      playlistSourceId,
+      () => syncYoutubePlaylistVideo(playlistSourceId, videoSourceId, {
+        metadata: true,
+        transcripts: true,
+        comments: false,
+      }),
+      "YouTube playlist video sync started.",
+    );
+  }
+
+  async function retryYoutubePlaylistVideoRow(playlistSourceId: number, videoSourceId: number) {
+    await startYoutubeJob(
+      playlistSourceId,
+      () => syncYoutubePlaylistVideo(playlistSourceId, videoSourceId, {
+        metadata: false,
+        transcripts: true,
+        comments: false,
+      }),
+      "YouTube playlist video retry started.",
+    );
+  }
+
+  async function cancelYoutubeSourceJob(jobId: string) {
+    try {
+      await cancelSourceJob(jobId);
+      status = "YouTube source job cancel requested.";
+    } catch (error) {
+      status = formatAppError("cancelling YouTube source job", error);
     }
   }
 
@@ -958,8 +1156,15 @@
     }
 
     if (selectedSourceId) {
-      await loadSourceTopics(Number(selectedSourceId), { preserveSelection: true });
-      await loadItems(Number(selectedSourceId));
+      const sourceId = Number(selectedSourceId);
+      const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
+      await Promise.all([
+        source && sourceCapabilities(source).hasTopics
+          ? loadSourceTopics(sourceId, { preserveSelection: true })
+          : Promise.resolve(),
+        loadItems(sourceId),
+        source?.sourceType === "youtube" ? loadYoutubeDetail(source) : Promise.resolve(),
+      ]);
       return;
     }
 
@@ -1145,14 +1350,21 @@
     void loadAccounts();
     void loadSourceCatalog().then(() => {
       if (selectedSourceId) {
-        void loadSourceTopics(Number(selectedSourceId)).then(() =>
-          loadItems(Number(selectedSourceId)),
-        );
+        const sourceId = Number(selectedSourceId);
+        const selected = sourceCatalog.find((source) => source.id === sourceId);
+        void Promise.all([
+          selected && sourceCapabilities(selected).hasTopics
+            ? loadSourceTopics(sourceId)
+            : Promise.resolve(),
+          loadItems(sourceId),
+          selected?.sourceType === "youtube" ? loadYoutubeDetail(selected) : Promise.resolve(),
+        ]);
       }
     });
     void loadTemplates();
     void loadGroups();
     void loadActiveRuns();
+    void loadYoutubeRuntimeStatus();
     void loadTakeoutImportJobs();
     void loadSourceJobs();
 
@@ -1221,6 +1433,13 @@
       syncingIds = isActiveSourceJob(job)
         ? sourceActionPending(syncingIds, job.source_id)
         : clearSourceActionPending(syncingIds, job.source_id);
+      if (!isActiveSourceJob(job)) {
+        void loadYoutubeSummaries();
+        const selected = currentSource();
+        if (selected?.sourceType === "youtube") {
+          void loadYoutubeDetail(selected);
+        }
+      }
     }).then((unlisten) => {
       if (disposed) {
         unlisten();
@@ -1277,6 +1496,8 @@
     {deletingSourceIds}
     {startingTakeoutSourceIds}
     {takeoutJobsBySource}
+    {youtubeSummaries}
+    {youtubeRuntimeStatus}
     {formatTimestamp}
     {accountLabel}
     {sourceInitial}
@@ -1346,6 +1567,10 @@
     {deletingGroup}
     sourceMetricsList={Object.values(sourceMetrics)}
     {syncingIds}
+    sourceJobs={currentSourceJobs()}
+    {youtubeVideoDetail}
+    {youtubePlaylistDetail}
+    {loadingYoutubeDetail}
     {formatTimestamp}
     {formatPeriod}
     {runTargetLabel}
@@ -1366,6 +1591,15 @@
     onChangeModelOverride={(value) => (modelOverride = value)}
     onRunReport={() => void runReport()}
     onSyncCurrentSource={(sourceId) => void syncSelectedSource(sourceId)}
+    onSyncYoutubeMetadata={(sourceId) => void syncYoutubeMetadata(sourceId)}
+    onSyncYoutubeTranscript={(sourceId) => void syncYoutubeTranscript(sourceId)}
+    onSyncYoutubeComments={(sourceId) => void syncYoutubeComments(sourceId)}
+    onSyncYoutubePlaylist={(sourceId) => void syncYoutubePlaylist(sourceId)}
+    onRetryFailedYoutubePlaylistVideos={(sourceId) => void retryYoutubePlaylist(sourceId)}
+    onSyncYoutubePlaylistVideo={(playlistSourceId, videoSourceId) => void syncYoutubePlaylistVideoRow(playlistSourceId, videoSourceId)}
+    onRetryYoutubePlaylistVideo={(playlistSourceId, videoSourceId) => void retryYoutubePlaylistVideoRow(playlistSourceId, videoSourceId)}
+    onCancelSourceJob={(jobId) => void cancelYoutubeSourceJob(jobId)}
+    onOpenSource={(sourceId) => void selectSource(sourceId)}
     {exportDialogOpen}
     {notebookLmExportForm}
     notebookLmExportResult={notebookLmExportResult}

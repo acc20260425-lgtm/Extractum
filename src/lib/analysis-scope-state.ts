@@ -59,9 +59,9 @@ export function currentAnalysisScopeSummary(
 
   if (!source) return "Select a synced source to inspect messages and launch a report.";
   if (metrics) {
-    return `${metrics.item_count} synced messages available locally for analysis.`;
+    return `${metrics.item_count} synced items available locally for analysis.`;
   }
-  return "This source is available in the workspace but has no synced message count yet.";
+  return "This source is available in the workspace but has no synced item count yet.";
 }
 
 export function analysisHistoryScopeParams(

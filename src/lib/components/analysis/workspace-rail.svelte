@@ -6,6 +6,7 @@
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
   import type { Source, TakeoutImportJobRecord } from "$lib/types/sources";
+  import type { YoutubeRuntimeStatus, YoutubeSourceSummary } from "$lib/types/youtube";
   import type { BadgeVariant } from "$lib/components/ui/types";
 
   let {
@@ -24,6 +25,8 @@
     deletingSourceIds,
     startingTakeoutSourceIds,
     takeoutJobsBySource,
+    youtubeSummaries,
+    youtubeRuntimeStatus,
     formatTimestamp,
     accountLabel,
     sourceInitial,
@@ -54,6 +57,8 @@
     deletingSourceIds: Record<number, boolean>;
     startingTakeoutSourceIds: Record<number, boolean>;
     takeoutJobsBySource: Record<number, TakeoutImportJobRecord>;
+    youtubeSummaries: Record<number, YoutubeSourceSummary>;
+    youtubeRuntimeStatus: YoutubeRuntimeStatus | null;
     formatTimestamp: (value: number) => string;
     accountLabel: (accountId: number | null) => string;
     sourceInitial: (source: Source) => string;
@@ -153,6 +158,28 @@
   function takeoutSummary(job: TakeoutImportJobRecord) {
     return `${job.inserted} inserted, ${job.skipped} skipped`;
   }
+
+  function youtubeMetaLine(summary: YoutubeSourceSummary | null) {
+    if (!summary) return null;
+    return [summary.channelHandle ?? summary.channelTitle, formatDuration(summary.durationSeconds)]
+      .filter(Boolean)
+      .join(" · ") || null;
+  }
+
+  function formatDuration(value: number | null) {
+    if (value === null) return null;
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const seconds = value % 60;
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function availabilityLabel(value: string | null) {
+    return value ? value.replaceAll("_", " ") : null;
+  }
 </script>
 
 <aside class="rail">
@@ -197,6 +224,8 @@
           {@const capabilities = sourceCapabilities(source)}
           {@const kindLabel = sourceKindLabel(source)}
           {@const sourceMembershipLabel = membershipLabel(source)}
+          {@const youtubeSummary = source.sourceType === "youtube" ? youtubeSummaries[source.id] ?? null : null}
+          {@const youtubeSub = youtubeMetaLine(youtubeSummary)}
           {@const runtime = runtimeStatus(source.accountId)}
           {@const runtimeStateBadge = runtimeBadge(runtime)}
           {@const isSelected = analysisScope === "single_source" && selectedSourceId === String(source.id)}
@@ -212,31 +241,56 @@
               onclick={() => onSelectSource(source.id)}
             >
               <div class="rail-avatar" aria-hidden="true">
-                {#if source.avatarDataUrl}
-                  <img src={source.avatarDataUrl} alt="" loading="lazy" />
+                {#if youtubeSummary?.thumbnailUrl ?? source.avatarDataUrl}
+                  <img src={youtubeSummary?.thumbnailUrl ?? source.avatarDataUrl ?? ""} alt="" loading="lazy" />
                 {:else}
                   <span>{sourceInitial(source)}</span>
                 {/if}
               </div>
               <div class="rail-copy">
                 <div class="rail-copy-top">
-                  <strong>{source.title ?? source.externalId}</strong>
+                  <strong>{youtubeSummary?.title ?? source.title ?? source.externalId}</strong>
                   {#if metrics?.last_synced_at}
                     <span>{formatTimestamp(metrics.last_synced_at)}</span>
                   {/if}
                 </div>
                 <div class="rail-copy-meta">
-                  <span>{accountLabel(source.accountId)}</span>
+                  <span>{youtubeSub ?? accountLabel(source.accountId)}</span>
                   <span>{kindLabel}</span>
                   {#if metrics}
-                    <span>{metrics.item_count} msgs</span>
+                    <span>{metrics.item_count} {capabilities.contentLabel}</span>
+                  {/if}
+                  {#if youtubeSummary?.videoCount !== null && youtubeSummary?.videoCount !== undefined}
+                    <span>{youtubeSummary.videoCount} videos</span>
+                  {/if}
+                  {#if youtubeSummary?.linkedVideoCount !== null && youtubeSummary?.linkedVideoCount !== undefined}
+                    <span>{youtubeSummary.linkedVideoCount} linked</span>
                   {/if}
                 </div>
               </div>
             </button>
             <div class="rail-row-actions">
+              {#if source.sourceType === "youtube" && youtubeRuntimeStatus && !youtubeRuntimeStatus.ytdlpAvailable}
+                <Badge variant="warning" title={youtubeRuntimeStatus.message}>yt-dlp unavailable</Badge>
+              {/if}
               {#if capabilities.hasMembershipState && sourceMembershipLabel}
                 <Badge>{sourceMembershipLabel}</Badge>
+              {/if}
+              {#if youtubeSummary}
+                <Badge variant={youtubeSummary.captions.state === "synced" ? "success" : youtubeSummary.captions.state === "unavailable" ? "warning" : "neutral"}>
+                  {youtubeSummary.captions.label}
+                </Badge>
+                <Badge variant={youtubeSummary.comments.state === "synced" ? "success" : "neutral"}>
+                  {youtubeSummary.comments.label}
+                </Badge>
+                {#if availabilityLabel(youtubeSummary.availabilityStatus)}
+                  <Badge variant={youtubeSummary.availabilityStatus === "available" ? "neutral" : "warning"}>
+                    {availabilityLabel(youtubeSummary.availabilityStatus)}
+                  </Badge>
+                {/if}
+                {#if youtubeSummary.canonicalUrl}
+                  <a class="youtube-link" href={youtubeSummary.canonicalUrl} target="_blank" rel="noreferrer">YouTube</a>
+                {/if}
               {/if}
               {#if runtimeStateBadge}
                 <Badge variant="warning" title={runtime?.message ?? undefined}>{runtimeStateBadge}</Badge>
@@ -556,9 +610,18 @@
   }
 
   .rail-copy-top span,
-  .rail-copy-meta span {
+  .rail-copy-meta span,
+  .youtube-link {
     font-size: 0.75rem;
     color: var(--muted);
+  }
+
+  .youtube-link {
+    text-decoration: none;
+  }
+
+  .youtube-link:hover {
+    color: var(--text);
   }
 
   .takeout-status {

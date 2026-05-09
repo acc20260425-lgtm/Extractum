@@ -38,11 +38,15 @@ use sources::{
 };
 
 mod youtube;
+use youtube::detail::{
+    get_youtube_playlist_detail, get_youtube_video_detail, list_youtube_source_summaries,
+};
 use youtube::jobs::{
     cancel_source_job, list_source_jobs, retry_failed_youtube_playlist_videos,
     sync_youtube_playlist_video, sync_youtube_source, SourceJobState,
 };
 use youtube::preview::{add_youtube_source, preview_youtube_source};
+use youtube::runtime::get_youtube_runtime_status;
 use youtube::settings::{
     clear_youtube_auth, get_youtube_auth_status, get_youtube_settings, save_youtube_cookies,
     save_youtube_settings,
@@ -172,6 +176,10 @@ pub fn run() {
             cancel_source_job,
             list_source_jobs,
             retry_failed_youtube_playlist_videos,
+            get_youtube_runtime_status,
+            list_youtube_source_summaries,
+            get_youtube_video_detail,
+            get_youtube_playlist_detail,
             get_youtube_settings,
             save_youtube_settings,
             get_youtube_auth_status,

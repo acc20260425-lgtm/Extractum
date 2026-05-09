@@ -11,12 +11,14 @@
     formatDate,
     embedded = false,
     previewLimit = 200,
+    contentLabel = "messages",
   }: {
     loadingItems: boolean;
     items: SourceItem[];
     formatDate: (timestamp: number) => string;
     embedded?: boolean;
     previewLimit?: number;
+    contentLabel?: string;
   } = $props();
 
   const visibleItems = $derived.by(() => {
@@ -39,19 +41,19 @@
 </script>
 
 <Card as="div" {embedded}>
-  <PanelHeader title="Messages">
+  <PanelHeader title={contentLabel.charAt(0).toUpperCase() + contentLabel.slice(1)}>
     {#if loadingItems}
       <span class="subtle">Loading...</span>
     {:else if items.length > 0}
       <span class="subtle">
         Showing {visibleItems.length} of {items.length} latest
-        message{items.length === 1 ? "" : "s"}
+        {contentLabel}
       </span>
     {/if}
   </PanelHeader>
 
   {#if !loadingItems && items.length === 0}
-    <EmptyState description="No synced messages yet for this source." />
+    <EmptyState description={`No synced ${contentLabel} yet for this source.`} />
   {:else if visibleItems.length > 0}
     <ul class="message-list">
       {#each visibleItems as item (item.id)}

@@ -5,12 +5,15 @@
   import { membershipLabel, sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { Source } from "$lib/types/sources";
+  import type { YoutubeRuntimeStatus, YoutubeSourceSummary } from "$lib/types/youtube";
 
   let {
     source,
     selected,
     syncing,
     deleting,
+    youtubeSummary = null,
+    youtubeRuntimeStatus = null,
     accountLabel,
     runtimeStatus,
     syncDisabledReason,
@@ -23,6 +26,8 @@
     selected: boolean;
     syncing: boolean;
     deleting: boolean;
+    youtubeSummary?: YoutubeSourceSummary | null;
+    youtubeRuntimeStatus?: YoutubeRuntimeStatus | null;
     accountLabel: (id: number | null) => string;
     runtimeStatus: (accountId: number | null) => AccountRuntimeStatus | null;
     syncDisabledReason: (source: Source) => string | null;
@@ -37,6 +42,7 @@
   const sourceMembershipLabel = $derived(membershipLabel(source));
   const syncReason = $derived(syncDisabledReason(source));
   const sourceRuntimeStatus = $derived(runtimeStatus(source.accountId));
+  const thumbnailUrl = $derived(youtubeSummary?.thumbnailUrl ?? source.avatarDataUrl);
   const runtimeBadgeLabel = $derived(
     !sourceRuntimeStatus
       ? null
@@ -58,21 +64,32 @@
 
 <li class:selected={selected}>
   <div class="source-avatar" aria-hidden="true">
-    {#if source.avatarDataUrl}
-      <img src={source.avatarDataUrl} alt="" loading="lazy" />
+    {#if thumbnailUrl}
+      <img src={thumbnailUrl} alt="" loading="lazy" />
     {:else}
       <span>{sourceInitial()}</span>
     {/if}
   </div>
   <div class="channel-info">
     <button class="source-main" onclick={() => onSelect(source.id)}>
-      <span class="title">{source.title ?? source.externalId}</span>
-      <span class="sub">{accountLabel(source.accountId)}</span>
+      <span class="title">{youtubeSummary?.title ?? source.title ?? source.externalId}</span>
+      <span class="sub">{youtubeSummary?.channelHandle ?? youtubeSummary?.channelTitle ?? accountLabel(source.accountId)}</span>
     </button>
     <div class="channel-actions">
       <Badge>{kindLabel}</Badge>
       {#if source.lastSyncedAt !== null}
         <Badge>synced {formatDate(source.lastSyncedAt)}</Badge>
+      {/if}
+      {#if source.sourceType === "youtube" && youtubeRuntimeStatus && !youtubeRuntimeStatus.ytdlpAvailable}
+        <Badge variant="warning" title={youtubeRuntimeStatus.message}>yt-dlp unavailable</Badge>
+      {/if}
+      {#if youtubeSummary}
+        <Badge variant={youtubeSummary.captions.state === "synced" ? "success" : youtubeSummary.captions.state === "unavailable" ? "warning" : "neutral"}>
+          {youtubeSummary.captions.label}
+        </Badge>
+        <Badge variant={youtubeSummary.comments.state === "synced" ? "success" : "neutral"}>
+          {youtubeSummary.comments.label}
+        </Badge>
       {/if}
       {#if capabilities.requiresAccount && source.accountId !== null}
         {#if runtimeBadgeLabel}

@@ -37,7 +37,7 @@ export function sourceCapabilities(source: Source): SourceCapabilities {
       hasTopics: false,
       requiresAccount: false,
       hasMembershipState: false,
-      contentLabel: "videos",
+      contentLabel: "items",
     };
   }
 

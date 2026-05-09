@@ -160,4 +160,26 @@ describe("analysis-source-state", () => {
       isMember: false,
     }), {})).toBeNull();
   });
+
+  it("uses YouTube runtime status before allowing YouTube sync", () => {
+    const youtubeVideoSource = source({
+      sourceType: "youtube",
+      sourceSubtype: "video",
+      telegramSourceKind: null,
+      accountId: null,
+      isMember: false,
+    });
+
+    expect(sourceSyncDisabledReason(youtubeVideoSource, {}, {
+      ytdlpAvailable: false,
+      ytdlpVersion: null,
+      message: "yt-dlp is not available on PATH",
+    })).toBe("yt-dlp is not available on PATH");
+
+    expect(sourceSyncDisabledReason(youtubeVideoSource, {}, {
+      ytdlpAvailable: true,
+      ytdlpVersion: "2026.01.01",
+      message: "yt-dlp is available",
+    })).toBeNull();
+  });
 });

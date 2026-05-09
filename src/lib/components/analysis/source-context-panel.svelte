@@ -15,6 +15,7 @@
     loadingSourceTopics,
     selectedTopicKey,
     showTopicSelector,
+    contentLabel = "messages",
     formatTimestamp,
     onChangeSelectedTopicKey,
   }: {
@@ -26,6 +27,7 @@
     loadingSourceTopics: boolean;
     selectedTopicKey: string;
     showTopicSelector: boolean;
+    contentLabel?: string;
     formatTimestamp: (value: number | null) => string;
     onChangeSelectedTopicKey: (value: string) => void | Promise<void>;
   } = $props();
@@ -77,12 +79,12 @@
   <div class="context-panel-header">
     <div>
       <span class="eyebrow">Source context</span>
-      <h3>Recent synced messages</h3>
+      <h3>Recent synced {contentLabel}</h3>
       <p class="context-summary">
         {#if currentRunOpen}
           Report is in focus. Open the message preview only when you need to verify source-level context.
         {:else}
-          Scan the latest synced messages before you launch a run.
+          Scan the latest synced {contentLabel} before you launch a run.
         {/if}
       </p>
     </div>
@@ -112,7 +114,7 @@
         </label>
       {/if}
       <Badge variant="neutral">
-        {currentSourceMetric?.item_count ?? sourceItems.length} messages
+        {currentSourceMetric?.item_count ?? sourceItems.length} {contentLabel}
       </Badge>
       <Button variant="ghost" size="sm" onclick={toggleContextPanel}>
         {contextExpanded ? "Hide preview" : "Peek at messages"}
@@ -127,14 +129,15 @@
       formatDate={formatTimestamp}
       embedded={true}
       previewLimit={fullContextPreview ? expandedContextPreviewLimit : compactContextPreviewLimit}
+      {contentLabel}
     />
 
     {#if sourceItems.length > compactContextPreviewLimit}
       <div class="context-panel-footer">
         <span class="context-footnote">
           {fullContextPreview
-            ? `Showing a wider slice of the latest ${Math.min(sourceItems.length, expandedContextPreviewLimit)} messages.`
-            : `Showing the latest ${Math.min(sourceItems.length, compactContextPreviewLimit)} messages to keep the report area light.`}
+            ? `Showing a wider slice of the latest ${Math.min(sourceItems.length, expandedContextPreviewLimit)} ${contentLabel}.`
+            : `Showing the latest ${Math.min(sourceItems.length, compactContextPreviewLimit)} ${contentLabel} to keep the report area light.`}
         </span>
         <Button variant="secondary" size="sm" onclick={toggleContextDepth}>
           {fullContextPreview ? "Show fewer" : "Show more"}

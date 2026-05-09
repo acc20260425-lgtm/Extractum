@@ -98,9 +98,9 @@ describe("analysis-scope-state", () => {
     expect(currentAnalysisScopeSummary("source_group", null, null, null))
       .toBe("Select a saved source group to run a cross-source report.");
     expect(currentAnalysisScopeSummary("single_source", source(), null, metric({ item_count: 12 })))
-      .toBe("12 synced messages available locally for analysis.");
+      .toBe("12 synced items available locally for analysis.");
     expect(currentAnalysisScopeSummary("single_source", source(), null, null))
-      .toBe("This source is available in the workspace but has no synced message count yet.");
+      .toBe("This source is available in the workspace but has no synced item count yet.");
     expect(currentAnalysisScopeSummary("single_source", null, null, null))
       .toBe("Select a synced source to inspect messages and launch a report.");
   });

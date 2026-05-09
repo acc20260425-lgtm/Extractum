@@ -7,11 +7,13 @@
   import SourceContextPanel from "$lib/components/analysis/source-context-panel.svelte";
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
+  import YoutubePlaylistDetail from "$lib/components/analysis/youtube-playlist-detail.svelte";
+  import YoutubeSourceDetail from "$lib/components/analysis/youtube-source-detail.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
-  import { sourceKindLabel } from "$lib/source-capabilities";
+  import { sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
     AnalysisGroupSourceType,
@@ -30,7 +32,9 @@
     NotebookLmExportEvent,
     NotebookLmExportResult,
     Source,
+    SourceJobRecord,
   } from "$lib/types/sources";
+  import type { YoutubePlaylistDetail as YoutubePlaylistDetailDto, YoutubeVideoDetail } from "$lib/types/youtube";
 
   export type NotebookLmExportProgressState = {
     phase: NotebookLmExportEvent["phase"];
@@ -92,6 +96,10 @@
     deletingGroup,
     sourceMetricsList,
     syncingIds,
+    sourceJobs,
+    youtubeVideoDetail,
+    youtubePlaylistDetail,
+    loadingYoutubeDetail,
     formatTimestamp,
     formatPeriod,
     runTargetLabel,
@@ -112,6 +120,15 @@
     onChangeModelOverride,
     onRunReport,
     onSyncCurrentSource,
+    onSyncYoutubeMetadata,
+    onSyncYoutubeTranscript,
+    onSyncYoutubeComments,
+    onSyncYoutubePlaylist,
+    onRetryFailedYoutubePlaylistVideos,
+    onSyncYoutubePlaylistVideo,
+    onRetryYoutubePlaylistVideo,
+    onCancelSourceJob,
+    onOpenSource,
     exportDialogOpen,
     notebookLmExportForm,
     notebookLmExportResult,
@@ -192,6 +209,10 @@
     deletingGroup: boolean;
     sourceMetricsList: AnalysisSourceOption[];
     syncingIds: Record<number, boolean>;
+    sourceJobs: SourceJobRecord[];
+    youtubeVideoDetail: YoutubeVideoDetail | null;
+    youtubePlaylistDetail: YoutubePlaylistDetailDto | null;
+    loadingYoutubeDetail: boolean;
     formatTimestamp: (value: number | null) => string;
     formatPeriod: (from: number, to: number) => string;
     runTargetLabel: (
@@ -220,6 +241,15 @@
     onChangeModelOverride: (value: string) => void;
     onRunReport: () => void;
     onSyncCurrentSource: (sourceId: number) => void;
+    onSyncYoutubeMetadata: (sourceId: number) => void | Promise<void>;
+    onSyncYoutubeTranscript: (sourceId: number) => void | Promise<void>;
+    onSyncYoutubeComments: (sourceId: number) => void | Promise<void>;
+    onSyncYoutubePlaylist: (sourceId: number) => void | Promise<void>;
+    onRetryFailedYoutubePlaylistVideos: (sourceId: number) => void | Promise<void>;
+    onSyncYoutubePlaylistVideo: (playlistSourceId: number, videoSourceId: number) => void | Promise<void>;
+    onRetryYoutubePlaylistVideo: (playlistSourceId: number, videoSourceId: number) => void | Promise<void>;
+    onCancelSourceJob: (jobId: string) => void | Promise<void>;
+    onOpenSource: (sourceId: number) => void | Promise<void>;
     exportDialogOpen: boolean;
     notebookLmExportForm: NotebookLmExportForm;
     notebookLmExportResult: NotebookLmExportResult | null;
@@ -256,6 +286,7 @@
     (analysisScope === "single_source" && currentSource?.sourceType === "youtube") ||
       (analysisScope === "source_group" && currentGroup?.source_type === "youtube"),
   );
+  const currentSourceContentLabel = $derived(currentSource ? sourceCapabilities(currentSource).contentLabel : "items");
 </script>
 
 <section class="center-pane">
@@ -294,7 +325,7 @@
         {#if analysisScope === "source_group" && currentGroup}
           {currentGroup.members.length} sources
         {:else if currentSourceMetric}
-          {currentSourceMetric.item_count} synced messages
+          {currentSourceMetric.item_count} synced {currentSourceContentLabel}
         {:else}
           Awaiting synced context
         {/if}
@@ -439,18 +470,47 @@
 
   {#if analysisScope === "single_source" && currentSource}
     {#key sourceContextKey}
-      <SourceContextPanel
-        currentRunOpen={!!currentRun}
-        {currentSourceMetric}
-        {sourceItems}
-        {loadingItems}
-        {sourceTopics}
-        {loadingSourceTopics}
-        {selectedTopicKey}
-        {showTopicSelector}
-        {formatTimestamp}
-        onChangeSelectedTopicKey={onChangeSelectedTopicKey}
-      />
+      {#if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "video"}
+        <YoutubeSourceDetail
+          source={currentSource}
+          detail={youtubeVideoDetail}
+          jobs={sourceJobs}
+          loadingDetail={loadingYoutubeDetail}
+          {formatTimestamp}
+          onSyncMetadata={onSyncYoutubeMetadata}
+          onSyncTranscript={onSyncYoutubeTranscript}
+          onSyncComments={onSyncYoutubeComments}
+          onCancelJob={onCancelSourceJob}
+        />
+      {:else if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}
+        <YoutubePlaylistDetail
+          source={currentSource}
+          detail={youtubePlaylistDetail}
+          jobs={sourceJobs}
+          loadingDetail={loadingYoutubeDetail}
+          {formatTimestamp}
+          onOpenSource={onOpenSource}
+          onSyncPlaylist={onSyncYoutubePlaylist}
+          onRetryFailed={onRetryFailedYoutubePlaylistVideos}
+          onSyncPlaylistVideo={onSyncYoutubePlaylistVideo}
+          onRetryPlaylistVideo={onRetryYoutubePlaylistVideo}
+          onCancelJob={onCancelSourceJob}
+        />
+      {:else}
+        <SourceContextPanel
+          currentRunOpen={!!currentRun}
+          {currentSourceMetric}
+          {sourceItems}
+          {loadingItems}
+          {sourceTopics}
+          {loadingSourceTopics}
+          {selectedTopicKey}
+          {showTopicSelector}
+          contentLabel={currentSourceContentLabel}
+          {formatTimestamp}
+          onChangeSelectedTopicKey={onChangeSelectedTopicKey}
+        />
+      {/if}
     {/key}
   {/if}
 

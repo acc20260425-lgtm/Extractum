@@ -1,5 +1,6 @@
 import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
 import type { Source } from "$lib/types/sources";
+import type { YoutubeRuntimeStatus } from "$lib/types/youtube";
 import {
   membershipLabel as sourceMembershipLabel,
   sourceCapabilities,
@@ -46,9 +47,18 @@ export function sourceInitial(source: Source) {
 export function sourceSyncDisabledReason(
   source: Source,
   accountStatuses: Record<number, AccountRuntimeStatus>,
+  youtubeRuntimeStatus: YoutubeRuntimeStatus | null = null,
 ) {
   const capabilities = sourceCapabilities(source);
   if (!capabilities.canSync) return "This source type is not syncable.";
+
+  if (source.sourceType === "youtube") {
+    if (youtubeRuntimeStatus && !youtubeRuntimeStatus.ytdlpAvailable) {
+      return youtubeRuntimeStatus.message || "yt-dlp is not available on PATH.";
+    }
+    return null;
+  }
+
   if (!capabilities.requiresAccount) return null;
 
   const runtime = runtimeStatus(source.accountId, accountStatuses);

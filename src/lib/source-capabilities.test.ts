@@ -74,7 +74,7 @@ describe("source capabilities", () => {
       hasTopics: false,
       requiresAccount: false,
       hasMembershipState: false,
-      contentLabel: "videos",
+      contentLabel: "items",
     });
     expect(sourceKindLabel(video)).toBe("YouTube video");
     expect(membershipLabel(video)).toBe("");
@@ -92,7 +92,7 @@ describe("source capabilities", () => {
     expect(sourceCapabilities(playlist)).toMatchObject({
       canSync: true,
       requiresAccount: false,
-      contentLabel: "videos",
+      contentLabel: "items",
     });
     expect(sourceKindLabel(playlist)).toBe("YouTube playlist");
   });
