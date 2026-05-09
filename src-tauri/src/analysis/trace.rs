@@ -29,18 +29,49 @@ pub(crate) fn normalize_ref(candidate: &str) -> Option<String> {
             return None;
         }
         let source_digits = &source_part[1..];
-        if source_digits.is_empty()
-            || item_part.is_empty()
-            || !source_digits.chars().all(|c| c.is_ascii_digit())
-            || !item_part.chars().all(|c| c.is_ascii_digit())
-        {
+        if source_digits.is_empty() || !source_digits.chars().all(|c| c.is_ascii_digit()) {
             return None;
         }
 
-        return Some(format!("s{source_digits}{separator}{item_part}"));
+        let (item_digits, timestamp_suffix) = match item_part.split_once('@') {
+            Some((digits, suffix)) if separator == "-i" => {
+                (digits, Some(normalize_timestamp_suffix(suffix)?))
+            }
+            Some(_) => return None,
+            None => (item_part, None),
+        };
+
+        if item_digits.is_empty() || !item_digits.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+
+        let suffix = timestamp_suffix.unwrap_or_default();
+        return Some(format!("s{source_digits}{separator}{item_digits}{suffix}"));
     }
 
     None
+}
+
+fn normalize_timestamp_suffix(suffix: &str) -> Option<String> {
+    let body = suffix.strip_suffix("ms")?;
+    if let Some((start, end)) = body.split_once('-') {
+        let start_ms = parse_ref_millis(start)?;
+        let end_ms = parse_ref_millis(end)?;
+        if end_ms < start_ms {
+            return None;
+        }
+        return Some(format!("@{start_ms}-{end_ms}ms"));
+    }
+
+    let start_ms = parse_ref_millis(body)?;
+    Some(format!("@{start_ms}ms"))
+}
+
+fn parse_ref_millis(value: &str) -> Option<i64> {
+    if value.is_empty() || !value.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    value.parse::<i64>().ok()
 }
 
 pub(crate) fn extract_cited_refs(markdown: &str) -> Vec<String> {
@@ -141,6 +172,16 @@ mod tests {
     fn normalize_ref_accepts_item_refs_and_legacy_message_refs() {
         assert_eq!(normalize_ref("[s12-i845]").as_deref(), Some("s12-i845"));
         assert_eq!(normalize_ref("s12-m845").as_deref(), Some("s12-m845"));
+        assert_eq!(
+            normalize_ref("s12-i400@754000ms").as_deref(),
+            Some("s12-i400@754000ms")
+        );
+        assert_eq!(
+            normalize_ref("[s12-i400@754000-790000ms]").as_deref(),
+            Some("s12-i400@754000-790000ms")
+        );
+        assert_eq!(normalize_ref("s12-m400@754000ms"), None);
+        assert_eq!(normalize_ref("s12-i400@790000-754000ms"), None);
         assert_eq!(normalize_ref("s12-iabc"), None);
         assert_eq!(normalize_ref("x12-i845"), None);
     }

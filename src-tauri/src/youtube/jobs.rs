@@ -8,9 +8,13 @@ use crate::compression::decompress_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{
-    load_source, upsert_youtube_playlist_source, upsert_youtube_video_source, SourceSyncTarget,
+    load_source, upsert_youtube_playlist_source, upsert_youtube_transcript_item,
+    upsert_youtube_video_source, SourceSyncTarget,
 };
 
+use super::captions::{
+    fetch_transcript_for_video, replace_transcript_segments, transcript_external_id,
+};
 use super::dto::{YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata};
 use super::metadata::{fetch_playlist_metadata, fetch_video_metadata};
 use super::playlist::upsert_playlist_items;
@@ -386,7 +390,15 @@ async fn run_source_job(handle: AppHandle, job_id: String) {
             transcripts: false,
             comments: false,
         });
-    let result = run_source_job_steps(&handle, &state, &job_id, record.source_id, &options).await;
+    let result = run_source_job_steps(
+        &handle,
+        &state,
+        &job_id,
+        record.source_id,
+        record.related_source_id,
+        &options,
+    )
+    .await;
 
     match result {
         Ok(warnings) => {
@@ -425,15 +437,17 @@ async fn run_source_job_steps(
     state: &SourceJobState,
     job_id: &str,
     source_id: i64,
+    related_source_id: Option<i64>,
     options: &YoutubeSyncOptions,
 ) -> AppResult<Vec<String>> {
     let mut warnings = Vec::new();
+    let sync_source_id = related_source_id.unwrap_or(source_id);
     if options.metadata {
         update_and_emit_source_job(handle, state, job_id, |job| {
             job.message = Some("Refreshing YouTube metadata.".to_string());
         })
         .await;
-        sync_youtube_metadata(handle, source_id).await?;
+        sync_youtube_metadata(handle, sync_source_id).await?;
     }
 
     if state.is_cancel_requested(job_id).await {
@@ -441,8 +455,11 @@ async fn run_source_job_steps(
     }
 
     if options.transcripts {
-        warnings
-            .push("Transcript sync is deferred until transcript ingest is available.".to_string());
+        update_and_emit_source_job(handle, state, job_id, |job| {
+            job.message = Some("Syncing YouTube transcript.".to_string());
+        })
+        .await;
+        sync_youtube_transcript(handle, sync_source_id).await?;
     }
     if options.comments {
         warnings.push("Comment sync is deferred until YouTube comments are available.".to_string());
@@ -494,6 +511,74 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
     tx.commit().await.map_err(AppError::database)
 }
 
+async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResult<()> {
+    let pool = get_pool(handle).await?;
+    let mut source = load_source(&pool, source_id).await?;
+    ensure_youtube_source(&source)?;
+    if source.source_subtype.as_deref() != Some("video") {
+        return Err(AppError::validation(format!(
+            "Source {source_id} is not a YouTube video source"
+        )));
+    }
+
+    if decode_video_metadata(&source).is_none() {
+        sync_youtube_metadata(handle, source_id).await?;
+        source = load_source(&pool, source_id).await?;
+    }
+
+    let metadata = decode_video_metadata(&source).ok_or_else(|| {
+        AppError::validation(format!("Source {source_id} has no YouTube video metadata"))
+    })?;
+    let preferred_language = load_preferred_caption_language(&pool).await?;
+    let transcript = fetch_transcript_for_video(
+        &metadata,
+        Some(preferred_language.as_str()),
+        caption_language_override(&metadata).as_deref(),
+    )
+    .await?;
+    if transcript.segments.is_empty() {
+        return Err(AppError::validation(
+            "YouTube transcript has no text segments",
+        ));
+    }
+
+    let content = transcript
+        .segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let external_id = transcript_external_id(
+        &transcript.video_id,
+        transcript.language.as_deref(),
+        &transcript.track_kind,
+    );
+    let author = metadata
+        .author_display
+        .as_deref()
+        .or(metadata.channel_title.as_deref());
+    let published_at = metadata
+        .published_at
+        .as_deref()
+        .and_then(ymd_to_unix_midnight)
+        .unwrap_or_else(now_secs);
+
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    let item_id = upsert_youtube_transcript_item(
+        &mut tx,
+        source_id,
+        &external_id,
+        author,
+        published_at,
+        &content,
+        &transcript,
+    )
+    .await?;
+    replace_transcript_segments(&mut tx, item_id, source_id, &transcript).await?;
+    mark_source_synced(&mut tx, source_id).await?;
+    tx.commit().await.map_err(AppError::database)
+}
+
 async fn mark_source_synced(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     source_id: i64,
@@ -532,6 +617,9 @@ async fn run_retry_playlist_job(handle: AppHandle, job_id: String) {
         for (index, _row) in rows.iter().enumerate() {
             if state.is_cancel_requested(&job_id).await {
                 return Err(AppError::validation("Source job cancelled"));
+            }
+            if let Some(video_source_id) = _row.video_source_id {
+                sync_youtube_transcript(&handle, video_source_id).await?;
             }
             update_and_emit_source_job(&handle, &state, &job_id, |job| {
                 job.progress_current = Some(index as i64 + 1);
@@ -661,6 +749,44 @@ where
     let metadata = metadata_zstd?;
     let json = decompress_bytes(metadata).ok()?;
     serde_json::from_slice(&json).ok()
+}
+
+async fn load_preferred_caption_language(pool: &sqlx::SqlitePool) -> AppResult<String> {
+    let value: Option<String> = sqlx::query_scalar("SELECT value FROM app_settings WHERE key = ?")
+        .bind("youtube.captions.preferred_language")
+        .fetch_optional(pool)
+        .await
+        .map_err(AppError::database)?;
+    Ok(value.unwrap_or_else(|| "original".to_string()))
+}
+
+fn caption_language_override(metadata: &YoutubeVideoMetadata) -> Option<String> {
+    metadata
+        .raw_metadata_json
+        .get("caption_language_override")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
+fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
+    let mut parts = value.split('-');
+    let year = parts.next()?.parse::<i64>().ok()?;
+    let month = parts.next()?.parse::<i64>().ok()?;
+    let day = parts.next()?.parse::<i64>().ok()?;
+    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    Some(days_from_civil(year, month, day) * 86_400)
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = year - i64::from(month <= 2);
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let yoe = year - era * 400;
+    let month_prime = month + if month > 2 { -3 } else { 9 };
+    let doy = (153 * month_prime + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
 }
 
 fn emit_source_job_event(handle: &AppHandle, record: &SourceJobRecord) {

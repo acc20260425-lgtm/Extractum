@@ -27,7 +27,9 @@ pub use topics::SourceForumTopicRecord;
 #[allow(unused_imports)]
 pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind};
 
-pub(crate) use items::{insert_source_item, SourceItemInsert, TelegramItemContext};
+pub(crate) use items::{
+    insert_source_item, upsert_youtube_transcript_item, SourceItemInsert, TelegramItemContext,
+};
 pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
 pub(crate) use store::{
     load_source, load_source_record, upsert_youtube_playlist_source, upsert_youtube_video_source,
