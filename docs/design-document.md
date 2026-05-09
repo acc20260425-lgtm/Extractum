@@ -182,6 +182,8 @@ The current runtime contract is:
 - OpenAI-compatible model listing and live requests both use the saved or currently edited `base_url`;
 - analysis runs persist `provider_profile`, `provider`, and `model` metadata so later review can see which profile produced the result.
 
+LLM scheduling allows two running requests per `(provider, profile)` and prioritizes interactive requests over background work. Analysis report runs run a backend preflight before run creation and are capped at `10_000` messages, `80` estimated chunks, `1_500_000` estimated input characters, and `80` background requests.
+
 `/settings` is intentionally profile-oriented:
 
 - existing profiles can be selected and edited;

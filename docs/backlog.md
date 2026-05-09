@@ -18,7 +18,6 @@ Released work should stay in the codebase and in current-state documentation, no
 - Telegram runtime behavior still needs broader validation against real accounts and dialogs
 - private-source resolution is better defined but still needs more real-world validation
 - Takeout source import is shipped, but still needs broader live validation and a few parity follow-ups
-- LLM concurrency policy still needs refinement beyond the current request-scoped scheduling baseline
 - saved-run history still lacks richer filtering for larger archives
 - media download, preview, and media-aware analysis are still incomplete
 - NotebookLM export is shipped for single synced sources; optional link enrichment and source-group export remain follow-up work
@@ -44,7 +43,7 @@ Released work should stay in the codebase and in current-state documentation, no
 | Private source resolution | explicit rules exist, but runtime coverage is incomplete | predictable behavior for dialog-picked private sources |
 | Takeout source import | implemented for existing sources with TDesktop-first pagination and per-split descending fallback | validated across source kinds, private/left cases, and export DC behavior |
 | Secret storage | LLM keys, Telegram `api_hash`, and Telegram session file contents use OS-backed protection | avoid logging secrets in backend errors, frontend status text, or debug output |
-| LLM concurrency | request isolation is in place, but limit policy is still coarse | predictable request scheduling with clearer limits |
+| LLM concurrency | request isolation and analysis preflight caps are documented | configurable or differentiated limits only if future provider behavior requires them |
 | Saved runs UX | global history and active/history split are shipped | richer narrowing and filtering for large archives |
 | Media support | metadata-first only | optional download/preview and media-aware analysis |
 | NotebookLM export | single-source local Markdown export with progress events and local reply/thread/reaction metadata is shipped | optional link enrichment and source-group export |
@@ -219,16 +218,20 @@ Goal: support multiple LLM requests at the same time without mixing stream state
 
 Scope:
 
-- [ ] decide whether per-provider and per-profile concurrency limits need explicit configuration beyond the current shared default
+- [x] decide whether per-provider and per-profile concurrency limits need explicit configuration beyond the current shared default
+- [x] cap analysis report runs before chunk workers are spawned
 
 Acceptance criteria:
 
-- [ ] concurrency limits are intentional and documented
-- [ ] request scheduling remains predictable under mixed interactive and background load
+- [x] concurrency limits are intentional and documented
+- [x] request scheduling remains predictable under mixed interactive and background load
+- [x] oversized analysis scopes fail fast with a validation error before creating an analysis run
 
 Current notes:
 
-- the remaining open question is whether concurrency limits should become explicitly configurable or otherwise differentiated beyond the current per-`(provider, profile)` queue with a shared default limit
+- LLM scheduler concurrency is intentionally `2` running requests per `(provider, profile)`.
+- Interactive requests jump ahead of background requests in the same scheduler key.
+- Analysis report runs are capped by backend preflight limits: `10_000` messages, `80` chunks, `1_500_000` estimated input characters, and `80` background requests per run.
 
 ---
 
@@ -314,7 +317,7 @@ Goal: keep the verification baseline healthy as the remaining infrastructure wor
 
 1. finish the remaining Telegram runtime and private-source validation
 2. decide whether saved-run history now needs richer metadata/date filters before deeper Phase 4 work
-3. finish the remaining LLM concurrency policy work after the shipped request-scoped scheduling and cancellation baseline
+3. decide whether saved-run history now needs richer metadata/date filters before deeper media work
 
 ### Next priority
 
@@ -330,17 +333,17 @@ If implementation resumes directly from this file, the recommended opening seque
 1. validate the remaining Telegram runtime cases on real accounts and dialogs
 2. validate dialog-picked private `channel` and `supergroup` sources against the stored-identity path
 3. validate the shipped Takeout import path across representative source kinds and fallback cases
-4. decide whether saved-run history now needs richer metadata/date filters before Phase 4
+4. continue media download/preview and media-aware analysis design when the saved-run filtering question is settled
 
 ### Session Handoff
 
 Current implementation checkpoint:
 
-- current work should start from the open items above, not from already-shipped profile, snapshot, or UI-separation work
+- current work should start from the open items above, not from already-shipped profile, snapshot, UI-separation, or LLM preflight work
 
 Recommended next step:
 
-- decide whether the remaining LLM concurrency work should be limited to better limit policy/configuration or deferred behind Telegram validation
+- decide whether saved-run history now needs richer metadata/date filters before media expansion
 
 ---
 

@@ -32,6 +32,7 @@ Implemented:
 - source groups for analysis
 - saved reports
 - follow-up chat on saved runs
+- analysis report preflight limits for large selected corpora
 - single-source NotebookLM export with local reply/thread/reaction metadata
 - reusable LLM provider profiles with active-profile selection
 - configurable OpenAI-compatible `base_url` support in `/settings`
@@ -139,6 +140,10 @@ Not implemented yet:
 - `analysis_runs`: saved report runs
 - `analysis_run_messages`: frozen corpus snapshot for saved runs
 - `analysis_chat_messages`: follow-up chat history
+
+## LLM scheduling and analysis caps
+
+LLM scheduling allows two running requests per `(provider, profile)` and prioritizes interactive requests over background work. Analysis report runs run a backend preflight before run creation and are capped at `10_000` messages, `80` estimated chunks, `1_500_000` estimated input characters, and `80` background requests.
 
 ## Current practical constraints
 

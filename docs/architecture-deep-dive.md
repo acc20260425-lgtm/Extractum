@@ -216,6 +216,8 @@ The frontend `/settings` route mirrors that contract:
 
 This keeps analysis runs, provider tests, and follow-up chat aligned on one backend profile-resolution model.
 
+LLM scheduling allows two running requests per `(provider, profile)` and prioritizes interactive requests over background work. Analysis report runs run a backend preflight before run creation and are capped at `10_000` messages, `80` estimated chunks, `1_500_000` estimated input characters, and `80` background requests.
+
 ## 7. Error boundary
 
 The backend now exposes structured `AppError` values. The frontend normalizes them through `src/lib/app-error.ts`.
