@@ -45,8 +45,9 @@ Svelte 5 `$effect` blocks should keep their dependency surface narrow. An
 effect tracks synchronous `$state` and `$derived` reads, including reads inside
 functions it calls. Route effects that call workflow functions must be reviewed
 carefully when those workflows synchronously call `deps.getState()` and later
-patch route state. Use `untrack` for incidental reads, or prefer explicit event
-handlers / lifecycle flows for one-shot data loads.
+patch route state. Prefer explicit parameter APIs for effect-triggered workflow
+calls; use `untrack` for incidental reads, or prefer explicit event handlers /
+lifecycle flows for one-shot data loads.
 
 ### 2.3 Text-first analysis, media-aware ingest
 

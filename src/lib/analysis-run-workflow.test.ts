@@ -127,6 +127,52 @@ describe("analysis-run-workflow", () => {
     vi.restoreAllMocks();
   });
 
+  it("clears saved runs for a null scope without reading workflow state", async () => {
+    const { state, deps, workflow } = createHarness({
+      historyScopeParams: { sourceId: 7, sourceGroupId: null },
+      runs: [runSummary({ id: 1 })],
+      loadingRuns: true,
+    });
+    const getState = vi.fn(() => {
+      throw new Error("loadRunsForScope should use its params argument");
+    });
+    deps.getState = getState as typeof deps.getState;
+
+    await workflow.loadRunsForScope(null);
+
+    expect(state.runs).toEqual([]);
+    expect(deps.listRuns).not.toHaveBeenCalled();
+    expect(getState).not.toHaveBeenCalled();
+    expect(state.loadingRuns).toBe(false);
+  });
+
+  it("loads saved runs for the provided scope without reading workflow state", async () => {
+    const params: AnalysisHistoryScopeParams = { sourceId: 7, sourceGroupId: null };
+    const { state, deps, workflow } = createHarness({
+      historyScopeParams: { sourceId: 99, sourceGroupId: 100 },
+    });
+    const getState = vi.fn(() => {
+      throw new Error("loadRunsForScope should use its params argument");
+    });
+    deps.getState = getState as typeof deps.getState;
+    deps.listRuns.mockResolvedValueOnce([
+      runSummary({ id: 1, status: "completed" }),
+      runSummary({ id: 2, status: "running" }),
+      runSummary({ id: 3, status: "failed" }),
+    ]);
+
+    await workflow.loadRunsForScope(params);
+
+    expect(deps.listRuns).toHaveBeenCalledWith({
+      sourceId: 7,
+      sourceGroupId: null,
+      limit: 50,
+    });
+    expect(state.runs.map((run) => run.id)).toEqual([1, 3]);
+    expect(getState).not.toHaveBeenCalled();
+    expect(state.loadingRuns).toBe(false);
+  });
+
   it("clears saved runs without loading when history scope is unavailable", async () => {
     const { state, deps, workflow } = createHarness({
       historyScopeParams: null,

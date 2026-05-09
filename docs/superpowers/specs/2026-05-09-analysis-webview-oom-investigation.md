@@ -2,7 +2,7 @@
 
 Date: 2026-05-09
 Area: Tauri WebView / Svelte analysis workspace
-Status: Root cause found, fixed, and committed
+Status: Root cause fixed; explicit loader refactor implemented
 
 ## Summary
 
@@ -20,21 +20,25 @@ subscribed to `runs` in addition to `historyScopeParams`. When the loader later
 patched `runs`, the effect re-ran and scheduled another load, causing repeated
 reactive work and rapid JS heap growth on the analysis page.
 
-The fix wraps the asynchronous `loadRuns()` call in `untrack`, keeping the
-effect dependent only on `historyScopeParams`:
+The original fix wrapped the asynchronous `loadRuns()` call in `untrack`. A
+follow-up refactor now makes the dependency explicit: the route effect reads
+`historyScopeParams` directly and passes that value to a workflow method that
+does not call `deps.getState()`.
 
 ```ts
-import { onMount, untrack } from "svelte";
-
 $effect(() => {
-  if (historyScopeParams === null) {
+  const params = historyScopeParams;
+  if (params === null) {
     runs = [];
     return;
   }
 
-  void untrack(() => loadRuns());
+  void runWorkflow.loadRunsForScope(params);
 });
 ```
+
+The broad `loadRuns()` wrapper still exists for event-driven and user-action
+call sites outside Svelte effect tracking contexts.
 
 ## Environment
 
@@ -187,9 +191,10 @@ The intended dependency is only `historyScopeParams`.
 The current `$effect` blocks in `src/routes/analysis/+page.svelte` were checked
 after identifying the root cause:
 
-- The saved-run history effect was the risky pattern: `$effect` -> `loadRuns()`
-  -> workflow `deps.getState()` -> route `$state` reads -> later patch of
-  `runs`.
+- The saved-run history effect was the risky pattern before the fix:
+  `$effect` -> `loadRuns()` -> workflow `deps.getState()` -> route `$state`
+  reads -> later patch of `runs`. It now reads `historyScopeParams` explicitly
+  and calls `loadRunsForScope(params)`, which does not call `deps.getState()`.
 - The template editor binding effect reads `selectedTemplate` and
   `editorBoundTemplateId`, then writes editor form state only when the selected
   template id changes. It does not call a workflow `getState`.
@@ -201,12 +206,12 @@ after identifying the root cause:
 
 No other analysis-route effect currently has the `$effect` -> workflow
 `deps.getState()` pattern that caused this OOM. Future effects that call route
-workflow functions should either keep synchronous reads intentionally narrow or
-wrap incidental reads in `untrack`.
+workflow functions should either keep synchronous reads intentionally narrow,
+prefer explicit parameter APIs, or wrap incidental reads in `untrack`.
 
 ## Fix
 
-Changed:
+The OOM was first fixed by changing:
 
 ```ts
 void loadRuns();
@@ -218,15 +223,26 @@ To:
 void untrack(() => loadRuns());
 ```
 
-And imported `untrack`:
+That kept broad workflow state reads out of the effect's tracking context.
+
+The current implementation removes the need for `untrack` in this effect by
+using an explicit-scope workflow API:
 
 ```ts
-import { onMount, untrack } from "svelte";
+$effect(() => {
+  const params = historyScopeParams;
+  if (params === null) {
+    runs = [];
+    return;
+  }
+
+  void runWorkflow.loadRunsForScope(params);
+});
 ```
 
-This prevents state reads inside `loadRuns()` from becoming dependencies of the
-effect, while preserving the intended behavior: load saved runs whenever
-`historyScopeParams` changes.
+`loadRunsForScope(params)` uses only the provided scope argument. The existing
+`loadRuns()` method remains as a convenience wrapper for non-effect contexts and
+delegates to `loadRunsForScope(deps.getState().historyScopeParams)`.
 
 ## Verification
 
@@ -255,8 +271,8 @@ npm.cmd test -- analysis
 Result:
 
 ```text
-Test Files  16 passed (16)
-Tests       160 passed (160)
+Test Files  17 passed (17)
+Tests       163 passed (163)
 ```
 
 ### Whitespace Check
@@ -269,12 +285,8 @@ git diff --check
 
 Result:
 
-No whitespace errors. Git printed only the existing line-ending warning:
-
-```text
-warning: in the working copy of 'src/routes/analysis/+page.svelte',
-LF will be replaced by CRLF the next time Git touches it
-```
+No whitespace errors. Git printed only line-ending warnings for touched files
+because the Windows checkout will rewrite LF to CRLF on the next Git write.
 
 ### Live Memory Check After Fix
 
@@ -318,6 +330,9 @@ was validated with the live MCP memory check above.
 ## Files Changed
 
 - `src/routes/analysis/+page.svelte`
+- `src/lib/analysis-run-workflow.ts`
+- `src/lib/analysis-run-workflow.test.ts`
+- `src/lib/analysis-route-effects.test.ts`
 
 ## Risk Assessment
 
@@ -325,8 +340,8 @@ Risk is low:
 
 - The behavior remains the same from the user's perspective.
 - Saved runs still load when `historyScopeParams` changes.
-- The change only prevents accidental Svelte dependency tracking inside the
-  asynchronous loader.
+- The effect-path loader no longer enters broad workflow state reads, preventing
+  accidental Svelte dependency tracking inside the saved-run loader.
 - Static checks and analysis tests pass.
 - Live memory behavior changed from unbounded growth to stable memory usage.
 
@@ -334,8 +349,8 @@ Risk is low:
 
 1. When adding new `$effect` blocks, treat calls into route workflow functions as
    high-risk if they synchronously call `deps.getState()` and later patch any of
-   the same route state. Similar cases may need `untrack` or a different
-   lifecycle pattern.
+   the same route state. Similar cases may need an explicit parameter API,
+   `untrack`, or a different lifecycle pattern.
 2. Consider moving one-shot data loads to explicit event handlers or lifecycle
    flows where possible, keeping `$effect` for narrow dependency-driven work.
 3. Keep the frontend architecture note on Svelte 5 `$effect` dependency tracking
@@ -344,21 +359,19 @@ Risk is low:
 ## Suggested Commit Message
 
 ```text
-fix(analysis): prevent WebView OOM from tracked run loading
+refactor(analysis): make saved-run loading scope explicit
 
-Wrap the analysis saved-run loader in Svelte's untrack() when it is
-called from the history-scope effect. The effect only needs to depend on
-historyScopeParams, but calling loadRuns() directly allowed synchronous
-state reads inside the workflow to become tracked dependencies.
+Add loadRunsForScope(params) so the analysis history effect can pass its
+intended dependency directly instead of entering the broad loadRuns()
+wrapper inside Svelte tracking.
 
-That accidental dependency tracking caused repeated reactive work on the
-/analysis route and rapidly grew the WebView renderer heap into multiple
-gigabytes while the Rust backend stayed small.
+Keep loadRuns() as the convenience wrapper for event-driven refreshes.
+Update the route regression guard to require the explicit-scope loader
+and to reject the old broad wrapper from the history effect.
 
 Verification:
+- npm.cmd test -- analysis-run-workflow analysis-route-effects
 - npm.cmd run check
 - npm.cmd test -- analysis
 - git diff --check
-- live MCP memory check: /analysis renderer stabilized around 157-173 MB
-  instead of growing past 3-5 GB
 ```

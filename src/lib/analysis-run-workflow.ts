@@ -79,8 +79,7 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
     };
   }
 
-  async function loadRuns() {
-    const params = deps.getState().historyScopeParams;
+  async function loadRunsForScope(params: AnalysisHistoryScopeParams | null) {
     if (params === null) {
       deps.patch({ runs: [], loadingRuns: false });
       return;
@@ -99,6 +98,10 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
     } finally {
       deps.patch({ loadingRuns: false });
     }
+  }
+
+  async function loadRuns() {
+    await loadRunsForScope(deps.getState().historyScopeParams);
   }
 
   function syncActiveRunState(summaries: AnalysisRunSummary[]) {
@@ -326,6 +329,7 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
   }
 
   return {
+    loadRunsForScope,
     loadRuns,
     loadActiveRuns,
     openRun,

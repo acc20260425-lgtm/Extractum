@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { onMount } from "svelte";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
@@ -1033,12 +1033,13 @@
   }
 
   $effect(() => {
-    if (historyScopeParams === null) {
+    const params = historyScopeParams;
+    if (params === null) {
       runs = [];
       return;
     }
 
-    void untrack(() => loadRuns());
+    void runWorkflow.loadRunsForScope(params);
   });
 
   $effect(() => {
