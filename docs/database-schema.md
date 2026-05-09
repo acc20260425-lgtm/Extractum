@@ -70,8 +70,9 @@ Notes:
 
 ### 1.2 `items`
 
-Stores locally ingested source items. Current rows are Telegram messages, but
-the table is the shared local corpus for future provider documents.
+Stores locally ingested source items. Current rows include Telegram messages,
+YouTube transcript items, and YouTube comment items. The table remains the
+shared local corpus for provider documents.
 
 Important fields:
 

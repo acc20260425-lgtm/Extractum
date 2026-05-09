@@ -3,9 +3,9 @@
 ## 1. Goal
 
 Extractum is a desktop-first research tool for collecting source history into a
-local archive and running structured analysis over that archive. Telegram is
-the only implemented ingest provider today, while the shared source and
-analysis layers are ready for future non-Telegram providers.
+local archive and running structured analysis over that archive. Telegram and
+YouTube are implemented ingest providers today, while the shared source and
+analysis layers are ready for future RSS/forum providers.
 
 The design goals are:
 
@@ -25,6 +25,7 @@ All source data and analysis state are stored locally in SQLite. The application
 Rust owns:
 
 - Telegram client lifecycle
+- YouTube `yt-dlp` orchestration
 - session restore
 - migrations
 - SQLite access
@@ -77,6 +78,8 @@ Each source is stored in `sources` with:
 Source identity is scoped by account, provider, kind, and external id. This
 matters because the same Telegram channel or group can exist in more than one
 local account, and Telegram bare ids can overlap across source kinds.
+YouTube identity is scoped by provider subtype and external id, so videos and
+playlists dedupe separately.
 
 Source UI actions are capability-driven. Sync, Takeout import, membership
 state, and topic controls are shown only for source families that support them.
@@ -91,9 +94,10 @@ The first sync window is configurable through app settings:
 After the first sync, the app resumes from `last_sync_state`.
 
 `sync_source` remains the ordinary incremental ingest path. It dispatches by
-provider and currently routes only Telegram sources into the implemented sync
-flow. Unsupported or not-yet-implemented provider sync attempts return typed
-validation errors.
+provider and routes Telegram sources into the Telegram sync flow. YouTube sync
+uses provider-specific source jobs for metadata, transcripts, comments, and
+playlist expansion. Unsupported provider sync attempts return typed validation
+errors.
 
 ### 3.3 Takeout import model
 
@@ -110,7 +114,31 @@ Important design choices:
 
 The history pagination is TDesktop-first. The app models the full state machine with `largest_id_plus_one`, page-order normalization, and cursor advancement, then falls back per split to the older descending cursor profile only when the TDesktop profile is visibly unsafe for that split.
 
-### 3.4 Item persistence
+### 3.4 YouTube source model
+
+YouTube support is text/metadata-first. Extractum shells out to `yt-dlp` for
+preview, source creation, metadata refresh, captions, comments, and playlist
+entry metadata. The app does not download YouTube audio or video binaries.
+
+YouTube videos and playlists are registered as `sources` rows:
+
+- videos use `source_type = youtube`, `source_subtype = video`;
+- playlists use `source_type = youtube`, `source_subtype = playlist`;
+- provider metadata is compressed into `sources.metadata_zstd`;
+- playlist membership lives in `youtube_playlist_items`;
+- transcript timing lives in `youtube_transcript_segments`.
+
+The analysis workspace can run YouTube reports over synced transcript text,
+optional synthetic description text, and optional comments. Playlist analysis
+expands linked playlist video sources and excludes unlinked/unavailable rows.
+
+YouTube source jobs are in-memory runtime state. They are not resumed after app
+restart; completed SQLite writes remain visible and the user can start a fresh
+sync. Auth-gated YouTube content can use cookies configured in Settings. Those
+cookies are stored in OS secure storage and are written only to temporary
+backend files for the lifetime of a `yt-dlp` process.
+
+### 3.5 Item persistence
 
 Each synced item can be:
 
@@ -123,6 +151,7 @@ The backend stores:
 - compressed text when text exists;
 - compressed raw JSON payload;
 - lightweight media metadata when media exists.
+- provider item kind (`telegram_message`, `youtube_transcript`, or `youtube_comment`);
 - nullable Telegram context metadata for newly synced rows:
   - reply target message id;
   - reply target Telegram peer kind/id;
@@ -133,6 +162,10 @@ This keeps the storage model useful for browsing and future expansion without co
 
 Older rows are not backfilled. A `NULL` Telegram context value means the metadata is unavailable, predates the migration, or was not exposed by Telegram.
 
+YouTube transcript text is stored as a `youtube_transcript` item. Timestamped
+segments are stored separately in `youtube_transcript_segments` so trace refs
+can resolve to YouTube timestamp links.
+
 ## 4. Current analysis design
 
 ### 4.1 Scope
@@ -141,6 +174,12 @@ Reports can be generated for:
 
 - one source;
 - one saved source group.
+
+YouTube scopes can choose one of three corpus modes:
+
+- transcript only;
+- transcript plus synthetic description;
+- transcript plus synthetic description plus comments.
 
 The report run stores:
 
@@ -169,6 +208,8 @@ The intended behavior is:
 New live corpus refs use local item identity (`s{source_id}-i{item_id}`), while
 legacy Telegram-shaped refs (`s{source_id}-m{message_id}`) remain readable.
 Legacy runs without snapshot data can still fall back to live items.
+YouTube transcript refs preserve timestamp evidence and can resolve to
+canonical YouTube URLs with `t=` parameters.
 
 ### 4.3 LLM provider profiles
 
@@ -257,6 +298,7 @@ This keeps SQLite reasonably small without introducing extra infrastructure.
 - active LLM profile selection
 - LLM provider profile metadata
 - initial sync policy keys
+- YouTube settings metadata
 
 Saved LLM API keys and Telegram `api_hash` values are stored through the backend
 `secret_store` module in the OS credential store. Telegram session files remain
@@ -266,15 +308,19 @@ Legacy plaintext values in `app_settings`, `accounts.api_hash`, or Telegram
 session files are migrated lazily: the backend writes the secure-store secret
 first and only then clears or replaces the legacy value. If secure storage
 fails, the operation fails closed and leaves legacy plaintext untouched.
+YouTube cookies use the same secure-store boundary and are never returned to the
+frontend through IPC.
 
 ## 7. Open design work
 
 The most meaningful remaining design questions are:
 
-- which concrete non-Telegram provider should be implemented first;
+- whether RSS or forum ingestion should be implemented next;
 - whether private Telegram peer resolution should gain stronger cached identity data;
 - how to handle migrated supergroup history without corrupting `(source_id, external_id)` uniqueness;
 - whether Takeout import should run the forum-topic auxiliary refresh after successful Takeout finish;
+- whether YouTube jobs should become persistent/resumable across app restart;
+- whether YouTube-specific NotebookLM export enrichment should be shipped;
 - how to expand analysis beyond text-bearing corpus items;
 - whether a full Telegram Forum Topics model is needed beyond stored `reply_to_top_id`;
 - how and when to persist forward metadata;

@@ -134,6 +134,7 @@ YouTube integration shells out to `yt-dlp`; Extractum does not embed a YouTube A
 The boundary is intentionally narrow:
 
 - preview and metadata commands use JSON output from `yt-dlp`;
+- watch URLs with both `v=` and `list=` are treated as the selected video; canonical playlist URLs are used when the user wants the playlist itself;
 - captions request transcript files and parse them into one `youtube_transcript` item plus `youtube_transcript_segments`;
 - comments request bounded comment JSON and store `youtube_comment` items;
 - playlist metadata is flattened into `youtube_playlist_items`;

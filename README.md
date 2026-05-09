@@ -50,6 +50,7 @@ The current product slice is a local-first MVP for:
 - Takeout source import can fill older local history for an existing source without creating a second source record.
 
 YouTube source support requires `yt-dlp` to be installed and available on `PATH`. Extractum does not download YouTube audio or video binaries in the MVP; it calls `yt-dlp` for metadata, captions, comments, and playlist entries only. Auth-gated YouTube content requires cookies configured in `/settings`. YouTube sync jobs are in memory in the MVP and are not resumed after app restart.
+When a YouTube URL contains both `v=` and `list=`, Extractum previews and adds the selected video. Use a canonical `youtube.com/playlist?list=...` URL when you want to add the playlist itself.
 
 ### Media-aware item metadata
 

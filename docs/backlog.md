@@ -7,14 +7,14 @@
 
 - Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
 - Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
-- Takeout source import is shipped but still needs broader live validation, incomplete-batch provenance, and a migrated-history identity decision.
+- Takeout source import still needs broader live validation, incomplete-batch provenance, and a migrated-history identity decision.
 - YouTube source MVP is shipped, but live-provider coverage still needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Saved-run history works, but large archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
 - NotebookLM export is single-source and local-only; optional link enrichment, source-group export, forward metadata, and richer forum-topic grouping remain open.
 - YouTube-specific NotebookLM export enrichment is not implemented yet; the existing generic NotebookLM export remains shipped for Telegram sources.
 - Full Telegram Forum Topics browsing/export and forward metadata are not modeled yet.
-- Stabilization needs a current Rust lint baseline, repeatable full-project verification, and a dependency pinning policy for `grammers`.
+- Stabilization needs repeatable full-project verification, CI, and a dependency pinning policy for `grammers`.
 - Secret storage is implemented, but logs and user-facing error surfaces still need a focused secret-leak audit.
 
 ## 2. Planning Principles
@@ -23,7 +23,7 @@
 2. Prioritize correctness, data integrity, and operability risks before UI polish.
 3. Validate Telegram behavior against real data when static reading is insufficient.
 4. Prefer tests for pure logic, storage rules, request lifecycle boundaries, and route workflow regressions.
-5. Keep completed Superpowers plans/specs out of active docs; preserve them through Git history instead.
+5. Keep closed Superpowers plans/specs out of active docs; preserve them through Git history instead.
 
 ## 3. Active Work Areas
 
@@ -31,8 +31,8 @@
 | --- | --- | --- |
 | Telegram runtime validation | partially validated | predictable behavior across real supported dialogs and accounts |
 | Account deletion coordination | account row/runtime cleanup exists | deletion cannot race active ingest or analysis work |
-| Takeout source import | MVP shipped | validated across source kinds with explicit incomplete-import provenance |
-| YouTube source ingest | MVP shipped | broader live validation plus optional future enrichment/resumability |
+| Takeout source import | implemented | validated across source kinds with explicit incomplete-import provenance |
+| YouTube source ingest | implemented | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | global/current-scope history shipped | fast narrowing for large saved-run histories |
 | Media support | metadata only | optional download/preview and controlled media-aware analysis |
 | NotebookLM export | single-source Markdown export shipped | optional enrichment and source-group export if needed |
@@ -153,11 +153,9 @@ Acceptance:
 
 Priority: medium.
 
-- [ ] record current `cargo clippy --all-targets -- -D warnings` status and fix or explicitly allow remaining warnings
 - [ ] add a single documented full-project verification command or script
 - [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
 - [ ] pin `grammers-*` dependencies to an explicit `rev` or owned release policy
-- [ ] add frontend tests for `analysis-utils.ts` and `app-error.ts`
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
 - [ ] audit backend errors, frontend status text, and debug output for accidental credential exposure
 
@@ -180,7 +178,3 @@ Priority: medium.
 5. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
 6. Continue media download/preview and media-aware analysis design.
 7. Tighten verification, CI, and dependency pinning.
-
-## 7. Session Handoff
-
-Start from the open items above. Do not resurrect completed Superpowers plans for secure storage, encrypted Telegram sessions, LLM preflight/concurrency, `loadRunsForScope`, or the YouTube Sources MVP; those are already represented in current-state docs and Git history.
