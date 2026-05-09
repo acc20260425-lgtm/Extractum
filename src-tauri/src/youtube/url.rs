@@ -35,10 +35,6 @@ pub(crate) fn parse_youtube_url(input: &str) -> AppResult<YoutubeParsedUrl> {
         return Err(invalid_youtube_url(format!("unsupported host '{host}'")));
     }
 
-    if let Some(playlist_id) = query_param(&parsed, "list") {
-        return Ok(parsed_playlist(playlist_id, original_url));
-    }
-
     match host.as_str() {
         "youtu.be" => {
             let video_id = first_path_segment(&parsed)
@@ -52,9 +48,13 @@ pub(crate) fn parse_youtube_url(input: &str) -> AppResult<YoutubeParsedUrl> {
 fn parse_youtube_com_url(parsed: &url::Url, original_url: &str) -> AppResult<YoutubeParsedUrl> {
     let path = parsed.path();
     if path == "/watch" {
-        let video_id = query_param(parsed, "v")
-            .ok_or_else(|| invalid_youtube_url("missing watch video id"))?;
-        return Ok(parsed_video(video_id, original_url));
+        if let Some(video_id) = query_param(parsed, "v") {
+            return Ok(parsed_video(video_id, original_url));
+        }
+        if let Some(playlist_id) = query_param(parsed, "list") {
+            return Ok(parsed_playlist(playlist_id, original_url));
+        }
+        return Err(invalid_youtube_url("missing watch video id"));
     }
 
     if let Some(video_id) = path_segment_after(parsed, "shorts") {
@@ -71,6 +71,10 @@ fn parse_youtube_com_url(parsed: &url::Url, original_url: &str) -> AppResult<You
             original_url: original_url.to_string(),
             kind: YoutubeUrlKind::Live { video_id },
         });
+    }
+
+    if let Some(playlist_id) = query_param(parsed, "list") {
+        return Ok(parsed_playlist(playlist_id, original_url));
     }
 
     Err(invalid_youtube_url("unsupported YouTube URL shape"))
@@ -211,18 +215,18 @@ mod tests {
     }
 
     #[test]
-    fn list_parameter_takes_priority_over_video_parameter() {
+    fn watch_url_with_playlist_parameter_parses_selected_video() {
         let parsed = parse("https://www.youtube.com/watch?v=video123&list=PLabc123");
 
         assert_eq!(
             parsed.kind,
-            YoutubeUrlKind::Playlist {
-                playlist_id: "PLabc123".to_string()
+            YoutubeUrlKind::Video {
+                video_id: "video123".to_string()
             }
         );
         assert_eq!(
             parsed.canonical_url,
-            "https://www.youtube.com/playlist?list=PLabc123"
+            "https://www.youtube.com/watch?v=video123"
         );
     }
 
