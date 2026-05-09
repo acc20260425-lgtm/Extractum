@@ -33,7 +33,7 @@ After this part:
 - Modify: `src-tauri/src/secret_store.rs`
 - Modify: `src-tauri/src/youtube/mod.rs`
 
-- [ ] Add stable secret key helper in `src-tauri/src/secret_store.rs` next to the existing secret key helpers:
+- [x] Add stable secret key helper in `src-tauri/src/secret_store.rs` next to the existing secret key helpers:
 
 ```rust
 pub(crate) fn youtube_default_cookies_secret() -> String {
@@ -41,7 +41,7 @@ pub(crate) fn youtube_default_cookies_secret() -> String {
 }
 ```
 
-- [ ] Extend the existing `secret_store::tests::secret_ids_are_stable` test with the YouTube key:
+- [x] Extend the existing `secret_store::tests::secret_ids_are_stable` test with the YouTube key:
 
 ```rust
 assert_eq!(
@@ -50,9 +50,9 @@ assert_eq!(
 );
 ```
 
-- [ ] Add `cookies` module to `src-tauri/src/youtube/mod.rs`.
+- [x] Add `cookies` module to `src-tauri/src/youtube/mod.rs`.
 
-- [ ] In `src-tauri/src/youtube/cookies.rs`, implement the secure-storage boundary:
+- [x] In `src-tauri/src/youtube/cookies.rs`, implement the secure-storage boundary:
 
 ```rust
 use crate::error::{AppError, AppResult};
@@ -88,7 +88,7 @@ Security boundary rules:
 - Validation errors may include a line number and reason, but must not include the line content or cookie value.
 - Unit tests should assert returned command args contain only `--cookies` and the temp file path, not cookie names or cookie values.
 
-- [ ] Add minimal Netscape cookie format validation before saving:
+- [x] Add minimal Netscape cookie format validation before saving:
 
 ```rust
 pub(crate) fn validate_netscape_cookie_file(cookies: &str) -> AppResult<()> {
@@ -177,7 +177,7 @@ Validation policy:
 - `value` may be empty because Netscape cookie files permit empty values.
 - Do not reject non-YouTube domains in this part; `yt-dlp` can ignore unrelated cookies exported by a browser.
 
-- [ ] In `src-tauri/src/youtube/ytdlp.rs`, add authenticated execution support without changing existing unauthenticated call sites:
+- [x] In `src-tauri/src/youtube/ytdlp.rs`, add authenticated execution support without changing existing unauthenticated call sites:
 
 ```rust
 use std::time::Duration;
@@ -210,7 +210,7 @@ Timeout policy:
 - Preview with or without cookies uses the existing 30 second preview timeout.
 - Metadata, transcript, playlist, and comment sync callers must pass their existing Part 3/Part 4 timeout constants. If a caller does not yet have a named timeout, define one near that caller and use it for both auth and no-auth execution.
 
-- [ ] Add tests using `InMemorySecretStore` from `secret_store.rs`.
+- [x] Add tests using `InMemorySecretStore` from `secret_store.rs`.
 
 Minimum backend tests:
 
@@ -233,7 +233,7 @@ fn rejects_empty_cookie_text() {
 }
 ```
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 cd src-tauri
@@ -242,7 +242,7 @@ cargo test youtube::cookies secret_store --lib
 
 Expected: cookie read/write/delete passes, `secret_ids_are_stable` includes the YouTube key, cookie validation passes, invalid cookie errors are sanitized, and raw cookie content is not part of command args.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```powershell
 git add src-tauri/src/youtube src-tauri/src/secret_store.rs
@@ -263,16 +263,16 @@ git commit -m "feat: store youtube cookies securely"
 - Create: `src/lib/api/youtube-settings.ts`
 - Create: `src/lib/api/youtube-settings.test.ts`
 
-- [ ] Execute this task in two internal checkpoints so the settings contract stays reviewable:
+- [x] Execute this task in two internal checkpoints so the settings contract stays reviewable:
 
 ```text
 Checkpoint A: Rust DTOs, validation, app_settings helpers, shared internal helpers, Tauri commands, and Rust tests.
 Checkpoint B: TypeScript types, frontend API wrappers, and Vitest contract tests.
 ```
 
-- [ ] Add `settings` module to `src-tauri/src/youtube/mod.rs`.
+- [x] Add `settings` module to `src-tauri/src/youtube/mod.rs`.
 
-- [ ] In `src-tauri/src/youtube/settings.rs`, define explicit app setting keys matching the migration added in Part 1:
+- [x] In `src-tauri/src/youtube/settings.rs`, define explicit app setting keys matching the migration added in Part 1:
 
 ```rust
 const AUTH_ENABLED_KEY: &str = "youtube.auth.enabled";
@@ -287,7 +287,7 @@ const STOP_AFTER_CONSECUTIVE_FAILURES_KEY: &str =
     "youtube.sync.stop_after_consecutive_failures";
 ```
 
-- [ ] Add typed Rust DTOs with concrete ranges:
+- [x] Add typed Rust DTOs with concrete ranges:
 
 ```rust
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -343,7 +343,7 @@ YoutubeSettingsDto {
 }
 ```
 
-- [ ] Implement `validate_youtube_settings(settings: YoutubeSettingsDto) -> AppResult<YoutubeSettingsDto>`:
+- [x] Implement `validate_youtube_settings(settings: YoutubeSettingsDto) -> AppResult<YoutubeSettingsDto>`:
 
 ```rust
 fn validate_range(value: i64, min: i64, max: i64, label: &str) -> AppResult<i64> {
@@ -375,7 +375,7 @@ fn validate_preferred_captions_language(value: &str) -> AppResult<String> {
 
 Invalid values such as `delay_between_requests_ms = -1`, `max_parallel_video_syncs = 0`, or `max_parallel_video_syncs = 100` must return `AppError::validation` and must not write partial settings.
 
-- [ ] Implement typed `app_settings` helpers in `settings.rs`, following the existing pattern in `src-tauri/src/sources/settings.rs`:
+- [x] Implement typed `app_settings` helpers in `settings.rs`, following the existing pattern in `src-tauri/src/sources/settings.rs`:
 
 ```rust
 async fn read_setting(pool: &sqlx::Pool<sqlx::Sqlite>, key: &str) -> AppResult<Option<String>>;
@@ -397,7 +397,7 @@ Write policy:
 - Persist integers as decimal strings.
 - Persist `preferred_captions_language` as the normalized string from validation.
 
-- [ ] Add internal helpers so commands and tests can share the same logic without duplicating Tauri command setup:
+- [x] Add internal helpers so commands and tests can share the same logic without duplicating Tauri command setup:
 
 ```rust
 pub(crate) fn default_youtube_settings() -> YoutubeSettingsDto;
@@ -437,7 +437,7 @@ Helper behavior:
 - `save_youtube_cookies_to_state` validates and stores cookies through `youtube::cookies`, writes `youtube.auth.enabled = "true"`, and returns fresh auth status.
 - `clear_youtube_auth_in_state` deletes cookies through `youtube::cookies`, writes `youtube.auth.enabled = "false"`, and returns fresh auth status.
 
-- [ ] Add auth status message policy:
+- [x] Add auth status message policy:
 
 ```rust
 fn auth_status_message(enabled: bool, has_cookies: bool) -> &'static str {
@@ -451,7 +451,7 @@ fn auth_status_message(enabled: bool, has_cookies: bool) -> &'static str {
 
 Frontend may display `message`, but must not branch on free-form message text. Backend behavior branches on `enabled` and `has_cookies`.
 
-- [ ] Implement commands:
+- [x] Implement commands:
 
 ```rust
 #[tauri::command]
@@ -492,9 +492,9 @@ Command behavior:
 - `clear_youtube_auth` deletes the cookie secret, writes `youtube.auth.enabled = "false"`, and returns `enabled = false`, `has_cookies = false`, `message = "Auth disabled"`.
 - Empty or whitespace-only `cookies` is a validation error, not an alias for `clear_youtube_auth`.
 
-- [ ] Register commands in `src-tauri/src/lib.rs`.
+- [x] Register commands in `src-tauri/src/lib.rs`.
 
-- [ ] Add Rust tests.
+- [x] Add Rust tests.
 
 Minimum backend tests:
 
@@ -560,7 +560,7 @@ async fn saving_cookies_enables_auth_and_clear_disables_it() {
 }
 ```
 
-- [ ] Add frontend types in `src/lib/types/youtube.ts`:
+- [x] Add frontend types in `src/lib/types/youtube.ts`:
 
 ```ts
 export interface YoutubeSettings {
@@ -582,7 +582,7 @@ export interface YoutubeAuthStatus {
 }
 ```
 
-- [ ] Add frontend API wrappers in `src/lib/api/youtube-settings.ts` instead of adding more YouTube settings code to `src/lib/api/sources.ts`:
+- [x] Add frontend API wrappers in `src/lib/api/youtube-settings.ts` instead of adding more YouTube settings code to `src/lib/api/sources.ts`:
 
 ```ts
 import { invoke } from "@tauri-apps/api/core";
@@ -642,7 +642,7 @@ function mapYoutubeSettings(settings: RawYoutubeSettings): YoutubeSettings {
 }
 ```
 
-- [ ] Add explicit Vitest tests in `src/lib/api/youtube-settings.test.ts`:
+- [x] Add explicit Vitest tests in `src/lib/api/youtube-settings.test.ts`:
 
 ```ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -743,7 +743,7 @@ describe("youtube settings API", () => {
 });
 ```
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 cd src-tauri
@@ -755,7 +755,7 @@ npm run check
 
 Expected: settings persist in `app_settings`, out-of-range inputs fail before writes, auth status reflects secure cookie state without returning cookie content, frontend API wrapper tests pass, and the frontend compiles.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```powershell
 git add src-tauri/src/youtube src-tauri/src/lib.rs src/lib/types/youtube.ts src/lib/api/youtube-settings.ts src/lib/api/youtube-settings.test.ts
@@ -775,11 +775,11 @@ git commit -m "feat: add youtube settings commands"
 - Modify if this task first uses an approved UI dependency: `package.json`
 - Modify if this task first uses an approved UI dependency: `package-lock.json`
 
-- [ ] Add a focused `src/lib/components/settings/youtube-settings-panel.svelte` component and mount it from `/settings` instead of putting all YouTube settings state directly in `src/routes/settings/+page.svelte`.
+- [x] Add a focused `src/lib/components/settings/youtube-settings-panel.svelte` component and mount it from `/settings` instead of putting all YouTube settings state directly in `src/routes/settings/+page.svelte`.
 
-- [ ] Apply the approved UI-library policy only inside the new settings panel or new local UI wrappers. Keep the existing `/settings` route and existing shared UI components as the visual baseline. `@lucide/svelte` may be used for auth/cookie/save/clear action icons. `bits-ui` may be used for a headless switch or tooltip only if it avoids custom accessibility code; otherwise keep native inputs and the existing local `Input`, `Textarea`, `CheckboxRow`, `Button`, `Badge`, and `StatusMessage` components.
+- [x] Apply the approved UI-library policy only inside the new settings panel or new local UI wrappers. Keep the existing `/settings` route and existing shared UI components as the visual baseline. `@lucide/svelte` may be used for auth/cookie/save/clear action icons. `bits-ui` may be used for a headless switch or tooltip only if it avoids custom accessibility code; otherwise keep native inputs and the existing local `Input`, `Textarea`, `CheckboxRow`, `Button`, `Badge`, and `StatusMessage` components.
 
-- [ ] On panel mount, load both:
+- [x] On panel mount, load both:
 
 ```ts
 const [settings, authStatus] = await Promise.all([
@@ -788,7 +788,7 @@ const [settings, authStatus] = await Promise.all([
 ]);
 ```
 
-- [ ] Show auth status from `YoutubeAuthStatus.message`:
+- [x] Show auth status from `YoutubeAuthStatus.message`:
 
 ```text
 Auth disabled
@@ -804,7 +804,7 @@ Display rules:
 - After a successful save, clear the textarea state and reload auth status.
 - Empty or whitespace-only textarea values keep the save-cookies button disabled; backend still validates and rejects empty text.
 
-- [ ] Add cookie input UX as a hidden-by-default multiline textarea:
+- [x] Add cookie input UX as a hidden-by-default multiline textarea:
 
 ```svelte
 {#if editingCookies}
@@ -837,7 +837,7 @@ Stop after consecutive failures
 Save settings
 ```
 
-- [ ] Match frontend input constraints to backend validation:
+- [x] Match frontend input constraints to backend validation:
 
 ```text
 preferred captions language: text input, placeholder "original", max length 32
@@ -853,15 +853,15 @@ auth enabled: checkbox
 
 Use `0` helper copy in labels only where needed: daily soft limit `0` means no soft limit, delay `0` means no deliberate delay, retry backoff `0` means no wait before retry.
 
-- [ ] Save non-secret values via `saveYoutubeSettings`.
+- [x] Save non-secret values via `saveYoutubeSettings`.
 
-- [ ] Save cookies via `saveYoutubeCookies`; display only the returned `YoutubeAuthStatus.message`.
+- [x] Save cookies via `saveYoutubeCookies`; display only the returned `YoutubeAuthStatus.message`.
 
-- [ ] Clear cookies via `clearYoutubeAuth`; this should also set `authEnabled` false in the local settings state after the command returns.
+- [x] Clear cookies via `clearYoutubeAuth`; this should also set `authEnabled` false in the local settings state after the command returns.
 
-- [ ] Keep API wrapper tests from Task 2 in the verification command for this UI task so new wiring is not untested.
+- [x] Keep API wrapper tests from Task 2 in the verification command for this UI task so new wiring is not untested.
 
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 npm test -- youtube-settings
@@ -870,7 +870,7 @@ npm run check
 
 Expected: settings UI typechecks, does not render stored cookies, uses the dedicated YouTube settings API module, and API mapping tests pass.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```powershell
 git add src/routes/settings/+page.svelte src/lib/components/settings/youtube-settings-panel.svelte src/lib/api/youtube-settings.ts src/lib/types/youtube.ts
@@ -881,11 +881,11 @@ git commit -m "feat: add youtube settings UI"
 
 ## Manual Verification
 
-- [ ] Clear auth and preview a public video.
-- [ ] Save an empty cookie textarea and confirm the UI prevents submission; if called directly, backend returns a validation error.
-- [ ] Save malformed cookie text and confirm the backend error names the line/reason without echoing cookie content.
-- [ ] Save valid Netscape cookies and confirm `get_youtube_auth_status` reports `enabled = true`, `has_cookies = true`, `message = "Cookies stored"`.
-- [ ] Confirm the settings UI never displays the stored cookie text after save or reload.
-- [ ] Run an authenticated preview/sync path with temporary cookie file support and confirm `yt-dlp` receives `--cookies <temp-path>`.
-- [ ] Confirm authenticated `yt-dlp` preview still times out after the preview timeout instead of running unbounded.
-- [ ] Clear auth and confirm cookies are removed from secure storage and `youtube.auth.enabled` becomes `false`.
+- [x] Clear auth and preview a public video.
+- [x] Save an empty cookie textarea and confirm the UI prevents submission; if called directly, backend returns a validation error.
+- [x] Save malformed cookie text and confirm the backend error names the line/reason without echoing cookie content.
+- [x] Save valid Netscape cookies and confirm `get_youtube_auth_status` reports `enabled = true`, `has_cookies = true`, `message = "Cookies stored"`.
+- [x] Confirm the settings UI never displays the stored cookie text after save or reload.
+- [x] Run an authenticated preview/sync path with temporary cookie file support and confirm `yt-dlp` receives `--cookies <temp-path>`.
+- [x] Confirm authenticated `yt-dlp` preview still times out after the preview timeout instead of running unbounded.
+- [x] Clear auth and confirm cookies are removed from secure storage and `youtube.auth.enabled` becomes `false`.
