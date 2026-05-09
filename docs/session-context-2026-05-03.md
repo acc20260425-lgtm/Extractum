@@ -7,15 +7,23 @@ Timezone: Europe/Minsk
 User language: Russian
 Branch: `main`
 
-This file is the restore point for the current Codex session. A future session should be able to continue YouTube Sources implementation without reading the full chat history.
+This file is the restore point for the current Codex session. A future session should be able to continue YouTube Sources work without reading the full chat history.
 
 ## Current User Request
 
 The latest user request was:
 
-Rewrite `docs\session-context-2026-05-03.md` with all information needed to restore the current session. The file may be overwritten. Provide a commit message.
+- Rewrite `docs\session-context-2026-05-03.md` with all information needed to restore the current session.
+- The file may be overwritten.
+- Provide a commit message.
 
-The user did not explicitly ask to commit the context file.
+The user did not explicitly ask to commit this documentation update.
+
+Suggested commit message for this documentation update:
+
+```text
+docs: refresh session context after youtube part 4
+```
 
 ## Current IDE Context
 
@@ -26,27 +34,32 @@ Latest IDE context reported by the user:
 
 ## Workflow And Session Rules
 
-- Use relevant Superpowers skills on future implementation turns. This session already used:
+- Use relevant Superpowers skills on future implementation turns.
+- This session used:
   - `superpowers:using-superpowers`
-  - `superpowers:using-git-worktrees`
   - `superpowers:executing-plans`
   - `superpowers:test-driven-development`
+  - `superpowers:systematic-debugging`
   - `superpowers:verification-before-completion`
 - Do not spawn subagents unless the user explicitly asks for delegation or parallel agents.
-- Work is being done directly on `main`; the user had allowed this earlier and then asked to execute Part 4 fully.
-- Current user instruction for Part 4: execute all of Part 4 fully, with one commit per task.
-- `git add` and `git commit` may require escalation. Use `sandbox_permissions: "require_escalated"` for those commands when needed.
+- Work is being done directly on `main`.
 - Use `rg` / `rg --files` for search.
 - Use `apply_patch` for manual file edits.
 - In PowerShell, prefer `npm.cmd`.
-- Svelte edits should be checked with Svelte autofixer before finalizing a task.
-- If verification is interrupted, do not claim completion; rerun the interrupted commands.
+- Svelte edits should be checked with Svelte autofixer before finalizing.
+- Before claiming completion, rerun relevant verification and inspect output.
+- If committing later, `git add` and `git commit` may require escalation.
 
 ## Current Git State
 
-Latest commits before this context rewrite:
+Before this documentation rewrite, `git status --short` returned no output.
+
+Latest commits before this documentation rewrite:
 
 ```text
+52891eb fix: add youtube sources on upgraded databases
+a861fe0 docs: refresh session context after youtube part 4 task 4
+87f12b2 feat: resolve youtube timestamp evidence
 3e4f890 feat: load youtube analysis corpus
 d55aa90 feat: enforce provider-specific analysis groups
 138b6c1 docs: refresh session context after youtube part 4 task 1
@@ -54,72 +67,24 @@ d55aa90 feat: enforce provider-specific analysis groups
 50ac301 test: update youtube sync disabled expectation
 ```
 
-Important Part 4 commits already completed:
+After this request, `docs/session-context-2026-05-03.md` is modified and should be the only intended documentation change unless the user also asks to update the plan checkboxes.
 
-```text
-3707090 feat: ingest youtube comments
-d55aa90 feat: enforce provider-specific analysis groups
-3e4f890 feat: load youtube analysis corpus
-```
+## Important Status Summary
 
-Current working tree before this context-file edit had uncommitted Task 4 partial work in:
+YouTube Sources Part 4 is functionally complete:
 
-```text
-src-tauri/src/analysis/chat.rs
-src-tauri/src/analysis/corpus.rs
-src-tauri/src/analysis/mod.rs
-src-tauri/src/analysis/models.rs
-src-tauri/src/analysis/report.rs
-src-tauri/src/analysis/store.rs
-src-tauri/src/analysis/trace.rs
-src/lib/analysis-state.test.ts
-src/lib/analysis-trace-workflow.test.ts
-src/lib/api/analysis-trace.test.ts
-src/lib/components/analysis/trace-panel.svelte
-src/lib/types/analysis.ts
-```
+- Task 1: comments ingest completed and committed.
+- Task 2: provider-safe analysis groups completed and committed.
+- Task 3: YouTube corpus loading and playlist expansion completed and committed.
+- Task 4: timestamp trace refs and run snapshots completed and committed.
+- Manual verification for Part 4 was completed.
+- A real manual-verification bug for upgraded databases was found, fixed with TDD, verified, and committed.
 
-After this request, `docs/session-context-2026-05-03.md` is also modified.
+Important caveat:
 
-The current uncommitted Task 4 diff is intentionally not committed yet.
+- The active Part 4 markdown plan file still has unchecked checklist boxes. The implementation and manual verification are complete, but the plan document itself has not been physically marked complete.
 
-## Suggested Commit Message
-
-For this context-file update:
-
-```text
-docs: refresh session context during youtube part 4 task 4
-```
-
-Do not use this message for the Task 4 implementation commit. The planned Task 4 implementation commit message remains:
-
-```text
-feat: resolve youtube timestamp evidence
-```
-
-## yt-dlp Status
-
-The user later stated:
-
-```text
-yt-dlp установлен.
-```
-
-This was verified in the session:
-
-```powershell
-yt-dlp --version
-```
-
-Result:
-
-```text
-2026.03.17
-```
-
-Earlier notes about `yt-dlp` being missing are obsolete.
-
-## Plan In Scope
+## Active Plan
 
 Active plan file:
 
@@ -137,7 +102,7 @@ Goal of Part 4:
 - Store stable run snapshots with metadata.
 - Resolve timestamp trace refs and synthetic description refs.
 
-## Part 4 Task 1 Completed
+## Part 4 Task 1: Comments Ingest
 
 Commit:
 
@@ -162,17 +127,18 @@ yt-dlp --dump-single-json --write-comments --skip-download --extractor-args yout
   - accept string timestamp;
   - fallback to video timestamp;
   - fallback to sync start timestamp;
-  - warn on missing/unparseable comment timestamp.
+  - warn on missing or unparseable comment timestamp.
 - Added `upsert_youtube_comment_item`.
 - Persisted YouTube comments as:
   - `item_kind = youtube_comment`
   - `external_id = comment:<comment_id>`
   - `content_kind = text_only`
   - `reaction_count = like_count`
+- Stored parent id, reply state, like count, pinned state, creator reaction, author metadata, and raw provider payload in compressed raw data.
 - Comment upsert updates existing rows instead of duplicating.
 - Jobs run comments only when `YoutubeSyncOptions.comments = true`.
 
-Verification:
+Verification at completion:
 
 ```powershell
 cd src-tauri
@@ -189,7 +155,7 @@ Known results:
 - `sources::items`: 8 passed.
 - Full `cargo test --lib`: 244 passed.
 
-## Part 4 Task 2 Completed
+## Part 4 Task 2: Provider-Safe Analysis Groups
 
 Commit:
 
@@ -219,16 +185,16 @@ async fn validate_group_source_type(
 - Validation allows only `telegram` or `youtube`.
 - Validation rejects sources whose `sources.source_type` does not match the group type.
 - Validation runs after `ensure_sources_exist` and before the write transaction.
-- In-memory test schemas updated for `analysis_source_groups.source_type`.
+- In-memory test schemas were updated for `analysis_source_groups.source_type`.
 
 Implemented frontend:
 
 - Added `AnalysisGroupSourceType`.
 - Added `source_type` to analysis source/group TS types.
 - Added `sourceType` to create/update group inputs.
-- Group editor now has a Telegram/YouTube type select.
+- Group editor has a Telegram/YouTube type select.
 - Group editor filters candidate sources by selected provider.
-- Route state now keeps `groupSourceType`.
+- Route state keeps `groupSourceType`.
 - Selecting an existing group copies its `source_type`.
 - Starting a new group defaults to `telegram`.
 - Save calls pass group type.
@@ -236,7 +202,7 @@ Implemented frontend:
 Task 2 RED checks:
 
 - `cargo test analysis::groups --lib` initially failed because provider validation was missing.
-- `vitest` workflow test initially failed because `sourceType` was not passed.
+- Vitest workflow test initially failed because `sourceType` was not passed.
 
 Task 2 final verification:
 
@@ -261,7 +227,7 @@ Svelte autofixer:
 - Ran on `source-group-editor.svelte`.
 - No issues.
 
-## Part 4 Task 3 Completed
+## Part 4 Task 3: YouTube Corpus Loading And Playlist Expansion
 
 Commit:
 
@@ -308,7 +274,7 @@ No linked YouTube videos are available for analysis in this scope
   - `external_id = description:<video_id>`
   - `ref = s<source_id>-i0`
 - `preflight_analysis_run` now calls the same corpus loader used by execution.
-- `ReportRunInput` now carries `corpus_request`.
+- `ReportRunInput` carries `corpus_request`.
 - `start_analysis_report` accepts `youtube_corpus_mode`.
 
 Implemented frontend:
@@ -351,56 +317,13 @@ Svelte autofixer:
 - Ran on `run-controls.svelte`.
 - No issues.
 
-## Part 4 Task 4 In Progress
+## Part 4 Task 4: Timestamp Trace Refs And Run Snapshots
 
-Planned commit message:
-
-```text
-feat: resolve youtube timestamp evidence
-```
-
-Task 4 files in plan:
-
-- `src-tauri/src/analysis/models.rs`
-- `src-tauri/src/analysis/store.rs`
-- `src-tauri/src/analysis/trace.rs`
-- `src-tauri/src/analysis/corpus.rs`
-- `src/lib/types/analysis.ts`
-- `src/lib/api/analysis-trace.ts`
-- `src/lib/analysis-trace-workflow.test.ts`
-
-Actual uncommitted files currently modified:
+Commit:
 
 ```text
-src-tauri/src/analysis/chat.rs
-src-tauri/src/analysis/corpus.rs
-src-tauri/src/analysis/mod.rs
-src-tauri/src/analysis/models.rs
-src-tauri/src/analysis/report.rs
-src-tauri/src/analysis/store.rs
-src-tauri/src/analysis/trace.rs
-src/lib/analysis-state.test.ts
-src/lib/analysis-trace-workflow.test.ts
-src/lib/api/analysis-trace.test.ts
-src/lib/components/analysis/trace-panel.svelte
-src/lib/types/analysis.ts
+87f12b2 feat: resolve youtube timestamp evidence
 ```
-
-### Task 4 Work Already Done
-
-Added RED tests in `src-tauri/src/analysis/trace.rs` for:
-
-- Exact YouTube timestamp refs.
-- Milliseconds to integer YouTube timestamp seconds.
-- Appending `t=<seconds>` to YouTube URLs.
-- Falling back from old refs to base item refs.
-- Serializing YouTube fields as `null` for Telegram refs.
-- Marking YouTube description refs with `item_id = 0` as synthetic.
-
-The initial RED failure showed missing fields on:
-
-- `CorpusMessage`
-- `AnalysisTraceRef`
 
 Implemented Rust model changes:
 
@@ -419,13 +342,13 @@ Implemented Rust model changes:
 
 Implemented Rust store/corpus changes:
 
-- `persist_run_snapshot` now inserts:
+- `persist_run_snapshot` inserts:
   - `item_kind`
   - `source_type`
   - `source_subtype`
   - `metadata_zstd`
-- `load_run_snapshot_messages` now selects those fields and restores them into `CorpusMessage`.
-- Live item loader now joins `sources` and selects:
+- `load_run_snapshot_messages` selects those fields and restores them into `CorpusMessage`.
+- Live item loader joins `sources` and selects:
   - `items.item_kind`
   - `sources.source_type`
   - `sources.source_subtype`
@@ -449,10 +372,11 @@ s<source_id>-i<transcript_item_id>@<segment_start_ms>ms
   - `segment_end_ms`
   - `item_kind = youtube_transcript`
 - Synthetic YouTube descriptions now set:
+  - `item_id = 0`
   - `item_kind = youtube_description`
   - `source_type = youtube`
   - `source_subtype = video`
-  - `metadata_zstd` with YouTube metadata
+  - `metadata_zstd` with YouTube metadata.
 
 Implemented Rust trace changes:
 
@@ -462,11 +386,11 @@ Implemented Rust trace changes:
 - `youtube_timestamp_seconds` is `ms / 1000`.
 - `youtube_url` appends `t=<seconds>`.
 - `youtube_display_label` formats as:
-  - `"Video title at 12:34"` when title exists.
-  - `"YouTube at 12:34"` otherwise.
+  - `Video title at 12:34` when title exists.
+  - `YouTube at 12:34` otherwise.
 - `is_synthetic = true` when:
   - `message.item_id == 0`, or
-  - `message.item_kind == Some("youtube_description")`
+  - `message.item_kind == Some("youtube_description")`.
 
 Implemented TypeScript/frontend changes:
 
@@ -486,166 +410,354 @@ Implemented TypeScript/frontend changes:
 - Updated `trace-panel.svelte` to render:
   - YouTube link when `youtube_url` exists.
   - `youtube_display_label` when available.
-  - "Saved synthetic evidence" for synthetic refs.
+  - `Saved synthetic evidence` for synthetic refs.
 
-### Task 4 Verification Already Run
-
-Before the latest tiny corpus test fixture assertion was added, these passed:
+Task 4 final verification:
 
 ```powershell
 cd src-tauri
 cargo test analysis::trace --lib
 cargo test analysis::corpus --lib
 cargo test analysis::store --lib
+cd ..
+npm.cmd test -- analysis-trace analysis-trace-workflow
+npm.cmd run check
+git diff --cached --check
 ```
 
-Known results:
+Results:
 
 - `analysis::trace`: 7 passed.
 - `analysis::corpus`: 19 passed.
 - `analysis::store`: 3 passed.
+- `analysis-trace` and `analysis-trace-workflow`: 13 tests passed.
+- `svelte-check`: 0 errors and 0 warnings.
+- `git diff --cached --check`: clean.
 
-After TypeScript/frontend changes, this passed:
+Svelte autofixer:
 
-```powershell
-npm.cmd test -- analysis-trace analysis-trace-workflow
+- Ran on `trace-panel.svelte`.
+- No issues.
+
+## Legacy Database YouTube Source Fix
+
+Commit:
+
+```text
+52891eb fix: add youtube sources on upgraded databases
 ```
 
-Result:
+Manual verification found a real bug on an upgraded database:
 
-- 2 files passed.
-- 13 tests passed.
-
-### Important Interruption
-
-After adding an extra assertion to prove run snapshots roundtrip YouTube metadata, `cargo fmt` was run. Then a parallel rerun of:
-
-```powershell
-cargo test analysis::trace --lib
-cargo test analysis::corpus --lib
-cargo test analysis::store --lib
+```text
+NOT NULL constraint failed: sources.telegram_source_kind
 ```
 
-was started, but the user intentionally interrupted the turn. Tool output said the parallel commands were aborted by user. Treat final Task 4 verification as not complete until rerun.
+Root cause:
 
-### Task 4 Next Steps
+- Old migration made `sources.telegram_source_kind TEXT NOT NULL DEFAULT 'channel'`.
+- YouTube upsert inserted `NULL` for this Telegram compatibility column.
+- Fresh test schemas did not expose the bug.
 
-Continue from the current uncommitted diff. Recommended next actions:
+TDD tests added in `src-tauri/src/sources/store.rs`:
 
-1. Inspect current status:
+- `source_record_parts_hides_non_telegram_compatibility_kind`
+- `upsert_youtube_video_source_handles_legacy_not_null_telegram_kind`
+- `upsert_youtube_playlist_source_handles_legacy_not_null_telegram_kind`
 
-```powershell
-git status --short
-```
+RED result:
 
-2. Rerun Rust checks after the final fixture/assertion edits:
+- `cargo test sources::store::tests --lib` failed on the three new tests.
+
+Fix:
+
+- YouTube source upsert now inserts `telegram_source_kind = ''` for video/playlist rows so legacy NOT NULL databases work.
+- `source_record_from_row_parts` hides non-Telegram compatibility kind by returning `telegram_source_kind: None` when `source_type != "telegram"`.
+
+Verification:
 
 ```powershell
 cd src-tauri
-cargo test analysis::trace --lib
-cargo test analysis::corpus --lib
-cargo test analysis::store --lib
+cargo test sources::store::tests --lib
+cargo fmt
+cargo test sources::store --lib
+cargo test youtube::preview --lib
+cargo test youtube::jobs --lib
+cargo test --lib
 ```
 
-3. Run frontend checks:
+Results:
+
+- `sources::store::tests`: 6 passed.
+- `sources::store`: passed.
+- `youtube::preview`: passed.
+- `youtube::jobs`: passed.
+- Full `cargo test --lib`: 261 passed.
+
+## Manual Verification Of Part 4
+
+Manual verification was performed with the Tauri MCP bridge and the app running at:
+
+```text
+http://localhost:1420/analysis
+```
+
+Tauri app id:
+
+```text
+org.ai.extractum
+```
+
+Tauri bridge:
+
+```text
+localhost:9223
+```
+
+The dev app was started with:
 
 ```powershell
-cd ..
-npm.cmd test -- analysis-trace analysis-trace-workflow
-npm.cmd run check
+Start-Process -FilePath npm.cmd -ArgumentList @('run','tauri','--','dev') -WorkingDirectory 'G:\Develop\Extractum' -WindowStyle Hidden
 ```
 
-4. Because `trace-panel.svelte` was modified, run Svelte autofixer on it before finalizing if possible.
+The app and bridge may or may not still be running in a future session. Check before using:
 
-5. Run:
-
-```powershell
-git diff --check
+```text
+mcp__tauri__.driver_session status
 ```
 
-6. If all pass, commit Task 4:
-
-```powershell
-git add src-tauri/src/analysis src/lib/types/analysis.ts src/lib/api/analysis-trace.ts src/lib/analysis-trace-workflow.test.ts src/lib/analysis-state.test.ts src/lib/api/analysis-trace.test.ts src/lib/components/analysis/trace-panel.svelte
-git commit -m "feat: resolve youtube timestamp evidence"
-```
-
-Note: Include `src-tauri/src/analysis/chat.rs`, `src-tauri/src/analysis/mod.rs`, and `src-tauri/src/analysis/report.rs` because test fixtures and trace serialization were updated there.
-
-## Potential Task 4 Risks To Recheck
-
-- `load_youtube_transcript_segment_messages` now depends on `youtube_transcript_segments`. Verify fallback behavior if a YouTube transcript item has no segment rows. The plan wants segment-level messages, so zero rows may be acceptable, but it changes Task 3 tests and behavior.
-- `load_item_messages` uses a raw `item_kind_filter` string. It is currently passed only static internal strings, so it is not user-controlled.
-- `append_youtube_timestamp` always appends `&t=` when URL already has query params. It does not remove an existing `t` param. Tests currently expect appending.
-- `find_trace_message` fallback returns the first corpus message matching source/item. With multiple transcript segments for one item, old base refs map to the first segment by corpus order.
-- `youtube_display_label` for synthetic description refs currently may show only title without timestamp.
-- Need ensure all `AnalysisTraceRef` constructors in Rust/TS were updated.
-- Need ensure all `CorpusMessage` literals were updated:
-
-```powershell
-rg -n "CorpusMessage \{" src-tauri/src
-```
-
-- Need ensure all in-memory `items` schemas used by touched tests include `media_metadata_zstd` if they exercise `load_corpus_messages`.
-- Need ensure all in-memory `analysis_run_messages` schemas include:
-  - `item_kind`
-  - `source_type`
-  - `source_subtype`
-  - `metadata_zstd`
-
-## Part 4 Remaining After Task 4
-
-After committing Task 4, Part 4 still needs manual verification from the plan:
-
-- Sync comments for a public video with transcript data and confirm top-level comments plus replies appear as `youtube_comment` items.
-- Rerun comment sync and confirm item count stays stable.
-- Create a YouTube-only analysis group and confirm adding a Telegram source is rejected before membership write.
-- Run analysis for one YouTube video in all three corpus modes:
-  - `transcript_only`
-  - `transcript_description`
-  - `transcript_description_comments`
-- Run analysis for a playlist with at least one unavailable/unlinked row and confirm only linked, non-removed child videos enter corpus.
-- Save a YouTube analysis run, resync transcript/comments, reopen saved run and confirm old snapshot excerpt, metadata, and trace resolution remain unchanged.
-- Open timestamp trace ref and synthetic description ref:
-  - timestamp ref should produce YouTube URL with `t=<seconds>`;
-  - synthetic ref should render saved excerpt without source-item lookup using `item_id = 0`.
-
-Manual verification may require the app running, network access, configured provider profile/LLM, and a suitable public YouTube video/playlist.
-
-## Verification Command Reference
-
-Useful commands:
+`yt-dlp` was verified:
 
 ```powershell
 yt-dlp --version
 ```
 
-```powershell
-cd src-tauri
-cargo test analysis::groups --lib
-cargo test analysis::store --lib
-cargo test analysis::corpus --lib
-cargo test analysis::report --lib
-cargo test analysis::trace --lib
-cargo test youtube::comments --lib
-cargo test youtube::jobs --lib
-cargo test sources::items --lib
+Result:
+
+```text
+2026.03.17
 ```
 
-```powershell
-cd g:\Develop\Extractum
-npm.cmd test -- analysis-source-groups
-npm.cmd test -- analysis-run-workflow analysis-state analysis-runs
-npm.cmd test -- analysis-trace analysis-trace-workflow
-npm.cmd run check
-git diff --check
+### Video Used For Reliable Manual Verification
+
+Initial test video:
+
+```text
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ```
 
-If `npm.cmd test -- <filter>` has environment issues, use:
+Notes:
 
-```powershell
-node --trace-uncaught ./node_modules/vitest/vitest.mjs run <path-or-filter> --reporter dot
+- Preview worked.
+- After the legacy DB fix, adding the source worked as source id `28`.
+- Full sync failed on comments with `yt-dlp preview timed out after 30 seconds`, likely due comment volume on a popular video.
+
+Reliable test video:
+
+```text
+https://www.youtube.com/watch?v=M7lc1UVf-VE
 ```
+
+Source:
+
+- Source id: `30`
+- Title: `YouTube Developers Live: Embedded Web Player Customization`
+- Preview available.
+- Manual and auto captions available.
+
+Full sync for source `30`:
+
+- Metadata + transcript + comments succeeded.
+- Job id: `source-job-2`
+- Status: `succeeded`
+- DB counts:
+  - `youtube_transcript`: 1 item
+  - transcript segments: 466
+  - `youtube_comment`: 94 items
+- Reply-like comment ids were present, including ids with dot suffixes.
+
+Comments-only resync:
+
+- Job id: `source-job-3`
+- Status: `succeeded`
+- `youtube_comment` count remained 94, confirming idempotent upsert behavior.
+
+### Provider-Safe Analysis Group Verification
+
+Created YouTube group:
+
+- Group id: `1`
+- Name: `Manual Verification YouTube`
+- Member source: `30`
+
+Telegram source used for negative test:
+
+- Source id: `17`
+- Title: `chat aigenis invest`
+
+Attempt to update group with `[17, 30]` was rejected:
+
+```text
+Source 17 has type 'telegram' and cannot be added to a 'youtube' analysis group
+```
+
+Membership before and after rejection remained only source `30`.
+
+### Analysis Mode Verification
+
+Run settings:
+
+- Source: `30`
+- Period: `1360000000` to `1778331400`
+- Template id: `1`
+- Profile: `test_profile`
+- Provider: `omniroute`
+- Model: `gemini/gemini-3-flash-preview`
+
+Runs:
+
+- Run `54`: `transcript_only`
+  - Status: completed.
+  - Snapshot: 466 `youtube_transcript` docs.
+- Run `55`: `transcript_description`
+  - Status: completed.
+  - Snapshot: 466 `youtube_transcript` docs + 1 `youtube_description`.
+- Run `56`: `transcript_description_comments`
+  - Status: completed.
+  - Snapshot: 466 transcript docs + 1 description + 94 comment docs.
+  - Report included transcript refs and comment refs, for example `s30-i134725`.
+
+### Playlist Expansion Verification
+
+Created local synthetic manual playlist source:
+
+- Source id: `32`
+- Title: `Manual Verification Playlist`
+
+Inserted playlist rows:
+
+- Linked row:
+  - `video_source_id = 30`
+  - `video_id = 'M7lc1UVf-VE'`
+- Unlinked row:
+  - `video_source_id = NULL`
+  - `video_id = 'manual-unlinked-video'`
+  - `availability_status = 'no_captions'`
+
+Run:
+
+- Run `57`
+- Scope: playlist source `32`
+- Mode: `transcript_only`
+- Status: completed.
+
+Result:
+
+- Snapshot contained only source `30` transcript docs.
+- Query for `external_id LIKE '%manual-unlinked-video%'` returned count 0.
+- No empty documents were created for `video_source_id IS NULL`.
+
+### Saved-Run Stability Verification
+
+Before resync, resolved refs for run `56`:
+
+- Timestamp ref:
+  - Ref: `s30-i134703@14030ms`
+  - `youtube_url`: `https://www.youtube.com/watch?v=M7lc1UVf-VE&t=14`
+  - `youtube_timestamp_seconds`: `14`
+  - Display label ended with `at 0:14`.
+- Synthetic description ref:
+  - Ref: `s30-i0`
+  - `item_id = 0`
+  - `is_synthetic = true`
+  - Saved excerpt came from description.
+  - `youtube_url` was base video URL.
+
+Then source `30` was resynced with transcripts and comments:
+
+- Job id: `source-job-4`
+- Status: `succeeded`
+
+After resync:
+
+- Current source items remained:
+  - 94 comments
+  - 1 transcript item
+- Run `56` snapshot remained:
+  - 94 comments
+  - 1 description
+  - 466 transcript docs
+- Same timestamp and synthetic refs resolved identically after resync.
+
+### Trace UI Verification
+
+Run `54` trace panel:
+
+- Timestamp ref `s30-i134703@14030ms` rendered with YouTube link:
+
+```text
+https://www.youtube.com/watch?v=M7lc1UVf-VE&t=14
+```
+
+To force a synthetic description citation, prompt template id `2` was created:
+
+- Name: `Manual YouTube description trace`
+- Body:
+
+```text
+Create a very short report using only the YouTube video description document. Cite the description evidence ref exactly once. Do not cite transcript or comment refs.
+```
+
+Run:
+
+- Run `58`
+- Mode: `transcript_description`
+- Template id: `2`
+- Status: completed.
+- Result cited `[s30-i0]`.
+
+Trace panel for run `58` showed:
+
+- `s30-i0`
+- Link: `https://www.youtube.com/watch?v=M7lc1UVf-VE`
+- Text: `Saved synthetic evidence`
+- Saved excerpt from YouTube description
+- No source-item lookup was needed because `item_id = 0`.
+
+## Local Data Created During Manual Verification
+
+The following data was created in the user's local app/database during manual verification. Do not delete it unless the user asks.
+
+- YouTube source `28`: Rick Astley test video, added after legacy DB fix.
+- YouTube source `30`: `YouTube Developers Live: Embedded Web Player Customization`.
+- YouTube playlist source `32`: `Manual Verification Playlist`.
+- Analysis group `1`: `Manual Verification YouTube`.
+- Prompt template `2`: `Manual YouTube description trace`.
+- Analysis runs `54`, `55`, `56`, `57`, `58`.
+- Source jobs including `source-job-2`, `source-job-3`, `source-job-4`.
+
+## Part 4 Completion Answer Already Given
+
+When the user asked whether Part 4 was fully complete, the answer given was:
+
+- Yes, functionally Part 4 is fully complete.
+- Code implementation, automated verification, manual verification, and the upgraded-database fix are done.
+- The only documentation caveat is that the markdown plan checkboxes were still not physically updated, and this session context needed refreshing.
+
+## Recommended Next Steps
+
+If the user wants documentation cleanup:
+
+1. Update `docs/superpowers/plans/2026-05-09-youtube-sources-04-comments-and-analysis.md` to mark Part 4 tasks and manual verification complete.
+2. Commit this session context update and optional plan checkbox update.
+
+If the user wants implementation to continue:
+
+1. Move to Part 5.
+2. Read `docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md`.
+3. Use `superpowers:executing-plans`.
+4. Use `superpowers:test-driven-development` for behavior changes.
+5. Keep one commit per task if the user continues the previous working style.
 
 ## Part 5 Reminder: Auth And Settings
 
@@ -658,7 +770,7 @@ docs/superpowers/plans/2026-05-09-youtube-sources-05-auth-and-settings.md
 Key reminders:
 
 - Raw cookies are allowed only inside backend code that writes temporary cookie files.
-- Raw cookies must never appear in logs, IPC responses, job records, events, or `AppError.message`.
+- Raw cookies must never appear in logs, IPC responses, job records/events, or `AppError.message`.
 - Settings UI must never render stored cookie text back into an input.
 - Existing `run_ytdlp(args)` keeps 30s preview timeout without cookies.
 - Authenticated paths use explicit bounded timeouts.
@@ -679,6 +791,48 @@ Key reminders:
 - `get_youtube_runtime_status` runs `yt-dlp --version` with a 5s timeout.
 - Source summaries should use provider-neutral `synced items`, not `synced messages`.
 - Hide Telegram topic controls for YouTube sources.
+
+## Verification Command Reference
+
+Useful backend commands:
+
+```powershell
+cd src-tauri
+cargo test analysis::groups --lib
+cargo test analysis::store --lib
+cargo test analysis::corpus --lib
+cargo test analysis::report --lib
+cargo test analysis::trace --lib
+cargo test youtube::comments --lib
+cargo test youtube::preview --lib
+cargo test youtube::jobs --lib
+cargo test sources::items --lib
+cargo test sources::store --lib
+cargo test --lib
+```
+
+Useful frontend commands:
+
+```powershell
+cd g:\Develop\Extractum
+npm.cmd test -- analysis-source-groups
+npm.cmd test -- analysis-run-workflow analysis-state analysis-runs
+npm.cmd test -- analysis-trace analysis-trace-workflow
+npm.cmd run check
+```
+
+Whitespace checks:
+
+```powershell
+git diff --check
+git diff --cached --check
+```
+
+If `npm.cmd test -- <filter>` has environment issues, use:
+
+```powershell
+node --trace-uncaught ./node_modules/vitest/vitest.mjs run <path-or-filter> --reporter dot
+```
 
 ## General Gotchas
 
