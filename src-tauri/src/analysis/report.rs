@@ -368,6 +368,20 @@ struct ReportRunInput {
     preflight: AnalysisRunPreflight,
 }
 
+fn validate_report_preflight(preflight: &AnalysisRunPreflight) -> AppResult<()> {
+    if preflight.message_count == 0 {
+        return Err(AppError::validation(
+            "No synced source documents were found for the selected analysis scope and period",
+        ));
+    }
+
+    if let Some(error) = preflight_limit_error(preflight) {
+        return Err(AppError::validation(error));
+    }
+
+    Ok(())
+}
+
 struct ReportPipelineContext {
     handle: AppHandle,
     pool: Pool<Sqlite>,
@@ -1000,15 +1014,7 @@ pub async fn start_analysis_report(
     .await
     .map_err(AppError::database)?;
 
-    if preflight.message_count == 0 {
-        return Err(AppError::validation(
-            "No synced source documents were found for the selected analysis scope and period",
-        ));
-    }
-
-    if let Some(error) = preflight_limit_error(&preflight) {
-        return Err(AppError::validation(error));
-    }
+    validate_report_preflight(&preflight)?;
 
     if let Some(existing_run_id) = find_active_duplicate_run(
         &pool,
@@ -1102,9 +1108,11 @@ pub async fn start_analysis_report(
 mod tests {
     use super::{
         build_map_request, build_reduce_request, extract_json_payload, finish_map_phase,
-        parse_chunk_summary, ReduceRequestParams, ReportRunError,
+        parse_chunk_summary, validate_report_preflight, ReduceRequestParams, ReportRunError,
     };
+    use crate::analysis::corpus::{AnalysisRunPreflight, AnalysisRunPreflightLimits};
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
+    use crate::error::AppErrorKind;
 
     const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-i2"]}"#;
 
@@ -1260,5 +1268,50 @@ mod tests {
         assert!(request.messages[0].content.contains("[s12-i845]"));
         assert!(request.messages[1].content.contains("Chunk 1 summary"));
         assert!(request.messages[1].content.contains("Chunk 2 summary"));
+    }
+
+    #[test]
+    fn validate_report_preflight_rejects_empty_corpus() {
+        let error = validate_report_preflight(&AnalysisRunPreflight {
+            source_ids: vec![1],
+            message_count: 0,
+            estimated_input_chars: 0,
+            estimated_chunks: 0,
+            limits: AnalysisRunPreflightLimits::default(),
+        })
+        .expect_err("empty corpus should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(
+            error.message,
+            "No synced source documents were found for the selected analysis scope and period"
+        );
+    }
+
+    #[test]
+    fn validate_report_preflight_rejects_oversized_runs() {
+        let error = validate_report_preflight(&AnalysisRunPreflight {
+            source_ids: vec![1],
+            message_count: 10_001,
+            estimated_input_chars: 100_000,
+            estimated_chunks: 10,
+            limits: AnalysisRunPreflightLimits::default(),
+        })
+        .expect_err("oversized corpus should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert!(error.message.contains("Analysis scope is too large"));
+    }
+
+    #[test]
+    fn validate_report_preflight_allows_runs_within_limits() {
+        validate_report_preflight(&AnalysisRunPreflight {
+            source_ids: vec![1],
+            message_count: 100,
+            estimated_input_chars: 50_000,
+            estimated_chunks: 4,
+            limits: AnalysisRunPreflightLimits::default(),
+        })
+        .expect("preflight should pass");
     }
 }
