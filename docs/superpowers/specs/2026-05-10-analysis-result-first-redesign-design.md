@@ -183,6 +183,24 @@ Report | Source
 
 The existing `ReportViewer`, `SourceMessagesPanel`, `YoutubeSourceDetail`, and `YoutubePlaylistDetail` can be reused internally, but they should be adapted toward the new canvas model rather than rendered as independent stacked panels.
 
+### Report Setup / Template Management
+
+Report setup is a pre-run concern. It should stay available when the user is preparing a new analysis, but it must not compete with reading an opened report.
+
+When no run is open and a source or source group is selected, `ReportCanvas` may show a focused run setup surface near the report/source header or as a compact setup card. This setup surface owns:
+
+- report template picker;
+- selected provider/profile/model summary when needed for launch confidence;
+- date/topic/scope controls that are required before starting a run;
+- primary `Run report` action;
+- access to advanced run settings through a collapsed `Run setup` panel or drawer.
+
+Template editing and template creation should be reachable from the pre-run setup surface, preferably as a modal, dialog, or temporary drawer launched from the template picker or setup header. Editing a template should not replace the report reader, source reader, evidence tab, chat tab, or run history tab as a primary workspace mode.
+
+When a completed, failed, cancelled, queued, or running run is opened, report setup controls leave the primary canvas. The opened run can still show the prompt template name/version as metadata, and may expose a secondary `Use this template for new run` or `Open run setup` action, but the default surface remains the report or run status.
+
+`RunCompanionTabs.Runs` can filter by prompt template and display template metadata for saved runs, but it should not become the main template editor. Global app settings remain responsible for LLM profiles, provider keys, and smoke tests; report template editing remains part of analysis run setup unless a later product decision moves all report-template management to `/settings`.
+
 ### Source Ingest Controls And Activity
 
 The redesign must preserve source ingest control after the old full-width `WorkspaceRail` is collapsed. Source sync and source-job controls should remain close to the source material, but they must not compete with report reading or mix with analysis runs.
@@ -432,6 +450,8 @@ State keys should be versioned or namespaced so future layout changes can discar
 - Selecting `Source` for an active run shows the run snapshot only if snapshot data exists; otherwise it shows the pending snapshot state and an explicit live source option.
 - Selecting `Source` for a failed or cancelled run shows the run snapshot when available, or an unavailable state with an explicit live source option when it is not available.
 - Selecting a source or source group from `CompactSourceRail` sets `WorkspaceSelection` to that scope, clears `OpenRunState`, clears run-bound evidence/chat state, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, and sets `companionTab = "runs"`.
+- When no run is open and a source or group is selected, report setup and template selection can appear in the primary canvas as pre-run setup.
+- Opening any run removes report setup and template editing controls from the primary canvas, leaving template name/version as run metadata and any setup entry point as secondary.
 - Clicking a trace ref sets `companionTab = "evidence"`.
 - Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
 - Choosing `View live source` in run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
@@ -497,6 +517,9 @@ Add focused tests around state and structure:
 - opening a completed run defaults to report canvas and evidence companion, and aligns `WorkspaceSelection` to the run scope;
 - opening an active run aligns `WorkspaceSelection` to the run scope and shows live run status in the canvas;
 - source or source group selection from `CompactSourceRail` clears `OpenRunState`, clears run-bound evidence/chat state, defaults to source canvas, uses live source basis, and switches the companion to `Runs`;
+- no-run source context exposes pre-run report setup with template selection and launch controls;
+- opening a run removes template editing and report setup from the primary report-reading surface;
+- template editor opens as a modal, dialog, or temporary drawer without replacing report/source reading or companion tabs;
 - local source filtering inside a run snapshot does not close the opened run;
 - focusing the chat input alone does not unexpectedly switch companion tab to chat;
 - explicit chat tab selection or question submission switches companion tab to chat;
