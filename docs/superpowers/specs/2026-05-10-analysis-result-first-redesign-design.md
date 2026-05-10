@@ -173,8 +173,11 @@ Report | Source
 - shows the current run header and run metadata;
 - shows live output while a run is running;
 - shows saved report output when a run is completed;
+- represents report setup rather than report output when no run is open;
 - keeps trace refs clickable;
 - exposes cancel action for a cancellable active run.
+
+When no run is open, the `Report` side of the canvas represents report setup rather than report output. `Source` remains the default mode after a source or group selection, but if the user switches to `Report`, the canvas should show the pre-run setup surface instead of an empty report. The visible mode label can remain `Report` for consistency or become contextual such as `Setup`; either way the state represents preparation for a new report.
 
 Run header metadata should include at least:
 
@@ -483,6 +486,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 - Selecting `Source` for a failed or cancelled run shows the run snapshot when available, or an unavailable state with an explicit live source option when it is not available.
 - Selecting a source or source group from `CompactSourceRail` sets `WorkspaceSelection` to that scope, clears `OpenRunState`, clears run-bound evidence/chat state, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, sets `companionTab = "runs"`, and defaults `Runs` scope filtering to current scope.
 - When no run is open and a source or group is selected, report setup and template selection can appear in the primary canvas as pre-run setup.
+- When no run is open and the user switches the canvas to `Report`, show report setup instead of report output.
 - Opening any run removes report setup and template editing controls from the primary canvas, leaving template name/version as run metadata and any setup entry point as secondary.
 - Clicking a trace ref sets `companionTab = "evidence"`.
 - Choosing `Show in source` from an evidence item sets `canvasMode = "source"`, prefers `sourceViewBasis = "run_snapshot"` when available, and highlights the referenced message or transcript segment.
@@ -553,6 +557,7 @@ Add focused tests around state and structure:
 - opening an active run aligns `WorkspaceSelection` to the run scope and shows live run status in the canvas;
 - source or source group selection from `CompactSourceRail` clears `OpenRunState`, clears run-bound evidence/chat state, defaults to source canvas, uses live source basis, switches the companion to `Runs`, and defaults `Runs` filtering to current scope;
 - no-run source context exposes pre-run report setup with template selection and launch controls;
+- no-run `Report` canvas mode shows report setup rather than empty report output;
 - opening a run removes template editing and report setup from the primary report-reading surface;
 - template editor opens as a modal, dialog, or temporary drawer without replacing report/source reading or companion tabs;
 - run header exposes the required minimum metadata: scope label, status, timestamps, template version, provider profile, provider/model, source basis status, and YouTube corpus mode when applicable;
