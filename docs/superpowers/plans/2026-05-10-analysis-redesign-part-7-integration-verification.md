@@ -1070,7 +1070,7 @@ git commit -m "docs: record analysis redesign browser verification"
 **Files:**
 - Verify all Part 7 test and documentation files.
 
-- [ ] **Step 1: Run the final command set after browser verification updates**
+- [x] **Step 1: Run the final command set after browser verification updates**
 
 Run:
 
@@ -1082,7 +1082,7 @@ git diff --check
 
 Expected: all commands pass, and `git diff --check` prints no output.
 
-- [ ] **Step 2: Verify the verification document has no unfilled markers**
+- [x] **Step 2: Verify the verification document has no unfilled markers**
 
 Run:
 
@@ -1092,7 +1092,7 @@ rg -n "Pending automated execution|Pending browser execution|Result recorded in 
 
 Expected: no output.
 
-- [ ] **Step 3: Check final working tree**
+- [x] **Step 3: Check final working tree**
 
 Run:
 
@@ -1102,7 +1102,7 @@ git status --short
 
 Expected: clean working tree.
 
-- [ ] **Step 4: Stop for review**
+- [x] **Step 4: Stop for review**
 
 Report:
 
