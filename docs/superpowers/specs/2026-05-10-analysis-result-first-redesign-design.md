@@ -272,6 +272,32 @@ For source groups, `Source` mode should not merge unrelated messages into one ps
 
 It should show grouped corpus or snapshot material by source, with source headings and per-source counts. This keeps mixed Telegram and YouTube groups understandable.
 
+## Workspace State Persistence
+
+Persist enough state to restore the user's analysis workspace context between app sessions, but avoid restoring transient UI moments that can feel surprising.
+
+Persist:
+
+- last selected source or source group;
+- analysis scope, such as single source vs source group;
+- `canvasMode`;
+- `companionTab`;
+- `sourceViewBasis`, with the same visible `Live source` indicator when it restores to live data;
+- durable filter/search preferences for the `Runs` tab when they are useful across sessions;
+- lightweight layout preferences that do not open overlays automatically.
+
+Do not persist:
+
+- an automatically opened last run;
+- transient selected trace ref;
+- partially typed chat question;
+- open popovers, drawers, or temporary expanded source panels;
+- scroll positions across app restarts unless a later usability pass proves this is helpful.
+
+On app restart, `/analysis` should restore the last selected source or group and its working view, but the user chooses a saved run explicitly from `Runs`. If the persisted source or group no longer exists, fall back to the first available source/group or an empty state without error noise.
+
+State keys should be versioned or namespaced so future layout changes can discard incompatible saved UI state without breaking the route.
+
 ## Interaction Rules
 
 - Opening a completed run sets `canvasMode = "report"` and `companionTab = "evidence"`.
@@ -335,6 +361,10 @@ Add focused tests around state and structure:
 - Telegram media renders metadata placeholders without requiring binary preview support;
 - YouTube transcript timestamp actions expose jump/copy behavior without requiring an embedded player;
 - snapshot unavailable state does not silently fall back to live data;
+- workspace persistence restores last source/group and UI context without auto-opening the last run;
+- persistence ignores stale source/group ids gracefully;
+- persistence does not restore transient trace selection, draft chat text, or open popovers;
+- `Report | Source` switching is covered for Telegram, YouTube video, YouTube playlist, active run, completed run, failed run, and no-run states;
 - raw-source or component tests confirm the new `CompactSourceRail`, `ReportCanvas`, and `RunCompanionTabs` zones exist.
 
 Browser verification should check desktop and narrow widths for:
