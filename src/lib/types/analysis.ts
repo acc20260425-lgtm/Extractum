@@ -47,6 +47,7 @@ export interface AnalysisRunSummary {
   source_group_id: number | null;
   source_group_name: string | null;
   scope_label: string;
+  scope_label_snapshot: string | null;
   period_from: number;
   period_to: number;
   output_language: string;

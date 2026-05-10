@@ -52,6 +52,7 @@ function summary(overrides: Partial<AnalysisRunSummary> = {}): AnalysisRunSummar
     source_group_id: null,
     source_group_name: null,
     scope_label: "Telegram A",
+    scope_label_snapshot: "Telegram A",
     period_from: 1710000000,
     period_to: 1710100000,
     output_language: "Russian",

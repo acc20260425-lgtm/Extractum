@@ -1,5 +1,4 @@
 <script lang="ts">
-  import ChatPanel from "$lib/components/analysis/chat-panel.svelte";
   import NotebookLmExportDialog, {
     type NotebookLmExportForm,
   } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
@@ -16,7 +15,6 @@
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
-    AnalysisChatTurn,
     AnalysisGroupSourceType,
     AnalysisPromptTemplate,
     AnalysisRunDetail,
@@ -104,12 +102,6 @@
     showTopicSelector,
     selectedTraceRef,
     traceRefCount,
-    chatMessages,
-    chatQuestion,
-    chatting,
-    canCancelChat,
-    clearingChat,
-    loadingChat,
     selectedTemplate,
     templateName,
     templateBody,
@@ -180,10 +172,6 @@
     onExportNotebookLm,
     onFocusTraceRef,
     onCancelCurrentRun,
-    onAskRunQuestion,
-    onCancelChat,
-    onClearChat,
-    onChangeChatQuestion,
     onSaveTemplateCopy,
     onSaveTemplateChanges,
     onDeleteTemplate,
@@ -250,12 +238,6 @@
     showTopicSelector: boolean;
     selectedTraceRef: string | null;
     traceRefCount: number;
-    chatMessages: AnalysisChatTurn[];
-    chatQuestion: string;
-    chatting: boolean;
-    canCancelChat: boolean;
-    clearingChat: boolean;
-    loadingChat: boolean;
     selectedTemplate: AnalysisPromptTemplate | null;
     templateName: string;
     templateBody: string;
@@ -334,10 +316,6 @@
     onExportNotebookLm: () => void | Promise<void>;
     onFocusTraceRef: (ref: string) => void | Promise<void>;
     onCancelCurrentRun: () => void;
-    onAskRunQuestion: () => void;
-    onCancelChat: () => void;
-    onClearChat: () => void;
-    onChangeChatQuestion: (value: string) => void;
     onSaveTemplateCopy: () => void;
     onSaveTemplateChanges: () => void;
     onDeleteTemplate: () => void;
@@ -349,6 +327,7 @@
     onSaveGroupCopy: () => void;
     onSaveGroupChanges: () => void;
     onDeleteGroup: () => void;
+    [key: string]: unknown;
   } = $props();
 
   const currentSourceContentLabel = $derived(
@@ -420,24 +399,6 @@
         {onFocusTraceRef}
         {onCancelCurrentRun}
       />
-      <div class="temporary-follow-up" aria-label="Temporary follow-up chat until companion tabs ship">
-        <ChatPanel
-          {currentRun}
-          {loadingChat}
-          {chatMessages}
-          {chatQuestion}
-          {chatting}
-          {canCancelChat}
-          {clearingChat}
-          {selectedTraceRef}
-          {reportLines}
-          onFocusTraceRef={onFocusTraceRef}
-          onAskQuestion={onAskRunQuestion}
-          onCancelChat={onCancelChat}
-          onClearChat={onClearChat}
-          onChangeChatQuestion={onChangeChatQuestion}
-        />
-      </div>
     {:else}
       <ReportSetupPanel
         {analysisScope}
@@ -626,12 +587,6 @@
     padding: 0.2rem;
     border-radius: 8px;
     background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
-  }
-
-  .temporary-follow-up {
-    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-    border-radius: 8px;
-    background: var(--panel);
   }
 
   .eyebrow {

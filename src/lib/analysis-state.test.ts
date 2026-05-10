@@ -195,6 +195,7 @@ function runSummary(overrides: Partial<AnalysisRunSummary>): AnalysisRunSummary 
     source_group_id: null,
     source_group_name: null,
     scope_label: "Source",
+    scope_label_snapshot: "Source",
     period_from: 100,
     period_to: 200,
     output_language: "en",

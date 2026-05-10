@@ -178,6 +178,10 @@
     type RunSnapshotAvailability,
   } from "$lib/analysis-report-canvas-state";
   import {
+    runsFilterDefaults,
+    type CompanionRunsFilterState,
+  } from "$lib/analysis-run-companion-state";
+  import {
     defaultAnalysisWorkspaceUiState,
     legacyScopeFromWorkspaceSelection,
     openRunWorkspaceState,
@@ -343,6 +347,7 @@
   let savedTraceRefs = $state<string[]>([]);
   let resolvedTraceRefs = $state<string[]>([]);
   let runFilter = $state<AnalysisRunFilter>("all");
+  let runsFilter = $state<CompanionRunsFilterState>(runsFilterDefaults());
   let historyScope = $state<"all" | "current">("all");
   let chatQuestion = $state("");
   let chatMessages = $state<AnalysisChatTurn[]>([]);
@@ -758,6 +763,7 @@
     restoredWorkspaceSelection = restored.workspaceSelection;
     historyScope = persisted.runs.historyScope;
     runFilter = persisted.runs.runFilter;
+    runsFilter = persisted.runs.runsFilter;
     workspacePersistenceReady = true;
   }
 
@@ -770,6 +776,7 @@
       persistableAnalysisWorkspaceState(workspaceUiState, {
         historyScope,
         runFilter,
+        runsFilter,
       }),
     );
   }
@@ -2318,7 +2325,7 @@
     onAskRunQuestion={() => void askRunQuestion()}
     onCancelChat={() => void cancelChat()}
     onClearChat={() => void clearChatMessages()}
-    onChangeChatQuestion={(value) => (chatQuestion = value)}
+    onChangeChatQuestion={(value: string) => (chatQuestion = value)}
     onSaveTemplateCopy={() => void saveTemplateCopy()}
     onSaveTemplateChanges={() => void saveTemplateChanges()}
     onDeleteTemplate={() => void deleteTemplate()}

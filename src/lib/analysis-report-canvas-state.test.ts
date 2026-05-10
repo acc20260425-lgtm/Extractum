@@ -18,6 +18,7 @@ function run(overrides: Partial<AnalysisRunDetail> = {}): AnalysisRunDetail {
     source_group_id: null,
     source_group_name: null,
     scope_label: "Source A",
+    scope_label_snapshot: "Source A",
     period_from: 1704067200,
     period_to: 1706659200,
     output_language: "Russian",

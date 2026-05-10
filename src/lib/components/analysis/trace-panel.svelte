@@ -1,5 +1,6 @@
 <script lang="ts">
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import type { BadgeVariant } from "$lib/components/ui/types";
@@ -11,14 +12,18 @@
     selectedTrace,
     formatTimestamp,
     traceRefOrigin,
+    showInSourceDisabledReason = "",
     onSelectTraceRef,
+    onShowInSource,
   }: {
     traceRefs: AnalysisTraceRef[];
     selectedTraceRef: string | null;
     selectedTrace: AnalysisTraceRef | null;
     formatTimestamp: (timestamp: number | null) => string;
     traceRefOrigin: (ref: string) => string;
-    onSelectTraceRef: (ref: string) => void;
+    showInSourceDisabledReason?: string;
+    onSelectTraceRef: (ref: string) => void | Promise<void>;
+    onShowInSource?: () => void | Promise<void>;
   } = $props();
 
   function originLabel(origin: string) {
@@ -82,6 +87,18 @@
               >
                 {selectedTrace.youtube_display_label ?? "Open on YouTube"}
               </a>
+            {/if}
+            {#if onShowInSource}
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                disabled={!!showInSourceDisabledReason}
+                title={showInSourceDisabledReason || "Show this evidence in Source mode"}
+                onclick={() => void onShowInSource()}
+              >
+                Show in source
+              </Button>
             {/if}
             {#if selectedTrace.is_synthetic}
               <span>Saved synthetic evidence</span>

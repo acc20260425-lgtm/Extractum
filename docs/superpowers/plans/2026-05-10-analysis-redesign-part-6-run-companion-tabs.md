@@ -1178,7 +1178,7 @@ git commit -m "fix: guard analysis companion context against live fallback"
 - Create: `src/lib/components/analysis/run-companion-tabs.svelte`
 - Modify: `src/lib/components/analysis/trace-panel.svelte`
 
-- [ ] **Step 1: Extend `TracePanel` with optional Show in source**
+- [x] **Step 1: Extend `TracePanel` with optional Show in source**
 
 In `src/lib/components/analysis/trace-panel.svelte`, add props:
 
@@ -1217,7 +1217,7 @@ Add the import:
 import Button from "$lib/components/ui/Button.svelte";
 ```
 
-- [ ] **Step 2: Create Evidence tab**
+- [x] **Step 2: Create Evidence tab**
 
 Create `src/lib/components/analysis/run-evidence-tab.svelte`:
 
@@ -1299,7 +1299,7 @@ Create `src/lib/components/analysis/run-evidence-tab.svelte`:
 </style>
 ```
 
-- [ ] **Step 3: Create Chat tab**
+- [x] **Step 3: Create Chat tab**
 
 Create `src/lib/components/analysis/run-chat-tab.svelte`:
 
@@ -1382,7 +1382,7 @@ Create `src/lib/components/analysis/run-chat-tab.svelte`:
 </style>
 ```
 
-- [ ] **Step 4: Create Runs tab**
+- [x] **Step 4: Create Runs tab**
 
 Create `src/lib/components/analysis/run-companion-runs-tab.svelte`:
 
@@ -1630,7 +1630,7 @@ Add CSS with stable dimensions and no nested cards:
 </style>
 ```
 
-- [ ] **Step 5: Create tab shell**
+- [x] **Step 5: Create tab shell**
 
 Create `src/lib/components/analysis/run-companion-tabs.svelte`:
 
@@ -1894,7 +1894,7 @@ Create `src/lib/components/analysis/run-companion-tabs.svelte`:
 </style>
 ```
 
-- [ ] **Step 6: Run component raw-source tests and Svelte check**
+- [x] **Step 6: Run component raw-source tests and Svelte check**
 
 Run:
 
@@ -1905,7 +1905,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit components**
+- [x] **Step 7: Commit components**
 
 Run:
 
