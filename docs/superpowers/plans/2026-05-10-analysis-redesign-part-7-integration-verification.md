@@ -955,7 +955,7 @@ git commit -m "docs: record analysis redesign automated verification"
 **Files:**
 - Update: `docs/superpowers/verification/2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Start the local dev server**
+- [x] **Step 1: Start the local dev server**
 
 Run:
 
@@ -967,7 +967,7 @@ Expected: Vite prints a local URL containing `http://127.0.0.1:5173/`.
 
 Keep this server running until the browser verification is complete.
 
-- [ ] **Step 2: Open `/analysis` at desktop width**
+- [x] **Step 2: Open `/analysis` at desktop width**
 
 Use Chrome DevTools MCP or the available browser automation tool:
 
@@ -985,7 +985,7 @@ Expected:
 - no text overlaps or incoherent clipping;
 - global app sidebar remains the only app navigation.
 
-- [ ] **Step 3: Check wide desktop width**
+- [x] **Step 3: Check wide desktop width**
 
 Use Chrome DevTools MCP or the available browser automation tool:
 
@@ -1001,7 +1001,7 @@ Expected:
 - compact rail does not expand into a full source manager;
 - no page section is presented as a nested card inside another card.
 
-- [ ] **Step 4: Check narrow desktop width**
+- [x] **Step 4: Check narrow desktop width**
 
 Use Chrome DevTools MCP or the available browser automation tool:
 
@@ -1017,7 +1017,7 @@ Expected:
 - companion is placed below or beside the canvas according to implemented CSS;
 - `Report | Source` and `Evidence | Chat | Runs` controls remain reachable.
 
-- [ ] **Step 5: Check mobile width**
+- [x] **Step 5: Check mobile width**
 
 Use Chrome DevTools MCP or the available browser automation tool:
 
@@ -1034,7 +1034,7 @@ Expected:
 - tab labels do not overflow their buttons;
 - report setup/onboarding text fits its containers.
 
-- [ ] **Step 6: Exercise the core browser scenarios**
+- [x] **Step 6: Exercise the core browser scenarios**
 
 Using the local data available in the development database, verify every scenario in the Browser Scenarios table of `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
 
@@ -1046,17 +1046,17 @@ BLOCKED: missing local fixture; scenario name is the current table row
 
 Do not mark a scenario `PASS` unless it was actually exercised in the browser.
 
-- [ ] **Step 7: Update the browser verification record**
+- [x] **Step 7: Update the browser verification record**
 
 In `docs/superpowers/verification/2026-05-10-analysis-redesign.md`, update the Browser Smoke Verification and Browser Scenarios tables with actual `PASS`, `FAIL`, or `BLOCKED` results from Steps 2-6.
 
-- [ ] **Step 8: Stop the dev server**
+- [x] **Step 8: Stop the dev server**
 
 Stop the `npm.cmd run dev` process with `Ctrl+C`.
 
 Expected: the dev server exits.
 
-- [ ] **Step 9: Commit browser verification results**
+- [x] **Step 9: Commit browser verification results**
 
 Run:
 

@@ -30,32 +30,33 @@ Then verify `http://127.0.0.1:5173/analysis` in desktop, narrow desktop, and mob
 
 | Viewport | Result | Notes |
 | --- | --- | --- |
-| Desktop 1440x900 | Pending browser execution | Check three-zone layout, canvas dominance, no overlap |
-| Wide desktop 1920x1080 | Pending browser execution | Check report readability and companion width |
-| Narrow 1180x900 | Pending browser execution | Check companion fallback and compact rail usability |
-| Mobile 390x844 | Pending browser execution | Check stacked canvas/companion and source switching access |
+| Desktop 1440x900 | PASS | Compact rail, report/source canvas, and companion are visible; companion stacks below canvas at this width; no horizontal overflow |
+| Wide desktop 1920x1080 | PASS | Three-column rail/canvas/companion layout; report canvas remains dominant and companion is 430px wide; no horizontal overflow |
+| Narrow 1180x900 | PASS | Compact rail becomes a top row, canvas stays readable, companion stacks below, and mode/tab controls remain reachable |
+| Mobile 390x844 | PASS | Rail, canvas, and companion stack vertically; Report/Source and Evidence/Chat/Runs controls remain visible without horizontal overflow |
 
 ## Browser Scenarios
 
 | Scenario | Result | Notes |
 | --- | --- | --- |
-| No source state shows central onboarding for Telegram and YouTube | Pending browser execution | No global-sidebar duplication in compact rail |
-| Selecting source clears opened run and shows live source + Runs | Pending browser execution | Rail selection, canvas, companion aligned |
-| Completed saved run opens Report + Evidence and aligns rail if live scope exists | Pending browser execution | Header metadata visible |
-| Completed saved run with missing snapshot does not resolve evidence/chat against live source | Pending browser execution | Source mode shows unavailable snapshot state |
-| Running run opens Report and Source shows pending snapshot | Pending browser execution | Chat disabled until completion |
-| Failed/cancelled run shows snapshot if available, otherwise explicit live source option | Pending browser execution | Not visually styled as completed |
-| Trace ref click activates Evidence | Pending browser execution | Focus/selection visible |
-| Show in source prefers run snapshot and highlights message/segment | Pending browser execution | Live source clearly labeled when allowed for non-completed states |
-| Chat tab activates only on explicit tab selection or question submit | Pending browser execution | Textarea focus alone does not switch tab |
-| Runs search/status/scope filters work and exclude source ingest jobs | Pending browser execution | Current-scope filter updates after workspace switch |
-| Telegram timeline shows groups, metadata, and media placeholders only | Pending browser execution | No binary previews |
-| YouTube video reader shows transcript timestamps and copy/open actions | Pending browser execution | No embedded player |
-| YouTube playlist reader shows playlist item list before transcript reading | Pending browser execution | Per-video source navigation reachable |
-| Source group reader groups by source with counts | Pending browser execution | No pseudo-chat merge |
-| Workspace persistence restores source/group and UI context without opening a run | Pending browser execution | Run-bound tabs normalize to Runs |
+| No source state shows central onboarding for Telegram and YouTube | PASS | Empty setup state renders; compact rail has no duplicated global sidebar; New source dialog exposes Telegram and YouTube provider tabs |
+| Selecting source clears opened run and shows live source + Runs | BLOCKED | Missing local fixture; no synced source available in browser verification dataset |
+| Completed saved run opens Report + Evidence and aligns rail if live scope exists | BLOCKED | Missing local fixture; no completed saved run with live scope available |
+| Completed saved run with missing snapshot does not resolve evidence/chat against live source | BLOCKED | Missing local fixture; no completed saved run with missing snapshot available |
+| Running run opens Report and Source shows pending snapshot | BLOCKED | Missing local fixture; no running analysis run available |
+| Failed/cancelled run shows snapshot if available, otherwise explicit live source option | BLOCKED | Missing local fixture; no failed or cancelled analysis run available |
+| Trace ref click activates Evidence | BLOCKED | Missing local fixture; no trace-backed completed run available |
+| Show in source prefers run snapshot and highlights message/segment | BLOCKED | Missing local fixture; no snapshot-backed run messages available |
+| Chat tab activates only on explicit tab selection or question submit | BLOCKED | Missing local fixture; no chat-enabled completed run available |
+| Runs search/status/scope filters work and exclude source ingest jobs | BLOCKED | Missing local fixture; filters render in empty state, but no run/source data exists to verify filtering behavior |
+| Telegram timeline shows groups, metadata, and media placeholders only | BLOCKED | Missing local fixture; no synced Telegram source available |
+| YouTube video reader shows transcript timestamps and copy/open actions | BLOCKED | Missing local fixture; no synced YouTube video source available |
+| YouTube playlist reader shows playlist item list before transcript reading | BLOCKED | Missing local fixture; no synced YouTube playlist source available |
+| Source group reader groups by source with counts | BLOCKED | Missing local fixture; no source group available |
+| Workspace persistence restores source/group and UI context without opening a run | BLOCKED | Missing local fixture; no source or group state available for persistence restore check |
 
 ## Residual Risks
 
 - Browser scenarios depend on local data fixtures. Record any missing fixture as a verification gap with the smallest reproducible setup.
+- Standalone browser verification used a minimal Tauri IPC/event stub because Vite `/analysis` otherwise requires the Tauri runtime bridge for event listeners.
 - Raw-source tests intentionally protect architectural contracts. If they fail because implementation names changed, update the assertion string while preserving the tested behavior.
