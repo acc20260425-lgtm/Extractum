@@ -81,10 +81,12 @@ type OpenRunState =
 The MVP redesign should avoid a stable mismatch where the rail shows one source or group while the center shows a report for another source or group. The invariant is:
 
 ```text
-If OpenRunState is active or saved, WorkspaceSelection matches that run's scope.
+If OpenRunState is active or saved and the run's live scope exists, WorkspaceSelection matches that run's scope.
 ```
 
 Opening an active or saved run aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and applies the normal companion default for that run state.
+
+Deleted live scope is the exception to this alignment rule. If a saved run's original source or source group no longer exists, the saved run remains openable as an artifact. `Report` mode shows the saved run with a deleted or missing scope label, preferably using `scope_label_snapshot` when available. `Source` mode can show the run snapshot if snapshot data exists. `CompactSourceRail` must not pretend the deleted source or group is an active live workspace selection; it should show a clearly marked missing run context or no live selection for that opened run.
 
 Selecting a different source or source group from `CompactSourceRail` is an explicit workspace switch. It clears `OpenRunState`, clears run-bound evidence/chat/trace selection, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, and moves the companion to `Runs` so the right panel does not show orphaned run tools.
 
@@ -447,8 +449,9 @@ State keys should be versioned or namespaced so future layout changes can discar
 
 ## Interaction Rules
 
-- Opening a completed run sets `OpenRunState = { kind: "saved", runId }`, aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and sets `companionTab = "evidence"`.
+- Opening a completed run sets `OpenRunState = { kind: "saved", runId }`, aligns `WorkspaceSelection` to the run scope when that live scope still exists, sets `canvasMode = "report"`, and sets `companionTab = "evidence"`.
 - Opening an active run sets `OpenRunState = { kind: "active", runId }`, aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and shows live run status in the canvas.
+- Opening a saved run whose original source or source group has been deleted keeps the run open, shows the missing/deleted scope label in the run header, and keeps the compact rail from selecting a fallback live source as if it were the run's source.
 - Selecting `Source` for an active run shows the run snapshot only if snapshot data exists; otherwise it shows the pending snapshot state and an explicit live source option.
 - Selecting `Source` for a failed or cancelled run shows the run snapshot when available, or an unavailable state with an explicit live source option when it is not available.
 - Selecting a source or source group from `CompactSourceRail` sets `WorkspaceSelection` to that scope, clears `OpenRunState`, clears run-bound evidence/chat state, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, and sets `companionTab = "runs"`.
@@ -476,6 +479,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 ## Empty And Error States
 
 - If a completed run has no snapshot rows, show a storage or integrity error instead of a legacy live-source fallback.
+- If a saved run's original source or source group has been deleted, keep the run readable with a missing/deleted scope label. Do not replace it with a fallback live source or group.
 - If an active run snapshot is not available yet, show a pending state rather than an empty timeline or transcript.
 - If a failed or cancelled run has no snapshot, explain that the run ended before a frozen source snapshot was saved and offer `View live source`.
 - If a Telegram source has no synced items, show an empty state with `Sync source`.
@@ -529,6 +533,7 @@ Add focused tests around state and structure:
 - runs search and filters narrow saved runs without losing current-scope behavior;
 - run source mode prefers run snapshot over live source when snapshot data is available;
 - completed run source mode requires snapshot data and does not expose a legacy live-source fallback;
+- saved runs with deleted source or source group remain openable, show missing scope labeling, and do not select a fallback live source in `CompactSourceRail`;
 - active-run source mode shows pending snapshot state until snapshot data exists;
 - failed and cancelled run source mode shows snapshot when available and unavailable state plus live source action when not;
 - source snapshot availability is not inferred from run status alone;
