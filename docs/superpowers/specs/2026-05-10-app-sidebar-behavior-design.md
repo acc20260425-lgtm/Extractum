@@ -31,6 +31,7 @@ Create `src/lib/components/app-sidebar.svelte` for the primary navigation. It ow
 - mobile drawer rendering.
 
 `src/routes/+layout.svelte` remains the owner of shell state and passes the current route and callbacks into `AppSidebar`.
+The `AppSidebar` root drawer/sidebar element should use the stable id `app-sidebar`; the mobile menu button should point to that id with `aria-controls`.
 
 `+layout.svelte` should keep:
 
@@ -58,6 +59,8 @@ Expanded desktop sidebar:
 - shows nav icons, labels, and captions;
 - shows the sidebar footer copy;
 - includes a clear collapse button.
+
+The desktop collapse/expand transition should be a lightweight CSS transition on sidebar width/flex-basis. No JavaScript animation is needed.
 
 Collapsed desktop sidebar:
 
@@ -100,6 +103,7 @@ Move the theme toggle into the workspace topbar. It should be available in all s
 - mobile drawer open.
 
 The topbar can keep the current route title and badges. On mobile, the menu button should sit at the left side of the topbar and not crowd the route title or theme button.
+After moving the theme toggle, the sidebar footer should keep only the workspace-mode copy. It should be shown in expanded desktop and mobile-open drawer states, and hidden in collapsed desktop mode.
 
 ## Responsive Rules
 
@@ -118,13 +122,14 @@ The mobile drawer always renders in expanded form. It must not inherit the deskt
 - Icon-only nav items must keep accessible names.
 - Escape key closes the mobile drawer.
 - Overlay click closes the mobile drawer without trapping users.
-- Focus behavior should remain predictable; no focus trap is required for this lightweight navigation drawer unless testing shows keyboard users can tab into hidden content in an incoherent order.
+- Opening the mobile drawer should move focus to the `app-sidebar` drawer container so the next Tab reaches drawer content. Users can close it with Escape, close it via the overlay, or close it by selecting a nav link. No focus trap is required for this lightweight navigation drawer unless testing shows keyboard users can tab into hidden content in an incoherent order.
 
 ## Testing And Verification
 
 Add or update focused Vitest source tests to lock the intended shell behavior:
 
 - `AppSidebar` exists and is used by `+layout.svelte`.
+- `AppSidebar` exposes the stable `app-sidebar` id used by the mobile menu button's `aria-controls`.
 - The collapsed preference key is present.
 - The layout includes desktop collapsed state and mobile drawer state.
 - Mobile nav selection has a close callback path.

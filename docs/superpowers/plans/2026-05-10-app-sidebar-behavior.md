@@ -1,0 +1,1119 @@
+# App Sidebar Behavior Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Extract Extractum's primary sidebar into a dedicated component, add OmniRoute-style desktop collapse, and replace the narrow-screen horizontal nav with an off-canvas drawer.
+
+**Architecture:** `src/routes/+layout.svelte` owns shell state, topbar, theme, and persistence. `src/lib/components/app-sidebar.svelte` owns the brand, nav links, desktop collapse control, footer, overlay, mobile drawer presentation, and drawer focus handoff. Existing source-level Vitest tests lock the shell behavior without introducing a full e2e suite.
+
+**Tech Stack:** Svelte 5 runes, SvelteKit layout, Vitest raw-source tests, lucide-svelte icons, existing Extractum CSS variables and `Button` component.
+
+---
+
+## File Structure
+
+- Create: `src/lib/components/app-sidebar.svelte`
+  - Responsibility: render the primary navigation in desktop expanded, desktop collapsed, and mobile drawer states.
+- Modify: `src/routes/+layout.svelte`
+  - Responsibility: own theme state, sidebar collapsed state, mobile drawer state, topbar controls, and shell layout.
+- Modify: `src/lib/components/ui/Button.svelte`
+  - Responsibility: support `aria-expanded` for the mobile menu button.
+- Create: `src/lib/app-sidebar-behavior.test.ts`
+  - Responsibility: raw-source regression coverage for the new shell behavior.
+
+## Task 1: Add Failing Source Tests
+
+**Files:**
+- Create: `src/lib/app-sidebar-behavior.test.ts`
+
+- [ ] **Step 1: Create the failing test file**
+
+Add this file:
+
+```ts
+import { describe, expect, it } from "vitest";
+import layoutSource from "../routes/+layout.svelte?raw";
+import appSidebarSource from "./components/app-sidebar.svelte?raw";
+import buttonSource from "./components/ui/Button.svelte?raw";
+
+describe("app sidebar behavior", () => {
+  it("extracts primary navigation into AppSidebar", () => {
+    expect(layoutSource).toContain('import AppSidebar from "$lib/components/app-sidebar.svelte";');
+    expect(layoutSource).toContain("<AppSidebar");
+    expect(appSidebarSource).toContain('id="app-sidebar"');
+    expect(appSidebarSource).toContain('aria-label="Primary navigation"');
+    expect(appSidebarSource).toContain('class="sidebar-nav"');
+    expect(appSidebarSource).toContain("{#each navItems as item (item.href)}");
+  });
+
+  it("persists desktop collapsed state separately from mobile drawer state", () => {
+    expect(layoutSource).toContain('const SIDEBAR_COLLAPSED_KEY = "extractum.sidebar.collapsed";');
+    expect(layoutSource).toContain("let sidebarCollapsed = $state(false);");
+    expect(layoutSource).toContain("let mobileSidebarOpen = $state(false);");
+    expect(layoutSource).toContain("localStorage.getItem(SIDEBAR_COLLAPSED_KEY)");
+    expect(layoutSource).toContain("localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed))");
+  });
+
+  it("keeps the theme toggle in the topbar", () => {
+    const topbarStart = layoutSource.indexOf('<div class="workspace-topbar">');
+    const innerStart = layoutSource.indexOf('<div class="workspace-inner">');
+    const sidebarStart = appSidebarSource.indexOf('<aside');
+    const sidebarEnd = appSidebarSource.indexOf("</aside>");
+
+    expect(topbarStart).toBeGreaterThanOrEqual(0);
+    expect(innerStart).toBeGreaterThan(topbarStart);
+    expect(layoutSource.slice(topbarStart, innerStart)).toContain('className="theme-toggle"');
+    expect(layoutSource.slice(topbarStart, innerStart)).toContain("toggleTheme");
+    expect(appSidebarSource.slice(sidebarStart, sidebarEnd)).not.toContain("toggleTheme");
+  });
+
+  it("supports mobile drawer controls and closes on navigation", () => {
+    expect(layoutSource).toContain("mobileSidebarOpen = true");
+    expect(layoutSource).toContain("mobileSidebarOpen = false");
+    expect(layoutSource).toContain("handleShellKeydown");
+    expect(layoutSource).toContain('event.key === "Escape"');
+    expect(appSidebarSource).toContain('class:mobile-open={mobileOpen}');
+    expect(appSidebarSource).toContain("handleNavClick");
+    expect(appSidebarSource).toContain("onCloseMobile()");
+    expect(appSidebarSource).toContain("sidebar-overlay");
+    expect(appSidebarSource).toContain("sidebarElement?.focus()");
+    expect(appSidebarSource).toContain("tabindex={mobileOpen ? -1 : undefined}");
+  });
+
+  it("supports icon-only collapsed desktop navigation accessibly", () => {
+    expect(appSidebarSource).toContain('class:collapsed={!mobileOpen && collapsed}');
+    expect(appSidebarSource).toContain('title={!mobileOpen && collapsed ? item.label : undefined}');
+    expect(appSidebarSource).toContain('aria-label={item.label}');
+    expect(appSidebarSource).toContain('aria-current={item.active(pathname) ? "page" : undefined}');
+    expect(appSidebarSource).toContain('ariaLabel={collapsed && !mobileOpen ? "Expand navigation" : "Collapse navigation"}');
+  });
+
+  it("lets Button expose aria-expanded for the mobile menu", () => {
+    expect(buttonSource).toContain("ariaExpanded");
+    expect(buttonSource).toContain("aria-expanded={ariaExpanded}");
+    expect(layoutSource).toContain("ariaExpanded={mobileSidebarOpen}");
+    expect(layoutSource).toContain('ariaControls="app-sidebar"');
+  });
+});
+```
+
+- [ ] **Step 2: Run the focused test and verify it fails**
+
+Run:
+
+```bash
+npm run test -- src/lib/app-sidebar-behavior.test.ts
+```
+
+Expected: FAIL because `src/lib/components/app-sidebar.svelte` does not exist yet, or because the new layout strings are missing.
+
+- [ ] **Step 3: Commit the failing test**
+
+Run:
+
+```bash
+git add src/lib/app-sidebar-behavior.test.ts
+git commit -m "test: capture app sidebar behavior"
+```
+
+Expected: commit succeeds with only the new failing source test staged.
+
+## Task 2: Add `aria-expanded` Support To Button
+
+**Files:**
+- Modify: `src/lib/components/ui/Button.svelte`
+- Test: `src/lib/app-sidebar-behavior.test.ts`
+
+- [ ] **Step 1: Update Button props**
+
+In `src/lib/components/ui/Button.svelte`, add `ariaExpanded` next to the existing aria props:
+
+```svelte
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  type ButtonVariant =
+    | "primary"
+    | "secondary"
+    | "danger"
+    | "danger-soft"
+    | "ghost";
+
+  type ButtonSize = "sm" | "md";
+
+  let {
+    type = "button",
+    variant = "primary",
+    size = "md",
+    disabled = false,
+    selected = false,
+    iconOnly = false,
+    id,
+    role,
+    title,
+    ariaLabel,
+    ariaPressed,
+    ariaSelected,
+    ariaControls,
+    ariaExpanded,
+    tabIndex,
+    className = "",
+    onclick,
+    children,
+  }: {
+    type?: "button" | "submit" | "reset";
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+    disabled?: boolean;
+    selected?: boolean;
+    iconOnly?: boolean;
+    id?: string;
+    role?: string;
+    title?: string;
+    ariaLabel?: string;
+    ariaPressed?: boolean;
+    ariaSelected?: boolean;
+    ariaControls?: string;
+    ariaExpanded?: boolean;
+    tabIndex?: number;
+    className?: string;
+    onclick?: (event: MouseEvent) => unknown | Promise<unknown>;
+    children?: Snippet;
+  } = $props();
+</script>
+
+<button
+  {id}
+  {type}
+  {role}
+  {disabled}
+  {title}
+  aria-label={ariaLabel}
+  aria-pressed={ariaPressed}
+  aria-selected={ariaSelected}
+  aria-controls={ariaControls}
+  aria-expanded={ariaExpanded}
+  tabindex={tabIndex}
+  class={`ui-button ${variant} ${size} ${selected ? "selected" : ""} ${iconOnly ? "icon-only" : ""} ${className}`.trim()}
+  onclick={onclick}
+>
+  {@render children?.()}
+</button>
+```
+
+Leave the existing `<style>` block unchanged.
+
+- [ ] **Step 2: Run the focused test and verify partial failure**
+
+Run:
+
+```bash
+npm run test -- src/lib/app-sidebar-behavior.test.ts
+```
+
+Expected: still FAIL because `AppSidebar` and layout changes are missing, but the Button-specific assertions should now be satisfiable once the missing component exists.
+
+- [ ] **Step 3: Commit the Button update**
+
+Run:
+
+```bash
+git add src/lib/components/ui/Button.svelte
+git commit -m "feat: support expanded button state"
+```
+
+Expected: commit includes only `Button.svelte`.
+
+## Task 3: Create `AppSidebar`
+
+**Files:**
+- Create: `src/lib/components/app-sidebar.svelte`
+- Test: `src/lib/app-sidebar-behavior.test.ts`
+
+- [ ] **Step 1: Create `AppSidebar` with desktop and mobile states**
+
+Create `src/lib/components/app-sidebar.svelte` with this content:
+
+```svelte
+<script lang="ts">
+  import { ChevronLeft, ChevronRight } from "@lucide/svelte";
+  import { tick, type Component } from "svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+
+  type NavIcon = Component<{
+    size?: number;
+    "aria-hidden"?: boolean | "true";
+  }>;
+
+  export type AppSidebarNavItem = {
+    href: string;
+    label: string;
+    caption: string;
+    icon: NavIcon;
+    active: (pathname: string) => boolean;
+  };
+
+  let {
+    navItems,
+    pathname,
+    collapsed,
+    mobileOpen,
+    onToggleCollapsed,
+    onCloseMobile,
+  }: {
+    navItems: AppSidebarNavItem[];
+    pathname: string;
+    collapsed: boolean;
+    mobileOpen: boolean;
+    onToggleCollapsed: () => void;
+    onCloseMobile: () => void;
+  } = $props();
+
+  let sidebarElement: HTMLElement | undefined;
+  let previousMobileOpen = false;
+
+  $effect(() => {
+    if (mobileOpen && !previousMobileOpen) {
+      tick().then(() => sidebarElement?.focus());
+    }
+    previousMobileOpen = mobileOpen;
+  });
+
+  function handleNavClick() {
+    if (mobileOpen) {
+      onCloseMobile();
+    }
+  }
+</script>
+
+{#if mobileOpen}
+  <button
+    class="sidebar-overlay"
+    type="button"
+    aria-label="Close navigation"
+    onclick={onCloseMobile}
+  ></button>
+{/if}
+
+<aside
+  bind:this={sidebarElement}
+  id="app-sidebar"
+  class="sidebar"
+  class:collapsed={!mobileOpen && collapsed}
+  class:mobile-open={mobileOpen}
+  aria-label="Primary navigation"
+  tabindex={mobileOpen ? -1 : undefined}
+>
+  <div class="sidebar-header">
+    <a class="brand" href="/analysis" onclick={handleNavClick} title="Extractum">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      {#if !collapsed || mobileOpen}
+        <span class="brand-copy">
+          <strong>Extractum</strong>
+          <small>Research workspace</small>
+        </span>
+      {/if}
+    </a>
+
+    <Button
+      className="sidebar-collapse"
+      variant="ghost"
+      iconOnly
+      ariaLabel={collapsed && !mobileOpen ? "Expand navigation" : "Collapse navigation"}
+      title={collapsed && !mobileOpen ? "Expand navigation" : "Collapse navigation"}
+      onclick={onToggleCollapsed}
+    >
+      {#if collapsed && !mobileOpen}
+        <ChevronRight size={16} aria-hidden="true" />
+      {:else}
+        <ChevronLeft size={16} aria-hidden="true" />
+      {/if}
+    </Button>
+  </div>
+
+  <nav class="sidebar-nav" aria-label="Primary navigation">
+    {#each navItems as item (item.href)}
+      {@const NavIcon = item.icon}
+      <a
+        href={item.href}
+        class:active={item.active(pathname)}
+        aria-current={item.active(pathname) ? "page" : undefined}
+        aria-label={item.label}
+        title={!mobileOpen && collapsed ? item.label : undefined}
+        onclick={handleNavClick}
+      >
+        <span class="nav-row">
+          <NavIcon size={16} aria-hidden="true" />
+          {#if !collapsed || mobileOpen}
+            <span class="nav-label">{item.label}</span>
+          {/if}
+        </span>
+        {#if !collapsed || mobileOpen}
+          <span class="nav-caption">{item.caption}</span>
+        {/if}
+      </a>
+    {/each}
+  </nav>
+
+  {#if !collapsed || mobileOpen}
+    <div class="sidebar-footer">
+      <div class="footer-copy">
+        <span class="footer-label">Workspace mode</span>
+        <strong>NotebookLM x Telegram</strong>
+      </div>
+    </div>
+  {/if}
+</aside>
+
+<style>
+  .sidebar-overlay {
+    display: none;
+  }
+
+  .sidebar {
+    width: 214px;
+    flex: 0 0 214px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 0.85rem 0.7rem 0.85rem 0.85rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, white 4%), var(--panel));
+    border-right: 1px solid var(--border);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.18);
+    transition: width 0.18s ease, flex-basis 0.18s ease, transform 0.18s ease;
+  }
+
+  .sidebar.collapsed {
+    width: 64px;
+    flex-basis: 64px;
+    padding: 0.85rem 0.5rem;
+    align-items: center;
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.2rem 0;
+    min-width: 0;
+  }
+
+  .sidebar.collapsed .sidebar-header {
+    flex-direction: column-reverse;
+    padding-inline: 0;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: inherit;
+    text-decoration: none;
+    padding: 0.5rem 0.55rem;
+    border-radius: 12px;
+    min-width: 0;
+  }
+
+  .brand:hover {
+    background: color-mix(in srgb, var(--panel-hover) 68%, transparent);
+  }
+
+  .sidebar.collapsed .brand {
+    justify-content: center;
+    padding: 0.45rem;
+  }
+
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.8rem;
+    background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 74%, black));
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    box-shadow: 0 10px 24px rgba(47, 109, 234, 0.22);
+    flex: 0 0 auto;
+  }
+
+  .brand-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .brand-copy strong {
+    font-size: 0.94rem;
+    line-height: 1.1;
+  }
+
+  .brand-copy small {
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.1;
+  }
+
+  :global(.sidebar-collapse) {
+    flex: 0 0 auto;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .sidebar.collapsed .sidebar-nav {
+    width: 100%;
+    align-items: center;
+  }
+
+  .sidebar-nav a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    padding: 0.62rem 0.78rem;
+    border-radius: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    border: 1px solid transparent;
+    min-width: 0;
+  }
+
+  .sidebar.collapsed .sidebar-nav a {
+    width: 2.45rem;
+    min-height: 2.45rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .nav-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .sidebar-nav a:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--panel-hover) 72%, transparent);
+    border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  }
+
+  .sidebar-nav a.active {
+    color: var(--text);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--primary) 12%, var(--panel)), color-mix(in srgb, var(--primary) 7%, var(--panel)));
+    border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
+  }
+
+  .nav-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  .nav-caption {
+    font-size: 0.72rem;
+    line-height: 1.2;
+    color: var(--muted);
+  }
+
+  .sidebar-nav a.active .nav-caption,
+  .sidebar-nav a:hover .nav-caption {
+    color: color-mix(in srgb, var(--muted) 72%, var(--text));
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 0.25rem 0.2rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .footer-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    color: var(--muted);
+  }
+
+  .footer-copy strong {
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+
+  .footer-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  @media (max-width: 820px) {
+    .sidebar-overlay {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(15, 23, 42, 0.34);
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      cursor: default;
+    }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 41;
+      width: min(214px, calc(100vw - 3rem));
+      max-width: calc(100vw - 3rem);
+      height: 100vh;
+      transform: translateX(-100%);
+      border-bottom: none;
+      box-shadow: 18px 0 44px rgba(15, 23, 42, 0.16);
+      overflow: auto;
+    }
+
+    .sidebar.mobile-open {
+      transform: translateX(0);
+    }
+
+    .sidebar.collapsed {
+      width: min(214px, calc(100vw - 3rem));
+      flex-basis: auto;
+      align-items: stretch;
+      padding: 0.85rem 0.7rem 0.85rem 0.85rem;
+    }
+
+    .sidebar.collapsed .sidebar-header {
+      flex-direction: row;
+      padding: 0.2rem 0.2rem 0;
+    }
+
+    :global(.sidebar-collapse) {
+      display: none;
+    }
+  }
+</style>
+```
+
+The footer intentionally keeps only the workspace-mode copy after the theme toggle moves to the topbar. It renders in expanded desktop and mobile-open drawer states, and remains hidden in collapsed desktop state.
+
+- [ ] **Step 2: Run the focused test and verify layout assertions still fail**
+
+Run:
+
+```bash
+npm run test -- src/lib/app-sidebar-behavior.test.ts
+```
+
+Expected: FAIL because `+layout.svelte` has not imported or used `AppSidebar` yet.
+
+- [ ] **Step 3: Run Svelte autofixer on the component**
+
+Use the Svelte MCP `svelte_autofixer` tool on `app-sidebar.svelte`.
+
+Expected: no Svelte syntax or accessibility issues, or actionable fixes that are applied before continuing.
+
+- [ ] **Step 4: Commit the new component**
+
+Run:
+
+```bash
+git add src/lib/components/app-sidebar.svelte
+git commit -m "feat: add app sidebar component"
+```
+
+Expected: commit includes only the new component.
+
+## Task 4: Wire Sidebar State Into The Layout
+
+**Files:**
+- Modify: `src/routes/+layout.svelte`
+- Test: `src/lib/app-sidebar-behavior.test.ts`
+
+- [ ] **Step 1: Update layout imports and shell state**
+
+In `src/routes/+layout.svelte`, replace the current import block with:
+
+```svelte
+<script lang="ts">
+  import { LayoutDashboard, Menu, Moon, Settings, Sun, UserRound } from "@lucide/svelte";
+  import { browser } from "$app/environment";
+  import { page } from "$app/state";
+  import AppSidebar from "$lib/components/app-sidebar.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import ModalHost from "$lib/components/modal-host.svelte";
+  import ToastHost from "$lib/components/toast-host.svelte";
+
+  const SIDEBAR_COLLAPSED_KEY = "extractum.sidebar.collapsed";
+
+  let { children } = $props();
+  let theme = $state<"light" | "dark">("light");
+  let sidebarCollapsed = $state(false);
+  let mobileSidebarOpen = $state(false);
+
+  if (browser) {
+    theme = localStorage.getItem("theme") === "dark" ? "dark" : "light";
+    sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  }
+
+  function toggleTheme() {
+    theme = theme === "light" ? "dark" : "light";
+    if (browser) {
+      localStorage.setItem("theme", theme);
+    }
+  }
+
+  function setSidebarCollapsed(collapsed: boolean) {
+    sidebarCollapsed = collapsed;
+    if (browser) {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+    }
+  }
+
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed(!sidebarCollapsed);
+  }
+
+  function closeMobileSidebar() {
+    mobileSidebarOpen = false;
+  }
+
+  function handleShellKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      mobileSidebarOpen = false;
+    }
+  }
+
+  const navItems = [
+    {
+      href: "/analysis",
+      label: "Workspace",
+      caption: "Sources, reports, chat",
+      icon: LayoutDashboard,
+      active: (pathname: string) => pathname.startsWith("/analysis") || pathname === "/",
+    },
+    {
+      href: "/accounts",
+      label: "Accounts",
+      caption: "Source access",
+      icon: UserRound,
+      active: (pathname: string) =>
+        pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
+    },
+    {
+      href: "/settings",
+      label: "Settings",
+      caption: "Models and app",
+      icon: Settings,
+      active: (pathname: string) => pathname.startsWith("/settings"),
+    },
+  ];
+</script>
+```
+
+- [ ] **Step 2: Add window key handling**
+
+Immediately after the closing `</svelte:head>` block, add:
+
+```svelte
+<svelte:window onkeydown={handleShellKeydown} />
+```
+
+- [ ] **Step 3: Replace inline sidebar markup with `AppSidebar`**
+
+Inside `<div class="shell">`, delete the existing sidebar block that starts with `<aside class="sidebar">` and ends at its matching closing `</aside>`. Replace that whole block with:
+
+```svelte
+    <AppSidebar
+      {navItems}
+      pathname={page.url.pathname}
+      collapsed={sidebarCollapsed}
+      mobileOpen={mobileSidebarOpen}
+      onToggleCollapsed={toggleSidebarCollapsed}
+      onCloseMobile={closeMobileSidebar}
+    />
+```
+
+- [ ] **Step 4: Move theme toggle into topbar and add mobile menu**
+
+Replace the current `.workspace-topbar` markup with:
+
+```svelte
+      <div class="workspace-topbar">
+        <div class="workspace-topbar-main">
+          <Button
+            className="mobile-menu-button"
+            variant="ghost"
+            iconOnly
+            ariaLabel="Open navigation"
+            ariaControls="app-sidebar"
+            ariaExpanded={mobileSidebarOpen}
+            onclick={() => (mobileSidebarOpen = true)}
+          >
+            <Menu size={17} aria-hidden="true" />
+          </Button>
+          <div class="workspace-route">
+            <span class="workspace-kicker">Current space</span>
+            <strong>
+              {#if page.url.pathname.startsWith("/analysis")}
+                Analysis workspace
+              {:else if page.url.pathname.startsWith("/accounts") || page.url.pathname.startsWith("/auth")}
+                Source access
+              {:else if page.url.pathname.startsWith("/settings")}
+                Settings
+              {:else}
+                Extractum
+              {/if}
+            </strong>
+          </div>
+        </div>
+        <div class="workspace-topbar-actions">
+          <div class="workspace-topbar-meta">
+            <span class="workspace-badge">Local-first desktop</span>
+            <span class="workspace-badge">Tauri + Svelte</span>
+          </div>
+          <Button
+            className="theme-toggle"
+            variant="secondary"
+            iconOnly
+            ariaLabel={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+            title={theme === "light" ? "Dark theme" : "Light theme"}
+            type="button"
+            onclick={toggleTheme}
+          >
+            {#if theme === "light"}
+              <Moon size={15} aria-hidden="true" />
+            {:else}
+              <Sun size={15} aria-hidden="true" />
+            {/if}
+          </Button>
+        </div>
+      </div>
+```
+
+- [ ] **Step 5: Remove sidebar CSS from layout and add topbar CSS**
+
+In `src/routes/+layout.svelte`, delete the existing local CSS rule groups with these exact selectors because they now belong to `AppSidebar`:
+
+```text
+.sidebar
+.sidebar-header
+.brand
+.brand:hover
+.brand-mark
+.brand-copy
+.brand-copy strong
+.brand-copy small
+.sidebar-nav
+.sidebar-nav a
+.nav-row
+.sidebar-nav a:hover
+.sidebar-nav a.active
+.nav-label
+.nav-caption
+.sidebar-nav a.active .nav-caption,
+.sidebar-nav a:hover .nav-caption
+.sidebar-footer
+.footer-copy
+.footer-copy strong
+```
+
+Keep `.workspace-kicker` and turn the old `.footer-label, .workspace-kicker` selector into:
+
+```css
+  .workspace-kicker {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+```
+
+Delete the old global theme width rule:
+
+```css
+  :global(.theme-toggle) {
+    width: 100%;
+  }
+```
+
+Add these topbar rules near the existing `.workspace-topbar` styles:
+
+```css
+  .workspace-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    min-height: 2.25rem;
+    padding: 0.15rem 0.15rem 0.35rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  }
+
+  .workspace-topbar-main,
+  .workspace-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+  }
+
+  .workspace-topbar-actions {
+    justify-content: flex-end;
+  }
+
+  :global(.mobile-menu-button) {
+    display: none;
+    flex: 0 0 auto;
+  }
+
+  :global(.theme-toggle) {
+    flex: 0 0 auto;
+  }
+```
+
+Then replace the current `@media (max-width: 820px)` block with:
+
+```css
+  @media (max-width: 820px) {
+    .shell {
+      display: block;
+      min-height: 100vh;
+    }
+
+    .workspace {
+      padding: 1rem;
+    }
+
+    .workspace-topbar {
+      align-items: center;
+    }
+
+    .workspace-topbar-main {
+      flex: 1;
+    }
+
+    :global(.mobile-menu-button) {
+      display: inline-flex;
+    }
+
+    .workspace-topbar-actions {
+      gap: 0.45rem;
+    }
+
+    .workspace-topbar-meta {
+      display: none;
+    }
+
+    :global(.page-hero) {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    :global(.page-grid) {
+      grid-template-columns: 1fr;
+    }
+  }
+```
+
+- [ ] **Step 6: Run the focused test and verify it passes**
+
+Run:
+
+```bash
+npm run test -- src/lib/app-sidebar-behavior.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 7: Run Svelte autofixer on layout**
+
+Use the Svelte MCP `svelte_autofixer` tool on `+layout.svelte`.
+
+Expected: no Svelte syntax or accessibility issues, or actionable fixes that are applied before continuing.
+
+- [ ] **Step 8: Commit the layout wiring**
+
+Run:
+
+```bash
+git add src/routes/+layout.svelte
+git commit -m "feat: wire collapsible app sidebar"
+```
+
+Expected: commit includes only the layout changes.
+
+## Task 5: Run Full Project Checks
+
+**Files:**
+- Test: project scripts
+
+- [ ] **Step 1: Run all Vitest tests**
+
+Run:
+
+```bash
+npm run test
+```
+
+Expected: PASS for the full test suite.
+
+- [ ] **Step 2: Run Svelte check**
+
+Run:
+
+```bash
+npm run check
+```
+
+Expected: PASS with no Svelte or TypeScript diagnostics.
+
+- [ ] **Step 3: Commit any check-only fixes**
+
+If Task 5 Step 1 or Step 2 required code fixes, commit only those fixes:
+
+```bash
+git add src/lib/components/app-sidebar.svelte src/routes/+layout.svelte src/lib/components/ui/Button.svelte src/lib/app-sidebar-behavior.test.ts
+git commit -m "fix: polish app sidebar checks"
+```
+
+Expected: skip this commit if no check-only fixes were needed.
+
+## Task 6: Playwright Visual Verification
+
+**Files:**
+- No repo files should be changed by this task.
+
+- [ ] **Step 1: Start the dev server**
+
+Run:
+
+```bash
+npm run dev -- --host 127.0.0.1
+```
+
+Expected: Vite reports a local URL, usually `http://127.0.0.1:5173/`.
+
+- [ ] **Step 2: Verify desktop expanded**
+
+In Playwright, open the dev URL at a desktop viewport:
+
+```text
+Viewport: 1440x900
+URL: http://127.0.0.1:5173/analysis
+```
+
+Expected:
+
+- sidebar is expanded by default when `extractum.sidebar.collapsed` is not set;
+- brand text, nav labels, captions, and footer are visible;
+- theme toggle is in the topbar, not the sidebar footer.
+
+- [ ] **Step 2a: Verify tablet-width desktop behavior**
+
+Resize Playwright to:
+
+```text
+Viewport: 900x900
+```
+
+Expected:
+
+- the desktop shell still uses the sidebar layout;
+- the mobile menu button is hidden;
+- the sidebar can remain expanded or collapsed according to the persisted desktop state.
+
+- [ ] **Step 3: Verify desktop collapsed**
+
+Click the sidebar collapse button.
+
+Expected:
+
+- sidebar becomes a narrow icon rail;
+- only the `E` brand mark and nav icons remain;
+- active route styling remains visible;
+- nav links expose titles/accessible names;
+- `localStorage.getItem("extractum.sidebar.collapsed")` returns `"true"`.
+
+- [ ] **Step 4: Verify persisted collapsed state**
+
+Reload the page.
+
+Expected:
+
+- desktop sidebar remains collapsed;
+- theme toggle remains visible in the topbar.
+
+- [ ] **Step 5: Verify mobile drawer**
+
+Resize Playwright to:
+
+```text
+Viewport: 760x900
+```
+
+Expected:
+
+- sidebar is off-canvas;
+- topbar shows a menu button;
+- content uses the full width;
+- clicking the menu button opens a left drawer with readable labels;
+- focus moves to the `app-sidebar` drawer container after opening;
+- clicking overlay closes the drawer;
+- pressing Escape closes the drawer.
+
+- [ ] **Step 6: Verify mobile nav closes the drawer**
+
+Open the mobile drawer, then click `Accounts`.
+
+Expected:
+
+- route changes to `/accounts`;
+- drawer closes automatically after the nav click.
+
+- [ ] **Step 7: Stop the dev server**
+
+Stop the Vite process.
+
+Expected: no running dev server remains.
+
+## Task 7: Final Git Status
+
+**Files:**
+- No repo files should be changed by this task.
+
+- [ ] **Step 1: Check status**
+
+Run:
+
+```bash
+git status --short
+```
+
+Expected:
+
+- only intentional implementation files are modified or committed;
+- generated local artifacts such as `.playwright-mcp/` and `.superpowers/` are not staged.
+
+- [ ] **Step 2: Summarize work**
+
+Prepare a final implementation summary with:
+
+- files changed;
+- tests run and their results;
+- Playwright verification results;
+- any remaining untracked local artifacts.
