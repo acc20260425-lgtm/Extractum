@@ -67,6 +67,7 @@ export interface AnalysisRunWorkflowDeps {
   loadChatMessages(runId: number, guard?: AnalysisRunRequestGuard): Promise<void>;
   loadTrace(runId: number, guard?: AnalysisRunRequestGuard): Promise<void>;
   clearTraceState(): void;
+  onRunOpened?(run: AnalysisRunDetail): void;
   formatError(action: string, error: unknown): string;
 }
 
@@ -171,6 +172,7 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
       }
 
       deps.patch({ currentRun: run });
+      deps.onRunOpened?.(run);
       deps.syncRunSnapshot(run.id, run.status);
       await deps.loadChatMessages(run.id, guard);
       if (!guard.isCurrent()) {

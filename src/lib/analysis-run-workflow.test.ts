@@ -116,6 +116,7 @@ function createHarness(initial: Partial<AnalysisRunWorkflowHarnessState> = {}) {
     loadChatMessages: vi.fn(),
     loadTrace: vi.fn(),
     clearTraceState: vi.fn(),
+    onRunOpened: vi.fn(),
     formatError: vi.fn((action: string, error: unknown) => `Error ${action}: ${String(error)}`),
   };
 
@@ -274,6 +275,45 @@ describe("analysis-run-workflow", () => {
       isCurrent: expect.any(Function),
     }));
     expect(state.loadingRunDetail).toBe(false);
+  });
+
+  it("notifies route workspace state after a current run opens", async () => {
+    const { deps, workflow } = createHarness();
+    const run = runDetail({ id: 7, status: "completed" });
+    deps.getRun.mockResolvedValueOnce(run);
+    deps.loadChatMessages.mockResolvedValueOnce(undefined);
+
+    await workflow.openRun(7);
+
+    expect(deps.onRunOpened).toHaveBeenCalledWith(run);
+  });
+
+  it("does not notify route workspace state for a missing run", async () => {
+    const { deps, workflow } = createHarness();
+    deps.getRun.mockResolvedValueOnce(null);
+
+    await workflow.openRun(7);
+
+    expect(deps.onRunOpened).not.toHaveBeenCalled();
+  });
+
+  it("does not notify route workspace state for a stale open run response", async () => {
+    const { deps, workflow } = createHarness();
+    let resolveFirst: (run: AnalysisRunDetail) => void = () => {};
+    deps.getRun
+      .mockImplementationOnce(() => new Promise<AnalysisRunDetail>((resolve) => {
+        resolveFirst = resolve;
+      }))
+      .mockResolvedValueOnce(runDetail({ id: 8, result_markdown: "second" }));
+    deps.loadChatMessages.mockResolvedValue(undefined);
+
+    const first = workflow.openRun(7);
+    const second = workflow.openRun(8);
+    resolveFirst(runDetail({ id: 7, result_markdown: "first" }));
+    await Promise.all([first, second]);
+
+    expect(deps.onRunOpened).toHaveBeenCalledTimes(1);
+    expect(deps.onRunOpened).toHaveBeenCalledWith(expect.objectContaining({ id: 8 }));
   });
 
   it("clears trace state when the opened run has no trace data", async () => {
