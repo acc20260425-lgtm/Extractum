@@ -70,7 +70,7 @@ function traceData(refs: AnalysisTraceRef[] = [traceRef()]): AnalysisTraceData {
 }
 
 type HarnessState = AnalysisTraceWorkflowState & {
-  inspectorMode: "active" | "history" | "trace" | "chunks";
+  companionTab: "evidence" | "chat" | "runs";
   status: string;
 };
 
@@ -81,7 +81,7 @@ function createHarness(initial: Partial<HarnessState> = {}) {
     savedTraceRefs: [],
     resolvedTraceRefs: [],
     selectedTraceRef: null,
-    inspectorMode: "history",
+    companionTab: "runs",
     status: "",
     ...initial,
   };
@@ -189,7 +189,7 @@ describe("analysis-trace-workflow", () => {
     await workflow.focusTraceRef("ref-a");
 
     expect(deps.resolveRefs).not.toHaveBeenCalled();
-    expect(state.inspectorMode).toBe("history");
+    expect(state.companionTab).toBe("runs");
     expect(state.selectedTraceRef).toBeNull();
   });
 
@@ -202,7 +202,11 @@ describe("analysis-trace-workflow", () => {
     await workflow.focusTraceRef("ref-a");
 
     expect(deps.resolveRefs).not.toHaveBeenCalled();
-    expect(state.inspectorMode).toBe("trace");
+    expect(state.companionTab).toBe("evidence");
+    expect(deps.patch).toHaveBeenCalledWith({
+      companionTab: "evidence",
+      selectedTraceRef: "ref-a",
+    });
     expect(state.selectedTraceRef).toBe("ref-a");
     expect(state.traceData.refs).toEqual([loaded]);
   });
@@ -224,7 +228,7 @@ describe("analysis-trace-workflow", () => {
     expect(state.savedTraceRefs).toEqual(["ref-b"]);
     expect(state.resolvedTraceRefs).toEqual(["ref-a"]);
     expect(state.selectedTraceRef).toBe("ref-a");
-    expect(state.inspectorMode).toBe("trace");
+    expect(state.companionTab).toBe("evidence");
   });
 
   it("keeps synthetic youtube description refs selectable from saved trace data", async () => {
@@ -259,7 +263,7 @@ describe("analysis-trace-workflow", () => {
 
     expect(state.status).toBe("Error resolving the trace reference: corpus unavailable");
     expect(state.selectedTraceRef).toBe("ref-a");
-    expect(state.inspectorMode).toBe("trace");
+    expect(state.companionTab).toBe("evidence");
   });
 
   it("clears trace state to the route default values", () => {

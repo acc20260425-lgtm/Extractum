@@ -1923,7 +1923,7 @@ git commit -m "feat: add analysis run companion tabs"
 - Modify: `src/lib/analysis-chat-workflow.test.ts`
 - Modify: `src/lib/components/analysis/report-canvas.svelte`
 
-- [ ] **Step 1: Update trace workflow patch contract**
+- [x] **Step 1: Update trace workflow patch contract**
 
 In `src/lib/analysis-trace-workflow.ts`, replace:
 
@@ -1960,7 +1960,7 @@ expect(deps.patch).toHaveBeenCalledWith({
 });
 ```
 
-- [ ] **Step 2: Remove temporary chat from ReportCanvas**
+- [x] **Step 2: Remove temporary chat from ReportCanvas**
 
 In `src/lib/components/analysis/report-canvas.svelte`, remove the `ChatPanel` import and the `.temporary-follow-up` block.
 
@@ -1981,7 +1981,7 @@ onChangeChatQuestion
 
 Keep `onFocusTraceRef` because report refs still activate Evidence through the route.
 
-- [ ] **Step 3: Add route imports and state**
+- [x] **Step 3: Add route imports and state**
 
 In `src/routes/analysis/+page.svelte`, replace:
 
@@ -2024,7 +2024,7 @@ const chatAvailability = $derived(chatAvailabilityForRun({
 }));
 ```
 
-- [ ] **Step 4: Update route patch handlers**
+- [x] **Step 4: Update route patch handlers**
 
 In `applyTraceWorkflowPatch(...)`, replace the inspector patch handling:
 
@@ -2047,7 +2047,7 @@ In `applyRunWorkflowPatch(...)`, remove `inspectorMode` assignments. When a run 
 
 In source/group selection handlers, keep the Part 1 rule that workspace switches set `companionTab = "runs"`.
 
-- [ ] **Step 5: Add companion route helpers**
+- [x] **Step 5: Add companion route helpers**
 
 Add these helpers near the other workspace state helpers:
 
@@ -2117,7 +2117,7 @@ function changeRunsFilter(next: CompanionRunsFilterState) {
 
 This route code activates Chat only from question submission or explicit tab selection through `changeCompanionTab("chat")`. The chat textarea focus path does not call this helper.
 
-- [ ] **Step 6: Persist Runs filters**
+- [x] **Step 6: Persist Runs filters**
 
 Where the route calls `persistableAnalysisWorkspaceState(...)`, pass:
 
@@ -2146,7 +2146,7 @@ runFilter =
     : persisted.runs.runsFilter.status;
 ```
 
-- [ ] **Step 7: Replace right panel markup**
+- [x] **Step 7: Replace right panel markup**
 
 Replace the `<div class="inspector-slot">...</div>` block with:
 
@@ -2223,7 +2223,7 @@ Update route CSS:
 
 Remove `.inspector-slot` rules.
 
-- [ ] **Step 8: Update `ReportCanvas` route props**
+- [x] **Step 8: Update `ReportCanvas` route props**
 
 Remove these props and callbacks from `<ReportCanvas ... />`:
 
@@ -2246,7 +2246,7 @@ Keep:
 onFocusTraceRef={focusTraceRef}
 ```
 
-- [ ] **Step 9: Run route and workflow tests**
+- [x] **Step 9: Run route and workflow tests**
 
 Run:
 
@@ -2256,7 +2256,7 @@ npm.cmd test -- src/lib/analysis-run-companion-route.test.ts src/lib/analysis-ru
 
 Expected: PASS.
 
-- [ ] **Step 10: Run Svelte check**
+- [x] **Step 10: Run Svelte check**
 
 Run:
 
@@ -2266,7 +2266,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 11: Commit route wiring**
+- [x] **Step 11: Commit route wiring**
 
 Run:
 

@@ -18,7 +18,7 @@ export interface AnalysisTraceWorkflowState {
 }
 
 export type AnalysisTraceWorkflowPatch = Partial<{
-  inspectorMode: "trace";
+  companionTab: "evidence";
   traceData: AnalysisTraceData;
   savedTraceRefs: string[];
   resolvedTraceRefs: string[];
@@ -88,7 +88,7 @@ export function createAnalysisTraceWorkflow(deps: AnalysisTraceWorkflowDeps) {
       return;
     }
 
-    deps.patch({ inspectorMode: "trace", selectedTraceRef: ref });
+    deps.patch({ companionTab: "evidence", selectedTraceRef: ref });
     if (state.traceData.refs.some((entry) => entry.ref === ref)) {
       return;
     }

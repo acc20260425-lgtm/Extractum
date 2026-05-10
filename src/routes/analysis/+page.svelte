@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
-  import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
+  import RunCompanionTabs from "$lib/components/analysis/run-companion-tabs.svelte";
   import ReportCanvas from "$lib/components/analysis/report-canvas.svelte";
   import CompactSourceRail from "$lib/components/analysis/compact-source-rail.svelte";
   import SourceManagementDialog from "$lib/components/analysis/source-management-dialog.svelte";
@@ -124,10 +124,8 @@
     createEmptyLiveRunState,
     currentTopicFilter as currentTopicFilterFromState,
     filteredAnalysisGroups,
-    filteredAnalysisRuns,
     filteredAnalysisSourceCatalog,
     focusedLiveRunState,
-    focusedRunChunkSummaries,
     focusedRunStreamedOutput,
     hasRealForumTopics as hasRealForumTopicsInState,
     isRunActive,
@@ -178,6 +176,8 @@
     type RunSnapshotAvailability,
   } from "$lib/analysis-report-canvas-state";
   import {
+    chatAvailabilityForRun,
+    evidenceSourceActionDecision,
     runsFilterDefaults,
     type CompanionRunsFilterState,
   } from "$lib/analysis-run-companion-state";
@@ -189,6 +189,7 @@
     selectSourceWorkspace,
     type AnalysisWorkspaceUiState,
     type CanvasMode,
+    type CompanionTab,
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
   import {
@@ -243,7 +244,6 @@
   } from "$lib/types/youtube";
   import type { NotebookLmExportForm } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
 
-  type InspectorMode = "active" | "history" | "trace" | "chunks";
   const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
   const CUSTOM_MODEL_OPTION = "__custom_model__";
 
@@ -308,7 +308,6 @@
   let lastSnapshotLoadKey = "";
 
   let railQuery = $state("");
-  let inspectorMode = $state<InspectorMode>("history");
   let workspaceUiState = $state<AnalysisWorkspaceUiState>(
     defaultAnalysisWorkspaceUiState(),
   );
@@ -584,7 +583,12 @@
     if ("savedTraceRefs" in patch) savedTraceRefs = patch.savedTraceRefs ?? [];
     if ("resolvedTraceRefs" in patch) resolvedTraceRefs = patch.resolvedTraceRefs ?? [];
     if ("selectedTraceRef" in patch) selectedTraceRef = patch.selectedTraceRef ?? null;
-    if ("inspectorMode" in patch && patch.inspectorMode) inspectorMode = patch.inspectorMode;
+    if ("companionTab" in patch && patch.companionTab) {
+      workspaceUiState = {
+        ...workspaceUiState,
+        companionTab: patch.companionTab,
+      };
+    }
     if ("status" in patch && patch.status !== undefined) status = patch.status;
   }
 
@@ -704,7 +708,6 @@
 
   const activePhase = $derived.by(() => runActivePhase(focusedLiveRun, currentRun));
   const activeProgress = $derived.by(() => runActiveProgress(focusedLiveRun));
-  const focusedChunkSummaries = $derived.by(() => focusedRunChunkSummaries(focusedLiveRun));
   const focusedStreamedOutput = $derived.by(() => focusedRunStreamedOutput(
     focusedLiveRun,
     currentRun,
@@ -730,6 +733,11 @@
     traceData.refs,
   ));
 
+  const chatAvailability = $derived(chatAvailabilityForRun({
+    currentRun,
+    snapshotAvailability: runSnapshotAvailability,
+  }));
+
   const historyScopeParams = $derived.by(() => {
     return analysisHistoryScopeParams(
       historyScope,
@@ -738,8 +746,6 @@
       selectedGroupId,
     );
   });
-
-  const filteredRuns = $derived.by(() => filteredAnalysisRuns(runs, runFilter));
 
   const filteredSourceCatalog = $derived.by(() => {
     return filteredAnalysisSourceCatalog(sourceCatalog, railQuery, accountLabel);
@@ -761,9 +767,13 @@
     const restored = restoredUiStateFromPersisted(persisted);
     workspaceUiState = restored;
     restoredWorkspaceSelection = restored.workspaceSelection;
-    historyScope = persisted.runs.historyScope;
-    runFilter = persisted.runs.runFilter;
     runsFilter = persisted.runs.runsFilter;
+    historyScope = persisted.runs.runsFilter.scope;
+    runFilter =
+      persisted.runs.runsFilter.status === "cancelled" ||
+      persisted.runs.runsFilter.status === "queued_running"
+        ? "all"
+        : persisted.runs.runsFilter.status;
     workspacePersistenceReady = true;
   }
 
@@ -932,7 +942,6 @@
     if ("activeRuns" in patch) activeRuns = patch.activeRuns ?? [];
     if ("activeRunId" in patch) activeRunId = patch.activeRunId ?? null;
     if ("currentRun" in patch) currentRun = patch.currentRun ?? null;
-    if ("inspectorMode" in patch && patch.inspectorMode) inspectorMode = patch.inspectorMode;
     if ("loadingRuns" in patch) loadingRuns = patch.loadingRuns ?? false;
     if ("loadingActiveRuns" in patch) loadingActiveRuns = patch.loadingActiveRuns ?? false;
     if ("loadingRunDetail" in patch) loadingRunDetail = patch.loadingRunDetail ?? false;
@@ -1095,8 +1104,69 @@
     return traceRefOriginFromState(ref, savedTraceRefs, resolvedTraceRefs);
   }
 
+  function changeCompanionTab(nextTab: CompanionTab) {
+    workspaceUiState = {
+      ...workspaceUiState,
+      companionTab: nextTab,
+    };
+  }
+
   async function focusTraceRef(ref: string) {
+    changeCompanionTab("evidence");
     await traceWorkflow.focusTraceRef(ref);
+  }
+
+  function showSelectedTraceInSource() {
+    const decision = evidenceSourceActionDecision({
+      currentRun,
+      selectedTrace,
+      snapshotAvailability: runSnapshotAvailability,
+    });
+
+    if (decision.kind === "unavailable") {
+      status = decision.reason;
+      return;
+    }
+
+    selectedTraceRef = decision.highlightedRef;
+    workspaceUiState = {
+      ...workspaceUiState,
+      canvasMode: decision.canvasMode,
+      sourceViewBasis: decision.sourceViewBasis,
+      companionTab: "evidence",
+    };
+
+    if (decision.kind === "live_source") {
+      status = decision.warning;
+    }
+  }
+
+  async function submitRunQuestionFromCompanion() {
+    const availability = chatAvailabilityForRun({
+      currentRun,
+      snapshotAvailability: runSnapshotAvailability,
+    });
+
+    if (!availability.enabled) {
+      status = availability.description;
+      return;
+    }
+
+    if (!chatQuestion.trim()) {
+      status = "Question cannot be empty.";
+      return;
+    }
+
+    workspaceUiState = {
+      ...workspaceUiState,
+      companionTab: "chat",
+    };
+    await chatWorkflow.askRunQuestion();
+  }
+
+  function changeRunsFilter(next: CompanionRunsFilterState) {
+    runsFilter = next;
+    historyScope = next.scope;
   }
 
   async function loadTrace(runId: number, guard?: AnalysisRunRequestGuard) {
@@ -1320,7 +1390,6 @@
     analysisScope = next.analysisScope;
     selectedSourceId = next.selectedSourceId;
     selectedTopicKey = next.selectedTopicKey;
-    inspectorMode = next.inspectorMode;
     youtubeVideoDetail = null;
     youtubePlaylistDetail = null;
     resetGroupLiveReader();
@@ -1368,8 +1437,6 @@
     resetGroupLiveReader();
     selectedSnapshotSourceId = null;
     resetYoutubeTranscriptReader();
-    inspectorMode = next.inspectorMode;
-
     if (preserveRestoredCanvasState) {
       applyWorkspaceUiState({
         ...workspaceUiState,
@@ -1593,10 +1660,6 @@
 
   async function deleteSavedRun(run: AnalysisRunSummary) {
     await runWorkflow.deleteSavedRun(run);
-  }
-
-  async function askRunQuestion() {
-    await chatWorkflow.askRunQuestion();
   }
 
   async function clearChatMessages() {
@@ -1962,6 +2025,7 @@
     workspaceUiState;
     historyScope;
     runFilter;
+    runsFilter;
 
     if (!workspacePersistenceReady) {
       return;
@@ -2242,12 +2306,6 @@
     showTopicSelector={shouldShowTopicSelector()}
     {selectedTraceRef}
     traceRefCount={traceData.refs.length}
-    {chatMessages}
-    {chatQuestion}
-    {chatting}
-    canCancelChat={chatting && activeChatRequestId !== null}
-    {clearingChat}
-    {loadingChat}
     {selectedTemplate}
     {templateName}
     {templateBody}
@@ -2322,10 +2380,6 @@
         void cancelActiveRun(activeRunId);
       }
     }}
-    onAskRunQuestion={() => void askRunQuestion()}
-    onCancelChat={() => void cancelChat()}
-    onClearChat={() => void clearChatMessages()}
-    onChangeChatQuestion={(value: string) => (chatQuestion = value)}
     onSaveTemplateCopy={() => void saveTemplateCopy()}
     onSaveTemplateChanges={() => void saveTemplateChanges()}
     onDeleteTemplate={() => void deleteTemplate()}
@@ -2339,24 +2393,29 @@
     onDeleteGroup={() => void deleteGroup()}
   />
 
-  <div class="inspector-slot">
-    <WorkspaceInspector
-      {inspectorMode}
-      {activeRuns}
-      {loadingActiveRuns}
-      {activeRunId}
-      {runs}
-      {loadingRuns}
-      {historyScope}
-      historyTargetReady={historyScopeParams !== null}
-      {runFilter}
-      {deletingRunIds}
-      {filteredRuns}
+  <div class="companion-slot">
+    <RunCompanionTabs
+      companionTab={workspaceUiState.companionTab}
+      {currentRun}
+      snapshotAvailability={runSnapshotAvailability}
+      {chatAvailability}
       {traceData}
       {selectedTraceRef}
       {selectedTrace}
-      {focusedChunkSummaries}
-      {selectedRunIsActive}
+      {activeRuns}
+      savedRuns={runs}
+      {loadingActiveRuns}
+      {loadingRuns}
+      {activeRunId}
+      {deletingRunIds}
+      workspaceSelection={workspaceUiState.workspaceSelection}
+      {runsFilter}
+      {loadingChat}
+      {chatMessages}
+      {chatQuestion}
+      {chatting}
+      canCancelChat={chatting && activeChatRequestId !== null}
+      {clearingChat}
       {formatTimestamp}
       {formatPeriod}
       {phaseLabel}
@@ -2365,15 +2424,21 @@
       {runTargetLabel}
       {statusTone}
       {traceRefOrigin}
-      onChangeInspectorMode={(mode) => (inspectorMode = mode)}
+      {reportLines}
+      onChangeCompanionTab={changeCompanionTab}
+      onSelectTraceRef={(ref) => void focusTraceRef(ref)}
+      onShowSelectedTraceInSource={showSelectedTraceInSource}
+      onFocusTraceRef={(ref) => void focusTraceRef(ref)}
+      onAskQuestion={() => void submitRunQuestionFromCompanion()}
+      onCancelChat={() => void cancelChat()}
+      onClearChat={() => void clearChatMessages()}
+      onChangeChatQuestion={(value) => (chatQuestion = value)}
+      onChangeRunsFilter={changeRunsFilter}
       onRefreshActiveRuns={() => void loadActiveRuns()}
+      onRefreshRuns={() => void loadRuns()}
       onOpenRun={(runId) => void openRun(runId)}
       onCancelRun={(runId) => void cancelActiveRun(runId)}
-      onRefreshRuns={() => void loadRuns()}
       onDeleteRun={(run) => void deleteSavedRun(run)}
-      onChangeFilter={(next) => (runFilter = next)}
-      onChangeHistoryScope={(next) => (historyScope = next)}
-      onSelectTraceRef={(ref) => (selectedTraceRef = ref)}
     />
   </div>
 
@@ -2401,7 +2466,7 @@
     margin-bottom: 0.85rem;
   }
 
-  .inspector-slot {
+  .companion-slot {
     min-width: 0;
   }
 
@@ -2410,7 +2475,7 @@
       grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1fr);
     }
 
-    .inspector-slot {
+    .companion-slot {
       grid-column: 2;
     }
   }
@@ -2420,7 +2485,7 @@
       grid-template-columns: 1fr;
     }
 
-    .inspector-slot {
+    .companion-slot {
       grid-column: 1;
     }
   }
