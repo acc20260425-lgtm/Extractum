@@ -489,6 +489,8 @@ Do not persist:
 
 On app restart, `/analysis` should restore the last selected source or group and its working view, but the user chooses a saved run explicitly from `Runs`. If the persisted source or group no longer exists, fall back to the first available source/group or an empty state without error noise.
 
+Missing or deleted run scope context is run-bound and should not be persisted as `WorkspaceSelection` after restart. If the user had an opened saved run whose original source or group was deleted, restart should not restore that deleted run context as a live workspace selection because `OpenRunState` itself is not persisted.
+
 State keys should be versioned or namespaced so future layout changes can discard incompatible saved UI state without breaking the route.
 
 ## Interaction Rules
@@ -613,6 +615,7 @@ Add focused tests around state and structure:
 - `run_snapshot` source view does not present live sync/takeout controls as if they change the opened run snapshot;
 - YouTube metadata, transcript, comments, playlist, and playlist-video sync actions are reachable from `Source` mode;
 - workspace persistence restores last source/group and UI context without auto-opening the last run;
+- workspace persistence does not save missing/deleted run scope context as `WorkspaceSelection`;
 - persistence ignores stale source/group ids gracefully;
 - persistence does not restore transient trace selection, draft chat text, or open popovers;
 - persisted workspace state does not restore `OpenRunState`;
