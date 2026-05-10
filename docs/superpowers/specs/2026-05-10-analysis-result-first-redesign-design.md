@@ -343,7 +343,9 @@ Current live source loading already uses `listSourceItems` with a bounded limit,
 - keep topic filters and source-group filters compatible with paging;
 - avoid refetching already loaded pages when toggling `Report | Source`.
 
-Run snapshot source view should use the frozen `analysis_run_messages` data. If the current frontend API is insufficient for paged snapshot browsing, add a focused command/API such as `list_analysis_run_messages` with `runId`, optional source filter, optional cursor, and limit. Do not force the whole snapshot into route state just to render source mode.
+Run snapshot source view must use the frozen `analysis_run_messages` data through paged access. For run snapshots larger than a small threshold, `ReportCanvas` `Source` mode must load an initial page and then request additional pages by cursor, source filter, and limit. The route must not require loading the entire `analysis_run_messages` table for a run into memory just to enter `Source` mode.
+
+If the current frontend API is insufficient for this, add a focused command/API such as `list_analysis_run_messages` with `runId`, optional source filter, optional cursor, and limit. Snapshot availability probes should use a cheap count/existence check or the first page, not full snapshot hydration.
 
 For YouTube transcript source view, prefer segment-aware loading and rendering. The UI should be able to show a transcript page without loading every comment or playlist item unless the selected source mode requires it.
 
@@ -505,6 +507,7 @@ Add focused tests around state and structure:
 - active-run source mode shows pending snapshot state until snapshot data exists;
 - failed and cancelled run source mode shows snapshot when available and unavailable state plus live source action when not;
 - source snapshot availability is not inferred from run status alone;
+- large run snapshots are entered through paged `analysis_run_messages` access without hydrating the full run snapshot into route state;
 - live source does not auto-switch to run snapshot when a running snapshot becomes available;
 - live source mode shows an explicit indicator and return path to the run snapshot;
 - Telegram media renders metadata placeholders without requiring binary preview support;
