@@ -63,4 +63,10 @@ describe("app sidebar behavior", () => {
     expect(layoutSource).toContain("ariaExpanded={mobileSidebarOpen}");
     expect(layoutSource).toContain('ariaControls="app-sidebar"');
   });
+
+  it("keeps the mobile menu button hidden in desktop layout despite Button defaults", () => {
+    expect(layoutSource).toContain(":global(.mobile-menu-button.ui-button)");
+    expect(layoutSource).toContain("display: none;");
+    expect(layoutSource).toContain("display: inline-flex;");
+  });
 });

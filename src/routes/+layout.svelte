@@ -390,7 +390,7 @@
     justify-content: flex-end;
   }
 
-  :global(.mobile-menu-button) {
+  :global(.mobile-menu-button.ui-button) {
     display: none;
     flex: 0 0 auto;
   }
@@ -461,7 +461,7 @@
       flex: 1;
     }
 
-    :global(.mobile-menu-button) {
+    :global(.mobile-menu-button.ui-button) {
       display: inline-flex;
     }
 
