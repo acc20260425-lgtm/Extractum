@@ -130,26 +130,31 @@ The compact source rail can expose the full source list through a popover, drawe
 
 ### CompactSourceRail Access And Status Details
 
-The compact rail should have a predictable always-visible control set:
+The compact rail must stay quiet enough that `ReportCanvas` remains visually dominant. It should split source access into two layers instead of making every source action always visible.
 
-- a current source/group button that opens a source switcher popover or temporary expanded panel;
-- a dedicated `Expand sources` control for opening the full source list without navigating away from the current run;
-- a dedicated `Manage sources` control that opens the existing source management dialog;
-- a compact `New source` or add affordance only if it can be distinguished from source switching and manager access;
-- keyboard labels and tooltips for every icon-only control.
+Collapsed rail contract:
+
+- a current source/group context button or avatar that opens the source switcher;
+- a compact provider/source type mark, such as Telegram, YouTube video, YouTube playlist, or source group;
+- selected state through rail item highlight or active ring;
+- one contextual primary action slot, used for the most relevant immediate action such as `New source` when no source exists, `Sync`/`Retry` for actionable stale or failed state, or compact running progress while work is active;
+- critical warning/running state through a visible dot, spinner, or progress ring.
+
+The collapsed rail should not render separate always-visible controls for source switching, source expansion, source management, new-source creation, detailed provider status, and YouTube transcript/comment availability at the same time. `Manage sources`, `New source`, detailed statuses, sync/takeout actions, and YouTube availability details belong in the expanded layer unless they are the current contextual primary action.
+
+Popover or expanded panel contract:
+
+- full source and source-group list;
+- source/group search and filtering;
+- manage sources;
+- new source;
+- detailed statuses such as `Syncing`, `Sync failed`, `Sign in required`, `Transcript unavailable`, or `Takeout import running`;
+- provider-specific details, including YouTube transcript/comment availability;
+- source sync, retry, and takeout actions when supported.
 
 The full source list should appear as an overlay, popover, or temporary side panel anchored to the compact rail. It should support the same source/group search and selection behavior currently owned by `WorkspaceRail`. Closing the list without changing selection must return the user to the same `ReportCanvas` mode, scroll position, and companion tab. Selecting a different source or group from the expanded list follows the same workspace-switch rule as selecting directly from `CompactSourceRail`.
 
-Compact status display should use layered indicators rather than full text badges:
-
-- provider/source type mark, such as Telegram, YouTube video, YouTube playlist, or source group;
-- selected state through rail item highlight or active ring;
-- sync/running state through a small spinner or progress ring;
-- warning/error state through a visible warning/error dot and tooltip text;
-- stale or unsynced state through a muted or neutral dot;
-- YouTube transcript/comment availability through compact secondary dots only when the source is YouTube.
-
-Status indicators must have accessible labels such as `Syncing`, `Sync failed`, `Sign in required`, `Transcript unavailable`, or `Takeout import running`. Hover-only information is not sufficient; keyboard users need the same status through titles, aria labels, or the expanded source list.
+Status indicators must have accessible labels. Hover-only information is not sufficient; keyboard users need the same status through titles, aria labels, or the expanded source list.
 
 ### ReportCanvas
 
@@ -470,6 +475,9 @@ Add focused tests around state and structure:
 - persisted workspace state does not restore `OpenRunState`;
 - run opening from `Runs` updates the rail scope instead of allowing a stable rail/report mismatch;
 - `Report | Source` switching is covered for Telegram, YouTube video, YouTube playlist, active run, completed run, failed run, and no-run states;
+- collapsed `CompactSourceRail` does not render manage-source, new-source, detailed provider status, and YouTube transcript/comment availability as separate always-visible controls;
+- collapsed `CompactSourceRail` keeps critical warning/running state visible and accessible;
+- expanded source panel exposes full source management, source search, detailed statuses, provider-specific availability, and supported sync/takeout actions;
 - raw-source or component tests confirm the new `CompactSourceRail`, `ReportCanvas`, and `RunCompanionTabs` zones exist.
 
 Browser verification should check desktop and narrow widths for:
