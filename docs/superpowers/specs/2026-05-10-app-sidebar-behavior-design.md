@@ -134,6 +134,8 @@ Add or update focused Vitest source tests to lock the intended shell behavior:
 - The layout includes desktop collapsed state and mobile drawer state.
 - Mobile nav selection has a close callback path.
 - Theme toggle is in the topbar rather than only in the sidebar footer.
+- The mobile menu button remains hidden on desktop even though `Button.svelte`
+  applies `.ui-button { display: inline-flex; }`.
 
 Run:
 
@@ -150,6 +152,49 @@ Then run the app locally and verify with Playwright:
 - mobile nav click closes the drawer;
 - theme toggle remains accessible in topbar.
 
+### Playwright Session Notes
+
+These details are intentionally recorded so the next verification session can
+start cleanly:
+
+- On this Windows/PowerShell setup, prefer `npm.cmd` for scripts. Plain `npm`
+  may hit PowerShell execution policy for `npm.ps1`.
+- Do not assume Vite uses port `5173`. Use the actual URL Vite prints. In this
+  session it used `http://127.0.0.1:1420/`.
+- If a sandboxed background `npm run dev` process exits immediately or produces
+  empty logs, start Vite outside the sandbox and keep the process alive, for
+  example:
+
+  ```powershell
+  $cmd = 'Set-Location -LiteralPath ''G:\Develop\Extractum''; node.exe node_modules/vite/bin/vite.js --host 127.0.0.1'
+  Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoExit','-Command',$cmd) -PassThru -WindowStyle Hidden
+  ```
+
+- Stop the dev server by identifying the listening PID for the actual port:
+
+  ```powershell
+  netstat -ano | findstr ":1420"
+  Stop-Process -Id <LISTENING_PID> -Force
+  ```
+
+- `.playwright-mcp/` is a generated local artifact and should stay ignored and
+  unstaged.
+- Tauri IPC errors in the browser console are expected when opening the Svelte
+  app directly in a browser rather than inside Tauri. They did not block sidebar
+  verification.
+
 ## Implementation Notes
 
 Keep the change scoped to the shell. Prefer existing colors, CSS variables, button styling, and route title behavior. Avoid introducing a new global store unless the implementation becomes awkward without one.
+
+## Implementation Learnings
+
+- `Button.svelte` emits the `.ui-button` class and its local CSS sets
+  `display: inline-flex`. Layout CSS that needs to hide/show a `Button` by
+  class should use a selector at least as specific as
+  `:global(.mobile-menu-button.ui-button)`.
+- Avoid putting `tabindex={mobileOpen ? -1 : undefined}` directly on the
+  noninteractive `aside`. Svelte autofixer reports
+  `a11y_no_noninteractive_tabindex`. The accepted implementation keeps
+  `role="navigation"` on `#app-sidebar` and sets/removes `tabindex="-1"`
+  programmatically immediately before focusing the drawer on mobile open.
