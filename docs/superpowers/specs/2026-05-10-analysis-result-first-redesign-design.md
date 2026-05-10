@@ -267,6 +267,8 @@ Evidence | Chat | Runs
 - becomes active when the user explicitly selects the tab or submits the follow-up question;
 - stays disabled or explanatory until chat is available.
 
+When `OpenRunState` is not `none` and `sourceViewBasis = "live_source"`, `Evidence` and `Chat` remain bound to the opened run. The UI must not imply that follow-up chat or evidence refs are based on newly synced live source material.
+
 `Runs`:
 
 - combines active runs and saved run history entry points;
@@ -279,6 +281,14 @@ When `Runs` opens because of a workspace switch, such as selecting a source or s
 Existing `TracePanel`, `ChatPanel`, `ActiveRunList`, `RunHistory`, and `ChunkSummaries` should be reused inside the tab body where practical.
 
 The chat input should not steal the right companion from a user who is only navigating through the report or source view. Do not switch to `Chat` merely because an input receives incidental focus through tab navigation or restored focus. If the user explicitly clicks the `Chat` tab, uses a dedicated `Ask`/compose action, or submits a question, then `Chat` becomes active.
+
+### Privacy And Provenance
+
+The result-first UI should keep provenance visible without turning every action into a warning modal.
+
+When launching a report, the setup surface and run header should make the selected LLM profile, provider, and model visible. If the profile is missing or unusable, report launch remains disabled as described in onboarding states.
+
+Follow-up chat should make clear that the question is answered against the opened run context, normally the saved snapshot for completed runs, and may be sent to the configured provider. If the user is browsing live source material while a run is open, the chat surface still refers to the opened run context rather than the live source currently visible in `ReportCanvas`.
 
 ### Runs Search And Filtering
 
@@ -479,6 +489,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 - Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
 - Choosing `View live source` in run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
 - `sourceViewBasis = "live_source"` shows a persistent `Live source` indicator and a return action when run snapshot data is available.
+- When `OpenRunState` is not `none` and `sourceViewBasis = "live_source"`, `Evidence` and `Chat` remain bound to the opened run and must not imply newly synced live source context.
 - When `OpenRunState` is not `none`, switching back to `Report` from `Source` must not lose the selected run or companion tab state.
 - Local filtering or source focus inside a run snapshot does not count as `CompactSourceRail` selection and must not close the opened run.
 
@@ -561,6 +572,7 @@ Add focused tests around state and structure:
 - large run snapshots are entered through paged `analysis_run_messages` access without hydrating the full run snapshot into route state;
 - live source does not auto-switch to run snapshot when a running snapshot becomes available;
 - live source mode shows an explicit indicator and return path to the run snapshot;
+- live source browsing inside an opened run keeps `Evidence` and `Chat` bound to the opened run context, not newly synced live source material;
 - Telegram media renders metadata placeholders without requiring binary preview support;
 - YouTube transcript timestamp actions expose jump/copy behavior without requiring an embedded player;
 - snapshot unavailable state does not silently fall back to live data;
@@ -569,6 +581,7 @@ Add focused tests around state and structure:
 - missing `yt-dlp` for a YouTube source surfaces the runtime diagnostic in the central canvas;
 - synced sources with no text corpus explain the text-first limitation;
 - missing or unusable LLM profile disables report generation with `/settings` guidance;
+- report launch and follow-up chat make the selected LLM profile/provider/model and run-context provenance visible;
 - source ingest jobs are visible in `Source activity` or the expanded source panel, not in `Runs`;
 - report mode keeps source ingest activity compact and non-dominant unless it affects the opened run's availability or integrity;
 - active Takeout and YouTube source jobs expose progress plus cancel/retry where supported;
