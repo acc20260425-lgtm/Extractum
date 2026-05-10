@@ -45,6 +45,58 @@ The selected interaction model is:
 - **Chat activation**: explicit chat-tab selection or submitting a follow-up question switches the companion to `Chat`.
 - **Trace activation**: clicking a trace ref switches the companion to `Evidence`.
 
+## Workspace And Open Run State Model
+
+The redesign must keep the selected analysis workspace separate from the opened run. These two pieces of state answer different questions:
+
+```ts
+type WorkspaceSelection =
+  | { kind: "source"; sourceId: number }
+  | { kind: "source_group"; sourceGroupId: number }
+  | { kind: "none" };
+
+type OpenRunState =
+  | { kind: "none" }
+  | { kind: "active"; runId: number }
+  | { kind: "saved"; runId: number };
+```
+
+`WorkspaceSelection` owns:
+
+- the compact rail selection;
+- live source browsing;
+- the target scope for starting a new report;
+- the current-scope filter in `Runs`.
+
+`OpenRunState` owns:
+
+- report output;
+- run-bound source snapshot browsing;
+- trace evidence;
+- follow-up chat;
+- run metadata and active-run status.
+
+The MVP redesign should avoid a stable mismatch where the rail shows one source or group while the center shows a report for another source or group. The invariant is:
+
+```text
+If OpenRunState is active or saved, WorkspaceSelection matches that run's scope.
+```
+
+Opening an active or saved run aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and applies the normal companion default for that run state.
+
+Selecting a different source or source group from `CompactSourceRail` is an explicit workspace switch. It clears `OpenRunState`, clears run-bound evidence/chat/trace selection, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, and moves the companion to `Runs` so the right panel does not show orphaned run tools.
+
+Switching `Report | Source` does not change `WorkspaceSelection`. It only changes the central canvas view for the current state. Local navigation inside a run snapshot, such as filtering a source group snapshot down to one source, is not a rail selection and must not close the opened run.
+
+During async transitions, the UI can briefly show loading or pending state, but it should not settle into:
+
+```text
+Rail: Source B
+ReportCanvas: report for Source A
+```
+
+If future versions intentionally allow that mismatch, the header must make it explicit, for example `Viewing report for Source A` and `Current workspace Source B`. That is outside this MVP redesign.
+
 ## Component Architecture
 
 Introduce three explicit page zones.
@@ -86,7 +138,7 @@ The compact rail should have a predictable always-visible control set:
 - a compact `New source` or add affordance only if it can be distinguished from source switching and manager access;
 - keyboard labels and tooltips for every icon-only control.
 
-The full source list should appear as an overlay, popover, or temporary side panel anchored to the compact rail. It should support the same source/group search and selection behavior currently owned by `WorkspaceRail`, but closing it must return the user to the same `ReportCanvas` mode, scroll position, and companion tab.
+The full source list should appear as an overlay, popover, or temporary side panel anchored to the compact rail. It should support the same source/group search and selection behavior currently owned by `WorkspaceRail`. Closing the list without changing selection must return the user to the same `ReportCanvas` mode, scroll position, and companion tab. Selecting a different source or group from the expanded list follows the same workspace-switch rule as selecting directly from `CompactSourceRail`.
 
 Compact status display should use layered indicators rather than full text badges:
 
@@ -278,7 +330,7 @@ Persist enough state to restore the user's analysis workspace context between ap
 
 Persist:
 
-- last selected source or source group;
+- last `WorkspaceSelection`, meaning the last selected source or source group;
 - analysis scope, such as single source vs source group;
 - `canvasMode`;
 - `companionTab`;
@@ -288,7 +340,7 @@ Persist:
 
 Do not persist:
 
-- an automatically opened last run;
+- `OpenRunState`, so the route must not automatically reopen the last run;
 - transient selected trace ref;
 - partially typed chat question;
 - open popovers, drawers, or temporary expanded source panels;
@@ -300,14 +352,15 @@ State keys should be versioned or namespaced so future layout changes can discar
 
 ## Interaction Rules
 
-- Opening a completed run sets `canvasMode = "report"` and `companionTab = "evidence"`.
-- Opening an active run sets `canvasMode = "report"` and shows live run status in the canvas.
-- Selecting a source without an open run sets `canvasMode = "source"` and `sourceViewBasis = "live_source"`.
+- Opening a completed run sets `OpenRunState = { kind: "saved", runId }`, aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and sets `companionTab = "evidence"`.
+- Opening an active run sets `OpenRunState = { kind: "active", runId }`, aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and shows live run status in the canvas.
+- Selecting a source or source group from `CompactSourceRail` sets `WorkspaceSelection` to that scope, clears `OpenRunState`, clears run-bound evidence/chat state, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, and sets `companionTab = "runs"`.
 - Clicking a trace ref sets `companionTab = "evidence"`.
 - Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
 - Choosing `View live source` in saved-run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
 - `sourceViewBasis = "live_source"` shows a persistent `Live source` indicator and a return action when run snapshot data is available.
-- Switching back to `Report` from `Source` must not lose the selected run or companion tab state.
+- When `OpenRunState` is not `none`, switching back to `Report` from `Source` must not lose the selected run or companion tab state.
+- Local filtering or source focus inside a run snapshot does not count as `CompactSourceRail` selection and must not close the opened run.
 
 ## Empty And Error States
 
@@ -350,8 +403,10 @@ Mobile:
 
 Add focused tests around state and structure:
 
-- opening a completed run defaults to report canvas and evidence companion;
-- source selection without an open run defaults to source canvas;
+- opening a completed run defaults to report canvas and evidence companion, and aligns `WorkspaceSelection` to the run scope;
+- opening an active run aligns `WorkspaceSelection` to the run scope and shows live run status in the canvas;
+- source or source group selection from `CompactSourceRail` clears `OpenRunState`, clears run-bound evidence/chat state, defaults to source canvas, uses live source basis, and switches the companion to `Runs`;
+- local source filtering inside a run snapshot does not close the opened run;
 - focusing the chat input alone does not unexpectedly switch companion tab to chat;
 - explicit chat tab selection or question submission switches companion tab to chat;
 - clicking a trace ref switches companion tab to evidence;
@@ -364,6 +419,8 @@ Add focused tests around state and structure:
 - workspace persistence restores last source/group and UI context without auto-opening the last run;
 - persistence ignores stale source/group ids gracefully;
 - persistence does not restore transient trace selection, draft chat text, or open popovers;
+- persisted workspace state does not restore `OpenRunState`;
+- run opening from `Runs` updates the rail scope instead of allowing a stable rail/report mismatch;
 - `Report | Source` switching is covered for Telegram, YouTube video, YouTube playlist, active run, completed run, failed run, and no-run states;
 - raw-source or component tests confirm the new `CompactSourceRail`, `ReportCanvas`, and `RunCompanionTabs` zones exist.
 
