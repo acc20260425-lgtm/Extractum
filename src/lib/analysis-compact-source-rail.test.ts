@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+import compactRailSource from "./components/analysis/compact-source-rail.svelte?raw";
+import sourceSwitcherPanelSource from "./components/analysis/source-switcher-panel.svelte?raw";
+
+describe("compact analysis source rail", () => {
+  it("keeps the collapsed rail compact and source-scoped", () => {
+    expect(compactRailSource).toContain('class="compact-source-rail"');
+    expect(compactRailSource).toContain("workspaceSelection: WorkspaceSelection");
+    expect(compactRailSource).toContain("sourceSwitcherOpen");
+    expect(compactRailSource).toContain('ariaLabel="Open source switcher"');
+    expect(compactRailSource).toContain('title="Open source switcher"');
+    expect(compactRailSource).toContain("context-primary-action");
+    expect(compactRailSource).toContain("criticalSourceStatus");
+    expect(compactRailSource).toContain("selected={isSelectedSource(source.id)}");
+    expect(compactRailSource).toContain("selected={isSelectedGroup(group.id)}");
+    expect(compactRailSource).not.toContain("<h1>Workspace</h1>");
+    expect(compactRailSource).not.toContain("Research context");
+    expect(compactRailSource).not.toContain("Manage sources");
+    expect(compactRailSource).not.toContain("Transcript unavailable");
+    expect(compactRailSource).not.toContain("Comments unavailable");
+  });
+
+  it("puts full list, search, management, and detailed status in the expanded source panel", () => {
+    expect(sourceSwitcherPanelSource).toContain('class="source-switcher-panel"');
+    expect(sourceSwitcherPanelSource).toContain('aria-label="Source switcher panel"');
+    expect(sourceSwitcherPanelSource).toContain("Search sources or groups");
+    expect(sourceSwitcherPanelSource).toContain("Manage sources");
+    expect(sourceSwitcherPanelSource).toContain("New source");
+    expect(sourceSwitcherPanelSource).toContain("filteredSourceCatalog");
+    expect(sourceSwitcherPanelSource).toContain("filteredGroups");
+    expect(sourceSwitcherPanelSource).toContain("youtubeSummary.captions.label");
+    expect(sourceSwitcherPanelSource).toContain("youtubeSummary.comments.label");
+    expect(sourceSwitcherPanelSource).toContain("takeout-status");
+    expect(sourceSwitcherPanelSource).toContain("sourceJobsBySource");
+    expect(sourceSwitcherPanelSource).toContain("onSyncSource(source.id)");
+    expect(sourceSwitcherPanelSource).toContain("onStartTakeoutImport(source.id)");
+  });
+
+  it("keeps source and group switching callback-based", () => {
+    expect(compactRailSource).toContain("onclick={() => onSelectSource(source.id)}");
+    expect(compactRailSource).toContain("onclick={() => onSelectGroup(group.id)}");
+    expect(sourceSwitcherPanelSource).toContain("onclick={() => onSelectSource(source.id)}");
+    expect(sourceSwitcherPanelSource).toContain("onclick={() => onSelectGroup(group.id)}");
+  });
+
+  it("keeps icon-only controls accessible without hover-only status", () => {
+    expect(compactRailSource).toContain("ariaLabel={sourceButtonLabel(source)}");
+    expect(compactRailSource).toContain("title={sourceButtonLabel(source)}");
+    expect(compactRailSource).toContain("ariaLabel={groupButtonLabel(group)}");
+    expect(compactRailSource).toContain("title={groupButtonLabel(group)}");
+    expect(compactRailSource).toContain("title={criticalStatusLabel}");
+    expect(sourceSwitcherPanelSource).toContain("aria-pressed={isSelectedSource(source.id)}");
+    expect(sourceSwitcherPanelSource).toContain("aria-pressed={isSelectedGroup(group.id)}");
+  });
+});
