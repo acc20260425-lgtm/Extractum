@@ -12,6 +12,7 @@ reference
 artifacts
 /.vscode
 /.codex
+/.superpowers/
 .worktrees/
 kilo.json
 
