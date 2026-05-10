@@ -10,5 +10,6 @@ pub(crate) mod playlist;
 pub(crate) mod preview;
 pub(crate) mod runtime;
 pub(crate) mod settings;
+pub(crate) mod transcript_reader;
 pub(crate) mod url;
 pub(crate) mod ytdlp;

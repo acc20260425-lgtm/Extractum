@@ -104,6 +104,7 @@ export interface ListAnalysisRunMessagesInput {
   runId: number;
   after: AnalysisRunMessageCursor | null;
   limit: number;
+  sourceId?: number | null;
 }
 
 export type YoutubeCorpusMode =

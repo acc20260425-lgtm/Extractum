@@ -65,6 +65,7 @@ describe("analysis run api wrappers", () => {
       runId: 42,
       after: { published_at: 1_710_000_000, ref: "s7-i1" },
       limit: 25,
+      sourceId: 20,
     })).resolves.toEqual({
       messages: [],
       next_cursor: null,
@@ -75,6 +76,7 @@ describe("analysis run api wrappers", () => {
       runId: 42,
       after: { published_at: 1_710_000_000, ref: "s7-i1" },
       limit: 25,
+      sourceId: 20,
     });
   });
 

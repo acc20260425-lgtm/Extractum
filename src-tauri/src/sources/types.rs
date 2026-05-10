@@ -134,6 +134,11 @@ pub(super) struct StoredItemRow {
     pub(super) forum_topic_id: Option<i64>,
     pub(super) forum_topic_title: Option<String>,
     pub(super) forum_topic_top_message_id: Option<i64>,
+    pub(super) reply_to_msg_id: Option<i64>,
+    pub(super) reply_to_peer_kind: Option<String>,
+    pub(super) reply_to_peer_id: Option<String>,
+    pub(super) reply_to_top_id: Option<i64>,
+    pub(super) reaction_count: Option<i64>,
 }
 
 #[derive(sqlx::FromRow)]

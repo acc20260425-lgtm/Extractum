@@ -787,6 +787,7 @@ pub(crate) struct ListRunSnapshotMessagesRequest {
     pub(crate) run_id: i64,
     pub(crate) after: Option<AnalysisRunMessageCursor>,
     pub(crate) limit: usize,
+    pub(crate) source_id: Option<i64>,
 }
 
 fn decode_optional_metadata_json(
@@ -842,6 +843,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
                 metadata_zstd
             FROM analysis_run_messages
             WHERE run_id = ?
+              AND (? IS NULL OR source_id = ?)
               AND (
                 published_at > ?
                 OR (published_at = ? AND ref > ?)
@@ -851,6 +853,8 @@ pub(crate) async fn list_run_snapshot_messages_page(
             "#,
         )
         .bind(request.run_id)
+        .bind(request.source_id)
+        .bind(request.source_id)
         .bind(after.published_at)
         .bind(after.published_at)
         .bind(after.r#ref)
@@ -875,11 +879,14 @@ pub(crate) async fn list_run_snapshot_messages_page(
                 metadata_zstd
             FROM analysis_run_messages
             WHERE run_id = ?
+              AND (? IS NULL OR source_id = ?)
             ORDER BY published_at ASC, ref ASC
             LIMIT ?
             "#,
         )
         .bind(request.run_id)
+        .bind(request.source_id)
+        .bind(request.source_id)
         .bind(fetch_limit)
         .fetch_all(pool)
         .await
@@ -1421,6 +1428,7 @@ mod tests {
                 run_id: 1,
                 after: None,
                 limit: 1,
+                source_id: None,
             },
         )
         .await
@@ -1445,6 +1453,7 @@ mod tests {
                 run_id: 1,
                 after: page.next_cursor,
                 limit: 1,
+                source_id: None,
             },
         )
         .await
@@ -1454,6 +1463,22 @@ mod tests {
         assert_eq!(second_page.messages[0].content, "Second frozen message");
         assert!(!second_page.has_more);
         assert_eq!(second_page.next_cursor, None);
+
+        let filtered_page = list_run_snapshot_messages_page(
+            &pool,
+            ListRunSnapshotMessagesRequest {
+                run_id: 1,
+                after: None,
+                limit: 25,
+                source_id: Some(4),
+            },
+        )
+        .await
+        .expect("load source-filtered page");
+
+        assert_eq!(filtered_page.messages.len(), 1);
+        assert_eq!(filtered_page.messages[0].source_id, 4);
+        assert_eq!(filtered_page.messages[0].content, "Second frozen message");
     }
 
     #[tokio::test]
@@ -1497,6 +1522,7 @@ mod tests {
                 run_id: 1,
                 after: None,
                 limit: 25,
+                source_id: None,
             },
         )
         .await

@@ -31,6 +31,11 @@ pub(super) async fn load_item_rows_from_pool(
             items.content_zstd,
             items.media_metadata_zstd,
             items.raw_data_zstd,
+            items.reply_to_msg_id,
+            items.reply_to_peer_kind,
+            items.reply_to_peer_id,
+            items.reply_to_top_id,
+            items.reaction_count,
             forum_topics.topic_id AS forum_topic_id,
             forum_topics.title AS forum_topic_title,
             forum_topics.top_message_id AS forum_topic_top_message_id
@@ -109,12 +114,19 @@ mod tests {
             .expect("insert forum topic");
         }
 
-        for (id, external_id, published_at, reply_to_msg_id, reply_to_top_id) in [
-            (1_i64, "700", 500_i64, None, None),
-            (2_i64, "701", 400_i64, None, Some(200_i64)),
-            (3_i64, "702", 300_i64, Some(200_i64), None),
-            (4_i64, "999", 200_i64, None, None),
-            (5_i64, "1000", 100_i64, Some(123_i64), Some(404_i64)),
+        for (id, external_id, published_at, reply_to_msg_id, reply_to_top_id, reaction_count) in [
+            (1_i64, "700", 500_i64, None, None, None),
+            (2_i64, "701", 400_i64, None, Some(200_i64), Some(2_i64)),
+            (3_i64, "702", 300_i64, Some(200_i64), None, Some(3_i64)),
+            (4_i64, "999", 200_i64, None, None, None),
+            (
+                5_i64,
+                "1000",
+                100_i64,
+                Some(123_i64),
+                Some(404_i64),
+                Some(5_i64),
+            ),
         ] {
             sqlx::query(
                 r#"
@@ -143,7 +155,7 @@ mod tests {
             .bind(None::<String>)
             .bind(None::<String>)
             .bind(reply_to_top_id)
-            .bind(None::<i64>)
+            .bind(reaction_count)
             .execute(&pool)
             .await
             .expect("insert item");
@@ -158,8 +170,12 @@ mod tests {
         assert_eq!(rows[0].forum_topic_top_message_id, Some(700));
         assert_eq!(rows[1].forum_topic_id, Some(200));
         assert_eq!(rows[2].forum_topic_id, Some(200));
+        assert_eq!(rows[2].reply_to_msg_id, Some(200));
+        assert_eq!(rows[2].reaction_count, Some(3));
         assert_eq!(rows[3].forum_topic_id, Some(1));
         assert_eq!(rows[4].forum_topic_id, None);
+        assert_eq!(rows[4].reply_to_top_id, Some(404));
+        assert_eq!(rows[4].reaction_count, Some(5));
 
         let topic_rows = load_item_rows_from_pool(
             &pool,

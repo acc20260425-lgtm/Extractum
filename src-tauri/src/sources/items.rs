@@ -34,6 +34,11 @@ pub struct ItemRecord {
     pub forum_topic_id: Option<i64>,
     pub forum_topic_title: Option<String>,
     pub forum_topic_top_message_id: Option<i64>,
+    pub reply_to_msg_id: Option<i64>,
+    pub reply_to_peer_kind: Option<String>,
+    pub reply_to_peer_id: Option<String>,
+    pub reply_to_top_id: Option<i64>,
+    pub reaction_count: Option<i64>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -310,6 +315,11 @@ fn item_record_from_row(row: StoredItemRow) -> AppResult<ItemRecord> {
         forum_topic_id: row.forum_topic_id,
         forum_topic_title: row.forum_topic_title,
         forum_topic_top_message_id: row.forum_topic_top_message_id,
+        reply_to_msg_id: row.reply_to_msg_id,
+        reply_to_peer_kind: row.reply_to_peer_kind,
+        reply_to_peer_id: row.reply_to_peer_id,
+        reply_to_top_id: row.reply_to_top_id,
+        reaction_count: row.reaction_count,
     })
 }
 
@@ -496,6 +506,8 @@ mod tests {
             SELECT
                 id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
                 media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
+                reaction_count,
                 NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
             FROM items
             WHERE source_id = ? AND external_id = ?
@@ -514,6 +526,11 @@ mod tests {
         assert_eq!(row.content_kind, CONTENT_KIND_TEXT_WITH_MEDIA);
         assert!(row.has_media);
         assert_eq!(row.media_kind.as_deref(), Some("photo"));
+        assert_eq!(row.reply_to_msg_id, Some(7));
+        assert_eq!(row.reply_to_peer_kind.as_deref(), Some("channel"));
+        assert_eq!(row.reply_to_peer_id.as_deref(), Some("99"));
+        assert_eq!(row.reply_to_top_id, Some(5));
+        assert_eq!(row.reaction_count, Some(3));
         assert_eq!(
             decompress_text(&row.content_zstd.expect("content")).expect("decode content"),
             "hello"
@@ -564,6 +581,8 @@ mod tests {
             SELECT
                 id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
                 media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
+                reaction_count,
                 NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
             FROM items
             WHERE id = ?
@@ -628,6 +647,8 @@ mod tests {
             SELECT
                 id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
                 media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
+                reaction_count,
                 NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
             FROM items
             WHERE id = ?

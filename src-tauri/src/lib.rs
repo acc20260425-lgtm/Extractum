@@ -51,6 +51,7 @@ use youtube::settings::{
     clear_youtube_auth, get_youtube_auth_status, get_youtube_settings, save_youtube_cookies,
     save_youtube_settings,
 };
+use youtube::transcript_reader::list_youtube_transcript_segments;
 
 mod notebooklm_export;
 use notebooklm_export::export_source_to_notebooklm;
@@ -181,6 +182,7 @@ pub fn run() {
             list_youtube_source_summaries,
             get_youtube_video_detail,
             get_youtube_playlist_detail,
+            list_youtube_transcript_segments,
             get_youtube_settings,
             save_youtube_settings,
             get_youtube_auth_status,
