@@ -190,6 +190,8 @@ Run header metadata should include at least:
 - source basis status, such as run snapshot available, live source, pending snapshot, or unavailable snapshot;
 - YouTube corpus mode when applicable, such as transcript-only, transcript plus comments, playlist scope, or description-derived corpus.
 
+If saved run records do not currently persist the selected YouTube corpus mode, the implementation must add durable run metadata before treating this header field as reliable. A saved run header should not reconstruct the corpus mode from current source defaults because that can drift from the corpus used for the report.
+
 `Source` mode:
 
 - shows source material in a large readable canvas;
@@ -262,7 +264,7 @@ Evidence | Chat | Runs
 - is the default tab for completed runs;
 - exposes `Show in source` when the referenced item, message, or transcript segment can be located.
 
-`Show in source` is the explicit report to evidence to source bridge. It switches `ReportCanvas` to `Source`, uses `sourceViewBasis = "run_snapshot"` when snapshot data is available, and highlights the matching message or transcript segment. If only a live source path is available for the run state, the UI must label `sourceViewBasis = "live_source"` explicitly and must not present live data as the frozen report corpus.
+`Show in source` is the explicit report to evidence to source bridge. It switches `ReportCanvas` to `Source`, uses `sourceViewBasis = "run_snapshot"` when snapshot data is available, and highlights the matching message or transcript segment. If only a live source path is available for an active, failed, or cancelled run state, the UI must label `sourceViewBasis = "live_source"` explicitly and must not present live data as the frozen report corpus. For a completed run with missing snapshot rows, `Show in source` should degrade or become unavailable instead of resolving evidence against live source data; any separate `View live source` action must be clearly labeled as live browsing, not evidence resolution.
 
 `Chat`:
 
@@ -354,6 +356,8 @@ For `completed` runs:
 - Evidence views may still show saved trace refs when available, but any evidence that requires snapshot resolution should show a degraded or unavailable state rather than silently resolving against live source data.
 - Follow-up chat should be unavailable or warning-bound if it requires the missing snapshot context. It must not use live source data as a replacement for the completed run's frozen corpus.
 
+Implementation note: existing backend helpers that load a run corpus may include legacy live-source fallback when snapshot rows are empty. Snapshot-bound UI, evidence resolution, and follow-up chat availability for completed runs must use a snapshot-only path, a dedicated availability probe, or an explicit fallback mode so a completed run with missing snapshot rows cannot silently resolve against live source data.
+
 For `failed` and `cancelled` runs:
 
 - `Source` mode shows `run_snapshot` when snapshot data exists.
@@ -392,10 +396,11 @@ Suggested keys:
 type ReportCanvasViewKey =
   | `report:${number}`
   | `source:snapshot:${number}`
-  | `source:live:${number}:${string}`;
+  | `source:live:source:${number}:${string}`
+  | `source:live:group:${number}:${string}`;
 ```
 
-The final key shape can differ, but it should distinguish run report scroll, saved-run snapshot source scroll, and live source/topic scroll. If component remounting is needed, restore scroll after the next render tick rather than treating mode switches as fresh navigation.
+The final key shape can differ, but it should distinguish run report scroll, saved-run snapshot source scroll, live single-source scroll, live source-group scroll, and topic/filter-specific live source scroll. If component remounting is needed, restore scroll after the next render tick rather than treating mode switches as fresh navigation.
 
 ### Source Data Loading
 
@@ -412,6 +417,8 @@ Current live source loading already uses `listSourceItems` with a bounded limit,
 Run snapshot source view must use the frozen `analysis_run_messages` data through paged access. For run snapshots larger than a small threshold, `ReportCanvas` `Source` mode must load an initial page and then request additional pages by cursor, source filter, and limit. The route must not require loading the entire `analysis_run_messages` table for a run into memory just to enter `Source` mode.
 
 If the current frontend API is insufficient for this, add a focused command/API such as `list_analysis_run_messages` with `runId`, optional source filter, optional cursor, and limit. Snapshot availability probes should use a cheap count/existence check or the first page, not full snapshot hydration.
+
+The paged snapshot API should be distinct from any legacy helper that falls back to live source data when `analysis_run_messages` is empty. UI code that needs the frozen corpus must be able to ask for snapshot-only data and receive an explicit empty, pending, or unavailable result.
 
 For YouTube transcript source view, prefer segment-aware loading and rendering. The UI should be able to show a transcript page without loading every comment or playlist item unless the selected source mode requires it.
 
@@ -491,6 +498,8 @@ On app restart, `/analysis` should restore the last selected source or group and
 
 Missing or deleted run scope context is run-bound and should not be persisted as `WorkspaceSelection` after restart. If the user had an opened saved run whose original source or group was deleted, restart should not restore that deleted run context as a live workspace selection because `OpenRunState` itself is not persisted.
 
+Because `OpenRunState` is not persisted, restored UI state must be normalized before rendering. If restart restores no opened run, `sourceViewBasis = "run_snapshot"` is invalid and should become `live_source` for the restored workspace selection. Persisted `Evidence` or `Chat` companion tabs are also invalid without an opened run and should restore to `Runs` or another non-run-bound default. A restored `canvasMode = "report"` without an opened run shows report setup, not a stale report.
+
 State keys should be versioned or namespaced so future layout changes can discard incompatible saved UI state without breaking the route.
 
 ## Interaction Rules
@@ -505,7 +514,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 - When no run is open and the user switches the canvas to `Report`, show report setup instead of report output.
 - Opening any run removes report setup and template editing controls from the primary canvas, leaving template name/version as run metadata and any setup entry point as secondary.
 - Clicking a trace ref sets `companionTab = "evidence"`.
-- Choosing `Show in source` from an evidence item sets `canvasMode = "source"`, prefers `sourceViewBasis = "run_snapshot"` when available, and highlights the referenced message or transcript segment.
+- Choosing `Show in source` from an evidence item sets `canvasMode = "source"`, prefers `sourceViewBasis = "run_snapshot"` when available, and highlights the referenced message or transcript segment. For completed runs with missing snapshot rows, it must degrade or explain that exact source resolution is unavailable rather than resolving against live source data.
 - Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
 - Choosing `View live source` in run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
 - `sourceViewBasis = "live_source"` shows a persistent `Live source` indicator and a return action when run snapshot data is available.
@@ -585,12 +594,15 @@ Add focused tests around state and structure:
 - chat availability follows the MVP matrix: enabled for completed runs with usable saved context, disabled/explanatory for queued/running/failed/cancelled runs, and disabled or warning-bound for completed runs with missing snapshot context;
 - clicking a trace ref switches companion tab to evidence;
 - `Show in source` from evidence switches the canvas to `Source`, prefers run snapshot basis, highlights the referenced message or transcript segment, and labels live source basis explicitly when snapshot basis is unavailable;
+- completed-run `Show in source` with missing snapshot rows degrades honestly and does not resolve evidence against live source data;
 - runs search and filters narrow saved runs without losing current-scope behavior;
 - `Runs` defaults to current-scope filtering after a workspace switch and can default to all runs from a global history entry point;
 - `Runs` shows queued/running analysis report runs and saved analysis runs, not source ingest jobs;
 - run source mode prefers run snapshot over live source when snapshot data is available;
 - completed runs with missing snapshot rows keep saved report output readable when available, while source mode shows a source-basis integrity error without legacy live-source fallback;
 - evidence and chat for a completed run with missing snapshot rows degrade honestly when they require snapshot resolution or snapshot context;
+- snapshot-bound evidence and chat availability paths do not use legacy live-source fallback for completed runs with missing snapshot rows;
+- YouTube corpus mode is persisted with the run and appears in saved run header metadata when applicable;
 - saved runs with deleted source or source group remain openable, show missing scope labeling, and do not select a fallback live source in `CompactSourceRail`;
 - active-run source mode shows pending snapshot state until snapshot data exists;
 - failed and cancelled run source mode shows snapshot when available and unavailable state plus live source action when not;
@@ -615,6 +627,7 @@ Add focused tests around state and structure:
 - `run_snapshot` source view does not present live sync/takeout controls as if they change the opened run snapshot;
 - YouTube metadata, transcript, comments, playlist, and playlist-video sync actions are reachable from `Source` mode;
 - workspace persistence restores last source/group and UI context without auto-opening the last run;
+- workspace persistence normalizes run-bound persisted UI state after restart: no restored run snapshot basis, Evidence tab, or Chat tab without an opened run;
 - workspace persistence does not save missing/deleted run scope context as `WorkspaceSelection`;
 - persistence ignores stale source/group ids gracefully;
 - persistence does not restore transient trace selection, draft chat text, or open popovers;
