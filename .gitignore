@@ -13,6 +13,7 @@ artifacts
 /.vscode
 /.codex
 /.superpowers/
+/.playwright-mcp/
 .worktrees/
 kilo.json
 
