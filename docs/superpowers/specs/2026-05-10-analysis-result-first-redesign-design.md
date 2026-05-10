@@ -42,7 +42,7 @@ The selected interaction model is:
 - **Compact Rail**: sources and groups remain visible as a narrow context switcher instead of a full-width rail.
 - **Tabbed Companion**: evidence, chat, and runs share one right-side panel.
 - **Evidence default**: when a completed run opens, the right companion defaults to `Evidence`.
-- **Chat activation**: focusing or submitting the follow-up question switches the companion to `Chat`.
+- **Chat activation**: explicit chat-tab selection or submitting a follow-up question switches the companion to `Chat`.
 - **Trace activation**: clicking a trace ref switches the companion to `Evidence`.
 
 ## Component Architecture
@@ -118,16 +118,33 @@ Evidence | Chat | Runs
 `Chat`:
 
 - shows follow-up chat for the opened run;
-- becomes active when the user focuses or submits the follow-up question;
+- becomes active when the user explicitly selects the tab or submits the follow-up question;
 - stays disabled or explanatory until chat is available.
 
 `Runs`:
 
 - combines active runs and saved run history entry points;
 - replaces the current always-visible inspector role;
-- can keep filter controls for saved run status and scope.
+- includes search and filtering for saved runs, because run history is expected to grow.
 
 Existing `TracePanel`, `ChatPanel`, `ActiveRunList`, `RunHistory`, and `ChunkSummaries` should be reused inside the tab body where practical.
+
+The chat input should not steal the right companion from a user who is only navigating through the report or source view. Do not switch to `Chat` merely because an input receives incidental focus through tab navigation or restored focus. If the user explicitly clicks the `Chat` tab, uses a dedicated `Ask`/compose action, or submits a question, then `Chat` becomes active.
+
+### Runs Search And Filtering
+
+The `Runs` tab should scale beyond the current short saved-run list.
+
+It should include:
+
+- text search across target label, source title/group name, template name, provider, model, and error text when available;
+- status filter, including at least all, completed, failed, cancelled, queued/running;
+- scope filter for all runs vs current source/group;
+- date range filtering by created or completed date;
+- optional filters for provider profile, provider/model, and prompt template when those lists are available;
+- clear empty states for no runs, no current-scope runs, and no filter matches.
+
+Current `RunHistory` already has basic all/current scope and all/completed/failed filters, and `list_analysis_runs` currently accepts only source id, source group id, and limit. The redesign should treat richer filtering as part of the `Runs` tab work. If the list can grow large, prefer backend-backed filtering and cursor/limit pagination over loading all saved runs and filtering only in the frontend.
 
 ## Canvas Source Mode
 
@@ -151,7 +168,7 @@ The implementation should preserve view state independently for `Report` and `So
 - the source scroll position for the active source view basis;
 - the selected trace ref;
 - the selected source item or transcript segment;
-- the active companion tab, except for explicit rules such as trace ref activation or chat focus.
+- the active companion tab, except for explicit rules such as trace ref activation, explicit chat tab selection, or question submission.
 
 Suggested keys:
 
@@ -216,7 +233,7 @@ It should show grouped corpus or snapshot material by source, with source headin
 - Opening an active run sets `canvasMode = "report"` and shows live run status in the canvas.
 - Selecting a source without an open run sets `canvasMode = "source"` and `sourceViewBasis = "live_source"`.
 - Clicking a trace ref sets `companionTab = "evidence"`.
-- Focusing or submitting a follow-up question sets `companionTab = "chat"`.
+- Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
 - Choosing `View live source` in saved-run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
 - Switching back to `Report` from `Source` must not lose the selected run or companion tab state.
 
@@ -263,8 +280,10 @@ Add focused tests around state and structure:
 
 - opening a completed run defaults to report canvas and evidence companion;
 - source selection without an open run defaults to source canvas;
-- focusing chat switches companion tab to chat;
+- focusing the chat input alone does not unexpectedly switch companion tab to chat;
+- explicit chat tab selection or question submission switches companion tab to chat;
 - clicking a trace ref switches companion tab to evidence;
+- runs search and filters narrow saved runs without losing current-scope behavior;
 - saved-run source mode prefers run snapshot over live source;
 - snapshot unavailable state does not silently fall back to live data;
 - raw-source or component tests confirm the new `CompactSourceRail`, `ReportCanvas`, and `RunCompanionTabs` zones exist.
