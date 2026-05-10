@@ -227,6 +227,7 @@ Placement rules:
 - `Source` mode header actions can include Telegram `Sync source`, Telegram `Takeout import`, YouTube metadata sync, YouTube transcript sync, YouTube comments sync, playlist sync, playlist retry, and per-video playlist sync entry points when relevant.
 - A compact `Source activity` area in `Source` mode, or the expanded source panel, should show active and recent source jobs with progress, phase, warnings, errors, retry, and cancel actions.
 - The expanded source panel can show detailed source status, source job history, first-sync policy, and secondary ingest actions for sources that are not currently open in the canvas.
+- When a report is open, source ingest activity may remain visible as compact status in the rail, but should not interrupt or visually compete with report reading unless it affects the opened run's availability or integrity.
 - `RunCompanionTabs.Runs` is only for analysis report runs. Source ingest jobs must not appear there unless the product explicitly renames and redesigns the tab as a broader `Activity` surface.
 
 Snapshot trust rules:
@@ -272,6 +273,8 @@ Evidence | Chat | Runs
 - replaces the current always-visible inspector role;
 - includes search and filtering for saved runs, because run history is expected to grow;
 - does not show source ingest jobs, Takeout jobs, or YouTube source jobs.
+
+When `Runs` opens because of a workspace switch, such as selecting a source or source group from `CompactSourceRail`, it defaults to current-scope runs. The user can switch to all runs. When `Runs` opens from a global history entry point, it may default to all runs.
 
 Existing `TracePanel`, `ChatPanel`, `ActiveRunList`, `RunHistory`, and `ChunkSummaries` should be reused inside the tab body where practical.
 
@@ -468,7 +471,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 - Opening a saved run whose original source or source group has been deleted keeps the run open, shows the missing/deleted scope label in the run header, and keeps the compact rail from selecting a fallback live source as if it were the run's source.
 - Selecting `Source` for an active run shows the run snapshot only if snapshot data exists; otherwise it shows the pending snapshot state and an explicit live source option.
 - Selecting `Source` for a failed or cancelled run shows the run snapshot when available, or an unavailable state with an explicit live source option when it is not available.
-- Selecting a source or source group from `CompactSourceRail` sets `WorkspaceSelection` to that scope, clears `OpenRunState`, clears run-bound evidence/chat state, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, and sets `companionTab = "runs"`.
+- Selecting a source or source group from `CompactSourceRail` sets `WorkspaceSelection` to that scope, clears `OpenRunState`, clears run-bound evidence/chat state, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, sets `companionTab = "runs"`, and defaults `Runs` scope filtering to current scope.
 - When no run is open and a source or group is selected, report setup and template selection can appear in the primary canvas as pre-run setup.
 - Opening any run removes report setup and template editing controls from the primary canvas, leaving template name/version as run metadata and any setup entry point as secondary.
 - Clicking a trace ref sets `companionTab = "evidence"`.
@@ -537,7 +540,7 @@ Add focused tests around state and structure:
 
 - opening a completed run defaults to report canvas and evidence companion, and aligns `WorkspaceSelection` to the run scope;
 - opening an active run aligns `WorkspaceSelection` to the run scope and shows live run status in the canvas;
-- source or source group selection from `CompactSourceRail` clears `OpenRunState`, clears run-bound evidence/chat state, defaults to source canvas, uses live source basis, and switches the companion to `Runs`;
+- source or source group selection from `CompactSourceRail` clears `OpenRunState`, clears run-bound evidence/chat state, defaults to source canvas, uses live source basis, switches the companion to `Runs`, and defaults `Runs` filtering to current scope;
 - no-run source context exposes pre-run report setup with template selection and launch controls;
 - opening a run removes template editing and report setup from the primary report-reading surface;
 - template editor opens as a modal, dialog, or temporary drawer without replacing report/source reading or companion tabs;
@@ -548,6 +551,7 @@ Add focused tests around state and structure:
 - clicking a trace ref switches companion tab to evidence;
 - `Show in source` from evidence switches the canvas to `Source`, prefers run snapshot basis, highlights the referenced message or transcript segment, and labels live source basis explicitly when snapshot basis is unavailable;
 - runs search and filters narrow saved runs without losing current-scope behavior;
+- `Runs` defaults to current-scope filtering after a workspace switch and can default to all runs from a global history entry point;
 - run source mode prefers run snapshot over live source when snapshot data is available;
 - completed run source mode requires snapshot data and does not expose a legacy live-source fallback;
 - saved runs with deleted source or source group remain openable, show missing scope labeling, and do not select a fallback live source in `CompactSourceRail`;
@@ -566,6 +570,7 @@ Add focused tests around state and structure:
 - synced sources with no text corpus explain the text-first limitation;
 - missing or unusable LLM profile disables report generation with `/settings` guidance;
 - source ingest jobs are visible in `Source activity` or the expanded source panel, not in `Runs`;
+- report mode keeps source ingest activity compact and non-dominant unless it affects the opened run's availability or integrity;
 - active Takeout and YouTube source jobs expose progress plus cancel/retry where supported;
 - Telegram first-sync policy is visible before first sync for an unsynced Telegram source;
 - `run_snapshot` source view does not present live sync/takeout controls as if they change the opened run snapshot;
