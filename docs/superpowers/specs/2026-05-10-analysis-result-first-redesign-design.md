@@ -326,7 +326,7 @@ type RunSnapshotAvailability =
   | "unavailable";
 ```
 
-The final implementation can derive this from an explicit backend field such as `has_run_snapshot`, from a focused snapshot list/probe API, or from the first page of `list_analysis_run_messages`. Do not infer availability from run status alone: a failed or cancelled run can still have a snapshot if failure happened after snapshot persistence. Completed runs are expected to have saved snapshot rows; a completed run without snapshot data should be treated as a storage or integrity problem, not as a supported legacy source-view path.
+The final implementation can derive this from an explicit backend field such as `has_run_snapshot`, from a focused snapshot list/probe API, or from the first page of `list_analysis_run_messages`. Do not infer availability from run status alone: a failed or cancelled run can still have a snapshot if failure happened after snapshot persistence. Completed runs are expected to have saved snapshot rows; a completed run without snapshot data should be treated as a source-basis storage or integrity problem, not as a supported legacy source-view path.
 
 For `queued` or `running` runs:
 
@@ -337,8 +337,13 @@ For `queued` or `running` runs:
 
 For `completed` runs:
 
+- `Report` mode should still open and display the completed report when saved report output is available.
 - `Source` mode uses `run_snapshot`.
-- If snapshot rows are missing, show a storage or integrity error state and do not offer live-source fallback as an equivalent source view.
+- Missing snapshot rows are a source-basis integrity problem, not necessarily a report-output problem.
+- If snapshot rows are missing, the run header should show a clear warning that the frozen source snapshot is missing.
+- If snapshot rows are missing, `Source` mode shows a storage or integrity error state and does not offer live-source fallback as an equivalent source view. The error should explain that the report can still be read, but Extractum cannot show the exact source material used for that completed run.
+- Evidence views may still show saved trace refs when available, but any evidence that requires snapshot resolution should show a degraded or unavailable state rather than silently resolving against live source data.
+- Follow-up chat should be unavailable or warning-bound if it requires the missing snapshot context. It must not use live source data as a replacement for the completed run's frozen corpus.
 
 For `failed` and `cancelled` runs:
 
@@ -511,7 +516,9 @@ State keys should be versioned or namespaced so future layout changes can discar
 
 ## Empty And Error States
 
-- If a completed run has no snapshot rows, show a storage or integrity error instead of a legacy live-source fallback.
+- If a completed run has no snapshot rows, `Report` mode can still show saved report output when available. `Source` mode shows a storage or integrity error instead of a legacy live-source fallback.
+- If saved evidence refs exist for a completed run with missing snapshot rows, `Evidence` can still show the refs, but source resolution should be degraded or unavailable rather than resolved against live source data.
+- If follow-up chat depends on the missing snapshot context, `Chat` should be unavailable or warning-bound rather than sent against live source data.
 - If a saved run's original source or source group has been deleted, keep the run readable with a missing/deleted scope label. Do not replace it with a fallback live source or group.
 - If an active run snapshot is not available yet, show a pending state rather than an empty timeline or transcript.
 - If a failed or cancelled run has no snapshot, explain that the run ended before a frozen source snapshot was saved and offer `View live source`.
@@ -569,7 +576,8 @@ Add focused tests around state and structure:
 - runs search and filters narrow saved runs without losing current-scope behavior;
 - `Runs` defaults to current-scope filtering after a workspace switch and can default to all runs from a global history entry point;
 - run source mode prefers run snapshot over live source when snapshot data is available;
-- completed run source mode requires snapshot data and does not expose a legacy live-source fallback;
+- completed runs with missing snapshot rows keep saved report output readable when available, while source mode shows a source-basis integrity error without legacy live-source fallback;
+- evidence and chat for a completed run with missing snapshot rows degrade honestly when they require snapshot resolution or snapshot context;
 - saved runs with deleted source or source group remain openable, show missing scope labeling, and do not select a fallback live source in `CompactSourceRail`;
 - active-run source mode shows pending snapshot state until snapshot data exists;
 - failed and cancelled run source mode shows snapshot when available and unavailable state plus live source action when not;
