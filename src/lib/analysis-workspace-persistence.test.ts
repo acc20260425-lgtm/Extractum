@@ -12,6 +12,7 @@ import {
   type AnalysisWorkspaceUiState,
   type WorkspaceSelection,
 } from "./analysis-workspace-state";
+import { runsFilterDefaults } from "./analysis-run-companion-state";
 import type { AnalysisSourceGroup } from "./types/analysis";
 import type { Source } from "./types/sources";
 
@@ -81,6 +82,17 @@ describe("analysis-workspace-persistence", () => {
       {
         historyScope: "current",
         runFilter: "completed",
+        runsFilter: {
+          ...runsFilterDefaults(),
+          query: "weekly openai",
+          status: "completed",
+          scope: "current",
+          dateFrom: "2024-03-01",
+          dateTo: "2024-03-31",
+          provider: "openai",
+          model: "gpt-5.4",
+          template: "weekly",
+        },
       },
     );
 
@@ -93,6 +105,16 @@ describe("analysis-workspace-persistence", () => {
       runs: {
         historyScope: "current",
         runFilter: "completed",
+        runsFilter: {
+          query: "weekly openai",
+          status: "completed",
+          scope: "current",
+          dateFrom: "2024-03-01",
+          dateTo: "2024-03-31",
+          provider: "openai",
+          model: "gpt-5.4",
+          template: "weekly",
+        },
       },
     });
     expect(JSON.stringify(persisted)).not.toContain("openRunState");
@@ -112,6 +134,7 @@ describe("analysis-workspace-persistence", () => {
       {
         historyScope: "all",
         runFilter: "failed",
+        runsFilter: runsFilterDefaults(),
       },
     );
 
@@ -119,6 +142,24 @@ describe("analysis-workspace-persistence", () => {
 
     expect(storage.getItem(ANALYSIS_WORKSPACE_STATE_KEY)).toContain('"version":1');
     expect(loadPersistedAnalysisWorkspaceState(storage)).toEqual(persisted);
+  });
+
+  it("loads older persisted runs state with default companion filters", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(ANALYSIS_WORKSPACE_STATE_KEY, JSON.stringify({
+      version: 1,
+      workspaceSelection: { kind: "source", sourceId: 7 },
+      canvasMode: "source",
+      sourceViewBasis: "live_source",
+      companionTab: "runs",
+      runs: {
+        historyScope: "all",
+        runFilter: "all",
+      },
+    }));
+
+    expect(loadPersistedAnalysisWorkspaceState(storage)?.runs.runsFilter)
+      .toEqual(runsFilterDefaults());
   });
 
   it("rejects malformed, unsupported, or invalid persisted state", () => {
@@ -153,6 +194,7 @@ describe("analysis-workspace-persistence", () => {
       runs: {
         historyScope: "current",
         runFilter: "completed",
+        runsFilter: runsFilterDefaults(),
       },
     });
 

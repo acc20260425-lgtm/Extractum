@@ -1,6 +1,11 @@
 import type { AnalysisRunFilter } from "$lib/analysis-state";
 import type { AnalysisHistoryScope } from "$lib/analysis-scope-state";
 import {
+  runsFilterDefaults,
+  type CompanionRunStatusFilter,
+  type CompanionRunsFilterState,
+} from "$lib/analysis-run-companion-state";
+import {
   defaultAnalysisWorkspaceUiState,
   normalizeRestoredWorkspaceState,
   type AnalysisWorkspaceUiState,
@@ -17,6 +22,7 @@ export const ANALYSIS_WORKSPACE_STATE_KEY = "extractum.analysis.workspace.v1";
 export interface PersistedAnalysisWorkspaceRunsState {
   historyScope: AnalysisHistoryScope;
   runFilter: AnalysisRunFilter;
+  runsFilter: CompanionRunsFilterState;
 }
 
 export interface PersistedAnalysisWorkspaceState {
@@ -82,6 +88,36 @@ function parseRunFilter(value: unknown): AnalysisRunFilter | null {
   return value === "all" || value === "completed" || value === "failed" ? value : null;
 }
 
+function parseString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function parseRunsStatus(value: unknown): CompanionRunStatusFilter {
+  return value === "completed" ||
+    value === "failed" ||
+    value === "cancelled" ||
+    value === "queued_running"
+    ? value
+    : "all";
+}
+
+function parseRunsFilter(value: unknown): CompanionRunsFilterState {
+  if (!isObject(value)) {
+    return runsFilterDefaults();
+  }
+
+  return {
+    query: parseString(value.query),
+    status: parseRunsStatus(value.status),
+    scope: value.scope === "current" ? "current" : "all",
+    dateFrom: parseString(value.dateFrom),
+    dateTo: parseString(value.dateTo),
+    provider: parseString(value.provider),
+    model: parseString(value.model),
+    template: parseString(value.template),
+  };
+}
+
 export function persistableAnalysisWorkspaceState(
   uiState: AnalysisWorkspaceUiState,
   runs: PersistedAnalysisWorkspaceRunsState,
@@ -121,6 +157,7 @@ export function parsePersistedAnalysisWorkspaceState(
   const runs = isObject(parsed.runs) ? parsed.runs : null;
   const historyScope = runs ? parseHistoryScope(runs.historyScope) : null;
   const runFilter = runs ? parseRunFilter(runs.runFilter) : null;
+  const runsFilter = runs ? parseRunsFilter(runs.runsFilter) : runsFilterDefaults();
 
   if (
     !workspaceSelection ||
@@ -142,6 +179,7 @@ export function parsePersistedAnalysisWorkspaceState(
     runs: {
       historyScope,
       runFilter,
+      runsFilter,
     },
   };
 }
