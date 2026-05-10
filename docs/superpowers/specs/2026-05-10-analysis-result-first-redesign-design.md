@@ -45,6 +45,18 @@ The selected interaction model is:
 - **Chat activation**: explicit chat-tab selection or submitting a follow-up question switches the companion to `Chat`.
 - **Trace activation**: clicking a trace ref switches the companion to `Evidence`.
 
+## Preparatory Implementation Pass
+
+Before the visible layout redesign, the implementation may start with a small enabling pass that keeps the current `/analysis` UI behavior largely unchanged while creating safer contracts for the larger migration. This pass is part of the approved redesign, not a separate product feature.
+
+Recommended preparatory scope:
+
+- Add a frontend state-contract module for `WorkspaceSelection`, `OpenRunState`, `CanvasMode`, `SourceViewBasis`, `CompanionTab`, and pure transition helpers such as opening a run, switching workspace scope, clearing run-bound state, and normalizing restored workspace state.
+- Persist the selected YouTube corpus mode with each analysis run, expose it through backend and frontend run models, and keep existing runs compatible through an explicit default or nullable legacy value.
+- Add snapshot-only run source access, either as a paged `list_analysis_run_messages` API or a focused snapshot availability/probe plus first-page API. This path must not use legacy live-source fallback when callers need the frozen run corpus.
+
+This pass should include focused unit tests around state transitions, restored-state normalization, YouTube corpus mode persistence, and snapshot-only availability behavior. It should avoid introducing the new visual layout, companion tabs, compact rail, or source readers until the main implementation plan reaches those phases.
+
 ## Workspace And Open Run State Model
 
 The redesign must keep the selected analysis workspace separate from the opened run. These two pieces of state answer different questions:
