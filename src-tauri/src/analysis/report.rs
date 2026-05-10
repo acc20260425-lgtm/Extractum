@@ -1033,6 +1033,7 @@ pub async fn start_analysis_report(
             prompt_template_id: prompt_template.id,
             provider_profile: &resolved_profile.profile_id,
             model: &effective_model,
+            youtube_corpus_mode,
         },
     )
     .await?
@@ -1069,6 +1070,7 @@ pub async fn start_analysis_report(
             provider_profile: &resolved_profile.profile_id,
             provider: resolved_profile.provider.as_str(),
             model: &effective_model,
+            youtube_corpus_mode,
         },
     )
     .await?;

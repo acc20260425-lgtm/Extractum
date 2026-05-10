@@ -204,6 +204,7 @@ function runSummary(overrides: Partial<AnalysisRunSummary>): AnalysisRunSummary 
     provider_profile: "default",
     provider: "gemini",
     model: "gemini-2.5-flash",
+    youtube_corpus_mode: "transcript_description",
     status: "running",
     error: null,
     has_trace_data: false,

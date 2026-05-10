@@ -56,6 +56,7 @@ export interface AnalysisRunSummary {
   provider_profile: string;
   provider: string;
   model: string;
+  youtube_corpus_mode: YoutubeCorpusMode;
   status: string;
   error: string | null;
   has_trace_data: boolean;

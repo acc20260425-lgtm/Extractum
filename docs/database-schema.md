@@ -320,6 +320,7 @@ Important fields:
 - `provider_profile`
 - `provider`
 - `model`
+- `youtube_corpus_mode`
 - `status`
 - `result_markdown`
 - `trace_data_zstd`
@@ -403,6 +404,7 @@ Purpose:
 | 14 | `14.sql` | Add local `telegram_forum_topics` catalog and topic join indexes |
 | 15 | `15.sql` | Add provider-local `source_subtype` to `sources` and backfill Telegram rows |
 | 16 | `16.sql` | Add YouTube source foundation, item kinds, playlist rows, transcript segments, YouTube analysis snapshot metadata, source-group provider type, and YouTube settings defaults |
+| 17 | `17.sql` | Add durable YouTube corpus mode metadata to `analysis_runs` |
 
 ## 4. Current behavior implications
 
@@ -415,6 +417,7 @@ Purpose:
 - NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
+- `analysis_runs.youtube_corpus_mode` preserves the selected YouTube corpus scope used by the run, rather than reconstructing it from current source defaults.
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
 - new live analysis refs use local item identity (`s{source_id}-i{item_id}`);
 - YouTube transcript refs can include timestamp suffixes and resolve to canonical YouTube URLs with `t=` parameters;

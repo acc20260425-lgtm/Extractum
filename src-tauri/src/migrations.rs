@@ -186,6 +186,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/16.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 17,
+            description: "add youtube corpus mode to analysis runs",
+            sql: include_str!("../migrations/17.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -277,6 +283,28 @@ mod tests {
             "ALTER TABLE analysis_source_groups ADD COLUMN source_type TEXT NOT NULL DEFAULT 'telegram'",
             "idx_sources_unique_youtube_video",
             "idx_sources_unique_youtube_playlist",
+        ] {
+            assert!(
+                migration.sql.contains(fragment),
+                "missing migration fragment {fragment}"
+            );
+        }
+    }
+
+    #[test]
+    fn includes_analysis_run_youtube_corpus_mode_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 17)
+            .expect("version 17 migration is registered");
+
+        for fragment in [
+            "ALTER TABLE analysis_runs ADD COLUMN youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description'",
+            "CHECK (youtube_corpus_mode IN",
+            "'transcript_only'",
+            "'transcript_description'",
+            "'transcript_description_comments'",
         ] {
             assert!(
                 migration.sql.contains(fragment),

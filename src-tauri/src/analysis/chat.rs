@@ -498,6 +498,7 @@ mod tests {
             provider_profile: "default".to_string(),
             provider: "gemini".to_string(),
             model: "gemini-2.5-flash".to_string(),
+            youtube_corpus_mode: "transcript_description".to_string(),
             status: "completed".to_string(),
             result_markdown: Some("Saved report".to_string()),
             error: None,

@@ -1,5 +1,6 @@
 use sqlx::{Pool, Sqlite};
 
+use super::corpus::YoutubeCorpusMode;
 use super::models::{
     AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, AnalysisRunSummary,
     AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceGroupRow, CorpusMessage,
@@ -138,6 +139,7 @@ pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
         provider_profile: row.provider_profile,
         provider: row.provider,
         model: row.model,
+        youtube_corpus_mode: row.youtube_corpus_mode,
         status: row.status,
         error: row.error,
         has_trace_data: row.trace_data_zstd.is_some(),
@@ -167,6 +169,7 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         provider_profile: row.provider_profile,
         provider: row.provider,
         model: row.model,
+        youtube_corpus_mode: row.youtube_corpus_mode,
         status: row.status,
         result_markdown: row.result_markdown,
         error: row.error,
@@ -200,6 +203,7 @@ pub(crate) async fn fetch_run_row(
             runs.provider_profile,
             runs.provider,
             runs.model,
+            runs.youtube_corpus_mode,
             runs.status,
             runs.result_markdown,
             runs.trace_data_zstd,
@@ -314,6 +318,7 @@ pub(crate) struct DuplicateRunLookup<'a> {
     pub(crate) prompt_template_id: i64,
     pub(crate) provider_profile: &'a str,
     pub(crate) model: &'a str,
+    pub(crate) youtube_corpus_mode: YoutubeCorpusMode,
 }
 
 pub(crate) async fn find_active_duplicate_run(
@@ -334,6 +339,7 @@ pub(crate) async fn find_active_duplicate_run(
           AND prompt_template_id = ?
           AND provider_profile = ?
           AND model = ?
+          AND youtube_corpus_mode = ?
           AND status IN (?, ?)
         ORDER BY created_at DESC
         LIMIT 1
@@ -351,6 +357,7 @@ pub(crate) async fn find_active_duplicate_run(
     .bind(lookup.prompt_template_id)
     .bind(lookup.provider_profile)
     .bind(lookup.model)
+    .bind(lookup.youtube_corpus_mode.as_wire())
     .bind(ANALYSIS_STATUS_QUEUED)
     .bind(ANALYSIS_STATUS_RUNNING)
     .fetch_optional(pool)
@@ -369,6 +376,7 @@ pub(crate) struct AnalysisRunInsert<'a> {
     pub(crate) provider_profile: &'a str,
     pub(crate) provider: &'a str,
     pub(crate) model: &'a str,
+    pub(crate) youtube_corpus_mode: YoutubeCorpusMode,
 }
 
 pub(crate) async fn insert_analysis_run(
@@ -391,11 +399,12 @@ pub(crate) async fn insert_analysis_run(
             provider_profile,
             provider,
             model,
+            youtube_corpus_mode,
             status,
             scope_label_snapshot,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
         RETURNING id
         "#,
     )
@@ -411,6 +420,7 @@ pub(crate) async fn insert_analysis_run(
     .bind(insert.provider_profile)
     .bind(insert.provider)
     .bind(insert.model)
+    .bind(insert.youtube_corpus_mode.as_wire())
     .bind(ANALYSIS_STATUS_QUEUED)
     .bind(created_at)
     .fetch_one(pool)
@@ -553,7 +563,7 @@ pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> Result
 #[cfg(test)]
 mod tests {
     use super::{delete_saved_run, map_run_detail, map_run_summary, resolve_run_scope_label};
-    use crate::analysis::models::{AnalysisRunDetail, AnalysisRunRow};
+    use crate::analysis::models::{AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow};
 
     fn sample_run_row() -> AnalysisRunRow {
         AnalysisRunRow {
@@ -573,6 +583,7 @@ mod tests {
             provider_profile: "default".to_string(),
             provider: "gemini".to_string(),
             model: "gemini-2.5-flash".to_string(),
+            youtube_corpus_mode: "transcript_description_comments".to_string(),
             status: "completed".to_string(),
             result_markdown: Some("Saved report".to_string()),
             trace_data_zstd: Some(vec![1, 2, 3]),
@@ -597,6 +608,104 @@ mod tests {
     fn map_run_summary_exposes_frozen_scope_label() {
         let summary = map_run_summary(sample_run_row());
         assert_eq!(summary.scope_label, "Frozen group");
+    }
+
+    #[test]
+    fn map_run_summary_exposes_youtube_corpus_mode() {
+        let summary = map_run_summary(sample_run_row());
+        assert_eq!(
+            summary.youtube_corpus_mode,
+            "transcript_description_comments"
+        );
+    }
+
+    #[test]
+    fn map_run_detail_exposes_youtube_corpus_mode() {
+        let detail = map_run_detail(sample_run_row());
+        assert_eq!(
+            detail.youtube_corpus_mode,
+            "transcript_description_comments"
+        );
+    }
+
+    #[tokio::test]
+    async fn insert_analysis_run_persists_youtube_corpus_mode() {
+        use super::{insert_analysis_run, AnalysisRunInsert};
+        use crate::analysis::corpus::YoutubeCorpusMode;
+
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_type TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                source_id INTEGER,
+                source_group_id INTEGER,
+                period_from INTEGER NOT NULL,
+                period_to INTEGER NOT NULL,
+                output_language TEXT NOT NULL,
+                prompt_template_id INTEGER,
+                prompt_template_version INTEGER NOT NULL,
+                provider_profile TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
+                status TEXT NOT NULL,
+                result_markdown TEXT,
+                trace_data_zstd BLOB,
+                scope_label_snapshot TEXT,
+                error TEXT,
+                created_at INTEGER NOT NULL,
+                completed_at INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
+
+        let template = AnalysisPromptTemplate {
+            id: 5,
+            name: "Report".to_string(),
+            template_kind: "report".to_string(),
+            body: "Body".to_string(),
+            version: 3,
+            is_builtin: false,
+            created_at: 1,
+            updated_at: 1,
+        };
+
+        let run_id = insert_analysis_run(
+            &pool,
+            &AnalysisRunInsert {
+                scope_type: "single_source",
+                source_id: Some(7),
+                source_group_id: None,
+                period_from: 10,
+                period_to: 20,
+                output_language: "English",
+                prompt_template: &template,
+                provider_profile: "default",
+                provider: "gemini",
+                model: "gemini-2.5-flash",
+                youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescriptionComments,
+            },
+        )
+        .await
+        .expect("insert run");
+
+        let mode = sqlx::query_scalar::<_, String>(
+            "SELECT youtube_corpus_mode FROM analysis_runs WHERE id = ?",
+        )
+        .bind(run_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load mode");
+
+        assert_eq!(mode, "transcript_description_comments");
     }
 
     #[tokio::test]

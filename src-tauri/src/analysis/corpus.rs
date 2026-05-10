@@ -61,6 +61,14 @@ impl YoutubeCorpusMode {
         }
     }
 
+    pub(crate) fn as_wire(self) -> &'static str {
+        match self {
+            Self::TranscriptOnly => "transcript_only",
+            Self::TranscriptDescription => "transcript_description",
+            Self::TranscriptDescriptionComments => "transcript_description_comments",
+        }
+    }
+
     pub(crate) fn includes_description(self) -> bool {
         matches!(
             self,
@@ -981,6 +989,7 @@ mod tests {
                 provider_profile TEXT NOT NULL,
                 provider TEXT NOT NULL,
                 model TEXT NOT NULL,
+                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
                 status TEXT NOT NULL,
                 result_markdown TEXT,
                 trace_data_zstd BLOB,
@@ -1124,6 +1133,7 @@ mod tests {
             provider_profile: "default".to_string(),
             provider: "gemini".to_string(),
             model: "gemini-2.5-flash".to_string(),
+            youtube_corpus_mode: "transcript_description".to_string(),
             status: "completed".to_string(),
             result_markdown: Some("Saved report".to_string()),
             error: None,
@@ -1544,6 +1554,18 @@ mod tests {
             YoutubeCorpusMode::TranscriptDescriptionComments
         );
         assert!(YoutubeCorpusMode::from_wire(Some("all_text")).is_err());
+        assert_eq!(
+            YoutubeCorpusMode::TranscriptOnly.as_wire(),
+            "transcript_only"
+        );
+        assert_eq!(
+            YoutubeCorpusMode::TranscriptDescription.as_wire(),
+            "transcript_description"
+        );
+        assert_eq!(
+            YoutubeCorpusMode::TranscriptDescriptionComments.as_wire(),
+            "transcript_description_comments"
+        );
     }
 
     #[tokio::test]
