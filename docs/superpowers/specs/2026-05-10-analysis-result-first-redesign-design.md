@@ -240,7 +240,7 @@ type RunSnapshotAvailability =
   | "unavailable";
 ```
 
-The final implementation can derive this from an explicit backend field such as `has_run_snapshot`, from a focused snapshot list/probe API, or from the first page of `list_analysis_run_messages`. Do not infer availability from run status alone: a failed or cancelled run can still have a snapshot if failure happened after snapshot persistence, and a completed legacy run can lack a snapshot.
+The final implementation can derive this from an explicit backend field such as `has_run_snapshot`, from a focused snapshot list/probe API, or from the first page of `list_analysis_run_messages`. Do not infer availability from run status alone: a failed or cancelled run can still have a snapshot if failure happened after snapshot persistence. Completed runs are expected to have saved snapshot rows; a completed run without snapshot data should be treated as a storage or integrity problem, not as a supported legacy source-view path.
 
 For `queued` or `running` runs:
 
@@ -251,8 +251,8 @@ For `queued` or `running` runs:
 
 For `completed` runs:
 
-- `Source` mode prefers `run_snapshot` when available.
-- If no snapshot exists, show the snapshot unavailable state and offer explicit live source browsing.
+- `Source` mode uses `run_snapshot`.
+- If snapshot rows are missing, show a storage or integrity error state and do not offer live-source fallback as an equivalent source view.
 
 For `failed` and `cancelled` runs:
 
@@ -266,7 +266,7 @@ This keeps edge cases honest without blocking future optimization. If a later ba
 
 When an opened run has a saved snapshot, `Source` mode shows the frozen corpus or snapshot behind that run. This preserves the trust contract: the source material visible beside the report is the material the report was based on.
 
-If snapshot material is unavailable, the UI must show an explicit unavailable state and offer `View live source`. It must not silently fall back to live source data.
+When snapshot material is legitimately unavailable for an active, failed, or cancelled run, the UI must show an explicit unavailable state and offer `View live source`. It must not silently fall back to live source data. Explicit live source browsing is not a replacement for a completed run's missing snapshot.
 
 When the user chooses live data from a run source view, the canvas must show a persistent `Live source` indicator near the `Report | Source` mode control or source header. The indicator should include a clear way back to the run snapshot, such as `Back to run snapshot`, whenever snapshot data exists. This prevents live source data from being mistaken for the frozen material behind the opened report.
 
@@ -405,7 +405,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 
 ## Empty And Error States
 
-- If an opened run snapshot is unavailable, show a clear unavailable state and a `View live source` action.
+- If a completed run has no snapshot rows, show a storage or integrity error instead of a legacy live-source fallback.
 - If an active run snapshot is not available yet, show a pending state rather than an empty timeline or transcript.
 - If a failed or cancelled run has no snapshot, explain that the run ended before a frozen source snapshot was saved and offer `View live source`.
 - If a Telegram source has no synced items, show an empty state with `Sync source`.
@@ -455,6 +455,7 @@ Add focused tests around state and structure:
 - clicking a trace ref switches companion tab to evidence;
 - runs search and filters narrow saved runs without losing current-scope behavior;
 - run source mode prefers run snapshot over live source when snapshot data is available;
+- completed run source mode requires snapshot data and does not expose a legacy live-source fallback;
 - active-run source mode shows pending snapshot state until snapshot data exists;
 - failed and cancelled run source mode shows snapshot when available and unavailable state plus live source action when not;
 - source snapshot availability is not inferred from run status alone;

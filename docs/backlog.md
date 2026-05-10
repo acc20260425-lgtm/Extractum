@@ -10,6 +10,7 @@
 - Takeout source import still needs broader live validation, incomplete-batch provenance, and a migrated-history identity decision.
 - YouTube source MVP is shipped, but live-provider coverage still needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Saved-run history works, but large archives need richer narrowing by source, group, profile/model, template, and date.
+- Analysis saved-run compatibility still carries legacy fallback behavior for snapshotless runs; remove that fallback after the result-first redesign lands.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
 - NotebookLM export is single-source and local-only; optional link enrichment, source-group export, forward metadata, and richer forum-topic grouping remain open.
 - YouTube-specific NotebookLM export enrichment is not implemented yet; the existing generic NotebookLM export remains shipped for Telegram sources.
@@ -33,7 +34,7 @@
 | Account deletion coordination | account row/runtime cleanup exists | deletion cannot race active ingest or analysis work |
 | Takeout source import | implemented | validated across source kinds with explicit incomplete-import provenance |
 | YouTube source ingest | implemented | broader live validation plus optional future enrichment/resumability |
-| Saved runs UX | global/current-scope history shipped | fast narrowing for large saved-run histories |
+| Saved runs UX | global/current-scope history shipped | fast narrowing for large saved-run histories and removal of legacy saved-run fallback |
 | Media support | metadata only | optional download/preview and controlled media-aware analysis |
 | NotebookLM export | single-source Markdown export shipped | optional enrichment and source-group export if needed |
 | Stabilization | ad hoc verification | repeatable baseline plus dependency upgrade policy |
@@ -94,15 +95,17 @@ Acceptance:
 - Export DC fallback and only-my-messages fallback warnings remain visible in job state.
 - Migrated supergroup history has a safe identity policy before import is enabled.
 
-### 4.4 Saved Runs Discoverability
+### 4.4 Saved Runs Discoverability And Cleanup
 
 Priority: medium.
 
 - [ ] add historical search/filtering by source, source group, provider, profile, model, template, and date
+- [ ] remove legacy saved-run fallback paths that read live `items` when a completed run has no `analysis_run_messages` snapshot rows
 
 Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
+- Completed saved runs are treated as snapshot-backed artifacts; snapshotless completed runs are not a supported source-view path.
 
 ### 4.5 NotebookLM Export Follow-Ups
 
@@ -174,7 +177,7 @@ Priority: medium.
 1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
 2. Close account-deletion coordination before more long-running ingest expansion.
 3. Validate Takeout import across representative source kinds and decide incomplete-import provenance.
-4. Decide whether saved-run history needs richer filters before media expansion.
+4. Decide whether saved-run history needs richer filters and schedule legacy saved-run fallback removal before media expansion.
 5. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
 6. Continue media download/preview and media-aware analysis design.
 7. Tighten verification, CI, and dependency pinning.
