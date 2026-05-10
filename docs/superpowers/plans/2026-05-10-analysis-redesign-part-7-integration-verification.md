@@ -748,7 +748,7 @@ git commit -m "test: add analysis redesign safety contract"
 **Files:**
 - Create: `docs/superpowers/verification/2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Create the verification record**
+- [x] **Step 1: Create the verification record**
 
 Create `docs/superpowers/verification/2026-05-10-analysis-redesign.md`:
 
@@ -814,7 +814,7 @@ Then verify `http://127.0.0.1:5173/analysis` in desktop, narrow desktop, and mob
 - Raw-source tests intentionally protect architectural contracts. If they fail because implementation names changed, update the assertion string while preserving the tested behavior.
 ```
 
-- [ ] **Step 2: Commit the verification record template**
+- [x] **Step 2: Commit the verification record template**
 
 Run:
 
