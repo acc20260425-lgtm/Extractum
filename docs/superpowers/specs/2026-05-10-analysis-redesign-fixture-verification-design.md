@@ -48,6 +48,21 @@ Rows that cannot carry an independent fixture marker must be selected for deleti
 
 The clear command must be safe when no fixture rows exist. The seed command must be idempotent by clearing the fixture set first, then inserting a fresh deterministic dataset.
 
+Visible fixture labels should be deterministic, human-recognizable, and scenario-oriented so browser verification can select the intended source, group, run, or profile without ambiguity. Examples:
+
+- `__analysis_redesign_fixture__ Telegram Channel`
+- `__analysis_redesign_fixture__ Telegram Supergroup`
+- `__analysis_redesign_fixture__ YouTube Video`
+- `__analysis_redesign_fixture__ YouTube Playlist`
+- `__analysis_redesign_fixture__ Telegram Group`
+- `__analysis_redesign_fixture__ Completed Snapshot Run`
+- `__analysis_redesign_fixture__ Missing Snapshot Run`
+- `__analysis_redesign_fixture__ Running Run`
+- `__analysis_redesign_fixture__ Failed Run`
+- `__analysis_redesign_fixture__ Cancelled Run`
+- `__analysis_redesign_fixture__ Group Snapshot Run`
+- `__analysis_redesign_fixture__ LLM Profile`
+
 ## Fixture Dataset
 
 The fixture set targets the populated browser scenarios that were blocked by missing local data in `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
