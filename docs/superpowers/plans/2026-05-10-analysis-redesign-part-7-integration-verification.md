@@ -462,7 +462,7 @@ git commit -m "test: add analysis redesign workflow scenarios"
 **Files:**
 - Create: `src/lib/analysis-redesign-route-contract.test.ts`
 
-- [ ] **Step 1: Create the raw-source route contract test file**
+- [x] **Step 1: Create the raw-source route contract test file**
 
 Create `src/lib/analysis-redesign-route-contract.test.ts`:
 
@@ -591,7 +591,7 @@ describe("analysis redesign final route contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the route contract tests**
+- [x] **Step 2: Run the route contract tests**
 
 Run:
 
@@ -601,7 +601,7 @@ npm.cmd test -- src/lib/analysis-redesign-route-contract.test.ts
 
 Expected: PASS. If this fails because a raw-source marker has a different final name, keep the assertion intent and update only the string to the actual implemented public contract.
 
-- [ ] **Step 3: Commit the route contract tests**
+- [x] **Step 3: Commit the route contract tests**
 
 Run:
 
