@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import reportCanvasSource from "./components/analysis/report-canvas.svelte?raw";
 import reportRunHeaderSource from "./components/analysis/report-run-header.svelte?raw";
 import reportSetupPanelSource from "./components/analysis/report-setup-panel.svelte?raw";
+import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import runSnapshotMessagesPanelSource from "./components/analysis/run-snapshot-messages-panel.svelte?raw";
 
@@ -50,14 +51,14 @@ describe("report canvas component contract", () => {
     expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "live_source"');
     expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "run_snapshot"');
     expect(reportSourceSurfaceSource).toContain("Live source");
-    expect(reportSourceSurfaceSource).toContain("View live source");
-    expect(reportSourceSurfaceSource).toContain("Back to run snapshot");
+    expect(sourceReaderHeaderSource).toContain("View live source");
+    expect(sourceReaderHeaderSource).toContain("Back to run snapshot");
     expect(reportSourceSurfaceSource).toContain("Snapshot pending");
     expect(reportSourceSurfaceSource).toContain("Snapshot unavailable");
-    expect(reportSourceSurfaceSource).toContain("<RunSnapshotMessagesPanel");
-    expect(reportSourceSurfaceSource).toContain("<SourceContextPanel");
-    expect(reportSourceSurfaceSource).toContain("<YoutubeSourceDetail");
-    expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistDetail");
+    expect(reportSourceSurfaceSource).toContain("<SourceReaderHeader");
+    expect(reportSourceSurfaceSource).toContain("<TelegramTimelineReader");
+    expect(reportSourceSurfaceSource).toContain("<YoutubeTranscriptReader");
+    expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
   });
 
   it("keeps run snapshot reading bounded and snapshot-only", () => {

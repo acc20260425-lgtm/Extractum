@@ -32,10 +32,10 @@
     SourceJobRecord,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
-  import type {
-    YoutubePlaylistDetail as YoutubePlaylistDetailData,
-    YoutubeVideoDetail,
-  } from "$lib/types/youtube";
+  import type { YoutubeVideoDetail } from "$lib/types/youtube";
+  import type { ComponentProps } from "svelte";
+
+  type YoutubePlaylistReaderProps = ComponentProps<typeof YoutubePlaylistReader>;
 
   type Props = {
     currentRun: AnalysisRunDetail | null;
@@ -58,7 +58,7 @@
     currentSourceContentLabel: string;
     sourceJobs: SourceJobRecord[];
     youtubeVideoDetail: YoutubeVideoDetail | null;
-    youtubePlaylistDetail: YoutubePlaylistDetailData | null;
+    youtubePlaylistDetail: YoutubePlaylistReaderProps["playlist"];
     loadingYoutubeDetail: boolean;
     selectedTraceRef?: string | null;
     currentScopeTitle?: string;
