@@ -81,7 +81,7 @@ Part 7 must not:
 **Files:**
 - Create: `src/lib/analysis-redesign-workflow-scenarios.test.ts`
 
-- [ ] **Step 1: Create the final workflow scenario test file**
+- [x] **Step 1: Create the final workflow scenario test file**
 
 Create `src/lib/analysis-redesign-workflow-scenarios.test.ts`:
 
@@ -438,7 +438,7 @@ describe("analysis redesign final workflow scenarios", () => {
 });
 ```
 
-- [ ] **Step 2: Run the workflow tests**
+- [x] **Step 2: Run the workflow tests**
 
 Run:
 
@@ -448,7 +448,7 @@ npm.cmd test -- src/lib/analysis-redesign-workflow-scenarios.test.ts
 
 Expected: PASS after Parts 1-6 are correctly implemented. If the test fails, repair the named helper contract in the smallest responsible Part 1-6 file, then rerun this exact command.
 
-- [ ] **Step 3: Commit the workflow tests**
+- [x] **Step 3: Commit the workflow tests**
 
 Run:
 
