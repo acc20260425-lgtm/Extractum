@@ -4,7 +4,7 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
   import WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";
-  import WorkspaceRail from "$lib/components/analysis/workspace-rail.svelte";
+  import CompactSourceRail from "$lib/components/analysis/compact-source-rail.svelte";
   import SourceManagementDialog from "$lib/components/analysis/source-management-dialog.svelte";
   import { formatAppError } from "$lib/app-error";
   import {
@@ -1792,7 +1792,7 @@
 {/if}
 
 <section class="analysis-workspace">
-  <WorkspaceRail
+  <CompactSourceRail
     {sourceCatalog}
     {groups}
     {sourceMetrics}
@@ -1801,13 +1801,12 @@
     {railQuery}
     {filteredSourceCatalog}
     {filteredGroups}
-    {analysisScope}
-    {selectedSourceId}
-    {selectedGroupId}
+    workspaceSelection={workspaceUiState.workspaceSelection}
     {syncingIds}
     {deletingSourceIds}
     {startingTakeoutSourceIds}
     {takeoutJobsBySource}
+    {sourceJobsBySource}
     {youtubeSummaries}
     {youtubeRuntimeStatus}
     {formatTimestamp}
@@ -1822,6 +1821,7 @@
     onSyncSource={(sourceId) => void syncSelectedSource(sourceId)}
     onStartTakeoutImport={(sourceId) => void startTakeoutImport(sourceId)}
     onCancelTakeoutImport={(jobId) => void cancelTakeoutImport(jobId)}
+    onCancelSourceJob={(jobId) => void cancelYoutubeSourceJob(jobId)}
     onOpenSourceManager={() => (sourceManagerOpen = true)}
     onDeleteSource={(source) => void deleteSource(source)}
   />
@@ -2006,7 +2006,7 @@
 <style>
   .analysis-workspace {
     display: grid;
-    grid-template-columns: minmax(260px, 320px) minmax(0, 1.6fr) minmax(320px, 430px);
+    grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.6fr) minmax(320px, 430px);
     gap: 0.9rem;
     align-items: start;
     min-width: 0;
@@ -2022,7 +2022,7 @@
 
   @media (max-width: 1500px) {
     .analysis-workspace {
-      grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+      grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1fr);
     }
 
     .inspector-slot {
