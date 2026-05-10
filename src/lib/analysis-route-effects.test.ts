@@ -3,9 +3,11 @@ import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 
 describe("analysis route effects", () => {
   function historyScopeEffect() {
-    const effectStart = analysisPageSource.indexOf("  $effect(() => {");
+    const paramsStart = analysisPageSource.indexOf("const params = historyScopeParams;");
+    const effectStart = analysisPageSource.lastIndexOf("  $effect(() => {", paramsStart);
     const nextEffectStart = analysisPageSource.indexOf("\n  $effect(() => {", effectStart + 1);
 
+    expect(paramsStart, "analysis route should read explicit history-scope params").toBeGreaterThan(-1);
     expect(effectStart, "analysis route should define a history-scope effect").toBeGreaterThan(-1);
     expect(
       nextEffectStart,
