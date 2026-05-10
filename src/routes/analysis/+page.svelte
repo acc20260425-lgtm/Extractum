@@ -172,6 +172,22 @@
     currentAnalysisSourceMetric,
   } from "$lib/analysis-scope-state";
   import {
+    defaultAnalysisWorkspaceUiState,
+    legacyScopeFromWorkspaceSelection,
+    openRunWorkspaceState,
+    selectSourceGroupWorkspace,
+    selectSourceWorkspace,
+    type AnalysisWorkspaceUiState,
+    type WorkspaceSelection,
+  } from "$lib/analysis-workspace-state";
+  import {
+    fallbackWorkspaceSelection,
+    loadPersistedAnalysisWorkspaceState,
+    persistableAnalysisWorkspaceState,
+    restoredUiStateFromPersisted,
+    savePersistedAnalysisWorkspaceState,
+  } from "$lib/analysis-workspace-persistence";
+  import {
     accountLabel as formatAccountLabel,
     runtimeBadge,
     runtimeStatus as getRuntimeStatus,
@@ -257,6 +273,11 @@
 
   let railQuery = $state("");
   let inspectorMode = $state<InspectorMode>("history");
+  let workspaceUiState = $state<AnalysisWorkspaceUiState>(
+    defaultAnalysisWorkspaceUiState(),
+  );
+  let workspacePersistenceReady = $state(false);
+  let restoredWorkspaceSelection = $state<WorkspaceSelection | null>(null);
 
   let selectedSourceId = $state("");
   let selectedTopicKey = $state("__all_topics__");
@@ -689,6 +710,118 @@
 
   const filteredGroups = $derived.by(() => filteredAnalysisGroups(groups, railQuery));
 
+  function restorePersistedWorkspaceState() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const persisted = loadPersistedAnalysisWorkspaceState(window.localStorage);
+    if (!persisted) {
+      workspacePersistenceReady = true;
+      return;
+    }
+
+    const restored = restoredUiStateFromPersisted(persisted);
+    workspaceUiState = restored;
+    restoredWorkspaceSelection = restored.workspaceSelection;
+    historyScope = persisted.runs.historyScope;
+    runFilter = persisted.runs.runFilter;
+    workspacePersistenceReady = true;
+  }
+
+  function persistWorkspaceState() {
+    if (typeof window === "undefined" || !workspacePersistenceReady) {
+      return;
+    }
+
+    savePersistedAnalysisWorkspaceState(window.localStorage,
+      persistableAnalysisWorkspaceState(workspaceUiState, {
+        historyScope,
+        runFilter,
+      }),
+    );
+  }
+
+  function applyWorkspaceUiState(next: AnalysisWorkspaceUiState) {
+    workspaceUiState = next;
+  }
+
+  function clearCurrentRunForWorkspaceSwitch() {
+    if (activeRunId !== null || currentRun !== null) {
+      runWorkflow.invalidateOpenRunRequests();
+    }
+
+    activeRunId = null;
+    currentRun = null;
+    traceData = { refs: [] };
+    savedTraceRefs = [];
+    resolvedTraceRefs = [];
+    selectedTraceRef = null;
+    chatMessages = [];
+    chatQuestion = "";
+    chatting = false;
+    activeChatRequestId = null;
+    activeChatRunId = null;
+  }
+
+  function liveScopeExistsForRun(run: AnalysisRunDetail) {
+    if (run.source_id !== null) {
+      return sourceCatalog.some((source) => source.id === run.source_id);
+    }
+
+    if (run.source_group_id !== null) {
+      return groups.some((group) => group.id === run.source_group_id);
+    }
+
+    return false;
+  }
+
+  function alignWorkspaceToOpenedRun(run: AnalysisRunDetail) {
+    const next = openRunWorkspaceState(workspaceUiState, {
+      runId: run.id,
+      status: run.status,
+      sourceId: run.source_id,
+      sourceGroupId: run.source_group_id,
+      liveScopeExists: liveScopeExistsForRun(run),
+    });
+
+    applyWorkspaceUiState(next);
+
+    const legacy = legacyScopeFromWorkspaceSelection(next.workspaceSelection);
+    analysisScope = legacy.analysisScope;
+    selectedSourceId = legacy.selectedSourceId;
+    selectedGroupId = legacy.selectedGroupId;
+  }
+
+  async function applyRestoredWorkspaceSelection() {
+    if (!restoredWorkspaceSelection) {
+      return false;
+    }
+
+    const selection = fallbackWorkspaceSelection(
+      restoredWorkspaceSelection,
+      sourceCatalog,
+      groups,
+    );
+    restoredWorkspaceSelection = null;
+
+    if (selection.kind === "source") {
+      await selectSource(selection.sourceId, { preserveRestoredCanvasState: true });
+      return true;
+    }
+
+    if (selection.kind === "source_group") {
+      selectGroup(selection.sourceGroupId, { preserveRestoredCanvasState: true });
+      return true;
+    }
+
+    applyWorkspaceUiState({
+      ...workspaceUiState,
+      workspaceSelection: { kind: "none" },
+    });
+    return false;
+  }
+
   function applyRunWorkflowPatch(patch: AnalysisRunWorkflowPatch) {
     if ("runs" in patch) runs = patch.runs ?? [];
     if ("activeRuns" in patch) activeRuns = patch.activeRuns ?? [];
@@ -809,6 +942,7 @@
     loadChatMessages,
     loadTrace,
     clearTraceState,
+    onRunOpened: alignWorkspaceToOpenedRun,
     formatError: formatAppError,
   });
 
@@ -955,7 +1089,18 @@
     }
   }
 
-  async function selectSource(sourceId: number) {
+  async function selectSource(
+    sourceId: number,
+    { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
+  ) {
+    const previousWorkspaceState = workspaceUiState;
+    applyWorkspaceUiState(selectSourceWorkspace(workspaceUiState, sourceId));
+    historyScope = "current";
+    if (activeChatRequestId !== null) {
+      void cancelChat({ silent: true });
+    }
+    clearCurrentRunForWorkspaceSwitch();
+
     const next = analysisSourceSelectionState(sourceId);
     const source = sourceCatalog.find((candidate) => candidate.id === sourceId) ?? null;
     analysisScope = next.analysisScope;
@@ -973,9 +1118,29 @@
       loadItems(sourceId),
       source?.sourceType === "youtube" ? loadYoutubeDetail(source) : Promise.resolve(),
     ]);
+
+    if (preserveRestoredCanvasState) {
+      applyWorkspaceUiState({
+        ...workspaceUiState,
+        canvasMode: previousWorkspaceState.canvasMode,
+        sourceViewBasis: previousWorkspaceState.sourceViewBasis,
+        companionTab: previousWorkspaceState.companionTab,
+      });
+    }
   }
 
-  function selectGroup(groupId: number) {
+  function selectGroup(
+    groupId: number,
+    { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
+  ) {
+    const previousWorkspaceState = workspaceUiState;
+    applyWorkspaceUiState(selectSourceGroupWorkspace(workspaceUiState, groupId));
+    historyScope = "current";
+    if (activeChatRequestId !== null) {
+      void cancelChat({ silent: true });
+    }
+    clearCurrentRunForWorkspaceSwitch();
+
     const next = analysisGroupSelectionState(groupId);
     analysisScope = next.analysisScope;
     selectedGroupId = next.selectedGroupId;
@@ -984,6 +1149,15 @@
     youtubeVideoDetail = null;
     youtubePlaylistDetail = null;
     inspectorMode = next.inspectorMode;
+
+    if (preserveRestoredCanvasState) {
+      applyWorkspaceUiState({
+        ...workspaceUiState,
+        canvasMode: previousWorkspaceState.canvasMode,
+        sourceViewBasis: previousWorkspaceState.sourceViewBasis,
+        companionTab: previousWorkspaceState.companionTab,
+      });
+    }
   }
 
   async function changeSelectedTopicKey(nextKey: string) {
@@ -1424,6 +1598,18 @@
   }
 
   $effect(() => {
+    workspaceUiState;
+    historyScope;
+    runFilter;
+
+    if (!workspacePersistenceReady) {
+      return;
+    }
+
+    persistWorkspaceState();
+  });
+
+  $effect(() => {
     const params = historyScopeParams;
     if (params === null) {
       runs = [];
@@ -1470,9 +1656,12 @@
     let detachTakeoutImportListener: (() => void) | null = null;
     let detachSourceJobListener: (() => void) | null = null;
 
+    restorePersistedWorkspaceState();
     void loadAccounts();
-    void loadSourceCatalog().then(() => {
-      if (selectedSourceId) {
+    void (async () => {
+      await Promise.all([loadSourceCatalog(), loadGroups()]);
+      const restoredSelectionApplied = await applyRestoredWorkspaceSelection();
+      if (!restoredSelectionApplied && selectedSourceId) {
         const sourceId = Number(selectedSourceId);
         const selected = sourceCatalog.find((source) => source.id === sourceId);
         void Promise.all([
@@ -1483,10 +1672,9 @@
           selected?.sourceType === "youtube" ? loadYoutubeDetail(selected) : Promise.resolve(),
         ]);
       }
-    });
+      void loadActiveRuns();
+    })();
     void loadTemplates();
-    void loadGroups();
-    void loadActiveRuns();
     void loadLlmProfiles();
     void loadYoutubeRuntimeStatus();
     void loadTakeoutImportJobs();
