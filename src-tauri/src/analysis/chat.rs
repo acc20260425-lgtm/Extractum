@@ -8,7 +8,7 @@ use crate::llm::{
     LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
 };
 
-use super::corpus::load_run_corpus_messages;
+use super::corpus::load_run_snapshot_messages;
 use super::models::{
     AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage,
 };
@@ -128,6 +128,25 @@ fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n\n---\n\n")
+}
+
+fn ensure_completed_chat_context(
+    run: &AnalysisRunDetail,
+    snapshot: &[CorpusMessage],
+) -> AppResult<()> {
+    if run.status != ANALYSIS_STATUS_COMPLETED {
+        return Err(AppError::validation(
+            "Open a completed analysis run before asking follow-up questions",
+        ));
+    }
+
+    if snapshot.is_empty() {
+        return Err(AppError::conflict(
+            "This completed analysis run has no saved snapshot context for follow-up chat",
+        ));
+    }
+
+    Ok(())
 }
 
 struct ChatRequestParams<'a> {
@@ -356,7 +375,10 @@ pub async fn ask_analysis_run_question(
             AppError::conflict("The selected analysis run does not have a saved report")
         })?;
 
-    let corpus = load_run_corpus_messages(&pool, &run).await?;
+    let corpus = load_run_snapshot_messages(&pool, run.id)
+        .await
+        .map_err(AppError::database)?;
+    ensure_completed_chat_context(&run, &corpus)?;
     let context_messages = find_chat_context_messages(&question, &corpus);
     let effective_profile_id = profile_id.unwrap_or_else(|| run.provider_profile.clone());
     let history = load_chat_messages_from_pool(&pool, run_id)
@@ -476,7 +498,10 @@ pub async fn ask_analysis_run_question(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_chat_request, format_chat_context_messages, ChatRequestParams};
+    use super::{
+        build_chat_request, ensure_completed_chat_context, format_chat_context_messages,
+        ChatRequestParams,
+    };
     use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
 
     fn sample_run() -> AnalysisRunDetail {
@@ -523,6 +548,23 @@ mod tests {
             source_subtype: None,
             metadata_zstd: None,
         }
+    }
+
+    #[test]
+    fn completed_chat_context_requires_saved_snapshot_messages() {
+        let error = ensure_completed_chat_context(&sample_run(), &[])
+            .expect_err("missing snapshot rejects completed chat");
+
+        assert_eq!(
+            error.message,
+            "This completed analysis run has no saved snapshot context for follow-up chat"
+        );
+    }
+
+    #[test]
+    fn completed_chat_context_accepts_saved_snapshot_messages() {
+        ensure_completed_chat_context(&sample_run(), &[sample_message()])
+            .expect("snapshot context enables completed chat");
     }
 
     #[test]

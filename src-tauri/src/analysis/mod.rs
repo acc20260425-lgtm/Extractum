@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
 use self::corpus::{
-    list_run_snapshot_messages_page, load_run_corpus_messages, ListRunSnapshotMessagesRequest,
+    list_run_snapshot_messages_page, load_trace_resolution_messages, ListRunSnapshotMessagesRequest,
 };
 use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent,
@@ -449,7 +449,7 @@ pub async fn resolve_analysis_trace_refs(
         .await?
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
-    let corpus = load_run_corpus_messages(&pool, &run).await?;
+    let corpus = load_trace_resolution_messages(&pool, &run).await?;
     Ok(build_trace_refs(&normalized_refs, &corpus))
 }
 

@@ -938,6 +938,22 @@ pub(crate) async fn load_run_corpus_messages(
     load_corpus_messages(pool, &request).await
 }
 
+pub(crate) async fn load_trace_resolution_messages(
+    pool: &Pool<Sqlite>,
+    run: &AnalysisRunDetail,
+) -> Result<Vec<CorpusMessage>, String> {
+    let snapshot = load_run_snapshot_messages(pool, run.id).await?;
+    if !snapshot.is_empty() {
+        return Ok(snapshot);
+    }
+
+    if run.status == "completed" {
+        return Ok(Vec::new());
+    }
+
+    load_run_corpus_messages(pool, run).await
+}
+
 #[cfg(test)]
 mod tests {
     use sqlx::SqlitePool;
@@ -945,10 +961,10 @@ mod tests {
     use super::{
         estimate_message_input_chars, estimate_preflight_chunk_count,
         list_run_snapshot_messages_page, live_corpus_ref, load_corpus_messages,
-        load_run_corpus_messages, load_run_snapshot_messages, preflight_analysis_run,
-        preflight_limit_error, resolve_analysis_sources, resolve_run_source_ids,
-        AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest,
-        ListRunSnapshotMessagesRequest, YoutubeCorpusMode,
+        load_run_corpus_messages, load_run_snapshot_messages, load_trace_resolution_messages,
+        preflight_analysis_run, preflight_limit_error, resolve_analysis_sources,
+        resolve_run_source_ids, AnalysisRunPreflight, AnalysisRunPreflightLimits,
+        CorpusLoadRequest, ListRunSnapshotMessagesRequest, YoutubeCorpusMode,
     };
     use crate::analysis::models::{AnalysisRunDetail, AnalysisRunMessageCursor, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
@@ -1531,6 +1547,31 @@ mod tests {
         assert_eq!(page.messages, Vec::new());
         assert_eq!(page.next_cursor, None);
         assert!(!page.has_more);
+    }
+
+    #[tokio::test]
+    async fn trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, content_zstd)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(11_i64)
+        .bind(2_i64)
+        .bind("100")
+        .bind("telegram_message")
+        .bind("Alice")
+        .bind(1_710_000_000_i64)
+        .bind(compress_text("Live source text").expect("compress live text"))
+        .execute(&pool)
+        .await
+        .expect("insert live item");
+
+        let messages = load_trace_resolution_messages(&pool, &sample_run())
+            .await
+            .expect("load trace resolution messages");
+
+        assert!(messages.is_empty());
     }
 
     #[test]
