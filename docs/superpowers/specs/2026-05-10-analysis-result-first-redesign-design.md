@@ -178,9 +178,37 @@ Report | Source
 - shows run snapshot material when an opened run has a saved snapshot;
 - shows a pending or unavailable state when an opened run has no saved snapshot yet;
 - shows live source material only when the user explicitly switches to it;
-- becomes the default mode when no run is open and a source/group is selected.
+- becomes the default mode when no run is open and a source/group is selected;
+- owns the source-specific action header for the selected live source context.
 
 The existing `ReportViewer`, `SourceMessagesPanel`, `YoutubeSourceDetail`, and `YoutubePlaylistDetail` can be reused internally, but they should be adapted toward the new canvas model rather than rendered as independent stacked panels.
+
+### Source Ingest Controls And Activity
+
+The redesign must preserve source ingest control after the old full-width `WorkspaceRail` is collapsed. Source sync and source-job controls should remain close to the source material, but they must not compete with report reading or mix with analysis runs.
+
+Placement rules:
+
+- `CompactSourceRail` shows only compact ingest status, running, warning, or error indicators, plus the single contextual primary action slot described above.
+- `ReportCanvas` `Source` mode header is the primary location for source-specific ingest actions for the selected live source context.
+- `Source` mode header actions can include Telegram `Sync source`, Telegram `Takeout import`, YouTube metadata sync, YouTube transcript sync, YouTube comments sync, playlist sync, playlist retry, and per-video playlist sync entry points when relevant.
+- A compact `Source activity` area in `Source` mode, or the expanded source panel, should show active and recent source jobs with progress, phase, warnings, errors, retry, and cancel actions.
+- The expanded source panel can show detailed source status, source job history, first-sync policy, and secondary ingest actions for sources that are not currently open in the canvas.
+- `RunCompanionTabs.Runs` is only for analysis report runs. Source ingest jobs must not appear there unless the product explicitly renames and redesigns the tab as a broader `Activity` surface.
+
+Snapshot trust rules:
+
+- When `Source` mode is showing `run_snapshot`, ingest controls must not imply that sync, Takeout, or YouTube jobs can change the snapshot behind the opened report.
+- In `run_snapshot` mode, live-source ingest actions should be hidden, secondary, or labeled as `Live source actions`.
+- Full source ingest controls become primary only when the user is browsing live source context, such as no open run or explicit `View live source`.
+
+Provider-specific rules:
+
+- Telegram first sync policy should be visible before first sync for an unsynced Telegram source, for example `First sync will import the last N messages/days`, with a path to Settings when the user needs to change it.
+- After a Telegram sync completes, the applied first-sync policy can remain in the sync result/status message.
+- Takeout import progress should show phase, count/progress when available, warnings, terminal error, and cancel state.
+- YouTube source activity should show metadata, transcript, comments, playlist, and playlist-video jobs separately enough that users can tell which corpus part is stale or running.
+- YouTube transcript/comments/playlist actions should live in `Source` mode near the relevant reader/list, not only in the compact rail.
 
 ### RunCompanionTabs
 
@@ -206,7 +234,8 @@ Evidence | Chat | Runs
 
 - combines active runs and saved run history entry points;
 - replaces the current always-visible inspector role;
-- includes search and filtering for saved runs, because run history is expected to grow.
+- includes search and filtering for saved runs, because run history is expected to grow;
+- does not show source ingest jobs, Takeout jobs, or YouTube source jobs.
 
 Existing `TracePanel`, `ChatPanel`, `ActiveRunList`, `RunHistory`, and `ChunkSummaries` should be reused inside the tab body where practical.
 
@@ -486,6 +515,11 @@ Add focused tests around state and structure:
 - missing `yt-dlp` for a YouTube source surfaces the runtime diagnostic in the central canvas;
 - synced sources with no text corpus explain the text-first limitation;
 - missing or unusable LLM profile disables report generation with `/settings` guidance;
+- source ingest jobs are visible in `Source activity` or the expanded source panel, not in `Runs`;
+- active Takeout and YouTube source jobs expose progress plus cancel/retry where supported;
+- Telegram first-sync policy is visible before first sync for an unsynced Telegram source;
+- `run_snapshot` source view does not present live sync/takeout controls as if they change the opened run snapshot;
+- YouTube metadata, transcript, comments, playlist, and playlist-video sync actions are reachable from `Source` mode;
 - workspace persistence restores last source/group and UI context without auto-opening the last run;
 - persistence ignores stale source/group ids gracefully;
 - persistence does not restore transient trace selection, draft chat text, or open popovers;
