@@ -1,22 +1,49 @@
 <script lang="ts">
-  import { LayoutDashboard, Moon, Settings, Sun, UserRound } from "@lucide/svelte";
+  import { LayoutDashboard, Menu, Moon, Settings, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
+  import AppSidebar from "$lib/components/app-sidebar.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import ModalHost from "$lib/components/modal-host.svelte";
   import ToastHost from "$lib/components/toast-host.svelte";
 
+  const SIDEBAR_COLLAPSED_KEY = "extractum.sidebar.collapsed";
+
   let { children } = $props();
   let theme = $state<"light" | "dark">("light");
+  let sidebarCollapsed = $state(false);
+  let mobileSidebarOpen = $state(false);
 
   if (browser) {
     theme = localStorage.getItem("theme") === "dark" ? "dark" : "light";
+    sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
   }
 
   function toggleTheme() {
     theme = theme === "light" ? "dark" : "light";
     if (browser) {
       localStorage.setItem("theme", theme);
+    }
+  }
+
+  function setSidebarCollapsed(collapsed: boolean) {
+    sidebarCollapsed = collapsed;
+    if (browser) {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+    }
+  }
+
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed(!sidebarCollapsed);
+  }
+
+  function closeMobileSidebar() {
+    mobileSidebarOpen = false;
+  }
+
+  function handleShellKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      mobileSidebarOpen = false;
     }
   }
 
@@ -50,72 +77,70 @@
   <meta name="color-scheme" content={theme === "dark" ? "dark" : "light"} />
 </svelte:head>
 
+<svelte:window onkeydown={handleShellKeydown} />
+
 <div class="app" data-theme={theme}>
   <ToastHost />
   <ModalHost />
   <div class="shell">
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <a class="brand" href="/analysis">
-          <span class="brand-mark" aria-hidden="true">E</span>
-          <span class="brand-copy">
-            <strong>Extractum</strong>
-            <small>Research workspace</small>
-          </span>
-        </a>
-      </div>
-
-      <nav class="sidebar-nav" aria-label="Primary">
-        {#each navItems as item (item.href)}
-          {@const NavIcon = item.icon}
-          <a
-            href={item.href}
-            class:active={item.active(page.url.pathname)}
-          >
-            <span class="nav-row">
-              <NavIcon size={16} aria-hidden="true" />
-              <span class="nav-label">{item.label}</span>
-            </span>
-            <span class="nav-caption">{item.caption}</span>
-          </a>
-        {/each}
-      </nav>
-
-      <div class="sidebar-footer">
-        <div class="footer-copy">
-          <span class="footer-label">Workspace mode</span>
-          <strong>NotebookLM x Telegram</strong>
-        </div>
-        <Button className="theme-toggle" variant="secondary" type="button" onclick={toggleTheme}>
-          {#if theme === "light"}
-            <Moon size={15} aria-hidden="true" />
-          {:else}
-            <Sun size={15} aria-hidden="true" />
-          {/if}
-          {theme === "light" ? "Dark theme" : "Light theme"}
-        </Button>
-      </div>
-    </aside>
+    <AppSidebar
+      {navItems}
+      pathname={page.url.pathname}
+      collapsed={sidebarCollapsed}
+      mobileOpen={mobileSidebarOpen}
+      onToggleCollapsed={toggleSidebarCollapsed}
+      onCloseMobile={closeMobileSidebar}
+    />
 
     <main class="workspace">
       <div class="workspace-topbar">
-        <div class="workspace-route">
-          <span class="workspace-kicker">Current space</span>
-          <strong>
-            {#if page.url.pathname.startsWith("/analysis")}
-              Analysis workspace
-            {:else if page.url.pathname.startsWith("/accounts") || page.url.pathname.startsWith("/auth")}
-              Source access
-            {:else if page.url.pathname.startsWith("/settings")}
-              Settings
-            {:else}
-              Extractum
-            {/if}
-          </strong>
+        <div class="workspace-topbar-main">
+          <Button
+            className="mobile-menu-button"
+            variant="ghost"
+            iconOnly
+            ariaLabel="Open navigation"
+            ariaControls="app-sidebar"
+            ariaExpanded={mobileSidebarOpen}
+            onclick={() => (mobileSidebarOpen = true)}
+          >
+            <Menu size={17} aria-hidden="true" />
+          </Button>
+          <div class="workspace-route">
+            <span class="workspace-kicker">Current space</span>
+            <strong>
+              {#if page.url.pathname.startsWith("/analysis")}
+                Analysis workspace
+              {:else if page.url.pathname.startsWith("/accounts") || page.url.pathname.startsWith("/auth")}
+                Source access
+              {:else if page.url.pathname.startsWith("/settings")}
+                Settings
+              {:else}
+                Extractum
+              {/if}
+            </strong>
+          </div>
         </div>
-        <div class="workspace-topbar-meta">
-          <span class="workspace-badge">Local-first desktop</span>
-          <span class="workspace-badge">Tauri + Svelte</span>
+        <div class="workspace-topbar-actions">
+          <div class="workspace-topbar-meta">
+            <span class="workspace-badge">Local-first desktop</span>
+            <span class="workspace-badge">Tauri + Svelte</span>
+          </div>
+          <Button
+            className="theme-toggle"
+            variant="secondary"
+            iconOnly
+            ariaLabel={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+            title={theme === "light" ? "Dark theme" : "Light theme"}
+            type="button"
+            onclick={toggleTheme}
+          >
+            {#if theme === "light"}
+              <Moon size={15} aria-hidden="true" />
+            {:else}
+              <Sun size={15} aria-hidden="true" />
+            {/if}
+          </Button>
         </div>
       </div>
       <div class="workspace-inner">
@@ -334,158 +359,6 @@
     gap: 0;
   }
 
-  .sidebar {
-    width: 214px;
-    flex: 0 0 214px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-    padding: 0.85rem 0.7rem 0.85rem 0.85rem;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, white 4%), var(--panel));
-    border-right: 1px solid var(--border);
-    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.18);
-  }
-
-  .sidebar-header {
-    padding: 0.2rem 0.2rem 0;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    color: inherit;
-    text-decoration: none;
-    padding: 0.5rem 0.55rem;
-    border-radius: 12px;
-  }
-
-  .brand:hover {
-    background: color-mix(in srgb, var(--panel-hover) 68%, transparent);
-  }
-
-  .brand-mark {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.1rem;
-    height: 2.1rem;
-    border-radius: 0.8rem;
-    background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 74%, black));
-    color: white;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    box-shadow: 0 10px 24px rgba(47, 109, 234, 0.22);
-  }
-
-  .brand-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 0;
-  }
-
-  .brand-copy strong {
-    font-size: 0.94rem;
-    line-height: 1.1;
-  }
-
-  .brand-copy small {
-    color: var(--muted);
-    font-size: 0.72rem;
-    line-height: 1.1;
-  }
-
-  .sidebar-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .sidebar-nav a {
-    display: flex;
-    flex-direction: column;
-    gap: 0.18rem;
-    padding: 0.62rem 0.78rem;
-    border-radius: 12px;
-    color: var(--muted);
-    text-decoration: none;
-    transition: background 0.2s, color 0.2s, border-color 0.2s;
-    border: 1px solid transparent;
-  }
-
-  .nav-row {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    min-width: 0;
-  }
-
-  .sidebar-nav a:hover {
-    color: var(--text);
-    background: color-mix(in srgb, var(--panel-hover) 72%, transparent);
-    border-color: color-mix(in srgb, var(--border) 72%, transparent);
-  }
-
-  .sidebar-nav a.active {
-    color: var(--text);
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--primary) 12%, var(--panel)), color-mix(in srgb, var(--primary) 7%, var(--panel)));
-    border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
-    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
-  }
-
-  .nav-label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    line-height: 1.15;
-  }
-
-  .nav-caption {
-    font-size: 0.72rem;
-    line-height: 1.2;
-    color: var(--muted);
-  }
-
-  .sidebar-nav a.active .nav-caption,
-  .sidebar-nav a:hover .nav-caption {
-    color: color-mix(in srgb, var(--muted) 72%, var(--text));
-  }
-
-  .sidebar-footer {
-    margin-top: auto;
-    padding: 0.25rem 0.2rem 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-  }
-
-  .footer-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    color: var(--muted);
-  }
-
-  .footer-copy strong {
-    font-size: 0.82rem;
-    color: var(--text);
-  }
-
-  .footer-label,
-  .workspace-kicker {
-    font-size: 0.68rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  :global(.theme-toggle) {
-    width: 100%;
-  }
-
   .workspace {
     flex: 1;
     min-width: 0;
@@ -499,19 +372,49 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.8rem;
     min-height: 2.25rem;
     padding: 0.15rem 0.15rem 0.35rem;
     border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  }
+
+  .workspace-topbar-main,
+  .workspace-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+  }
+
+  .workspace-topbar-actions {
+    justify-content: flex-end;
+  }
+
+  :global(.mobile-menu-button) {
+    display: none;
+    flex: 0 0 auto;
+  }
+
+  :global(.theme-toggle) {
+    flex: 0 0 auto;
   }
 
   .workspace-route {
     display: flex;
     flex-direction: column;
     gap: 0.08rem;
+    min-width: 0;
   }
 
   .workspace-route strong {
     font-size: 0.96rem;
+  }
+
+  .workspace-kicker {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
 
   .workspace-topbar-meta {
@@ -542,28 +445,34 @@
 
   @media (max-width: 820px) {
     .shell {
-      flex-direction: column;
-    }
-
-    .sidebar {
-      width: auto;
-      flex-basis: auto;
-      padding: 0.8rem;
-      border-right: none;
-      border-bottom: 1px solid var(--border);
-      box-shadow: none;
-    }
-
-    .sidebar-nav {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      display: block;
+      min-height: 100vh;
     }
 
     .workspace {
       padding: 1rem;
     }
 
-    .workspace-topbar,
+    .workspace-topbar {
+      align-items: center;
+    }
+
+    .workspace-topbar-main {
+      flex: 1;
+    }
+
+    :global(.mobile-menu-button) {
+      display: inline-flex;
+    }
+
+    .workspace-topbar-actions {
+      gap: 0.45rem;
+    }
+
+    .workspace-topbar-meta {
+      display: none;
+    }
+
     :global(.page-hero) {
       flex-direction: column;
       align-items: stretch;
