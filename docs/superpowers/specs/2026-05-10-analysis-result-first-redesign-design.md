@@ -177,6 +177,8 @@ When a saved or completed run is open, `Source` mode shows the frozen corpus or 
 
 If snapshot material is unavailable, the UI must show an explicit unavailable state and offer `View live source`. It must not silently fall back to live source data.
 
+When the user chooses live data from a saved-run source view, the canvas must show a persistent `Live source` indicator near the `Report | Source` mode control or source header. The indicator should include a clear way back to the run snapshot, such as `Back to run snapshot`, whenever snapshot data exists. This prevents live source data from being mistaken for the frozen material behind the opened report.
+
 Suggested state:
 
 ```ts
@@ -232,6 +234,16 @@ Telegram `Source` mode should become a TDesktop-like reading timeline:
 - media placeholders for metadata-only media;
 - no binary media preview unless a later media feature explicitly implements it.
 
+Telegram media handling in this redesign is metadata-first only. The timeline should reserve stable slots for future preview, but the current design should render placeholders rather than real binary previews:
+
+- images: image placeholder, media summary, file name when available, mime type when available;
+- videos: video placeholder, duration or summary metadata when available, file name/mime type when available;
+- documents: document icon, file name, mime type, and summary metadata;
+- media-only posts: a clear media-only message body instead of an empty bubble;
+- mixed text and media posts: text remains primary, media metadata appears as an attached block.
+
+No automatic media download, thumbnail generation, inline video playback, or document preview is included in this redesign. If future media download support adds local file references, these placeholder slots can become preview slots without changing the overall `Source` mode structure.
+
 ### YouTube Source View
 
 YouTube `Source` mode should be transcript-oriented:
@@ -240,7 +252,17 @@ YouTube `Source` mode should be transcript-oriented:
 - transcript segments with timestamps;
 - transcript sync status;
 - evidence ref alignment when trace refs point to transcript segments;
+- transcript search and timestamp navigation;
 - explicit empty state when transcript is unavailable.
+
+Transcript navigation should support:
+
+- clicking a timestamp to open the canonical YouTube URL at that time when available;
+- selecting a trace ref and scrolling/highlighting the matching transcript segment when the ref resolves to a timestamped segment;
+- copying or exposing the timestamp link from the segment action area;
+- text search within loaded transcript segments, with paging or additional loading when the transcript is large.
+
+The redesign does not require an embedded YouTube player or playback synchronization. Extractum remains an analysis workspace; timestamp navigation should help users verify evidence and jump to YouTube when they need the original video context.
 
 For YouTube playlists, `Source` mode shows the playlist item list first. Transcript reading happens at the individual video/source level.
 
@@ -258,6 +280,7 @@ It should show grouped corpus or snapshot material by source, with source headin
 - Clicking a trace ref sets `companionTab = "evidence"`.
 - Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
 - Choosing `View live source` in saved-run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
+- `sourceViewBasis = "live_source"` shows a persistent `Live source` indicator and a return action when run snapshot data is available.
 - Switching back to `Report` from `Source` must not lose the selected run or companion tab state.
 
 ## Empty And Error States
@@ -308,6 +331,9 @@ Add focused tests around state and structure:
 - clicking a trace ref switches companion tab to evidence;
 - runs search and filters narrow saved runs without losing current-scope behavior;
 - saved-run source mode prefers run snapshot over live source;
+- live source mode shows an explicit indicator and return path to the run snapshot;
+- Telegram media renders metadata placeholders without requiring binary preview support;
+- YouTube transcript timestamp actions expose jump/copy behavior without requiring an embedded player;
 - snapshot unavailable state does not silently fall back to live data;
 - raw-source or component tests confirm the new `CompactSourceRail`, `ReportCanvas`, and `RunCompanionTabs` zones exist.
 
