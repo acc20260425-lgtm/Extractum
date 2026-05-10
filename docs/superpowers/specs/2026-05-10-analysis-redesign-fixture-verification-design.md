@@ -24,7 +24,7 @@ This approach is preferred over a separate fixture database because it requires 
 
 Fixture rows must be identifiable and removable without touching user-created data. The seed set uses a stable marker:
 
-- account labels, source titles, group names, scope labels, and prompt/template names begin with `__analysis_redesign_fixture__`;
+- account labels, source titles, group names, scope labels, prompt/template names, and optional fixture LLM profile ids begin with `__analysis_redesign_fixture__`;
 - source `external_id` values use a namespaced fixture prefix;
 - JSON metadata stored in compressed metadata columns includes `"analysis_redesign_fixture": true` where practical;
 - run result text and trace payloads include fixture-specific labels.
@@ -36,14 +36,15 @@ Rows that cannot carry an independent fixture marker must be selected for deleti
 1. analysis chat rows for fixture runs;
 2. analysis run snapshot rows for fixture runs;
 3. fixture analysis runs;
-4. fixture analysis prompt templates;
-5. fixture source group memberships and groups;
-6. YouTube playlist rows for fixture playlist/video sources;
-7. YouTube transcript segments for fixture source items;
-8. Telegram forum topics for fixture sources;
-9. source items for fixture sources;
-10. fixture sources;
-11. fixture accounts.
+4. fixture LLM profile settings in `app_settings`;
+5. fixture analysis prompt templates;
+6. fixture source group memberships and groups;
+7. YouTube playlist rows for fixture playlist/video sources;
+8. YouTube transcript segments for fixture source items;
+9. Telegram forum topics for fixture sources;
+10. source items for fixture sources;
+11. fixture sources;
+12. fixture accounts.
 
 The clear command must be safe when no fixture rows exist. The seed command must be idempotent by clearing the fixture set first, then inserting a fresh deterministic dataset.
 
@@ -66,6 +67,14 @@ The clear command deletes fixture accounts only after fixture sources have been 
 Create one fixture `analysis_prompt_templates` row for report runs. Fixture analysis runs reference this template so run metadata can show a deterministic prompt template name through the existing `analysis_runs` to `analysis_prompt_templates` join.
 
 The clear command deletes fixture prompt templates after fixture runs have been deleted. This keeps prompt-template cleanup explicit and avoids leaving fixture labels in the normal template list.
+
+### LLM Profile State
+
+The fixture layer must not create real LLM secrets. It must not write API keys to secure storage and must not create legacy `llm.profile.*.api_key` settings.
+
+Saved fixture runs carry their own provider/profile/model provenance in `analysis_runs`, so saved-run verification does not require a configured active LLM profile. If setup/provenance browser checks need profile metadata, the fixture may create non-secret provider profile settings in `app_settings` using a fixture profile id, provider, default model, and base URL. That metadata must be marked by the fixture profile id and cleared with the rest of the fixture set.
+
+The fixture dataset must not claim successful new report launch without a real usable developer-configured profile. If the current UI allows attempting a launch without an API key, that behavior is outside fixture success criteria and should be recorded as a setup limitation, not masked by fake secrets.
 
 ### Sources
 
@@ -97,6 +106,8 @@ Create these analysis runs:
 
 The completed snapshot-backed run must include trace refs that point at `analysis_run_messages` rows. At least one trace ref should exercise Telegram content and one should exercise YouTube timestamp metadata.
 
+Trace refs must be shaped so the redesigned Evidence panel can resolve one Telegram snapshot message and one YouTube timestamped segment through the same path used by real runs. The snapshot-backed fixture should enable Evidence refs, report inline refs, `Show in source` for a Telegram message, and `Show in source` for a YouTube transcript timestamp. The missing-snapshot run should include at least one trace ref in its trace payload that cannot resolve to saved snapshot rows, so degraded evidence/source behavior can be verified.
+
 ### Source Items
 
 Create source `items` rows that exercise:
@@ -107,11 +118,15 @@ Create source `items` rows that exercise:
 - reaction metadata;
 - media placeholder metadata without binary previews;
 - YouTube transcript item;
-- YouTube comment item if needed for corpus-mode labels;
+- YouTube comment item for `transcript_description_comments` corpus-mode labels;
 - YouTube transcript segments in `youtube_transcript_segments`;
 - playlist membership in `youtube_playlist_items`.
 
 Compressed fields must use the same zstd helpers as production code, including `content_zstd`, `raw_data_zstd`, `media_metadata_zstd`, `metadata_zstd`, `analysis_run_messages.content_zstd`, and `analysis_runs.trace_data_zstd`.
+
+### Source Activity And Jobs
+
+This fixture layer seeds persistent database-backed source state. It does not seed in-memory source job or Takeout import job state unless a separate debug-only runtime job fixture is explicitly added. Browser scenarios that require active Takeout progress or active YouTube source job progress may still require manual triggering or remain residual risks.
 
 ## Command Contract
 
@@ -120,6 +135,7 @@ Compressed fields must use the same zstd helpers as production code, including `
 ```ts
 interface AnalysisRedesignFixtureSummary {
   accounts: number;
+  llmProfiles: number;
   sources: number;
   sourceGroups: number;
   promptTemplates: number;
@@ -166,9 +182,11 @@ Backend tests should cover the fixture infrastructure before any browser verific
 - clearing deletes child rows through fixture parent ids instead of broad content matching;
 - fixture Telegram sources reference fixture account rows, and fixture accounts contain no credentials or secure-store state;
 - fixture runs reference a fixture report prompt template, and clearing removes that template;
+- fixture LLM profile metadata, if created, stores no API key and clearing removes only fixture profile settings;
 - fixture sources intended for reader verification have non-empty items, non-null sync timestamps, and provider metadata that renders as locally available;
 - the completed snapshot-backed run has saved `analysis_run_messages` rows;
 - the completed missing-snapshot run has no saved snapshot rows;
+- fixture trace refs resolve a Telegram snapshot message and a YouTube timestamped segment, while the missing-snapshot run leaves evidence resolution explicitly unavailable;
 - fixture statuses include completed, running, failed, and cancelled runs;
 - fixture data includes Telegram topic/media metadata, YouTube transcript segments, playlist membership, and source group membership.
 
@@ -179,6 +197,7 @@ Tests should use in-memory SQLite where possible. If the fixture code depends on
 - No release-build seed commands.
 - No visible product UI for fixtures.
 - No new `/analysis` product behavior.
+- No fake LLM secrets and no successful report-launch guarantee without a real configured profile.
 - No source ingest jobs in `RunCompanionTabs.Runs`.
 - No live-source fallback for completed-run evidence or chat.
 - No Playwright dependency.
