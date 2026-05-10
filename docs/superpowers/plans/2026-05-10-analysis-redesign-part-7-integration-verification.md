@@ -615,7 +615,7 @@ git commit -m "test: add analysis redesign route contract"
 **Files:**
 - Create: `src/lib/analysis-redesign-safety-contract.test.ts`
 
-- [ ] **Step 1: Create the raw-source safety contract test file**
+- [x] **Step 1: Create the raw-source safety contract test file**
 
 Create `src/lib/analysis-redesign-safety-contract.test.ts`:
 
@@ -724,7 +724,7 @@ describe("analysis redesign final safety contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the safety tests**
+- [x] **Step 2: Run the safety tests**
 
 Run:
 
@@ -734,7 +734,7 @@ npm.cmd test -- src/lib/analysis-redesign-safety-contract.test.ts
 
 Expected: PASS. If a backend raw-source assertion fails because the final Rust helper uses a different function name, preserve the safety property and update the assertion to the exact function or error string in the implemented file.
 
-- [ ] **Step 3: Commit the safety tests**
+- [x] **Step 3: Commit the safety tests**
 
 Run:
 
