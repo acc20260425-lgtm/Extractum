@@ -3,7 +3,7 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";
-  import WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";
+  import ReportCanvas from "$lib/components/analysis/report-canvas.svelte";
   import CompactSourceRail from "$lib/components/analysis/compact-source-rail.svelte";
   import SourceManagementDialog from "$lib/components/analysis/source-management-dialog.svelte";
   import { formatAppError } from "$lib/app-error";
@@ -12,6 +12,7 @@
     deleteAnalysisRun,
     getAnalysisRun,
     listActiveAnalysisRuns,
+    listAnalysisRunMessages,
     listAnalysisRuns,
     listenToAnalysisRunEvents,
     startAnalysisReport,
@@ -172,12 +173,17 @@
     currentAnalysisSourceMetric,
   } from "$lib/analysis-scope-state";
   import {
+    runSnapshotAvailabilityFromPage,
+    type RunSnapshotAvailability,
+  } from "$lib/analysis-report-canvas-state";
+  import {
     defaultAnalysisWorkspaceUiState,
     legacyScopeFromWorkspaceSelection,
     openRunWorkspaceState,
     selectSourceGroupWorkspace,
     selectSourceWorkspace,
     type AnalysisWorkspaceUiState,
+    type CanvasMode,
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
   import {
@@ -203,6 +209,9 @@
     AnalysisPromptTemplate,
     AnalysisRunDetail,
     AnalysisRunEvent,
+    AnalysisRunMessage,
+    AnalysisRunMessageCursor,
+    AnalysisRunMessagesPage,
     AnalysisRunSummary,
     AnalysisSourceGroup,
     AnalysisSourceOption,
@@ -270,6 +279,14 @@
   let loadingGroups = $state(false);
   let loadingRunDetail = $state(false);
   let loadingChat = $state(false);
+  let runSnapshotAvailability = $state<RunSnapshotAvailability>("unknown");
+  let runSnapshotMessages = $state<AnalysisRunMessage[]>([]);
+  let runSnapshotCursor = $state<AnalysisRunMessageCursor | null>(null);
+  let runSnapshotHasMore = $state(false);
+  let loadingRunSnapshotMessages = $state(false);
+  let runSnapshotError = $state("");
+  let runSnapshotPage: AnalysisRunMessagesPage | null = null;
+  let lastSnapshotLoadKey = "";
 
   let railQuery = $state("");
   let inspectorMode = $state<InspectorMode>("history");
@@ -744,6 +761,53 @@
 
   function applyWorkspaceUiState(next: AnalysisWorkspaceUiState) {
     workspaceUiState = next;
+  }
+
+  function changeCanvasMode(mode: CanvasMode) {
+    applyWorkspaceUiState({
+      ...workspaceUiState,
+      canvasMode: mode,
+    });
+  }
+
+  function viewLiveSourceForOpenedRun() {
+    applyWorkspaceUiState({
+      ...workspaceUiState,
+      canvasMode: "source",
+      sourceViewBasis: "live_source",
+    });
+  }
+
+  function backToRunSnapshot() {
+    applyWorkspaceUiState({
+      ...workspaceUiState,
+      canvasMode: "source",
+      sourceViewBasis: "run_snapshot",
+    });
+  }
+
+  function resetRunSnapshotState() {
+    runSnapshotAvailability = "unknown";
+    runSnapshotMessages = [];
+    runSnapshotCursor = null;
+    runSnapshotHasMore = false;
+    loadingRunSnapshotMessages = false;
+    runSnapshotError = "";
+    runSnapshotPage = null;
+    lastSnapshotLoadKey = "";
+  }
+
+  function applySnapshotPage(run: AnalysisRunDetail, page: AnalysisRunMessagesPage, append: boolean) {
+    runSnapshotPage = page;
+    runSnapshotMessages = append ? [...runSnapshotMessages, ...page.messages] : page.messages;
+    runSnapshotCursor = page.next_cursor;
+    runSnapshotHasMore = page.has_more;
+    runSnapshotAvailability = runSnapshotAvailabilityFromPage({
+      currentRun: run,
+      page,
+      loading: false,
+      errorMessage: "",
+    });
   }
 
   function clearCurrentRunForWorkspaceSwitch() {
@@ -1254,6 +1318,83 @@
     await runWorkflow.openRun(runId);
   }
 
+  async function loadRunSnapshotFirstPage(runId: number) {
+    const run = currentRun;
+    if (!run || run.id !== runId) {
+      return;
+    }
+
+    const loadKey = `${runId}:first`;
+    if (lastSnapshotLoadKey === loadKey && (loadingRunSnapshotMessages || runSnapshotPage !== null)) {
+      return;
+    }
+
+    lastSnapshotLoadKey = loadKey;
+    loadingRunSnapshotMessages = true;
+    runSnapshotError = "";
+    try {
+      const page = await listAnalysisRunMessages({
+        runId,
+        after: null,
+        limit: 50,
+      });
+      if (!currentRun || currentRun.id !== runId) {
+        return;
+      }
+      applySnapshotPage(currentRun, page, false);
+    } catch (error) {
+      if (!currentRun || currentRun.id !== runId) {
+        return;
+      }
+      runSnapshotMessages = [];
+      runSnapshotCursor = null;
+      runSnapshotHasMore = false;
+      runSnapshotPage = null;
+      runSnapshotError = formatAppError("loading run snapshot", error);
+      runSnapshotAvailability = runSnapshotAvailabilityFromPage({
+        currentRun,
+        page: null,
+        loading: false,
+        errorMessage: runSnapshotError,
+      });
+    } finally {
+      if (currentRun?.id === runId) {
+        loadingRunSnapshotMessages = false;
+      }
+    }
+  }
+
+  async function loadMoreRunSnapshotMessages() {
+    const run = currentRun;
+    if (!run || !runSnapshotCursor || loadingRunSnapshotMessages) {
+      return;
+    }
+
+    const runId = run.id;
+    loadingRunSnapshotMessages = true;
+    runSnapshotError = "";
+    try {
+      const page = await listAnalysisRunMessages({
+        runId,
+        after: runSnapshotCursor,
+        limit: 50,
+      });
+      if (!currentRun || currentRun.id !== runId) {
+        return;
+      }
+      applySnapshotPage(currentRun, page, true);
+    } catch (error) {
+      if (!currentRun || currentRun.id !== runId) {
+        return;
+      }
+      runSnapshotError = formatAppError("loading more run snapshot messages", error);
+    } finally {
+      if (currentRun?.id === runId) {
+        loadingRunSnapshotMessages = false;
+      }
+    }
+  }
+
   async function loadChatMessages(runId: number, guard?: AnalysisRunRequestGuard) {
     await chatWorkflow.loadMessages(runId, guard);
   }
@@ -1598,6 +1739,28 @@
   }
 
   $effect(() => {
+    const runId = currentRun?.id ?? null;
+    if (runId === null) {
+      resetRunSnapshotState();
+      return;
+    }
+
+    if (!lastSnapshotLoadKey.startsWith(`${runId}:`) && lastSnapshotLoadKey !== "") {
+      resetRunSnapshotState();
+    }
+  });
+
+  $effect(() => {
+    if (
+      currentRun &&
+      workspaceUiState.canvasMode === "source" &&
+      workspaceUiState.sourceViewBasis === "run_snapshot"
+    ) {
+      void loadRunSnapshotFirstPage(currentRun.id);
+    }
+  });
+
+  $effect(() => {
     workspaceUiState;
     historyScope;
     runFilter;
@@ -1826,13 +1989,20 @@
     onDeleteSource={(source) => void deleteSource(source)}
   />
 
-  <WorkspaceMain
+  <ReportCanvas
     {analysisScope}
     currentSource={currentSource()}
     currentGroup={currentGroup()}
     currentSourceMetric={currentSourceMetric()}
     currentScopeTitle={currentScopeTitle()}
     currentScopeSummary={currentScopeSummary()}
+    canvasMode={workspaceUiState.canvasMode}
+    sourceViewBasis={workspaceUiState.sourceViewBasis}
+    {runSnapshotAvailability}
+    {runSnapshotMessages}
+    {loadingRunSnapshotMessages}
+    {runSnapshotError}
+    hasMoreRunSnapshotMessages={runSnapshotHasMore}
     {periodFrom}
     {periodTo}
     {selectedTemplateId}
@@ -1901,6 +2071,10 @@
     {startOfDayUnix}
     {endOfDayUnix}
     {isGroupSourceSelected}
+    onChangeCanvasMode={(mode) => changeCanvasMode(mode)}
+    onViewLiveSource={() => viewLiveSourceForOpenedRun()}
+    onBackToRunSnapshot={() => backToRunSnapshot()}
+    onLoadMoreRunSnapshotMessages={() => void loadMoreRunSnapshotMessages()}
     onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}
     onChangePeriodFrom={(value) => (periodFrom = value)}
     onChangePeriodTo={(value) => (periodTo = value)}
