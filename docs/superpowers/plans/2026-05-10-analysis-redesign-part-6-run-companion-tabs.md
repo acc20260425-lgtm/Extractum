@@ -2280,7 +2280,7 @@ git commit -m "feat: wire analysis run companion tabs"
 **Files:**
 - Verify all Part 6 files changed in Tasks 1-6.
 
-- [ ] **Step 1: Run focused frontend tests**
+- [x] **Step 1: Run focused frontend tests**
 
 Run:
 
@@ -2290,7 +2290,7 @@ npm.cmd test -- src/lib/analysis-run-companion-state.test.ts src/lib/analysis-ru
 
 Expected: PASS.
 
-- [ ] **Step 2: Run relevant route and canvas tests from earlier parts**
+- [x] **Step 2: Run relevant route and canvas tests from earlier parts**
 
 Run:
 
@@ -2300,7 +2300,7 @@ npm.cmd test -- src/lib/analysis-report-canvas-state.test.ts src/lib/analysis-re
 
 Expected: PASS.
 
-- [ ] **Step 3: Run backend context-safety tests**
+- [x] **Step 3: Run backend context-safety tests**
 
 Run:
 
@@ -2310,7 +2310,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests::completed
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Svelte and TypeScript checks**
+- [x] **Step 4: Run Svelte and TypeScript checks**
 
 Run:
 
@@ -2320,7 +2320,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 5: Run full frontend test suite**
+- [x] **Step 5: Run full frontend test suite**
 
 Run:
 
@@ -2330,7 +2330,7 @@ npm.cmd test
 
 Expected: PASS.
 
-- [ ] **Step 6: Run full backend tests**
+- [x] **Step 6: Run full backend tests**
 
 Run:
 
@@ -2340,7 +2340,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [ ] **Step 7: Check staged redesign boundaries**
+- [x] **Step 7: Check staged redesign boundaries**
 
 Run:
 
@@ -2372,7 +2372,7 @@ rg -n "sourceViewBasis: \"run_snapshot\", // automatic|listSourceItems\\(\\{ run
 
 Expected: no output for automatic snapshot switching, live-source snapshot fallback, or completed-run live fallback language.
 
-- [ ] **Step 8: Check whitespace**
+- [x] **Step 8: Check whitespace**
 
 Run:
 
@@ -2382,7 +2382,7 @@ git diff --check
 
 Expected: no output and exit code 0.
 
-- [ ] **Step 9: Commit final fixes if needed**
+- [x] **Step 9: Commit final fixes if needed**
 
 If verification required fixes, commit them:
 
@@ -2393,7 +2393,7 @@ git commit -m "test: verify analysis run companion tabs"
 
 Skip this commit if Tasks 1-6 already have a clean verified tree.
 
-- [ ] **Step 10: Stop for review**
+- [x] **Step 10: Stop for review**
 
 Run:
 

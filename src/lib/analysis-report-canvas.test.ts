@@ -25,7 +25,8 @@ describe("report canvas component contract", () => {
     expect(reportCanvasSource).toContain("<ReportRunHeader");
     expect(reportCanvasSource).toContain("<ReportViewer");
     expect(reportCanvasSource).toContain("<ReportSetupPanel");
-    expect(reportCanvasSource).toContain('class="temporary-follow-up"');
+    expect(reportCanvasSource).not.toContain('class="temporary-follow-up"');
+    expect(reportCanvasSource).not.toContain("<ChatPanel");
     expect(reportSetupPanelSource).toContain("TemplateEditor");
     expect(reportSetupPanelSource).toContain("SourceGroupEditor");
     expect(reportSetupPanelSource).toContain('class="template-editor-drawer"');

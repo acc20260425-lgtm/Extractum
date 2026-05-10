@@ -139,7 +139,7 @@ export function chatAvailabilityForRun({
       enabled: false,
       reason: "missing_snapshot",
       title: "Saved context unavailable",
-      description: "This completed run has no saved snapshot rows, so chat will not use live source as replacement context.",
+      description: "Saved snapshot rows are missing for this run, so chat is disabled instead of using replacement context.",
     };
   }
 
@@ -188,7 +188,7 @@ export function evidenceSourceActionDecision({
     canvasMode: "source",
     sourceViewBasis: "live_source",
     highlightedRef: selectedTrace.ref,
-    warning: "Showing live source for a non-completed run. This is not the frozen run snapshot.",
+    warning: "Showing current source for this in-progress run. This is not the frozen run snapshot.",
   };
 }
 

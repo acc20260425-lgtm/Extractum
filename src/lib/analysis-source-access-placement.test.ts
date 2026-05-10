@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 import activeRunListSource from "./components/analysis/active-run-list.svelte?raw";
 import runHistorySource from "./components/analysis/run-history.svelte?raw";
+import runCompanionRunsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
 import workspaceInspectorSource from "./components/analysis/workspace-inspector.svelte?raw";
 
 describe("analysis source access placement", () => {
@@ -29,15 +30,18 @@ describe("analysis source access placement", () => {
     expect(activeRunListSource).not.toContain("SourceJobRecord");
     expect(activeRunListSource).not.toContain("sourceJobs");
     expect(activeRunListSource).not.toContain("Takeout");
+    expect(runCompanionRunsTabSource).not.toContain("SourceJobRecord");
+    expect(runCompanionRunsTabSource).not.toContain("sourceJobs");
+    expect(runCompanionRunsTabSource).not.toContain("Takeout");
   });
 
-  it("keeps the left analysis column compact while preserving the inspector", () => {
+  it("keeps the left analysis column compact while rendering the run companion", () => {
     expect(analysisPageSource).toContain(
       "grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.6fr) minmax(320px, 430px);",
     );
     expect(analysisPageSource).toContain("<ReportCanvas");
-    expect(analysisPageSource).toContain("<WorkspaceInspector");
+    expect(analysisPageSource).toContain("<RunCompanionTabs");
     expect(analysisPageSource).not.toContain("<WorkspaceMain");
-    expect(analysisPageSource).not.toContain("<RunCompanionTabs");
+    expect(analysisPageSource).not.toContain("<WorkspaceInspector");
   });
 });

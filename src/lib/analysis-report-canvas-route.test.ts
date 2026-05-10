@@ -4,18 +4,24 @@ import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 const legacyWorkspaceMainTag = "<" + "WorkspaceMain";
 const legacyWorkspaceMainImport =
   'import ' + 'WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";';
-const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
+const workspaceInspectorTag = "<" + "WorkspaceInspector";
+const workspaceInspectorImport =
+  'import ' + 'WorkspaceInspector from "$lib/components/analysis/workspace-inspector.svelte";';
 
 describe("analysis route report canvas wiring", () => {
-  it("renders ReportCanvas instead of the legacy WorkspaceMain", () => {
+  it("renders ReportCanvas with RunCompanionTabs instead of legacy workspace panels", () => {
     expect(analysisPageSource).toContain(
       'import ReportCanvas from "$lib/components/analysis/report-canvas.svelte";',
     );
+    expect(analysisPageSource).toContain(
+      'import RunCompanionTabs from "$lib/components/analysis/run-companion-tabs.svelte";',
+    );
     expect(analysisPageSource).not.toContain(legacyWorkspaceMainImport);
+    expect(analysisPageSource).not.toContain(workspaceInspectorImport);
     expect(analysisPageSource).toContain("<ReportCanvas");
+    expect(analysisPageSource).toContain("<RunCompanionTabs");
     expect(analysisPageSource).not.toContain(legacyWorkspaceMainTag);
-    expect(analysisPageSource).toContain("<WorkspaceInspector");
-    expect(analysisPageSource).not.toContain(runCompanionTabsTag);
+    expect(analysisPageSource).not.toContain(workspaceInspectorTag);
   });
 
   it("passes persisted canvas mode and source basis from workspace UI state", () => {
