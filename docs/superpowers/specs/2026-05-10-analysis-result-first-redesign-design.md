@@ -61,6 +61,8 @@ type OpenRunState =
   | { kind: "saved"; runId: number };
 ```
 
+`OpenRunState.saved` means a persisted non-active run, including completed, failed, and cancelled runs. The run's terminal status still controls `Report` and `Source` behavior.
+
 `WorkspaceSelection` owns:
 
 - the compact rail selection;
