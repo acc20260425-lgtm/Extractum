@@ -1,9 +1,8 @@
 <script lang="ts">
+  import { Dialog } from "bits-ui";
   import { X } from "@lucide/svelte";
-  import { tick } from "svelte";
   import { cubicOut } from "svelte/easing";
   import { fade, scale } from "svelte/transition";
-  import Button from "$lib/components/ui/Button.svelte";
 
   let {
     open,
@@ -23,145 +22,94 @@
     children?: import("svelte").Snippet;
   } = $props();
 
-  let dialogElement = $state<HTMLDivElement | null>(null);
-  let previousFocusedElement = $state<HTMLElement | null>(null);
-
-  async function focusDialog() {
-    if (!open) return;
-
-    previousFocusedElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-
-    await tick();
-
-    const focusable = dialogElement?.querySelector<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-
-    focusable?.focus();
-  }
-
-  function restoreFocus() {
-    previousFocusedElement?.focus();
-    previousFocusedElement = null;
-  }
-
-  function trapFocus(event: KeyboardEvent) {
-    if (event.key !== "Tab" || !dialogElement) return;
-
-    const focusable = Array.from(
-      dialogElement.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )
-    ).filter((element) => !element.hasAttribute("hidden"));
-
-    if (focusable.length === 0) {
-      event.preventDefault();
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-      return;
-    }
-
-    if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-
-    trapFocus(event);
-  }
-
-  function handleBackdropClick(event: MouseEvent) {
-    if (event.target === event.currentTarget) {
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && open) {
       onClose();
     }
   }
-
-  $effect(() => {
-    if (open) {
-      void focusDialog();
-      return;
-    }
-
-    restoreFocus();
-  });
 </script>
 
-{#if open}
-  <div
-    class="dialog-backdrop"
-    role="presentation"
-    onclick={handleBackdropClick}
-    transition:fade={{ duration: 120 }}
-  >
-    <div
-      bind:this={dialogElement}
-      class="dialog-card"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={labelledBy}
-      aria-describedby={description ? `${labelledBy}-description` : undefined}
-      tabindex="-1"
-      style={`--dialog-width: ${width};`}
-      onkeydown={handleKeydown}
-      transition:scale={{ duration: 150, start: 0.985, easing: cubicOut }}
-    >
-      <header class="dialog-header">
-        <div class="dialog-copy">
-          <h4 id={labelledBy}>{title}</h4>
-          {#if description}
-            <p id={`${labelledBy}-description`}>{description}</p>
-          {/if}
-        </div>
-        <Button
-          variant="ghost"
-          type="button"
-          onclick={onClose}
-          ariaLabel="Close dialog"
-          title="Close dialog"
-          iconOnly={true}
-        >
-          <X size={16} aria-hidden="true" />
-        </Button>
-      </header>
+<Dialog.Root {open} onOpenChange={handleOpenChange}>
+  <Dialog.Portal>
+    <Dialog.Overlay forceMount>
+      {#snippet child({ props, open })}
+        {#if open}
+          <div
+            {...props}
+            class="dialog-backdrop"
+            transition:fade={{ duration: 120 }}
+          ></div>
+        {/if}
+      {/snippet}
+    </Dialog.Overlay>
 
-      <div class="dialog-content">
-        {@render children?.()}
-      </div>
-    </div>
-  </div>
-{/if}
+    <Dialog.Content
+      forceMount
+      trapFocus={true}
+      interactOutsideBehavior="ignore"
+    >
+      {#snippet child({ props, open })}
+        {#if open}
+          <div
+            {...props}
+            class="dialog-card"
+            style={`${String(props.style ?? "")}; --dialog-width: ${width};`}
+            transition:scale={{ duration: 150, start: 0.985, easing: cubicOut }}
+          >
+            <header class="dialog-header">
+              <div class="dialog-copy">
+                <Dialog.Title id={labelledBy} level={4} class="dialog-title">
+                  {title}
+                </Dialog.Title>
+                {#if description}
+                  <Dialog.Description
+                    id={`${labelledBy}-description`}
+                    class="dialog-description"
+                  >
+                    {description}
+                  </Dialog.Description>
+                {/if}
+              </div>
+              <Dialog.Close>
+                {#snippet child({ props })}
+                  <button
+                    {...props}
+                    class="dialog-close"
+                    type="button"
+                    aria-label="Close dialog"
+                    title="Close dialog"
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                {/snippet}
+              </Dialog.Close>
+            </header>
+
+            <div class="dialog-content">
+              {@render children?.()}
+            </div>
+          </div>
+        {/if}
+      {/snippet}
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
 
 <style>
   .dialog-backdrop {
     position: fixed;
     inset: 0;
     z-index: 60;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.5rem;
     background: color-mix(in srgb, #0f172a 28%, transparent);
     backdrop-filter: blur(6px);
   }
 
   .dialog-card {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 61;
+    translate: -50% -50%;
     width: min(var(--dialog-width), calc(100vw - 2rem));
     max-height: min(88vh, 56rem);
     display: flex;
@@ -197,17 +145,42 @@
     gap: 0.25rem;
   }
 
-  .dialog-copy h4 {
+  .dialog-title {
     margin: 0;
     font-size: 0.98rem;
     font-weight: 650;
   }
 
-  .dialog-copy p {
+  .dialog-description {
     margin: 0;
     color: var(--muted);
     font-size: 0.9rem;
     line-height: 1.45;
+  }
+
+  .dialog-close {
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+  }
+
+  .dialog-close:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--panel-hover) 72%, transparent);
+  }
+
+  .dialog-close:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
 
   .dialog-content {
@@ -217,13 +190,13 @@
   }
 
   @media (max-width: 640px) {
-    .dialog-backdrop {
-      padding: 1rem;
-      align-items: flex-end;
-    }
-
     .dialog-card {
-      width: 100%;
+      top: auto;
+      right: 1rem;
+      bottom: 1rem;
+      left: 1rem;
+      translate: none;
+      width: auto;
       max-height: 92vh;
       border-radius: 18px 18px 14px 14px;
     }
