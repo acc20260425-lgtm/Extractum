@@ -29,7 +29,9 @@ Fixture rows must be identifiable and removable without touching user-created da
 - JSON metadata stored in compressed metadata columns includes `"analysis_redesign_fixture": true` where practical;
 - run result text and trace payloads include fixture-specific labels.
 
-`clear_analysis_redesign_fixtures` deletes only rows that match this marker set. It must delete dependent rows in an order that respects foreign keys and existing cascade behavior:
+Rows that cannot carry an independent fixture marker must be selected for deletion only through fixture parent ids, such as fixture run ids, fixture source ids, fixture source group ids, or fixture prompt template ids. The clear command must not rely on broad content matching for child rows.
+
+`clear_analysis_redesign_fixtures` deletes only rows that match this marker set or belong to marker-matched fixture parents. It must delete dependent rows in an order that respects foreign keys and existing cascade behavior:
 
 1. analysis chat rows for fixture runs;
 2. analysis run snapshot rows for fixture runs;
@@ -37,9 +39,11 @@ Fixture rows must be identifiable and removable without touching user-created da
 4. fixture analysis prompt templates;
 5. fixture source group memberships and groups;
 6. YouTube playlist rows for fixture playlist/video sources;
-7. YouTube transcript segments and source items for fixture sources;
-8. fixture sources;
-9. fixture accounts.
+7. YouTube transcript segments for fixture source items;
+8. Telegram forum topics for fixture sources;
+9. source items for fixture sources;
+10. fixture sources;
+11. fixture accounts.
 
 The clear command must be safe when no fixture rows exist. The seed command must be idempotent by clearing the fixture set first, then inserting a fresh deterministic dataset.
 
@@ -155,6 +159,7 @@ Backend tests should cover the fixture infrastructure before any browser verific
 
 - seeding twice leaves one deterministic fixture dataset rather than duplicates;
 - clearing removes fixture rows and leaves non-fixture rows untouched;
+- clearing deletes child rows through fixture parent ids instead of broad content matching;
 - fixture Telegram sources reference fixture account rows, and fixture accounts contain no credentials or secure-store state;
 - fixture runs reference a fixture report prompt template, and clearing removes that template;
 - the completed snapshot-backed run has saved `analysis_run_messages` rows;
