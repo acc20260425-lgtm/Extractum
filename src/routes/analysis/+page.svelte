@@ -76,6 +76,7 @@
     deleteSource as deleteSourceCommand,
     listSourceForumTopics,
     listSourceItems,
+    listYoutubeTranscriptSegments,
     listSources,
     syncSource,
   } from "$lib/api/sources";
@@ -227,6 +228,8 @@
     SourceItem,
     TakeoutImportEvent,
     TakeoutImportJobRecord,
+    YoutubeTranscriptSegment,
+    YoutubeTranscriptSegmentCursor,
   } from "$lib/types/sources";
   import type {
     YoutubePlaylistDetail,
@@ -251,6 +254,18 @@
   let sourceMetrics = $state<Record<number, AnalysisSourceOption>>({});
   let sourceItems = $state<SourceItem[]>([]);
   let sourceTopics = $state<SourceForumTopic[]>([]);
+  let youtubeTranscriptSegments = $state<YoutubeTranscriptSegment[]>([]);
+  let youtubeTranscriptCursor = $state<YoutubeTranscriptSegmentCursor | null>(null);
+  let youtubeTranscriptHasMore = $state(false);
+  let youtubeTranscriptSearch = $state("");
+  let loadingYoutubeTranscriptSegments = $state(false);
+  let youtubeTranscriptRequestKey = "";
+  let groupLiveItemsBySource = $state<Record<number, SourceItem[]>>({});
+  let groupLiveCursorsBySource = $state<Record<number, number | null>>({});
+  let groupLiveHasMoreBySource = $state<Record<number, boolean>>({});
+  let groupLiveLoadingBySource = $state<Record<number, boolean>>({});
+  let selectedGroupSourceId = $state<number | null>(null);
+  let selectedSnapshotSourceId = $state<number | null>(null);
   let accounts = $state<AccountRecord[]>([]);
   let accountStatuses = $state<Record<number, AccountRuntimeStatus>>({});
   let youtubeRuntimeStatus = $state<YoutubeRuntimeStatus | null>(null);
@@ -797,6 +812,22 @@
     lastSnapshotLoadKey = "";
   }
 
+  function resetYoutubeTranscriptReader() {
+    youtubeTranscriptSegments = [];
+    youtubeTranscriptCursor = null;
+    youtubeTranscriptHasMore = false;
+    loadingYoutubeTranscriptSegments = false;
+    youtubeTranscriptRequestKey = "";
+  }
+
+  function resetGroupLiveReader() {
+    groupLiveItemsBySource = {};
+    groupLiveCursorsBySource = {};
+    groupLiveHasMoreBySource = {};
+    groupLiveLoadingBySource = {};
+    selectedGroupSourceId = null;
+  }
+
   function applySnapshotPage(run: AnalysisRunDetail, page: AnalysisRunMessagesPage, append: boolean) {
     runSnapshotPage = page;
     runSnapshotMessages = append ? [...runSnapshotMessages, ...page.messages] : page.messages;
@@ -855,6 +886,9 @@
     analysisScope = legacy.analysisScope;
     selectedSourceId = legacy.selectedSourceId;
     selectedGroupId = legacy.selectedGroupId;
+    resetGroupLiveReader();
+    resetYoutubeTranscriptReader();
+    selectedSnapshotSourceId = null;
   }
 
   async function applyRestoredWorkspaceSelection() {
@@ -1153,6 +1187,115 @@
     }
   }
 
+  async function loadYoutubeTranscriptFirstPage(sourceId: number) {
+    const requestKey = `${sourceId}:${youtubeTranscriptSearch.trim()}`;
+    if (
+      youtubeTranscriptRequestKey === requestKey &&
+      (loadingYoutubeTranscriptSegments || youtubeTranscriptSegments.length > 0 || youtubeTranscriptCursor !== null)
+    ) {
+      return;
+    }
+
+    youtubeTranscriptRequestKey = requestKey;
+    loadingYoutubeTranscriptSegments = true;
+    try {
+      const page = await listYoutubeTranscriptSegments({
+        sourceId,
+        after: null,
+        limit: 80,
+        searchQuery: youtubeTranscriptSearch.trim() || null,
+      });
+      if (youtubeTranscriptRequestKey !== requestKey) {
+        return;
+      }
+      youtubeTranscriptSegments = page.segments;
+      youtubeTranscriptCursor = page.nextCursor;
+      youtubeTranscriptHasMore = page.hasMore;
+    } catch (error) {
+      if (youtubeTranscriptRequestKey === requestKey) {
+        youtubeTranscriptSegments = [];
+        youtubeTranscriptCursor = null;
+        youtubeTranscriptHasMore = false;
+        status = formatAppError("loading YouTube transcript", error);
+      }
+    } finally {
+      if (youtubeTranscriptRequestKey === requestKey) {
+        loadingYoutubeTranscriptSegments = false;
+      }
+    }
+  }
+
+  async function loadMoreYoutubeTranscriptSegments() {
+    const source = currentSource();
+    if (!source || source.sourceType !== "youtube" || source.sourceSubtype !== "video") return;
+    if (!youtubeTranscriptCursor || loadingYoutubeTranscriptSegments) return;
+
+    const requestKey = `${source.id}:${youtubeTranscriptSearch.trim()}`;
+    loadingYoutubeTranscriptSegments = true;
+    try {
+      const page = await listYoutubeTranscriptSegments({
+        sourceId: source.id,
+        after: youtubeTranscriptCursor,
+        limit: 80,
+        searchQuery: youtubeTranscriptSearch.trim() || null,
+      });
+      if (youtubeTranscriptRequestKey !== requestKey) {
+        return;
+      }
+      youtubeTranscriptSegments = [...youtubeTranscriptSegments, ...page.segments];
+      youtubeTranscriptCursor = page.nextCursor;
+      youtubeTranscriptHasMore = page.hasMore;
+    } catch (error) {
+      status = formatAppError("loading more YouTube transcript", error);
+    } finally {
+      if (youtubeTranscriptRequestKey === requestKey) {
+        loadingYoutubeTranscriptSegments = false;
+      }
+    }
+  }
+
+  function changeYoutubeTranscriptSearch(value: string) {
+    youtubeTranscriptSearch = value;
+    resetYoutubeTranscriptReader();
+    youtubeTranscriptSearch = value;
+    const source = currentSource();
+    if (source?.sourceType === "youtube" && source.sourceSubtype === "video") {
+      void loadYoutubeTranscriptFirstPage(source.id);
+    }
+  }
+
+  async function loadLiveGroupSourcePage(sourceId: number) {
+    if (groupLiveLoadingBySource[sourceId]) return;
+    groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [sourceId]: true };
+    try {
+      const beforePublishedAt = groupLiveCursorsBySource[sourceId] ?? null;
+      const items = await listSourceItems({
+        sourceId,
+        limit: 40,
+        beforePublishedAt,
+        topicFilter: null,
+      });
+      groupLiveItemsBySource = {
+        ...groupLiveItemsBySource,
+        [sourceId]: [...(groupLiveItemsBySource[sourceId] ?? []), ...items],
+      };
+      groupLiveCursorsBySource = {
+        ...groupLiveCursorsBySource,
+        [sourceId]: items.at(-1)?.publishedAt ?? beforePublishedAt,
+      };
+      groupLiveHasMoreBySource = {
+        ...groupLiveHasMoreBySource,
+        [sourceId]: items.length === 40,
+      };
+    } catch (error) {
+      status = formatAppError("loading group source material", error);
+    } finally {
+      const next = { ...groupLiveLoadingBySource };
+      delete next[sourceId];
+      groupLiveLoadingBySource = next;
+    }
+  }
+
   async function selectSource(
     sourceId: number,
     { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
@@ -1173,6 +1316,9 @@
     inspectorMode = next.inspectorMode;
     youtubeVideoDetail = null;
     youtubePlaylistDetail = null;
+    resetGroupLiveReader();
+    selectedSnapshotSourceId = null;
+    resetYoutubeTranscriptReader();
     if (!source || !sourceCapabilities(source).hasTopics) {
       sourceTopics = [];
       selectedTopicKey = "__all_topics__";
@@ -1212,6 +1358,9 @@
     selectedTopicKey = next.selectedTopicKey;
     youtubeVideoDetail = null;
     youtubePlaylistDetail = null;
+    resetGroupLiveReader();
+    selectedSnapshotSourceId = null;
+    resetYoutubeTranscriptReader();
     inspectorMode = next.inspectorMode;
 
     if (preserveRestoredCanvasState) {
@@ -1324,7 +1473,7 @@
       return;
     }
 
-    const loadKey = `${runId}:first`;
+    const loadKey = `${runId}:first:${selectedSnapshotSourceId ?? "all"}`;
     if (lastSnapshotLoadKey === loadKey && (loadingRunSnapshotMessages || runSnapshotPage !== null)) {
       return;
     }
@@ -1337,6 +1486,7 @@
         runId,
         after: null,
         limit: 50,
+        sourceId: selectedSnapshotSourceId,
       });
       if (!currentRun || currentRun.id !== runId) {
         return;
@@ -1378,6 +1528,7 @@
         runId,
         after: runSnapshotCursor,
         limit: 50,
+        sourceId: selectedSnapshotSourceId,
       });
       if (!currentRun || currentRun.id !== runId) {
         return;
@@ -1392,6 +1543,18 @@
       if (currentRun?.id === runId) {
         loadingRunSnapshotMessages = false;
       }
+    }
+  }
+
+  function changeSelectedSnapshotSourceId(sourceId: number | null) {
+    selectedSnapshotSourceId = sourceId;
+    resetRunSnapshotState();
+    if (
+      currentRun &&
+      workspaceUiState.canvasMode === "source" &&
+      workspaceUiState.sourceViewBasis === "run_snapshot"
+    ) {
+      void loadRunSnapshotFirstPage(currentRun.id);
     }
   }
 
@@ -1751,6 +1914,34 @@
   });
 
   $effect(() => {
+    const source = currentSource();
+    if (
+      workspaceUiState.canvasMode === "source" &&
+      workspaceUiState.sourceViewBasis === "live_source" &&
+      source?.sourceType === "youtube" &&
+      source.sourceSubtype === "video"
+    ) {
+      void loadYoutubeTranscriptFirstPage(source.id);
+    }
+  });
+
+  $effect(() => {
+    const group = currentGroup();
+    if (
+      workspaceUiState.canvasMode === "source" &&
+      workspaceUiState.sourceViewBasis === "live_source" &&
+      analysisScope === "source_group" &&
+      group
+    ) {
+      for (const member of group.members.slice(0, 6)) {
+        if (!groupLiveItemsBySource[member.source_id]) {
+          void loadLiveGroupSourcePage(member.source_id);
+        }
+      }
+    }
+  });
+
+  $effect(() => {
     if (
       currentRun &&
       workspaceUiState.canvasMode === "source" &&
@@ -2003,6 +2194,14 @@
     {loadingRunSnapshotMessages}
     {runSnapshotError}
     hasMoreRunSnapshotMessages={runSnapshotHasMore}
+    {youtubeTranscriptSegments}
+    {loadingYoutubeTranscriptSegments}
+    {youtubeTranscriptHasMore}
+    {youtubeTranscriptSearch}
+    {groupLiveItemsBySource}
+    {groupLiveHasMoreBySource}
+    {selectedGroupSourceId}
+    {selectedSnapshotSourceId}
     {periodFrom}
     {periodTo}
     {selectedTemplateId}
@@ -2075,6 +2274,11 @@
     onViewLiveSource={() => viewLiveSourceForOpenedRun()}
     onBackToRunSnapshot={() => backToRunSnapshot()}
     onLoadMoreRunSnapshotMessages={() => void loadMoreRunSnapshotMessages()}
+    onChangeTranscriptSearch={changeYoutubeTranscriptSearch}
+    onLoadMoreYoutubeTranscriptSegments={() => void loadMoreYoutubeTranscriptSegments()}
+    onLoadLiveGroupSourcePage={(sourceId) => void loadLiveGroupSourcePage(sourceId)}
+    onChangeSelectedGroupSourceId={(sourceId) => (selectedGroupSourceId = sourceId)}
+    onChangeSelectedSnapshotSourceId={changeSelectedSnapshotSourceId}
     onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}
     onChangePeriodFrom={(value) => (periodFrom = value)}
     onChangePeriodTo={(value) => (periodTo = value)}

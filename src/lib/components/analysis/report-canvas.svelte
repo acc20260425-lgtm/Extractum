@@ -35,6 +35,7 @@
     SourceForumTopic,
     SourceItem,
     SourceJobRecord,
+    YoutubeTranscriptSegment,
   } from "$lib/types/sources";
   import type {
     YoutubePlaylistDetail as YoutubePlaylistDetailDto,
@@ -62,6 +63,14 @@
     loadingRunSnapshotMessages,
     runSnapshotError,
     hasMoreRunSnapshotMessages,
+    youtubeTranscriptSegments,
+    loadingYoutubeTranscriptSegments,
+    youtubeTranscriptHasMore,
+    youtubeTranscriptSearch,
+    groupLiveItemsBySource,
+    groupLiveHasMoreBySource,
+    selectedGroupSourceId,
+    selectedSnapshotSourceId,
     periodFrom,
     periodTo,
     selectedTemplateId,
@@ -134,6 +143,11 @@
     onViewLiveSource,
     onBackToRunSnapshot,
     onLoadMoreRunSnapshotMessages,
+    onChangeTranscriptSearch,
+    onLoadMoreYoutubeTranscriptSegments,
+    onLoadLiveGroupSourcePage,
+    onChangeSelectedGroupSourceId,
+    onChangeSelectedSnapshotSourceId,
     onChangeSelectedTopicKey,
     onChangePeriodFrom,
     onChangePeriodTo,
@@ -195,6 +209,14 @@
     loadingRunSnapshotMessages: boolean;
     runSnapshotError: string;
     hasMoreRunSnapshotMessages: boolean;
+    youtubeTranscriptSegments: YoutubeTranscriptSegment[];
+    loadingYoutubeTranscriptSegments: boolean;
+    youtubeTranscriptHasMore: boolean;
+    youtubeTranscriptSearch: string;
+    groupLiveItemsBySource: Record<number, SourceItem[]>;
+    groupLiveHasMoreBySource: Record<number, boolean>;
+    selectedGroupSourceId: number | null;
+    selectedSnapshotSourceId: number | null;
     periodFrom: string;
     periodTo: string;
     selectedTemplateId: string;
@@ -275,6 +297,11 @@
     onViewLiveSource: () => void;
     onBackToRunSnapshot: () => void;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
+    onChangeTranscriptSearch: (value: string) => void;
+    onLoadMoreYoutubeTranscriptSegments: () => void | Promise<void>;
+    onLoadLiveGroupSourcePage: (sourceId: number) => void | Promise<void>;
+    onChangeSelectedGroupSourceId: (sourceId: number | null) => void;
+    onChangeSelectedSnapshotSourceId: (sourceId: number | null) => void;
     onChangeSelectedTopicKey: (value: string) => void | Promise<void>;
     onChangePeriodFrom: (value: string) => void;
     onChangePeriodTo: (value: string) => void;
@@ -497,11 +524,21 @@
       {loadingRunSnapshotMessages}
       {runSnapshotError}
       {hasMoreRunSnapshotMessages}
+      {selectedTraceRef}
+      {currentScopeTitle}
       {currentSource}
       {currentGroup}
       {currentSourceMetric}
       {sourceItems}
       {loadingItems}
+      {youtubeTranscriptSegments}
+      {loadingYoutubeTranscriptSegments}
+      {youtubeTranscriptHasMore}
+      {youtubeTranscriptSearch}
+      {groupLiveItemsBySource}
+      {groupLiveHasMoreBySource}
+      {selectedGroupSourceId}
+      {selectedSnapshotSourceId}
       {sourceTopics}
       {loadingSourceTopics}
       {selectedTopicKey}
@@ -515,6 +552,11 @@
       onViewLiveSource={onViewLiveSource}
       onBackToRunSnapshot={onBackToRunSnapshot}
       onLoadMoreRunSnapshotMessages={onLoadMoreRunSnapshotMessages}
+      onChangeTranscriptSearch={onChangeTranscriptSearch}
+      onLoadMoreYoutubeTranscriptSegments={onLoadMoreYoutubeTranscriptSegments}
+      onLoadLiveGroupSourcePage={onLoadLiveGroupSourcePage}
+      onChangeSelectedGroupSourceId={onChangeSelectedGroupSourceId}
+      onChangeSelectedSnapshotSourceId={onChangeSelectedSnapshotSourceId}
       onChangeSelectedTopicKey={onChangeSelectedTopicKey}
       onSyncYoutubeMetadata={onSyncYoutubeMetadata}
       onSyncYoutubeTranscript={onSyncYoutubeTranscript}
