@@ -26,7 +26,7 @@ This works functionally, but the opened analysis result competes with setup cont
 - Do not implement a full reading-mode drawer system in this redesign.
 - Do not move source management, sync, or provider logic into the backend.
 - Do not change the saved-run immutability model.
-- Do not automatically substitute live source data when a saved run snapshot is unavailable.
+- Do not automatically substitute live source data when a run snapshot is unavailable.
 
 ## Approved Direction
 
@@ -170,7 +170,8 @@ Report | Source
 `Source` mode:
 
 - shows source material in a large readable canvas;
-- shows saved-run snapshot material when a saved run is open;
+- shows run snapshot material when an opened run has a saved snapshot;
+- shows a pending or unavailable state when an opened run has no saved snapshot yet;
 - shows live source material only when the user explicitly switches to it;
 - becomes the default mode when no run is open and a source/group is selected.
 
@@ -223,13 +224,51 @@ Current `RunHistory` already has basic all/current scope and all/completed/faile
 
 ## Canvas Source Mode
 
-### Saved Run Basis
+### Active And Terminal Run Source Availability
 
-When a saved or completed run is open, `Source` mode shows the frozen corpus or snapshot behind that run. This preserves the trust contract: the source material visible beside the report is the material the report was based on.
+`Source` mode must distinguish the run's frozen snapshot from live source browsing for every run status.
+
+Current backend behavior persists `analysis_run_messages` near the final persist step after provider work has succeeded. That means an active run usually has no browsable run snapshot until the report is almost complete. The UI must not imply that a future snapshot already exists.
+
+Suggested state:
+
+```ts
+type RunSnapshotAvailability =
+  | "unknown"
+  | "capturing"
+  | "available"
+  | "unavailable";
+```
+
+The final implementation can derive this from an explicit backend field such as `has_run_snapshot`, from a focused snapshot list/probe API, or from the first page of `list_analysis_run_messages`. Do not infer availability from run status alone: a failed or cancelled run can still have a snapshot if failure happened after snapshot persistence, and a completed legacy run can lack a snapshot.
+
+For `queued` or `running` runs:
+
+- `Report` remains the default mode.
+- `Source` can be selected, but if no snapshot exists yet it shows a clear pending state such as `Source snapshot will be available after the run's corpus snapshot is saved`.
+- The pending state may expose an explicit `View live source` action, but this must switch to `sourceViewBasis = "live_source"` and show the persistent `Live source` indicator.
+- If a snapshot becomes available while the run is still active, `Source` mode may show `run_snapshot`; if the user is already viewing live source, do not switch automatically. Show an action such as `View run snapshot`.
+
+For `completed` runs:
+
+- `Source` mode prefers `run_snapshot` when available.
+- If no snapshot exists, show the snapshot unavailable state and offer explicit live source browsing.
+
+For `failed` and `cancelled` runs:
+
+- `Source` mode shows `run_snapshot` when snapshot data exists.
+- If no snapshot exists, show an unavailable state that explains the run ended before a frozen source snapshot was saved, with an explicit `View live source` action.
+- Failed or cancelled report output should remain clearly terminal in `Report` mode; `Source` mode must not make the run look completed.
+
+This keeps edge cases honest without blocking future optimization. If a later backend change persists the snapshot immediately after corpus capture, the UI can surface `Source` earlier through the same availability state without changing the user-facing model.
+
+### Run Snapshot Basis
+
+When an opened run has a saved snapshot, `Source` mode shows the frozen corpus or snapshot behind that run. This preserves the trust contract: the source material visible beside the report is the material the report was based on.
 
 If snapshot material is unavailable, the UI must show an explicit unavailable state and offer `View live source`. It must not silently fall back to live source data.
 
-When the user chooses live data from a saved-run source view, the canvas must show a persistent `Live source` indicator near the `Report | Source` mode control or source header. The indicator should include a clear way back to the run snapshot, such as `Back to run snapshot`, whenever snapshot data exists. This prevents live source data from being mistaken for the frozen material behind the opened report.
+When the user chooses live data from a run source view, the canvas must show a persistent `Live source` indicator near the `Report | Source` mode control or source header. The indicator should include a clear way back to the run snapshot, such as `Back to run snapshot`, whenever snapshot data exists. This prevents live source data from being mistaken for the frozen material behind the opened report.
 
 Suggested state:
 
@@ -270,7 +309,7 @@ Current live source loading already uses `listSourceItems` with a bounded limit,
 - keep topic filters and source-group filters compatible with paging;
 - avoid refetching already loaded pages when toggling `Report | Source`.
 
-Saved-run snapshot source view should use the frozen `analysis_run_messages` data. If the current frontend API is insufficient for paged snapshot browsing, add a focused command/API such as `list_analysis_run_messages` with `runId`, optional source filter, optional cursor, and limit. Do not force the whole snapshot into route state just to render source mode.
+Run snapshot source view should use the frozen `analysis_run_messages` data. If the current frontend API is insufficient for paged snapshot browsing, add a focused command/API such as `list_analysis_run_messages` with `runId`, optional source filter, optional cursor, and limit. Do not force the whole snapshot into route state just to render source mode.
 
 For YouTube transcript source view, prefer segment-aware loading and rendering. The UI should be able to show a transcript page without loading every comment or playlist item unless the selected source mode requires it.
 
@@ -354,17 +393,21 @@ State keys should be versioned or namespaced so future layout changes can discar
 
 - Opening a completed run sets `OpenRunState = { kind: "saved", runId }`, aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and sets `companionTab = "evidence"`.
 - Opening an active run sets `OpenRunState = { kind: "active", runId }`, aligns `WorkspaceSelection` to the run scope, sets `canvasMode = "report"`, and shows live run status in the canvas.
+- Selecting `Source` for an active run shows the run snapshot only if snapshot data exists; otherwise it shows the pending snapshot state and an explicit live source option.
+- Selecting `Source` for a failed or cancelled run shows the run snapshot when available, or an unavailable state with an explicit live source option when it is not available.
 - Selecting a source or source group from `CompactSourceRail` sets `WorkspaceSelection` to that scope, clears `OpenRunState`, clears run-bound evidence/chat state, sets `canvasMode = "source"`, sets `sourceViewBasis = "live_source"`, and sets `companionTab = "runs"`.
 - Clicking a trace ref sets `companionTab = "evidence"`.
 - Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
-- Choosing `View live source` in saved-run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
+- Choosing `View live source` in run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
 - `sourceViewBasis = "live_source"` shows a persistent `Live source` indicator and a return action when run snapshot data is available.
 - When `OpenRunState` is not `none`, switching back to `Report` from `Source` must not lose the selected run or companion tab state.
 - Local filtering or source focus inside a run snapshot does not count as `CompactSourceRail` selection and must not close the opened run.
 
 ## Empty And Error States
 
-- If a saved run snapshot is unavailable, show a clear unavailable state and a `View live source` action.
+- If an opened run snapshot is unavailable, show a clear unavailable state and a `View live source` action.
+- If an active run snapshot is not available yet, show a pending state rather than an empty timeline or transcript.
+- If a failed or cancelled run has no snapshot, explain that the run ended before a frozen source snapshot was saved and offer `View live source`.
 - If a Telegram source has no synced items, show an empty state with `Sync source`.
 - If a YouTube video has no transcript, show transcript status and actions such as `Sync transcript` and `Sync metadata`.
 - If a YouTube playlist has no linked videos, show playlist status and sync actions.
@@ -411,7 +454,11 @@ Add focused tests around state and structure:
 - explicit chat tab selection or question submission switches companion tab to chat;
 - clicking a trace ref switches companion tab to evidence;
 - runs search and filters narrow saved runs without losing current-scope behavior;
-- saved-run source mode prefers run snapshot over live source;
+- run source mode prefers run snapshot over live source when snapshot data is available;
+- active-run source mode shows pending snapshot state until snapshot data exists;
+- failed and cancelled run source mode shows snapshot when available and unavailable state plus live source action when not;
+- source snapshot availability is not inferred from run status alone;
+- live source does not auto-switch to run snapshot when a running snapshot becomes available;
 - live source mode shows an explicit indicator and return path to the run snapshot;
 - Telegram media renders metadata placeholders without requiring binary preview support;
 - YouTube transcript timestamp actions expose jump/copy behavior without requiring an embedded player;
