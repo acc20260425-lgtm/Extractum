@@ -349,7 +349,7 @@ For `completed` runs:
 - `Report` mode should still open and display the completed report when saved report output is available.
 - `Source` mode uses `run_snapshot`.
 - Missing snapshot rows are a source-basis integrity problem, not necessarily a report-output problem.
-- If snapshot rows are missing, the run header should show a clear warning that the frozen source snapshot is missing.
+- If snapshot rows are missing, the run header should show a clear warning that the frozen source snapshot is missing. The warning should communicate degraded source/evidence availability, not imply that the saved report output itself is unavailable.
 - If snapshot rows are missing, `Source` mode shows a storage or integrity error state and does not offer live-source fallback as an equivalent source view. The error should explain that the report can still be read, but Extractum cannot show the exact source material used for that completed run.
 - Evidence views may still show saved trace refs when available, but any evidence that requires snapshot resolution should show a degraded or unavailable state rather than silently resolving against live source data.
 - Follow-up chat should be unavailable or warning-bound if it requires the missing snapshot context. It must not use live source data as a replacement for the completed run's frozen corpus.
@@ -573,7 +573,7 @@ Add focused tests around state and structure:
 - opening an active run aligns `WorkspaceSelection` to the run scope and shows live run status in the canvas;
 - source or source group selection from `CompactSourceRail` clears `OpenRunState`, clears run-bound evidence/chat state, defaults to source canvas, uses live source basis, switches the companion to `Runs`, and defaults `Runs` filtering to current scope;
 - no-run source context exposes pre-run report setup with template selection and launch controls;
-- no-run `Report` canvas mode shows report setup rather than empty report output;
+- no-run report/setup canvas mode shows report setup rather than empty report output;
 - opening a run removes template editing and report setup from the primary report-reading surface;
 - template editor opens as a modal, dialog, or temporary drawer without replacing report/source reading or companion tabs;
 - run header exposes the required minimum metadata: scope label, status, timestamps, template version, provider profile, provider/model, source basis status, and YouTube corpus mode when applicable;
