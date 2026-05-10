@@ -24,7 +24,7 @@ This approach is preferred over a separate fixture database because it requires 
 
 Fixture rows must be identifiable and removable without touching user-created data. The seed set uses a stable marker:
 
-- source titles, group names, scope labels, and prompt/template names begin with `__analysis_redesign_fixture__`;
+- account labels, source titles, group names, scope labels, and prompt/template names begin with `__analysis_redesign_fixture__`;
 - source `external_id` values use a namespaced fixture prefix;
 - JSON metadata stored in compressed metadata columns includes `"analysis_redesign_fixture": true` where practical;
 - run result text and trace payloads include fixture-specific labels.
@@ -34,16 +34,32 @@ Fixture rows must be identifiable and removable without touching user-created da
 1. analysis chat rows for fixture runs;
 2. analysis run snapshot rows for fixture runs;
 3. fixture analysis runs;
-4. fixture source group memberships and groups;
-5. YouTube playlist rows for fixture playlist/video sources;
-6. YouTube transcript segments and source items for fixture sources;
-7. fixture sources.
+4. fixture analysis prompt templates;
+5. fixture source group memberships and groups;
+6. YouTube playlist rows for fixture playlist/video sources;
+7. YouTube transcript segments and source items for fixture sources;
+8. fixture sources;
+9. fixture accounts.
 
 The clear command must be safe when no fixture rows exist. The seed command must be idempotent by clearing the fixture set first, then inserting a fresh deterministic dataset.
 
 ## Fixture Dataset
 
 The fixture set covers every browser scenario that was blocked by missing local data in `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
+
+### Fixture Accounts
+
+Create one debug-only Telegram account row for fixture Telegram sources. The account uses a fixture label, a harmless placeholder `api_id`, an empty `api_hash`, and no phone number. The seed must not create real credentials, Telegram session files, or secure-store entries.
+
+Fixture Telegram sources reference this account row. This keeps `/analysis` source rendering close to real Telegram source state while avoiding dependence on the user's actual Telegram accounts or authentication state.
+
+The clear command deletes fixture accounts only after fixture sources have been deleted. It must not call account deletion helpers that touch secure storage because the fixture account never writes secrets.
+
+### Prompt Template
+
+Create one fixture `analysis_prompt_templates` row for report runs. Fixture analysis runs reference this template so run metadata can show a deterministic prompt template name through the existing `analysis_runs` to `analysis_prompt_templates` join.
+
+The clear command deletes fixture prompt templates after fixture runs have been deleted. This keeps prompt-template cleanup explicit and avoids leaving fixture labels in the normal template list.
 
 ### Sources
 
@@ -95,8 +111,10 @@ Compressed fields must use the same zstd helpers as production code, including `
 
 ```ts
 interface AnalysisRedesignFixtureSummary {
+  accounts: number;
   sources: number;
   sourceGroups: number;
+  promptTemplates: number;
   runs: number;
   snapshotMessages: number;
   chatMessages: number;
@@ -137,6 +155,8 @@ Backend tests should cover the fixture infrastructure before any browser verific
 
 - seeding twice leaves one deterministic fixture dataset rather than duplicates;
 - clearing removes fixture rows and leaves non-fixture rows untouched;
+- fixture Telegram sources reference fixture account rows, and fixture accounts contain no credentials or secure-store state;
+- fixture runs reference a fixture report prompt template, and clearing removes that template;
 - the completed snapshot-backed run has saved `analysis_run_messages` rows;
 - the completed missing-snapshot run has no saved snapshot rows;
 - fixture statuses include completed, running, failed, and cancelled runs;
