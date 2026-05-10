@@ -203,6 +203,14 @@ PowerShell-based agent session:
   Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoExit','-Command',$cmd) -PassThru -WindowStyle Hidden
   ```
 
+- The Superpowers visual companion has the same Windows sandbox issue. If its
+  `localhost` URL returns `ERR_CONNECTION_REFUSED` after a reported start,
+  restart it outside the sandbox with a hidden PowerShell host, setting
+  `BRAINSTORM_DIR`, `BRAINSTORM_HOST=127.0.0.1`, and
+  `BRAINSTORM_URL_HOST=localhost` before running the companion `server.cjs`.
+  Verify the printed port with `Invoke-WebRequest` or `netstat` before handing
+  the URL to the user.
+
 - Stop the dev server by identifying the listening PID for the actual port:
 
   ```powershell
