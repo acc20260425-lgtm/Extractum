@@ -268,13 +268,22 @@ Evidence | Chat | Runs
 
 - shows follow-up chat for the opened run;
 - becomes active when the user explicitly selects the tab or submits the follow-up question;
-- stays disabled or explanatory until chat is available.
+- stays disabled or explanatory until chat is available;
+- for MVP, is available only for completed runs with usable saved run context.
+
+Chat availability:
+
+- `queued` or `running`: disabled, with an explanation that chat becomes available after completion.
+- `completed` with snapshot: enabled against the saved run context.
+- `completed` with missing snapshot: disabled or warning-bound; it must not use live source as replacement context.
+- `failed` or `cancelled` with snapshot: disabled for MVP, with an explanation that the run is terminal and chat is only available for completed reports.
+- `failed` or `cancelled` without snapshot: disabled; it may show saved error or result context only as read-only run information.
 
 When `OpenRunState` is not `none` and `sourceViewBasis = "live_source"`, `Evidence` and `Chat` remain bound to the opened run. The UI must not imply that follow-up chat or evidence refs are based on newly synced live source material.
 
 `Runs`:
 
-- combines active runs and saved run history entry points;
+- may show queued/running analysis report runs and saved analysis runs;
 - replaces the current always-visible inspector role;
 - includes search and filtering for saved runs, because run history is expected to grow;
 - does not show source ingest jobs, Takeout jobs, or YouTube source jobs.
@@ -525,7 +534,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 - If a Telegram source has no synced items, show an empty state with `Sync source`.
 - If a YouTube video has no transcript, show transcript status and actions such as `Sync transcript` and `Sync metadata`.
 - If a YouTube playlist has no linked videos, show playlist status and sync actions.
-- If chat is unavailable because the run is not completed, the `Chat` tab should explain when it becomes available.
+- If chat is unavailable because the run is not completed or the completed run context is unusable, the `Chat` tab should explain why and when chat becomes available.
 - If evidence refs are empty, the `Evidence` tab should say that no trace refs were captured for this run.
 
 ## Responsive Behavior
@@ -571,10 +580,12 @@ Add focused tests around state and structure:
 - local source filtering inside a run snapshot does not close the opened run;
 - focusing the chat input alone does not unexpectedly switch companion tab to chat;
 - explicit chat tab selection or question submission switches companion tab to chat;
+- chat availability follows the MVP matrix: enabled for completed runs with usable saved context, disabled/explanatory for queued/running/failed/cancelled runs, and disabled or warning-bound for completed runs with missing snapshot context;
 - clicking a trace ref switches companion tab to evidence;
 - `Show in source` from evidence switches the canvas to `Source`, prefers run snapshot basis, highlights the referenced message or transcript segment, and labels live source basis explicitly when snapshot basis is unavailable;
 - runs search and filters narrow saved runs without losing current-scope behavior;
 - `Runs` defaults to current-scope filtering after a workspace switch and can default to all runs from a global history entry point;
+- `Runs` shows queued/running analysis report runs and saved analysis runs, not source ingest jobs;
 - run source mode prefers run snapshot over live source when snapshot data is available;
 - completed runs with missing snapshot rows keep saved report output readable when available, while source mode shows a source-basis integrity error without legacy live-source fallback;
 - evidence and chat for a completed run with missing snapshot rows degrade honestly when they require snapshot resolution or snapshot context;
