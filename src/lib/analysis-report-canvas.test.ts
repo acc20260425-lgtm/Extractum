@@ -5,6 +5,8 @@ import reportSetupPanelSource from "./components/analysis/report-setup-panel.sve
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import runSnapshotMessagesPanelSource from "./components/analysis/run-snapshot-messages-panel.svelte?raw";
 
+const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
+
 describe("report canvas component contract", () => {
   it("owns the central Report and Source modes", () => {
     expect(reportCanvasSource).toContain('class="report-canvas"');
@@ -14,7 +16,7 @@ describe("report canvas component contract", () => {
     expect(reportCanvasSource).toContain('onChangeCanvasMode("source")');
     expect(reportCanvasSource).toContain('{#if canvasMode === "report"}');
     expect(reportCanvasSource).toContain("<ReportSourceSurface");
-    expect(reportCanvasSource).not.toContain("<RunCompanionTabs");
+    expect(reportCanvasSource).not.toContain(runCompanionTabsTag);
   });
 
   it("shows setup only when no run is open and report mode is selected", () => {

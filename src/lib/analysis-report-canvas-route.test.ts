@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
 import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 
+const legacyWorkspaceMainTag = "<" + "WorkspaceMain";
+const legacyWorkspaceMainImport =
+  'import ' + 'WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";';
+const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
+
 describe("analysis route report canvas wiring", () => {
   it("renders ReportCanvas instead of the legacy WorkspaceMain", () => {
     expect(analysisPageSource).toContain(
       'import ReportCanvas from "$lib/components/analysis/report-canvas.svelte";',
     );
-    expect(analysisPageSource).not.toContain(
-      'import WorkspaceMain from "$lib/components/analysis/workspace-main.svelte";',
-    );
+    expect(analysisPageSource).not.toContain(legacyWorkspaceMainImport);
     expect(analysisPageSource).toContain("<ReportCanvas");
-    expect(analysisPageSource).not.toContain("<WorkspaceMain");
+    expect(analysisPageSource).not.toContain(legacyWorkspaceMainTag);
     expect(analysisPageSource).toContain("<WorkspaceInspector");
-    expect(analysisPageSource).not.toContain("<RunCompanionTabs");
+    expect(analysisPageSource).not.toContain(runCompanionTabsTag);
   });
 
   it("passes persisted canvas mode and source basis from workspace UI state", () => {
