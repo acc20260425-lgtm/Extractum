@@ -176,6 +176,17 @@ Report | Source
 - keeps trace refs clickable;
 - exposes cancel action for a cancellable active run.
 
+Run header metadata should include at least:
+
+- target source or source group label, including missing/deleted labeling when the live scope is gone;
+- run status;
+- created time and completed time when available;
+- prompt template name and version;
+- provider profile;
+- provider and model;
+- source basis status, such as run snapshot available, live source, pending snapshot, or unavailable snapshot;
+- YouTube corpus mode when applicable, such as transcript-only, transcript plus comments, playlist scope, or description-derived corpus.
+
 `Source` mode:
 
 - shows source material in a large readable canvas;
@@ -244,7 +255,10 @@ Evidence | Chat | Runs
 
 - shows trace refs and selected evidence;
 - becomes active when a trace ref is clicked;
-- is the default tab for completed runs.
+- is the default tab for completed runs;
+- exposes `Show in source` when the referenced item, message, or transcript segment can be located.
+
+`Show in source` is the explicit report to evidence to source bridge. It switches `ReportCanvas` to `Source`, uses `sourceViewBasis = "run_snapshot"` when snapshot data is available, and highlights the matching message or transcript segment. If only a live source path is available for the run state, the UI must label `sourceViewBasis = "live_source"` explicitly and must not present live data as the frozen report corpus.
 
 `Chat`:
 
@@ -458,6 +472,7 @@ State keys should be versioned or namespaced so future layout changes can discar
 - When no run is open and a source or group is selected, report setup and template selection can appear in the primary canvas as pre-run setup.
 - Opening any run removes report setup and template editing controls from the primary canvas, leaving template name/version as run metadata and any setup entry point as secondary.
 - Clicking a trace ref sets `companionTab = "evidence"`.
+- Choosing `Show in source` from an evidence item sets `canvasMode = "source"`, prefers `sourceViewBasis = "run_snapshot"` when available, and highlights the referenced message or transcript segment.
 - Explicitly selecting the chat tab or submitting a follow-up question sets `companionTab = "chat"`.
 - Choosing `View live source` in run source mode sets `sourceViewBasis = "live_source"` without pretending the live source is the run snapshot.
 - `sourceViewBasis = "live_source"` shows a persistent `Live source` indicator and a return action when run snapshot data is available.
@@ -526,10 +541,12 @@ Add focused tests around state and structure:
 - no-run source context exposes pre-run report setup with template selection and launch controls;
 - opening a run removes template editing and report setup from the primary report-reading surface;
 - template editor opens as a modal, dialog, or temporary drawer without replacing report/source reading or companion tabs;
+- run header exposes the required minimum metadata: scope label, status, timestamps, template version, provider profile, provider/model, source basis status, and YouTube corpus mode when applicable;
 - local source filtering inside a run snapshot does not close the opened run;
 - focusing the chat input alone does not unexpectedly switch companion tab to chat;
 - explicit chat tab selection or question submission switches companion tab to chat;
 - clicking a trace ref switches companion tab to evidence;
+- `Show in source` from evidence switches the canvas to `Source`, prefers run snapshot basis, highlights the referenced message or transcript segment, and labels live source basis explicitly when snapshot basis is unavailable;
 - runs search and filters narrow saved runs without losing current-scope behavior;
 - run source mode prefers run snapshot over live source when snapshot data is available;
 - completed run source mode requires snapshot data and does not expose a legacy live-source fallback;
