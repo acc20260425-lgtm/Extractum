@@ -49,7 +49,9 @@ The clear command must be safe when no fixture rows exist. The seed command must
 
 ## Fixture Dataset
 
-The fixture set covers every browser scenario that was blocked by missing local data in `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
+The fixture set targets the populated browser scenarios that were blocked by missing local data in `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
+
+This fixture dataset is for populated-state verification. No-source and no-context onboarding states are verified separately by clearing fixtures and using an empty or controlled development database.
 
 ### Fixture Accounts
 
@@ -75,6 +77,8 @@ Create these sources:
 - YouTube playlist source with playlist membership rows that link to the video source.
 
 Source rows use realistic titles, provider types, subtypes, sync timestamps, and item counts so `/analysis` can render the compact source rail, setup state, source readers, and source group reader without network access.
+
+Fixture sources that are intended to exercise source readers must be seeded in a post-sync-looking state: non-empty source items, plausible `last_synced_at` values, plausible `last_sync_state` values where the provider uses them, and source metadata sufficient for the `/analysis` reader to treat the material as locally available. Do not use these populated fixture sources to verify unsynced or first-sync onboarding prompts.
 
 ### Source Group
 
@@ -162,6 +166,7 @@ Backend tests should cover the fixture infrastructure before any browser verific
 - clearing deletes child rows through fixture parent ids instead of broad content matching;
 - fixture Telegram sources reference fixture account rows, and fixture accounts contain no credentials or secure-store state;
 - fixture runs reference a fixture report prompt template, and clearing removes that template;
+- fixture sources intended for reader verification have non-empty items, non-null sync timestamps, and provider metadata that renders as locally available;
 - the completed snapshot-backed run has saved `analysis_run_messages` rows;
 - the completed missing-snapshot run has no saved snapshot rows;
 - fixture statuses include completed, running, failed, and cancelled runs;
