@@ -408,6 +408,18 @@ State keys should be versioned or namespaced so future layout changes can discar
 - When `OpenRunState` is not `none`, switching back to `Report` from `Source` must not lose the selected run or companion tab state.
 - Local filtering or source focus inside a run snapshot does not count as `CompactSourceRail` selection and must not close the opened run.
 
+## Onboarding / No Context States
+
+`/analysis` needs clear first-run and no-context states before a useful report or source canvas exists. These states should live in the central canvas instead of being hidden in the compact rail, because the result-first layout still needs to guide the user when there is no result yet.
+
+- If there are no sources, `ReportCanvas` should offer source creation entry points for Telegram and YouTube. Telegram source creation may point to account setup when needed; YouTube source creation should not be blocked just because no Telegram account exists.
+- If there are sources but no selected source or source group, `ReportCanvas` should prompt the user to choose a source/group from `CompactSourceRail` or its expanded source panel.
+- If no Telegram accounts exist, Telegram-specific source creation and sync guidance should point to `/accounts`, but the rest of `/analysis` should remain usable for source types that do not require Telegram auth.
+- If a Telegram source is selected but its account is disconnected, restoring, or unauthenticated, source sync and report generation for that source should be disabled with sign-in or restore guidance.
+- If a YouTube source is selected but `yt-dlp` is unavailable, the canvas should show the runtime diagnostic and a settings/help action instead of relying only on a small rail badge.
+- If a selected source is synced but has no text corpus, the canvas should explain the text-first limitation, such as media-only Telegram posts or YouTube content without transcript/comments, and offer the relevant sync or source-detail action when one exists.
+- If no LLM profile is configured, or the active profile lacks a usable key/configuration, report generation should be disabled with a link or action to `/settings`. The UI can suggest running the provider smoke test before starting reports.
+
 ## Empty And Error States
 
 - If a completed run has no snapshot rows, show a storage or integrity error instead of a legacy live-source fallback.
@@ -469,6 +481,11 @@ Add focused tests around state and structure:
 - Telegram media renders metadata placeholders without requiring binary preview support;
 - YouTube transcript timestamp actions expose jump/copy behavior without requiring an embedded player;
 - snapshot unavailable state does not silently fall back to live data;
+- no-source state shows central Telegram and YouTube add-source onboarding;
+- missing Telegram account or disconnected Telegram account disables affected Telegram sync/report actions with `/accounts` guidance;
+- missing `yt-dlp` for a YouTube source surfaces the runtime diagnostic in the central canvas;
+- synced sources with no text corpus explain the text-first limitation;
+- missing or unusable LLM profile disables report generation with `/settings` guidance;
 - workspace persistence restores last source/group and UI context without auto-opening the last run;
 - persistence ignores stale source/group ids gracefully;
 - persistence does not restore transient trace selection, draft chat text, or open popovers;
