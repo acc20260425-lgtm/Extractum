@@ -63,6 +63,19 @@ Responsibilities:
 
 Existing `WorkspaceRail` behavior should be reused or extracted where useful, but the new rail should not keep the current full card-heavy source list visible by default.
 
+The rail must not look or behave like a second application menu. The global `AppSidebar` remains the only place for app-level destinations such as Workspace, Accounts, and Settings. `CompactSourceRail` lives inside `/analysis` and should be visually scoped to research context: source avatars, provider/source-type marks, group marks, source status, and an explicit source-switcher affordance. It should not repeat the global brand, route navigation, theme toggle, or app settings actions.
+
+When both rails are visible on desktop, the visual hierarchy should be:
+
+```text
+AppSidebar: app navigation
+CompactSourceRail: analysis source context
+ReportCanvas: primary work surface
+RunCompanionTabs: run tools
+```
+
+The compact source rail can expose the full source list through a popover, drawer, or expanded temporary panel, but the collapsed/default state should remain clearly source-oriented rather than route-oriented.
+
 ### ReportCanvas
 
 `ReportCanvas` owns the main center surface. It has two modes:
@@ -131,6 +144,41 @@ type CanvasMode = "report" | "source";
 type SourceViewBasis = "run_snapshot" | "live_source";
 type CompanionTab = "evidence" | "chat" | "runs";
 ```
+
+The implementation should preserve view state independently for `Report` and `Source` modes. Switching modes should not reset:
+
+- the report scroll position for the opened run;
+- the source scroll position for the active source view basis;
+- the selected trace ref;
+- the selected source item or transcript segment;
+- the active companion tab, except for explicit rules such as trace ref activation or chat focus.
+
+Suggested keys:
+
+```ts
+type ReportCanvasViewKey =
+  | `report:${number}`
+  | `source:snapshot:${number}`
+  | `source:live:${number}:${string}`;
+```
+
+The final key shape can differ, but it should distinguish run report scroll, saved-run snapshot source scroll, and live source/topic scroll. If component remounting is needed, restore scroll after the next render tick rather than treating mode switches as fresh navigation.
+
+### Source Data Loading
+
+`Source` mode must not load an entire large archive into the DOM.
+
+Current live source loading already uses `listSourceItems` with a bounded limit, and the backend clamps source item requests to at most 200 rows with a `beforePublishedAt` cursor. The redesign should preserve that bounded model and extend it for the larger center canvas:
+
+- load an initial page of source items or transcript segments;
+- load older/newer pages on explicit action or near-scroll boundary;
+- keep DOM size bounded with pagination, incremental rendering, or virtualization;
+- keep topic filters and source-group filters compatible with paging;
+- avoid refetching already loaded pages when toggling `Report | Source`.
+
+Saved-run snapshot source view should use the frozen `analysis_run_messages` data. If the current frontend API is insufficient for paged snapshot browsing, add a focused command/API such as `list_analysis_run_messages` with `runId`, optional source filter, optional cursor, and limit. Do not force the whole snapshot into route state just to render source mode.
+
+For YouTube transcript source view, prefer segment-aware loading and rendering. The UI should be able to show a transcript page without loading every comment or playlist item unless the selected source mode requires it.
 
 ### Telegram Source View
 
