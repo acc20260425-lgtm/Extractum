@@ -829,7 +829,7 @@ git commit -m "docs: add analysis redesign verification record"
 - Verify all files touched by Parts 1-7.
 - Update: `docs/superpowers/verification/2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Run the final Part 7 tests**
+- [x] **Step 1: Run the final Part 7 tests**
 
 Run:
 
@@ -839,7 +839,7 @@ npm.cmd test -- src/lib/analysis-redesign-workflow-scenarios.test.ts src/lib/ana
 
 Expected: PASS.
 
-- [ ] **Step 2: Run focused redesign frontend tests**
+- [x] **Step 2: Run focused redesign frontend tests**
 
 Run:
 
@@ -849,7 +849,7 @@ npm.cmd test -- src/lib/analysis-workspace-state.test.ts src/lib/analysis-worksp
 
 Expected: PASS.
 
-- [ ] **Step 3: Run Svelte and TypeScript checks**
+- [x] **Step 3: Run Svelte and TypeScript checks**
 
 Run:
 
@@ -859,7 +859,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 4: Run the full frontend test suite**
+- [x] **Step 4: Run the full frontend test suite**
 
 Run:
 
@@ -869,7 +869,7 @@ npm.cmd test
 
 Expected: PASS.
 
-- [ ] **Step 5: Run focused backend safety tests from earlier parts**
+- [x] **Step 5: Run focused backend safety tests from earlier parts**
 
 Run:
 
@@ -879,7 +879,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests::completed
 
 Expected: PASS.
 
-- [ ] **Step 6: Run the full backend test suite**
+- [x] **Step 6: Run the full backend test suite**
 
 Run:
 
@@ -889,7 +889,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [ ] **Step 7: Run final boundary searches**
+- [x] **Step 7: Run final boundary searches**
 
 Run:
 
@@ -915,7 +915,7 @@ rg -n "<iframe|<video|<audio|<img" src/lib/components/analysis/telegram-media-ca
 
 Expected: no embedded players or binary media preview elements in Telegram media placeholders or YouTube transcript reader.
 
-- [ ] **Step 8: Check whitespace**
+- [x] **Step 8: Check whitespace**
 
 Run:
 
@@ -925,7 +925,7 @@ git diff --check
 
 Expected: no output and exit code 0.
 
-- [ ] **Step 9: Update the verification record with automated results**
+- [x] **Step 9: Update the verification record with automated results**
 
 In `docs/superpowers/verification/2026-05-10-analysis-redesign.md`, replace each `Pending automated execution` in the Automated Verification table with:
 
@@ -941,7 +941,7 @@ FAIL: command exited 1; first failing assertion or compiler error is recorded in
 
 Do not mark a command `PASS` unless that exact command has been run in this task.
 
-- [ ] **Step 10: Commit automated verification record updates**
+- [x] **Step 10: Commit automated verification record updates**
 
 Run:
 

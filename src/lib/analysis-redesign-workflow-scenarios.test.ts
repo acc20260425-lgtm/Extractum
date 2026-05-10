@@ -70,6 +70,7 @@ function summary(overrides: Partial<AnalysisRunSummary> = {}): AnalysisRunSummar
     source_group_id: null,
     source_group_name: null,
     scope_label: "Telegram A",
+    scope_label_snapshot: "Telegram A at run time",
     period_from: 1710000000,
     period_to: 1710100000,
     output_language: "Russian",
@@ -335,10 +336,7 @@ describe("analysis redesign final workflow scenarios", () => {
       },
     };
 
-    const restored = restoredUiStateFromPersisted(persisted, {
-      sources: [{ id: 7 }],
-      groups: [],
-    });
+    const restored = restoredUiStateFromPersisted(persisted);
 
     expect(restored.workspaceSelection).toEqual({ kind: "source", sourceId: 7 });
     expect(restored.openRunState).toEqual({ kind: "none" });

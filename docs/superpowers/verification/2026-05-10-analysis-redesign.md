@@ -7,14 +7,16 @@ Scope: `/analysis` result-first redesign, Parts 1-7
 
 | Check | Command | Result | Notes |
 | --- | --- | --- | --- |
-| Final workflow scenarios | `npm.cmd test -- src/lib/analysis-redesign-workflow-scenarios.test.ts` | Pending automated execution | Result recorded in Task 5 |
-| Final route contract | `npm.cmd test -- src/lib/analysis-redesign-route-contract.test.ts` | Pending automated execution | Result recorded in Task 5 |
-| Final safety contract | `npm.cmd test -- src/lib/analysis-redesign-safety-contract.test.ts` | Pending automated execution | Result recorded in Task 5 |
-| Focused redesign frontend tests | `npm.cmd test -- src/lib/analysis-workspace-state.test.ts src/lib/analysis-workspace-persistence.test.ts src/lib/analysis-route-workspace-state.test.ts src/lib/analysis-compact-source-rail.test.ts src/lib/analysis-source-access-placement.test.ts src/lib/analysis-report-canvas-state.test.ts src/lib/analysis-report-canvas.test.ts src/lib/analysis-report-canvas-route.test.ts src/lib/source-reader-model.test.ts src/lib/analysis-source-readers.test.ts src/lib/analysis-source-readers-route.test.ts src/lib/analysis-run-companion-state.test.ts src/lib/analysis-run-companion-tabs.test.ts src/lib/analysis-run-companion-route.test.ts src/lib/analysis-redesign-workflow-scenarios.test.ts src/lib/analysis-redesign-route-contract.test.ts src/lib/analysis-redesign-safety-contract.test.ts` | Pending automated execution | Result recorded in Task 5 |
-| Svelte and TypeScript | `npm.cmd run check` | Pending automated execution | Result recorded in Task 5 |
-| Full frontend suite | `npm.cmd test` | Pending automated execution | Result recorded in Task 5 |
-| Full backend suite | `cargo test --manifest-path src-tauri/Cargo.toml` | Pending automated execution | Result recorded in Task 5 |
-| Whitespace | `git diff --check` | Pending automated execution | Result recorded in Task 5 |
+| Final workflow scenarios | `npm.cmd test -- src/lib/analysis-redesign-workflow-scenarios.test.ts` | PASS | Covered by combined Part 7 run: 3 files, 23 tests |
+| Final route contract | `npm.cmd test -- src/lib/analysis-redesign-route-contract.test.ts` | PASS | Covered by combined Part 7 run: 3 files, 23 tests |
+| Final safety contract | `npm.cmd test -- src/lib/analysis-redesign-safety-contract.test.ts` | PASS | Covered by combined Part 7 run: 3 files, 23 tests |
+| Focused redesign frontend tests | `npm.cmd test -- src/lib/analysis-workspace-state.test.ts src/lib/analysis-workspace-persistence.test.ts src/lib/analysis-route-workspace-state.test.ts src/lib/analysis-compact-source-rail.test.ts src/lib/analysis-source-access-placement.test.ts src/lib/analysis-report-canvas-state.test.ts src/lib/analysis-report-canvas.test.ts src/lib/analysis-report-canvas-route.test.ts src/lib/source-reader-model.test.ts src/lib/analysis-source-readers.test.ts src/lib/analysis-source-readers-route.test.ts src/lib/analysis-run-companion-state.test.ts src/lib/analysis-run-companion-tabs.test.ts src/lib/analysis-run-companion-route.test.ts src/lib/analysis-redesign-workflow-scenarios.test.ts src/lib/analysis-redesign-route-contract.test.ts src/lib/analysis-redesign-safety-contract.test.ts` | PASS | 17 files, 108 tests |
+| Svelte and TypeScript | `npm.cmd run check` | PASS | 0 errors, 0 warnings |
+| Full frontend suite | `npm.cmd test` | PASS | 50 files, 348 tests |
+| Focused backend safety tests | Split `cargo test --manifest-path src-tauri/Cargo.toml <filter>` commands for the Task 5 backend filters | PASS | 7 tests across chat, corpus, YouTube transcript reader, and source item query filters |
+| Full backend suite | `cargo test --manifest-path src-tauri/Cargo.toml` | PASS | 298 tests |
+| Boundary searches | Windows-safe `rg` equivalents for Task 5 Step 7 | PASS | Active route/components clear; legacy inactive files and absence-assertion tests may still contain marker strings |
+| Whitespace | `git diff --check` | PASS | Exit 0; CRLF warning only |
 
 ## Browser Smoke Verification
 
