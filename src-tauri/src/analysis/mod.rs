@@ -11,10 +11,13 @@ use std::collections::HashSet;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
-use self::corpus::load_run_corpus_messages;
+use self::corpus::{
+    list_run_snapshot_messages_page, load_run_corpus_messages, ListRunSnapshotMessagesRequest,
+};
 use self::models::{
-    AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent, AnalysisRunRow,
-    AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
+    AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent,
+    AnalysisRunMessageCursor, AnalysisRunMessagesPage, AnalysisRunRow, AnalysisRunSummary,
+    AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
 use self::store::{delete_saved_run, fetch_run_row, map_run_detail, map_run_summary};
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
@@ -351,6 +354,40 @@ pub async fn get_analysis_run(
 ) -> AppResult<Option<AnalysisRunDetail>> {
     let pool = get_pool(&handle).await?;
     Ok(fetch_run_row(&pool, run_id).await?.map(map_run_detail))
+}
+
+#[tauri::command]
+pub async fn list_analysis_run_messages(
+    handle: AppHandle,
+    run_id: i64,
+    after: Option<AnalysisRunMessageCursor>,
+    limit: Option<i64>,
+) -> AppResult<AnalysisRunMessagesPage> {
+    let pool = get_pool(&handle).await?;
+    let exists =
+        sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM analysis_runs WHERE id = ?)")
+            .bind(run_id)
+            .fetch_one(&pool)
+            .await
+            .map_err(AppError::database)?;
+
+    if exists == 0 {
+        return Err(AppError::not_found(format!(
+            "Analysis run {run_id} not found"
+        )));
+    }
+
+    let limit = limit.unwrap_or(100).clamp(1, 500) as usize;
+    list_run_snapshot_messages_page(
+        &pool,
+        ListRunSnapshotMessagesRequest {
+            run_id,
+            after,
+            limit,
+        },
+    )
+    .await
+    .map_err(AppError::database)
 }
 
 #[tauri::command]

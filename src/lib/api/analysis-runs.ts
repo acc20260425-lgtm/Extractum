@@ -4,8 +4,10 @@ import type {
   AnalysisReportStartCommand,
   AnalysisRunDetail,
   AnalysisRunEvent,
+  AnalysisRunMessagesPage,
   AnalysisRunSummary,
   EventEnvelope,
+  ListAnalysisRunMessagesInput,
   ListAnalysisRunsInput,
 } from "$lib/types/analysis";
 
@@ -21,6 +23,10 @@ export function listActiveAnalysisRuns() {
 
 export function getAnalysisRun(runId: number) {
   return invoke<AnalysisRunDetail | null>("get_analysis_run", { runId });
+}
+
+export function listAnalysisRunMessages(input: ListAnalysisRunMessagesInput) {
+  return invoke<AnalysisRunMessagesPage>("list_analysis_run_messages", { ...input });
 }
 
 export function startAnalysisReport(command: AnalysisReportStartCommand) {

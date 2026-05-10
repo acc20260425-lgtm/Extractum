@@ -5,6 +5,7 @@ import {
   deleteAnalysisRun,
   getAnalysisRun,
   listActiveAnalysisRuns,
+  listAnalysisRunMessages,
   listAnalysisRuns,
   listenToAnalysisRunEvents,
   startAnalysisReport,
@@ -51,6 +52,30 @@ describe("analysis run api wrappers", () => {
 
     await expect(getAnalysisRun(42)).resolves.toBeNull();
     expect(invokeMock).toHaveBeenLastCalledWith("get_analysis_run", { runId: 42 });
+  });
+
+  it("wraps snapshot-only run message paging", async () => {
+    invokeMock.mockResolvedValueOnce({
+      messages: [],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    await expect(listAnalysisRunMessages({
+      runId: 42,
+      after: { published_at: 1_710_000_000, ref: "s7-i1" },
+      limit: 25,
+    })).resolves.toEqual({
+      messages: [],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    expect(invokeMock).toHaveBeenLastCalledWith("list_analysis_run_messages", {
+      runId: 42,
+      after: { published_at: 1_710_000_000, ref: "s7-i1" },
+      limit: 25,
+    });
   });
 
   it("wraps analysis report start and destructive run actions", async () => {

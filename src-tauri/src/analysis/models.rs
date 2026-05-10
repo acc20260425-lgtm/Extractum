@@ -116,6 +116,34 @@ pub struct AnalysisRunDetail {
     pub(crate) scope_label_snapshot: Option<String>,
 }
 
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
+pub struct AnalysisRunMessageCursor {
+    pub published_at: i64,
+    pub r#ref: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct AnalysisRunMessage {
+    pub item_id: i64,
+    pub source_id: i64,
+    pub external_id: String,
+    pub author: Option<String>,
+    pub published_at: i64,
+    pub r#ref: String,
+    pub content: String,
+    pub item_kind: Option<String>,
+    pub source_type: Option<String>,
+    pub source_subtype: Option<String>,
+    pub metadata_json: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct AnalysisRunMessagesPage {
+    pub messages: Vec<AnalysisRunMessage>,
+    pub next_cursor: Option<AnalysisRunMessageCursor>,
+    pub has_more: bool,
+}
+
 #[derive(FromRow)]
 pub(crate) struct AnalysisRunRow {
     pub(crate) id: i64,

@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use sqlx::{Pool, QueryBuilder, Sqlite};
 
 use super::models::{
-    AnalysisRunDetail, CorpusMessage, StoredAnalysisItemRow, StoredRunSnapshotRow,
+    AnalysisRunDetail, AnalysisRunMessage, AnalysisRunMessageCursor, AnalysisRunMessagesPage,
+    CorpusMessage, StoredAnalysisItemRow, StoredRunSnapshotRow,
 };
 use super::store::fetch_source_group;
 #[cfg(test)]
@@ -782,6 +783,132 @@ pub(crate) async fn load_run_snapshot_messages(
         .collect()
 }
 
+pub(crate) struct ListRunSnapshotMessagesRequest {
+    pub(crate) run_id: i64,
+    pub(crate) after: Option<AnalysisRunMessageCursor>,
+    pub(crate) limit: usize,
+}
+
+fn decode_optional_metadata_json(
+    metadata_zstd: Option<&[u8]>,
+) -> Result<Option<serde_json::Value>, String> {
+    let Some(bytes) = metadata_zstd else {
+        return Ok(None);
+    };
+
+    let decompressed = decompress_bytes(bytes)?;
+    serde_json::from_slice(&decompressed)
+        .map(Some)
+        .map_err(|e| format!("Failed to decode run message metadata JSON: {e}"))
+}
+
+fn run_message_from_snapshot_row(row: StoredRunSnapshotRow) -> Result<AnalysisRunMessage, String> {
+    Ok(AnalysisRunMessage {
+        item_id: row.item_id,
+        source_id: row.source_id,
+        external_id: row.external_id,
+        author: row.author,
+        published_at: row.published_at,
+        r#ref: row.r#ref,
+        content: decompress_text(&row.content_zstd)?,
+        item_kind: row.item_kind,
+        source_type: row.source_type,
+        source_subtype: row.source_subtype,
+        metadata_json: decode_optional_metadata_json(row.metadata_zstd.as_deref())?,
+    })
+}
+
+pub(crate) async fn list_run_snapshot_messages_page(
+    pool: &Pool<Sqlite>,
+    request: ListRunSnapshotMessagesRequest,
+) -> Result<AnalysisRunMessagesPage, String> {
+    let limit = request.limit.clamp(1, 500);
+    let fetch_limit = (limit + 1) as i64;
+
+    let rows: Vec<StoredRunSnapshotRow> = if let Some(after) = request.after {
+        sqlx::query_as(
+            r#"
+            SELECT
+                item_id,
+                source_id,
+                external_id,
+                author,
+                published_at,
+                ref,
+                content_zstd,
+                item_kind,
+                source_type,
+                source_subtype,
+                metadata_zstd
+            FROM analysis_run_messages
+            WHERE run_id = ?
+              AND (
+                published_at > ?
+                OR (published_at = ? AND ref > ?)
+              )
+            ORDER BY published_at ASC, ref ASC
+            LIMIT ?
+            "#,
+        )
+        .bind(request.run_id)
+        .bind(after.published_at)
+        .bind(after.published_at)
+        .bind(after.r#ref)
+        .bind(fetch_limit)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    } else {
+        sqlx::query_as(
+            r#"
+            SELECT
+                item_id,
+                source_id,
+                external_id,
+                author,
+                published_at,
+                ref,
+                content_zstd,
+                item_kind,
+                source_type,
+                source_subtype,
+                metadata_zstd
+            FROM analysis_run_messages
+            WHERE run_id = ?
+            ORDER BY published_at ASC, ref ASC
+            LIMIT ?
+            "#,
+        )
+        .bind(request.run_id)
+        .bind(fetch_limit)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    };
+
+    let has_more = rows.len() > limit;
+    let page_rows = rows.into_iter().take(limit).collect::<Vec<_>>();
+    let mut messages = Vec::with_capacity(page_rows.len());
+    for row in page_rows {
+        messages.push(run_message_from_snapshot_row(row)?);
+    }
+
+    let next_cursor = if has_more {
+        messages.last().map(|message| AnalysisRunMessageCursor {
+            published_at: message.published_at,
+            r#ref: message.r#ref.clone(),
+        })
+    } else {
+        None
+    };
+
+    Ok(AnalysisRunMessagesPage {
+        messages,
+        next_cursor,
+        has_more,
+    })
+}
+
 pub(crate) async fn load_run_corpus_messages(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,
@@ -809,13 +936,14 @@ mod tests {
     use sqlx::SqlitePool;
 
     use super::{
-        estimate_message_input_chars, estimate_preflight_chunk_count, live_corpus_ref,
-        load_corpus_messages, load_run_corpus_messages, load_run_snapshot_messages,
-        preflight_analysis_run, preflight_limit_error, resolve_analysis_sources,
-        resolve_run_source_ids, AnalysisRunPreflight, AnalysisRunPreflightLimits,
-        CorpusLoadRequest, YoutubeCorpusMode,
+        estimate_message_input_chars, estimate_preflight_chunk_count,
+        list_run_snapshot_messages_page, live_corpus_ref, load_corpus_messages,
+        load_run_corpus_messages, load_run_snapshot_messages, preflight_analysis_run,
+        preflight_limit_error, resolve_analysis_sources, resolve_run_source_ids,
+        AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest,
+        ListRunSnapshotMessagesRequest, YoutubeCorpusMode,
     };
-    use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
+    use crate::analysis::models::{AnalysisRunDetail, AnalysisRunMessageCursor, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
     use crate::compression::{compress_json_bytes, compress_text};
     use crate::youtube::dto::{YoutubeAvailabilityStatus, YoutubeVideoForm, YoutubeVideoMetadata};
@@ -1261,6 +1389,133 @@ mod tests {
         assert_eq!(loaded.len(), corpus.len());
         assert_eq!(loaded[0].r#ref, "s2-m100");
         assert_eq!(loaded[1].content, "Second frozen message");
+    }
+
+    #[tokio::test]
+    async fn list_run_snapshot_messages_page_reads_saved_snapshot_only() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_runs (
+                id, run_type, scope_type, source_group_id, period_from, period_to,
+                output_language, prompt_template_version, provider_profile, provider,
+                model, status, created_at
+            )
+            VALUES (1, 'report', 'source_group', 9, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)
+            "#,
+        )
+        .bind(1_700_000_000_i64)
+        .bind(1_800_000_000_i64)
+        .bind(1_710_000_500_i64)
+        .execute(&pool)
+        .await
+        .expect("insert run");
+
+        persist_run_snapshot(&pool, 1, "Frozen group", &sample_corpus())
+            .await
+            .expect("persist snapshot");
+
+        let page = list_run_snapshot_messages_page(
+            &pool,
+            ListRunSnapshotMessagesRequest {
+                run_id: 1,
+                after: None,
+                limit: 1,
+            },
+        )
+        .await
+        .expect("load first page");
+
+        assert_eq!(page.messages.len(), 1);
+        assert_eq!(page.messages[0].content, "First frozen message");
+        assert_eq!(page.messages[0].source_type.as_deref(), Some("youtube"));
+        assert_eq!(
+            page.messages[0]
+                .metadata_json
+                .as_ref()
+                .and_then(|value| value.get("video_id"))
+                .and_then(|value| value.as_str()),
+            Some("video2")
+        );
+        assert!(page.has_more);
+
+        let second_page = list_run_snapshot_messages_page(
+            &pool,
+            ListRunSnapshotMessagesRequest {
+                run_id: 1,
+                after: page.next_cursor,
+                limit: 1,
+            },
+        )
+        .await
+        .expect("load second page");
+
+        assert_eq!(second_page.messages.len(), 1);
+        assert_eq!(second_page.messages[0].content, "Second frozen message");
+        assert!(!second_page.has_more);
+        assert_eq!(second_page.next_cursor, None);
+    }
+
+    #[tokio::test]
+    async fn list_run_snapshot_messages_page_does_not_fall_back_to_live_source() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_runs (
+                id, run_type, scope_type, source_id, period_from, period_to,
+                output_language, prompt_template_version, provider_profile, provider,
+                model, status, created_at
+            )
+            VALUES (1, 'report', 'single_source', 2, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)
+            "#,
+        )
+        .bind(1_700_000_000_i64)
+        .bind(1_800_000_000_i64)
+        .bind(1_710_000_500_i64)
+        .execute(&pool)
+        .await
+        .expect("insert run");
+
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, content_zstd)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(11_i64)
+        .bind(2_i64)
+        .bind("100")
+        .bind("telegram_message")
+        .bind("Alice")
+        .bind(1_710_000_000_i64)
+        .bind(compress_text("Live source message").expect("compress live message"))
+        .execute(&pool)
+        .await
+        .expect("insert live item");
+
+        let page = list_run_snapshot_messages_page(
+            &pool,
+            ListRunSnapshotMessagesRequest {
+                run_id: 1,
+                after: None,
+                limit: 25,
+            },
+        )
+        .await
+        .expect("load snapshot-only page");
+
+        assert_eq!(page.messages, Vec::new());
+        assert_eq!(page.next_cursor, None);
+        assert!(!page.has_more);
+    }
+
+    #[test]
+    fn run_message_cursor_uses_ref_and_published_at() {
+        let cursor = AnalysisRunMessageCursor {
+            published_at: 1_710_000_000,
+            r#ref: "s7-i1".to_string(),
+        };
+
+        assert_eq!(cursor.published_at, 1_710_000_000);
+        assert_eq!(cursor.r#ref, "s7-i1");
     }
 
     #[tokio::test]

@@ -68,10 +68,10 @@ use analysis::{
     clear_analysis_chat_messages, create_analysis_prompt_template, create_analysis_source_group,
     delete_analysis_prompt_template, delete_analysis_run, delete_analysis_source_group,
     get_analysis_run, get_analysis_run_trace, list_active_analysis_runs,
-    list_analysis_chat_messages, list_analysis_prompt_templates, list_analysis_runs,
-    list_analysis_source_groups, list_analysis_sources, resolve_analysis_trace_refs,
-    start_analysis_report, update_analysis_prompt_template, update_analysis_source_group,
-    AnalysisState,
+    list_analysis_chat_messages, list_analysis_prompt_templates, list_analysis_run_messages,
+    list_analysis_runs, list_analysis_source_groups, list_analysis_sources,
+    resolve_analysis_trace_refs, start_analysis_report, update_analysis_prompt_template,
+    update_analysis_source_group, AnalysisState,
 };
 
 #[tauri::command]
@@ -161,6 +161,7 @@ pub fn run() {
             list_analysis_runs,
             list_active_analysis_runs,
             get_analysis_run,
+            list_analysis_run_messages,
             delete_analysis_run,
             get_analysis_run_trace,
             resolve_analysis_trace_refs,

@@ -75,6 +75,37 @@ export interface ListAnalysisRunsInput {
   limit: number;
 }
 
+export interface AnalysisRunMessageCursor {
+  published_at: number;
+  ref: string;
+}
+
+export interface AnalysisRunMessage {
+  item_id: number;
+  source_id: number;
+  external_id: string;
+  author: string | null;
+  published_at: number;
+  ref: string;
+  content: string;
+  item_kind: string | null;
+  source_type: string | null;
+  source_subtype: string | null;
+  metadata_json: unknown | null;
+}
+
+export interface AnalysisRunMessagesPage {
+  messages: AnalysisRunMessage[];
+  next_cursor: AnalysisRunMessageCursor | null;
+  has_more: boolean;
+}
+
+export interface ListAnalysisRunMessagesInput {
+  runId: number;
+  after: AnalysisRunMessageCursor | null;
+  limit: number;
+}
+
 export type YoutubeCorpusMode =
   | "transcript_only"
   | "transcript_description"
