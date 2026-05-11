@@ -1,5 +1,8 @@
 mod chat;
 mod corpus;
+#[allow(dead_code)]
+#[cfg(debug_assertions)]
+mod fixtures;
 mod groups;
 mod models;
 mod report;
