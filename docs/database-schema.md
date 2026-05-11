@@ -419,6 +419,7 @@ Purpose:
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - `analysis_runs.youtube_corpus_mode` preserves the selected YouTube corpus scope used by the run, rather than reconstructing it from current source defaults.
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
+- completed snapshotless saved runs keep report output readable but do not silently resolve source/evidence/chat against live `items`;
 - new live analysis refs use local item identity (`s{source_id}-i{item_id}`);
 - YouTube transcript refs can include timestamp suffixes and resolve to canonical YouTube URLs with `t=` parameters;
 - legacy saved refs using Telegram message ids (`s{source_id}-m{message_id}`) remain readable;

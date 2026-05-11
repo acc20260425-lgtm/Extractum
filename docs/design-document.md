@@ -40,7 +40,10 @@ Svelte owns:
 - forms and filters
 - workflow composition
 
-The current frontend workflow is workspace-first: source browsing, sync actions, reports, trace inspection, and follow-up chat are centered in `/analysis`. The legacy `/sources` route remains only as a compatibility redirect to `/analysis`.
+The current frontend workflow is result-first: `/analysis` keeps the opened
+report or source material in the central canvas, while source switching,
+evidence, follow-up chat, and saved runs stay nearby. The legacy `/sources`
+route remains only as a compatibility redirect to `/analysis`.
 
 Svelte 5 `$effect` blocks should keep their dependency surface narrow. An
 effect tracks synchronous `$state` and `$derived` reads, including reads inside
@@ -202,12 +205,14 @@ This is important because it avoids drift caused by:
 The intended behavior is:
 
 - a saved run remains meaningfully reproducible;
-- follow-up chat for new runs reads the frozen snapshot first;
-- trace resolution for new runs resolves against the frozen snapshot first.
+- follow-up chat for completed runs uses the frozen snapshot context;
+- trace resolution for completed runs resolves against the frozen snapshot.
 
 New live corpus refs use local item identity (`s{source_id}-i{item_id}`), while
 legacy Telegram-shaped refs (`s{source_id}-m{message_id}`) remain readable.
-Legacy runs without snapshot data can still fall back to live items.
+Completed runs without snapshot data stay readable as reports, but source
+resolution, evidence, and follow-up chat degrade explicitly instead of silently
+falling back to live `items`.
 YouTube transcript refs preserve timestamp evidence and can resolve to
 canonical YouTube URLs with `t=` parameters.
 

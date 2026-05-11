@@ -1,8 +1,18 @@
 # App Sidebar Behavior Design
 
+## Implementation Status
+
+Status: implemented on `main`. The active shell uses
+`src/lib/components/app-sidebar.svelte`, persists the desktop collapsed state,
+keeps the theme toggle in the topbar, and uses an off-canvas mobile drawer.
+
+The old implementation plan was removed from active docs because it was an
+execution checklist. This design remains the source of truth for intended shell
+behavior.
+
 ## Context
 
-Extractum currently keeps the primary application navigation directly in `src/routes/+layout.svelte` as a fixed-width left sidebar. The sidebar works on desktop and becomes a top horizontal navigation on narrow screens. The requested change is to make Extractum's left application panel behave like OmniRoute's shell in the ways that matter for this app: desktop collapse/expand and mobile off-canvas navigation.
+Before this change, Extractum kept the primary application navigation directly in `src/routes/+layout.svelte` as a fixed-width left sidebar. The sidebar worked on desktop and became a top horizontal navigation on narrow screens. The implemented change makes Extractum's left application panel behave like OmniRoute's shell in the ways that matter for this app: desktop collapse/expand and mobile off-canvas navigation.
 
 ## Goals
 

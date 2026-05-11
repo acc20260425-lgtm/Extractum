@@ -1,14 +1,25 @@
 # Analysis Result-First Redesign Design
 
+## Implementation Status
+
+Status: implemented and merged into `main` on 2026-05-11.
+
+Canonical verification record:
+`docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
+
+The staged implementation plans for Parts 1-7 were removed from active docs
+after merge because they were execution checklists, not current product
+documentation. Git history remains the audit trail for those plans.
+
 ## Context
 
-The `/analysis` route is currently a dense workspace with three major areas:
+Before this redesign, the `/analysis` route was a dense workspace with three major areas:
 
 - `WorkspaceRail` for sources and source groups;
 - `WorkspaceMain` for scope controls, source context, report output, chat, template editing, and source group editing;
 - `WorkspaceInspector` for active runs, saved runs, trace refs, and chunk summaries.
 
-This works functionally, but the opened analysis result competes with setup controls, source browsing, history, trace inspection, and chat. The requested redesign makes the opened run and source material the primary work surface while keeping source switching, evidence, chat, and saved runs nearby.
+That worked functionally, but the opened analysis result competed with setup controls, source browsing, history, trace inspection, and chat. The implemented redesign makes the opened run and source material the primary work surface while keeping source switching, evidence, chat, and saved runs nearby.
 
 ## Goals
 
@@ -168,7 +179,7 @@ Popover or expanded panel contract:
 - provider-specific details, including YouTube transcript/comment availability;
 - source sync, retry, and takeout actions when supported.
 
-The full source list should appear as an overlay, popover, or temporary side panel anchored to the compact rail. It should support the same source/group search and selection behavior currently owned by `WorkspaceRail`. Closing the list without changing selection must return the user to the same `ReportCanvas` mode, scroll position, and companion tab. Selecting a different source or group from the expanded list follows the same workspace-switch rule as selecting directly from `CompactSourceRail`.
+The full source list should appear as an overlay, popover, or temporary side panel anchored to the compact rail. It should support the source/group search and selection behavior that the old `WorkspaceRail` owned before the redesign. Closing the list without changing selection must return the user to the same `ReportCanvas` mode, scroll position, and companion tab. Selecting a different source or group from the expanded list follows the same workspace-switch rule as selecting directly from `CompactSourceRail`.
 
 Status indicators must have accessible labels. Hover-only information is not sufficient; keyboard users need the same status through titles, aria labels, or the expanded source list.
 
@@ -202,7 +213,7 @@ Run header metadata should include at least:
 - source basis status, such as run snapshot available, live source, pending snapshot, or unavailable snapshot;
 - YouTube corpus mode when applicable, such as transcript-only, transcript plus comments, playlist scope, or description-derived corpus.
 
-If saved run records do not currently persist the selected YouTube corpus mode, the implementation must add durable run metadata before treating this header field as reliable. A saved run header should not reconstruct the corpus mode from current source defaults because that can drift from the corpus used for the report.
+Saved run records persist the selected YouTube corpus mode as durable run metadata. A saved run header should not reconstruct the corpus mode from current source defaults because that can drift from the corpus used for the report.
 
 `Source` mode:
 
@@ -329,7 +340,7 @@ It should include:
 - optional filters for provider profile, provider/model, and prompt template when those lists are available;
 - clear empty states for no runs, no current-scope runs, and no filter matches.
 
-Current `RunHistory` already has basic all/current scope and all/completed/failed filters, and `list_analysis_runs` currently accepts only source id, source group id, and limit. The redesign should treat richer filtering as part of the `Runs` tab work. If the list can grow large, prefer backend-backed filtering and cursor/limit pagination over loading all saved runs and filtering only in the frontend.
+`RunHistory` already had basic all/current scope and all/completed/failed filters before the redesign. The redesigned `Runs` tab can extend that path with richer filtering. If the list can grow large, prefer backend-backed filtering and cursor/limit pagination over loading all saved runs and filtering only in the frontend.
 
 ## Canvas Source Mode
 

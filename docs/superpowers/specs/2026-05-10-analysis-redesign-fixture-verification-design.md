@@ -3,9 +3,16 @@
 Date: 2026-05-10
 Scope: fixture-backed browser verification for `/analysis` result-first redesign
 
+## Implementation Status
+
+Status: implemented, exercised in browser verification, and merged into `main`
+on 2026-05-11. The fixture-backed scenarios in
+`docs/superpowers/verification/2026-05-10-analysis-redesign.md` are recorded as
+`PASS`.
+
 ## Purpose
 
-The `/analysis` result-first redesign Part 7 verification recorded many browser scenarios as `BLOCKED` because the local development database had no representative source, run, snapshot, and chat data. This design adds a debug-only fixture layer that can seed those scenarios into a development database, verify the UI through the real Tauri and SQLite paths, and then remove only the seeded records.
+The `/analysis` result-first redesign Part 7 verification initially could not exercise many populated browser scenarios because the local development database had no representative source, run, snapshot, and chat data. This design adds a debug-only fixture layer that can seed those scenarios into a development database, verify the UI through the real Tauri and SQLite paths, and then remove only the seeded records.
 
 This is verification infrastructure, not a product feature. It must not change release behavior, redesign `/analysis`, add a new visible workspace surface, or add a Playwright dependency.
 
@@ -181,7 +188,7 @@ The fixture-backed browser verification flow is:
 2. Invoke `clear_analysis_redesign_fixtures`.
 3. Invoke `seed_analysis_redesign_fixtures`.
 4. Open `/analysis`.
-5. Exercise the browser scenarios previously marked `BLOCKED`.
+5. Exercise the populated browser scenarios that previously lacked local data.
 6. Update `docs/superpowers/verification/2026-05-10-analysis-redesign.md` with real `PASS` or `FAIL` results.
 7. Invoke `clear_analysis_redesign_fixtures` again.
 8. Record any remaining fixture or standalone-browser limitations as residual risks.
@@ -216,7 +223,6 @@ Tests should use in-memory SQLite where possible. If the fixture code depends on
 - No source ingest jobs in `RunCompanionTabs.Runs`.
 - No live-source fallback for completed-run evidence or chat.
 - No Playwright dependency.
-- No edits to the completed Part 7 verification results until the fixture-backed browser scenarios have actually been exercised.
 
 ## Open Operational Note
 

@@ -18,6 +18,8 @@ families behind the shared source model.
 
 Implemented:
 
+- result-first `/analysis` workspace with compact source rail, central report/source canvas, and evidence/chat/runs companion panel
+- collapsible desktop app sidebar and mobile off-canvas navigation drawer
 - Telegram account management and sign-in flow
 - startup session restore
 - source management for Telegram channels, supergroups, and groups
@@ -79,6 +81,10 @@ Not implemented yet:
   - run a live provider smoke test with the currently edited form
   - configure YouTube cookies and runtime settings
 - `/analysis`
+  - use the result-first research workspace layout
+  - switch between report output/setup and source material in the central canvas
+  - switch source context through the compact analysis rail
+  - inspect evidence, follow-up chat, and saved runs in the companion panel
   - browse sources and inspect synced items
   - add Telegram sources manually or from dialogs
   - add YouTube videos and playlists by URL
@@ -197,3 +203,5 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 13. `src-tauri/src/migrations.rs`
 
 Related deep dive: `docs/takeout-source-import.md`.
+
+Recent verification: `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.

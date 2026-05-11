@@ -3,6 +3,15 @@
 Date: 2026-05-10
 Scope: `/analysis` result-first redesign, Parts 1-7
 
+## Current Status
+
+Merged into `main` on 2026-05-11 by fast-forward merge.
+
+- Current `main` HEAD after merge: `3ed5288 docs: record fixture-backed analysis verification`
+- Local feature branch `analysis-redesign-part-1` was deleted after merge.
+- No Git remote was configured in this workspace, so nothing was pushed.
+- The old staged implementation plans were removed from active docs after merge; this verification record and the design specs are the maintained documentation.
+
 ## Automated Verification
 
 | Check | Command | Result | Notes |
@@ -14,7 +23,8 @@ Scope: `/analysis` result-first redesign, Parts 1-7
 | Svelte and TypeScript | `npm.cmd run check` | PASS | 0 errors, 0 warnings |
 | Full frontend suite | `npm.cmd test` | PASS | 50 files, 348 tests |
 | Focused backend safety tests | Split `cargo test --manifest-path src-tauri/Cargo.toml <filter>` commands for the Task 5 backend filters | PASS | 7 tests across chat, corpus, YouTube transcript reader, and source item query filters |
-| Full backend suite | `cargo test --manifest-path src-tauri/Cargo.toml` | PASS | 298 tests |
+| Full backend suite | `cargo test --manifest-path src-tauri/Cargo.toml` | PASS | 310 tests |
+| Release backend compile | `cargo check --manifest-path src-tauri/Cargo.toml --release` | PASS | Verified after merge to `main` |
 | Boundary searches | Windows-safe `rg` equivalents for Task 5 Step 7 | PASS | Active route/components clear; legacy inactive files and absence-assertion tests may still contain marker strings |
 | Whitespace | `git diff --check` | PASS | Exit 0; CRLF warning only |
 

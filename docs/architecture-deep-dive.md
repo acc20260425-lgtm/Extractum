@@ -240,8 +240,11 @@ Frozen snapshot storage solves three drift problems:
 
 New live corpus refs use local item identity (`s{source_id}-i{item_id}`).
 Legacy Telegram-shaped refs (`s{source_id}-m{message_id}`) are still accepted.
-Older runs without snapshot rows can still fall back to live tables. This keeps
-upgrades non-breaking while making new runs more stable.
+Older completed runs without snapshot rows remain openable as report artifacts,
+but snapshot-bound source resolution, evidence, and follow-up chat degrade
+explicitly instead of silently reading live tables. When live browsing is
+offered for terminal or active runs, the UI labels it as live source context
+rather than the frozen run corpus.
 
 YouTube corpus loading adds timestamp-aware refs for transcript segments and synthetic refs for description text. Saved run snapshots preserve YouTube item kind, source type/subtype, and metadata needed for trace resolution after the live source changes.
 
