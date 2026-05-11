@@ -269,7 +269,7 @@ export function createAnalysisSourceGroupsWorkflow(
     try {
       await deps.deleteTemplate(decision.templateId);
       deps.patch({ status: templateDeletedStatus(decision.name) });
-      await deps.loadTemplates();
+      await loadTemplates();
       const fallback = templateFallbackSelection(deps.getState().templates);
       deps.patch({ selectedTemplateId: fallback.selectedTemplateId });
       deps.bindTemplateEditor(fallback.template);

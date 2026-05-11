@@ -75,7 +75,11 @@
   }
 
   function inputValue(event: Event) {
-    return (event.currentTarget as HTMLInputElement).value;
+    const target = event.currentTarget;
+    if (target instanceof HTMLInputElement) {
+      return target.value;
+    }
+    return "";
   }
 </script>
 

@@ -57,7 +57,7 @@ export function sourceItemToReaderItem(
     selectedTraceRef = null,
   }: { sourceTitle: string; selectedTraceRef?: string | null },
 ): SourceReaderItem {
-  const ref = null;
+  const ref = liveSourceItemRef(item);
   return {
     id: `live:${item.id}`,
     sourceId: item.sourceId,
@@ -112,7 +112,7 @@ export function analysisRunMessageToReaderItem(
     youtubeUrl:
       canonicalUrl && startSeconds !== null
         ? youtubeTimestampUrl(canonicalUrl, startSeconds)
-        : canonicalUrl,
+        : safeUrl(canonicalUrl),
     captionLabel: [captionLanguage, captionTrackKind].filter(Boolean).join(" ") || null,
     selected: selectedTraceRef !== null && message.ref === selectedTraceRef,
   };
@@ -126,17 +126,18 @@ export function youtubeSegmentToReaderItem(
     selectedTraceRef = null,
   }: { sourceTitle: string; canonicalUrl: string | null; selectedTraceRef?: string | null },
 ): SourceReaderItem {
-  const startSeconds = millisecondsToSeconds(segment.startMs);
+  const startSeconds = Math.floor(segment.startMs / 1000);
   const endSeconds = millisecondsToSeconds(segment.endMs);
+  const ref = youtubeSegmentRef(segment);
   return {
     id: `youtube-segment:${segment.id}`,
     sourceId: segment.sourceId,
     sourceTitle,
     externalId: `segment:${segment.segmentIndex}`,
-    ref: null,
+    ref,
     kind: "youtube_transcript",
     author: null,
-    publishedAt: startSeconds ?? 0,
+    publishedAt: startSeconds,
     content: segment.text,
     topicLabel: null,
     replyLabel: null,
@@ -144,9 +145,9 @@ export function youtubeSegmentToReaderItem(
     mediaCards: [],
     youtubeStartSeconds: startSeconds,
     youtubeEndSeconds: endSeconds,
-    youtubeUrl: canonicalUrl && startSeconds !== null ? youtubeTimestampUrl(canonicalUrl, startSeconds) : null,
+    youtubeUrl: canonicalUrl ? youtubeTimestampUrl(canonicalUrl, startSeconds) : null,
     captionLabel: [segment.captionLanguage, segment.captionTrackKind].filter(Boolean).join(" ") || null,
-    selected: selectedTraceRef !== null && false,
+    selected: selectedTraceRef !== null && ref === selectedTraceRef,
   };
 }
 
@@ -178,9 +179,10 @@ export function groupReaderItemsBySource(items: SourceReaderItem[]): SourceReade
 }
 
 export function formatYoutubeTime(totalSeconds: number) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+  const intSeconds = Math.floor(totalSeconds);
+  const hours = Math.floor(intSeconds / 3600);
+  const minutes = Math.floor((intSeconds % 3600) / 60);
+  const seconds = intSeconds % 60;
   if (hours > 0) {
     return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
@@ -188,9 +190,11 @@ export function formatYoutubeTime(totalSeconds: number) {
 }
 
 export function youtubeTimestampUrl(canonicalUrl: string, seconds: number) {
-  const url = new URL(canonicalUrl);
-  url.searchParams.set("t", String(seconds));
-  return url.toString();
+  const url = safeUrl(canonicalUrl);
+  if (!url) return null;
+  const timestampUrl = new URL(url);
+  timestampUrl.searchParams.set("t", String(Math.floor(seconds)));
+  return timestampUrl.toString();
 }
 
 function compareReaderItems(left: SourceReaderItem, right: SourceReaderItem) {
@@ -203,6 +207,23 @@ function itemKind(value: string | null): SourceReaderKind {
   if (value === "youtube_comment") return "youtube_comment";
   if (value === "youtube_description") return "youtube_description";
   return "generic_item";
+}
+
+function liveSourceItemRef(item: Pick<SourceItem, "sourceId" | "id">) {
+  return `s${item.sourceId}-i${item.id}`;
+}
+
+function youtubeSegmentRef(segment: Pick<YoutubeTranscriptSegment, "sourceId" | "itemId" | "startMs">) {
+  return `s${segment.sourceId}-i${segment.itemId}@${segment.startMs}ms`;
+}
+
+function safeUrl(value: string | null) {
+  if (!value) return null;
+  try {
+    return new URL(value).toString();
+  } catch {
+    return null;
+  }
 }
 
 function replyLabel(item: Pick<SourceItem, "replyToMessageId" | "replyToTopMessageId">) {

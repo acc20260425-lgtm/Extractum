@@ -193,7 +193,7 @@ export function evidenceSourceActionDecision({
 }
 
 function normalizedText(value: string | null | undefined) {
-  return (value ?? "").trim().toLocaleLowerCase();
+  return (value ?? "").trim().toLowerCase();
 }
 
 function runSearchText(run: AnalysisRunSummary) {

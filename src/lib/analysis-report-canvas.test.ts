@@ -29,6 +29,7 @@ describe("report canvas component contract", () => {
     expect(reportCanvasSource).not.toContain("<ChatPanel");
     expect(reportSetupPanelSource).toContain("TemplateEditor");
     expect(reportSetupPanelSource).toContain("SourceGroupEditor");
+    expect(reportSetupPanelSource).toContain("{#if !startingReport && !selectedRunIsActive}");
     expect(reportSetupPanelSource).toContain('class="template-editor-drawer"');
     expect(reportSetupPanelSource).toContain('class="group-editor-drawer"');
   });
@@ -39,8 +40,9 @@ describe("report canvas component contract", () => {
     expect(reportRunHeaderSource).toContain("currentRun.status");
     expect(reportRunHeaderSource).toContain("currentRun.created_at");
     expect(reportRunHeaderSource).toContain("currentRun.completed_at");
-    expect(reportRunHeaderSource).toContain("currentRun.prompt_template_name");
-    expect(reportRunHeaderSource).toContain("currentRun.prompt_template_version");
+    expect(reportRunHeaderSource).toContain("promptTemplateLabel");
+    expect(reportRunHeaderSource).toContain("prompt_template_name");
+    expect(reportRunHeaderSource).toContain("prompt_template_version");
     expect(reportRunHeaderSource).toContain("currentRun.provider_profile");
     expect(reportRunHeaderSource).toContain("currentRun.provider");
     expect(reportRunHeaderSource).toContain("currentRun.model");

@@ -371,7 +371,7 @@
     {/if}
   </div>
 
-  {#if !startingReport}
+  {#if !startingReport && !selectedRunIsActive}
     <div class="preflight-panel">
       <div class="preflight-copy">
         <span class="eyebrow">Next step</span>

@@ -182,6 +182,16 @@ describe("analysis-workspace-persistence", () => {
       runs: { historyScope: "all", runFilter: "all" },
     }));
     expect(loadPersistedAnalysisWorkspaceState(storage)).toBeNull();
+
+    storage.setItem(ANALYSIS_WORKSPACE_STATE_KEY, JSON.stringify({
+      version: 1,
+      workspaceSelection: { kind: "source", sourceId: 7 },
+      canvasMode: "source",
+      sourceViewBasis: "live_source",
+      companionTab: "runs",
+      runs: { historyScope: "all", runFilter: "all", runsFilter: "invalid" },
+    }));
+    expect(loadPersistedAnalysisWorkspaceState(storage)).toBeNull();
   });
 
   it("normalizes restored UI state because OpenRunState is never persisted", () => {
@@ -222,15 +232,17 @@ describe("analysis-workspace-persistence", () => {
     )).toEqual({ kind: "source_group", sourceGroupId: 9 });
 
     expect(fallbackWorkspaceSelection(
-      { kind: "none" },
-      [source(7)],
-      [group(9)],
-    )).toEqual({ kind: "source", sourceId: 7 });
-
-    expect(fallbackWorkspaceSelection(
       { kind: "source", sourceId: 99 },
       [],
       [],
+    )).toEqual({ kind: "none" });
+  });
+
+  it("preserves explicit empty workspace selections", () => {
+    expect(fallbackWorkspaceSelection(
+      { kind: "none" },
+      [source(7)],
+      [group(9)],
     )).toEqual({ kind: "none" });
   });
 

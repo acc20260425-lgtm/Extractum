@@ -54,6 +54,12 @@
   const hasSnapshotWarning = $derived(
     currentRun.status === "completed" && snapshotAvailability === "unavailable",
   );
+  const promptTemplateLabel = $derived(templateLabel(currentRun));
+
+  function templateLabel(run: AnalysisRunDetail) {
+    const version = run.prompt_template_version as number | null;
+    return `${run.prompt_template_name ?? "Unknown"}${version === null ? "" : ` v${version}`}`;
+  }
 </script>
 
 <section class="report-run-header" aria-label="Opened run metadata">
@@ -65,7 +71,7 @@
     </div>
     <div class="run-header-actions">
       <Badge variant={statusTone(currentRun.status)}>{currentRun.status}</Badge>
-      <Badge variant={snapshotAvailability === "unavailable" ? "warning" : "neutral"}>{basisLabel}</Badge>
+      <Badge variant={hasSnapshotWarning ? "warning" : "neutral"}>{basisLabel}</Badge>
       {#if canCancelCurrentRun}
         <Button variant="danger-soft" type="button" onclick={onCancelCurrentRun}>
           <Square size={15} aria-hidden="true" /> Cancel run
@@ -86,7 +92,7 @@
     <MetaCell label="Created">{formatTimestamp(currentRun.created_at)}</MetaCell>
     <MetaCell label="Completed">{formatTimestamp(currentRun.completed_at)}</MetaCell>
     <MetaCell label="Period">{formatPeriod(currentRun.period_from, currentRun.period_to)}</MetaCell>
-    <MetaCell label="Template">{currentRun.prompt_template_name ?? "Unknown"} v{currentRun.prompt_template_version}</MetaCell>
+    <MetaCell label="Template">{promptTemplateLabel}</MetaCell>
     <MetaCell label="Provider profile">{currentRun.provider_profile}</MetaCell>
     <MetaCell label="Provider/model">{currentRun.provider}/{currentRun.model}</MetaCell>
     <MetaCell label="Source basis">{basisDescription}</MetaCell>

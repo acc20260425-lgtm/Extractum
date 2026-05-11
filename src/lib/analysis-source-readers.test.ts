@@ -64,6 +64,10 @@ describe("analysis source readers", () => {
   it("groups source group material by source", () => {
     expect(sourceGroupReaderSource).toContain('class="source-group-reader"');
     expect(sourceGroupReaderSource).toContain("groupReaderItemsBySource");
+    expect(sourceGroupReaderSource).toContain("youtubeItems");
+    expect(sourceGroupReaderSource).toContain("telegramItems");
+    expect(sourceGroupReaderSource).toContain('item.kind === "youtube_transcript"');
+    expect(sourceGroupReaderSource).not.toContain("snapshotItems={group.items}");
     expect(sourceGroupReaderSource).toContain("source-heading");
     expect(sourceGroupReaderSource).toContain("selectedGroupSourceId");
     expect(sourceGroupReaderSource).toContain("onChangeSelectedGroupSourceId");

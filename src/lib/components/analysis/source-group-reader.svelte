@@ -63,17 +63,19 @@
     <EmptyState description="No source material is loaded for this group view." />
   {:else}
     {#each sourceGroups as group (group.sourceId)}
+      {@const youtubeItems = group.items.filter((item) => item.kind === "youtube_transcript")}
+      {@const telegramItems = group.items.filter((item) => item.kind !== "youtube_transcript")}
       <section class="source-bucket" aria-label={group.sourceTitle}>
         <div class="source-heading">
           <h3>{group.sourceTitle}</h3>
           <span>{group.items.length} loaded items</span>
         </div>
 
-        {#if group.items.some((item) => item.kind === "youtube_transcript")}
+        {#if youtubeItems.length > 0}
           <YoutubeTranscriptReader
             detail={youtubeDetailsBySource[group.sourceId] ?? null}
             segments={[]}
-            snapshotItems={group.items}
+            snapshotItems={youtubeItems}
             {loading}
             hasMore={hasMoreBySource[group.sourceId] ?? false}
             transcriptSearch=""
@@ -85,9 +87,11 @@
             onSyncTranscript={() => {}}
             onSyncMetadata={() => {}}
           />
-        {:else}
+        {/if}
+
+        {#if telegramItems.length > 0}
           <TelegramTimelineReader
-            items={group.items}
+            items={telegramItems}
             {loading}
             hasMore={hasMoreBySource[group.sourceId] ?? false}
             {formatTimestamp}

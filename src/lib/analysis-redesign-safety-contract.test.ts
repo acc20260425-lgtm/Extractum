@@ -11,9 +11,9 @@ import evidenceTabSource from "./components/analysis/run-evidence-tab.svelte?raw
 import chatTabSource from "./components/analysis/run-chat-tab.svelte?raw";
 import runsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
 import reportRunHeaderSource from "./components/analysis/report-run-header.svelte?raw";
-import runCompanionStateSource from "./analysis-run-companion-state?raw";
-import analysisUtilsSource from "./analysis-utils?raw";
-import workspaceStateSource from "./analysis-workspace-state?raw";
+import runCompanionStateSource from "./analysis-run-companion-state.ts?raw";
+import analysisUtilsSource from "./analysis-utils.ts?raw";
+import workspaceStateSource from "./analysis-workspace-state.ts?raw";
 import chatBackendSource from "../../src-tauri/src/analysis/chat.rs?raw";
 import corpusBackendSource from "../../src-tauri/src/analysis/corpus.rs?raw";
 import storeBackendSource from "../../src-tauri/src/analysis/store.rs?raw";
@@ -74,6 +74,7 @@ describe("analysis redesign final safety contract", () => {
     expect(telegramTimelineSource).toContain("replyLabel");
     expect(telegramTimelineSource).toContain("reactionLabel");
     expect(telegramTimelineSource).toContain("<TelegramMediaCard");
+    expect(telegramTimelineSource).toContain("item.mediaCards as media, index");
     expect(telegramMediaCardSource).toContain("media.fileName");
     expect(telegramMediaCardSource).toContain("media.mimeType");
     expect(telegramMediaCardSource).not.toContain("<img");
@@ -86,6 +87,9 @@ describe("analysis redesign final safety contract", () => {
     expect(youtubeTranscriptSource).toContain("Search transcript");
     expect(youtubeTranscriptSource).toContain("Copy timestamp link");
     expect(youtubeTranscriptSource).toContain("youtubeTimestampUrl");
+    expect(youtubeTranscriptSource).toContain("navigator.clipboard");
+    expect(youtubeTranscriptSource).toContain("catch");
+    expect(youtubeTranscriptSource).toContain('rel="noopener noreferrer"');
     expect(youtubeTranscriptSource).not.toContain("<iframe");
     expect(youtubeTranscriptSource).not.toContain("<video");
     expect(youtubePlaylistSource).toContain('class="youtube-playlist-reader"');
@@ -96,6 +100,8 @@ describe("analysis redesign final safety contract", () => {
   it("keeps source groups grouped by source instead of merged into one pseudo-chat", () => {
     expect(sourceGroupReaderSource).toContain('class="source-group-reader"');
     expect(sourceGroupReaderSource).toContain("groupReaderItemsBySource");
+    expect(sourceGroupReaderSource).toContain("youtubeItems");
+    expect(sourceGroupReaderSource).toContain("telegramItems");
     expect(sourceGroupReaderSource).toContain("source-heading");
     expect(sourceGroupReaderSource).toContain("selectedGroupSourceId");
     expect(sourceGroupReaderSource).not.toContain("mergedTimeline");
@@ -111,5 +117,17 @@ describe("analysis redesign final safety contract", () => {
     expect(workspaceStateSource).toContain("liveScopeExists");
     expect(reportRunHeaderSource).toContain("Source basis");
     expect(reportRunHeaderSource).toContain("youtube_corpus_mode");
+    expect(reportRunHeaderSource).toContain("promptTemplateLabel");
+    expect(reportRunHeaderSource).toContain('hasSnapshotWarning ? "warning" : "neutral"');
+  });
+
+  it("does not hide completed chat persistence failures", () => {
+    expect(chatBackendSource).toContain("persist_chat_exchange");
+    expect(chatBackendSource).not.toContain("let _ = persist_chat_exchange");
+  });
+
+  it("uses stable run filter normalization instead of locale-sensitive casing", () => {
+    expect(runCompanionStateSource).toContain(".toLowerCase()");
+    expect(runCompanionStateSource).not.toContain(".toLocaleLowerCase()");
   });
 });
