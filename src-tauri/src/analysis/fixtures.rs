@@ -56,11 +56,271 @@ pub async fn clear_analysis_redesign_fixtures(
     clear_analysis_redesign_fixtures_in_pool(&pool).await
 }
 
+fn json_zstd(value: serde_json::Value) -> AppResult<Vec<u8>> {
+    let json = serde_json::to_vec(&value).map_err(|error| AppError::internal(error.to_string()))?;
+    crate::compression::compress_json_bytes(&json).map_err(AppError::internal)
+}
+
+async fn insert_fixture_account(tx: &mut sqlx::Transaction<'_, Sqlite>) -> AppResult<i64> {
+    sqlx::query_scalar(
+        "INSERT INTO accounts (label, api_id, api_hash, phone, created_at)
+         VALUES (?, 100001, '', NULL, ?)
+         RETURNING id",
+    )
+    .bind(format!("{FIXTURE_MARKER} Telegram Account"))
+    .bind(FIXTURE_NOW)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn insert_fixture_prompt_template(tx: &mut sqlx::Transaction<'_, Sqlite>) -> AppResult<i64> {
+    sqlx::query_scalar(
+        "INSERT INTO analysis_prompt_templates (
+            name, template_kind, body, version, is_builtin, created_at, updated_at
+         )
+         VALUES (?, 'report', ?, 1, 0, ?, ?)
+         RETURNING id",
+    )
+    .bind(format!("{FIXTURE_MARKER} Report Template"))
+    .bind(
+        "Write a concise fixture report. Cite saved evidence refs and keep fixture labels visible.",
+    )
+    .bind(FIXTURE_NOW)
+    .bind(FIXTURE_NOW)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn insert_fixture_llm_profile(tx: &mut sqlx::Transaction<'_, Sqlite>) -> AppResult<()> {
+    for (key, value) in [
+        (
+            format!("llm.profile.{FIXTURE_PROFILE_ID}.provider"),
+            "gemini".to_string(),
+        ),
+        (
+            format!("llm.profile.{FIXTURE_PROFILE_ID}.default_model"),
+            "gemini-2.5-flash".to_string(),
+        ),
+        (
+            format!("llm.profile.{FIXTURE_PROFILE_ID}.base_url"),
+            String::new(),
+        ),
+    ] {
+        sqlx::query(
+            "INSERT INTO app_settings (key, value)
+             VALUES (?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&mut **tx)
+        .await
+        .map_err(AppError::database)?;
+    }
+    Ok(())
+}
+
+async fn insert_telegram_source(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    account_id: i64,
+    label: &str,
+    kind: &str,
+    external_suffix: &str,
+    last_sync_state: i64,
+) -> AppResult<i64> {
+    sqlx::query_scalar(
+        "INSERT INTO sources (
+            source_type, source_subtype, telegram_source_kind, account_id, external_id, title,
+            metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
+         )
+         VALUES ('telegram', ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+         RETURNING id",
+    )
+    .bind(kind)
+    .bind(kind)
+    .bind(account_id)
+    .bind(format!("{FIXTURE_EXTERNAL_PREFIX}{external_suffix}"))
+    .bind(label)
+    .bind(json_zstd(serde_json::json!({
+        "analysis_redesign_fixture": true,
+        "peer_identity": {
+            "strategy": "dialog",
+            "username": external_suffix,
+            "access_hash": 424242
+        }
+    }))?)
+    .bind(last_sync_state)
+    .bind(FIXTURE_NOW - 600)
+    .bind(FIXTURE_NOW)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn insert_youtube_video_source(tx: &mut sqlx::Transaction<'_, Sqlite>) -> AppResult<i64> {
+    let video_id = format!("{FIXTURE_EXTERNAL_PREFIX}youtube-video");
+    sqlx::query_scalar(
+        "INSERT INTO sources (
+            source_type, source_subtype, telegram_source_kind, account_id, external_id, title,
+            metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
+         )
+         VALUES ('youtube', 'video', '', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
+         RETURNING id",
+    )
+    .bind(&video_id)
+    .bind(YOUTUBE_VIDEO_LABEL)
+    .bind(json_zstd(serde_json::json!({
+        "analysis_redesign_fixture": true,
+        "video_id": video_id,
+        "canonical_url": "https://www.youtube.com/watch?v=analysis_fixture_video",
+        "title": YOUTUBE_VIDEO_LABEL,
+        "channel_title": "Fixture Channel",
+        "channel_id": "UCfixture",
+        "channel_handle": "@analysisfixture",
+        "channel_url": "https://www.youtube.com/@analysisfixture",
+        "author_display": "Fixture Channel",
+        "published_at": "2026-05-01",
+        "duration_seconds": 920,
+        "description": "Fixture video description for analysis report verification.",
+        "thumbnail_url": null,
+        "tags": ["fixture", "analysis"],
+        "chapters": [],
+        "view_count": 1250,
+        "like_count": 86,
+        "comment_count": 2,
+        "category": "Education",
+        "video_form": "regular",
+        "availability_status": "available",
+        "raw_metadata_json": { "fixture": true }
+    }))?)
+    .bind(FIXTURE_NOW - 540)
+    .bind(FIXTURE_NOW)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn insert_youtube_playlist_source(tx: &mut sqlx::Transaction<'_, Sqlite>) -> AppResult<i64> {
+    let playlist_id = format!("{FIXTURE_EXTERNAL_PREFIX}youtube-playlist");
+    sqlx::query_scalar(
+        "INSERT INTO sources (
+            source_type, source_subtype, telegram_source_kind, account_id, external_id, title,
+            metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
+         )
+         VALUES ('youtube', 'playlist', '', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
+         RETURNING id",
+    )
+    .bind(&playlist_id)
+    .bind(YOUTUBE_PLAYLIST_LABEL)
+    .bind(json_zstd(serde_json::json!({
+        "analysis_redesign_fixture": true,
+        "playlist_id": playlist_id,
+        "canonical_url": "https://www.youtube.com/playlist?list=analysis_fixture_playlist",
+        "title": YOUTUBE_PLAYLIST_LABEL,
+        "channel_title": "Fixture Channel",
+        "channel_id": "UCfixture",
+        "channel_handle": "@analysisfixture",
+        "channel_url": "https://www.youtube.com/@analysisfixture",
+        "thumbnail_url": null,
+        "video_count": 2,
+        "items": [],
+        "availability_status": "available",
+        "raw_metadata_json": { "fixture": true }
+    }))?)
+    .bind(FIXTURE_NOW - 500)
+    .bind(FIXTURE_NOW)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn insert_fixture_source_group(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    telegram_channel_id: i64,
+    telegram_supergroup_id: i64,
+) -> AppResult<i64> {
+    let group_id: i64 = sqlx::query_scalar(
+        "INSERT INTO analysis_source_groups (name, source_type, created_at, updated_at)
+         VALUES (?, 'telegram', ?, ?)
+         RETURNING id",
+    )
+    .bind(TELEGRAM_GROUP_LABEL)
+    .bind(FIXTURE_NOW)
+    .bind(FIXTURE_NOW)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+
+    for source_id in [telegram_channel_id, telegram_supergroup_id] {
+        sqlx::query(
+            "INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+             VALUES (?, ?, ?)",
+        )
+        .bind(group_id)
+        .bind(source_id)
+        .bind(FIXTURE_NOW)
+        .execute(&mut **tx)
+        .await
+        .map_err(AppError::database)?;
+    }
+    Ok(group_id)
+}
+
 async fn seed_analysis_redesign_fixtures_in_pool(
     pool: &Pool<Sqlite>,
 ) -> AppResult<AnalysisRedesignFixtureSummary> {
     let _ = clear_analysis_redesign_fixtures_in_pool(pool).await?;
-    Ok(AnalysisRedesignFixtureSummary::default())
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+
+    let account_id = insert_fixture_account(&mut tx).await?;
+    let prompt_template_id = insert_fixture_prompt_template(&mut tx).await?;
+    insert_fixture_llm_profile(&mut tx).await?;
+    let telegram_channel_id = insert_telegram_source(
+        &mut tx,
+        account_id,
+        TELEGRAM_CHANNEL_LABEL,
+        "channel",
+        "telegram-channel",
+        9001,
+    )
+    .await?;
+    let telegram_supergroup_id = insert_telegram_source(
+        &mut tx,
+        account_id,
+        TELEGRAM_SUPERGROUP_LABEL,
+        "supergroup",
+        "telegram-supergroup",
+        9101,
+    )
+    .await?;
+    let youtube_video_id = insert_youtube_video_source(&mut tx).await?;
+    let youtube_playlist_id = insert_youtube_playlist_source(&mut tx).await?;
+    let source_group_id =
+        insert_fixture_source_group(&mut tx, telegram_channel_id, telegram_supergroup_id).await?;
+
+    let _ = (
+        prompt_template_id,
+        source_group_id,
+        youtube_video_id,
+        youtube_playlist_id,
+    );
+
+    tx.commit().await.map_err(AppError::database)?;
+
+    Ok(AnalysisRedesignFixtureSummary {
+        accounts: 1,
+        llm_profiles: 1,
+        sources: 4,
+        source_groups: 1,
+        prompt_templates: 1,
+        runs: 0,
+        snapshot_messages: 0,
+        chat_messages: 0,
+        youtube_transcript_segments: 0,
+        youtube_playlist_items: 0,
+    })
 }
 
 async fn clear_analysis_redesign_fixtures_in_pool(
@@ -586,6 +846,84 @@ mod tests {
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM youtube_playlist_items").await,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_creates_safe_account_prompt_profile_sources_and_group() {
+        let pool = fixture_pool().await;
+
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        let account: (String, i64, String, Option<String>) = sqlx::query_as(
+            "SELECT label, api_id, api_hash, phone FROM accounts WHERE label = ?",
+        )
+        .bind(TELEGRAM_CHANNEL_LABEL.replace("Telegram Channel", "Telegram Account"))
+        .fetch_one(&pool)
+        .await
+        .expect("load fixture account");
+        assert!(account.0.starts_with(FIXTURE_MARKER));
+        assert_eq!(account.1, 100_001);
+        assert_eq!(account.2, "");
+        assert_eq!(account.3, None);
+
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM sources WHERE title LIKE '__analysis_redesign_fixture__%'"
+            )
+            .await,
+            4
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM sources WHERE source_type = 'telegram' AND account_id IS NOT NULL"
+            )
+            .await,
+            2
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_source_groups WHERE name = '__analysis_redesign_fixture__ Telegram Group'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_source_group_members"
+            )
+            .await,
+            2
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_prompt_templates WHERE name LIKE '__analysis_redesign_fixture__%' AND template_kind = 'report'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM app_settings WHERE key LIKE 'llm.profile.__analysis_redesign_fixture__.%'"
+            )
+            .await,
+            3
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM app_settings WHERE key LIKE 'llm.profile.__analysis_redesign_fixture__.api_key'"
+            )
+            .await,
             0
         );
     }
