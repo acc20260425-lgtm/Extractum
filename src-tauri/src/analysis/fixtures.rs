@@ -526,6 +526,337 @@ async fn insert_youtube_content(
     Ok(())
 }
 
+struct FixtureIds {
+    prompt_template_id: i64,
+    telegram_channel_id: i64,
+    telegram_supergroup_id: i64,
+    youtube_video_id: i64,
+    source_group_id: i64,
+}
+
+async fn insert_run(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    label: &str,
+    scope_type: &str,
+    source_id: Option<i64>,
+    source_group_id: Option<i64>,
+    prompt_template_id: i64,
+    status: &str,
+    result_markdown: Option<&str>,
+    trace_data_zstd: Option<Vec<u8>>,
+    error: Option<&str>,
+    completed_at: Option<i64>,
+) -> AppResult<i64> {
+    sqlx::query_scalar(
+        "INSERT INTO analysis_runs (
+            run_type, scope_type, source_id, source_group_id, period_from, period_to,
+            output_language, prompt_template_id, prompt_template_version, provider_profile,
+            provider, model, youtube_corpus_mode, status, result_markdown, trace_data_zstd,
+            scope_label_snapshot, error, created_at, completed_at
+         )
+         VALUES (
+            'report', ?, ?, ?, ?, ?, 'English', ?, 1, ?, 'gemini',
+            'gemini-2.5-flash', 'transcript_description_comments', ?, ?, ?, ?, ?, ?, ?
+         )
+         RETURNING id",
+    )
+    .bind(scope_type)
+    .bind(source_id)
+    .bind(source_group_id)
+    .bind(FIXTURE_PERIOD_FROM)
+    .bind(FIXTURE_PERIOD_TO)
+    .bind(prompt_template_id)
+    .bind(FIXTURE_PROFILE_ID)
+    .bind(status)
+    .bind(result_markdown)
+    .bind(trace_data_zstd)
+    .bind(label)
+    .bind(error)
+    .bind(FIXTURE_NOW)
+    .bind(completed_at)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn insert_snapshot_message(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    run_id: i64,
+    item_id: i64,
+    source_id: i64,
+    external_id: &str,
+    author: &str,
+    published_at: i64,
+    reference: &str,
+    content: &str,
+    item_kind: &str,
+    source_type: &str,
+    source_subtype: &str,
+    metadata: Option<serde_json::Value>,
+) -> AppResult<()> {
+    sqlx::query(
+        "INSERT INTO analysis_run_messages (
+            run_id, item_id, source_id, external_id, author, published_at, ref, content_zstd,
+            item_kind, source_type, source_subtype, metadata_zstd
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(run_id)
+    .bind(item_id)
+    .bind(source_id)
+    .bind(external_id)
+    .bind(author)
+    .bind(published_at)
+    .bind(reference)
+    .bind(crate::compression::compress_text(content).map_err(AppError::internal)?)
+    .bind(item_kind)
+    .bind(source_type)
+    .bind(source_subtype)
+    .bind(metadata.map(json_zstd).transpose()?)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+fn trace_zstd(refs: serde_json::Value) -> AppResult<Vec<u8>> {
+    json_zstd(serde_json::json!({ "refs": refs }))
+}
+
+async fn first_item_id(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    external_suffix: &str,
+) -> AppResult<i64> {
+    sqlx::query_scalar("SELECT id FROM items WHERE external_id = ?")
+        .bind(format!("{FIXTURE_EXTERNAL_PREFIX}{external_suffix}"))
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(AppError::database)
+}
+
+async fn insert_analysis_runs(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    ids: FixtureIds,
+) -> AppResult<()> {
+    let youtube_item_id = first_item_id(tx, "youtube-transcript").await?;
+    let telegram_item_id = first_item_id(tx, "tg-channel-1").await?;
+    let youtube_ref = format!("s{}-i{}@754000ms", ids.youtube_video_id, youtube_item_id);
+    let telegram_ref = format!("s{}-i{}", ids.telegram_channel_id, telegram_item_id);
+
+    let completed_youtube_run_id = insert_run(
+        tx,
+        COMPLETED_SNAPSHOT_RUN_LABEL,
+        "single_source",
+        Some(ids.youtube_video_id),
+        None,
+        ids.prompt_template_id,
+        "completed",
+        Some(&format!(
+            "# {COMPLETED_SNAPSHOT_RUN_LABEL}\n\nYouTube evidence is available at [{youtube_ref}]."
+        )),
+        Some(trace_zstd(serde_json::json!([{
+            "ref": youtube_ref,
+            "item_id": youtube_item_id,
+            "source_id": ids.youtube_video_id,
+            "external_id": format!("{FIXTURE_EXTERNAL_PREFIX}youtube-transcript"),
+            "published_at": FIXTURE_PERIOD_FROM + 6_000,
+            "excerpt": "Fixture timestamp segment supports Show in source.",
+            "youtube_url": "https://www.youtube.com/watch?v=analysis_fixture_video&t=754",
+            "youtube_timestamp_seconds": 754,
+            "youtube_display_label": format!("{YOUTUBE_VIDEO_LABEL} at 12:34"),
+            "is_synthetic": false
+        }]))?),
+        None,
+        Some(FIXTURE_NOW + 20),
+    )
+    .await?;
+    insert_snapshot_message(
+        tx,
+        completed_youtube_run_id,
+        youtube_item_id,
+        ids.youtube_video_id,
+        &format!("{FIXTURE_EXTERNAL_PREFIX}youtube-transcript"),
+        "Fixture Channel",
+        FIXTURE_PERIOD_FROM + 6_000,
+        &youtube_ref,
+        "Fixture timestamp segment supports Show in source.",
+        "youtube_transcript",
+        "youtube",
+        "video",
+        Some(serde_json::json!({
+            "analysis_redesign_fixture": true,
+            "canonical_url": "https://www.youtube.com/watch?v=analysis_fixture_video",
+            "title": YOUTUBE_VIDEO_LABEL,
+            "segment_start_ms": 754000,
+            "segment_end_ms": 779000
+        })),
+    )
+    .await?;
+
+    let missing_ref = format!("s{}-i999999", ids.telegram_channel_id);
+    insert_run(
+        tx,
+        MISSING_SNAPSHOT_RUN_LABEL,
+        "single_source",
+        Some(ids.telegram_channel_id),
+        None,
+        ids.prompt_template_id,
+        "completed",
+        Some(&format!(
+            "# {MISSING_SNAPSHOT_RUN_LABEL}\n\nThis report cites missing saved evidence [{missing_ref}]."
+        )),
+        Some(trace_zstd(serde_json::json!([{
+            "ref": missing_ref,
+            "item_id": 999999,
+            "source_id": ids.telegram_channel_id,
+            "external_id": "missing-fixture-item",
+            "published_at": FIXTURE_PERIOD_FROM + 100,
+            "excerpt": "Missing fixture evidence",
+            "youtube_url": null,
+            "youtube_timestamp_seconds": null,
+            "youtube_display_label": null,
+            "is_synthetic": false
+        }]))?),
+        None,
+        Some(FIXTURE_NOW + 30),
+    )
+    .await?;
+
+    for (label, status, error, completed_at) in [
+        (RUNNING_RUN_LABEL, "running", None, None),
+        (
+            FAILED_RUN_LABEL,
+            "failed",
+            Some("Fixture failure: provider request failed without changing user data"),
+            Some(FIXTURE_NOW + 40),
+        ),
+        (
+            CANCELLED_RUN_LABEL,
+            "cancelled",
+            Some("Fixture cancellation: run was cancelled before snapshot capture"),
+            Some(FIXTURE_NOW + 50),
+        ),
+    ] {
+        insert_run(
+            tx,
+            label,
+            "single_source",
+            Some(ids.telegram_channel_id),
+            None,
+            ids.prompt_template_id,
+            status,
+            None,
+            None,
+            error,
+            completed_at,
+        )
+        .await?;
+    }
+
+    let group_run_id = insert_run(
+        tx,
+        GROUP_SNAPSHOT_RUN_LABEL,
+        "source_group",
+        None,
+        Some(ids.source_group_id),
+        ids.prompt_template_id,
+        "completed",
+        Some(&format!(
+            "# {GROUP_SNAPSHOT_RUN_LABEL}\n\nTelegram evidence is available at [{telegram_ref}]."
+        )),
+        Some(trace_zstd(serde_json::json!([{
+            "ref": telegram_ref,
+            "item_id": telegram_item_id,
+            "source_id": ids.telegram_channel_id,
+            "external_id": format!("{FIXTURE_EXTERNAL_PREFIX}tg-channel-1"),
+            "published_at": FIXTURE_PERIOD_FROM + 1_200,
+            "excerpt": "fixture channel update: result-first analysis now has source evidence",
+            "youtube_url": null,
+            "youtube_timestamp_seconds": null,
+            "youtube_display_label": null,
+            "source_type": "telegram",
+            "is_synthetic": false
+        }]))?),
+        None,
+        Some(FIXTURE_NOW + 60),
+    )
+    .await?;
+    insert_snapshot_message(
+        tx,
+        group_run_id,
+        telegram_item_id,
+        ids.telegram_channel_id,
+        &format!("{FIXTURE_EXTERNAL_PREFIX}tg-channel-1"),
+        "Fixture Editor",
+        FIXTURE_PERIOD_FROM + 1_200,
+        &telegram_ref,
+        "fixture channel update: result-first analysis now has source evidence",
+        "telegram_message",
+        "telegram",
+        "channel",
+        Some(serde_json::json!({ "analysis_redesign_fixture": true })),
+    )
+    .await?;
+
+    let supergroup_topic_id = first_item_id(tx, "tg-supergroup-topic").await?;
+    let supergroup_media_id = first_item_id(tx, "tg-supergroup-media").await?;
+    insert_snapshot_message(
+        tx,
+        group_run_id,
+        supergroup_topic_id,
+        ids.telegram_supergroup_id,
+        &format!("{FIXTURE_EXTERNAL_PREFIX}tg-supergroup-topic"),
+        "Fixture Moderator",
+        FIXTURE_PERIOD_FROM + 3_600,
+        &format!("s{}-i{}", ids.telegram_supergroup_id, supergroup_topic_id),
+        "fixture supergroup topic: grouped source reader should preserve topic metadata",
+        "telegram_message",
+        "telegram",
+        "supergroup",
+        Some(serde_json::json!({ "analysis_redesign_fixture": true })),
+    )
+    .await?;
+    insert_snapshot_message(
+        tx,
+        group_run_id,
+        supergroup_media_id,
+        ids.telegram_supergroup_id,
+        &format!("{FIXTURE_EXTERNAL_PREFIX}tg-supergroup-media"),
+        "Fixture Member",
+        FIXTURE_PERIOD_FROM + 4_800,
+        &format!("s{}-i{}", ids.telegram_supergroup_id, supergroup_media_id),
+        "fixture supergroup media placeholder: no binary preview is available",
+        "telegram_message",
+        "telegram",
+        "supergroup",
+        Some(serde_json::json!({ "analysis_redesign_fixture": true })),
+    )
+    .await?;
+
+    for (role, content, created_at) in [
+        ("user", "Summarize the strongest fixture evidence.", FIXTURE_NOW + 70),
+        (
+            "assistant",
+            "The fixture evidence highlights saved snapshots, YouTube timestamps, and Telegram source context.",
+            FIXTURE_NOW + 71,
+        ),
+    ] {
+        sqlx::query(
+            "INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(group_run_id)
+        .bind(role)
+        .bind(content)
+        .bind(created_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    Ok(())
+}
+
 async fn seed_analysis_redesign_fixtures_in_pool(
     pool: &Pool<Sqlite>,
 ) -> AppResult<AnalysisRedesignFixtureSummary> {
@@ -559,13 +890,19 @@ async fn seed_analysis_redesign_fixtures_in_pool(
         insert_fixture_source_group(&mut tx, telegram_channel_id, telegram_supergroup_id).await?;
     insert_telegram_content(&mut tx, telegram_channel_id, telegram_supergroup_id).await?;
     insert_youtube_content(&mut tx, youtube_video_id, youtube_playlist_id).await?;
+    insert_analysis_runs(
+        &mut tx,
+        FixtureIds {
+            prompt_template_id,
+            telegram_channel_id,
+            telegram_supergroup_id,
+            youtube_video_id,
+            source_group_id,
+        },
+    )
+    .await?;
 
-    let _ = (
-        prompt_template_id,
-        source_group_id,
-        youtube_video_id,
-        youtube_playlist_id,
-    );
+    let _ = youtube_playlist_id;
 
     tx.commit().await.map_err(AppError::database)?;
 
@@ -575,9 +912,9 @@ async fn seed_analysis_redesign_fixtures_in_pool(
         sources: 4,
         source_groups: 1,
         prompt_templates: 1,
-        runs: 0,
-        snapshot_messages: 0,
-        chat_messages: 0,
+        runs: 6,
+        snapshot_messages: 4,
+        chat_messages: 2,
         youtube_transcript_segments: 3,
         youtube_playlist_items: 2,
     })
@@ -1307,6 +1644,186 @@ mod tests {
             String::from_utf8(crate::compression::decompress_bytes(&raw).expect("decompress raw"))
                 .expect("raw utf8")
                 .contains("analysis_redesign_fixture")
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_creates_fixture_runs_with_statuses_templates_and_snapshots() {
+        let pool = fixture_pool().await;
+        let summary = seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        assert_eq!(summary.runs, 6);
+        assert_eq!(summary.snapshot_messages, 4);
+        assert_eq!(summary.chat_messages, 2);
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_runs WHERE prompt_template_id IS NOT NULL"
+            )
+            .await,
+            6
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(DISTINCT status) FROM analysis_runs WHERE scope_label_snapshot LIKE '__analysis_redesign_fixture__%'"
+            )
+            .await,
+            4
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_runs WHERE status = 'completed'"
+            )
+            .await,
+            3
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_runs WHERE status = 'running'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_runs WHERE status = 'failed'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_runs WHERE status = 'cancelled'"
+            )
+            .await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn fixture_trace_refs_cover_youtube_timestamp_and_telegram_snapshot() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        let youtube_trace: Vec<u8> = sqlx::query_scalar(
+            "SELECT trace_data_zstd FROM analysis_runs WHERE scope_label_snapshot = ?",
+        )
+        .bind(COMPLETED_SNAPSHOT_RUN_LABEL)
+        .fetch_one(&pool)
+        .await
+        .expect("load youtube trace");
+        let telegram_trace: Vec<u8> = sqlx::query_scalar(
+            "SELECT trace_data_zstd FROM analysis_runs WHERE scope_label_snapshot = ?",
+        )
+        .bind(GROUP_SNAPSHOT_RUN_LABEL)
+        .fetch_one(&pool)
+        .await
+        .expect("load telegram trace");
+
+        let youtube_json: serde_json::Value = serde_json::from_slice(
+            &crate::compression::decompress_bytes(&youtube_trace).expect("decompress youtube trace"),
+        )
+        .expect("parse youtube trace");
+        let telegram_json: serde_json::Value = serde_json::from_slice(
+            &crate::compression::decompress_bytes(&telegram_trace)
+                .expect("decompress telegram trace"),
+        )
+        .expect("parse telegram trace");
+
+        assert!(
+            youtube_json["refs"]
+                .as_array()
+                .expect("youtube refs")
+                .iter()
+                .any(|value| value["ref"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("@754000ms"))
+        );
+        assert!(
+            telegram_json["refs"]
+                .as_array()
+                .expect("telegram refs")
+                .iter()
+                .any(|value| value["source_type"] == "telegram")
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_snapshot_run_has_trace_but_no_saved_messages() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        let run_id: i64 = sqlx::query_scalar(
+            "SELECT id FROM analysis_runs WHERE scope_label_snapshot = ?",
+        )
+        .bind(MISSING_SNAPSHOT_RUN_LABEL)
+        .fetch_one(&pool)
+        .await
+        .expect("load missing snapshot run");
+
+        assert_eq!(
+            count(
+                &pool,
+                &format!("SELECT COUNT(*) FROM analysis_run_messages WHERE run_id = {run_id}")
+            )
+            .await,
+            0
+        );
+        assert_eq!(
+            count(
+                &pool,
+                &format!(
+                    "SELECT COUNT(*) FROM analysis_runs WHERE id = {run_id} AND trace_data_zstd IS NOT NULL"
+                )
+            )
+            .await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_twice_keeps_one_deterministic_fixture_set() {
+        let pool = fixture_pool().await;
+
+        let first = seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures once");
+        let second = seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures twice");
+
+        assert_eq!(first, second);
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM sources WHERE title LIKE '__analysis_redesign_fixture__%'"
+            )
+            .await,
+            4
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_runs WHERE scope_label_snapshot LIKE '__analysis_redesign_fixture__%'"
+            )
+            .await,
+            6
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM analysis_run_messages").await,
+            4
         );
     }
 }
