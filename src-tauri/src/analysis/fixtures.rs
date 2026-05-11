@@ -268,6 +268,264 @@ async fn insert_fixture_source_group(
     Ok(group_id)
 }
 
+async fn insert_item(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    source_id: i64,
+    external_suffix: &str,
+    item_kind: &str,
+    author: &str,
+    published_at: i64,
+    content: &str,
+    content_kind: &str,
+    media_kind: Option<&str>,
+    media_metadata: Option<serde_json::Value>,
+    reply_to_msg_id: Option<i64>,
+    reply_to_top_id: Option<i64>,
+    reaction_count: Option<i64>,
+) -> AppResult<i64> {
+    let raw = json_zstd(serde_json::json!({
+        "analysis_redesign_fixture": true,
+        "external_suffix": external_suffix,
+        "item_kind": item_kind
+    }))?;
+    let media_metadata_zstd = media_metadata.map(json_zstd).transpose()?;
+    sqlx::query_scalar(
+        "INSERT INTO items (
+            source_id, external_id, item_kind, author, published_at, ingested_at, content_zstd,
+            raw_data_zstd, content_kind, has_media, media_kind, media_metadata_zstd,
+            reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
+            reaction_count
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+         RETURNING id",
+    )
+    .bind(source_id)
+    .bind(format!("{FIXTURE_EXTERNAL_PREFIX}{external_suffix}"))
+    .bind(item_kind)
+    .bind(author)
+    .bind(published_at)
+    .bind(FIXTURE_NOW - 480)
+    .bind(crate::compression::compress_text(content).map_err(AppError::internal)?)
+    .bind(raw)
+    .bind(content_kind)
+    .bind(media_metadata_zstd.is_some())
+    .bind(media_kind)
+    .bind(media_metadata_zstd)
+    .bind(reply_to_msg_id)
+    .bind(reply_to_top_id)
+    .bind(reaction_count)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn insert_telegram_content(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    telegram_channel_id: i64,
+    telegram_supergroup_id: i64,
+) -> AppResult<()> {
+    insert_item(
+        tx,
+        telegram_channel_id,
+        "tg-channel-1",
+        "telegram_message",
+        "Fixture Editor",
+        FIXTURE_PERIOD_FROM + 1_200,
+        "fixture channel update: result-first analysis now has source evidence",
+        "text_only",
+        None,
+        None,
+        None,
+        None,
+        Some(4),
+    )
+    .await?;
+    insert_item(
+        tx,
+        telegram_channel_id,
+        "tg-channel-2",
+        "telegram_message",
+        "Fixture Analyst",
+        FIXTURE_PERIOD_FROM + 2_400,
+        "fixture channel update: browser verification should show this timeline row",
+        "text_only",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO telegram_forum_topics (
+            source_id, topic_id, top_message_id, title, icon_color, icon_emoji_id,
+            is_closed, is_pinned, is_hidden, is_deleted, sort_order, last_seen_at, updated_at
+         )
+         VALUES (?, 501, 7001, ?, 7322096, NULL, 0, 1, 0, 0, 1, ?, ?)",
+    )
+    .bind(telegram_supergroup_id)
+    .bind(format!("{FIXTURE_MARKER} Topic"))
+    .bind(FIXTURE_NOW - 420)
+    .bind(FIXTURE_NOW - 420)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_item(
+        tx,
+        telegram_supergroup_id,
+        "tg-supergroup-topic",
+        "telegram_message",
+        "Fixture Moderator",
+        FIXTURE_PERIOD_FROM + 3_600,
+        "fixture supergroup topic: grouped source reader should preserve topic metadata",
+        "text_only",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await?;
+    insert_item(
+        tx,
+        telegram_supergroup_id,
+        "tg-supergroup-media",
+        "telegram_message",
+        "Fixture Member",
+        FIXTURE_PERIOD_FROM + 4_800,
+        "fixture supergroup media placeholder: no binary preview is available",
+        "text_with_media",
+        Some("photo"),
+        Some(serde_json::json!({
+            "analysis_redesign_fixture": true,
+            "summary": "Fixture image placeholder",
+            "file_name": "fixture-proof.jpg",
+            "mime_type": "image/jpeg",
+            "size_bytes": 204800,
+            "width": 1280,
+            "height": 720
+        })),
+        Some(7001),
+        Some(501),
+        Some(2),
+    )
+    .await?;
+    Ok(())
+}
+
+async fn insert_youtube_content(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    youtube_video_id: i64,
+    youtube_playlist_id: i64,
+) -> AppResult<()> {
+    let transcript_item_id = insert_item(
+        tx,
+        youtube_video_id,
+        "youtube-transcript",
+        "youtube_transcript",
+        "Fixture Channel",
+        FIXTURE_PERIOD_FROM + 6_000,
+        "Fixture transcript full text for result-first report evidence.",
+        "text_only",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await?;
+
+    for (index, start_ms, text) in [
+        (0_i64, 0_i64, "Fixture opening segment introduces the redesign."),
+        (
+            1_i64,
+            754_000_i64,
+            "Fixture timestamp segment supports Show in source.",
+        ),
+        (
+            2_i64,
+            790_000_i64,
+            "Fixture closing segment mentions evidence tabs.",
+        ),
+    ] {
+        sqlx::query(
+            "INSERT INTO youtube_transcript_segments (
+                item_id, source_id, segment_index, start_ms, end_ms, text,
+                chapter_index, caption_language, caption_track_kind, is_auto_generated,
+                metadata_zstd
+             )
+             VALUES (?, ?, ?, ?, ?, ?, NULL, 'en', 'manual', 0, ?)",
+        )
+        .bind(transcript_item_id)
+        .bind(youtube_video_id)
+        .bind(index)
+        .bind(start_ms)
+        .bind(start_ms + 25_000)
+        .bind(text)
+        .bind(json_zstd(serde_json::json!({ "analysis_redesign_fixture": true }))?)
+        .execute(&mut **tx)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    insert_item(
+        tx,
+        youtube_video_id,
+        "youtube-comment",
+        "youtube_comment",
+        "Fixture Commenter",
+        FIXTURE_PERIOD_FROM + 7_200,
+        "Fixture comment validates transcript_description_comments mode.",
+        "text_only",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO youtube_playlist_items (
+            playlist_source_id, video_source_id, video_id, position, title_snapshot, url,
+            thumbnail_url, availability_status, is_removed_from_playlist, last_seen_at,
+            metadata_zstd, created_at, updated_at
+         )
+         VALUES
+            (?, ?, ?, 1, ?, 'https://www.youtube.com/watch?v=analysis_fixture_video', NULL,
+             'available', 0, ?, ?, ?, ?),
+            (?, NULL, ?, 2, ?, 'https://www.youtube.com/watch?v=analysis_fixture_missing', NULL,
+             'private_or_auth_required', 0, ?, ?, ?, ?)",
+    )
+    .bind(youtube_playlist_id)
+    .bind(youtube_video_id)
+    .bind(format!("{FIXTURE_EXTERNAL_PREFIX}youtube-video"))
+    .bind(YOUTUBE_VIDEO_LABEL)
+    .bind(FIXTURE_NOW - 360)
+    .bind(json_zstd(serde_json::json!({
+        "analysis_redesign_fixture": true,
+        "linked": true
+    }))?)
+    .bind(FIXTURE_NOW)
+    .bind(FIXTURE_NOW)
+    .bind(youtube_playlist_id)
+    .bind(format!("{FIXTURE_EXTERNAL_PREFIX}youtube-missing"))
+    .bind(format!("{FIXTURE_MARKER} Unavailable Playlist Item"))
+    .bind(FIXTURE_NOW - 360)
+    .bind(json_zstd(serde_json::json!({
+        "analysis_redesign_fixture": true,
+        "linked": false
+    }))?)
+    .bind(FIXTURE_NOW)
+    .bind(FIXTURE_NOW)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 async fn seed_analysis_redesign_fixtures_in_pool(
     pool: &Pool<Sqlite>,
 ) -> AppResult<AnalysisRedesignFixtureSummary> {
@@ -299,6 +557,8 @@ async fn seed_analysis_redesign_fixtures_in_pool(
     let youtube_playlist_id = insert_youtube_playlist_source(&mut tx).await?;
     let source_group_id =
         insert_fixture_source_group(&mut tx, telegram_channel_id, telegram_supergroup_id).await?;
+    insert_telegram_content(&mut tx, telegram_channel_id, telegram_supergroup_id).await?;
+    insert_youtube_content(&mut tx, youtube_video_id, youtube_playlist_id).await?;
 
     let _ = (
         prompt_template_id,
@@ -318,8 +578,8 @@ async fn seed_analysis_redesign_fixtures_in_pool(
         runs: 0,
         snapshot_messages: 0,
         chat_messages: 0,
-        youtube_transcript_segments: 0,
-        youtube_playlist_items: 0,
+        youtube_transcript_segments: 3,
+        youtube_playlist_items: 2,
     })
 }
 
@@ -925,6 +1185,128 @@ mod tests {
             )
             .await,
             0
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_creates_post_sync_reader_content() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM items WHERE item_kind = 'telegram_message'"
+            )
+            .await,
+            4
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM telegram_forum_topics").await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM items WHERE has_media = 1 AND media_metadata_zstd IS NOT NULL"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM items WHERE reply_to_top_id IS NOT NULL OR reply_to_msg_id IS NOT NULL"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM items WHERE reaction_count IS NOT NULL"
+            )
+            .await,
+            2
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM items WHERE item_kind = 'youtube_transcript'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM items WHERE item_kind = 'youtube_comment'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM youtube_transcript_segments").await,
+            3
+        );
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM youtube_playlist_items").await,
+            2
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM sources WHERE title LIKE '__analysis_redesign_fixture__%' AND last_synced_at IS NOT NULL"
+            )
+            .await,
+            4
+        );
+    }
+
+    #[tokio::test]
+    async fn compressed_fixture_fields_are_readable() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        let content: Vec<u8> = sqlx::query_scalar(
+            "SELECT content_zstd FROM items WHERE external_id LIKE '__analysis_redesign_fixture__:tg-channel-1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load content");
+        let media: Vec<u8> = sqlx::query_scalar(
+            "SELECT media_metadata_zstd FROM items WHERE media_metadata_zstd IS NOT NULL LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load media metadata");
+        let raw: Vec<u8> = sqlx::query_scalar(
+            "SELECT raw_data_zstd FROM items WHERE raw_data_zstd IS NOT NULL LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load raw data");
+
+        assert!(
+            crate::compression::decompress_text(&content)
+                .expect("decompress content")
+                .contains("fixture channel update")
+        );
+        assert!(
+            String::from_utf8(
+                crate::compression::decompress_bytes(&media).expect("decompress media")
+            )
+            .expect("media utf8")
+            .contains("image/jpeg")
+        );
+        assert!(
+            String::from_utf8(crate::compression::decompress_bytes(&raw).expect("decompress raw"))
+                .expect("raw utf8")
+                .contains("analysis_redesign_fixture")
         );
     }
 }
