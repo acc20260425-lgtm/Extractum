@@ -1,6 +1,5 @@
 mod chat;
 mod corpus;
-#[allow(dead_code)]
 #[cfg(debug_assertions)]
 mod fixtures;
 mod groups;
@@ -30,6 +29,8 @@ use crate::error::{AppError, AppResult};
 pub use self::chat::{
     ask_analysis_run_question, clear_analysis_chat_messages, list_analysis_chat_messages,
 };
+#[cfg(debug_assertions)]
+pub use self::fixtures::{clear_analysis_redesign_fixtures, seed_analysis_redesign_fixtures};
 pub use self::groups::{
     create_analysis_source_group, delete_analysis_source_group, list_analysis_source_groups,
     update_analysis_source_group,

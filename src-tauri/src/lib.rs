@@ -74,6 +74,8 @@ use analysis::{
     resolve_analysis_trace_refs, start_analysis_report, update_analysis_prompt_template,
     update_analysis_source_group, AnalysisState,
 };
+#[cfg(debug_assertions)]
+use analysis::{clear_analysis_redesign_fixtures, seed_analysis_redesign_fixtures};
 
 #[tauri::command]
 fn ping_db() -> String {
@@ -84,7 +86,7 @@ fn ping_db() -> String {
 pub fn run() {
     prepare_database();
 
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(TelegramState::new())
         .manage(SourceIngestLocks::new())
         .manage(TakeoutImportState::new())
@@ -101,9 +103,7 @@ pub fn run() {
         );
 
     #[cfg(debug_assertions)]
-    {
-        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
-    }
+    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
     builder
         .setup(|app| {
@@ -171,6 +171,10 @@ pub fn run() {
             ask_analysis_run_question,
             start_analysis_report,
             cancel_analysis_run,
+            #[cfg(debug_assertions)]
+            seed_analysis_redesign_fixtures,
+            #[cfg(debug_assertions)]
+            clear_analysis_redesign_fixtures,
             preview_youtube_source,
             add_youtube_source,
             sync_youtube_source,

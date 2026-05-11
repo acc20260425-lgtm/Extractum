@@ -652,7 +652,7 @@ async fn insert_analysis_runs(
         ids.prompt_template_id,
         "completed",
         Some(&format!(
-            "# {COMPLETED_SNAPSHOT_RUN_LABEL}\n\nYouTube evidence is available at [{youtube_ref}]."
+            "# {COMPLETED_SNAPSHOT_RUN_LABEL}\n\nProvider fixture: {LLM_PROFILE_LABEL}.\n\nYouTube evidence is available at [{youtube_ref}]."
         )),
         Some(trace_zstd(serde_json::json!([{
             "ref": youtube_ref,
@@ -703,7 +703,7 @@ async fn insert_analysis_runs(
         ids.prompt_template_id,
         "completed",
         Some(&format!(
-            "# {MISSING_SNAPSHOT_RUN_LABEL}\n\nThis report cites missing saved evidence [{missing_ref}]."
+            "# {MISSING_SNAPSHOT_RUN_LABEL}\n\nProvider fixture: {LLM_PROFILE_LABEL}.\n\nThis report cites missing saved evidence [{missing_ref}]."
         )),
         Some(trace_zstd(serde_json::json!([{
             "ref": missing_ref,
@@ -762,7 +762,7 @@ async fn insert_analysis_runs(
         ids.prompt_template_id,
         "completed",
         Some(&format!(
-            "# {GROUP_SNAPSHOT_RUN_LABEL}\n\nTelegram evidence is available at [{telegram_ref}]."
+            "# {GROUP_SNAPSHOT_RUN_LABEL}\n\nProvider fixture: {LLM_PROFILE_LABEL}.\n\nTelegram evidence is available at [{telegram_ref}]."
         )),
         Some(trace_zstd(serde_json::json!([{
             "ref": telegram_ref,
