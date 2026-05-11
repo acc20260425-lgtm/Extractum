@@ -70,8 +70,20 @@
 
   async function copyLink(item: SourceReaderItem) {
     const url = timestampUrl(item);
-    if (!url || typeof navigator === "undefined") return;
-    await navigator.clipboard.writeText(url);
+    if (!url || typeof navigator === "undefined" || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (error) {
+      console.error("Failed to copy timestamp link", error);
+    }
+  }
+
+  function inputValue(event: Event) {
+    const target = event.currentTarget;
+    if (target instanceof HTMLInputElement) {
+      return target.value;
+    }
+    return "";
   }
 </script>
 
@@ -104,7 +116,7 @@
         type="search"
         value={transcriptSearch}
         ariaLabel="Search transcript"
-        oninput={(event) => onChangeTranscriptSearch((event.currentTarget as HTMLInputElement).value)}
+        oninput={(event) => onChangeTranscriptSearch(inputValue(event))}
       />
     </div>
   </label>
@@ -124,7 +136,7 @@
         <li class:selected={item.selected}>
           <div class="segment-time">
             {#if item.youtubeStartSeconds !== null && url}
-              <a href={url} target="_blank" rel="noreferrer">
+              <a href={url} target="_blank" rel="noopener noreferrer">
                 {formatYoutubeTime(item.youtubeStartSeconds)}
                 <ExternalLink size={13} aria-hidden="true" />
               </a>

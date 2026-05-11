@@ -53,7 +53,15 @@ pub(crate) async fn list_youtube_transcript_segments_from_pool(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(|value| format!("%{}%", value.replace('%', "\\%").replace('_', "\\_")));
+        .map(|value| {
+            format!(
+                "%{}%",
+                value
+                    .replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_")
+            )
+        });
 
     let mut query = QueryBuilder::<Sqlite>::new(
         r#"
@@ -245,5 +253,27 @@ mod tests {
 
         assert_eq!(page.segments.len(), 1);
         assert_eq!(page.segments[0].text, "beta topic");
+    }
+
+    #[tokio::test]
+    async fn search_escapes_existing_backslashes_before_like_wildcards() {
+        let pool = transcript_pool().await;
+        insert_segment(&pool, 20, 1000, r"literal \_ marker").await;
+        insert_segment(&pool, 20, 2000, r"literal \x marker").await;
+
+        let page = list_youtube_transcript_segments_from_pool(
+            &pool,
+            ListYoutubeTranscriptSegmentsRequest {
+                source_id: 20,
+                after: None,
+                limit: 20,
+                search_query: Some(r"\_".to_string()),
+            },
+        )
+        .await
+        .expect("search transcript");
+
+        assert_eq!(page.segments.len(), 1);
+        assert_eq!(page.segments[0].text, r"literal \_ marker");
     }
 }

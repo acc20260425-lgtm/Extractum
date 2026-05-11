@@ -235,14 +235,12 @@ describe("analysis-source-groups-workflow", () => {
     });
     deps.confirm.mockResolvedValueOnce(true);
     deps.deleteTemplate.mockResolvedValueOnce(undefined);
-    deps.loadTemplates.mockImplementationOnce(async () => {
-      state.templates = [fallback];
-    });
+    deps.listTemplates.mockResolvedValueOnce([fallback]);
 
     await workflow.deleteTemplate();
 
     expect(deps.deleteTemplate).toHaveBeenCalledWith(42);
-    expect(deps.loadTemplates).toHaveBeenCalledOnce();
+    expect(deps.listTemplates).toHaveBeenCalledWith("report");
     expect(state.status).toBe("Template \"Custom\" deleted.");
     expect(state.selectedTemplateId).toBe("7");
     expect(deps.bindTemplateEditor).toHaveBeenCalledWith(fallback);

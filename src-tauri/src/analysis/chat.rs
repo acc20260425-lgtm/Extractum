@@ -472,8 +472,27 @@ pub async fn ask_analysis_run_question(
             .await
         {
             Ok(completion) => {
-                if let Ok(pool) = get_pool(&app_handle).await {
-                    let _ = persist_chat_exchange(&pool, run_id, &question, &completion.text).await;
+                let pool = match get_pool(&app_handle).await {
+                    Ok(pool) => pool,
+                    Err(error) => {
+                        ChatEvent::new(failed_request_id, run_id, "failed")
+                            .error(format!(
+                                "Answer completed but chat history could not be saved: {error}"
+                            ))
+                            .emit(&failed_handle);
+                        return;
+                    }
+                };
+
+                if let Err(error) =
+                    persist_chat_exchange(&pool, run_id, &question, &completion.text).await
+                {
+                    ChatEvent::new(failed_request_id, run_id, "failed")
+                        .error(format!(
+                            "Answer completed but chat history could not be saved: {error}"
+                        ))
+                        .emit(&failed_handle);
+                    return;
                 }
 
                 ChatEvent::new(completed_request_id, run_id, "completed")

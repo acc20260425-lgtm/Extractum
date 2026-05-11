@@ -101,9 +101,13 @@ function parseRunsStatus(value: unknown): CompanionRunStatusFilter {
     : "all";
 }
 
-function parseRunsFilter(value: unknown): CompanionRunsFilterState {
-  if (!isObject(value)) {
+function parseRunsFilter(value: unknown): CompanionRunsFilterState | null {
+  if (value === undefined || value === null) {
     return runsFilterDefaults();
+  }
+
+  if (!isObject(value)) {
+    return null;
   }
 
   return {
@@ -157,7 +161,7 @@ export function parsePersistedAnalysisWorkspaceState(
   const runs = isObject(parsed.runs) ? parsed.runs : null;
   const historyScope = runs ? parseHistoryScope(runs.historyScope) : null;
   const runFilter = runs ? parseRunFilter(runs.runFilter) : null;
-  const runsFilter = runs ? parseRunsFilter(runs.runsFilter) : runsFilterDefaults();
+  const runsFilter = runs ? parseRunsFilter(runs.runsFilter) : null;
 
   if (
     !workspaceSelection ||
@@ -165,7 +169,8 @@ export function parsePersistedAnalysisWorkspaceState(
     !sourceViewBasis ||
     !companionTab ||
     !historyScope ||
-    !runFilter
+    !runFilter ||
+    !runsFilter
   ) {
     return null;
   }
@@ -222,6 +227,10 @@ export function fallbackWorkspaceSelection(
   sources: Source[],
   groups: AnalysisSourceGroup[],
 ): WorkspaceSelection {
+  if (preferred.kind === "none") {
+    return preferred;
+  }
+
   if (
     preferred.kind === "source" &&
     sources.some((source) => source.id === preferred.sourceId)
@@ -236,19 +245,11 @@ export function fallbackWorkspaceSelection(
     return preferred;
   }
 
-  if (preferred.kind === "none" && sources.length === 0 && groups.length === 0) {
-    return preferred;
-  }
-
   if (preferred.kind === "source_group" && groups.length > 0) {
     return { kind: "source_group", sourceGroupId: groups[0].id };
   }
 
   if (preferred.kind === "source" && sources.length > 0) {
-    return { kind: "source", sourceId: sources[0].id };
-  }
-
-  if (preferred.kind === "none" && sources.length > 0) {
     return { kind: "source", sourceId: sources[0].id };
   }
 

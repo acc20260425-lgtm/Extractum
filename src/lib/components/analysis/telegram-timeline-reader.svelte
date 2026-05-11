@@ -46,7 +46,7 @@
                 <p>{item.content}</p>
                 {#if item.mediaCards.length > 0}
                   <div class="media-list">
-                    {#each item.mediaCards as media (`${item.id}:${media.kind}:${media.fileName ?? ""}`)}
+                    {#each item.mediaCards as media, index (`${item.id}:${index}`)}
                       <TelegramMediaCard {media} />
                     {/each}
                   </div>

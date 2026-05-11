@@ -35,6 +35,7 @@ describe("run companion tabs", () => {
 
   it("contains only analysis report runs in the Runs tab", () => {
     expect(runsTabSource).toContain("filterCompanionRuns");
+    expect(runsTabSource).toContain("target instanceof HTMLInputElement");
     expect(runsTabSource).toContain("queued/running");
     expect(runsTabSource).toContain("Search runs");
     expect(runsTabSource).toContain("Current scope");
