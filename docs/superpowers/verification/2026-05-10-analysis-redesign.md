@@ -40,23 +40,24 @@ Then verify `http://127.0.0.1:5173/analysis` in desktop, narrow desktop, and mob
 | Scenario | Result | Notes |
 | --- | --- | --- |
 | No source state shows central onboarding for Telegram and YouTube | PASS | Empty setup state renders; compact rail has no duplicated global sidebar; New source dialog exposes Telegram and YouTube provider tabs |
-| Selecting source clears opened run and shows live source + Runs | BLOCKED | Missing local fixture; no synced source available in browser verification dataset |
-| Completed saved run opens Report + Evidence and aligns rail if live scope exists | BLOCKED | Missing local fixture; no completed saved run with live scope available |
-| Completed saved run with missing snapshot does not resolve evidence/chat against live source | BLOCKED | Missing local fixture; no completed saved run with missing snapshot available |
-| Running run opens Report and Source shows pending snapshot | BLOCKED | Missing local fixture; no running analysis run available |
-| Failed/cancelled run shows snapshot if available, otherwise explicit live source option | BLOCKED | Missing local fixture; no failed or cancelled analysis run available |
-| Trace ref click activates Evidence | BLOCKED | Missing local fixture; no trace-backed completed run available |
-| Show in source prefers run snapshot and highlights message/segment | BLOCKED | Missing local fixture; no snapshot-backed run messages available |
-| Chat tab activates only on explicit tab selection or question submit | BLOCKED | Missing local fixture; no chat-enabled completed run available |
-| Runs search/status/scope filters work and exclude source ingest jobs | BLOCKED | Missing local fixture; filters render in empty state, but no run/source data exists to verify filtering behavior |
-| Telegram timeline shows groups, metadata, and media placeholders only | BLOCKED | Missing local fixture; no synced Telegram source available |
-| YouTube video reader shows transcript timestamps and copy/open actions | BLOCKED | Missing local fixture; no synced YouTube video source available |
-| YouTube playlist reader shows playlist item list before transcript reading | BLOCKED | Missing local fixture; no synced YouTube playlist source available |
-| Source group reader groups by source with counts | BLOCKED | Missing local fixture; no source group available |
-| Workspace persistence restores source/group and UI context without opening a run | BLOCKED | Missing local fixture; no source or group state available for persistence restore check |
+| Selecting source clears opened run and shows live source + Runs | PASS | Fixture source selections cleared opened runs, showed live source readers, and kept the Runs companion tab available |
+| Completed saved run opens Report + Evidence and aligns rail if live scope exists | PASS | Completed Snapshot Run opened Report + Evidence and aligned the rail to the fixture YouTube video live scope |
+| Completed saved run with missing snapshot does not resolve evidence/chat against live source | PASS | Missing Snapshot Run preserved trace data, showed snapshot unavailable, and kept Show in source disabled instead of falling back to live rows |
+| Running run opens Report and Source shows pending snapshot | PASS | Running Run appeared as an active run; Report showed live in-progress output and Source showed Snapshot pending with an explicit live-source option |
+| Failed/cancelled run shows snapshot if available, otherwise explicit live source option | PASS | Failed and Cancelled fixture runs showed terminal report states; Source showed Snapshot unavailable plus View live source |
+| Trace ref click activates Evidence | PASS | Clicking the saved trace ref selected the Evidence context and kept the referenced evidence details visible |
+| Show in source prefers run snapshot and highlights message/segment | PASS | Completed Snapshot Run loaded the run snapshot; Show in source selected the saved YouTube transcript segment, not the live reader row |
+| Chat tab activates only on explicit tab selection or question submit | PASS | Evidence remained active until the Chat tab was clicked; Chat then rendered the follow-up panel and disabled Ask until text input |
+| Runs search/status/scope filters work and exclude source ingest jobs | PASS | Search narrowed to Completed Snapshot Run; Failed and queued/running status filters returned only matching analysis runs; no source ingest jobs appeared |
+| Telegram timeline shows groups, metadata, and media placeholders only | PASS | Telegram Supergroup showed date grouping, topic metadata, reply link, reactions, and image placeholder metadata without binary preview |
+| YouTube video reader shows transcript timestamps and copy/open actions | PASS | YouTube Video reader showed timestamped transcript segments with copy timestamp actions and evidence open link metadata |
+| YouTube playlist reader shows playlist item list before transcript reading | PASS | YouTube Playlist reader showed two playlist items, linked/unavailable counts, per-video sync actions, and disabled actions for unavailable rows |
+| Source group reader groups by source with counts | PASS | Telegram Group reader restored all-sources focus, per-source sections, and item counts for channel and supergroup members |
+| Workspace persistence restores source/group and UI context without opening a run | PASS | After a runtime restart without active-run memory, reload restored the Telegram Group source context and did not open a run |
 
 ## Residual Risks
 
-- Browser scenarios depend on local data fixtures. Record any missing fixture as a verification gap with the smallest reproducible setup.
+- Live ingest progress, external provider responses, and network-backed source sync remain outside the DB fixture scope.
+- Running-run verification uses the debug fixture command to register the seeded running row in runtime active-run state; persistence was verified after restarting the app without that runtime memory.
 - Standalone browser verification used a minimal Tauri IPC/event stub because Vite `/analysis` otherwise requires the Tauri runtime bridge for event listeners.
 - Raw-source tests intentionally protect architectural contracts. If they fail because implementation names changed, update the assertion string while preserving the tested behavior.
