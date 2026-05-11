@@ -1,7 +1,8 @@
 use serde::Serialize;
 use sqlx::{Pool, Sqlite};
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 
+use super::AnalysisState;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 
@@ -43,17 +44,61 @@ pub struct AnalysisRedesignFixtureSummary {
 #[tauri::command]
 pub async fn seed_analysis_redesign_fixtures(
     handle: AppHandle,
+    state: State<'_, AnalysisState>,
 ) -> AppResult<AnalysisRedesignFixtureSummary> {
     let pool = get_pool(&handle).await?;
-    seed_analysis_redesign_fixtures_in_pool(&pool).await
+    let previous_run_ids = fixture_run_ids(&pool).await?;
+    remove_fixture_active_runs(state.inner(), &previous_run_ids).await;
+    let summary = seed_analysis_redesign_fixtures_in_pool(&pool).await?;
+    register_fixture_active_runs(&pool, state.inner()).await?;
+    Ok(summary)
 }
 
 #[tauri::command]
 pub async fn clear_analysis_redesign_fixtures(
     handle: AppHandle,
+    state: State<'_, AnalysisState>,
 ) -> AppResult<AnalysisRedesignFixtureSummary> {
     let pool = get_pool(&handle).await?;
+    let run_ids = fixture_run_ids(&pool).await?;
+    remove_fixture_active_runs(state.inner(), &run_ids).await;
     clear_analysis_redesign_fixtures_in_pool(&pool).await
+}
+
+async fn fixture_run_ids(pool: &Pool<Sqlite>) -> AppResult<Vec<i64>> {
+    let marker_pattern = format!("{FIXTURE_MARKER}%");
+    sqlx::query_scalar(
+        "SELECT id FROM analysis_runs
+         WHERE scope_label_snapshot LIKE ? OR provider_profile = ?",
+    )
+    .bind(marker_pattern)
+    .bind(FIXTURE_PROFILE_ID)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn register_fixture_active_runs(pool: &Pool<Sqlite>, state: &AnalysisState) -> AppResult<()> {
+    let run_ids: Vec<i64> = sqlx::query_scalar(
+        "SELECT id FROM analysis_runs
+         WHERE scope_label_snapshot = ? AND status = 'running'",
+    )
+    .bind(RUNNING_RUN_LABEL)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    for run_id in run_ids {
+        state.insert_active_report_run(run_id).await;
+    }
+
+    Ok(())
+}
+
+async fn remove_fixture_active_runs(state: &AnalysisState, run_ids: &[i64]) {
+    for run_id in run_ids {
+        state.remove_active_report_run(*run_id).await;
+    }
 }
 
 fn json_zstd(value: serde_json::Value) -> AppResult<Vec<u8>> {
@@ -438,7 +483,11 @@ async fn insert_youtube_content(
     .await?;
 
     for (index, start_ms, text) in [
-        (0_i64, 0_i64, "Fixture opening segment introduces the redesign."),
+        (
+            0_i64,
+            0_i64,
+            "Fixture opening segment introduces the redesign.",
+        ),
         (
             1_i64,
             754_000_i64,
@@ -464,7 +513,9 @@ async fn insert_youtube_content(
         .bind(start_ms)
         .bind(start_ms + 25_000)
         .bind(text)
-        .bind(json_zstd(serde_json::json!({ "analysis_redesign_fixture": true }))?)
+        .bind(json_zstd(
+            serde_json::json!({ "analysis_redesign_fixture": true }),
+        )?)
         .execute(&mut **tx)
         .await
         .map_err(AppError::database)?;
@@ -975,19 +1026,22 @@ async fn clear_analysis_redesign_fixtures_in_pool(
         .rows_affected(),
     );
 
-    let fixture_profile_setting_count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM app_settings WHERE key LIKE ?",
-    )
-    .bind(&profile_settings_pattern)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(AppError::database)?;
+    let fixture_profile_setting_count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM app_settings WHERE key LIKE ?")
+            .bind(&profile_settings_pattern)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(AppError::database)?;
     sqlx::query("DELETE FROM app_settings WHERE key LIKE ?")
         .bind(&profile_settings_pattern)
         .execute(&mut *tx)
         .await
         .map_err(AppError::database)?;
-    summary.llm_profiles = if fixture_profile_setting_count > 0 { 1 } else { 0 };
+    summary.llm_profiles = if fixture_profile_setting_count > 0 {
+        1
+    } else {
+        0
+    };
 
     summary.prompt_templates = rows_to_i64(
         sqlx::query("DELETE FROM analysis_prompt_templates WHERE name LIKE ?")
@@ -1455,13 +1509,12 @@ mod tests {
             .await
             .expect("seed fixtures");
 
-        let account: (String, i64, String, Option<String>) = sqlx::query_as(
-            "SELECT label, api_id, api_hash, phone FROM accounts WHERE label = ?",
-        )
-        .bind(TELEGRAM_CHANNEL_LABEL.replace("Telegram Channel", "Telegram Account"))
-        .fetch_one(&pool)
-        .await
-        .expect("load fixture account");
+        let account: (String, i64, String, Option<String>) =
+            sqlx::query_as("SELECT label, api_id, api_hash, phone FROM accounts WHERE label = ?")
+                .bind(TELEGRAM_CHANNEL_LABEL.replace("Telegram Channel", "Telegram Account"))
+                .fetch_one(&pool)
+                .await
+                .expect("load fixture account");
         assert!(account.0.starts_with(FIXTURE_MARKER));
         assert_eq!(account.1, 100_001);
         assert_eq!(account.2, "");
@@ -1492,11 +1545,7 @@ mod tests {
             1
         );
         assert_eq!(
-            count(
-                &pool,
-                "SELECT COUNT(*) FROM analysis_source_group_members"
-            )
-            .await,
+            count(&pool, "SELECT COUNT(*) FROM analysis_source_group_members").await,
             2
         );
         assert_eq!(
@@ -1628,23 +1677,19 @@ mod tests {
         .await
         .expect("load raw data");
 
-        assert!(
-            crate::compression::decompress_text(&content)
-                .expect("decompress content")
-                .contains("fixture channel update")
-        );
-        assert!(
-            String::from_utf8(
-                crate::compression::decompress_bytes(&media).expect("decompress media")
-            )
-            .expect("media utf8")
-            .contains("image/jpeg")
-        );
-        assert!(
-            String::from_utf8(crate::compression::decompress_bytes(&raw).expect("decompress raw"))
-                .expect("raw utf8")
-                .contains("analysis_redesign_fixture")
-        );
+        assert!(crate::compression::decompress_text(&content)
+            .expect("decompress content")
+            .contains("fixture channel update"));
+        assert!(String::from_utf8(
+            crate::compression::decompress_bytes(&media).expect("decompress media")
+        )
+        .expect("media utf8")
+        .contains("image/jpeg"));
+        assert!(String::from_utf8(
+            crate::compression::decompress_bytes(&raw).expect("decompress raw")
+        )
+        .expect("raw utf8")
+        .contains("analysis_redesign_fixture"));
     }
 
     #[tokio::test]
@@ -1730,7 +1775,8 @@ mod tests {
         .expect("load telegram trace");
 
         let youtube_json: serde_json::Value = serde_json::from_slice(
-            &crate::compression::decompress_bytes(&youtube_trace).expect("decompress youtube trace"),
+            &crate::compression::decompress_bytes(&youtube_trace)
+                .expect("decompress youtube trace"),
         )
         .expect("parse youtube trace");
         let telegram_json: serde_json::Value = serde_json::from_slice(
@@ -1739,23 +1785,19 @@ mod tests {
         )
         .expect("parse telegram trace");
 
-        assert!(
-            youtube_json["refs"]
-                .as_array()
-                .expect("youtube refs")
-                .iter()
-                .any(|value| value["ref"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .contains("@754000ms"))
-        );
-        assert!(
-            telegram_json["refs"]
-                .as_array()
-                .expect("telegram refs")
-                .iter()
-                .any(|value| value["source_type"] == "telegram")
-        );
+        assert!(youtube_json["refs"]
+            .as_array()
+            .expect("youtube refs")
+            .iter()
+            .any(|value| value["ref"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("@754000ms")));
+        assert!(telegram_json["refs"]
+            .as_array()
+            .expect("telegram refs")
+            .iter()
+            .any(|value| value["source_type"] == "telegram"));
     }
 
     #[tokio::test]
@@ -1765,13 +1807,12 @@ mod tests {
             .await
             .expect("seed fixtures");
 
-        let run_id: i64 = sqlx::query_scalar(
-            "SELECT id FROM analysis_runs WHERE scope_label_snapshot = ?",
-        )
-        .bind(MISSING_SNAPSHOT_RUN_LABEL)
-        .fetch_one(&pool)
-        .await
-        .expect("load missing snapshot run");
+        let run_id: i64 =
+            sqlx::query_scalar("SELECT id FROM analysis_runs WHERE scope_label_snapshot = ?")
+                .bind(MISSING_SNAPSHOT_RUN_LABEL)
+                .fetch_one(&pool)
+                .await
+                .expect("load missing snapshot run");
 
         assert_eq!(
             count(
@@ -1791,6 +1832,35 @@ mod tests {
             .await,
             1
         );
+    }
+
+    #[tokio::test]
+    async fn fixture_active_state_tracks_seeded_running_run() {
+        let pool = fixture_pool().await;
+        let state = super::super::AnalysisState::new();
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        register_fixture_active_runs(&pool, &state)
+            .await
+            .expect("register active fixture runs");
+
+        let active_run_ids = state.active_report_run_ids().await;
+        let running_run_id: i64 =
+            sqlx::query_scalar("SELECT id FROM analysis_runs WHERE scope_label_snapshot = ?")
+                .bind(RUNNING_RUN_LABEL)
+                .fetch_one(&pool)
+                .await
+                .expect("load running run");
+
+        assert_eq!(active_run_ids.len(), 1);
+        assert!(active_run_ids.contains(&running_run_id));
+
+        let fixture_run_ids = fixture_run_ids(&pool).await.expect("load fixture run ids");
+        remove_fixture_active_runs(&state, &fixture_run_ids).await;
+
+        assert!(state.active_report_run_ids().await.is_empty());
     }
 
     #[tokio::test]
