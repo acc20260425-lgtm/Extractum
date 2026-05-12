@@ -343,3 +343,78 @@ Observed pass notes:
 - Group report setup showed `Run another report` instead of first-report copy when prior saved runs existed.
 
 Residual polish remains for batch 2: Runs filter density, source switcher behavior, source reader deduplication, transcript search styling, and mobile source rail height.
+
+## Pass 2 Implementation Verification
+
+Date: 2026-05-12
+Branch: `analysis-ux-pass-2`
+
+Batch 2 fixes implemented:
+
+- Runs companion now keeps search, scope, and status filters visible while date/profile/template filters live behind `Advanced filters`.
+- Source switcher now closes after selecting a source or group, removes destructive `Delete` actions from quick-switch rows, and quiets empty filtered buckets.
+- Source reader headers now use compact surface labels and avoid repeating the selected source title below the workspace header.
+- Group source reader no longer repeats the source focus control.
+- YouTube transcript search now uses one compact input shell with an inline search icon and `Search transcript` placeholder.
+- Mobile source rail now shows the current context label and constrains the quick-source scroller at narrow widths.
+
+Automated verification:
+
+```text
+npm.cmd test
+npm.cmd run check
+git diff --check
+```
+
+Result:
+
+```text
+50 test files passed
+368 tests passed
+svelte-check found 0 errors and 0 warnings
+git diff --check passed with no output
+```
+
+Runtime verification used Tauri dev mode with the same fixture seed path:
+
+```js
+await window.__TAURI__.core.invoke("clear_analysis_redesign_fixtures");
+await window.__TAURI__.core.invoke("seed_analysis_redesign_fixtures");
+```
+
+Seed result:
+
+```json
+{
+  "accounts": 1,
+  "chatMessages": 2,
+  "llmProfiles": 1,
+  "promptTemplates": 1,
+  "runs": 6,
+  "snapshotMessages": 4,
+  "sourceGroups": 1,
+  "sources": 4,
+  "youtubePlaylistItems": 2,
+  "youtubeTranscriptSegments": 3
+}
+```
+
+New artifacts:
+
+```text
+artifacts/analysis-ux-pass-2-runs-filters.png
+artifacts/analysis-ux-pass-2-source-switcher.png
+artifacts/analysis-ux-pass-2-source-reader.png
+artifacts/analysis-ux-pass-2-youtube-search.png
+artifacts/analysis-ux-pass-2-mobile-rail.png
+```
+
+Observed pass notes:
+
+- Runs companion rendered `Advanced filters` open on demand, keeping the main status/scope controls above the saved-run area.
+- Source switcher listed fixture sources and groups without `Delete` in quick rows; selecting `__analysis_redesign_fixture__ Telegram Group` closed the switcher and changed the current context.
+- Group Source mode rendered `GROUP SOURCES` without a duplicate `Source focus` control.
+- Fixture YouTube source rendered transcript search with `aria-label="Search transcript"`, placeholder `Search transcript`, `.search-input-wrap`, and `.search-icon`.
+- At `390x850`, the mobile rail showed `__analysis_redesign_fixture__ YouTube Video` as the current context and `documentElement.scrollWidth <= clientWidth`.
+
+Residual polish remains outside this batch: the seeded fixture can surface a stale YouTube detail lookup warning after reseeding over prior local state, and run cards can still be hidden by persisted local filters until the user clears or changes the filter state.
