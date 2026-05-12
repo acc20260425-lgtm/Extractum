@@ -58,6 +58,12 @@ describe("analysis source readers", () => {
     expect(youtubeTranscriptSource).not.toContain("<video");
   });
 
+  it("renders transcript search as one compact input shell", () => {
+    expect(youtubeTranscriptSource).toContain('placeholder="Search transcript"');
+    expect(youtubeTranscriptSource).toContain('class="search-icon"');
+    expect(youtubeTranscriptSource).toContain('class="search-input-wrap"');
+  });
+
   it("keeps YouTube playlist reading playlist-first", () => {
     expect(youtubePlaylistSource).toContain('class="youtube-playlist-reader"');
     expect(youtubePlaylistSource).toContain("playlist.items");

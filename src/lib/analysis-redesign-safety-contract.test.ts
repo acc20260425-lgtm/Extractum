@@ -85,6 +85,8 @@ describe("analysis redesign final safety contract", () => {
   it("renders YouTube source material as transcript and playlist readers without an embedded player", () => {
     expect(youtubeTranscriptSource).toContain('class="youtube-transcript-reader"');
     expect(youtubeTranscriptSource).toContain("Search transcript");
+    expect(youtubeTranscriptSource).toContain('placeholder="Search transcript"');
+    expect(youtubeTranscriptSource).toContain('class="search-input-wrap"');
     expect(youtubeTranscriptSource).toContain("Copy timestamp link");
     expect(youtubeTranscriptSource).toContain("youtubeTimestampUrl");
     expect(youtubeTranscriptSource).toContain("navigator.clipboard");

@@ -109,12 +109,15 @@
   </div>
 
   <label class="search-field">
-    <span>Search transcript</span>
-    <div class="search-shell">
-      <Search size={15} aria-hidden="true" />
+    <span class="sr-only">Search transcript</span>
+    <div class="search-input-wrap">
+      <span class="search-icon">
+        <Search size={15} aria-hidden="true" />
+      </span>
       <Input
         type="search"
         value={transcriptSearch}
+        placeholder="Search transcript"
         ariaLabel="Search transcript"
         oninput={(event) => onChangeTranscriptSearch(inputValue(event))}
       />
@@ -207,8 +210,7 @@
 
   .transcript-meta,
   .transcript-actions,
-  .segment-actions,
-  .search-shell {
+  .segment-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
@@ -221,6 +223,36 @@
     gap: 0.3rem;
     color: var(--muted);
     font-size: 0.8rem;
+  }
+
+  .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 0.75rem;
+    z-index: 1;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  .search-input-wrap :global(input) {
+    padding-left: 2.15rem;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .segment-list {
