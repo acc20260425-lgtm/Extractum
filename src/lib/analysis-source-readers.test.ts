@@ -54,6 +54,20 @@ describe("analysis source readers", () => {
     expect(telegramTimelineSource).not.toContain("z-index: 1;");
   });
 
+  it("uses TDesktop-inspired Telegram message geometry and typography", () => {
+    expect(telegramTimelineSource).toContain('class="telegram-message-bubble"');
+    expect(telegramTimelineSource).toContain('class="telegram-message-text"');
+    expect(telegramTimelineSource).toContain('class="telegram-message-time"');
+    expect(telegramTimelineSource).toContain("max-width: 460px;");
+    expect(telegramTimelineSource).toContain("border-radius: 16px;");
+    expect(telegramTimelineSource).toContain("font-size: 0.9375rem;");
+    expect(telegramTimelineSource).toContain("font-size: 0.8125rem;");
+  });
+
+  it("centers Telegram message bubbles under sticky day labels", () => {
+    expect(telegramTimelineSource).toMatch(/li\s*{\s*display: flex;\s*justify-content: center;/);
+  });
+
   it("renders YouTube videos as transcript-first source readers", () => {
     expect(youtubeTranscriptSource).toContain('class="youtube-transcript-reader"');
     expect(youtubeTranscriptSource).toContain("formatYoutubeTime");

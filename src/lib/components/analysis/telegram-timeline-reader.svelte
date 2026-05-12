@@ -35,22 +35,24 @@
           <ul>
             {#each day.items as item (item.id)}
               <li class:selected={item.selected}>
-                <div class="message-meta">
-                  <span>{formatTimestamp(item.publishedAt)}</span>
-                  {#if item.author}<span>{item.author}</span>{/if}
-                  {#if item.topicLabel}<Badge variant="neutral">{item.topicLabel}</Badge>{/if}
-                  {#if item.replyLabel}<Badge variant="info">{item.replyLabel}</Badge>{/if}
-                  {#if item.reactionLabel}<Badge variant="neutral">{item.reactionLabel}</Badge>{/if}
-                  {#if item.ref}<Badge variant="neutral">{item.ref}</Badge>{/if}
-                </div>
-                <p>{item.content}</p>
-                {#if item.mediaCards.length > 0}
-                  <div class="media-list">
-                    {#each item.mediaCards as media, index (`${item.id}:${index}`)}
-                      <TelegramMediaCard {media} />
-                    {/each}
+                <div class="telegram-message-bubble">
+                  <div class="message-meta">
+                    {#if item.author}<span class="message-author">{item.author}</span>{/if}
+                    <span class="telegram-message-time">{formatTimestamp(item.publishedAt)}</span>
+                    {#if item.topicLabel}<Badge variant="neutral">{item.topicLabel}</Badge>{/if}
+                    {#if item.replyLabel}<Badge variant="info">{item.replyLabel}</Badge>{/if}
+                    {#if item.reactionLabel}<Badge variant="neutral">{item.reactionLabel}</Badge>{/if}
+                    {#if item.ref}<Badge variant="neutral">{item.ref}</Badge>{/if}
                   </div>
-                {/if}
+                  <p class="telegram-message-text">{item.content}</p>
+                  {#if item.mediaCards.length > 0}
+                    <div class="media-list">
+                      {#each item.mediaCards as media, index (`${item.id}:${index}`)}
+                        <TelegramMediaCard {media} />
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
               </li>
             {/each}
           </ul>
@@ -72,7 +74,7 @@
   .telegram-timeline-reader {
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: 0.75rem;
     min-width: 0;
   }
 
@@ -81,7 +83,7 @@
   .timeline-day ul {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .timeline-day ul {
@@ -95,24 +97,36 @@
     top: 0;
     z-index: 0;
     width: fit-content;
-    padding: 0.25rem 0.55rem;
+    align-self: center;
+    padding: 0.18rem 0.5rem;
     border-radius: 999px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--muted);
+    background: color-mix(in srgb, var(--panel-strong) 82%, transparent);
+    color: color-mix(in srgb, var(--muted) 86%, var(--text));
     font-size: 0.75rem;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--border) 34%, transparent);
   }
 
   li {
-    padding: 0.9rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel);
+    display: flex;
+    justify-content: center;
+    padding: 0.125rem 0;
   }
 
   li.selected {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+  }
+
+  .telegram-message-bubble {
+    width: fit-content;
+    max-width: 460px;
+    padding: 0.6875rem 0.8125rem 0.5rem;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--panel) 74%, #dff0e9);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--border) 46%, transparent),
+      0 1px 2px color-mix(in srgb, var(--border) 28%, transparent);
+    color: var(--text);
   }
 
   .message-meta,
@@ -124,19 +138,31 @@
   }
 
   .message-meta {
-    margin-bottom: 0.45rem;
-    color: var(--muted);
-    font-size: 0.78rem;
+    margin-bottom: 0.25rem;
+    color: color-mix(in srgb, var(--muted) 86%, var(--text));
+    font-size: 0.8125rem;
+    line-height: 1.25;
   }
 
-  p {
+  .message-author {
+    color: color-mix(in srgb, var(--primary) 68%, var(--text));
+    font-weight: 600;
+  }
+
+  .telegram-message-time {
+    color: var(--muted);
+  }
+
+  .telegram-message-text {
     margin: 0;
     white-space: pre-wrap;
-    line-height: 1.5;
+    overflow-wrap: anywhere;
+    font-size: 0.9375rem;
+    line-height: 1.45;
   }
 
   .media-list {
-    margin-top: 0.65rem;
+    margin-top: 0.5rem;
   }
 
   .reader-footer {
