@@ -40,7 +40,6 @@
     onCancelTakeoutImport,
     onCancelSourceJob,
     onOpenSourceManager,
-    onDeleteSource,
   }: {
     sourceCatalog: Source[];
     groups: AnalysisSourceGroup[];
@@ -72,7 +71,6 @@
     onCancelTakeoutImport: (jobId: string) => void;
     onCancelSourceJob: (jobId: string) => void;
     onOpenSourceManager: () => void;
-    onDeleteSource: (source: Source) => void;
   } = $props();
 
   let sourceSwitcherOpen = $state(false);
@@ -149,6 +147,16 @@
     if (source.sourceType === "telegram") return Send;
     if (source.sourceType === "youtube") return Video;
     return Folder;
+  }
+
+  function selectSourceAndClose(sourceId: number) {
+    onSelectSource(sourceId);
+    sourceSwitcherOpen = false;
+  }
+
+  function selectGroupAndClose(groupId: number) {
+    onSelectGroup(groupId);
+    sourceSwitcherOpen = false;
   }
 </script>
 
@@ -291,14 +299,13 @@
       {runtimeBadge}
       {sourceSyncDisabledReason}
       {onChangeRailQuery}
-      {onSelectSource}
-      {onSelectGroup}
+      onSelectSource={selectSourceAndClose}
+      onSelectGroup={selectGroupAndClose}
       {onSyncSource}
       {onStartTakeoutImport}
       {onCancelTakeoutImport}
       {onCancelSourceJob}
       {onOpenSourceManager}
-      {onDeleteSource}
       onClose={() => (sourceSwitcherOpen = false)}
     />
   {/if}

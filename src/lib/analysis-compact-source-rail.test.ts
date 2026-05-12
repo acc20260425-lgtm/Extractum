@@ -43,6 +43,16 @@ describe("compact analysis source rail", () => {
     expect(sourceSwitcherPanelSource).toContain("onclick={() => onSelectGroup(group.id)}");
   });
 
+  it("closes the expanded switcher after quick source or group selection", () => {
+    expect(compactRailSource).toContain("selectSourceAndClose");
+    expect(compactRailSource).toContain("selectGroupAndClose");
+  });
+
+  it("keeps destructive source deletion out of quick switch rows", () => {
+    expect(sourceSwitcherPanelSource).not.toContain("onDeleteSource(source)");
+    expect(sourceSwitcherPanelSource).toContain("Manage sources");
+  });
+
   it("keeps icon-only controls accessible without hover-only status", () => {
     expect(compactRailSource).toContain("ariaLabel={sourceButtonLabel(source)}");
     expect(compactRailSource).toContain("title={sourceButtonLabel(source)}");

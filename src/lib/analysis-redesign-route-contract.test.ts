@@ -61,6 +61,8 @@ describe("analysis redesign final route contract", () => {
     expect(compactRailSource).toContain('class="compact-source-rail"');
     expect(compactRailSource).toContain("workspaceSelection: WorkspaceSelection");
     expect(compactRailSource).toContain('ariaLabel="Open source switcher"');
+    expect(compactRailSource).toContain("selectSourceAndClose");
+    expect(compactRailSource).toContain("selectGroupAndClose");
     expect(compactRailSource).toContain("context-primary-action");
     expect(compactRailSource).toContain("criticalSourceStatus");
     expect(compactRailSource).not.toContain("AppSidebar");

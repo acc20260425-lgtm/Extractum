@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Archive, ExternalLink, Plus, RefreshCw, Search, Square, Trash2 } from "@lucide/svelte";
+  import { Archive, ExternalLink, Plus, RefreshCw, Search, Square } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -42,7 +42,6 @@
     onCancelTakeoutImport,
     onCancelSourceJob,
     onOpenSourceManager,
-    onDeleteSource,
     onClose,
   }: {
     sourceCatalog: Source[];
@@ -75,7 +74,6 @@
     onCancelTakeoutImport: (jobId: string) => void;
     onCancelSourceJob: (jobId: string) => void;
     onOpenSourceManager: () => void;
-    onDeleteSource: (source: Source) => void;
     onClose: () => void;
   } = $props();
 
@@ -170,8 +168,10 @@
 
     {#if loadingSourceCatalog}
       <div class="panel-empty">Loading sources...</div>
+    {:else if filteredSourceCatalog.length === 0 && filteredGroups.length === 0}
+      <div class="panel-empty">No sources or groups match the current search.</div>
     {:else if filteredSourceCatalog.length === 0}
-      <div class="panel-empty">No sources match the current search.</div>
+      <div class="panel-empty subtle">No source matches.</div>
     {:else}
       <div class="source-list">
         {#each filteredSourceCatalog as source (source.id)}
@@ -285,16 +285,6 @@
                   </Button>
                 {/if}
               {/if}
-              <Button
-                size="sm"
-                variant="danger-soft"
-                onclick={() => onDeleteSource(source)}
-                disabled={deleting || !!syncingIds[source.id] || takeoutActive}
-                title={takeoutActive ? "Takeout import is active." : undefined}
-              >
-                <Trash2 size={13} aria-hidden="true" />
-                {deleting ? "Deleting..." : "Delete"}
-              </Button>
             </div>
 
             {#if takeoutJob}
@@ -335,8 +325,10 @@
 
     {#if loadingGroups}
       <div class="panel-empty">Loading groups...</div>
+    {:else if filteredGroups.length === 0 && filteredSourceCatalog.length === 0}
+      <div class="panel-empty subtle">No group matches.</div>
     {:else if filteredGroups.length === 0}
-      <div class="panel-empty">No groups match the current search.</div>
+      <div class="panel-empty subtle">No group matches.</div>
     {:else}
       <div class="group-list">
         {#each filteredGroups as group (group.id)}
@@ -518,6 +510,13 @@
     border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
     border-radius: 8px;
     background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+  }
+
+  .panel-empty.subtle {
+    padding: 0.35rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
   }
 
   .group-row {
