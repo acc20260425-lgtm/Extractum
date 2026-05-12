@@ -27,6 +27,11 @@ describe("analysis source readers", () => {
     expect(sourceReaderHeaderSource).toContain("View live source");
   });
 
+  it("uses a compact source reader heading instead of repeating the selected title", () => {
+    expect(sourceReaderHeaderSource).toContain("surfaceLabel");
+    expect(sourceReaderHeaderSource).not.toContain("<h2>{title}</h2>");
+  });
+
   it("renders Telegram as a metadata-rich timeline without binary previews", () => {
     expect(telegramTimelineSource).toContain('class="telegram-timeline-reader"');
     expect(telegramTimelineSource).toContain("groupReaderItemsByDay");
@@ -70,6 +75,12 @@ describe("analysis source readers", () => {
     expect(sourceGroupReaderSource).not.toContain("snapshotItems={group.items}");
     expect(sourceGroupReaderSource).toContain("source-heading");
     expect(sourceGroupReaderSource).toContain("selectedGroupSourceId");
-    expect(sourceGroupReaderSource).toContain("onChangeSelectedGroupSourceId");
+    expect(reportSourceSurfaceSource).toContain("onChangeSelectedSourceId={onChangeSelectedGroupSourceId}");
+  });
+
+  it("keeps source focus controls in one reader header location", () => {
+    expect(sourceReaderHeaderSource).toContain("<span>Source focus</span>");
+    expect(sourceGroupReaderSource).not.toContain("<span>Source focus</span>");
+    expect(sourceGroupReaderSource).not.toContain("group-filter");
   });
 });

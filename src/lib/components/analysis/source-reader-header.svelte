@@ -9,6 +9,7 @@
   let {
     title,
     subtitle,
+    surfaceLabel = "Source material",
     sourceViewBasis,
     canViewLiveSource,
     canBackToRunSnapshot,
@@ -20,6 +21,7 @@
   }: {
     title: string;
     subtitle: string;
+    surfaceLabel?: string;
     sourceViewBasis: SourceViewBasis;
     canViewLiveSource: boolean;
     canBackToRunSnapshot: boolean;
@@ -36,10 +38,9 @@
   }
 </script>
 
-<header class="source-reader-header">
+<header class="source-reader-header" aria-label={title}>
   <div class="reader-title">
-    <span class="eyebrow">Source reader</span>
-    <h2>{title}</h2>
+    <span class="eyebrow">{surfaceLabel}</span>
     <p>{subtitle}</p>
   </div>
 
@@ -97,13 +98,8 @@
     color: var(--muted);
   }
 
-  h2 {
-    margin: 0.15rem 0 0;
-    font-size: 1.05rem;
-  }
-
   p {
-    margin: 0.35rem 0 0;
+    margin: 0.2rem 0 0;
     color: var(--muted);
     line-height: 1.45;
   }

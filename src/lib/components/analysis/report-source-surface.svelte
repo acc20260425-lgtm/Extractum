@@ -168,6 +168,7 @@
     }),
   );
   const displayScopeTitle = $derived(currentScopeTitle ?? fallbackScopeTitle());
+  const readerSurfaceLabel = $derived(analysisScope === "source_group" ? "Group sources" : "Source material");
 
   function fallbackScopeTitle() {
     if (currentRun) return currentRun.scope_label;
@@ -203,6 +204,7 @@
     {#if snapshotAvailability === "available"}
       <SourceReaderHeader
         title="Run snapshot"
+        surfaceLabel={currentRun.scope_type === "source_group" ? "Group sources" : "Source material"}
         subtitle="Frozen source material captured for the opened run."
         {sourceViewBasis}
         canViewLiveSource={!!currentRun}
@@ -252,6 +254,7 @@
     {:else}
       <SourceReaderHeader
         title={sourceBasisLabel(sourceBasis)}
+        surfaceLabel={readerSurfaceLabel}
         subtitle={sourceBasisDescription(sourceBasis)}
         {sourceViewBasis}
         canViewLiveSource={true}
@@ -279,6 +282,7 @@
   {:else}
     <SourceReaderHeader
       title={currentRun && sourceViewBasis === "live_source" ? "Live source" : displayScopeTitle}
+      surfaceLabel={readerSurfaceLabel}
       subtitle={sourceBasisDescription(sourceBasis)}
       {sourceViewBasis}
       canViewLiveSource={false}
@@ -344,7 +348,6 @@
       youtubeDetailsBySource={{}}
       {formatTimestamp}
       onLoadMoreSource={onLoadLiveGroupSourcePage}
-      onChangeSelectedGroupSourceId={onChangeSelectedGroupSourceId}
     />
   {:else}
     <StatusMessage tone="muted" surface={false}>Select a source or source group to browse source material.</StatusMessage>

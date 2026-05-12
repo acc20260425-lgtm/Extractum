@@ -74,6 +74,13 @@ describe("report canvas component contract", () => {
     expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
   });
 
+  it("labels source surfaces without repeating the selected workspace title", () => {
+    expect(sourceReaderHeaderSource).toContain("surfaceLabel");
+    expect(reportSourceSurfaceSource).toContain("surfaceLabel=");
+    expect(reportSourceSurfaceSource).toContain("Group sources");
+    expect(reportSourceSurfaceSource).toContain("Source material");
+  });
+
   it("keeps run snapshot reading bounded and snapshot-only", () => {
     expect(runSnapshotMessagesPanelSource).toContain("AnalysisRunMessage");
     expect(runSnapshotMessagesPanelSource).toContain("Load older snapshot messages");
