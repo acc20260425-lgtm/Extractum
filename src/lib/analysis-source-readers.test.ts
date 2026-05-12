@@ -47,6 +47,13 @@ describe("analysis source readers", () => {
     expect(telegramMediaCardSource).not.toContain("<audio");
   });
 
+  it("keeps sticky date labels below overlay source switching UI", () => {
+    expect(telegramTimelineSource).toContain(".day-label");
+    expect(telegramTimelineSource).toContain("position: sticky;");
+    expect(telegramTimelineSource).toContain("z-index: 0;");
+    expect(telegramTimelineSource).not.toContain("z-index: 1;");
+  });
+
   it("renders YouTube videos as transcript-first source readers", () => {
     expect(youtubeTranscriptSource).toContain('class="youtube-transcript-reader"');
     expect(youtubeTranscriptSource).toContain("formatYoutubeTime");

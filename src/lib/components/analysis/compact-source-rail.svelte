@@ -330,6 +330,7 @@
   .compact-source-rail {
     position: sticky;
     top: 0;
+    z-index: 30;
     width: 100%;
     min-width: 0;
     max-height: calc(100vh - 6rem);

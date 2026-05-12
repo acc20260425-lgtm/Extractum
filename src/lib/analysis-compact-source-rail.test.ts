@@ -73,6 +73,7 @@ describe("compact analysis source rail", () => {
     expect(compactRailSource).toContain(
       "padding: 0.35rem;",
     );
+    expect(compactRailSource).toContain("z-index: 30;");
     expect(compactRailSource).toContain(
       "border: 1px solid color-mix(in srgb, var(--border) 38%, transparent);",
     );

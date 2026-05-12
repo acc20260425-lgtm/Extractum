@@ -93,7 +93,7 @@
   .day-label {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 0;
     width: fit-content;
     padding: 0.25rem 0.55rem;
     border-radius: 999px;
