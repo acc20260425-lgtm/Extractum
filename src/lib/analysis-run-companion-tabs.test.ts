@@ -47,6 +47,13 @@ describe("run companion tabs", () => {
     expect(runsTabSource).not.toContain("sourceJobs");
   });
 
+  it("keeps dense run filters behind an advanced filters disclosure", () => {
+    expect(runsTabSource).toContain("<summary>Advanced filters</summary>");
+    expect(runsTabSource).toContain('class="advanced-filters"');
+    expect(runsTabSource).toContain('ariaLabel="Runs from date"');
+    expect(runsTabSource).toContain('ariaLabel="Provider filter"');
+  });
+
   it("removes temporary chat from ReportCanvas once companion Chat exists", () => {
     expect(reportCanvasSource).not.toContain("temporary-follow-up");
     expect(reportCanvasSource).not.toContain("<ChatPanel");

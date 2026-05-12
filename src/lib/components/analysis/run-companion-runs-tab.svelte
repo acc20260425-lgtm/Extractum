@@ -109,47 +109,52 @@
       <Button size="sm" variant="secondary" selected={runsFilter.status === "cancelled"} onclick={() => updateFilter({ status: "cancelled" })}>Cancelled</Button>
     </div>
 
-    <div class="date-row" aria-label="Date range">
-      <label>
-        <span>From</span>
-        <Input
-          type="date"
-          value={runsFilter.dateFrom}
-          ariaLabel="Runs from date"
-          oninput={(event) => updateFilter({ dateFrom: inputValue(event) })}
-        />
-      </label>
-      <label>
-        <span>To</span>
-        <Input
-          type="date"
-          value={runsFilter.dateTo}
-          ariaLabel="Runs to date"
-          oninput={(event) => updateFilter({ dateTo: inputValue(event) })}
-        />
-      </label>
-    </div>
+    <details class="advanced-filters">
+      <summary>Advanced filters</summary>
+      <div class="advanced-filter-grid">
+        <div class="date-row" aria-label="Date range">
+          <label>
+            <span>From</span>
+            <Input
+              type="date"
+              value={runsFilter.dateFrom}
+              ariaLabel="Runs from date"
+              oninput={(event) => updateFilter({ dateFrom: inputValue(event) })}
+            />
+          </label>
+          <label>
+            <span>To</span>
+            <Input
+              type="date"
+              value={runsFilter.dateTo}
+              ariaLabel="Runs to date"
+              oninput={(event) => updateFilter({ dateTo: inputValue(event) })}
+            />
+          </label>
+        </div>
 
-    <div class="meta-row">
-      <Input
-        value={runsFilter.provider}
-        placeholder="Provider"
-        ariaLabel="Provider filter"
-        oninput={(event) => updateFilter({ provider: inputValue(event) })}
-      />
-      <Input
-        value={runsFilter.model}
-        placeholder="Model"
-        ariaLabel="Model filter"
-        oninput={(event) => updateFilter({ model: inputValue(event) })}
-      />
-      <Input
-        value={runsFilter.template}
-        placeholder="Template"
-        ariaLabel="Template filter"
-        oninput={(event) => updateFilter({ template: inputValue(event) })}
-      />
-    </div>
+        <div class="meta-row">
+          <Input
+            value={runsFilter.provider}
+            placeholder="Provider"
+            ariaLabel="Provider filter"
+            oninput={(event) => updateFilter({ provider: inputValue(event) })}
+          />
+          <Input
+            value={runsFilter.model}
+            placeholder="Model"
+            ariaLabel="Model filter"
+            oninput={(event) => updateFilter({ model: inputValue(event) })}
+          />
+          <Input
+            value={runsFilter.template}
+            placeholder="Template"
+            ariaLabel="Template filter"
+            oninput={(event) => updateFilter({ template: inputValue(event) })}
+          />
+        </div>
+      </div>
+    </details>
 
     <div class="refresh-row">
       <Button size="sm" variant="secondary" onclick={onRefreshActiveRuns}>
@@ -234,6 +239,27 @@
     flex-wrap: wrap;
     gap: 0.45rem;
     align-items: center;
+  }
+
+  .advanced-filters {
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel-strong) 62%, transparent);
+  }
+
+  .advanced-filters summary {
+    cursor: pointer;
+    padding: 0.55rem 0.65rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  .advanced-filter-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0 0.65rem 0.65rem;
   }
 
   .runs-list {
