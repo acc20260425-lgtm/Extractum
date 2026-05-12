@@ -71,3 +71,11 @@ Then verify `http://127.0.0.1:5173/analysis` in desktop, narrow desktop, and mob
 - Running-run verification uses the debug fixture command to register the seeded running row in runtime active-run state; persistence was verified after restarting the app without that runtime memory.
 - Standalone browser verification used a minimal Tauri IPC/event stub because Vite `/analysis` otherwise requires the Tauri runtime bridge for event listeners.
 - Raw-source tests intentionally protect architectural contracts. If they fail because implementation names changed, update the assertion string while preserving the tested behavior.
+
+## Follow-Up UX Pass
+
+A later real Tauri app pass captured post-merge UX polish findings for `/analysis` with seeded fixtures:
+
+```text
+docs/superpowers/verification/2026-05-11-analysis-redesign-ux-polish.md
+```
