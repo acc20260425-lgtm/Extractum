@@ -59,13 +59,29 @@ describe("analysis source readers", () => {
     expect(telegramTimelineSource).toContain('class="telegram-message-text"');
     expect(telegramTimelineSource).toContain('class="telegram-message-time"');
     expect(telegramTimelineSource).toContain("max-width: 460px;");
-    expect(telegramTimelineSource).toContain("border-radius: 16px;");
+    expect(telegramTimelineSource).toContain("border-radius: 12px;");
     expect(telegramTimelineSource).toContain("font-size: 0.9375rem;");
     expect(telegramTimelineSource).toContain("font-size: 0.8125rem;");
   });
 
   it("centers Telegram message bubbles under sticky day labels", () => {
     expect(telegramTimelineSource).toMatch(/li\s*{\s*display: flex;\s*justify-content: center;/);
+  });
+
+  it("keeps Telegram bubbles and attachments visually compact", () => {
+    expect(telegramTimelineSource).toContain("padding: 0.5rem 0.625rem 0.4375rem;");
+    expect(telegramTimelineSource).toContain("line-height: 1.4;");
+    expect(telegramTimelineSource).toContain("box-shadow: 0 0 0 1px");
+    expect(telegramMediaCardSource).toContain("padding: 0.375rem 0.5rem;");
+    expect(telegramMediaCardSource).toContain("border-radius: 7px;");
+    expect(telegramMediaCardSource).toContain("font-size: 0.8125rem;");
+  });
+
+  it("allows Telegram message text to hyphenate long words", () => {
+    expect(telegramTimelineSource).toContain('lang="ru"');
+    expect(telegramTimelineSource).toContain("hyphens: auto;");
+    expect(telegramTimelineSource).toContain("overflow-wrap: break-word;");
+    expect(telegramTimelineSource).toContain("word-break: normal;");
   });
 
   it("renders YouTube videos as transcript-first source readers", () => {

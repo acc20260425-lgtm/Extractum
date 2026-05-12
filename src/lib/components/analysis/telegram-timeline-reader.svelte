@@ -44,7 +44,7 @@
                     {#if item.reactionLabel}<Badge variant="neutral">{item.reactionLabel}</Badge>{/if}
                     {#if item.ref}<Badge variant="neutral">{item.ref}</Badge>{/if}
                   </div>
-                  <p class="telegram-message-text">{item.content}</p>
+                  <p class="telegram-message-text" lang="ru">{item.content}</p>
                   {#if item.mediaCards.length > 0}
                     <div class="media-list">
                       {#each item.mediaCards as media, index (`${item.id}:${index}`)}
@@ -120,25 +120,23 @@
   .telegram-message-bubble {
     width: fit-content;
     max-width: 460px;
-    padding: 0.6875rem 0.8125rem 0.5rem;
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--panel) 74%, #dff0e9);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--border) 46%, transparent),
-      0 1px 2px color-mix(in srgb, var(--border) 28%, transparent);
+    padding: 0.5rem 0.625rem 0.4375rem;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--panel) 68%, #dff0e9);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 38%, transparent);
     color: var(--text);
   }
 
   .message-meta,
   .media-list {
     display: flex;
-    gap: 0.45rem;
+    gap: 0.375rem;
     flex-wrap: wrap;
     align-items: center;
   }
 
   .message-meta {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.1875rem;
     color: color-mix(in srgb, var(--muted) 86%, var(--text));
     font-size: 0.8125rem;
     line-height: 1.25;
@@ -156,13 +154,15 @@
   .telegram-message-text {
     margin: 0;
     white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: auto;
     font-size: 0.9375rem;
-    line-height: 1.45;
+    line-height: 1.4;
   }
 
   .media-list {
-    margin-top: 0.5rem;
+    margin-top: 0.4375rem;
   }
 
   .reader-footer {
