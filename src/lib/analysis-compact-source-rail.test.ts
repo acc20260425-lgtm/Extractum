@@ -62,4 +62,10 @@ describe("compact analysis source rail", () => {
     expect(sourceSwitcherPanelSource).toContain("aria-pressed={isSelectedSource(source.id)}");
     expect(sourceSwitcherPanelSource).toContain("aria-pressed={isSelectedGroup(group.id)}");
   });
+
+  it("uses a compact mobile source context bar", () => {
+    expect(compactRailSource).toContain("mobile-current-label");
+    expect(compactRailSource).toContain("quick-list-scroll");
+    expect(compactRailSource).toContain("@media (max-width: 720px)");
+  });
 });

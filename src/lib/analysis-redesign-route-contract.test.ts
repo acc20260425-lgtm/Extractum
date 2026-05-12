@@ -63,6 +63,8 @@ describe("analysis redesign final route contract", () => {
     expect(compactRailSource).toContain('ariaLabel="Open source switcher"');
     expect(compactRailSource).toContain("selectSourceAndClose");
     expect(compactRailSource).toContain("selectGroupAndClose");
+    expect(compactRailSource).toContain("mobile-current-label");
+    expect(compactRailSource).toContain("quick-list-scroll");
     expect(compactRailSource).toContain("context-primary-action");
     expect(compactRailSource).toContain("criticalSourceStatus");
     expect(compactRailSource).not.toContain("AppSidebar");

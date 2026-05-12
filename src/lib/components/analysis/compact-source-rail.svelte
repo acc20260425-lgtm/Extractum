@@ -88,6 +88,13 @@
   const visibleSources = $derived(filteredSourceCatalog.slice(0, 8));
   const visibleGroups = $derived(filteredGroups.slice(0, 4));
   const criticalStatusLabel = $derived(criticalSourceStatus());
+  const currentContextLabel = $derived(
+    currentSource
+      ? (youtubeSummaries[currentSource.id]?.title ?? currentSource.title ?? currentSource.externalId)
+      : currentGroup
+        ? currentGroup.name
+        : "Choose source",
+  );
 
   function isSelectedSource(sourceId: number) {
     return workspaceSelection.kind === "source" && workspaceSelection.sourceId === sourceId;
@@ -199,6 +206,14 @@
       {/if}
     </button>
 
+    <button
+      class="mobile-current-label"
+      type="button"
+      onclick={() => (sourceSwitcherOpen = true)}
+    >
+      <span>{currentContextLabel}</span>
+    </button>
+
     {#if criticalStatusLabel}
       <span class="status-dot" title={criticalStatusLabel} aria-label={criticalStatusLabel}>
         {#if criticalStatusLabel.toLocaleLowerCase().includes("sync") || criticalStatusLabel.toLocaleLowerCase().includes("running")}
@@ -210,7 +225,7 @@
     {/if}
   </div>
 
-  <div class="quick-list" aria-label="Quick source choices">
+  <div class="quick-list quick-list-scroll" aria-label="Quick source choices">
     {#each visibleSources as source (source.id)}
       {@const Mark = providerMark(source)}
       <Button
@@ -359,6 +374,24 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 12%, transparent);
   }
 
+  .mobile-current-label {
+    display: none;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mobile-current-label span {
+    display: block;
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .context-avatar,
   .mini-avatar {
     width: 1.75rem;
@@ -429,6 +462,38 @@
       padding-left: 0.45rem;
       border-top: 0;
       border-left: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+    }
+  }
+
+  @media (max-width: 720px) {
+    .compact-source-rail {
+      padding: 0.45rem;
+      gap: 0.4rem;
+    }
+
+    .rail-top {
+      min-width: 0;
+      flex: 0 0 auto;
+    }
+
+    .current-context-button {
+      width: 2.35rem;
+      min-height: 2.35rem;
+    }
+
+    .current-context-button :global(svg) {
+      display: none;
+    }
+
+    .mobile-current-label {
+      display: inline-flex;
+    }
+
+    .quick-list-scroll {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: thin;
     }
   }
 </style>
