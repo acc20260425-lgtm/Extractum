@@ -4,6 +4,7 @@ import {
   defaultCompanionTabForOpenedRun,
   evidenceSourceActionDecision,
   filterCompanionRuns,
+  hasSavedRunsForWorkspace,
   runsFilterDefaults,
   type CompanionRunsFilterState,
 } from "./analysis-run-companion-state";
@@ -218,5 +219,27 @@ describe("analysis run companion state", () => {
     });
 
     expect(result.map((entry) => entry.run.id)).toEqual([20]);
+  });
+
+  it("detects saved runs for the selected workspace scope", () => {
+    expect(hasSavedRunsForWorkspace({
+      savedRuns: [
+        summary({ id: 20, source_id: 7, source_group_id: null }),
+        summary({ id: 21, source_id: 8, source_title: "Other" }),
+      ],
+      workspaceSelection: { kind: "source", sourceId: 7 },
+    })).toBe(true);
+
+    expect(hasSavedRunsForWorkspace({
+      savedRuns: [
+        summary({ id: 22, scope_type: "source_group", source_id: null, source_group_id: 4, source_group_name: "Group A" }),
+      ],
+      workspaceSelection: { kind: "source_group", sourceGroupId: 4 },
+    })).toBe(true);
+
+    expect(hasSavedRunsForWorkspace({
+      savedRuns: [summary({ id: 23, source_id: 9, source_title: "Other" })],
+      workspaceSelection: { kind: "source", sourceId: 7 },
+    })).toBe(false);
   });
 });

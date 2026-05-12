@@ -38,6 +38,9 @@ describe("report canvas component contract", () => {
     expect(reportRunHeaderSource).toContain("Run #");
     expect(reportRunHeaderSource).toContain("runTargetLabel(currentRun)");
     expect(reportRunHeaderSource).toContain("currentRun.status");
+    expect(reportRunHeaderSource).toContain('class="run-summary-strip"');
+    expect(reportRunHeaderSource).toContain("<details");
+    expect(reportRunHeaderSource).toContain("Run details");
     expect(reportRunHeaderSource).toContain("currentRun.created_at");
     expect(reportRunHeaderSource).toContain("currentRun.completed_at");
     expect(reportRunHeaderSource).toContain("promptTemplateLabel");
@@ -48,6 +51,13 @@ describe("report canvas component contract", () => {
     expect(reportRunHeaderSource).toContain("currentRun.model");
     expect(reportRunHeaderSource).toContain("sourceBasisLabel");
     expect(reportRunHeaderSource).toContain("youtubeCorpusModeLabel");
+  });
+
+  it("keeps report setup copy aware of existing saved runs", () => {
+    expect(reportCanvasSource).toContain("{currentScopeHasSavedRuns}");
+    expect(reportSetupPanelSource).toContain("currentScopeHasSavedRuns");
+    expect(reportSetupPanelSource).toContain("Run another report");
+    expect(reportSetupPanelSource).not.toContain("Build the first report for this workspace");
   });
 
   it("keeps snapshot and live source basis explicit", () => {

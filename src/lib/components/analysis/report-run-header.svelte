@@ -54,11 +54,19 @@
   const hasSnapshotWarning = $derived(
     currentRun.status === "completed" && snapshotAvailability === "unavailable",
   );
+  const basisVariant = $derived(snapshotBadgeVariant(snapshotAvailability));
   const promptTemplateLabel = $derived(templateLabel(currentRun));
 
   function templateLabel(run: AnalysisRunDetail) {
     const version = run.prompt_template_version as number | null;
     return `${run.prompt_template_name ?? "Unknown"}${version === null ? "" : ` v${version}`}`;
+  }
+
+  function snapshotBadgeVariant(availability: RunSnapshotAvailability): BadgeVariant {
+    if (availability === "available") return "success";
+    if (availability === "capturing") return "info";
+    if (availability === "unavailable") return "warning";
+    return "neutral";
   }
 </script>
 
@@ -71,7 +79,7 @@
     </div>
     <div class="run-header-actions">
       <Badge variant={statusTone(currentRun.status)}>{currentRun.status}</Badge>
-      <Badge variant={hasSnapshotWarning ? "warning" : "neutral"}>{basisLabel}</Badge>
+      <Badge variant={basisVariant}>{basisLabel}</Badge>
       {#if canCancelCurrentRun}
         <Button variant="danger-soft" type="button" onclick={onCancelCurrentRun}>
           <Square size={15} aria-hidden="true" /> Cancel run
@@ -86,21 +94,27 @@
     </p>
   {/if}
 
-  <div class="run-meta-grid">
-    <MetaCell label="Scope">{runTargetLabel(currentRun)}</MetaCell>
-    <MetaCell label="Status">{currentRun.status}</MetaCell>
-    <MetaCell label="Created">{formatTimestamp(currentRun.created_at)}</MetaCell>
-    <MetaCell label="Completed">{formatTimestamp(currentRun.completed_at)}</MetaCell>
+  <div class="run-summary-strip">
     <MetaCell label="Period">{formatPeriod(currentRun.period_from, currentRun.period_to)}</MetaCell>
     <MetaCell label="Template">{promptTemplateLabel}</MetaCell>
-    <MetaCell label="Provider profile">{currentRun.provider_profile}</MetaCell>
     <MetaCell label="Provider/model">{currentRun.provider}/{currentRun.model}</MetaCell>
-    <MetaCell label="Source basis">{basisDescription}</MetaCell>
-    <MetaCell label="YouTube corpus">{youtubeCorpusModeLabel(currentRun.youtube_corpus_mode)}</MetaCell>
     <MetaCell label="Trace refs">{traceRefCount}</MetaCell>
-    <MetaCell label="Live phase">{activePhase || currentRun.status}</MetaCell>
-    <MetaCell label="Live progress">{activeProgress || "n/a"}</MetaCell>
   </div>
+
+  <details class="run-details">
+    <summary>Run details</summary>
+    <div class="run-meta-grid">
+      <MetaCell label="Scope">{runTargetLabel(currentRun)}</MetaCell>
+      <MetaCell label="Status">{currentRun.status}</MetaCell>
+      <MetaCell label="Created">{formatTimestamp(currentRun.created_at)}</MetaCell>
+      <MetaCell label="Completed">{formatTimestamp(currentRun.completed_at)}</MetaCell>
+      <MetaCell label="Provider profile">{currentRun.provider_profile}</MetaCell>
+      <MetaCell label="Source basis">{basisDescription}</MetaCell>
+      <MetaCell label="YouTube corpus">{youtubeCorpusModeLabel(currentRun.youtube_corpus_mode)}</MetaCell>
+      <MetaCell label="Live phase">{activePhase || currentRun.status}</MetaCell>
+      <MetaCell label="Live progress">{activeProgress || "n/a"}</MetaCell>
+    </div>
+  </details>
 
   {#if currentRun.error}
     <p class="run-error">{currentRun.error}</p>
@@ -160,6 +174,27 @@
     gap: 0.7rem;
   }
 
+  .run-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+
+  .run-details {
+    min-width: 0;
+  }
+
+  .run-details summary {
+    width: fit-content;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .run-details .run-meta-grid {
+    margin-top: 0.7rem;
+  }
+
   .snapshot-warning,
   .run-error {
     padding: 0.7rem 0.85rem;
@@ -181,7 +216,8 @@
       flex-direction: column;
     }
 
-    .run-meta-grid {
+    .run-meta-grid,
+    .run-summary-strip {
       grid-template-columns: 1fr;
     }
   }

@@ -281,3 +281,65 @@ After implementing polish fixes, repeat the same fixture-backed pass and specifi
 - Runs tab shows at least the first run card without scrolling on desktop.
 - Source switcher selection closes or clearly changes mode after selecting a source/group.
 - Mobile width has no title overflow and less repeated context chrome.
+
+## Pass 1 Implementation Verification
+
+Date: 2026-05-12
+Branch: `polish/analysis-ux-pass-1`
+
+Batch 1 fixes implemented:
+
+- Opened-run metadata is now a compact summary strip with detailed metadata behind `Run details`.
+- Snapshot copy now uses explicit states: `Checking snapshot`, `Snapshot pending`, `Snapshot available`, and `Snapshot unavailable`.
+- Opened runs now probe snapshot availability before the user switches to Source mode, so Report and Evidence resolve the same snapshot state.
+- Report setup copy is run-aware and shows `Run another report` when saved runs exist for the current workspace.
+
+Automated verification:
+
+```text
+npm.cmd test
+npm.cmd run check
+git diff --check
+```
+
+Runtime verification used Tauri dev mode with the same fixture seed path:
+
+```js
+await window.__TAURI__.core.invoke("clear_analysis_redesign_fixtures");
+await window.__TAURI__.core.invoke("seed_analysis_redesign_fixtures");
+```
+
+Seed result:
+
+```json
+{
+  "accounts": 1,
+  "chatMessages": 2,
+  "llmProfiles": 1,
+  "promptTemplates": 1,
+  "runs": 6,
+  "snapshotMessages": 4,
+  "sourceGroups": 1,
+  "sources": 4,
+  "youtubePlaylistItems": 2,
+  "youtubeTranscriptSegments": 3
+}
+```
+
+New artifacts:
+
+```text
+artifacts/analysis-ux-pass-1-completed-report.png
+artifacts/analysis-ux-pass-1-completed-source.png
+artifacts/analysis-ux-pass-1-failed-report.png
+artifacts/analysis-ux-pass-1-group-setup.png
+```
+
+Observed pass notes:
+
+- Completed Snapshot Run showed `Snapshot available` in the Report header before switching to Source mode. Evidence enabled `Show in source`, and Source mode rendered the frozen run snapshot transcript.
+- Missing Snapshot Run showed `Snapshot unavailable` and did not show a positive snapshot badge.
+- Failed Run showed `Snapshot unavailable` beside the failed status and kept failure details readable.
+- Group report setup showed `Run another report` instead of first-report copy when prior saved runs existed.
+
+Residual polish remains for batch 2: Runs filter density, source switcher behavior, source reader deduplication, transcript search styling, and mobile source rail height.

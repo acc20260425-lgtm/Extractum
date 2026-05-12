@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   runSnapshotAvailabilityFromPage,
+  sourceBasisDescription,
   sourceBasisLabel,
   sourceCanvasSurface,
   youtubeCorpusModeLabel,
@@ -134,9 +135,9 @@ describe("report canvas state", () => {
   });
 
   it.each([
-    ["unknown", "Snapshot status unknown"],
+    ["unknown", "Checking snapshot"],
     ["capturing", "Snapshot pending"],
-    ["available", "Run snapshot"],
+    ["available", "Snapshot available"],
     ["unavailable", "Snapshot unavailable"],
   ] satisfies Array<[RunSnapshotAvailability, string]>)("labels %s snapshot basis", (availability, label) => {
     expect(sourceBasisLabel({
@@ -144,6 +145,19 @@ describe("report canvas state", () => {
       sourceViewBasis: "run_snapshot",
       snapshotAvailability: availability,
     })).toBe(label);
+  });
+
+  it.each([
+    ["unknown", "Checking whether a frozen source snapshot is available for this run."],
+    ["capturing", "Snapshot capture is still in progress for this run."],
+    ["available", "Frozen source material captured for this run is available."],
+    ["unavailable", "No frozen source snapshot is available for this run."],
+  ] satisfies Array<[RunSnapshotAvailability, string]>)("describes %s snapshot basis consistently", (availability, description) => {
+    expect(sourceBasisDescription({
+      currentRun: run(),
+      sourceViewBasis: "run_snapshot",
+      snapshotAvailability: availability,
+    })).toBe(description);
   });
 
   it("labels YouTube corpus modes for run headers", () => {

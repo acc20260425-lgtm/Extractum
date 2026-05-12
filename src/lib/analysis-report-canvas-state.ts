@@ -73,10 +73,10 @@ export function sourceBasisLabel({
     return "Live source";
   }
 
-  if (snapshotAvailability === "available") return "Run snapshot";
+  if (snapshotAvailability === "available") return "Snapshot available";
   if (snapshotAvailability === "capturing") return "Snapshot pending";
   if (snapshotAvailability === "unavailable") return "Snapshot unavailable";
-  return "Snapshot status unknown";
+  return "Checking snapshot";
 }
 
 export function sourceBasisDescription({
@@ -93,18 +93,18 @@ export function sourceBasisDescription({
   }
 
   if (snapshotAvailability === "available") {
-    return "Browsing the frozen source material captured for this run.";
+    return "Frozen source material captured for this run is available.";
   }
 
   if (snapshotAvailability === "capturing") {
-    return "The run snapshot is not browsable yet. It becomes available after corpus capture is saved.";
+    return "Snapshot capture is still in progress for this run.";
   }
 
   if (snapshotAvailability === "unavailable") {
-    return "Extractum cannot show a frozen source snapshot for this run.";
+    return "No frozen source snapshot is available for this run.";
   }
 
-  return "Checking whether a frozen run snapshot exists.";
+  return "Checking whether a frozen source snapshot is available for this run.";
 }
 
 export function canReturnToRunSnapshot(availability: RunSnapshotAvailability) {

@@ -36,6 +36,18 @@ describe("analysis route effects", () => {
     return analysisPageSource.slice(functionStart, nextFunctionStart);
   }
 
+  function runSnapshotEffect() {
+    const callStart = analysisPageSource.lastIndexOf("void loadRunSnapshotFirstPage(currentRun.id);");
+    const effectStart = analysisPageSource.lastIndexOf("  $effect(() => {", callStart);
+    const nextEffectStart = analysisPageSource.indexOf("\n  $effect(() => {", effectStart + 1);
+
+    expect(callStart, "analysis route should load run snapshot data for opened runs").toBeGreaterThan(-1);
+    expect(effectStart, "snapshot loading should be owned by an effect").toBeGreaterThan(-1);
+    expect(nextEffectStart, "snapshot effect should be followed by another effect").toBeGreaterThan(effectStart);
+
+    return analysisPageSource.slice(effectStart, nextEffectStart);
+  }
+
   it("keeps saved run history loading out of effect dependency tracking", () => {
     const effect = historyScopeEffect();
 
@@ -59,5 +71,14 @@ describe("analysis route effects", () => {
     expect(syncFunction).toContain("if (source.sourceType === \"youtube\")");
     expect(syncFunction).toContain("transcripts: source.sourceSubtype === \"video\"");
     expect(syncFunction).toContain("comments: source.sourceSubtype === \"video\"");
+  });
+
+  it("probes opened-run snapshot availability before the user switches to Source mode", () => {
+    const effect = runSnapshotEffect();
+
+    expect(effect).toContain("currentRun");
+    expect(effect).toContain("void loadRunSnapshotFirstPage(currentRun.id);");
+    expect(effect).not.toContain('workspaceUiState.canvasMode === "source"');
+    expect(effect).not.toContain('workspaceUiState.sourceViewBasis === "run_snapshot"');
   });
 });

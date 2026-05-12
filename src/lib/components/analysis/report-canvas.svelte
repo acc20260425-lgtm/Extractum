@@ -87,6 +87,7 @@
     startingReport,
     selectedSourceId,
     selectedGroupId,
+    currentScopeHasSavedRuns,
     currentRun,
     loadingRunDetail,
     selectedRunIsActive,
@@ -223,6 +224,7 @@
     startingReport: boolean;
     selectedSourceId: string;
     selectedGroupId: string;
+    currentScopeHasSavedRuns: boolean;
     currentRun: AnalysisRunDetail | null;
     loadingRunDetail: boolean;
     selectedRunIsActive: boolean;
@@ -425,6 +427,7 @@
         {startingReport}
         {selectedSourceId}
         {selectedGroupId}
+        {currentScopeHasSavedRuns}
         {selectedRunIsActive}
         {activeProgress}
         {activePhase}

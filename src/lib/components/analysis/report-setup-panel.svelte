@@ -42,6 +42,7 @@
     startingReport,
     selectedSourceId,
     selectedGroupId,
+    currentScopeHasSavedRuns,
     selectedRunIsActive,
     activeProgress,
     activePhase,
@@ -115,6 +116,7 @@
     startingReport: boolean;
     selectedSourceId: string;
     selectedGroupId: string;
+    currentScopeHasSavedRuns: boolean;
     selectedRunIsActive: boolean;
     activeProgress: string;
     activePhase: string;
@@ -375,10 +377,11 @@
     <div class="preflight-panel">
       <div class="preflight-copy">
         <span class="eyebrow">Next step</span>
-        <h3>Build the first report for this workspace</h3>
+        <h3>{currentScopeHasSavedRuns ? "Run another report" : "Start the first report"}</h3>
         <p>
-          Set the date window, choose a prompt template, and start a run. Once the report is ready,
-          this area will turn into a live document and follow-up conversation workspace.
+          {currentScopeHasSavedRuns
+            ? "Choose the next date window and prompt template. Prior reports stay available in Runs while the new result is generated here."
+            : "Set the date window, choose a prompt template, and start a run. Once the report is ready, this area will turn into a live document and follow-up conversation workspace."}
         </p>
       </div>
       <div class="preflight-points">

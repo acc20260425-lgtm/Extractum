@@ -221,6 +221,16 @@ function runMatchesWorkspace(run: AnalysisRunSummary, selection: WorkspaceSelect
   return run.source_group_id === selection.sourceGroupId;
 }
 
+export function hasSavedRunsForWorkspace({
+  savedRuns,
+  workspaceSelection,
+}: {
+  savedRuns: AnalysisRunSummary[];
+  workspaceSelection: WorkspaceSelection;
+}) {
+  return savedRuns.some((run) => runMatchesWorkspace(run, workspaceSelection));
+}
+
 function parseDateStart(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;

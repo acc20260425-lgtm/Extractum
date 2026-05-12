@@ -118,7 +118,9 @@ describe("analysis redesign final safety contract", () => {
     expect(reportRunHeaderSource).toContain("Source basis");
     expect(reportRunHeaderSource).toContain("youtube_corpus_mode");
     expect(reportRunHeaderSource).toContain("promptTemplateLabel");
-    expect(reportRunHeaderSource).toContain('hasSnapshotWarning ? "warning" : "neutral"');
+    expect(reportRunHeaderSource).toContain("snapshotBadgeVariant");
+    expect(reportRunHeaderSource).toContain('availability === "unavailable"');
+    expect(reportRunHeaderSource).toContain('return "warning"');
   });
 
   it("does not hide completed chat persistence failures", () => {

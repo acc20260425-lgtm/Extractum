@@ -178,6 +178,7 @@
   import {
     chatAvailabilityForRun,
     evidenceSourceActionDecision,
+    hasSavedRunsForWorkspace,
     runsFilterDefaults,
     type CompanionRunsFilterState,
   } from "$lib/analysis-run-companion-state";
@@ -736,6 +737,11 @@
   const chatAvailability = $derived(chatAvailabilityForRun({
     currentRun,
     snapshotAvailability: runSnapshotAvailability,
+  }));
+
+  const currentScopeHasSavedRuns = $derived.by(() => hasSavedRunsForWorkspace({
+    savedRuns: runs,
+    workspaceSelection: workspaceUiState.workspaceSelection,
   }));
 
   const historyScopeParams = $derived.by(() => {
@@ -2012,11 +2018,7 @@
   });
 
   $effect(() => {
-    if (
-      currentRun &&
-      workspaceUiState.canvasMode === "source" &&
-      workspaceUiState.sourceViewBasis === "run_snapshot"
-    ) {
+    if (currentRun) {
       void loadRunSnapshotFirstPage(currentRun.id);
     }
   });
@@ -2291,6 +2293,7 @@
     {startingReport}
     {selectedSourceId}
     {selectedGroupId}
+    {currentScopeHasSavedRuns}
     {currentRun}
     {loadingRunDetail}
     {selectedRunIsActive}

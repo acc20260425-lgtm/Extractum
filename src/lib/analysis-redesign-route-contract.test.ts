@@ -95,6 +95,8 @@ describe("analysis redesign final route contract", () => {
     expect(reportRunHeaderSource).toContain("prompt_template_version");
     expect(reportRunHeaderSource).toContain("provider_profile");
     expect(reportRunHeaderSource).toContain("youtube_corpus_mode");
+    expect(reportRunHeaderSource).toContain('class="run-summary-strip"');
+    expect(reportRunHeaderSource).toContain("<details");
     expect(reportRunHeaderSource).not.toContain("Template editor");
   });
 
