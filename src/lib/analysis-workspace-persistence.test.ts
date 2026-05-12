@@ -218,18 +218,18 @@ describe("analysis-workspace-persistence", () => {
     });
   });
 
-  it("falls back gracefully when persisted source or group ids are stale", () => {
+  it("clears stale persisted source or group ids instead of selecting another scope", () => {
     expect(fallbackWorkspaceSelection(
       { kind: "source", sourceId: 99 },
       [source(7), source(8)],
       [group(9)],
-    )).toEqual({ kind: "source", sourceId: 7 });
+    )).toEqual({ kind: "none" });
 
     expect(fallbackWorkspaceSelection(
       { kind: "source_group", sourceGroupId: 99 },
       [source(7)],
       [group(9)],
-    )).toEqual({ kind: "source_group", sourceGroupId: 9 });
+    )).toEqual({ kind: "none" });
 
     expect(fallbackWorkspaceSelection(
       { kind: "source", sourceId: 99 },

@@ -245,17 +245,5 @@ export function fallbackWorkspaceSelection(
     return preferred;
   }
 
-  if (preferred.kind === "source_group" && groups.length > 0) {
-    return { kind: "source_group", sourceGroupId: groups[0].id };
-  }
-
-  if (preferred.kind === "source" && sources.length > 0) {
-    return { kind: "source", sourceId: sources[0].id };
-  }
-
-  if (groups.length > 0) {
-    return { kind: "source_group", sourceGroupId: groups[0].id };
-  }
-
   return { kind: "none" };
 }
