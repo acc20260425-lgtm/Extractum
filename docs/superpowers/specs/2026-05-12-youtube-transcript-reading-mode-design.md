@@ -24,7 +24,7 @@ Introduce a local presentation model for transcript groups.
 
 Each group contains:
 
-- `id`: stable id derived from the first segment item id/ref;
+- `id`: stable id derived as `transcript-group:${firstItem.id || firstItem.ref || index}`;
 - `startSeconds`: `youtubeStartSeconds` from the first item in the group, or `null` when unavailable;
 - `content`: joined text from all segments in the group;
 - `items`: source reader items included in the group;
@@ -54,14 +54,16 @@ For each next item, decide whether it starts a new group before appending it to 
 
 Rule order:
 
-1. If there is no current group, create one from the next item.
-2. If the next item has no `youtubeStartSeconds`, render it as a single-item group.
-3. If the current group's last item has `youtubeEndSeconds` and the next item has `youtubeStartSeconds`, start a new group when the gap is at least the pause threshold.
+1. If the next item has no `youtubeStartSeconds`, finalize the current group when present, emit the next item as a single-item group with `startSeconds: null`, and continue.
+2. If there is no current group, create one from the next item.
+3. If the current group's last item has `youtubeEndSeconds`, start a new group when `next.youtubeStartSeconds - last.youtubeEndSeconds` is at least the pause threshold.
 4. Start a new group when appending the next item would make the joined content exceed the hard paragraph length.
 5. Start a new group when the current content is at least the preferred paragraph length and ends with sentence punctuation.
 6. Otherwise append the next item.
 
 The hard length rule is checked before appending. A single segment may exceed the hard length when the source caption text is already longer than the threshold.
+
+If `youtubeEndSeconds` is unavailable for the current group's last item, skip the pause rule and continue evaluating length-based rules. Do not infer a pause from the previous start timestamp.
 
 Initial thresholds:
 
@@ -74,10 +76,10 @@ These values keep paragraphs readable without turning the transcript into long w
 Sentence punctuation is limited to `.`, `!`, `?`, and `...` in the first pass:
 
 ```ts
-/(?:[.!?]|\.\.\.)["')\]]?$/
+/(?:\.{3}|[.!?])["')\]]*$/
 ```
 
-The regex allows one trailing closing quote, parenthesis, or bracket.
+The regex allows trailing closing quotes, parentheses, or brackets.
 
 Joined content is normalized for reading:
 
@@ -139,6 +141,7 @@ Add helper and source-level tests for:
 - content at least `360` characters long starts a new group before the next segment when it ends with `.`, `!`, `?`, or `...`;
 - preferred length alone does not split a sentence when sentence punctuation is missing;
 - selected state applies to the whole group when any included ref matches `selectedTraceRef`;
+- an item without `youtubeStartSeconds` renders as a single-item group and does not merge with previous or next timed items;
 - mixed caption labels produce `captionLabel: null`;
 - mixed source ids produce `sourceId: null`;
 - grouped rows replace per-segment panel styling;
