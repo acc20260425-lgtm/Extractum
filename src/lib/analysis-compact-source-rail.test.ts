@@ -68,4 +68,27 @@ describe("compact analysis source rail", () => {
     expect(compactRailSource).toContain("quick-list-scroll");
     expect(compactRailSource).toContain("@media (max-width: 720px)");
   });
+
+  it("reduces rail chrome without widening the rail", () => {
+    expect(compactRailSource).toContain(
+      "padding: 0.35rem;",
+    );
+    expect(compactRailSource).toContain(
+      "border: 1px solid color-mix(in srgb, var(--border) 38%, transparent);",
+    );
+    expect(compactRailSource).toContain("border: 0;");
+    expect(compactRailSource).toContain("box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 44%, transparent);");
+    expect(compactRailSource).not.toContain("width: 4rem");
+  });
+
+  it("shows mini source logos without cropping them", () => {
+    expect(compactRailSource).toContain(".mini-avatar img");
+    expect(compactRailSource).toContain(".quick-list :global(.ui-button.icon-only.sm)");
+    expect(compactRailSource).toContain("width: 3.75rem;");
+    expect(compactRailSource).toContain("height: 3rem;");
+    expect(compactRailSource).toContain("width: 2.5rem;");
+    expect(compactRailSource).toContain("height: 2.5rem;");
+    expect(compactRailSource).toContain("object-fit: contain;");
+    expect(compactRailSource).toContain("background: var(--panel);");
+  });
 });

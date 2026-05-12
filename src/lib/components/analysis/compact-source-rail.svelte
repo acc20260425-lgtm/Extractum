@@ -337,8 +337,8 @@
     flex-direction: column;
     gap: 0.55rem;
     align-items: center;
-    padding: 0.55rem;
-    border: 1px solid var(--border);
+    padding: 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--border) 38%, transparent);
     border-radius: 8px;
     background: var(--panel);
     box-shadow: var(--shadow);
@@ -362,7 +362,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.2rem;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: 8px;
     background: var(--panel-strong);
     color: var(--text);
@@ -370,8 +370,7 @@
   }
 
   .current-context-button.active {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 12%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 44%, transparent);
   }
 
   .mobile-current-label {
@@ -392,10 +391,23 @@
     white-space: nowrap;
   }
 
-  .context-avatar,
-  .mini-avatar {
+  .context-avatar {
     width: 1.75rem;
     height: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+    color: var(--primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .mini-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -416,17 +428,28 @@
     color: var(--muted);
   }
 
-  .context-avatar img,
-  .mini-avatar img {
+  .context-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .mini-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: var(--panel);
   }
 
   .quick-list {
     width: 100%;
     padding-top: 0.45rem;
     border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  }
+
+  .quick-list :global(.ui-button.icon-only.sm) {
+    width: 3.75rem;
+    height: 3rem;
   }
 
   .status-dot {
