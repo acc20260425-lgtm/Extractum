@@ -25,28 +25,72 @@ Introduce a local presentation model for transcript groups.
 Each group contains:
 
 - `id`: stable id derived from the first segment item id/ref;
-- `startSeconds`: timestamp for the first segment in the group;
+- `startSeconds`: `youtubeStartSeconds` from the first item in the group, or `null` when unavailable;
 - `content`: joined text from all segments in the group;
 - `items`: source reader items included in the group;
 - `selected`: true when any included item is selected;
-- `captionLabel`: shared label when all included items use the same label;
-- `sourceId`: shared source id;
+- `captionLabel`: shared label when all included items use the same non-empty label, otherwise `null`;
+- `sourceId`: shared numeric source id when all included items use the same source id, otherwise `null`;
 - `refs`: included trace refs for testing and future interactions.
 
-Grouping rules:
+## Grouping Contract
 
-- start a new group when there is a large pause between segments;
-- start a new group when the current group is already long enough and the previous text ends with sentence punctuation;
-- start a new group when adding another segment would make the paragraph too long;
-- keep a fallback that still renders every item when only snapshot reader items are available and timing is missing.
+Grouping is a pure presentation-layer helper:
+
+```ts
+type TranscriptGroup = {
+  id: string;
+  startSeconds: number | null;
+  content: string;
+  items: SourceReaderItem[];
+  selected: boolean;
+  captionLabel: string | null;
+  sourceId: number | null;
+  refs: string[];
+};
+```
+
+For each next item, decide whether it starts a new group before appending it to the current group.
+
+Rule order:
+
+1. If there is no current group, create one from the next item.
+2. If the next item has no `youtubeStartSeconds`, render it as a single-item group.
+3. If the current group's last item has `youtubeEndSeconds` and the next item has `youtubeStartSeconds`, start a new group when the gap is at least the pause threshold.
+4. Start a new group when appending the next item would make the joined content exceed the hard paragraph length.
+5. Start a new group when the current content is at least the preferred paragraph length and ends with sentence punctuation.
+6. Otherwise append the next item.
+
+The hard length rule is checked before appending. A single segment may exceed the hard length when the source caption text is already longer than the threshold.
 
 Initial thresholds:
 
-- pause threshold: `2000ms`;
+- pause threshold: `2` seconds;
 - preferred paragraph length: `360` characters;
 - hard paragraph length: `560` characters.
 
 These values keep paragraphs readable without turning the transcript into long walls of text.
+
+Sentence punctuation is limited to `.`, `!`, `?`, and `...` in the first pass:
+
+```ts
+/(?:[.!?]|\.\.\.)["')\]]?$/
+```
+
+The regex allows one trailing closing quote, parenthesis, or bracket.
+
+Joined content is normalized for reading:
+
+```ts
+content = items
+  .map((item) => item.content.trim())
+  .filter(Boolean)
+  .join(" ")
+  .replace(/\s+/g, " ")
+  .trim();
+```
+
+This pass does not preserve line breaks inside captions.
 
 ## UI Design
 
@@ -66,7 +110,15 @@ The transcript should feel closer to a reading pane than a table of cards.
 
 Search continues to work through the existing filtered `readerItems` input. Grouping happens after filtering, so matching segments naturally appear inside grouped paragraphs.
 
+In search mode, groups are built only from filtered `readerItems`. The first pass does not pull hidden neighboring segments back into the visible paragraph for context.
+
 When `selectedTraceRef` matches any segment inside a group, the whole group is selected. This keeps trace navigation reliable while avoiding complex inline highlight work in the first pass.
+
+Selection is group-level only:
+
+- if `selectedTraceRef` matches any value in `group.refs`, `group.selected` is true;
+- selected groups use a subtle background and a left accent line;
+- inline segment-level highlighting remains out of scope.
 
 ## Non-Goals
 
@@ -79,11 +131,18 @@ This pass does not add:
 
 ## Tests
 
-Add source-level tests for:
+Add helper and source-level tests for:
 
-- transcript grouping helper and thresholds;
-- grouped rows replacing per-segment panel styling;
-- selected state applying at group level;
-- compact continuous transcript styling without ordinary row cards.
+- nearby short caption segments with small timing gaps join into one group;
+- a gap of at least `2` seconds starts a new group when both timestamps are available;
+- appending a segment that would make content longer than `560` characters starts a new group;
+- content at least `360` characters long starts a new group before the next segment when it ends with `.`, `!`, `?`, or `...`;
+- preferred length alone does not split a sentence when sentence punctuation is missing;
+- selected state applies to the whole group when any included ref matches `selectedTraceRef`;
+- mixed caption labels produce `captionLabel: null`;
+- mixed source ids produce `sourceId: null`;
+- grouped rows replace per-segment panel styling;
+- ordinary groups do not render card borders, rounded panel backgrounds, or per-row panel shadows;
+- groups are separated by thin dividers and keep keyboard-reachable actions.
 
 Run the existing Svelte checks and unit tests before merging.
