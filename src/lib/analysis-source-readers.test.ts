@@ -169,6 +169,15 @@ describe("analysis source readers", () => {
     expect(youtubeTranscriptSource).not.toContain("box-shadow: 0 0 0 3px");
   });
 
+  it("scrolls selected Telegram and YouTube source rows into view", () => {
+    expect(telegramTimelineSource).toContain("scrollSelectedMessageIntoView");
+    expect(telegramTimelineSource).toContain("scrollIntoView");
+    expect(telegramTimelineSource).toContain("data-trace-ref={item.ref}");
+    expect(youtubeTranscriptSource).toContain("scrollSelectedTranscriptGroupIntoView");
+    expect(youtubeTranscriptSource).toContain("scrollIntoView");
+    expect(youtubeTranscriptSource).toContain("data-trace-ref={visibleRef}");
+  });
+
   it("keeps YouTube playlist reading playlist-first", () => {
     expect(youtubePlaylistSource).toContain('class="youtube-playlist-reader"');
     expect(youtubePlaylistSource).toContain("playlist.items");

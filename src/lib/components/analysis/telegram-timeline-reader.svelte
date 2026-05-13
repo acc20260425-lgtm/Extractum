@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -22,9 +23,25 @@
   } = $props();
 
   const dayGroups = $derived(groupReaderItemsByDay(items));
+  let timelineElement: HTMLElement | null = $state(null);
+
+  $effect(() => {
+    const selectedRef = items.find((item) => item.selected)?.ref ?? null;
+    if (selectedRef) {
+      void scrollSelectedMessageIntoView(selectedRef);
+    }
+  });
+
+  async function scrollSelectedMessageIntoView(selectedRef: string) {
+    await tick();
+    const selected = timelineElement?.querySelector<HTMLElement>(
+      `[data-trace-ref="${CSS.escape(selectedRef)}"]`,
+    );
+    selected?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 </script>
 
-<section class="telegram-timeline-reader" aria-label="Telegram source timeline">
+<section class="telegram-timeline-reader" aria-label="Telegram source timeline" bind:this={timelineElement}>
   {#if !loading && items.length === 0}
     <EmptyState description={`No synced ${contentLabel} are available for this source view.`} />
   {:else}
@@ -34,7 +51,7 @@
           <div class="day-label">{day.label}</div>
           <ul>
             {#each day.items as item (item.id)}
-              <li class:selected={item.selected}>
+              <li class:selected={item.selected} data-trace-ref={item.ref}>
                 <div class="telegram-message-bubble">
                   <div class="message-meta">
                     {#if item.author}<span class="message-author">{item.author}</span>{/if}

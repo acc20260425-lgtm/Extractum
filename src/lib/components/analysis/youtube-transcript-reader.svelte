@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { Copy, ExternalLink, Search } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -68,6 +69,22 @@
   );
   const readerItems = $derived(snapshotItems.length > 0 ? snapshotItems : liveItems);
   const transcriptGroups = $derived(groupYoutubeTranscriptItems(readerItems));
+  let transcriptElement: HTMLElement | null = $state(null);
+
+  $effect(() => {
+    const selectedRef = transcriptGroups.find((group) => group.selected)?.refs[0] ?? null;
+    if (selectedRef) {
+      void scrollSelectedTranscriptGroupIntoView(selectedRef);
+    }
+  });
+
+  async function scrollSelectedTranscriptGroupIntoView(selectedRef: string) {
+    await tick();
+    const selected = transcriptElement?.querySelector<HTMLElement>(
+      `[data-trace-ref="${CSS.escape(selectedRef)}"]`,
+    );
+    selected?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 
   function timestampUrl(group: YoutubeTranscriptGroup) {
     if (canonicalUrl && group.startSeconds !== null) {
@@ -105,7 +122,7 @@
   }
 </script>
 
-<section class="youtube-transcript-reader" aria-label="YouTube transcript reader">
+<section class="youtube-transcript-reader" aria-label="YouTube transcript reader" bind:this={transcriptElement}>
   <div class="transcript-header">
     <div class="transcript-title">
       <span class="eyebrow">YouTube transcript</span>
@@ -171,7 +188,7 @@
       {#each transcriptGroups as group (group.id)}
         {@const url = timestampUrl(group)}
         {@const visibleRef = refBadge(group)}
-        <li class:selected={group.selected}>
+        <li class:selected={group.selected} data-trace-ref={visibleRef}>
           <div class="group-time">
             {#if group.startSeconds !== null && url}
               <a href={url} target="_blank" rel="noopener noreferrer">
