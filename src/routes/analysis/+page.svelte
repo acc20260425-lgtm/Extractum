@@ -138,6 +138,7 @@
     openedRunResetState,
     normalizeSelectedTopicKey as normalizeTopicKey,
     pruneLiveRuns as pruneLiveRunMap,
+    reportLaunchDisabledReason as getReportLaunchDisabledReason,
     runActivePhase,
     runActiveProgress,
     selectedAnalysisGroup,
@@ -475,6 +476,27 @@
 
   function sourceSyncDisabledReason(source: Source) {
     return getSourceSyncDisabledReason(source, accountStatuses, youtubeRuntimeStatus);
+  }
+
+  function currentReportLaunchDisabledReason() {
+    return getReportLaunchDisabledReason({
+      analysisScope,
+      selectedSourceId,
+      selectedGroupId,
+      selectedTemplateId,
+      periodFrom,
+      periodTo,
+      outputLanguage,
+      profileId: runProfileId(),
+      modelOverride: runModelOverride(),
+      youtubeCorpusMode,
+      llmProfiles,
+      activeLlmProfile,
+      currentSource: currentSource(),
+      currentGroup: currentGroup(),
+      sourceCatalog,
+      sourceSyncDisabledReason,
+    });
   }
 
   function dedupeProviderModels(models: LlmProviderModel[]) {
@@ -1664,6 +1686,12 @@
   }
 
   async function runReport() {
+    const disabledReason = currentReportLaunchDisabledReason();
+    if (disabledReason) {
+      status = disabledReason;
+      return;
+    }
+
     const isYoutubeAnalysisScope =
       (analysisScope === "single_source" && currentSource()?.sourceType === "youtube") ||
       (analysisScope === "source_group" && currentGroup()?.source_type === "youtube");
@@ -2355,6 +2383,7 @@
     {phaseLabel}
     {accountLabel}
     {sourceSyncDisabledReason}
+    reportLaunchDisabledReason={currentReportLaunchDisabledReason()}
     {startOfDayUnix}
     {endOfDayUnix}
     {isGroupSourceSelected}

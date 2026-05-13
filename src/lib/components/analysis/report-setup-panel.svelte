@@ -6,6 +6,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import { sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
   import type {
     AnalysisGroupSourceType,
@@ -66,6 +67,7 @@
     phaseLabel,
     accountLabel,
     sourceSyncDisabledReason,
+    reportLaunchDisabledReason,
     startOfDayUnix,
     endOfDayUnix,
     isGroupSourceSelected,
@@ -140,6 +142,7 @@
     phaseLabel: (value: string) => string;
     accountLabel: (accountId: number | null) => string;
     sourceSyncDisabledReason: (source: Source) => string | null;
+    reportLaunchDisabledReason: string | null;
     startOfDayUnix: (value: string) => number;
     endOfDayUnix: (value: string) => number;
     isGroupSourceSelected: (sourceId: number) => boolean;
@@ -182,6 +185,7 @@
       null,
   );
   const currentSourceContentLabel = $derived(currentSource ? sourceCapabilities(currentSource).contentLabel : "items");
+  const runReportDisabled = $derived(startingReport || reportLaunchDisabledReason !== null);
 </script>
 
 <section class="report-setup-panel" aria-label="Report setup">
@@ -337,7 +341,11 @@
         {/if}
       </div>
       <div class="controls-actions">
-        <Button onclick={onRunReport} disabled={startingReport || !selectedTemplateId || (analysisScope === "single_source" ? !selectedSourceId : !selectedGroupId)}>
+        <Button
+          onclick={onRunReport}
+          disabled={runReportDisabled}
+          title={reportLaunchDisabledReason ?? undefined}
+        >
           <Play size={15} aria-hidden="true" />
           {startingReport ? "Starting..." : "Run report"}
         </Button>
@@ -370,6 +378,10 @@
           <span><strong>Progress:</strong> {activeProgress}</span>
         {/if}
       </div>
+    {/if}
+
+    {#if reportLaunchDisabledReason && !startingReport}
+      <StatusMessage tone="error">{reportLaunchDisabledReason}</StatusMessage>
     {/if}
   </div>
 

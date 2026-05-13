@@ -3,6 +3,8 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import type { SourceViewBasis } from "$lib/analysis-workspace-state";
+  import type { SourceCanvasSurface } from "$lib/analysis-report-canvas-state";
+  import type { BadgeVariant } from "$lib/components/ui/types";
 
   const allSourcesValue = "__all_sources__";
 
@@ -11,6 +13,7 @@
     subtitle,
     surfaceLabel = "Source material",
     sourceViewBasis,
+    sourceBasisState,
     canViewLiveSource,
     canBackToRunSnapshot,
     selectedSourceId,
@@ -23,6 +26,7 @@
     subtitle: string;
     surfaceLabel?: string;
     sourceViewBasis: SourceViewBasis;
+    sourceBasisState?: SourceCanvasSurface;
     canViewLiveSource: boolean;
     canBackToRunSnapshot: boolean;
     selectedSourceId: number | null;
@@ -36,6 +40,25 @@
     const value = (event.currentTarget as HTMLSelectElement).value;
     onChangeSelectedSourceId(value === allSourcesValue ? null : Number(value));
   }
+
+  const currentSourceBasisState = $derived(
+    sourceBasisState ?? (sourceViewBasis === "live_source" ? "live_source" : "run_snapshot_unknown"),
+  );
+
+  const sourceBadgeLabel = $derived.by(() => {
+    if (currentSourceBasisState === "live_source") return "Live source";
+    if (currentSourceBasisState === "run_snapshot_available") return "Run snapshot";
+    if (currentSourceBasisState === "run_snapshot_pending") return "Snapshot pending";
+    if (currentSourceBasisState === "run_snapshot_unavailable") return "Snapshot unavailable";
+    return "Checking snapshot";
+  });
+
+  const sourceBadgeVariant = $derived.by<BadgeVariant>(() => {
+    if (currentSourceBasisState === "live_source") return "warning";
+    if (currentSourceBasisState === "run_snapshot_available") return "success";
+    if (currentSourceBasisState === "run_snapshot_unavailable") return "danger";
+    return "neutral";
+  });
 </script>
 
 <header class="source-reader-header" aria-label={title}>
@@ -45,9 +68,7 @@
   </div>
 
   <div class="reader-actions">
-    <Badge variant={sourceViewBasis === "live_source" ? "warning" : "success"}>
-      {sourceViewBasis === "live_source" ? "Live source" : "Run snapshot"}
-    </Badge>
+    <Badge variant={sourceBadgeVariant}>{sourceBadgeLabel}</Badge>
 
     {#if sourceOptions.length > 1}
       <label>

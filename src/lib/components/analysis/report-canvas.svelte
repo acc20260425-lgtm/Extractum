@@ -129,6 +129,7 @@
     phaseLabel,
     accountLabel,
     sourceSyncDisabledReason,
+    reportLaunchDisabledReason,
     startOfDayUnix,
     endOfDayUnix,
     isGroupSourceSelected,
@@ -274,6 +275,7 @@
     phaseLabel: (value: string) => string;
     accountLabel: (accountId: number | null) => string;
     sourceSyncDisabledReason: (source: Source) => string | null;
+    reportLaunchDisabledReason: string | null;
     startOfDayUnix: (value: string) => number;
     endOfDayUnix: (value: string) => number;
     isGroupSourceSelected: (sourceId: number) => boolean;
@@ -451,6 +453,7 @@
         {phaseLabel}
         {accountLabel}
         {sourceSyncDisabledReason}
+        {reportLaunchDisabledReason}
         {startOfDayUnix}
         {endOfDayUnix}
         {isGroupSourceSelected}
@@ -513,6 +516,7 @@
       {youtubePlaylistDetail}
       {loadingYoutubeDetail}
       {formatTimestamp}
+      {sourceSyncDisabledReason}
       onViewLiveSource={onViewLiveSource}
       onBackToRunSnapshot={onBackToRunSnapshot}
       onLoadMoreRunSnapshotMessages={onLoadMoreRunSnapshotMessages}

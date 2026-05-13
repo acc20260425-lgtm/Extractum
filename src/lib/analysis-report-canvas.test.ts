@@ -25,6 +25,8 @@ describe("report canvas component contract", () => {
     expect(reportCanvasSource).toContain("<ReportRunHeader");
     expect(reportCanvasSource).toContain("<ReportViewer");
     expect(reportCanvasSource).toContain("<ReportSetupPanel");
+    expect(reportCanvasSource).toContain("reportLaunchDisabledReason");
+    expect(reportSetupPanelSource).toContain("reportLaunchDisabledReason");
     expect(reportCanvasSource).not.toContain('class="temporary-follow-up"');
     expect(reportCanvasSource).not.toContain("<ChatPanel");
     expect(reportSetupPanelSource).toContain("TemplateEditor");
@@ -63,6 +65,7 @@ describe("report canvas component contract", () => {
   it("keeps snapshot and live source basis explicit", () => {
     expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "live_source"');
     expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "run_snapshot"');
+    expect(reportSourceSurfaceSource).toContain("sourceBasisState={canvasSurface}");
     expect(reportSourceSurfaceSource).toContain("Live source");
     expect(sourceReaderHeaderSource).toContain("View live source");
     expect(sourceReaderHeaderSource).toContain("Back to run snapshot");

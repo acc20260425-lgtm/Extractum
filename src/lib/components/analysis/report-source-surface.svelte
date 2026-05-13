@@ -83,6 +83,7 @@
     onCancelSourceJob: (jobId: string) => void | Promise<void>;
     onViewLiveSource: () => void | Promise<void>;
     onBackToRunSnapshot: () => void | Promise<void>;
+    sourceSyncDisabledReason?: (source: Source) => string | null;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
     onChangeTranscriptSearch?: (value: string) => void;
     onLoadMoreYoutubeTranscriptSegments?: () => void | Promise<void>;
@@ -128,6 +129,7 @@
     onRetryYoutubePlaylistVideo,
     onViewLiveSource,
     onBackToRunSnapshot,
+    sourceSyncDisabledReason = () => null,
     onLoadMoreRunSnapshotMessages,
     onChangeTranscriptSearch = () => {},
     onLoadMoreYoutubeTranscriptSegments = () => {},
@@ -169,6 +171,9 @@
   );
   const displayScopeTitle = $derived(currentScopeTitle ?? fallbackScopeTitle());
   const readerSurfaceLabel = $derived(analysisScope === "source_group" ? "Group sources" : "Source material");
+  const youtubeRuntimeDiagnostic = $derived(
+    currentSource?.sourceType === "youtube" ? sourceSyncDisabledReason(currentSource) : null,
+  );
 
   function fallbackScopeTitle() {
     if (currentRun) return currentRun.scope_label;
@@ -207,6 +212,7 @@
         surfaceLabel={currentRun.scope_type === "source_group" ? "Group sources" : "Source material"}
         subtitle="Frozen source material captured for the opened run."
         {sourceViewBasis}
+        sourceBasisState={canvasSurface}
         canViewLiveSource={!!currentRun}
         canBackToRunSnapshot={false}
         selectedSourceId={selectedSnapshotSourceId}
@@ -234,6 +240,7 @@
           loading={loadingRunSnapshotMessages}
           hasMore={hasMoreRunSnapshotMessages}
           transcriptSearch=""
+          showSyncActions={false}
           sourceTitle={displayScopeTitle}
           {selectedTraceRef}
           {formatTimestamp}
@@ -257,6 +264,7 @@
         surfaceLabel={readerSurfaceLabel}
         subtitle={sourceBasisDescription(sourceBasis)}
         {sourceViewBasis}
+        sourceBasisState={canvasSurface}
         canViewLiveSource={true}
         canBackToRunSnapshot={false}
         selectedSourceId={null}
@@ -285,6 +293,7 @@
       surfaceLabel={readerSurfaceLabel}
       subtitle={sourceBasisDescription(sourceBasis)}
       {sourceViewBasis}
+      sourceBasisState={canvasSurface}
       canViewLiveSource={false}
       canBackToRunSnapshot={!!currentRun && canReturnToRunSnapshot(snapshotAvailability)}
       selectedSourceId={analysisScope === "source_group" ? selectedGroupSourceId : null}
@@ -301,6 +310,9 @@
   {#if analysisScope === "single_source" && currentSource}
     {#key `${analysisScope}:${currentSource.id}:${currentRun?.id ?? "idle"}:live`}
       {#if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "video"}
+        {#if youtubeRuntimeDiagnostic}
+          <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
+        {/if}
         <YoutubeTranscriptReader
           detail={youtubeVideoDetail}
           segments={youtubeTranscriptSegments}
@@ -317,6 +329,9 @@
           onSyncMetadata={() => onSyncYoutubeMetadata(currentSource.id)}
         />
       {:else if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}
+        {#if youtubeRuntimeDiagnostic}
+          <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
+        {/if}
         <YoutubePlaylistReader
           sourceTitle={currentSource.title ?? currentSource.externalId}
           playlist={youtubePlaylistDetail}

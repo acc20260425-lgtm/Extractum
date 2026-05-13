@@ -54,6 +54,7 @@
             {loading}
             hasMore={hasMoreBySource[group.sourceId] ?? false}
             transcriptSearch=""
+            showSyncActions={false}
             sourceTitle={group.sourceTitle}
             selectedTraceRef={null}
             {formatTimestamp}

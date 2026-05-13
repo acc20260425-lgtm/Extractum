@@ -34,6 +34,7 @@ import {
   activeAnalysisRunIds,
   activeRunSyncDecision,
   analysisReportStartCommand,
+  reportLaunchDisabledReason,
   runDeletionDecision,
   runDeletedStatus,
   shouldShowTopicSelector,
@@ -631,6 +632,84 @@ describe("analysis-state", () => {
         youtubeCorpusMode: "transcript_only",
       },
     });
+  });
+
+  it("blocks report launch when LLM profile or source runtime is unusable", () => {
+    const source = sourceRecord({ id: 7, title: "Announcements" });
+    const base = {
+      analysisScope: "single_source" as const,
+      selectedSourceId: "7",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "Russian",
+      profileId: null,
+      modelOverride: "",
+      youtubeCorpusMode: "transcript_description" as const,
+      llmProfiles: [
+        {
+          profile_id: "default",
+          api_key_configured: true,
+        },
+      ],
+      activeLlmProfile: "default",
+      currentSource: source,
+      currentGroup: null,
+      sourceCatalog: [source],
+      sourceSyncDisabledReason: () => null,
+    };
+
+    expect(reportLaunchDisabledReason({ ...base, llmProfiles: [] })).toBe(
+      "Set up an LLM profile in Settings before running reports.",
+    );
+    expect(reportLaunchDisabledReason({
+      ...base,
+      llmProfiles: [{ ...base.llmProfiles[0], api_key_configured: false }],
+    })).toBe('Add an API key for LLM profile "default" in Settings before running reports.');
+    expect(reportLaunchDisabledReason({
+      ...base,
+      sourceSyncDisabledReason: () => "Initialize this account before syncing.",
+    })).toBe("Initialize this account before syncing.");
+    expect(reportLaunchDisabledReason(base)).toBeNull();
+  });
+
+  it("blocks report launch when a source group member has an unusable runtime", () => {
+    const available = sourceRecord({ id: 10, title: "Ready source" });
+    const unavailable = sourceRecord({ id: 11, title: "Offline source" });
+    const group = sourceGroup({
+      id: 3,
+      name: "Research",
+      members: [
+        { source_id: 10, source_title: "Ready source", item_count: 4 },
+        { source_id: 11, source_title: "Offline source", item_count: 0 },
+      ],
+    });
+
+    expect(reportLaunchDisabledReason({
+      analysisScope: "source_group",
+      selectedSourceId: "",
+      selectedGroupId: "3",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "Russian",
+      profileId: null,
+      modelOverride: "",
+      youtubeCorpusMode: "transcript_description",
+      llmProfiles: [
+        {
+          profile_id: "default",
+          api_key_configured: true,
+        },
+      ],
+      activeLlmProfile: "default",
+      currentSource: null,
+      currentGroup: group,
+      sourceCatalog: [available, unavailable],
+      sourceSyncDisabledReason: (candidate) =>
+        candidate.id === 11 ? "Sign in to this account again before syncing." : null,
+    })).toBe('Offline source: Sign in to this account again before syncing.');
   });
 
   it("builds reset state only when the cleared run is currently opened", () => {

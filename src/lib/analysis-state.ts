@@ -13,6 +13,7 @@ import type {
   AnalysisTraceRef,
   YoutubeCorpusMode,
 } from "$lib/types/analysis";
+import type { LlmProfile } from "$lib/types/llm";
 import type {
   ForumTopicFilter,
   SourceItem,
@@ -140,6 +141,14 @@ export type AnalysisReportStartState = {
 export type AnalysisReportStartDecision =
   | { ok: true; command: AnalysisReportStartCommand }
   | { ok: false; status: string };
+export type ReportLaunchPreflightState = AnalysisReportStartState & {
+  llmProfiles: Pick<LlmProfile, "profile_id" | "api_key_configured">[];
+  activeLlmProfile: string;
+  currentSource: Source | null;
+  currentGroup: AnalysisSourceGroup | null;
+  sourceCatalog: Source[];
+  sourceSyncDisabledReason: (source: Source) => string | null;
+};
 
 export function createEmptyLiveRunState(): LiveRunState {
   return {
@@ -434,6 +443,60 @@ export function analysisReportStartCommand(
       youtubeCorpusMode: state.youtubeCorpusMode,
     },
   };
+}
+
+function selectedRunProfile(state: ReportLaunchPreflightState) {
+  const requestedProfileId = state.profileId?.trim() || state.activeLlmProfile.trim();
+  if (requestedProfileId) {
+    return state.llmProfiles.find((profile) => profile.profile_id === requestedProfileId) ?? null;
+  }
+  return state.llmProfiles[0] ?? null;
+}
+
+function groupMemberLabel(
+  member: Pick<AnalysisSourceGroup["members"][number], "source_id" | "source_title">,
+  source: Source | null,
+) {
+  return source?.title ?? member.source_title ?? source?.externalId ?? `Source #${member.source_id}`;
+}
+
+export function reportLaunchDisabledReason(state: ReportLaunchPreflightState) {
+  const startDecision = analysisReportStartCommand(state);
+  if (!startDecision.ok) {
+    return startDecision.status;
+  }
+
+  const profile = selectedRunProfile(state);
+  if (!profile) {
+    return "Set up an LLM profile in Settings before running reports.";
+  }
+  if (!profile.api_key_configured) {
+    return `Add an API key for LLM profile "${profile.profile_id}" in Settings before running reports.`;
+  }
+
+  if (state.analysisScope === "single_source") {
+    if (!state.currentSource) {
+      return "Selected source is not loaded.";
+    }
+    return state.sourceSyncDisabledReason(state.currentSource);
+  }
+
+  if (!state.currentGroup) {
+    return "Selected source group is not loaded.";
+  }
+
+  for (const member of state.currentGroup.members) {
+    const source = state.sourceCatalog.find((candidate) => candidate.id === member.source_id) ?? null;
+    if (!source) {
+      return `${groupMemberLabel(member, source)}: Source is not loaded.`;
+    }
+    const reason = state.sourceSyncDisabledReason(source);
+    if (reason) {
+      return `${groupMemberLabel(member, source)}: ${reason}`;
+    }
+  }
+
+  return null;
 }
 
 export function openedRunResetState(

@@ -23,6 +23,7 @@
     loading,
     hasMore,
     transcriptSearch,
+    showSyncActions = true,
     sourceTitle,
     selectedTraceRef,
     formatTimestamp,
@@ -37,6 +38,7 @@
     loading: boolean;
     hasMore: boolean;
     transcriptSearch: string;
+    showSyncActions?: boolean;
     sourceTitle: string;
     selectedTraceRef: string | null;
     formatTimestamp: (value: number | null) => string;
@@ -111,10 +113,12 @@
         {/if}
       </div>
     </div>
-    <div class="transcript-actions">
-      <Button type="button" size="sm" variant="secondary" onclick={onSyncMetadata}>Sync metadata</Button>
-      <Button type="button" size="sm" variant="secondary" onclick={onSyncTranscript}>Sync transcript</Button>
-    </div>
+    {#if showSyncActions}
+      <div class="transcript-actions">
+        <Button type="button" size="sm" variant="secondary" onclick={onSyncMetadata}>Sync metadata</Button>
+        <Button type="button" size="sm" variant="secondary" onclick={onSyncTranscript}>Sync transcript</Button>
+      </div>
+    {/if}
   </div>
 
   <label class="search-field">
@@ -135,7 +139,9 @@
 
   {#if summary?.captions.state === "unavailable"}
     <StatusMessage tone="muted" surface={false}>
-      Transcript unavailable for this video. Metadata and transcript sync actions remain available when the source supports retry.
+      {showSyncActions
+        ? "Transcript unavailable for this video. Metadata and transcript sync actions remain available when the source supports retry."
+        : "Transcript was unavailable in this run snapshot."}
     </StatusMessage>
   {/if}
 

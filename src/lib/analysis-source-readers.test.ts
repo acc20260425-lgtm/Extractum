@@ -21,10 +21,13 @@ describe("analysis source readers", () => {
 
   it("keeps live source and run snapshot basis visible", () => {
     expect(sourceReaderHeaderSource).toContain("sourceViewBasis");
+    expect(sourceReaderHeaderSource).toContain("sourceBasisState");
+    expect(sourceReaderHeaderSource).toContain("run_snapshot_unavailable");
     expect(sourceReaderHeaderSource).toContain("Live source");
     expect(sourceReaderHeaderSource).toContain("Run snapshot");
     expect(sourceReaderHeaderSource).toContain("Back to run snapshot");
     expect(sourceReaderHeaderSource).toContain("View live source");
+    expect(reportSourceSurfaceSource).toContain("sourceBasisState={canvasSurface}");
   });
 
   it("uses a compact source reader heading instead of repeating the selected title", () => {
@@ -86,6 +89,8 @@ describe("analysis source readers", () => {
 
   it("renders YouTube videos as transcript-first source readers", () => {
     expect(youtubeTranscriptSource).toContain('class="youtube-transcript-reader"');
+    expect(youtubeTranscriptSource).toContain("showSyncActions = true");
+    expect(youtubeTranscriptSource).toContain("{#if showSyncActions}");
     expect(youtubeTranscriptSource).toContain("groupYoutubeTranscriptItems");
     expect(youtubeTranscriptSource).toContain("formatYoutubeTime");
     expect(youtubeTranscriptSource).toContain("youtubeTimestampUrl");
@@ -94,6 +99,18 @@ describe("analysis source readers", () => {
     expect(youtubeTranscriptSource).toContain("Load more transcript");
     expect(youtubeTranscriptSource).not.toContain("<iframe");
     expect(youtubeTranscriptSource).not.toContain("<video");
+  });
+
+  it("keeps YouTube live sync actions out of readonly snapshot transcript readers", () => {
+    expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
+    expect(sourceGroupReaderSource).toContain("showSyncActions={false}");
+    expect(reportSourceSurfaceSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(currentSource.id)}");
+  });
+
+  it("surfaces YouTube runtime diagnostics in the live source canvas", () => {
+    expect(reportSourceSurfaceSource).toContain("sourceSyncDisabledReason");
+    expect(reportSourceSurfaceSource).toContain("youtubeRuntimeDiagnostic");
+    expect(reportSourceSurfaceSource).toContain('tone="error"');
   });
 
   it("renders transcript search as one compact input shell", () => {
