@@ -84,6 +84,14 @@ describe("report canvas component contract", () => {
     expect(reportSourceSurfaceSource).toContain("onSyncYoutubeComments");
   });
 
+  it("passes Telegram topic state into the source surface", () => {
+    expect(reportCanvasSource).toContain("{sourceTopics}");
+    expect(reportCanvasSource).toContain("{loadingSourceTopics}");
+    expect(reportCanvasSource).toContain("{selectedTopicKey}");
+    expect(reportCanvasSource).toContain("{showTopicSelector}");
+    expect(reportCanvasSource).toContain("onChangeSelectedTopicKey={onChangeSelectedTopicKey}");
+  });
+
   it("labels source surfaces without repeating the selected workspace title", () => {
     expect(sourceReaderHeaderSource).toContain("surfaceLabel");
     expect(reportSourceSurfaceSource).toContain("surfaceLabel=");

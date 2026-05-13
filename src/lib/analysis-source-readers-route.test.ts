@@ -22,9 +22,14 @@ describe("analysis source reader route wiring", () => {
     expect(analysisPageSource).toContain("{youtubeTranscriptSegments}");
     expect(analysisPageSource).toContain("{groupLiveItemsBySource}");
     expect(analysisPageSource).toContain("{selectedGroupSourceId}");
+    expect(analysisPageSource).toContain("{sourceTopics}");
+    expect(analysisPageSource).toContain("{loadingSourceTopics}");
+    expect(analysisPageSource).toContain("{selectedTopicKey}");
+    expect(analysisPageSource).toContain("showTopicSelector={shouldShowTopicSelector()}");
     expect(analysisPageSource).toContain("onLoadMoreYoutubeTranscriptSegments");
     expect(analysisPageSource).toContain("onLoadLiveGroupSourcePage");
     expect(analysisPageSource).toContain("onChangeSelectedGroupSourceId");
+    expect(analysisPageSource).toContain("onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}");
   });
 
   it("supports run snapshot source filtering through the snapshot-only API", () => {

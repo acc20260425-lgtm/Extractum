@@ -1,5 +1,6 @@
 <script lang="ts">
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
   import SourceGroupReader from "$lib/components/analysis/source-group-reader.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
@@ -105,6 +106,10 @@
     currentGroup,
     sourceItems,
     loadingItems,
+    sourceTopics,
+    loadingSourceTopics,
+    selectedTopicKey,
+    showTopicSelector,
     currentSourceContentLabel,
     sourceJobs,
     youtubeVideoDetail,
@@ -122,6 +127,7 @@
     selectedSnapshotSourceId = null,
     formatTimestamp,
     onOpenSource,
+    onChangeSelectedTopicKey,
     onSyncYoutubeMetadata,
     onSyncYoutubeTranscript,
     onSyncYoutubeComments,
@@ -177,6 +183,7 @@
   const youtubeRuntimeDiagnostic = $derived(
     currentSource?.sourceType === "youtube" ? sourceSyncDisabledReason(currentSource) : null,
   );
+  const sortedSourceTopics = $derived([...sourceTopics].sort(compareTopics));
 
   function fallbackScopeTitle() {
     if (currentRun) return currentRun.scope_label;
@@ -204,6 +211,33 @@
     return [...counts.entries()]
       .sort(([left], [right]) => left - right)
       .map(([id, value]) => ({ id, label: value.label, count: value.count }));
+  }
+
+  function compareTopics(left: SourceForumTopic, right: SourceForumTopic) {
+    if (left.kind !== right.kind) {
+      return left.kind === "topic" ? -1 : 1;
+    }
+
+    if (left.isDeleted !== right.isDeleted) {
+      return left.isDeleted ? 1 : -1;
+    }
+
+    const titleOrder = left.title.localeCompare(right.title, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+    if (titleOrder !== 0) {
+      return titleOrder;
+    }
+
+    return left.key.localeCompare(right.key, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+  }
+
+  function changeSelectedTopic(event: Event) {
+    onChangeSelectedTopicKey((event.currentTarget as HTMLSelectElement).value);
   }
 </script>
 
@@ -352,6 +386,21 @@
           onCancelSourceJob={onCancelSourceJob}
         />
       {:else}
+        {#if showTopicSelector}
+          <label class="topic-filter">
+            <span>Topic view</span>
+            <Select value={selectedTopicKey} disabled={loadingSourceTopics} onchange={changeSelectedTopic}>
+              <option value="__all_topics__">All topics</option>
+              {#if loadingSourceTopics && sourceTopics.length === 0}
+                <option value="__loading_topics__" disabled>Loading topics...</option>
+              {:else}
+                {#each sortedSourceTopics as topic (topic.key)}
+                  <option value={topic.key}>{topic.title} ({topic.messageCount})</option>
+                {/each}
+              {/if}
+            </Select>
+          </label>
+        {/if}
         <TelegramTimelineReader
           items={liveReaderItems}
           loading={loadingItems}
@@ -383,5 +432,25 @@
     flex-direction: column;
     gap: 1rem;
     min-width: 0;
+  }
+
+  .topic-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-self: flex-start;
+    min-width: min(18rem, 100%);
+    color: var(--muted);
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .topic-filter :global(select) {
+    min-width: 14rem;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.9rem;
+    color: var(--text);
   }
 </style>

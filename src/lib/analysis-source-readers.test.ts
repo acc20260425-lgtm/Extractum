@@ -51,6 +51,17 @@ describe("analysis source readers", () => {
     expect(telegramMediaCardSource).not.toContain("<audio");
   });
 
+  it("renders Telegram topic filtering only in live single-source mode", () => {
+    expect(reportSourceSurfaceSource).toContain('class="topic-filter"');
+    expect(reportSourceSurfaceSource).toContain("showTopicSelector");
+    expect(reportSourceSurfaceSource).toContain("sourceTopics");
+    expect(reportSourceSurfaceSource).toContain("loadingSourceTopics");
+    expect(reportSourceSurfaceSource).toContain("selectedTopicKey");
+    expect(reportSourceSurfaceSource).toContain("onChangeSelectedTopicKey");
+    expect(reportSourceSurfaceSource).toContain("__all_topics__");
+    expect(sourceGroupReaderSource).not.toContain("topic-filter");
+  });
+
   it("keeps sticky date labels below overlay source switching UI", () => {
     expect(telegramTimelineSource).toContain(".day-label");
     expect(telegramTimelineSource).toContain("position: sticky;");
