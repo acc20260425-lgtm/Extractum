@@ -417,4 +417,7 @@ Observed pass notes:
 - Fixture YouTube source rendered transcript search with `aria-label="Search transcript"`, placeholder `Search transcript`, `.search-input-wrap`, and `.search-icon`.
 - At `390x850`, the mobile rail showed `__analysis_redesign_fixture__ YouTube Video` as the current context and `documentElement.scrollWidth <= clientWidth`.
 
-Residual polish remains outside this batch: the seeded fixture can surface a stale YouTube detail lookup warning after reseeding over prior local state, and run cards can still be hidden by persisted local filters until the user clears or changes the filter state.
+Post-pass follow-ups completed on `main`:
+
+- `621be35 polish: make run filters recoverable` adds a `Clear filters` affordance when restored companion Runs filters hide every run.
+- `2b8aefe fix: ignore stale youtube detail responses` guards YouTube detail loads so stale responses cannot update the current detail state or surface a stale lookup warning after reseeding or switching sources.
