@@ -86,6 +86,7 @@ describe("analysis source readers", () => {
 
   it("renders YouTube videos as transcript-first source readers", () => {
     expect(youtubeTranscriptSource).toContain('class="youtube-transcript-reader"');
+    expect(youtubeTranscriptSource).toContain("groupYoutubeTranscriptItems");
     expect(youtubeTranscriptSource).toContain("formatYoutubeTime");
     expect(youtubeTranscriptSource).toContain("youtubeTimestampUrl");
     expect(youtubeTranscriptSource).toContain("Copy timestamp link");
@@ -99,6 +100,16 @@ describe("analysis source readers", () => {
     expect(youtubeTranscriptSource).toContain('placeholder="Search transcript"');
     expect(youtubeTranscriptSource).toContain('class="search-icon"');
     expect(youtubeTranscriptSource).toContain('class="search-input-wrap"');
+  });
+
+  it("renders grouped transcript rows as a continuous reading surface", () => {
+    expect(youtubeTranscriptSource).toContain("transcriptGroups");
+    expect(youtubeTranscriptSource).toContain('class="transcript-group-list"');
+    expect(youtubeTranscriptSource).toContain('class:selected={group.selected}');
+    expect(youtubeTranscriptSource).toContain(".transcript-group-list li + li");
+    expect(youtubeTranscriptSource).not.toContain("border-radius: 8px;");
+    expect(youtubeTranscriptSource).not.toContain("background: var(--panel);");
+    expect(youtubeTranscriptSource).not.toContain("box-shadow: 0 0 0 3px");
   });
 
   it("keeps YouTube playlist reading playlist-first", () => {

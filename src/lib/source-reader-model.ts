@@ -50,6 +50,22 @@ export interface SourceReaderSourceGroup {
   items: SourceReaderItem[];
 }
 
+export interface YoutubeTranscriptGroup {
+  id: string;
+  startSeconds: number | null;
+  content: string;
+  items: SourceReaderItem[];
+  selected: boolean;
+  captionLabel: string | null;
+  sourceId: number | null;
+  refs: string[];
+}
+
+const YOUTUBE_TRANSCRIPT_PAUSE_THRESHOLD_SECONDS = 2;
+const YOUTUBE_TRANSCRIPT_PREFERRED_LENGTH = 360;
+const YOUTUBE_TRANSCRIPT_HARD_LENGTH = 560;
+const SENTENCE_END_PATTERN = /(?:\.{3}|[.!?])["')\]]*$/;
+
 export function sourceItemToReaderItem(
   item: SourceItem,
   {
@@ -178,6 +194,38 @@ export function groupReaderItemsBySource(items: SourceReaderItem[]): SourceReade
     }));
 }
 
+export function groupYoutubeTranscriptItems(items: SourceReaderItem[]): YoutubeTranscriptGroup[] {
+  const groups: YoutubeTranscriptGroup[] = [];
+  let currentItems: SourceReaderItem[] = [];
+
+  const finalizeCurrentGroup = () => {
+    if (currentItems.length === 0) return;
+    groups.push(buildYoutubeTranscriptGroup(currentItems, groups.length));
+    currentItems = [];
+  };
+
+  for (const item of items) {
+    if (item.youtubeStartSeconds === null) {
+      finalizeCurrentGroup();
+      groups.push(buildYoutubeTranscriptGroup([item], groups.length));
+      continue;
+    }
+
+    if (currentItems.length === 0) {
+      currentItems = [item];
+      continue;
+    }
+
+    if (shouldStartYoutubeTranscriptGroup(currentItems, item)) {
+      finalizeCurrentGroup();
+    }
+    currentItems = [...currentItems, item];
+  }
+
+  finalizeCurrentGroup();
+  return groups;
+}
+
 export function formatYoutubeTime(totalSeconds: number) {
   const intSeconds = Math.floor(totalSeconds);
   const hours = Math.floor(intSeconds / 3600);
@@ -195,6 +243,61 @@ export function youtubeTimestampUrl(canonicalUrl: string, seconds: number) {
   const timestampUrl = new URL(url);
   timestampUrl.searchParams.set("t", String(Math.floor(seconds)));
   return timestampUrl.toString();
+}
+
+function buildYoutubeTranscriptGroup(items: SourceReaderItem[], index: number): YoutubeTranscriptGroup {
+  const firstItem = items[0];
+  return {
+    id: `transcript-group:${firstItem?.id || firstItem?.ref || index}`,
+    startSeconds: firstItem?.youtubeStartSeconds ?? null,
+    content: normalizeTranscriptGroupContent(items),
+    items,
+    selected: items.some((item) => item.selected),
+    captionLabel: sharedNonEmptyValue(items.map((item) => item.captionLabel)),
+    sourceId: sharedNumberValue(items.map((item) => item.sourceId)),
+    refs: items.map((item) => item.ref).filter((ref): ref is string => ref !== null),
+  };
+}
+
+function normalizeTranscriptGroupContent(items: SourceReaderItem[]) {
+  return items
+    .map((item) => item.content.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shouldStartYoutubeTranscriptGroup(currentItems: SourceReaderItem[], nextItem: SourceReaderItem) {
+  const lastItem = currentItems[currentItems.length - 1];
+  if (
+    lastItem?.youtubeEndSeconds !== null &&
+    lastItem?.youtubeEndSeconds !== undefined &&
+    nextItem.youtubeStartSeconds !== null &&
+    nextItem.youtubeStartSeconds - lastItem.youtubeEndSeconds >= YOUTUBE_TRANSCRIPT_PAUSE_THRESHOLD_SECONDS
+  ) {
+    return true;
+  }
+
+  const currentContent = normalizeTranscriptGroupContent(currentItems);
+  const nextContent = normalizeTranscriptGroupContent([nextItem]);
+  const joinedLength = [currentContent, nextContent].filter(Boolean).join(" ").length;
+  if (joinedLength > YOUTUBE_TRANSCRIPT_HARD_LENGTH) {
+    return true;
+  }
+
+  return currentContent.length >= YOUTUBE_TRANSCRIPT_PREFERRED_LENGTH && SENTENCE_END_PATTERN.test(currentContent);
+}
+
+function sharedNonEmptyValue(values: Array<string | null>) {
+  const firstValue = values[0];
+  if (!firstValue) return null;
+  return values.every((value) => value === firstValue) ? firstValue : null;
+}
+
+function sharedNumberValue(values: number[]) {
+  const firstValue = values[0];
+  return values.every((value) => value === firstValue) ? firstValue : null;
 }
 
 function compareReaderItems(left: SourceReaderItem, right: SourceReaderItem) {

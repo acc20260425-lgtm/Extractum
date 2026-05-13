@@ -7,8 +7,10 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import {
     formatYoutubeTime,
+    groupYoutubeTranscriptItems,
     youtubeSegmentToReaderItem,
     youtubeTimestampUrl,
+    type YoutubeTranscriptGroup,
     type SourceReaderItem,
   } from "$lib/source-reader-model";
   import type { SourceItem, YoutubeTranscriptSegment } from "$lib/types/sources";
@@ -56,20 +58,27 @@
     ),
   );
   const readerItems = $derived(snapshotItems.length > 0 ? snapshotItems : liveItems);
+  const transcriptGroups = $derived(groupYoutubeTranscriptItems(readerItems));
 
-  function timestampUrl(item: SourceReaderItem) {
-    if (canonicalUrl && item.youtubeStartSeconds !== null) {
-      return youtubeTimestampUrl(canonicalUrl, item.youtubeStartSeconds);
+  function timestampUrl(group: YoutubeTranscriptGroup) {
+    if (canonicalUrl && group.startSeconds !== null) {
+      return youtubeTimestampUrl(canonicalUrl, group.startSeconds);
     }
-    return item.youtubeUrl;
+    return group.items[0]?.youtubeUrl ?? null;
   }
 
   function sourceBadge(sourceId: SourceItem["sourceId"]) {
     return `Source #${sourceId}`;
   }
 
-  async function copyLink(item: SourceReaderItem) {
-    const url = timestampUrl(item);
+  function refBadge(group: YoutubeTranscriptGroup) {
+    if (group.refs.length === 0) return null;
+    if (group.refs.length === 1) return group.refs[0];
+    return `${group.refs.length} refs`;
+  }
+
+  async function copyLink(group: YoutubeTranscriptGroup) {
+    const url = timestampUrl(group);
     if (!url || typeof navigator === "undefined" || !navigator.clipboard) return;
     try {
       await navigator.clipboard.writeText(url);
@@ -130,32 +139,33 @@
     </StatusMessage>
   {/if}
 
-  {#if !loading && readerItems.length === 0}
+  {#if !loading && transcriptGroups.length === 0}
     <EmptyState description="No transcript segments are loaded for this source view." />
   {:else}
-    <ol class="segment-list">
-      {#each readerItems as item (item.id)}
-        {@const url = timestampUrl(item)}
-        <li class:selected={item.selected}>
-          <div class="segment-time">
-            {#if item.youtubeStartSeconds !== null && url}
+    <ol class="transcript-group-list">
+      {#each transcriptGroups as group (group.id)}
+        {@const url = timestampUrl(group)}
+        {@const visibleRef = refBadge(group)}
+        <li class:selected={group.selected}>
+          <div class="group-time">
+            {#if group.startSeconds !== null && url}
               <a href={url} target="_blank" rel="noopener noreferrer">
-                {formatYoutubeTime(item.youtubeStartSeconds)}
+                {formatYoutubeTime(group.startSeconds)}
                 <ExternalLink size={13} aria-hidden="true" />
               </a>
-            {:else if item.youtubeStartSeconds !== null}
-              <span>{formatYoutubeTime(item.youtubeStartSeconds)}</span>
+            {:else if group.startSeconds !== null}
+              <span>{formatYoutubeTime(group.startSeconds)}</span>
             {:else}
               <span>Transcript</span>
             {/if}
           </div>
-          <p>{item.content}</p>
-          <div class="segment-actions">
-            {#if item.captionLabel}<Badge variant="neutral">{item.captionLabel}</Badge>{/if}
-            {#if item.ref}<Badge variant="neutral">{item.ref}</Badge>{/if}
-            <Badge variant="neutral">{sourceBadge(item.sourceId)}</Badge>
+          <p>{group.content}</p>
+          <div class="group-actions">
+            {#if group.captionLabel}<Badge variant="neutral">{group.captionLabel}</Badge>{/if}
+            {#if visibleRef}<Badge variant="neutral">{visibleRef}</Badge>{/if}
+            {#if group.sourceId !== null}<Badge variant="neutral">{sourceBadge(group.sourceId)}</Badge>{/if}
             {#if url}
-              <Button type="button" size="sm" variant="ghost" ariaLabel="Copy timestamp link" title="Copy timestamp link" onclick={() => void copyLink(item)}>
+              <Button type="button" size="sm" variant="ghost" ariaLabel="Copy timestamp link" title="Copy timestamp link" onclick={() => void copyLink(group)}>
                 <Copy size={14} aria-hidden="true" />
               </Button>
             {/if}
@@ -210,7 +220,7 @@
 
   .transcript-meta,
   .transcript-actions,
-  .segment-actions {
+  .group-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
@@ -255,33 +265,32 @@
     border: 0;
   }
 
-  .segment-list {
+  .transcript-group-list {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
   }
 
-  .segment-list li {
+  .transcript-group-list li {
     display: grid;
     grid-template-columns: 5.5rem minmax(0, 1fr) auto;
     gap: 0.75rem;
     align-items: start;
-    padding: 0.8rem;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel);
+    padding: 0.72rem 0.35rem 0.72rem 0.55rem;
+    border-left: 2px solid transparent;
   }
 
-  .segment-list li.selected {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+  .transcript-group-list li + li {
+    border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   }
 
-  .segment-time a,
-  .segment-time span {
+  .transcript-group-list li.selected {
+    border-left-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 7%, transparent);
+  }
+
+  .group-time a,
+  .group-time span {
     display: inline-flex;
     gap: 0.25rem;
     align-items: center;
@@ -294,7 +303,7 @@
   p {
     margin: 0;
     line-height: 1.5;
-    white-space: pre-wrap;
+    white-space: normal;
   }
 
   .reader-footer {
@@ -304,9 +313,13 @@
 
   @media (max-width: 760px) {
     .transcript-header,
-    .segment-list li {
+    .transcript-group-list li {
       display: flex;
       flex-direction: column;
+    }
+
+    .group-actions {
+      gap: 0.35rem;
     }
   }
 </style>

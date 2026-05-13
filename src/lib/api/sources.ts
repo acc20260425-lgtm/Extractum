@@ -85,8 +85,8 @@ interface RawSourceItem {
 }
 
 interface RawYoutubeTranscriptSegmentCursor {
-  start_ms: number;
-  segment_id: number;
+  startMs: number;
+  segmentId: number;
 }
 
 interface RawYoutubeTranscriptSegment {
@@ -324,8 +324,8 @@ function mapYoutubeTranscriptSegmentsPage(
     })),
     nextCursor: page.next_cursor
       ? {
-          startMs: page.next_cursor.start_ms,
-          segmentId: page.next_cursor.segment_id,
+          startMs: page.next_cursor.startMs,
+          segmentId: page.next_cursor.segmentId,
         }
       : null,
     hasMore: page.has_more,

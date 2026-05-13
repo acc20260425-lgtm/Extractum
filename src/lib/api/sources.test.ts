@@ -293,8 +293,8 @@ describe("sources api wrappers", () => {
         },
       ],
       next_cursor: {
-        start_ms: 754000,
-        segment_id: 9,
+        startMs: 754000,
+        segmentId: 9,
       },
       has_more: true,
     });
@@ -330,6 +330,29 @@ describe("sources api wrappers", () => {
         limit: 50,
         searchQuery: "text",
       },
+    });
+  });
+
+  it("maps camel-case YouTube transcript cursors returned by Tauri", async () => {
+    invokeMock.mockResolvedValueOnce({
+      segments: [],
+      next_cursor: {
+        startMs: 754000,
+        segmentId: 9,
+      },
+      has_more: true,
+    });
+
+    await expect(
+      listYoutubeTranscriptSegments({
+        sourceId: 20,
+        after: null,
+        limit: 50,
+        searchQuery: null,
+      }),
+    ).resolves.toMatchObject({
+      nextCursor: { startMs: 754000, segmentId: 9 },
+      hasMore: true,
     });
   });
 
