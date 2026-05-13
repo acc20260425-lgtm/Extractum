@@ -43,4 +43,11 @@ describe("analysis source reader route wiring", () => {
     expect(analysisPageSource).toContain("seenSourceJobIds");
     expect(analysisPageSource).toContain("right.started_at - left.started_at");
   });
+
+  it("loads live source pages around the selected trace before source readers scroll", () => {
+    expect(analysisPageSource).toContain("function sourceReaderFocusInput");
+    expect(analysisPageSource).toContain("aroundItemId: trace.item_id");
+    expect(analysisPageSource).toContain("aroundStartMs: trace.youtube_timestamp_seconds * 1000");
+    expect(analysisPageSource).toContain("loadSourcePageAroundTrace");
+  });
 });

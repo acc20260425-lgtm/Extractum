@@ -223,6 +223,7 @@
     AnalysisRunSummary,
     AnalysisSourceGroup,
     AnalysisSourceOption,
+    AnalysisTraceRef,
     AnalysisTraceData,
     YoutubeCorpusMode,
   } from "$lib/types/analysis";
@@ -1167,10 +1168,127 @@
     await traceWorkflow.focusTraceRef(ref);
   }
 
-  function showSelectedTraceInSource() {
+  function sourceReaderFocusInput(trace: AnalysisTraceRef) {
+    if (trace.youtube_timestamp_seconds !== null) {
+      return {
+        aroundItemId: trace.item_id,
+        aroundStartMs: trace.youtube_timestamp_seconds * 1000,
+      };
+    }
+
+    return {
+      aroundItemId: trace.item_id,
+      aroundStartMs: null,
+    };
+  }
+
+  async function loadSourcePageAroundTrace(
+    decision: ReturnType<typeof evidenceSourceActionDecision>,
+    trace: AnalysisTraceRef,
+  ) {
+    if (decision.kind === "unavailable") {
+      return;
+    }
+
+    try {
+      if (decision.kind === "run_snapshot") {
+        const run = currentRun;
+        if (!run) return;
+        loadingRunSnapshotMessages = true;
+        runSnapshotError = "";
+        const page = await listAnalysisRunMessages({
+          runId: run.id,
+          after: null,
+          limit: 50,
+          sourceId: selectedSnapshotSourceId,
+          aroundRef: trace.ref,
+        });
+        if (currentRun?.id !== run.id) {
+          return;
+        }
+        applySnapshotPage(run, page, false);
+        return;
+      }
+
+      const focus = sourceReaderFocusInput(trace);
+      const source = sourceCatalog.find((candidate) => candidate.id === trace.source_id);
+      if (!source) {
+        return;
+      }
+
+      if (analysisScope === "source_group") {
+        selectedGroupSourceId = trace.source_id;
+        groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: true };
+        const items = await listSourceItems({
+          sourceId: trace.source_id,
+          limit: 40,
+          beforePublishedAt: null,
+          topicFilter: null,
+          aroundItemId: focus.aroundItemId,
+        });
+        groupLiveItemsBySource = { ...groupLiveItemsBySource, [trace.source_id]: items };
+        groupLiveCursorsBySource = {
+          ...groupLiveCursorsBySource,
+          [trace.source_id]: items.at(-1)?.publishedAt ?? null,
+        };
+        groupLiveHasMoreBySource = {
+          ...groupLiveHasMoreBySource,
+          [trace.source_id]: items.length === 40,
+        };
+        return;
+      }
+
+      if (source.sourceType === "telegram") {
+        loadingItems = true;
+        sourceItems = await listSourceItems({
+          sourceId: trace.source_id,
+          limit: 120,
+          beforePublishedAt: null,
+          topicFilter: null,
+          aroundItemId: focus.aroundItemId,
+        });
+        return;
+      }
+
+      if (source.sourceType === "youtube" && source.sourceSubtype === "video") {
+        youtubeTranscriptSearch = "";
+        const requestKey = `${trace.source_id}:`;
+        youtubeTranscriptRequestKey = requestKey;
+        loadingYoutubeTranscriptSegments = true;
+        const page = await listYoutubeTranscriptSegments({
+          sourceId: trace.source_id,
+          after: null,
+          limit: 80,
+          searchQuery: null,
+          aroundStartMs: focus.aroundStartMs,
+        });
+        if (youtubeTranscriptRequestKey !== requestKey) {
+          return;
+        }
+        youtubeTranscriptSegments = page.segments;
+        youtubeTranscriptCursor = page.nextCursor;
+        youtubeTranscriptHasMore = page.hasMore;
+      }
+    } catch (error) {
+      status = formatAppError("loading selected source evidence", error);
+    } finally {
+      loadingItems = false;
+      loadingRunSnapshotMessages = false;
+      loadingYoutubeTranscriptSegments = false;
+      groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: false };
+    }
+  }
+
+  async function showSelectedTraceInSource() {
+    const trace = selectedTrace;
+    if (!trace) {
+      status = "Select evidence from an opened run before showing it in source.";
+      return;
+    }
+
     const decision = evidenceSourceActionDecision({
       currentRun,
-      selectedTrace,
+      selectedTrace: trace,
       snapshotAvailability: runSnapshotAvailability,
     });
 
@@ -1190,6 +1308,8 @@
     if (decision.kind === "live_source") {
       status = decision.warning;
     }
+
+    await loadSourcePageAroundTrace(decision, trace);
   }
 
   async function submitRunQuestionFromCompanion() {
@@ -2494,7 +2614,7 @@
       {reportLines}
       onChangeCompanionTab={changeCompanionTab}
       onSelectTraceRef={(ref) => void focusTraceRef(ref)}
-      onShowSelectedTraceInSource={showSelectedTraceInSource}
+      onShowSelectedTraceInSource={() => void showSelectedTraceInSource()}
       onFocusTraceRef={(ref) => void focusTraceRef(ref)}
       onAskQuestion={() => void submitRunQuestionFromCompanion()}
       onCancelChat={() => void cancelChat()}

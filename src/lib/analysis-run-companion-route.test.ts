@@ -26,10 +26,12 @@ describe("analysis route run companion wiring", () => {
   it("activates Evidence for trace clicks and Show in source prefers snapshot", () => {
     expect(analysisPageSource).toContain("async function focusTraceRef");
     expect(analysisPageSource).toContain('companionTab: "evidence"');
-    expect(analysisPageSource).toContain("showSelectedTraceInSource");
+    expect(analysisPageSource).toContain("async function showSelectedTraceInSource");
     expect(analysisPageSource).toContain("evidenceSourceActionDecision");
     expect(analysisPageSource).toContain('sourceViewBasis: "run_snapshot"');
     expect(analysisPageSource).toContain('sourceViewBasis: "live_source"');
+    expect(analysisPageSource).toContain("await loadSourcePageAroundTrace(decision, trace)");
+    expect(analysisPageSource).toContain("aroundRef: trace.ref");
   });
 
   it("activates Chat only through tab selection or question submission", () => {
