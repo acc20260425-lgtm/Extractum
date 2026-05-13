@@ -277,6 +277,7 @@
   let youtubeSummaries = $state<Record<number, YoutubeSourceSummary>>({});
   let youtubeVideoDetail = $state<YoutubeVideoDetail | null>(null);
   let youtubePlaylistDetail = $state<YoutubePlaylistDetail | null>(null);
+  let youtubeDetailRequestKey = $state("");
   let llmProfiles = $state<LlmProfile[]>([]);
   let activeLlmProfile = $state("default");
   let selectedLlmProfileId = $state("");
@@ -843,6 +844,13 @@
     youtubeTranscriptRequestKey = "";
   }
 
+  function resetYoutubeDetailState() {
+    youtubeVideoDetail = null;
+    youtubePlaylistDetail = null;
+    loadingYoutubeDetail = false;
+    youtubeDetailRequestKey = "";
+  }
+
   function resetGroupLiveReader() {
     groupLiveItemsBySource = {};
     groupLiveCursorsBySource = {};
@@ -1396,8 +1404,7 @@
     analysisScope = next.analysisScope;
     selectedSourceId = next.selectedSourceId;
     selectedTopicKey = next.selectedTopicKey;
-    youtubeVideoDetail = null;
-    youtubePlaylistDetail = null;
+    resetYoutubeDetailState();
     resetGroupLiveReader();
     selectedSnapshotSourceId = null;
     resetYoutubeTranscriptReader();
@@ -1438,8 +1445,7 @@
     selectedGroupId = next.selectedGroupId;
     sourceTopics = next.sourceTopics;
     selectedTopicKey = next.selectedTopicKey;
-    youtubeVideoDetail = null;
-    youtubePlaylistDetail = null;
+    resetYoutubeDetailState();
     resetGroupLiveReader();
     selectedSnapshotSourceId = null;
     resetYoutubeTranscriptReader();
@@ -1465,21 +1471,36 @@
   }
 
   async function loadYoutubeDetail(source: Source) {
+    const requestKey = `${source.id}:${source.sourceSubtype}`;
+    youtubeDetailRequestKey = requestKey;
     loadingYoutubeDetail = true;
     try {
       if (source.sourceSubtype === "playlist") {
-        youtubePlaylistDetail = await getYoutubePlaylistDetail(source.id);
+        const detail = await getYoutubePlaylistDetail(source.id);
+        if (youtubeDetailRequestKey !== requestKey) {
+          return;
+        }
+        youtubePlaylistDetail = detail;
         youtubeVideoDetail = null;
       } else {
-        youtubeVideoDetail = await getYoutubeVideoDetail(source.id);
+        const detail = await getYoutubeVideoDetail(source.id);
+        if (youtubeDetailRequestKey !== requestKey) {
+          return;
+        }
+        youtubeVideoDetail = detail;
         youtubePlaylistDetail = null;
       }
     } catch (error) {
+      if (youtubeDetailRequestKey !== requestKey) {
+        return;
+      }
       youtubeVideoDetail = null;
       youtubePlaylistDetail = null;
       status = formatAppError("loading YouTube detail", error);
     } finally {
-      loadingYoutubeDetail = false;
+      if (youtubeDetailRequestKey === requestKey) {
+        loadingYoutubeDetail = false;
+      }
     }
   }
 

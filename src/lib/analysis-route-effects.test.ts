@@ -48,6 +48,25 @@ describe("analysis route effects", () => {
     return analysisPageSource.slice(effectStart, nextEffectStart);
   }
 
+  function youtubeDetailFunction() {
+    const functionStart = analysisPageSource.indexOf("  async function loadYoutubeDetail");
+    const nextFunctionStart = analysisPageSource.indexOf(
+      "\n  async function loadTemplates",
+      functionStart + 1,
+    );
+
+    expect(
+      functionStart,
+      "analysis route should define a YouTube detail loader",
+    ).toBeGreaterThan(-1);
+    expect(
+      nextFunctionStart,
+      "YouTube detail loader should be followed by loadTemplates",
+    ).toBeGreaterThan(functionStart);
+
+    return analysisPageSource.slice(functionStart, nextFunctionStart);
+  }
+
   it("keeps saved run history loading out of effect dependency tracking", () => {
     const effect = historyScopeEffect();
 
@@ -80,5 +99,16 @@ describe("analysis route effects", () => {
     expect(effect).toContain("void loadRunSnapshotFirstPage(currentRun.id);");
     expect(effect).not.toContain('workspaceUiState.canvasMode === "source"');
     expect(effect).not.toContain('workspaceUiState.sourceViewBasis === "run_snapshot"');
+  });
+
+  it("ignores stale YouTube detail responses after the selected source changes", () => {
+    const detailFunction = youtubeDetailFunction();
+
+    expect(analysisPageSource).toContain("let youtubeDetailRequestKey = $state(\"\");");
+    expect(detailFunction).toContain("const requestKey = `${source.id}:${source.sourceSubtype}`;");
+    expect(detailFunction).toContain("youtubeDetailRequestKey = requestKey;");
+    expect(detailFunction).toContain("if (youtubeDetailRequestKey !== requestKey) {");
+    expect(detailFunction).toContain("status = formatAppError(\"loading YouTube detail\", error);");
+    expect(detailFunction).toContain("loadingYoutubeDetail = false;");
   });
 });
