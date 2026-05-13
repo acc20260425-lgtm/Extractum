@@ -4,6 +4,7 @@ import {
   defaultCompanionTabForOpenedRun,
   evidenceSourceActionDecision,
   filterCompanionRuns,
+  hasActiveCompanionRunsFilter,
   hasSavedRunsForWorkspace,
   runsFilterDefaults,
   type CompanionRunsFilterState,
@@ -219,6 +220,18 @@ describe("analysis run companion state", () => {
     });
 
     expect(result.map((entry) => entry.run.id)).toEqual([20]);
+  });
+
+  it("detects active companion run filters beyond the defaults", () => {
+    expect(hasActiveCompanionRunsFilter(runsFilterDefaults())).toBe(false);
+    expect(hasActiveCompanionRunsFilter({
+      ...runsFilterDefaults(),
+      provider: "openai",
+    })).toBe(true);
+    expect(hasActiveCompanionRunsFilter({
+      ...runsFilterDefaults(),
+      scope: "current",
+    })).toBe(true);
   });
 
   it("detects saved runs for the selected workspace scope", () => {

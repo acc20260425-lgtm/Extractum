@@ -54,6 +54,12 @@ describe("run companion tabs", () => {
     expect(runsTabSource).toContain('ariaLabel="Provider filter"');
   });
 
+  it("offers a clear path when restored run filters hide all runs", () => {
+    expect(runsTabSource).toContain("hasActiveCompanionRunsFilter");
+    expect(runsTabSource).toContain("Clear filters");
+    expect(runsTabSource).toContain("runsFilterDefaults()");
+  });
+
   it("removes temporary chat from ReportCanvas once companion Chat exists", () => {
     expect(reportCanvasSource).not.toContain("temporary-follow-up");
     expect(reportCanvasSource).not.toContain("<ChatPanel");

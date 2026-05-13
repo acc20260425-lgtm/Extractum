@@ -2,6 +2,8 @@
   import { PanelRightOpen, RefreshCw, Square, Trash2 } from "@lucide/svelte";
   import {
     filterCompanionRuns,
+    hasActiveCompanionRunsFilter,
+    runsFilterDefaults,
     type CompanionRunsFilterState,
   } from "$lib/analysis-run-companion-state";
   import type { WorkspaceSelection } from "$lib/analysis-workspace-state";
@@ -69,6 +71,7 @@
     filter: runsFilter,
     workspaceSelection,
   }));
+  const hasActiveFilters = $derived(hasActiveCompanionRunsFilter(runsFilter));
 
   function updateFilter(patch: Partial<CompanionRunsFilterState>) {
     onChangeRunsFilter({ ...runsFilter, ...patch });
@@ -169,7 +172,14 @@
   {#if loadingActiveRuns || loadingRuns}
     <EmptyState description="Loading analysis report runs..." />
   {:else if entries.length === 0}
-    <EmptyState description="No analysis report runs match these filters." />
+    {#if hasActiveFilters}
+      <div class="filtered-empty">
+        <EmptyState description="No analysis report runs match these filters." />
+        <Button size="sm" variant="secondary" onclick={() => onChangeRunsFilter(runsFilterDefaults())}>Clear filters</Button>
+      </div>
+    {:else}
+      <EmptyState description="No analysis report runs yet." />
+    {/if}
   {:else}
     <ul class="runs-list">
       {#each entries as entry (`${entry.kind}-${entry.run.id}`)}
@@ -266,6 +276,13 @@
     list-style: none;
     padding: 0;
     margin: 0;
+  }
+
+  .filtered-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
   }
 
   .runs-list li {

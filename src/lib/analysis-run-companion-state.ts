@@ -78,6 +78,18 @@ export function runsFilterDefaults(): CompanionRunsFilterState {
   };
 }
 
+export function hasActiveCompanionRunsFilter(filter: CompanionRunsFilterState) {
+  const defaults = runsFilterDefaults();
+  return filter.query !== defaults.query ||
+    filter.status !== defaults.status ||
+    filter.scope !== defaults.scope ||
+    filter.dateFrom !== defaults.dateFrom ||
+    filter.dateTo !== defaults.dateTo ||
+    filter.provider !== defaults.provider ||
+    filter.model !== defaults.model ||
+    filter.template !== defaults.template;
+}
+
 export function defaultCompanionTabForOpenedRun(run: AnalysisRunDetail | null): CompanionTab {
   return run?.status === "completed" ? "evidence" : "runs";
 }
