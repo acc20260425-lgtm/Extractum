@@ -77,6 +77,13 @@ describe("report canvas component contract", () => {
     expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
   });
 
+  it("passes YouTube comments and source activity callbacks through the report canvas", () => {
+    expect(reportCanvasSource).toContain("onSyncYoutubeComments={onSyncYoutubeComments}");
+    expect(reportCanvasSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+    expect(reportCanvasSource).toContain("{sourceJobs}");
+    expect(reportSourceSurfaceSource).toContain("onSyncYoutubeComments");
+  });
+
   it("labels source surfaces without repeating the selected workspace title", () => {
     expect(sourceReaderHeaderSource).toContain("surfaceLabel");
     expect(reportSourceSurfaceSource).toContain("surfaceLabel=");

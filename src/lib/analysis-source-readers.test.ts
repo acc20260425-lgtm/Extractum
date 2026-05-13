@@ -108,6 +108,24 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(currentSource.id)}");
   });
 
+  it("restores live YouTube video comments sync status and activity in transcript reader", () => {
+    expect(youtubeTranscriptSource).toContain("onSyncComments");
+    expect(youtubeTranscriptSource).toContain("sourceJobs");
+    expect(youtubeTranscriptSource).toContain("<YoutubeSourceActivity");
+    expect(youtubeTranscriptSource).toContain("summary.comments.label");
+    expect(youtubeTranscriptSource).toContain("summary.comments.itemCount");
+    expect(youtubeTranscriptSource).toContain("summary.comments.lastSyncedAt");
+    expect(youtubeTranscriptSource).toContain("Sync comments");
+  });
+
+  it("passes live YouTube video comments and jobs only into live transcript readers", () => {
+    expect(reportSourceSurfaceSource).toContain("sourceJobs={sourceJobs}");
+    expect(reportSourceSurfaceSource).toContain("onSyncComments={() => onSyncYoutubeComments(currentSource.id)}");
+    expect(reportSourceSurfaceSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+    expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
+    expect(reportSourceSurfaceSource).not.toContain("onSyncComments={() => {}}");
+  });
+
   it("renders YouTube source job activity with progress warnings errors and cancel", () => {
     expect(youtubeSourceActivitySource).toContain('class="youtube-source-activity"');
     expect(youtubeSourceActivitySource).toContain("SourceJobRecord");

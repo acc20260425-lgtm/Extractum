@@ -106,6 +106,7 @@
     sourceItems,
     loadingItems,
     currentSourceContentLabel,
+    sourceJobs,
     youtubeVideoDetail,
     youtubePlaylistDetail,
     loadingYoutubeDetail,
@@ -123,10 +124,12 @@
     onOpenSource,
     onSyncYoutubeMetadata,
     onSyncYoutubeTranscript,
+    onSyncYoutubeComments,
     onSyncYoutubePlaylist,
     onRetryFailedYoutubePlaylistVideos,
     onSyncYoutubePlaylistVideo,
     onRetryYoutubePlaylistVideo,
+    onCancelSourceJob,
     onViewLiveSource,
     onBackToRunSnapshot,
     sourceSyncDisabledReason = () => null,
@@ -327,6 +330,9 @@
           onLoadMore={onLoadMoreYoutubeTranscriptSegments}
           onSyncTranscript={() => onSyncYoutubeTranscript(currentSource.id)}
           onSyncMetadata={() => onSyncYoutubeMetadata(currentSource.id)}
+          sourceJobs={sourceJobs}
+          onSyncComments={() => onSyncYoutubeComments(currentSource.id)}
+          onCancelSourceJob={onCancelSourceJob}
         />
       {:else if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}
         {#if youtubeRuntimeDiagnostic}

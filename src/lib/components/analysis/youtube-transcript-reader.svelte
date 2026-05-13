@@ -5,6 +5,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import YoutubeSourceActivity from "$lib/components/analysis/youtube-source-activity.svelte";
   import {
     formatYoutubeTime,
     groupYoutubeTranscriptItems,
@@ -13,7 +14,7 @@
     type YoutubeTranscriptGroup,
     type SourceReaderItem,
   } from "$lib/source-reader-model";
-  import type { SourceItem, YoutubeTranscriptSegment } from "$lib/types/sources";
+  import type { SourceItem, SourceJobRecord, YoutubeTranscriptSegment } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
 
   let {
@@ -24,6 +25,7 @@
     hasMore,
     transcriptSearch,
     showSyncActions = true,
+    sourceJobs = [],
     sourceTitle,
     selectedTraceRef,
     formatTimestamp,
@@ -31,6 +33,8 @@
     onLoadMore,
     onSyncTranscript,
     onSyncMetadata,
+    onSyncComments = null,
+    onCancelSourceJob = async () => {},
   }: {
     detail: YoutubeVideoDetail | null;
     segments: YoutubeTranscriptSegment[];
@@ -39,6 +43,7 @@
     hasMore: boolean;
     transcriptSearch: string;
     showSyncActions?: boolean;
+    sourceJobs?: SourceJobRecord[];
     sourceTitle: string;
     selectedTraceRef: string | null;
     formatTimestamp: (value: number | null) => string;
@@ -46,6 +51,8 @@
     onLoadMore: () => void | Promise<void>;
     onSyncTranscript: () => void | Promise<void>;
     onSyncMetadata: () => void | Promise<void>;
+    onSyncComments?: (() => void | Promise<void>) | null;
+    onCancelSourceJob?: (jobId: string) => void | Promise<void>;
   } = $props();
 
   const summary = $derived(detail?.summary ?? null);
@@ -110,6 +117,11 @@
           </Badge>
           <Badge variant="neutral">{summary.captions.segmentCount} segments</Badge>
           <Badge variant="neutral">Last synced {formatTimestamp(summary.captions.lastSyncedAt)}</Badge>
+          <Badge variant={summary.comments.state === "synced" ? "success" : summary.comments.state === "failed" ? "danger" : "neutral"}>
+            Comments {summary.comments.label}
+          </Badge>
+          <Badge variant="neutral">{summary.comments.itemCount} comments</Badge>
+          <Badge variant="neutral">Comments synced {formatTimestamp(summary.comments.lastSyncedAt)}</Badge>
         {/if}
       </div>
     </div>
@@ -117,6 +129,9 @@
       <div class="transcript-actions">
         <Button type="button" size="sm" variant="secondary" onclick={onSyncMetadata}>Sync metadata</Button>
         <Button type="button" size="sm" variant="secondary" onclick={onSyncTranscript}>Sync transcript</Button>
+        {#if onSyncComments}
+          <Button type="button" size="sm" variant="secondary" onclick={onSyncComments}>Sync comments</Button>
+        {/if}
       </div>
     {/if}
   </div>
@@ -136,6 +151,10 @@
       />
     </div>
   </label>
+
+  {#if showSyncActions}
+    <YoutubeSourceActivity jobs={sourceJobs} {formatTimestamp} onCancelJob={onCancelSourceJob} />
+  {/if}
 
   {#if summary?.captions.state === "unavailable"}
     <StatusMessage tone="muted" surface={false}>

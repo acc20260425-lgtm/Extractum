@@ -65,7 +65,11 @@ describe("analysis redesign final safety contract", () => {
     expect(reportSourceSurfaceSource).toContain("sourceJobs: SourceJobRecord[]");
     expect(reportSourceSurfaceSource).toContain("onSyncYoutubeTranscript");
     expect(reportSourceSurfaceSource).toContain("onSyncYoutubePlaylist");
+    expect(reportSourceSurfaceSource).toContain("onSyncYoutubeComments");
     expect(reportSourceSurfaceSource).toContain("onCancelSourceJob");
+    expect(reportSourceSurfaceSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+    expect(youtubeTranscriptSource).toContain("showSyncActions");
+    expect(youtubeTranscriptSource).toContain("Sync comments");
   });
 
   it("renders Telegram source material as metadata-first timeline without binary previews", () => {
