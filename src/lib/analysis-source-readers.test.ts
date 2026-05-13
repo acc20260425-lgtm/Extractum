@@ -5,6 +5,7 @@ import sourceGroupReaderSource from "./components/analysis/source-group-reader.s
 import telegramMediaCardSource from "./components/analysis/telegram-media-card.svelte?raw";
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import youtubePlaylistSource from "./components/analysis/youtube-playlist-reader.svelte?raw";
+import youtubeSourceActivitySource from "./components/analysis/youtube-source-activity.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
 
 describe("analysis source readers", () => {
@@ -105,6 +106,16 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
     expect(sourceGroupReaderSource).toContain("showSyncActions={false}");
     expect(reportSourceSurfaceSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(currentSource.id)}");
+  });
+
+  it("renders YouTube source job activity with progress warnings errors and cancel", () => {
+    expect(youtubeSourceActivitySource).toContain('class="youtube-source-activity"');
+    expect(youtubeSourceActivitySource).toContain("SourceJobRecord");
+    expect(youtubeSourceActivitySource).toContain("progressLabel(job)");
+    expect(youtubeSourceActivitySource).toContain("job.warnings");
+    expect(youtubeSourceActivitySource).toContain("job.error");
+    expect(youtubeSourceActivitySource).toContain("onCancelJob(job.job_id)");
+    expect(youtubeSourceActivitySource).toContain("cancel_requested");
   });
 
   it("surfaces YouTube runtime diagnostics in the live source canvas", () => {
