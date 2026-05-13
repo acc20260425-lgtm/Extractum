@@ -1021,3 +1021,75 @@ Report:
 - full test counts;
 - `git diff --check` result;
 - runtime smoke result or skipped reason.
+
+## Verification Evidence
+
+Date: 2026-05-13
+
+Targeted tests:
+
+```powershell
+npm.cmd test -- --run src/lib/analysis-source-readers.test.ts src/lib/analysis-report-canvas.test.ts src/lib/analysis-source-readers-route.test.ts src/lib/analysis-redesign-safety-contract.test.ts
+```
+
+Result:
+
+```text
+Test Files  4 passed (4)
+Tests       46 passed (46)
+```
+
+Svelte check:
+
+```powershell
+npm.cmd run check
+```
+
+Result:
+
+```text
+svelte-check found 0 errors and 0 warnings
+```
+
+Full Vitest suite:
+
+```powershell
+npm.cmd test -- --run
+```
+
+Result:
+
+```text
+Test Files  50 passed (50)
+Tests       403 passed (403)
+```
+
+Whitespace verification:
+
+```powershell
+git diff --check
+```
+
+Result:
+
+```text
+exit code 0
+no output
+```
+
+Tauri MCP runtime smoke:
+
+```text
+mcp__tauri__.driver_session action=start port=9223
+mcp__tauri__.webview_dom_snapshot type=accessibility
+```
+
+Result:
+
+- Tauri MCP bridge connected to `localhost:9223`.
+- `/analysis` was open in the running app.
+- Live YouTube video Source mode showed the transcript reader, comments status, and `Sync comments`.
+- Live YouTube playlist Source mode showed the playlist reader, playlist actions, and comments badges.
+- No active YouTube source jobs were present in the visible fixtures, so source activity rows were not runtime-visible without starting a sync.
+- Live Telegram sources checked showed Telegram timelines, but the available selected fixtures did not expose forum topics; `Topic view` could not be runtime-verified with the available data.
+- Run snapshot Source mode was not runtime-verified because the current app state had no saved/opened run available for snapshot browsing.
