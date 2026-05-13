@@ -46,6 +46,7 @@ function source(id: number): Source {
     isMember: true,
     isActive: true,
     createdAt: 100,
+    telegramUsername: null,
     avatarDataUrl: null,
   };
 }

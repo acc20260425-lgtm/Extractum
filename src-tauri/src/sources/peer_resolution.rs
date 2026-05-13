@@ -72,6 +72,13 @@ impl SourceMetadata {
         normalized.access_hash = None;
         normalized
     }
+
+    pub(super) fn peer_username(&self) -> Option<String> {
+        self.normalized()
+            .peer_identity
+            .and_then(|identity| identity.username)
+            .filter(|username| !username.trim().is_empty())
+    }
 }
 
 pub(super) struct ResolvedTelegramSource {

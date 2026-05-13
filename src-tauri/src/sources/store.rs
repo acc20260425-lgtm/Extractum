@@ -312,6 +312,7 @@ pub async fn list_sources(
 
 fn source_record_from_row_parts(
     row: SourceRecordRow,
+    telegram_username: Option<String>,
     avatar_data_url: Option<String>,
 ) -> SourceRecord {
     let telegram_source_kind = if row.source_type == TELEGRAM_SOURCE_TYPE {
@@ -333,17 +334,27 @@ fn source_record_from_row_parts(
         is_member: row.is_member,
         is_active: row.is_active,
         created_at: row.created_at,
+        telegram_username,
         avatar_data_url,
     }
 }
 
 fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult<SourceRecord> {
+    let telegram_username = if row.source_type == TELEGRAM_SOURCE_TYPE {
+        decode_source_metadata(row.metadata_zstd.as_deref())?.peer_username()
+    } else {
+        None
+    };
     let avatar_cache_key = source_avatar_cache_key_from_row(&row)?;
     let avatar_data_url = avatar_cache_key
         .as_deref()
         .and_then(|cache_key| read_source_avatar_data_url(handle, cache_key));
 
-    Ok(source_record_from_row_parts(row, avatar_data_url))
+    Ok(source_record_from_row_parts(
+        row,
+        telegram_username,
+        avatar_data_url,
+    ))
 }
 
 fn source_avatar_cache_key_from_row(row: &SourceRecordRow) -> AppResult<Option<String>> {
@@ -389,6 +400,7 @@ mod tests {
                 created_at: 1_700_500,
             },
             None,
+            None,
         );
 
         assert_eq!(record.source_type, "youtube");
@@ -415,6 +427,7 @@ mod tests {
                 is_member: false,
                 created_at: 1_700_500,
             },
+            None,
             None,
         );
 

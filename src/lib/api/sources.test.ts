@@ -36,6 +36,7 @@ describe("sources api wrappers", () => {
         is_member: true,
         is_active: true,
         created_at: 1_600_000,
+        telegram_username: "newsroom",
         avatar_data_url: "data:image/jpeg;base64,abc",
       },
     ]);
@@ -54,6 +55,7 @@ describe("sources api wrappers", () => {
         isMember: true,
         isActive: true,
         createdAt: 1_600_000,
+        telegramUsername: "newsroom",
         avatarDataUrl: "data:image/jpeg;base64,abc",
       },
     ]);
@@ -180,6 +182,7 @@ describe("sources api wrappers", () => {
         isMember: false,
         isActive: true,
         createdAt: 1_700_500,
+        telegramUsername: null,
         avatarDataUrl: null,
       },
     ]);

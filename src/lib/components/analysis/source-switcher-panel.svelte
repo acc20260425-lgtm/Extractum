@@ -124,10 +124,39 @@
   function youtubeMetaLine(summary: YoutubeSourceSummary | null) {
     if (!summary) return null;
     return (
-      [summary.channelHandle ?? summary.channelTitle, summary.videoCount !== null ? `${summary.videoCount} videos` : null]
+      [
+        summary.channelHandle ?? summary.channelTitle,
+        formatDuration(summary.durationSeconds),
+        summary.publishedAt !== null ? `published ${formatTimestamp(summary.publishedAt)}` : null,
+        summary.videoCount !== null ? `${summary.videoCount} videos` : null,
+        summary.linkedVideoCount !== null ? `${summary.linkedVideoCount} linked` : null,
+        summary.unavailableCount !== null && summary.unavailableCount > 0
+          ? `${summary.unavailableCount} unavailable`
+          : null,
+      ]
         .filter(Boolean)
         .join(" - ") || null
     );
+  }
+
+  function telegramMetaLine(source: Source) {
+    return [
+      source.telegramUsername ? `@${source.telegramUsername}` : null,
+      accountLabel(source.accountId),
+    ]
+      .filter(Boolean)
+      .join(" - ");
+  }
+
+  function formatDuration(value: number | null) {
+    if (value === null) return null;
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const seconds = value % 60;
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
   }
 </script>
 
@@ -183,6 +212,7 @@
           {@const runtimeStateBadge = runtimeBadge(runtime)}
           {@const syncReason = sourceSyncDisabledReason(source)}
           {@const youtubeSummary = source.sourceType === "youtube" ? youtubeSummaries[source.id] ?? null : null}
+          {@const providerMetaLine = youtubeSummary ? youtubeMetaLine(youtubeSummary) : telegramMetaLine(source)}
           {@const sourceJobs = sourceJobsBySource[source.id] ?? []}
           {@const takeoutJob = takeoutJobsBySource[source.id]}
           {@const takeoutActive = isActiveTakeoutJob(takeoutJob)}
@@ -205,9 +235,12 @@
                 <strong>{youtubeSummary?.title ?? source.title ?? source.externalId}</strong>
                 <div class="source-meta">
                   <span>{kindLabel}</span>
-                  <span>{youtubeMetaLine(youtubeSummary) ?? accountLabel(source.accountId)}</span>
+                  <span>{providerMetaLine}</span>
                   {#if metrics}
                     <span>{metrics.item_count} {capabilities.contentLabel}</span>
+                    {#if metrics.last_synced_at}
+                      <span>Synced {formatTimestamp(metrics.last_synced_at)}</span>
+                    {/if}
                   {/if}
                 </div>
               </div>

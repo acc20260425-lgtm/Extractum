@@ -36,6 +36,17 @@ describe("compact analysis source rail", () => {
     expect(sourceSwitcherPanelSource).toContain("onStartTakeoutImport(source.id)");
   });
 
+  it("keeps YouTube video duration visible in expanded source metadata", () => {
+    expect(sourceSwitcherPanelSource).toContain("formatDuration(summary.durationSeconds)");
+    expect(sourceSwitcherPanelSource).toContain("youtubeMetaLine(youtubeSummary)");
+  });
+
+  it("keeps Telegram username and sync freshness visible in expanded source metadata", () => {
+    expect(sourceSwitcherPanelSource).toContain("telegramMetaLine(source)");
+    expect(sourceSwitcherPanelSource).toContain("source.telegramUsername");
+    expect(sourceSwitcherPanelSource).toContain("formatTimestamp(metrics.last_synced_at)");
+  });
+
   it("keeps source and group switching callback-based", () => {
     expect(compactRailSource).toContain("onclick={() => onSelectSource(source.id)}");
     expect(compactRailSource).toContain("onclick={() => onSelectGroup(group.id)}");

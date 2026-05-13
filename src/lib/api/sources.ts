@@ -56,6 +56,7 @@ interface RawSource {
   is_member: boolean;
   is_active: boolean;
   created_at: number;
+  telegram_username?: string | null;
   avatar_data_url: string | null;
 }
 
@@ -275,6 +276,7 @@ function mapSource(source: RawSource): Source {
     isMember: source.is_member,
     isActive: source.is_active,
     createdAt: source.created_at,
+    telegramUsername: source.telegram_username ?? null,
     avatarDataUrl: source.avatar_data_url,
   };
 }

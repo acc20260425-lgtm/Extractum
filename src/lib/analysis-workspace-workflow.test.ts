@@ -42,6 +42,7 @@ function source(overrides: Partial<Source> = {}): Source {
     isMember: true,
     isActive: true,
     createdAt: 10,
+    telegramUsername: null,
     avatarDataUrl: null,
     ...overrides,
   };

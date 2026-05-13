@@ -84,6 +84,7 @@ pub struct SourceRecord {
     pub is_member: bool,
     pub is_active: bool,
     pub created_at: i64,
+    pub telegram_username: Option<String>,
     pub avatar_data_url: Option<String>,
 }
 

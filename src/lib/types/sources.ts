@@ -49,6 +49,7 @@ export interface Source {
   isMember: boolean;
   isActive: boolean;
   createdAt: number;
+  telegramUsername: string | null;
   avatarDataUrl: string | null;
 }
 
