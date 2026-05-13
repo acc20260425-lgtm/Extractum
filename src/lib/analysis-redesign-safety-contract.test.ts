@@ -101,6 +101,8 @@ describe("analysis redesign final safety contract", () => {
     expect(youtubePlaylistSource).toContain('class="youtube-playlist-reader"');
     expect(youtubePlaylistSource).toContain("playlist.items");
     expect(youtubePlaylistSource).toContain("onOpenSource");
+    expect(youtubePlaylistSource).toContain("<YoutubeSourceActivity");
+    expect(youtubePlaylistSource).toContain("onCancelSourceJob");
   });
 
   it("keeps source groups grouped by source instead of merged into one pseudo-chat", () => {

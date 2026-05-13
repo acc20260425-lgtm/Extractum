@@ -3,6 +3,8 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import YoutubeSourceActivity from "$lib/components/analysis/youtube-source-activity.svelte";
+  import type { SourceJobRecord } from "$lib/types/sources";
   import type { YoutubePlaylistDetail, YoutubePlaylistItemDetail } from "$lib/types/youtube";
 
   const retryableStatuses = new Set([
@@ -15,22 +17,26 @@
     sourceTitle,
     playlist,
     loading,
+    sourceJobs = [],
     formatTimestamp,
     onOpenSource,
     onSyncPlaylist,
     onRetryFailed,
     onSyncPlaylistVideo,
     onRetryPlaylistVideo,
+    onCancelSourceJob = async () => {},
   }: {
     sourceTitle: string;
     playlist: YoutubePlaylistDetail | null;
     loading: boolean;
+    sourceJobs?: SourceJobRecord[];
     formatTimestamp: (value: number | null) => string;
     onOpenSource: (sourceId: number) => void | Promise<void>;
     onSyncPlaylist: () => void | Promise<void>;
     onRetryFailed: () => void | Promise<void>;
     onSyncPlaylistVideo: (videoSourceId: number) => void | Promise<void>;
     onRetryPlaylistVideo: (videoSourceId: number) => void | Promise<void>;
+    onCancelSourceJob?: (jobId: string) => void | Promise<void>;
   } = $props();
 
   const summary = $derived(playlist?.summary ?? null);
@@ -90,6 +96,13 @@
       {@render detailField("Comments", `${summary.comments.label} - ${formatTimestamp(summary.comments.lastSyncedAt)}`)}
       {@render detailField("Availability", availabilityLabel(summary.availabilityStatus))}
     </div>
+
+    <YoutubeSourceActivity
+      jobs={sourceJobs}
+      {formatTimestamp}
+      onCancelJob={onCancelSourceJob}
+      title="Playlist activity"
+    />
 
     {#if playlist.items.length === 0}
       <StatusMessage tone="muted" surface={false}>

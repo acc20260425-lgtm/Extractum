@@ -166,6 +166,14 @@ describe("analysis source readers", () => {
     expect(youtubePlaylistSource).toContain("onRetryPlaylistVideo");
   });
 
+  it("renders YouTube playlist source activity and cancellation", () => {
+    expect(youtubePlaylistSource).toContain("sourceJobs");
+    expect(youtubePlaylistSource).toContain("<YoutubeSourceActivity");
+    expect(youtubePlaylistSource).toContain("onCancelSourceJob");
+    expect(reportSourceSurfaceSource).toContain("sourceJobs={sourceJobs}");
+    expect(reportSourceSurfaceSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+  });
+
   it("groups source group material by source", () => {
     expect(sourceGroupReaderSource).toContain('class="source-group-reader"');
     expect(sourceGroupReaderSource).toContain("groupReaderItemsBySource");

@@ -348,6 +348,8 @@
           onRetryFailed={() => onRetryFailedYoutubePlaylistVideos(currentSource.id)}
           onSyncPlaylistVideo={(videoSourceId) => onSyncYoutubePlaylistVideo(currentSource.id, videoSourceId)}
           onRetryPlaylistVideo={(videoSourceId) => onRetryYoutubePlaylistVideo(currentSource.id, videoSourceId)}
+          sourceJobs={sourceJobs}
+          onCancelSourceJob={onCancelSourceJob}
         />
       {:else}
         <TelegramTimelineReader
