@@ -279,6 +279,30 @@ describe("sources api wrappers", () => {
     });
   });
 
+  it("passes a selected source item id for focused source item paging", async () => {
+    invokeMock.mockResolvedValueOnce([]);
+
+    await expect(
+      listSourceItems({
+        sourceId: 7,
+        limit: 50,
+        beforePublishedAt: null,
+        topicFilter: null,
+        aroundItemId: 99,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(invokeMock).toHaveBeenLastCalledWith("list_source_items", {
+      request: {
+        sourceId: 7,
+        limit: 50,
+        beforePublishedAt: null,
+        topicFilter: null,
+        aroundItemId: 99,
+      },
+    });
+  });
+
   it("wraps paged YouTube transcript segment loading", async () => {
     invokeMock.mockResolvedValueOnce({
       segments: [
@@ -332,6 +356,38 @@ describe("sources api wrappers", () => {
         after: { startMs: 700000, segmentId: 8 },
         limit: 50,
         searchQuery: "text",
+      },
+    });
+  });
+
+  it("passes a selected timestamp for focused YouTube transcript paging", async () => {
+    invokeMock.mockResolvedValueOnce({
+      segments: [],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    await expect(
+      listYoutubeTranscriptSegments({
+        sourceId: 20,
+        after: null,
+        limit: 50,
+        searchQuery: null,
+        aroundStartMs: 754000,
+      }),
+    ).resolves.toEqual({
+      segments: [],
+      nextCursor: null,
+      hasMore: false,
+    });
+
+    expect(invokeMock).toHaveBeenLastCalledWith("list_youtube_transcript_segments", {
+      request: {
+        sourceId: 20,
+        after: null,
+        limit: 50,
+        searchQuery: null,
+        aroundStartMs: 754000,
       },
     });
   });

@@ -127,6 +127,7 @@ export interface ListSourceItemsInput {
   limit: number;
   beforePublishedAt: number | null;
   topicFilter: ForumTopicFilter | null;
+  aroundItemId?: number | null;
 }
 
 export interface YoutubeTranscriptSegmentCursor {
@@ -158,6 +159,7 @@ export interface ListYoutubeTranscriptSegmentsInput {
   after: YoutubeTranscriptSegmentCursor | null;
   limit: number;
   searchQuery: string | null;
+  aroundStartMs?: number | null;
 }
 
 export interface SourceForumTopic {

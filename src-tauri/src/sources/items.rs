@@ -58,6 +58,7 @@ pub struct ListSourceItemsRequest {
     pub limit: i64,
     pub before_published_at: Option<i64>,
     pub topic_filter: Option<ForumTopicFilter>,
+    pub around_item_id: Option<i64>,
 }
 
 pub(crate) struct SourceItemInsert {
@@ -285,6 +286,7 @@ pub async fn list_source_items(
         limit,
         request.before_published_at,
         request.topic_filter,
+        request.around_item_id,
     )
     .await?;
 

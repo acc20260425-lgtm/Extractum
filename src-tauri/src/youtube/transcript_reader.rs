@@ -19,6 +19,7 @@ pub struct ListYoutubeTranscriptSegmentsRequest {
     pub after: Option<YoutubeTranscriptSegmentCursor>,
     pub limit: i64,
     pub search_query: Option<String>,
+    pub around_start_ms: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, sqlx::FromRow)]
@@ -88,6 +89,9 @@ pub(crate) async fn list_youtube_transcript_segments_from_pool(
         query.push(", ");
         query.push_bind(after.segment_id);
         query.push(")");
+    } else if let Some(around_start_ms) = request.around_start_ms {
+        query.push(" AND start_ms >= ");
+        query.push_bind(around_start_ms);
     }
 
     if let Some(search) = search {
@@ -204,6 +208,7 @@ mod tests {
                 after: None,
                 limit: 2,
                 search_query: None,
+                around_start_ms: None,
             },
         )
         .await
@@ -223,6 +228,7 @@ mod tests {
                 after: first.next_cursor,
                 limit: 2,
                 search_query: None,
+                around_start_ms: None,
             },
         )
         .await
@@ -246,6 +252,7 @@ mod tests {
                 after: None,
                 limit: 20,
                 search_query: Some("beta".to_string()),
+                around_start_ms: None,
             },
         )
         .await
@@ -253,6 +260,36 @@ mod tests {
 
         assert_eq!(page.segments.len(), 1);
         assert_eq!(page.segments[0].text, "beta topic");
+    }
+
+    #[tokio::test]
+    async fn list_youtube_transcript_segments_can_start_at_selected_time() {
+        let pool = transcript_pool().await;
+        insert_segment(&pool, 20, 1000, "first").await;
+        insert_segment(&pool, 20, 2000, "second").await;
+        insert_segment(&pool, 20, 3000, "third").await;
+
+        let page = list_youtube_transcript_segments_from_pool(
+            &pool,
+            ListYoutubeTranscriptSegmentsRequest {
+                source_id: 20,
+                after: None,
+                limit: 2,
+                search_query: None,
+                around_start_ms: Some(2000),
+            },
+        )
+        .await
+        .expect("load around selected timestamp");
+
+        assert_eq!(
+            page.segments
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["second", "third"]
+        );
+        assert!(!page.has_more);
     }
 
     #[tokio::test]
@@ -268,6 +305,7 @@ mod tests {
                 after: None,
                 limit: 20,
                 search_query: Some(r"\_".to_string()),
+                around_start_ms: None,
             },
         )
         .await

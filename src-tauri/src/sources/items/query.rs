@@ -10,7 +10,21 @@ pub(super) async fn load_item_rows_from_pool(
     limit: i64,
     before_published_at: Option<i64>,
     topic_filter: Option<ForumTopicFilter>,
+    around_item_id: Option<i64>,
 ) -> AppResult<Vec<StoredItemRow>> {
+    let around_published_at = if let Some(item_id) = around_item_id {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT published_at FROM items WHERE source_id = ? AND id = ? LIMIT 1",
+        )
+        .bind(source_id)
+        .bind(item_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?
+    } else {
+        None
+    };
+
     let topic_join = resolved_topic_join(&ResolvedTopicAliases {
         item: "items",
         topic: "forum_topics",
@@ -47,6 +61,8 @@ pub(super) async fn load_item_rows_from_pool(
 
     if before_published_at.is_some() {
         sql.push_str(" AND items.published_at < ?");
+    } else if around_published_at.is_some() {
+        sql.push_str(" AND items.published_at <= ?");
     }
 
     match topic_filter {
@@ -64,6 +80,8 @@ pub(super) async fn load_item_rows_from_pool(
     let mut query = sqlx::query_as::<_, StoredItemRow>(&sql).bind(source_id);
     if let Some(before) = before_published_at {
         query = query.bind(before);
+    } else if let Some(around) = around_published_at {
+        query = query.bind(around);
     }
     if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter {
         query = query.bind(topic_id);
@@ -161,7 +179,7 @@ mod tests {
             .expect("insert item");
         }
 
-        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None)
+        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
             .await
             .expect("load all rows");
         assert_eq!(rows.len(), 5);
@@ -183,6 +201,7 @@ mod tests {
             20,
             None,
             Some(ForumTopicFilter::Topic { topic_id: 200 }),
+            None,
         )
         .await
         .expect("load topic rows");
@@ -195,17 +214,63 @@ mod tests {
             20,
             None,
             Some(ForumTopicFilter::Topic { topic_id: 1 }),
+            None,
         )
         .await
         .expect("load general rows");
         assert_eq!(general_rows.len(), 1);
         assert_eq!(general_rows[0].external_id, "999");
 
-        let uncategorized_rows =
-            load_item_rows_from_pool(&pool, 1, 20, None, Some(ForumTopicFilter::Uncategorized))
-                .await
-                .expect("load uncategorized rows");
+        let uncategorized_rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            20,
+            None,
+            Some(ForumTopicFilter::Uncategorized),
+            None,
+        )
+        .await
+        .expect("load uncategorized rows");
         assert_eq!(uncategorized_rows.len(), 1);
         assert_eq!(uncategorized_rows[0].external_id, "1000");
+    }
+
+    #[tokio::test]
+    async fn load_item_rows_can_start_at_selected_item() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        for (id, external_id, published_at) in [
+            (10_i64, "100", 500_i64),
+            (11_i64, "101", 400_i64),
+            (12_i64, "102", 300_i64),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO items (
+                    id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                    content_zstd, raw_data_zstd, content_kind, has_media, media_kind,
+                    media_metadata_zstd, reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id,
+                    reply_to_top_id, reaction_count
+                ) VALUES (?, 1, ?, 'telegram_message', 'alice', ?, ?, NULL, NULL, 'text_only', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+                "#,
+            )
+            .bind(id)
+            .bind(external_id)
+            .bind(published_at)
+            .bind(published_at)
+            .execute(&pool)
+            .await
+            .expect("insert item");
+        }
+
+        let rows = load_item_rows_from_pool(&pool, 1, 2, None, None, Some(11))
+            .await
+            .expect("load around selected item");
+
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.external_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["101", "102"]
+        );
     }
 }

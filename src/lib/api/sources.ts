@@ -222,6 +222,7 @@ export function listSourceItems(input: ListSourceItemsInput) {
       limit: input.limit,
       beforePublishedAt: input.beforePublishedAt,
       topicFilter: mapForumTopicFilter(input.topicFilter),
+      ...(input.aroundItemId !== undefined ? { aroundItemId: input.aroundItemId } : {}),
     },
   }).then((items) => items.map(mapSourceItem));
 }
@@ -246,6 +247,7 @@ export function listYoutubeTranscriptSegments(input: ListYoutubeTranscriptSegmen
           : null,
         limit: input.limit,
         searchQuery: input.searchQuery,
+        ...(input.aroundStartMs !== undefined ? { aroundStartMs: input.aroundStartMs } : {}),
       },
     },
   ).then(mapYoutubeTranscriptSegmentsPage);
