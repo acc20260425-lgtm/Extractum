@@ -367,6 +367,7 @@ pub async fn list_analysis_run_messages(
     after: Option<AnalysisRunMessageCursor>,
     limit: Option<i64>,
     source_id: Option<i64>,
+    around_ref: Option<String>,
 ) -> AppResult<AnalysisRunMessagesPage> {
     let pool = get_pool(&handle).await?;
     let exists =
@@ -390,6 +391,7 @@ pub async fn list_analysis_run_messages(
             after,
             limit,
             source_id,
+            around_ref,
         },
     )
     .await

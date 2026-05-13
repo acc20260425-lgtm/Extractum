@@ -80,6 +80,34 @@ describe("analysis run api wrappers", () => {
     });
   });
 
+  it("passes an around ref for focused snapshot paging", async () => {
+    invokeMock.mockResolvedValueOnce({
+      messages: [],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    await expect(listAnalysisRunMessages({
+      runId: 7,
+      after: null,
+      limit: 50,
+      sourceId: 12,
+      aroundRef: "s12-i99",
+    })).resolves.toEqual({
+      messages: [],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    expect(invokeMock).toHaveBeenLastCalledWith("list_analysis_run_messages", {
+      runId: 7,
+      after: null,
+      limit: 50,
+      sourceId: 12,
+      aroundRef: "s12-i99",
+    });
+  });
+
   it("wraps analysis report start and destructive run actions", async () => {
     invokeMock.mockResolvedValueOnce(77);
     await expect(startAnalysisReport({

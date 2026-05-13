@@ -788,6 +788,7 @@ pub(crate) struct ListRunSnapshotMessagesRequest {
     pub(crate) after: Option<AnalysisRunMessageCursor>,
     pub(crate) limit: usize,
     pub(crate) source_id: Option<i64>,
+    pub(crate) around_ref: Option<String>,
 }
 
 fn decode_optional_metadata_json(
@@ -862,6 +863,95 @@ pub(crate) async fn list_run_snapshot_messages_page(
         .fetch_all(pool)
         .await
         .map_err(|e| e.to_string())?
+    } else if let Some(around_ref) = request.around_ref.as_deref() {
+        let around_cursor = sqlx::query_as::<_, (i64, String)>(
+            r#"
+            SELECT published_at, ref
+            FROM analysis_run_messages
+            WHERE run_id = ?
+              AND (? IS NULL OR source_id = ?)
+              AND ref = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(request.run_id)
+        .bind(request.source_id)
+        .bind(request.source_id)
+        .bind(around_ref)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|(published_at, r#ref)| AnalysisRunMessageCursor {
+            published_at,
+            r#ref,
+        });
+
+        if let Some(around) = around_cursor {
+            sqlx::query_as(
+                r#"
+                SELECT
+                    item_id,
+                    source_id,
+                    external_id,
+                    author,
+                    published_at,
+                    ref,
+                    content_zstd,
+                    item_kind,
+                    source_type,
+                    source_subtype,
+                    metadata_zstd
+                FROM analysis_run_messages
+                WHERE run_id = ?
+                  AND (? IS NULL OR source_id = ?)
+                  AND (
+                    published_at > ?
+                    OR (published_at = ? AND ref >= ?)
+                  )
+                ORDER BY published_at ASC, ref ASC
+                LIMIT ?
+                "#,
+            )
+            .bind(request.run_id)
+            .bind(request.source_id)
+            .bind(request.source_id)
+            .bind(around.published_at)
+            .bind(around.published_at)
+            .bind(around.r#ref)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| e.to_string())?
+        } else {
+            sqlx::query_as(
+                r#"
+                SELECT
+                    item_id,
+                    source_id,
+                    external_id,
+                    author,
+                    published_at,
+                    ref,
+                    content_zstd,
+                    item_kind,
+                    source_type,
+                    source_subtype,
+                    metadata_zstd
+                FROM analysis_run_messages
+                WHERE run_id = ?
+                  AND (? IS NULL OR source_id = ?)
+                ORDER BY published_at ASC, ref ASC
+                LIMIT ?
+                "#,
+            )
+            .bind(request.run_id)
+            .bind(request.source_id)
+            .bind(request.source_id)
+            .bind(fetch_limit)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| e.to_string())?
+        }
     } else {
         sqlx::query_as(
             r#"
@@ -1445,6 +1535,7 @@ mod tests {
                 after: None,
                 limit: 1,
                 source_id: None,
+                around_ref: None,
             },
         )
         .await
@@ -1470,6 +1561,7 @@ mod tests {
                 after: page.next_cursor,
                 limit: 1,
                 source_id: None,
+                around_ref: None,
             },
         )
         .await
@@ -1487,6 +1579,7 @@ mod tests {
                 after: None,
                 limit: 25,
                 source_id: Some(4),
+                around_ref: None,
             },
         )
         .await
@@ -1495,6 +1588,52 @@ mod tests {
         assert_eq!(filtered_page.messages.len(), 1);
         assert_eq!(filtered_page.messages[0].source_id, 4);
         assert_eq!(filtered_page.messages[0].content, "Second frozen message");
+    }
+
+    #[tokio::test]
+    async fn list_run_snapshot_messages_page_starts_at_around_ref() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_runs (
+                id, run_type, scope_type, source_group_id, period_from, period_to,
+                output_language, prompt_template_version, provider_profile, provider,
+                model, status, created_at
+            )
+            VALUES (1, 'report', 'source_group', 9, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)
+            "#,
+        )
+        .bind(1_700_000_000_i64)
+        .bind(1_800_000_000_i64)
+        .bind(1_710_000_500_i64)
+        .execute(&pool)
+        .await
+        .expect("insert run");
+
+        persist_run_snapshot(&pool, 1, "Frozen group", &sample_corpus())
+            .await
+            .expect("persist snapshot");
+
+        let page = list_run_snapshot_messages_page(
+            &pool,
+            ListRunSnapshotMessagesRequest {
+                run_id: 1,
+                after: None,
+                limit: 10,
+                source_id: None,
+                around_ref: Some("s4-m101".to_string()),
+            },
+        )
+        .await
+        .expect("load around ref");
+
+        assert_eq!(
+            page.messages
+                .iter()
+                .map(|message| message.r#ref.as_str())
+                .collect::<Vec<_>>(),
+            vec!["s4-m101"]
+        );
     }
 
     #[tokio::test]
@@ -1539,6 +1678,7 @@ mod tests {
                 after: None,
                 limit: 25,
                 source_id: None,
+                around_ref: None,
             },
         )
         .await
