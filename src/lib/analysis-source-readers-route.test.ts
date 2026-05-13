@@ -32,4 +32,10 @@ describe("analysis source reader route wiring", () => {
     expect(analysisPageSource).toContain("sourceId: selectedSnapshotSourceId");
     expect(analysisPageSource).not.toContain("listSourceItems({ runId");
   });
+
+  it("includes related playlist-video jobs in selected video source activity", () => {
+    expect(analysisPageSource).toContain("related_source_id === source.id");
+    expect(analysisPageSource).toContain("seenSourceJobIds");
+    expect(analysisPageSource).toContain("right.started_at - left.started_at");
+  });
 });

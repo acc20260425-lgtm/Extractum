@@ -446,7 +446,22 @@
 
   function currentSourceJobs() {
     const source = currentSource();
-    return source ? sourceJobsBySource[source.id] ?? [] : [];
+    if (!source) return [];
+
+    const directJobs = sourceJobsBySource[source.id] ?? [];
+    const seenSourceJobIds = new Set(directJobs.map((job) => job.job_id));
+    const relatedJobs = Object.values(sourceJobsBySource)
+      .flat()
+      .filter((job) => {
+        if (job.related_source_id === source.id) {
+          if (seenSourceJobIds.has(job.job_id)) return false;
+          seenSourceJobIds.add(job.job_id);
+          return true;
+        }
+        return false;
+      });
+
+    return [...directJobs, ...relatedJobs].sort((left, right) => right.started_at - left.started_at);
   }
 
   function currentGroup() {
