@@ -2359,7 +2359,7 @@
         ? sourceActionPending(syncingIds, job.source_id)
         : clearSourceActionPending(syncingIds, job.source_id);
       if (!isActiveSourceJob(job)) {
-        void loadYoutubeSummaries();
+        void Promise.all([loadSourceCatalog(), loadGroups()]);
         const selected = currentSource();
         if (selected?.sourceType === "youtube") {
           void loadYoutubeDetail(selected);

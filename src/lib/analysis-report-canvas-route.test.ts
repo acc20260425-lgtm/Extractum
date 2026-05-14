@@ -57,4 +57,12 @@ describe("analysis route report canvas wiring", () => {
     expect(analysisPageSource).toContain("currentSourceMetric: currentSourceMetric()");
     expect(analysisPageSource).toContain("reportLaunchDisabledReason={currentReportLaunchDisabledReason()}");
   });
+
+  it("refreshes source metrics after terminal YouTube source jobs for report preflight", () => {
+    expect(analysisPageSource).toContain("listenToSourceJobEvents");
+    expect(analysisPageSource).toContain("if (!isActiveSourceJob(job))");
+    expect(analysisPageSource).toContain(
+      "void Promise.all([loadSourceCatalog(), loadGroups()]);",
+    );
+  });
 });
