@@ -126,6 +126,7 @@
     filteredAnalysisGroups,
     filteredAnalysisSourceCatalog,
     focusedLiveRunState,
+    focusedRunChunkSummaries,
     focusedRunStreamedOutput,
     hasRealForumTopics as hasRealForumTopicsInState,
     isRunActive,
@@ -2589,6 +2590,8 @@
       {traceData}
       {selectedTraceRef}
       {selectedTrace}
+      focusedChunkSummaries={focusedRunChunkSummaries(focusedLiveRun)}
+      {selectedRunIsActive}
       {activeRuns}
       savedRuns={runs}
       {loadingActiveRuns}

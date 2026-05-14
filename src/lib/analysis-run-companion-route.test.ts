@@ -19,8 +19,18 @@ describe("analysis route run companion wiring", () => {
     expect(analysisPageSource).toContain("companionTab={workspaceUiState.companionTab}");
     expect(analysisPageSource).toContain("function changeCompanionTab");
     expect(analysisPageSource).toContain("companionTab: nextTab");
+    expect(analysisPageSource).not.toContain('inspectorMode: "chunks"');
     expect(analysisPageSource).not.toContain("let inspectorMode");
     expect(analysisPageSource).not.toContain("onChangeInspectorMode");
+  });
+
+  it("passes focused chunk summaries into the companion without auto-opening chunks", () => {
+    expect(analysisPageSource).toContain("focusedRunChunkSummaries");
+    expect(analysisPageSource).toContain(
+      "focusedChunkSummaries={focusedRunChunkSummaries(focusedLiveRun)}",
+    );
+    expect(analysisPageSource).toContain("{selectedRunIsActive}");
+    expect(analysisPageSource).not.toContain('companionTab: "chunks"');
   });
 
   it("activates Evidence for trace clicks and Show in source prefers snapshot", () => {
