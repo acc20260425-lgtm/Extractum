@@ -57,6 +57,7 @@ import type {
   AnalysisRunEvent,
   AnalysisRunSummary,
   AnalysisSourceGroup,
+  AnalysisSourceOption,
   AnalysisTraceRef,
 } from "./types/analysis";
 import type {
@@ -266,6 +267,18 @@ function sourceGroup(overrides: Partial<AnalysisSourceGroup>): AnalysisSourceGro
     members: [],
     created_at: 100,
     updated_at: 100,
+    ...overrides,
+  };
+}
+
+function sourceMetric(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOption {
+  return {
+    id: 1,
+    account_id: null,
+    source_type: "telegram",
+    title: "Announcements",
+    item_count: 12,
+    last_synced_at: 100,
     ...overrides,
   };
 }
@@ -655,6 +668,7 @@ describe("analysis-state", () => {
       ],
       activeLlmProfile: "default",
       currentSource: source,
+      currentSourceMetric: sourceMetric({ id: 7, item_count: 12 }),
       currentGroup: null,
       sourceCatalog: [source],
       sourceSyncDisabledReason: () => null,
@@ -672,6 +686,61 @@ describe("analysis-state", () => {
       sourceSyncDisabledReason: () => "Initialize this account before syncing.",
     })).toBe("Initialize this account before syncing.");
     expect(reportLaunchDisabledReason(base)).toBeNull();
+  });
+
+  it("blocks report launch when the selected scope has no synced context", () => {
+    const source = sourceRecord({ id: 7, title: "Announcements" });
+    const base = {
+      analysisScope: "single_source" as const,
+      selectedSourceId: "7",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "Russian",
+      profileId: null,
+      modelOverride: "",
+      youtubeCorpusMode: "transcript_description" as const,
+      llmProfiles: [
+        {
+          profile_id: "default",
+          api_key_configured: true,
+        },
+      ],
+      activeLlmProfile: "default",
+      currentSource: source,
+      currentSourceMetric: sourceMetric({ id: 7, item_count: 0 }),
+      currentGroup: null,
+      sourceCatalog: [source],
+      sourceSyncDisabledReason: () => null,
+    };
+
+    expect(reportLaunchDisabledReason(base)).toBe("Sync this source before running a report.");
+    expect(reportLaunchDisabledReason({ ...base, currentSourceMetric: null }))
+      .toBe("Sync this source before running a report.");
+    expect(reportLaunchDisabledReason({
+      ...base,
+      analysisScope: "source_group",
+      selectedSourceId: "",
+      selectedGroupId: "3",
+      currentSource: null,
+      currentSourceMetric: null,
+      currentGroup: sourceGroup({ id: 3, members: [] }),
+    })).toBe("Add synced sources to this group before running a report.");
+    expect(reportLaunchDisabledReason({
+      ...base,
+      analysisScope: "source_group",
+      selectedSourceId: "",
+      selectedGroupId: "3",
+      currentSource: null,
+      currentSourceMetric: null,
+      currentGroup: sourceGroup({
+        id: 3,
+        members: [
+          { source_id: 7, source_title: "Announcements", item_count: 0 },
+        ],
+      }),
+    })).toBe("Add synced sources to this group before running a report.");
   });
 
   it("blocks report launch when a source group member has an unusable runtime", () => {
@@ -705,6 +774,7 @@ describe("analysis-state", () => {
       ],
       activeLlmProfile: "default",
       currentSource: null,
+      currentSourceMetric: null,
       currentGroup: group,
       sourceCatalog: [available, unavailable],
       sourceSyncDisabledReason: (candidate) =>

@@ -509,6 +509,7 @@
       youtubeCorpusMode,
       llmProfiles,
       activeLlmProfile,
+      currentSourceMetric: currentSourceMetric(),
       currentSource: currentSource(),
       currentGroup: currentGroup(),
       sourceCatalog,

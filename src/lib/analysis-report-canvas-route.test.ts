@@ -52,4 +52,9 @@ describe("analysis route report canvas wiring", () => {
     expect(analysisPageSource).toContain("void loadRunSnapshotFirstPage(currentRun.id)");
     expect(analysisPageSource).not.toContain('sourceViewBasis: "run_snapshot", // automatic');
   });
+
+  it("passes source metrics into report launch preflight", () => {
+    expect(analysisPageSource).toContain("currentSourceMetric: currentSourceMetric()");
+    expect(analysisPageSource).toContain("reportLaunchDisabledReason={currentReportLaunchDisabledReason()}");
+  });
 });

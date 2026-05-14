@@ -9,6 +9,7 @@ import type {
   AnalysisRunEvent,
   AnalysisRunSummary,
   AnalysisSourceGroup,
+  AnalysisSourceOption,
   AnalysisTraceData,
   AnalysisTraceRef,
   YoutubeCorpusMode,
@@ -145,6 +146,7 @@ export type ReportLaunchPreflightState = AnalysisReportStartState & {
   llmProfiles: Pick<LlmProfile, "profile_id" | "api_key_configured">[];
   activeLlmProfile: string;
   currentSource: Source | null;
+  currentSourceMetric: Pick<AnalysisSourceOption, "item_count"> | null;
   currentGroup: AnalysisSourceGroup | null;
   sourceCatalog: Source[];
   sourceSyncDisabledReason: (source: Source) => string | null;
@@ -478,11 +480,20 @@ export function reportLaunchDisabledReason(state: ReportLaunchPreflightState) {
     if (!state.currentSource) {
       return "Selected source is not loaded.";
     }
+    if (!state.currentSourceMetric || state.currentSourceMetric.item_count <= 0) {
+      return "Sync this source before running a report.";
+    }
     return state.sourceSyncDisabledReason(state.currentSource);
   }
 
   if (!state.currentGroup) {
     return "Selected source group is not loaded.";
+  }
+  if (
+    state.currentGroup.members.length === 0 ||
+    state.currentGroup.members.every((member) => member.item_count <= 0)
+  ) {
+    return "Add synced sources to this group before running a report.";
   }
 
   for (const member of state.currentGroup.members) {
