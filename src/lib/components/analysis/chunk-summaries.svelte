@@ -6,102 +6,106 @@
   let {
     summaries,
     running,
+    framed = true,
+    waitingMessage = "Waiting for the first chunk summary.",
+    terminalEmptyMessage = "Chunk summaries are only available while the run is streaming.",
   }: {
     summaries: AnalysisChunkSummaryEvent[];
     running: boolean;
+    framed?: boolean;
+    waitingMessage?: string;
+    terminalEmptyMessage?: string;
   } = $props();
 </script>
 
-{#if running || summaries.length > 0}
-  <section class="card chunk-summaries">
-    <PanelHeader
-      title="Chunk Summaries"
-      subtitle={summaries.length > 0
-        ? `${summaries.length}/${summaries[0]?.total ?? summaries.length} received`
-        : "Waiting for the first chunk..."}
-    />
+<section class="chunk-summaries" class:card={framed}>
+  <PanelHeader
+    title="Chunk Summaries"
+    subtitle={summaries.length > 0
+      ? `${summaries.length}/${summaries[0]?.total ?? summaries.length} received`
+      : "Waiting for the first chunk..."}
+  />
 
-    {#if summaries.length === 0}
-      <EmptyState description="Intermediate summaries appear here during chunk analysis." />
-    {:else}
-      <div class="chunk-list">
-        {#each summaries as chunk (chunk.index)}
-          <details class="chunk-item" open={chunk.index === summaries.length}>
-            <summary>
-              <strong>Chunk {chunk.index}/{chunk.total}</strong>
-              <span>{chunk.message_count} messages</span>
-            </summary>
+  {#if summaries.length === 0}
+    <EmptyState description={running ? waitingMessage : terminalEmptyMessage} />
+  {:else}
+    <div class="chunk-list">
+      {#each summaries as chunk (chunk.index)}
+        <details class="chunk-item" open={chunk.index === summaries.length}>
+          <summary>
+            <strong>Chunk {chunk.index}/{chunk.total}</strong>
+            <span>{chunk.message_count} messages</span>
+          </summary>
 
-            <p>{chunk.summary}</p>
+          <p>{chunk.summary}</p>
 
-            {#if chunk.topics.length > 0}
-              <div class="chunk-section">
-                <span class="section-label">Topics</span>
-                <div class="chip-list">
-                  {#each chunk.topics as topic (topic)}
-                    <span class="chip">{topic}</span>
-                  {/each}
-                </div>
+          {#if chunk.topics.length > 0}
+            <div class="chunk-section">
+              <span class="section-label">Topics</span>
+              <div class="chip-list">
+                {#each chunk.topics as topic (topic)}
+                  <span class="chip">{topic}</span>
+                {/each}
               </div>
-            {/if}
+            </div>
+          {/if}
 
-            {#if chunk.notable_points.length > 0}
-              <div class="chunk-section">
-                <span class="section-label">Notable points</span>
-                <ul>
-                  {#each chunk.notable_points as point (point)}
-                    <li>{point}</li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
+          {#if chunk.notable_points.length > 0}
+            <div class="chunk-section">
+              <span class="section-label">Notable points</span>
+              <ul>
+                {#each chunk.notable_points as point (point)}
+                  <li>{point}</li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
 
-            {#if chunk.candidate_refs.length > 0}
-              <div class="chunk-section">
-                <span class="section-label">Candidate refs</span>
-                <div class="chip-list refs">
-                  {#each chunk.candidate_refs as ref (ref)}
-                    <span class="chip">{ref}</span>
-                  {/each}
-                </div>
+          {#if chunk.candidate_refs.length > 0}
+            <div class="chunk-section">
+              <span class="section-label">Candidate refs</span>
+              <div class="chip-list refs">
+                {#each chunk.candidate_refs as ref (ref)}
+                  <span class="chip">{ref}</span>
+                {/each}
               </div>
-            {/if}
-          </details>
-        {/each}
-      </div>
-    {/if}
-  </section>
-{/if}
+            </div>
+          {/if}
+        </details>
+      {/each}
+    </div>
+  {/if}
+</section>
 
 <style>
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
-    border-radius: 12px;
-    padding: 1.5rem;
+    border-radius: 8px;
+    padding: 1rem;
   }
 
   .chunk-summaries {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.85rem;
   }
 
   .chunk-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.65rem;
     max-height: 32rem;
     overflow: auto;
     padding-right: 0.25rem;
   }
 
   .chunk-item {
-    padding: 0.85rem 0.95rem;
+    padding: 0.75rem 0.8rem;
     background: var(--panel-strong);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
   }
 
   .chunk-item summary {

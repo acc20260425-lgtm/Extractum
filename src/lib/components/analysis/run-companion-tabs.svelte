@@ -1,14 +1,17 @@
 <script lang="ts">
+  import ChunkSummaries from "$lib/components/analysis/chunk-summaries.svelte";
   import RunChatTab from "$lib/components/analysis/run-chat-tab.svelte";
   import RunCompanionRunsTab from "$lib/components/analysis/run-companion-runs-tab.svelte";
   import RunEvidenceTab from "$lib/components/analysis/run-evidence-tab.svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import type { ChatAvailability, CompanionRunsFilterState } from "$lib/analysis-run-companion-state";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import type { CompanionTab, WorkspaceSelection } from "$lib/analysis-workspace-state";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
     AnalysisChatTurn,
+    AnalysisChunkSummaryEvent,
     AnalysisRunDetail,
     AnalysisRunSummary,
     AnalysisTraceData,
@@ -23,6 +26,8 @@
     traceData,
     selectedTraceRef,
     selectedTrace,
+    focusedChunkSummaries = [],
+    selectedRunIsActive = false,
     activeRuns,
     savedRuns,
     loadingActiveRuns,
@@ -68,6 +73,8 @@
     traceData: AnalysisTraceData;
     selectedTraceRef: string | null;
     selectedTrace: AnalysisTraceRef | null;
+    focusedChunkSummaries?: AnalysisChunkSummaryEvent[];
+    selectedRunIsActive?: boolean;
     activeRuns: AnalysisRunSummary[];
     savedRuns: AnalysisRunSummary[];
     loadingActiveRuns: boolean;
@@ -118,6 +125,17 @@
   function tabId(tab: CompanionTab) {
     return `run-companion-tab-${tab}`;
   }
+
+  function chunkTabLabel() {
+    const count = focusedChunkSummaries.length;
+    if (count === 0) return "Chunks";
+    const total = focusedChunkSummaries.at(-1)?.total ?? null;
+    return total && total > 0 ? `Chunks ${count}/${total}` : `Chunks ${count}`;
+  }
+
+  function chunksDisabled() {
+    return currentRun === null;
+  }
 </script>
 
 <aside class="run-companion-tabs">
@@ -129,6 +147,22 @@
     <div class="companion-tab-list" role="tablist" aria-label="Run companion tabs">
       <Button id={tabId("evidence")} role="tab" size="sm" variant="secondary" selected={companionTab === "evidence"} ariaSelected={companionTab === "evidence"} ariaControls="run-companion-panel" onclick={() => onChangeCompanionTab("evidence")}>Evidence</Button>
       <Button id={tabId("chat")} role="tab" size="sm" variant="secondary" selected={companionTab === "chat"} ariaSelected={companionTab === "chat"} ariaControls="run-companion-panel" onclick={() => onChangeCompanionTab("chat")}>Chat</Button>
+      <Button
+        id={tabId("chunks")}
+        role="tab"
+        size="sm"
+        variant="secondary"
+        selected={companionTab === "chunks"}
+        ariaSelected={companionTab === "chunks"}
+        ariaControls="run-companion-panel"
+        disabled={chunksDisabled()}
+        title={chunksDisabled() ? "Open a run to inspect chunk summaries." : undefined}
+        onclick={() => {
+          if (!chunksDisabled()) onChangeCompanionTab("chunks");
+        }}
+      >
+        {chunkTabLabel()}
+      </Button>
       <Button id={tabId("runs")} role="tab" size="sm" variant="secondary" selected={companionTab === "runs"} ariaSelected={companionTab === "runs"} ariaControls="run-companion-panel" onclick={() => onChangeCompanionTab("runs")}>Runs</Button>
     </div>
   </div>
@@ -164,6 +198,16 @@
         onClearChat={onClearChat}
         onChangeChatQuestion={onChangeChatQuestion}
       />
+    {:else if companionTab === "chunks"}
+      {#if currentRun}
+        <ChunkSummaries
+          summaries={focusedChunkSummaries}
+          running={selectedRunIsActive}
+          framed={false}
+        />
+      {:else}
+        <EmptyState description="Open a run to inspect chunk summaries." />
+      {/if}
     {:else}
       <RunCompanionRunsTab
         {activeRuns}

@@ -1,21 +1,39 @@
 import { describe, expect, it } from "vitest";
 import companionTabsSource from "./components/analysis/run-companion-tabs.svelte?raw";
+import chunkSummariesSource from "./components/analysis/chunk-summaries.svelte?raw";
 import evidenceTabSource from "./components/analysis/run-evidence-tab.svelte?raw";
 import chatTabSource from "./components/analysis/run-chat-tab.svelte?raw";
 import runsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
 import reportCanvasSource from "./components/analysis/report-canvas.svelte?raw";
 
 describe("run companion tabs", () => {
-  it("uses accessible Evidence, Chat, and Runs tabs", () => {
+  it("uses accessible Evidence, Chat, Chunks, and Runs tabs", () => {
     expect(companionTabsSource).toContain('class="run-companion-tabs"');
     expect(companionTabsSource).toContain('role="tablist"');
     expect(companionTabsSource).toContain('aria-label="Run companion tabs"');
     expect(companionTabsSource).toContain('onChangeCompanionTab("evidence")');
     expect(companionTabsSource).toContain('onChangeCompanionTab("chat")');
+    expect(companionTabsSource).toContain('onChangeCompanionTab("chunks")');
     expect(companionTabsSource).toContain('onChangeCompanionTab("runs")');
     expect(companionTabsSource).toContain("<RunEvidenceTab");
     expect(companionTabsSource).toContain("<RunChatTab");
+    expect(companionTabsSource).toContain("<ChunkSummaries");
     expect(companionTabsSource).toContain("<RunCompanionRunsTab");
+    expect(companionTabsSource).toContain("chunkTabLabel");
+    expect(companionTabsSource).toContain("chunksDisabled");
+  });
+
+  it("renders chunk summaries compactly inside the companion", () => {
+    expect(companionTabsSource).toContain("focusedChunkSummaries");
+    expect(companionTabsSource).toContain("selectedRunIsActive");
+    expect(companionTabsSource).toContain("framed={false}");
+    expect(chunkSummariesSource).toContain("framed = true");
+    expect(chunkSummariesSource).toContain("terminalEmptyMessage");
+    expect(chunkSummariesSource).toContain("Waiting for the first chunk summary.");
+    expect(chunkSummariesSource).toContain(
+      "Chunk summaries are only available while the run is streaming.",
+    );
+    expect(chunkSummariesSource).toContain("class:card={framed}");
   });
 
   it("keeps Evidence focused on trace refs and Show in source", () => {
