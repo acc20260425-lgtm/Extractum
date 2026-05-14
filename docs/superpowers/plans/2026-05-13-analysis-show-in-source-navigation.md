@@ -498,7 +498,7 @@ git commit -m "feat: scroll selected source evidence into view"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-13-analysis-show-in-source-navigation.md`
 
-- [ ] **Step 1: Run targeted tests**
+- [x] **Step 1: Run targeted tests**
 
 Run:
 
@@ -506,7 +506,7 @@ Run:
 npm.cmd test -- --run src/lib/api/analysis-runs.test.ts src/lib/api/sources.test.ts src/lib/analysis-run-companion-route.test.ts src/lib/analysis-source-readers-route.test.ts src/lib/analysis-source-readers.test.ts
 ```
 
-- [ ] **Step 2: Run backend targeted tests**
+- [x] **Step 2: Run backend targeted tests**
 
 Run:
 
@@ -516,7 +516,7 @@ cargo test load_item_rows_can_start_at_selected_item --manifest-path src-tauri/C
 cargo test list_youtube_transcript_segments_can_start_at_selected_time --manifest-path src-tauri/Cargo.toml
 ```
 
-- [ ] **Step 3: Run Svelte check and full tests**
+- [x] **Step 3: Run Svelte check and full tests**
 
 Run:
 
@@ -527,7 +527,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 git diff --check
 ```
 
-- [ ] **Step 4: Runtime smoke if Tauri bridge is available**
+- [x] **Step 4: Runtime smoke if Tauri bridge is available**
 
 If a Tauri app is running:
 
@@ -543,7 +543,7 @@ Verify:
 
 If no fixture state is available, record the exact skipped part.
 
-- [ ] **Step 5: Record verification evidence and commit**
+- [x] **Step 5: Record verification evidence and commit**
 
 Append a `## Verification Evidence` section to this plan with exact commands and pass/fail counts.
 
@@ -553,3 +553,27 @@ Commit:
 git add docs/superpowers/plans/2026-05-13-analysis-show-in-source-navigation.md
 git commit -m "docs: record show in source navigation verification"
 ```
+
+## Verification Evidence
+
+Recorded on 2026-05-14 from `G:\Develop\Extractum` on `main`.
+
+- `npm.cmd test -- --run src/lib/api/analysis-runs.test.ts src/lib/api/sources.test.ts src/lib/analysis-run-companion-route.test.ts src/lib/analysis-source-readers-route.test.ts src/lib/analysis-source-readers.test.ts`
+  - result: 5 files passed, 54 tests passed.
+- `cargo test list_run_snapshot_messages_page_starts_at_around_ref --manifest-path src-tauri/Cargo.toml`
+  - result: 1 test passed, 0 failed.
+- `cargo test load_item_rows_can_start_at_selected_item --manifest-path src-tauri/Cargo.toml`
+  - result: 1 test passed, 0 failed.
+- `cargo test list_youtube_transcript_segments_can_start_at_selected_time --manifest-path src-tauri/Cargo.toml`
+  - result: 1 test passed, 0 failed.
+- `npm.cmd run check`
+  - result: `svelte-check found 0 errors and 0 warnings`.
+- `npm.cmd test -- --run`
+  - result: 50 files passed, 408 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml`
+  - result: 314 tests passed, 0 failed.
+- `git diff --check`
+  - result: exit 0, no whitespace errors.
+- `mcp__tauri__.driver_session action=start port=9223`
+  - result: skipped runtime smoke because no Tauri app was found at `localhost:9223`.
+  - not runtime-verified in this pass: saved-run snapshot `Show in source`, active/live-source fallback scroll, and completed missing-snapshot refusal.
