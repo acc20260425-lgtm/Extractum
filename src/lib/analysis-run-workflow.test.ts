@@ -569,7 +569,7 @@ describe("analysis-run-workflow", () => {
     expect(state.deletingRunIds).toEqual({});
   });
 
-  it("applies run events and switches the inspector to chunks when chunk summaries arrive", () => {
+  it("applies chunk summary run events without auto-switching visible companion state", () => {
     const { state, deps, workflow } = createHarness({ activeRunId: 7 });
     const payload = runEvent({
       run_id: 7,
@@ -587,7 +587,10 @@ describe("analysis-run-workflow", () => {
     workflow.handleRunEvent(payload);
 
     expect(deps.applyRunEvent).toHaveBeenCalledWith(payload);
-    expect(state.inspectorMode).toBe("chunks");
+    expect(state.inspectorMode).toBe("history");
+    expect(deps.patch).not.toHaveBeenCalledWith(expect.objectContaining({
+      inspectorMode: "chunks",
+    }));
   });
 
   it("selects and opens the event run when no run is active", () => {

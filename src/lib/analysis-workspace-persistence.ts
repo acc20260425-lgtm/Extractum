@@ -77,7 +77,9 @@ function parseSourceViewBasis(value: unknown): SourceViewBasis | null {
 }
 
 function parseCompanionTab(value: unknown): CompanionTab | null {
-  return value === "evidence" || value === "chat" || value === "runs" ? value : null;
+  return value === "evidence" || value === "chat" || value === "chunks" || value === "runs"
+    ? value
+    : null;
 }
 
 function parseHistoryScope(value: unknown): AnalysisHistoryScope | null {

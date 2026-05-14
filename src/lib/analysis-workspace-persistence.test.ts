@@ -219,6 +219,29 @@ describe("analysis-workspace-persistence", () => {
     });
   });
 
+  it("loads persisted chunks companion tab and normalizes it without an opened run", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(ANALYSIS_WORKSPACE_STATE_KEY, JSON.stringify({
+      version: 1,
+      workspaceSelection: { kind: "source", sourceId: 7 },
+      canvasMode: "report",
+      sourceViewBasis: "run_snapshot",
+      companionTab: "chunks",
+      runs: {
+        historyScope: "current",
+        runFilter: "all",
+        runsFilter: runsFilterDefaults(),
+      },
+    }));
+
+    const persisted = loadPersistedAnalysisWorkspaceState(storage);
+    expect(persisted?.companionTab).toBe("chunks");
+    expect(restoredUiStateFromPersisted(persisted!)).toMatchObject({
+      sourceViewBasis: "live_source",
+      companionTab: "runs",
+    });
+  });
+
   it("clears stale persisted source or group ids instead of selecting another scope", () => {
     expect(fallbackWorkspaceSelection(
       { kind: "source", sourceId: 99 },

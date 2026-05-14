@@ -173,6 +173,21 @@ describe("analysis-workspace-state", () => {
     });
 
     expect(normalizeRestoredWorkspaceState(baseState({
+      openRunState: { kind: "none" },
+      canvasMode: "report",
+      sourceViewBasis: "run_snapshot",
+      companionTab: "chunks",
+      selectedTraceRef: "s7-i1",
+    }))).toEqual({
+      workspaceSelection: { kind: "none" },
+      openRunState: { kind: "none" },
+      canvasMode: "report",
+      sourceViewBasis: "live_source",
+      companionTab: "runs",
+      selectedTraceRef: null,
+    });
+
+    expect(normalizeRestoredWorkspaceState(baseState({
       openRunState: { kind: "saved", runId: 42 },
       sourceViewBasis: "run_snapshot",
       companionTab: "evidence",
@@ -182,6 +197,16 @@ describe("analysis-workspace-state", () => {
       sourceViewBasis: "run_snapshot",
       companionTab: "evidence",
       selectedTraceRef: "s7-i1",
+    });
+
+    expect(normalizeRestoredWorkspaceState(baseState({
+      openRunState: { kind: "active", runId: 42 },
+      sourceViewBasis: "run_snapshot",
+      companionTab: "chunks",
+    }))).toMatchObject({
+      openRunState: { kind: "active", runId: 42 },
+      sourceViewBasis: "run_snapshot",
+      companionTab: "chunks",
     });
   });
 });

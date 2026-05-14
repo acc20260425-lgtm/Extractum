@@ -12,7 +12,7 @@ export type OpenRunState =
 
 export type CanvasMode = "report" | "source";
 export type SourceViewBasis = "live_source" | "run_snapshot";
-export type CompanionTab = "evidence" | "chat" | "runs";
+export type CompanionTab = "evidence" | "chat" | "chunks" | "runs";
 export type LegacyAnalysisScope = "single_source" | "source_group";
 
 export interface AnalysisWorkspaceUiState {
@@ -196,7 +196,9 @@ export function normalizeRestoredWorkspaceState(
     ...state,
     sourceViewBasis: "live_source",
     companionTab:
-      state.companionTab === "evidence" || state.companionTab === "chat"
+      state.companionTab === "evidence" ||
+      state.companionTab === "chat" ||
+      state.companionTab === "chunks"
         ? "runs"
         : state.companionTab,
     selectedTraceRef: null,

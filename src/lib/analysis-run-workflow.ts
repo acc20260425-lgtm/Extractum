@@ -279,10 +279,6 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
   function handleRunEvent(payload: AnalysisRunEvent) {
     deps.applyRunEvent(payload);
 
-    if (payload.chunk_summary) {
-      deps.patch({ inspectorMode: "chunks" });
-    }
-
     if (deps.getState().activeRunId === null) {
       deps.patch({ activeRunId: payload.run_id, inspectorMode: "active" });
       void openRun(payload.run_id);
