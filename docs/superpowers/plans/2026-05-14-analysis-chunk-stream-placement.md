@@ -608,7 +608,7 @@ Append a recovery checkpoint to `reference/session-context-2026-05-10-analysis-r
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-14-analysis-chunk-stream-placement.md`
 
-- [ ] **Step 1: Run targeted tests**
+- [x] **Step 1: Run targeted tests**
 
 Run:
 
@@ -616,7 +616,7 @@ Run:
 npm.cmd test -- --run src/lib/analysis-workspace-state.test.ts src/lib/analysis-workspace-persistence.test.ts src/lib/analysis-run-workflow.test.ts src/lib/analysis-run-companion-tabs.test.ts src/lib/analysis-run-companion-route.test.ts
 ```
 
-- [ ] **Step 2: Run full frontend verification**
+- [x] **Step 2: Run full frontend verification**
 
 Run:
 
@@ -626,7 +626,7 @@ npm.cmd test -- --run
 git diff --check
 ```
 
-- [ ] **Step 3: Runtime smoke if app bridge is available**
+- [x] **Step 3: Runtime smoke if app bridge is available**
 
 Try:
 
@@ -644,7 +644,7 @@ If available, verify:
 
 If no running app or fixture state is available, record the exact skipped part.
 
-- [ ] **Step 4: Record verification evidence and commit**
+- [x] **Step 4: Record verification evidence and commit**
 
 Append a `## Verification Evidence` section to this plan with exact commands and pass/fail counts.
 
@@ -681,3 +681,73 @@ Type consistency:
 - `focusedChunkSummaries` is consistently typed as `AnalysisChunkSummaryEvent[]`.
 - `selectedRunIsActive` is consistently typed as `boolean`.
 - `CompanionTab` consistently includes `"chunks"`.
+
+## Verification Evidence
+
+Task 1 RED:
+
+- `npm.cmd test -- --run src/lib/analysis-workspace-state.test.ts src/lib/analysis-workspace-persistence.test.ts src/lib/analysis-run-workflow.test.ts`
+- Result before implementation: failed in 3 expected tests:
+  - restored `"chunks"` companion tab was not normalized to `"runs"` when no run was open;
+  - persisted `"chunks"` companion tab was rejected;
+  - `chunk_summary` events still switched inspector mode to `"chunks"`.
+
+Task 1 GREEN:
+
+- `npm.cmd test -- --run src/lib/analysis-workspace-state.test.ts src/lib/analysis-workspace-persistence.test.ts src/lib/analysis-run-workflow.test.ts`
+- Result: 3 files passed, 47 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `git diff --check`: exit 0.
+
+Task 2 RED:
+
+- `npm.cmd test -- --run src/lib/analysis-run-companion-tabs.test.ts`
+- Result before implementation: failed in 2 expected raw-source tests:
+  - no `Chunks` tab contract;
+  - no compact `ChunkSummaries` companion contract.
+
+Task 2 GREEN:
+
+- `mcp__svelte_server__.list_sections`: run before Svelte component edits.
+- `mcp__svelte_server__.svelte_autofixer`:
+  - `RunCompanionTabs.svelte`: no issues.
+  - `ChunkSummaries.svelte`: no issues.
+  - `RunCompanionTabs.svelte` after safe defaults: no issues.
+- `npm.cmd test -- --run src/lib/analysis-run-companion-tabs.test.ts`
+- Result: 1 file passed, 8 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `git diff --check`: exit 0.
+
+Task 3 RED:
+
+- `npm.cmd test -- --run src/lib/analysis-run-companion-route.test.ts`
+- Result before implementation: failed in 1 expected raw-source test because the route did not import/pass `focusedRunChunkSummaries`.
+
+Task 3 GREEN:
+
+- `mcp__svelte_server__.list_sections`: run before `src/routes/analysis/+page.svelte` edit.
+- `mcp__svelte_server__.svelte_autofixer`:
+  - route wiring pattern for `+page.svelte`: no issues.
+- `npm.cmd test -- --run src/lib/analysis-run-companion-route.test.ts src/lib/analysis-run-companion-tabs.test.ts`
+- Result: 2 files passed, 15 tests passed.
+- `npm.cmd run check`: 0 errors, 0 warnings.
+- `git diff --check`: exit 0.
+
+Final targeted verification:
+
+- `npm.cmd test -- --run src/lib/analysis-workspace-state.test.ts src/lib/analysis-workspace-persistence.test.ts src/lib/analysis-run-workflow.test.ts src/lib/analysis-run-companion-tabs.test.ts src/lib/analysis-run-companion-route.test.ts`
+- Result: 5 files passed, 62 tests passed.
+
+Final full frontend verification:
+
+- `npm.cmd run check`
+- Result: 0 errors, 0 warnings.
+- `npm.cmd test -- --run`
+- Result: 50 files passed, 411 tests passed.
+- `git diff --check`
+- Result: exit 0, no output.
+
+Runtime smoke:
+
+- `mcp__tauri__.driver_session action=start port=9223`
+- Result: skipped because no running Tauri app was available: `Session start failed - no Tauri app found at localhost or localhost:9223`.
