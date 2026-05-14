@@ -271,7 +271,7 @@
         />
       {:else if snapshotReaderItems.some((item) => item.kind === "youtube_transcript")}
         <YoutubeTranscriptReader
-          detail={youtubeVideoDetail}
+          detail={null}
           segments={[]}
           snapshotItems={snapshotReaderItems}
           loading={loadingRunSnapshotMessages}

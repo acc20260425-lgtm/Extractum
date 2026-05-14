@@ -119,6 +119,14 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(currentSource.id)}");
   });
 
+  it("keeps run snapshot YouTube readers detached from live video detail", () => {
+    expect(reportSourceSurfaceSource).toContain("detail={null}");
+    expect(reportSourceSurfaceSource.match(/detail=\{youtubeVideoDetail\}/g)).toHaveLength(1);
+    expect(reportSourceSurfaceSource).toContain(
+      'sourceTitle={currentSource.title ?? currentSource.externalId}',
+    );
+  });
+
   it("restores live YouTube video comments sync status and activity in transcript reader", () => {
     expect(youtubeTranscriptSource).toContain("onSyncComments");
     expect(youtubeTranscriptSource).toContain("sourceJobs");
