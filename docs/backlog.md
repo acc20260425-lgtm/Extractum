@@ -8,6 +8,7 @@
 - Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
 - Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
 - Takeout source import needs broader live validation, incomplete-batch provenance, and a migrated-history identity decision.
+- Database schema simplification needs a source/item identity cleanup plan before more provider expansion.
 - YouTube live-provider coverage needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Large saved-run archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
@@ -33,6 +34,7 @@
 | Telegram runtime validation | predictable behavior across real supported dialogs and accounts |
 | Account deletion coordination | deletion cannot race active ingest or analysis work |
 | Takeout source import | validated across source kinds with explicit incomplete-import provenance |
+| Database schema simplification | canonical source identity, provider-native item identity, and current-schema baseline |
 | YouTube source ingest | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | fast narrowing for large saved-run histories |
 | Analysis workspace parity | run-open NotebookLM export plus template and source-group management access |
@@ -96,7 +98,31 @@ Acceptance:
 - Export DC fallback and only-my-messages fallback warnings remain visible in job state.
 - Migrated supergroup history has a safe identity policy before import is enabled.
 
-### 4.4 Saved Runs Discoverability And Cleanup
+### 4.4 Database Schema Simplification
+
+Priority: high.
+
+Analysis:
+
+- Full findings are recorded in `docs/database-schema-legacy-analysis.md`.
+
+- [ ] make `source_subtype` the canonical provider subtype and retire normal-path `telegram_source_kind` usage
+- [ ] move high-value Telegram and YouTube identity metadata out of `metadata_zstd` into typed provider tables
+- [ ] replace `(source_id, external_id)` as the only item identity with provider-native identity and at least `(source_id, item_kind, external_id)` uniqueness
+- [ ] introduce a provider-neutral document/corpus layer for analysis and export text units
+- [ ] materialize Telegram forum topic membership instead of recomputing it in reader/export joins
+- [ ] harden analysis snapshots so new runs persist non-null provider/document fields before provider execution
+- [ ] simplify YouTube playlist entries by using stable video entities or always materialized video rows with availability state
+- [ ] add a current-schema baseline for fresh installs and isolate legacy migration/checksum repair paths
+
+Acceptance:
+
+- New provider work does not need to touch legacy Telegram subtype compatibility.
+- Migrated Telegram history has a safe duplicate-detection model.
+- Analysis and NotebookLM export read stable document rows without provider-specific item-table branching for normal cases.
+- Fresh installs start from a clean current schema while existing databases still upgrade safely.
+
+### 4.5 Saved Runs Discoverability And Cleanup
 
 Priority: medium.
 
@@ -106,7 +132,7 @@ Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-### 4.5 Analysis Workspace Parity
+### 4.6 Analysis Workspace Parity
 
 Priority: high.
 
@@ -120,7 +146,7 @@ Acceptance:
 - Opening a current or saved analysis run does not hide prompt template or source group management.
 - The setup/no-run path keeps the same management actions it has today.
 
-### 4.6 NotebookLM Export Follow-Ups
+### 4.7 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -130,7 +156,7 @@ Priority: medium.
 - [ ] decide whether export needs full Forum Topics names/grouping beyond stored `reply_to_top_id`
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 4.7 YouTube Source Follow-Ups
+### 4.8 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -147,7 +173,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 4.8 Media Download, Preview, And Analysis
+### 4.9 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -165,7 +191,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 4.9 Stabilization
+### 4.10 Stabilization
 
 Priority: medium.
 
@@ -190,8 +216,9 @@ Priority: medium.
 1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
 2. Close account-deletion coordination before more long-running ingest expansion.
 3. Validate Takeout import across representative source kinds and decide incomplete-import provenance.
-4. Decide whether saved-run history needs richer filters before media expansion.
-5. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
-6. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
-7. Continue media download/preview and media-aware analysis design.
-8. Tighten verification, CI, and dependency pinning.
+4. Design the database schema simplification path before adding more provider surface.
+5. Decide whether saved-run history needs richer filters before media expansion.
+6. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
+7. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
+8. Continue media download/preview and media-aware analysis design.
+9. Tighten verification, CI, and dependency pinning.
