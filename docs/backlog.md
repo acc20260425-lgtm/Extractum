@@ -11,6 +11,7 @@
 - YouTube live-provider coverage needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Large saved-run archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
+- Analysis workspace parity still needs run-open access to NotebookLM export, prompt template management, and source group management.
 - NotebookLM export follow-ups remain open for optional link enrichment, source-group export, forward metadata, and richer forum-topic grouping.
 - YouTube-specific NotebookLM export enrichment remains open.
 - Full Telegram Forum Topics browsing/export and forward metadata are not modeled yet.
@@ -34,6 +35,7 @@
 | Takeout source import | validated across source kinds with explicit incomplete-import provenance |
 | YouTube source ingest | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | fast narrowing for large saved-run histories |
+| Analysis workspace parity | run-open NotebookLM export plus template and source-group management access |
 | Media support | optional download/preview and controlled media-aware analysis |
 | NotebookLM export | optional enrichment and source-group export if needed |
 | Stabilization | repeatable baseline plus dependency upgrade policy |
@@ -104,7 +106,21 @@ Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-### 4.5 NotebookLM Export Follow-Ups
+### 4.5 Analysis Workspace Parity
+
+Priority: high.
+
+- [ ] keep `Export for NotebookLM` reachable when an analysis run is open
+- [ ] keep prompt template management reachable when an analysis run is open
+- [ ] keep source group management reachable when an analysis run is open
+
+Acceptance:
+
+- Opening a current or saved analysis run does not hide NotebookLM export.
+- Opening a current or saved analysis run does not hide prompt template or source group management.
+- The setup/no-run path keeps the same management actions it has today.
+
+### 4.6 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -114,7 +130,7 @@ Priority: medium.
 - [ ] decide whether export needs full Forum Topics names/grouping beyond stored `reply_to_top_id`
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 4.6 YouTube Source Follow-Ups
+### 4.7 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -131,7 +147,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 4.7 Media Download, Preview, And Analysis
+### 4.8 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -149,7 +165,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 4.8 Stabilization
+### 4.9 Stabilization
 
 Priority: medium.
 
@@ -175,6 +191,7 @@ Priority: medium.
 2. Close account-deletion coordination before more long-running ingest expansion.
 3. Validate Takeout import across representative source kinds and decide incomplete-import provenance.
 4. Decide whether saved-run history needs richer filters before media expansion.
-5. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
-6. Continue media download/preview and media-aware analysis design.
-7. Tighten verification, CI, and dependency pinning.
+5. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
+6. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
+7. Continue media download/preview and media-aware analysis design.
+8. Tighten verification, CI, and dependency pinning.
