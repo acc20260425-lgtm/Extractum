@@ -37,6 +37,18 @@ describe("compact analysis source rail", () => {
     expect(sourceSwitcherPanelSource).toContain("onDeleteSource(source)");
   });
 
+  it("keeps detailed Takeout import progress in the expanded source panel", () => {
+    expect(sourceSwitcherPanelSource).toContain("takeoutProgressLabel(takeoutJob)");
+    expect(sourceSwitcherPanelSource).toContain("takeoutProgressValue(takeoutJob)");
+    expect(sourceSwitcherPanelSource).toContain("takeoutSummary(takeoutJob)");
+    expect(sourceSwitcherPanelSource).toContain('class:terminal={!takeoutActive}');
+    expect(sourceSwitcherPanelSource).toContain('<progress max="100" value={progressValue}');
+    expect(sourceSwitcherPanelSource).toContain("<progress></progress>");
+    expect(sourceSwitcherPanelSource).toContain("takeoutJob.error");
+    expect(sourceSwitcherPanelSource).toContain("takeout-issue");
+    expect(sourceSwitcherPanelSource).toContain("takeoutJob.warnings.length");
+  });
+
   it("keeps YouTube video duration visible in expanded source metadata", () => {
     expect(sourceSwitcherPanelSource).toContain("formatDuration(summary.durationSeconds)");
     expect(sourceSwitcherPanelSource).toContain("youtubeMetaLine(youtubeSummary)");

@@ -119,6 +119,34 @@
     return "info";
   }
 
+  function takeoutProgressLabel(job: TakeoutImportJobRecord) {
+    if (job.progress_current !== null && job.progress_total !== null) {
+      return `${job.progress_current}/${job.progress_total}`;
+    }
+    if (job.status === "completed") {
+      return "done";
+    }
+    if (job.status === "failed" || job.status === "cancelled") {
+      return job.status;
+    }
+    return "pending";
+  }
+
+  function takeoutProgressValue(job: TakeoutImportJobRecord) {
+    if (
+      job.progress_current === null ||
+      job.progress_total === null ||
+      job.progress_total <= 0
+    ) {
+      return null;
+    }
+    return Math.min(100, Math.max(0, Math.round((job.progress_current / job.progress_total) * 100)));
+  }
+
+  function takeoutSummary(job: TakeoutImportJobRecord) {
+    return `${job.inserted} inserted, ${job.skipped} skipped`;
+  }
+
   function availabilityLabel(value: string | null) {
     return value ? value.replaceAll("_", " ") : null;
   }
@@ -336,9 +364,33 @@
             </div>
 
             {#if takeoutJob}
-              <div class="takeout-status">
-                <span>{takeoutPhaseName(takeoutJob.phase)}</span>
-                <span>{takeoutJob.message ?? takeoutJob.error ?? `${takeoutJob.inserted} inserted, ${takeoutJob.skipped} skipped`}</span>
+              {@const progressValue = takeoutProgressValue(takeoutJob)}
+              <div class="takeout-status" class:terminal={!takeoutActive}>
+                <div class="takeout-status-line">
+                  <span>{takeoutPhaseName(takeoutJob.phase)}</span>
+                  <span>{takeoutProgressLabel(takeoutJob)}</span>
+                </div>
+                {#if progressValue !== null}
+                  <progress max="100" value={progressValue}>{progressValue}%</progress>
+                {:else if takeoutActive}
+                  <progress></progress>
+                {/if}
+                <div class="takeout-status-meta">
+                  <span>{takeoutSummary(takeoutJob)}</span>
+                  {#if takeoutJob.message}
+                    <span>{takeoutJob.message}</span>
+                  {/if}
+                </div>
+                {#if takeoutJob.error}
+                  <div class="takeout-issue error">{takeoutJob.error}</div>
+                {/if}
+                {#if takeoutJob.warnings.length > 0}
+                  <div class="takeout-issue">
+                    {takeoutJob.warnings.length === 1
+                      ? takeoutJob.warnings[0]
+                      : `${takeoutJob.warnings.length} warnings. First: ${takeoutJob.warnings[0]}`}
+                  </div>
+                {/if}
               </div>
             {/if}
 
@@ -558,6 +610,61 @@
     border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
     border-radius: 8px;
     background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+  }
+
+  .takeout-status {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+    background: color-mix(in srgb, var(--primary) 7%, var(--panel));
+  }
+
+  .takeout-status.terminal {
+    border-color: color-mix(in srgb, var(--border) 84%, transparent);
+    background: color-mix(in srgb, var(--panel-hover) 60%, var(--panel));
+  }
+
+  .takeout-status-line,
+  .takeout-status-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .takeout-status-line span {
+    color: var(--text);
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .takeout-status-meta {
+    flex-wrap: wrap;
+  }
+
+  .takeout-status-meta span,
+  .takeout-issue {
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .takeout-status progress {
+    width: 100%;
+    height: 0.45rem;
+    accent-color: var(--primary);
+  }
+
+  .takeout-issue {
+    padding-top: 0.2rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    color: #b45309;
+  }
+
+  .takeout-issue.error {
+    color: var(--danger);
   }
 
   .panel-empty.subtle {
