@@ -33,7 +33,7 @@ describe("source capabilities", () => {
     expect(capabilities).toEqual({
       canSync: true,
       canDelete: true,
-      canImportArchive: false,
+      canImportArchive: true,
       hasTopics: false,
       requiresAccount: true,
       hasMembershipState: true,
@@ -42,6 +42,15 @@ describe("source capabilities", () => {
     expect(sourceKindLabel(source({}))).toBe("channel");
     expect(membershipLabel(source({ isMember: true }))).toBe("subscribed");
     expect(membershipLabel(source({ isMember: false }))).toBe("not subscribed");
+  });
+
+  it("allows Takeout import for every Telegram source kind", () => {
+    for (const telegramSourceKind of ["channel", "supergroup", "group"] as const) {
+      expect(sourceCapabilities(source({
+        sourceSubtype: telegramSourceKind,
+        telegramSourceKind,
+      })).canImportArchive).toBe(true);
+    }
   });
 
   it("marks Telegram supergroups as topic and Takeout capable", () => {

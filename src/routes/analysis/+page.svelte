@@ -2493,6 +2493,7 @@
     onCancelTakeoutImport={(jobId) => void cancelTakeoutImport(jobId)}
     onCancelSourceJob={(jobId) => void cancelYoutubeSourceJob(jobId)}
     onOpenSourceManager={() => (sourceManagerOpen = true)}
+    onDeleteSource={(source) => void deleteSource(source)}
   />
 
   <ReportCanvas

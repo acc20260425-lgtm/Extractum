@@ -34,6 +34,7 @@ describe("compact analysis source rail", () => {
     expect(sourceSwitcherPanelSource).toContain("sourceJobsBySource");
     expect(sourceSwitcherPanelSource).toContain("onSyncSource(source.id)");
     expect(sourceSwitcherPanelSource).toContain("onStartTakeoutImport(source.id)");
+    expect(sourceSwitcherPanelSource).toContain("onDeleteSource(source)");
   });
 
   it("keeps YouTube video duration visible in expanded source metadata", () => {
@@ -59,8 +60,13 @@ describe("compact analysis source rail", () => {
     expect(compactRailSource).toContain("selectGroupAndClose");
   });
 
-  it("keeps destructive source deletion out of quick switch rows", () => {
-    expect(sourceSwitcherPanelSource).not.toContain("onDeleteSource(source)");
+  it("keeps destructive source deletion out of the compact rail but available in the expanded panel", () => {
+    expect(compactRailSource).toContain("onDeleteSource");
+    expect(compactRailSource).toContain("{onDeleteSource}");
+    expect(compactRailSource).not.toContain("onDeleteSource(source)");
+    expect(sourceSwitcherPanelSource).toContain("onDeleteSource: (source: Source) => void");
+    expect(sourceSwitcherPanelSource).toContain("onDeleteSource(source)");
+    expect(sourceSwitcherPanelSource).toContain("Delete");
     expect(sourceSwitcherPanelSource).toContain("Manage sources");
   });
 

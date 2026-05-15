@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Archive, ExternalLink, Plus, RefreshCw, Search, Square } from "@lucide/svelte";
+  import { Archive, ExternalLink, Plus, RefreshCw, Search, Square, Trash2 } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -42,6 +42,7 @@
     onCancelTakeoutImport,
     onCancelSourceJob,
     onOpenSourceManager,
+    onDeleteSource,
     onClose,
   }: {
     sourceCatalog: Source[];
@@ -74,6 +75,7 @@
     onCancelTakeoutImport: (jobId: string) => void;
     onCancelSourceJob: (jobId: string) => void;
     onOpenSourceManager: () => void;
+    onDeleteSource: (source: Source) => void;
     onClose: () => void;
   } = $props();
 
@@ -214,6 +216,7 @@
           {@const youtubeSummary = source.sourceType === "youtube" ? youtubeSummaries[source.id] ?? null : null}
           {@const providerMetaLine = youtubeSummary ? youtubeMetaLine(youtubeSummary) : telegramMetaLine(source)}
           {@const sourceJobs = sourceJobsBySource[source.id] ?? []}
+          {@const sourceJobActive = sourceJobs.some(isActiveSourceJob)}
           {@const takeoutJob = takeoutJobsBySource[source.id]}
           {@const takeoutActive = isActiveTakeoutJob(takeoutJob)}
           {@const deleting = !!deletingSourceIds[source.id]}
@@ -317,6 +320,18 @@
                     {startingTakeoutSourceIds[source.id] ? "Starting..." : "Takeout"}
                   </Button>
                 {/if}
+              {/if}
+              {#if capabilities.canDelete}
+                <Button
+                  size="sm"
+                  variant="danger-soft"
+                  onclick={() => onDeleteSource(source)}
+                  disabled={deleting || !!syncingIds[source.id] || takeoutActive || sourceJobActive}
+                  title={takeoutActive ? "Takeout import is active." : sourceJobActive ? "Source job is active." : undefined}
+                >
+                  <Trash2 size={13} aria-hidden="true" />
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
               {/if}
             </div>
 

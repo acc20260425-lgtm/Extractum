@@ -40,6 +40,7 @@
     onCancelTakeoutImport,
     onCancelSourceJob,
     onOpenSourceManager,
+    onDeleteSource,
   }: {
     sourceCatalog: Source[];
     groups: AnalysisSourceGroup[];
@@ -71,6 +72,7 @@
     onCancelTakeoutImport: (jobId: string) => void;
     onCancelSourceJob: (jobId: string) => void;
     onOpenSourceManager: () => void;
+    onDeleteSource: (source: Source) => void;
   } = $props();
 
   let sourceSwitcherOpen = $state(false);
@@ -321,6 +323,7 @@
       {onCancelTakeoutImport}
       {onCancelSourceJob}
       {onOpenSourceManager}
+      {onDeleteSource}
       onClose={() => (sourceSwitcherOpen = false)}
     />
   {/if}

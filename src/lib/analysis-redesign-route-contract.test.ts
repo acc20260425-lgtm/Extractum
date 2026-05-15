@@ -19,6 +19,7 @@ describe("analysis redesign final route contract", () => {
       'import RunCompanionTabs from "$lib/components/analysis/run-companion-tabs.svelte";',
     );
     expect(analysisPageSource).toContain("<CompactSourceRail");
+    expect(analysisPageSource).toContain("onDeleteSource={(source) => void deleteSource(source)}");
     expect(analysisPageSource).toContain("<ReportCanvas");
     expect(analysisPageSource).toContain("<RunCompanionTabs");
     expect(analysisPageSource).toContain('class="analysis-workspace"');

@@ -21,7 +21,7 @@ export function sourceCapabilities(source: Source): SourceCapabilities {
     return {
       canSync: true,
       canDelete: true,
-      canImportArchive: kind === "supergroup",
+      canImportArchive: kind !== null,
       hasTopics: kind === "supergroup",
       requiresAccount: true,
       hasMembershipState: true,
