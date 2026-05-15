@@ -4,6 +4,8 @@ import reportRunHeaderSource from "./components/analysis/report-run-header.svelt
 import reportSetupPanelSource from "./components/analysis/report-setup-panel.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
+import reportViewerSource from "./components/analysis/report-viewer.svelte?raw";
+import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 import runSnapshotMessagesPanelSource from "./components/analysis/run-snapshot-messages-panel.svelte?raw";
 
 const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
@@ -105,5 +107,17 @@ describe("report canvas component contract", () => {
     expect(runSnapshotMessagesPanelSource).toContain("hasMoreRunSnapshotMessages");
     expect(runSnapshotMessagesPanelSource).not.toContain("listSourceItems");
     expect(runSnapshotMessagesPanelSource).not.toContain("SourceMessagesPanel");
+  });
+
+  it("keeps source-group run snapshots pageable through the grouped reader", () => {
+    expect(sourceGroupReaderSource).toContain("hasMoreAll");
+    expect(reportSourceSurfaceSource).toContain("hasMoreAll={hasMoreRunSnapshotMessages}");
+    expect(reportSourceSurfaceSource).not.toContain("hasMoreBySource={{}}");
+  });
+
+  it("uses real chat availability in the report toolbar", () => {
+    expect(reportCanvasSource).toContain("{chatAvailability}");
+    expect(reportViewerSource).toContain("chatAvailability");
+    expect(reportViewerSource).not.toContain('currentRun?.status === "completed" ? "Chat ready"');
   });
 });

@@ -214,6 +214,19 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("onChangeSelectedSourceId={onChangeSelectedGroupSourceId}");
   });
 
+  it("builds live source-group focus options from every group member", () => {
+    expect(reportSourceSurfaceSource).toContain("sourceFilterOptionsFromGroupMembers");
+    expect(reportSourceSurfaceSource).toContain("sourceOptions={analysisScope === \"source_group\" ? liveGroupSourceOptions : []}");
+    expect(reportSourceSurfaceSource).not.toContain("sourceFilterOptions(groupLiveReaderItems)");
+  });
+
+  it("keeps run snapshot focus options based on the whole loaded snapshot page", () => {
+    expect(reportSourceSurfaceSource).toContain("const allSnapshotReaderItems");
+    expect(reportSourceSurfaceSource).toContain("sourceFilterOptionsFromReaderItems(allSnapshotReaderItems)");
+    expect(reportSourceSurfaceSource).toContain("allSnapshotReaderItems.filter");
+    expect(reportSourceSurfaceSource).not.toContain("sourceFilterOptionsFromReaderItems(snapshotReaderItems)");
+  });
+
   it("keeps source focus controls in one reader header location", () => {
     expect(sourceReaderHeaderSource).toContain("<span>Source focus</span>");
     expect(sourceGroupReaderSource).not.toContain("<span>Source focus</span>");

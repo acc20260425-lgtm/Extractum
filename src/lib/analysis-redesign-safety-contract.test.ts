@@ -13,6 +13,7 @@ import runsTabSource from "./components/analysis/run-companion-runs-tab.svelte?r
 import reportRunHeaderSource from "./components/analysis/report-run-header.svelte?raw";
 import runCompanionStateSource from "./analysis-run-companion-state.ts?raw";
 import analysisUtilsSource from "./analysis-utils.ts?raw";
+import analysisTypesSource from "./types/analysis.ts?raw";
 import workspaceStateSource from "./analysis-workspace-state.ts?raw";
 import chatBackendSource from "../../src-tauri/src/analysis/chat.rs?raw";
 import corpusBackendSource from "../../src-tauri/src/analysis/corpus.rs?raw";
@@ -139,5 +140,10 @@ describe("analysis redesign final safety contract", () => {
   it("uses stable run filter normalization instead of locale-sensitive casing", () => {
     expect(runCompanionStateSource).toContain(".toLowerCase()");
     expect(runCompanionStateSource).not.toContain(".toLocaleLowerCase()");
+  });
+
+  it("keeps frontend run DTOs aligned with serialized backend fields", () => {
+    expect(analysisTypesSource).not.toContain("scope_label_snapshot");
+    expect(storeBackendSource).toContain("scope_label_snapshot");
   });
 });

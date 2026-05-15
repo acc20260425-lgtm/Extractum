@@ -1,5 +1,6 @@
 <script lang="ts">
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import { groupReaderItemsBySource, type SourceReaderItem } from "$lib/source-reader-model";
@@ -9,18 +10,24 @@
     items,
     selectedGroupSourceId,
     loading,
-    hasMoreBySource,
+    hasMoreBySource = {},
+    hasMoreAll = false,
+    loadMoreAllLabel = "Load more source material",
     youtubeDetailsBySource,
     formatTimestamp,
     onLoadMoreSource,
+    onLoadMoreAll = () => {},
   }: {
     items: SourceReaderItem[];
     selectedGroupSourceId: number | null;
     loading: boolean;
-    hasMoreBySource: Record<number, boolean>;
+    hasMoreBySource?: Record<number, boolean>;
+    hasMoreAll?: boolean;
+    loadMoreAllLabel?: string;
     youtubeDetailsBySource: Record<number, YoutubeVideoDetail | null>;
     formatTimestamp: (value: number | null) => string;
     onLoadMoreSource: (sourceId: number) => void | Promise<void>;
+    onLoadMoreAll?: () => void | Promise<void>;
   } = $props();
 
   const sourceGroups = $derived(
@@ -76,6 +83,19 @@
         {/if}
       </section>
     {/each}
+
+    {#if hasMoreAll}
+      <div class="source-group-footer">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={loading}
+          onclick={onLoadMoreAll}
+        >
+          {loading ? "Loading..." : loadMoreAllLabel}
+        </Button>
+      </div>
+    {/if}
   {/if}
 </section>
 
@@ -108,6 +128,11 @@
   .source-heading span {
     color: var(--muted);
     font-size: 0.82rem;
+  }
+
+  .source-group-footer {
+    display: flex;
+    justify-content: center;
   }
 
   @media (max-width: 760px) {

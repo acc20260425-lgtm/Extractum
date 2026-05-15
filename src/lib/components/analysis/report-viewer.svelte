@@ -7,11 +7,18 @@
   import MetaCell from "$lib/components/ui/MetaCell.svelte";
   import PanelHeader from "$lib/components/ui/PanelHeader.svelte";
   import RefChip from "$lib/components/ui/RefChip.svelte";
+  import type { ChatAvailability } from "$lib/analysis-run-companion-state";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
 
   let {
     currentRun,
+    chatAvailability = {
+      enabled: false,
+      reason: "no_run",
+      title: "Open a completed run",
+      description: "Follow-up chat is available after a saved report is open.",
+    },
     loadingRunDetail,
     streamedOutput,
     traceRefCount,
@@ -28,6 +35,7 @@
     onCancelCurrentRun,
   }: {
     currentRun: AnalysisRunDetail | null;
+    chatAvailability?: ChatAvailability;
     loadingRunDetail: boolean;
     streamedOutput: string;
     traceRefCount: number;
@@ -117,8 +125,8 @@
         {toolbarStatusLabel()}
       </Badge>
       <Badge variant="neutral">{traceRefCount} trace refs</Badge>
-      <Badge variant={currentRun?.status === "completed" ? "success" : "neutral"}>
-        {currentRun?.status === "completed" ? "Chat ready" : "Chat unlocks after completion"}
+      <Badge variant={chatAvailability.enabled ? "success" : "neutral"}>
+        {chatAvailability.enabled ? "Chat ready" : chatAvailability.title}
       </Badge>
       {#if liveProgress}
         <Badge variant="info">Progress {liveProgress}</Badge>

@@ -6,7 +6,9 @@ describe("analysis source reader route wiring", () => {
     expect(analysisPageSource).toContain("groupLiveItemsBySource");
     expect(analysisPageSource).toContain("loadLiveGroupSourcePage");
     expect(analysisPageSource).toContain("selectedGroupSourceId");
-    expect(analysisPageSource).toContain("onChangeSelectedGroupSourceId={(sourceId) =>");
+    expect(analysisPageSource).toContain("function changeSelectedGroupSourceId");
+    expect(analysisPageSource).toContain("void loadLiveGroupSourcePage(sourceId)");
+    expect(analysisPageSource).toContain("onChangeSelectedGroupSourceId={changeSelectedGroupSourceId}");
     expect(analysisPageSource).not.toContain("clearCurrentRunForWorkspaceSwitch(sourceId");
   });
 

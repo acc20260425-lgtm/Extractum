@@ -5,6 +5,8 @@ import {
   groupYoutubeTranscriptItems,
   groupReaderItemsByDay,
   groupReaderItemsBySource,
+  sourceFilterOptionsFromGroupMembers,
+  sourceFilterOptionsFromReaderItems,
   sourceItemToReaderItem,
   youtubeSegmentToReaderItem,
   youtubeTimestampUrl,
@@ -223,6 +225,37 @@ describe("source reader model", () => {
       "https://www.youtube.com/watch?v=v1&t=754",
     );
     expect(youtubeTimestampUrl("not a url", 754)).toBeNull();
+  });
+
+  it("builds source focus options from loaded reader items", () => {
+    const options = sourceFilterOptionsFromReaderItems([
+      analysisRunMessageToReaderItem(runMessage({ source_id: 2, ref: "s2-i1" }), {
+        sourceTitle: "Source 2",
+      }),
+      analysisRunMessageToReaderItem(runMessage({ source_id: 1, ref: "s1-i1" }), {
+        sourceTitle: "Source 1",
+      }),
+      analysisRunMessageToReaderItem(runMessage({ source_id: 2, ref: "s2-i2" }), {
+        sourceTitle: "Source 2",
+      }),
+    ]);
+
+    expect(options).toEqual([
+      { id: 1, label: "Source 1", count: 1 },
+      { id: 2, label: "Source 2", count: 2 },
+    ]);
+  });
+
+  it("builds source focus options from every group member even before items load", () => {
+    const options = sourceFilterOptionsFromGroupMembers([
+      { source_id: 8, source_title: "Loaded", item_count: 10 },
+      { source_id: 9, source_title: "Not loaded yet", item_count: 20 },
+    ]);
+
+    expect(options).toEqual([
+      { id: 8, label: "Loaded", count: 10 },
+      { id: 9, label: "Not loaded yet", count: 20 },
+    ]);
   });
 
   it("joins nearby short YouTube transcript segments into one reading group", () => {

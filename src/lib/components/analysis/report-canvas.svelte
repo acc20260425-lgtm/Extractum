@@ -12,6 +12,7 @@
     CanvasMode,
     SourceViewBasis,
   } from "$lib/analysis-workspace-state";
+  import type { ChatAvailability } from "$lib/analysis-run-companion-state";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
@@ -89,6 +90,7 @@
     selectedGroupId,
     currentScopeHasSavedRuns,
     currentRun,
+    chatAvailability,
     loadingRunDetail,
     selectedRunIsActive,
     activeProgress,
@@ -227,6 +229,7 @@
     selectedGroupId: string;
     currentScopeHasSavedRuns: boolean;
     currentRun: AnalysisRunDetail | null;
+    chatAvailability: ChatAvailability;
     loadingRunDetail: boolean;
     selectedRunIsActive: boolean;
     activeProgress: string;
@@ -388,6 +391,7 @@
       />
       <ReportViewer
         {currentRun}
+        {chatAvailability}
         {loadingRunDetail}
         streamedOutput={focusedStreamedOutput}
         {traceRefCount}

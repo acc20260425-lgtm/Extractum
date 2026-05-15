@@ -1546,6 +1546,19 @@
     }
   }
 
+  function changeSelectedGroupSourceId(sourceId: number | null) {
+    selectedGroupSourceId = sourceId;
+    if (
+      sourceId !== null &&
+      analysisScope === "source_group" &&
+      workspaceUiState.canvasMode === "source" &&
+      workspaceUiState.sourceViewBasis === "live_source" &&
+      !groupLiveItemsBySource[sourceId]
+    ) {
+      void loadLiveGroupSourcePage(sourceId);
+    }
+  }
+
   async function selectSource(
     sourceId: number,
     { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
@@ -2480,6 +2493,7 @@
     {selectedGroupId}
     {currentScopeHasSavedRuns}
     {currentRun}
+    {chatAvailability}
     {loadingRunDetail}
     {selectedRunIsActive}
     {activeProgress}
@@ -2531,7 +2545,7 @@
     onChangeTranscriptSearch={changeYoutubeTranscriptSearch}
     onLoadMoreYoutubeTranscriptSegments={() => void loadMoreYoutubeTranscriptSegments()}
     onLoadLiveGroupSourcePage={(sourceId) => void loadLiveGroupSourcePage(sourceId)}
-    onChangeSelectedGroupSourceId={(sourceId) => (selectedGroupSourceId = sourceId)}
+    onChangeSelectedGroupSourceId={changeSelectedGroupSourceId}
     onChangeSelectedSnapshotSourceId={changeSelectedSnapshotSourceId}
     onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}
     onChangePeriodFrom={(value) => (periodFrom = value)}

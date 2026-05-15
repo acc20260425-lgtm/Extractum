@@ -1,4 +1,4 @@
-import type { AnalysisRunMessage } from "$lib/types/analysis";
+import type { AnalysisRunMessage, AnalysisSourceGroupMember } from "$lib/types/analysis";
 import type { SourceItem, YoutubeTranscriptSegment } from "$lib/types/sources";
 
 export type SourceReaderBasis = "live_source" | "run_snapshot";
@@ -48,6 +48,12 @@ export interface SourceReaderSourceGroup {
   sourceId: number;
   sourceTitle: string;
   items: SourceReaderItem[];
+}
+
+export interface SourceFilterOption {
+  id: number;
+  label: string;
+  count: number;
 }
 
 export interface YoutubeTranscriptGroup {
@@ -192,6 +198,27 @@ export function groupReaderItemsBySource(items: SourceReaderItem[]): SourceReade
       sourceTitle: groupedItems[0]?.sourceTitle ?? `Source ${sourceId}`,
       items: groupedItems,
     }));
+}
+
+export function sourceFilterOptionsFromReaderItems(items: SourceReaderItem[]): SourceFilterOption[] {
+  const counts = new Map<number, { label: string; count: number }>();
+  for (const item of items) {
+    const current = counts.get(item.sourceId) ?? { label: item.sourceTitle, count: 0 };
+    counts.set(item.sourceId, { label: current.label, count: current.count + 1 });
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([id, value]) => ({ id, label: value.label, count: value.count }));
+}
+
+export function sourceFilterOptionsFromGroupMembers(
+  members: Array<Pick<AnalysisSourceGroupMember, "source_id" | "source_title" | "item_count">>,
+): SourceFilterOption[] {
+  return members.map((member) => ({
+    id: member.source_id,
+    label: member.source_title ?? `Source ${member.source_id}`,
+    count: member.item_count,
+  }));
 }
 
 export function groupYoutubeTranscriptItems(items: SourceReaderItem[]): YoutubeTranscriptGroup[] {

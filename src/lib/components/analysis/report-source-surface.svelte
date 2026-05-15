@@ -17,8 +17,9 @@
   import type { AnalysisScope } from "$lib/analysis-scope-state";
   import {
     analysisRunMessageToReaderItem,
+    sourceFilterOptionsFromGroupMembers,
+    sourceFilterOptionsFromReaderItems,
     sourceItemToReaderItem,
-    type SourceReaderItem,
   } from "$lib/source-reader-model";
   import type {
     AnalysisRunDetail,
@@ -161,9 +162,8 @@
       }),
     ),
   );
-  const snapshotReaderItems = $derived.by(() =>
+  const allSnapshotReaderItems = $derived.by(() =>
     runSnapshotMessages
-      .filter((message) => selectedSnapshotSourceId === null || message.source_id === selectedSnapshotSourceId)
       .map((message) =>
         analysisRunMessageToReaderItem(message, {
           sourceTitle: sourceTitleForSnapshotMessage(message.source_id),
@@ -171,12 +171,25 @@
         }),
       ),
   );
+  const snapshotReaderItems = $derived.by(() =>
+    selectedSnapshotSourceId === null
+      ? allSnapshotReaderItems
+      : allSnapshotReaderItems.filter((item) => item.sourceId === selectedSnapshotSourceId),
+  );
   const groupLiveReaderItems = $derived.by(() =>
     Object.entries(groupLiveItemsBySource).flatMap(([sourceId, items]) => {
       const source = groupMemberSource(Number(sourceId));
       const sourceTitle = source?.source_title ?? `Source ${sourceId}`;
       return items.map((item) => sourceItemToReaderItem(item, { sourceTitle, selectedTraceRef }));
     }),
+  );
+  const snapshotSourceOptions = $derived.by(() =>
+    sourceFilterOptionsFromReaderItems(allSnapshotReaderItems),
+  );
+  const liveGroupSourceOptions = $derived.by(() =>
+    currentGroup
+      ? sourceFilterOptionsFromGroupMembers(currentGroup.members)
+      : [],
   );
   const displayScopeTitle = $derived(currentScopeTitle ?? fallbackScopeTitle());
   const readerSurfaceLabel = $derived(analysisScope === "source_group" ? "Group sources" : "Source material");
@@ -200,17 +213,6 @@
 
   function groupMemberSource(sourceId: number) {
     return currentGroup?.members.find((member) => member.source_id === sourceId) ?? null;
-  }
-
-  function sourceFilterOptions(items: SourceReaderItem[]) {
-    const counts = new Map<number, { label: string; count: number }>();
-    for (const item of items) {
-      const current = counts.get(item.sourceId) ?? { label: item.sourceTitle, count: 0 };
-      counts.set(item.sourceId, { label: current.label, count: current.count + 1 });
-    }
-    return [...counts.entries()]
-      .sort(([left], [right]) => left - right)
-      .map(([id, value]) => ({ id, label: value.label, count: value.count }));
   }
 
   function compareTopics(left: SourceForumTopic, right: SourceForumTopic) {
@@ -253,7 +255,7 @@
         canViewLiveSource={!!currentRun}
         canBackToRunSnapshot={false}
         selectedSourceId={selectedSnapshotSourceId}
-        sourceOptions={sourceFilterOptions(snapshotReaderItems)}
+        sourceOptions={snapshotSourceOptions}
         {onViewLiveSource}
         {onBackToRunSnapshot}
         onChangeSelectedSourceId={onChangeSelectedSnapshotSourceId}
@@ -264,10 +266,12 @@
           items={snapshotReaderItems}
           selectedGroupSourceId={selectedSnapshotSourceId}
           loading={loadingRunSnapshotMessages}
-          hasMoreBySource={{}}
+          hasMoreAll={hasMoreRunSnapshotMessages}
+          loadMoreAllLabel="Load older snapshot messages"
           youtubeDetailsBySource={{}}
           {formatTimestamp}
           onLoadMoreSource={() => onLoadMoreRunSnapshotMessages()}
+          onLoadMoreAll={onLoadMoreRunSnapshotMessages}
         />
       {:else if snapshotReaderItems.some((item) => item.kind === "youtube_transcript")}
         <YoutubeTranscriptReader
@@ -334,7 +338,7 @@
       canViewLiveSource={false}
       canBackToRunSnapshot={!!currentRun && canReturnToRunSnapshot(snapshotAvailability)}
       selectedSourceId={analysisScope === "source_group" ? selectedGroupSourceId : null}
-      sourceOptions={analysisScope === "source_group" ? sourceFilterOptions(groupLiveReaderItems) : []}
+      sourceOptions={analysisScope === "source_group" ? liveGroupSourceOptions : []}
       {onViewLiveSource}
       {onBackToRunSnapshot}
       onChangeSelectedSourceId={onChangeSelectedGroupSourceId}
