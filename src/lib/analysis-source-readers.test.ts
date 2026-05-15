@@ -62,6 +62,13 @@ describe("analysis source readers", () => {
     expect(sourceGroupReaderSource).not.toContain("topic-filter");
   });
 
+  it("keeps live single-source timeline readers pageable", () => {
+    expect(reportSourceSurfaceSource).toContain("sourceItemsHasMore");
+    expect(reportSourceSurfaceSource).toContain("onLoadMoreSourceItems");
+    expect(reportSourceSurfaceSource).toContain("hasMore={sourceItemsHasMore}");
+    expect(reportSourceSurfaceSource).toContain("onLoadMore={onLoadMoreSourceItems}");
+  });
+
   it("keeps sticky date labels below overlay source switching UI", () => {
     expect(telegramTimelineSource).toContain(".day-label");
     expect(telegramTimelineSource).toContain("position: sticky;");
@@ -212,6 +219,12 @@ describe("analysis source readers", () => {
     expect(sourceGroupReaderSource).toContain("source-heading");
     expect(sourceGroupReaderSource).toContain("selectedGroupSourceId");
     expect(reportSourceSurfaceSource).toContain("onChangeSelectedSourceId={onChangeSelectedGroupSourceId}");
+  });
+
+  it("uses a neutral timeline label for mixed source-group material", () => {
+    expect(telegramTimelineSource).toContain("ariaLabel = \"Telegram source timeline\"");
+    expect(telegramTimelineSource).toContain("aria-label={ariaLabel}");
+    expect(sourceGroupReaderSource).toContain('ariaLabel="Source material timeline"');
   });
 
   it("builds live source-group focus options from every group member", () => {

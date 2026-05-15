@@ -52,6 +52,7 @@
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
     sourceItems: SourceItem[];
+    sourceItemsHasMore: boolean;
     loadingItems: boolean;
     sourceTopics: SourceForumTopic[];
     loadingSourceTopics: boolean;
@@ -87,6 +88,7 @@
     onBackToRunSnapshot: () => void | Promise<void>;
     sourceSyncDisabledReason?: (source: Source) => string | null;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
+    onLoadMoreSourceItems?: () => void | Promise<void>;
     onChangeTranscriptSearch?: (value: string) => void;
     onLoadMoreYoutubeTranscriptSegments?: () => void | Promise<void>;
     onLoadLiveGroupSourcePage?: (sourceId: number) => void | Promise<void>;
@@ -106,6 +108,7 @@
     currentSource,
     currentGroup,
     sourceItems,
+    sourceItemsHasMore,
     loadingItems,
     sourceTopics,
     loadingSourceTopics,
@@ -141,6 +144,7 @@
     onBackToRunSnapshot,
     sourceSyncDisabledReason = () => null,
     onLoadMoreRunSnapshotMessages,
+    onLoadMoreSourceItems = () => {},
     onChangeTranscriptSearch = () => {},
     onLoadMoreYoutubeTranscriptSegments = () => {},
     onLoadLiveGroupSourcePage = () => {},
@@ -295,6 +299,7 @@
           items={snapshotReaderItems}
           loading={loadingRunSnapshotMessages}
           hasMore={hasMoreRunSnapshotMessages}
+          ariaLabel={currentSource?.sourceType === "telegram" ? "Telegram source timeline" : "Source material timeline"}
           {formatTimestamp}
           onLoadMore={onLoadMoreRunSnapshotMessages}
         />
@@ -408,10 +413,10 @@
         <TelegramTimelineReader
           items={liveReaderItems}
           loading={loadingItems}
-          hasMore={false}
+          hasMore={sourceItemsHasMore}
           contentLabel={currentSourceContentLabel}
           {formatTimestamp}
-          onLoadMore={() => {}}
+          onLoadMore={onLoadMoreSourceItems}
         />
       {/if}
     {/key}

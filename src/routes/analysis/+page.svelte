@@ -250,6 +250,7 @@
 
   const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
   const CUSTOM_MODEL_OPTION = "__custom_model__";
+  const SOURCE_ITEMS_PAGE_LIMIT = 120;
 
   function createNotebookLmExportId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -261,6 +262,8 @@
   let sourceCatalog = $state<Source[]>([]);
   let sourceMetrics = $state<Record<number, AnalysisSourceOption>>({});
   let sourceItems = $state<SourceItem[]>([]);
+  let sourceItemsCursor = $state<number | null>(null);
+  let sourceItemsHasMore = $state(false);
   let sourceTopics = $state<SourceForumTopic[]>([]);
   let youtubeTranscriptSegments = $state<YoutubeTranscriptSegment[]>([]);
   let youtubeTranscriptCursor = $state<YoutubeTranscriptSegmentCursor | null>(null);
@@ -891,6 +894,19 @@
     youtubeDetailRequestKey = "";
   }
 
+  function resetSourceItemsReader() {
+    sourceItems = [];
+    sourceItemsCursor = null;
+    sourceItemsHasMore = false;
+  }
+
+  function applySourceItemsPage(items: SourceItem[], append: boolean) {
+    const previousCursor = sourceItemsCursor;
+    sourceItems = append ? [...sourceItems, ...items] : items;
+    sourceItemsCursor = items.at(-1)?.publishedAt ?? (append ? previousCursor : null);
+    sourceItemsHasMore = items.length === SOURCE_ITEMS_PAGE_LIMIT;
+  }
+
   function resetGroupLiveReader() {
     groupLiveItemsBySource = {};
     groupLiveCursorsBySource = {};
@@ -1202,12 +1218,14 @@
           runId: run.id,
           after: null,
           limit: 50,
-          sourceId: selectedSnapshotSourceId,
+          sourceId: trace.source_id,
           aroundRef: trace.ref,
         });
         if (currentRun?.id !== run.id) {
           return;
         }
+        lastSnapshotLoadKey = `${run.id}:first:${trace.source_id}`;
+        selectedSnapshotSourceId = trace.source_id;
         applySnapshotPage(run, page, false);
         return;
       }
@@ -1242,13 +1260,14 @@
 
       if (source.sourceType === "telegram") {
         loadingItems = true;
-        sourceItems = await listSourceItems({
+        const items = await listSourceItems({
           sourceId: trace.source_id,
-          limit: 120,
+          limit: SOURCE_ITEMS_PAGE_LIMIT,
           beforePublishedAt: null,
           topicFilter: null,
           aroundItemId: focus.aroundItemId,
         });
+        applySourceItemsPage(items, false);
         return;
       }
 
@@ -1423,15 +1442,36 @@
     loadingItems = true;
     const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
     try {
-      sourceItems = await listSourceItems({
+      const items = await listSourceItems({
         sourceId,
-        limit: 120,
+        limit: SOURCE_ITEMS_PAGE_LIMIT,
         beforePublishedAt: null,
         topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null,
       });
+      applySourceItemsPage(items, false);
     } catch (error) {
-      sourceItems = [];
+      resetSourceItemsReader();
       status = formatAppError("loading source messages", error);
+    } finally {
+      loadingItems = false;
+    }
+  }
+
+  async function loadMoreSourceItems() {
+    const source = currentSource();
+    if (!source || loadingItems || !sourceItemsHasMore || sourceItemsCursor === null) return;
+
+    loadingItems = true;
+    try {
+      const items = await listSourceItems({
+        sourceId: source.id,
+        limit: SOURCE_ITEMS_PAGE_LIMIT,
+        beforePublishedAt: sourceItemsCursor,
+        topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null,
+      });
+      applySourceItemsPage(items, true);
+    } catch (error) {
+      status = formatAppError("loading more source messages", error);
     } finally {
       loadingItems = false;
     }
@@ -1578,6 +1618,7 @@
     selectedTopicKey = next.selectedTopicKey;
     resetYoutubeDetailState();
     resetGroupLiveReader();
+    resetSourceItemsReader();
     selectedSnapshotSourceId = null;
     resetYoutubeTranscriptReader();
     if (!source || !sourceCapabilities(source).hasTopics) {
@@ -1619,6 +1660,7 @@
     selectedTopicKey = next.selectedTopicKey;
     resetYoutubeDetailState();
     resetGroupLiveReader();
+    resetSourceItemsReader();
     selectedSnapshotSourceId = null;
     resetYoutubeTranscriptReader();
     if (preserveRestoredCanvasState) {
@@ -2044,7 +2086,7 @@
       return;
     }
 
-    sourceItems = [];
+    resetSourceItemsReader();
   }
 
   async function deleteSource(source: Source) {
@@ -2061,6 +2103,8 @@
       const reset = sourceDeletionResetState(source.id, selectedSourceId);
       if (reset !== null) {
         sourceItems = reset.sourceItems;
+        sourceItemsCursor = null;
+        sourceItemsHasMore = false;
         currentRun = reset.currentRun;
         activeRunId = reset.activeRunId;
         traceData = reset.traceData;
@@ -2501,6 +2545,7 @@
     {focusedStreamedOutput}
     {canCancelCurrentRun}
     {sourceItems}
+    {sourceItemsHasMore}
     {loadingItems}
     {sourceTopics}
     {loadingSourceTopics}
@@ -2543,6 +2588,7 @@
     onBackToRunSnapshot={() => backToRunSnapshot()}
     onLoadMoreRunSnapshotMessages={() => void loadMoreRunSnapshotMessages()}
     onChangeTranscriptSearch={changeYoutubeTranscriptSearch}
+    onLoadMoreSourceItems={() => void loadMoreSourceItems()}
     onLoadMoreYoutubeTranscriptSegments={() => void loadMoreYoutubeTranscriptSegments()}
     onLoadLiveGroupSourcePage={(sourceId) => void loadLiveGroupSourcePage(sourceId)}
     onChangeSelectedGroupSourceId={changeSelectedGroupSourceId}

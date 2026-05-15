@@ -10,6 +10,7 @@
     items,
     loading,
     hasMore,
+    ariaLabel = "Telegram source timeline",
     contentLabel = "messages",
     formatTimestamp,
     onLoadMore,
@@ -17,6 +18,7 @@
     items: SourceReaderItem[];
     loading: boolean;
     hasMore: boolean;
+    ariaLabel?: string;
     contentLabel?: string;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
@@ -41,7 +43,7 @@
   }
 </script>
 
-<section class="telegram-timeline-reader" aria-label="Telegram source timeline" bind:this={timelineElement}>
+<section class="telegram-timeline-reader" aria-label={ariaLabel} bind:this={timelineElement}>
   {#if !loading && items.length === 0}
     <EmptyState description={`No synced ${contentLabel} are available for this source view.`} />
   {:else}

@@ -77,6 +77,7 @@
             items={telegramItems}
             {loading}
             hasMore={hasMoreBySource[group.sourceId] ?? false}
+            ariaLabel="Source material timeline"
             {formatTimestamp}
             onLoadMore={() => onLoadMoreSource(group.sourceId)}
           />

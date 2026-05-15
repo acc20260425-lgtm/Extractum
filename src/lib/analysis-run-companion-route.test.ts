@@ -41,6 +41,8 @@ describe("analysis route run companion wiring", () => {
     expect(analysisPageSource).toContain('sourceViewBasis: "run_snapshot"');
     expect(analysisPageSource).toContain('sourceViewBasis: "live_source"');
     expect(analysisPageSource).toContain("await loadSourcePageAroundTrace(decision, trace)");
+    expect(analysisPageSource).toContain("selectedSnapshotSourceId = trace.source_id");
+    expect(analysisPageSource).toContain("sourceId: trace.source_id");
     expect(analysisPageSource).toContain("aroundRef: trace.ref");
   });
 

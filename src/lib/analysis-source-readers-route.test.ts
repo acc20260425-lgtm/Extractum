@@ -29,9 +29,19 @@ describe("analysis source reader route wiring", () => {
     expect(analysisPageSource).toContain("{selectedTopicKey}");
     expect(analysisPageSource).toContain("showTopicSelector={shouldShowTopicSelector()}");
     expect(analysisPageSource).toContain("onLoadMoreYoutubeTranscriptSegments");
+    expect(analysisPageSource).toContain("{sourceItemsHasMore}");
+    expect(analysisPageSource).toContain("onLoadMoreSourceItems");
     expect(analysisPageSource).toContain("onLoadLiveGroupSourcePage");
     expect(analysisPageSource).toContain("onChangeSelectedGroupSourceId");
     expect(analysisPageSource).toContain("onChangeSelectedTopicKey={(value) => void changeSelectedTopicKey(value)}");
+  });
+
+  it("pages live single-source material without changing the selected topic filter", () => {
+    expect(analysisPageSource).toContain("sourceItemsCursor");
+    expect(analysisPageSource).toContain("sourceItemsHasMore");
+    expect(analysisPageSource).toContain("async function loadMoreSourceItems");
+    expect(analysisPageSource).toContain("beforePublishedAt: sourceItemsCursor");
+    expect(analysisPageSource).toContain("topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null");
   });
 
   it("supports run snapshot source filtering through the snapshot-only API", () => {

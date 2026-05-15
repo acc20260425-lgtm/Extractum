@@ -98,6 +98,7 @@
     focusedStreamedOutput,
     canCancelCurrentRun,
     sourceItems,
+    sourceItemsHasMore,
     loadingItems,
     sourceTopics,
     loadingSourceTopics,
@@ -139,6 +140,7 @@
     onViewLiveSource,
     onBackToRunSnapshot,
     onLoadMoreRunSnapshotMessages,
+    onLoadMoreSourceItems,
     onChangeTranscriptSearch,
     onLoadMoreYoutubeTranscriptSegments,
     onLoadLiveGroupSourcePage,
@@ -237,6 +239,7 @@
     focusedStreamedOutput: string;
     canCancelCurrentRun: boolean;
     sourceItems: SourceItem[];
+    sourceItemsHasMore: boolean;
     loadingItems: boolean;
     sourceTopics: SourceForumTopic[];
     loadingSourceTopics: boolean;
@@ -286,6 +289,7 @@
     onViewLiveSource: () => void;
     onBackToRunSnapshot: () => void;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
+    onLoadMoreSourceItems: () => void | Promise<void>;
     onChangeTranscriptSearch: (value: string) => void;
     onLoadMoreYoutubeTranscriptSegments: () => void | Promise<void>;
     onLoadLiveGroupSourcePage: (sourceId: number) => void | Promise<void>;
@@ -501,6 +505,7 @@
       {currentGroup}
       {currentSourceMetric}
       {sourceItems}
+      {sourceItemsHasMore}
       {loadingItems}
       {youtubeTranscriptSegments}
       {loadingYoutubeTranscriptSegments}
@@ -524,6 +529,7 @@
       onViewLiveSource={onViewLiveSource}
       onBackToRunSnapshot={onBackToRunSnapshot}
       onLoadMoreRunSnapshotMessages={onLoadMoreRunSnapshotMessages}
+      onLoadMoreSourceItems={onLoadMoreSourceItems}
       onChangeTranscriptSearch={onChangeTranscriptSearch}
       onLoadMoreYoutubeTranscriptSegments={onLoadMoreYoutubeTranscriptSegments}
       onLoadLiveGroupSourcePage={onLoadLiveGroupSourcePage}
