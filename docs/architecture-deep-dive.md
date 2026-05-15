@@ -223,8 +223,9 @@ The report flow:
 4. create the run only if preflight passes
 5. load corpus
 6. call the provider
-7. persist result + trace data
-8. persist frozen snapshot
+7. stream output and live chunk summaries to the workspace
+8. persist result + trace data
+9. persist frozen snapshot
 
 ### 6.2 Saved run semantics
 
@@ -247,6 +248,10 @@ offered for terminal or active runs, the UI labels it as live source context
 rather than the frozen run corpus.
 
 YouTube corpus loading adds timestamp-aware refs for transcript segments and synthetic refs for description text. Saved run snapshots preserve YouTube item kind, source type/subtype, and metadata needed for trace resolution after the live source changes.
+
+Chunk summaries are live companion state for the opened running run. They are
+not part of the saved run snapshot and terminal runs show an explicit empty
+state when no live summaries remain in memory.
 
 ## 7. LLM provider architecture
 

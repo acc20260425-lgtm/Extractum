@@ -18,7 +18,7 @@ families behind the shared source model.
 
 Implemented:
 
-- result-first `/analysis` workspace with compact source rail, central report/source canvas, and evidence/chat/runs companion panel
+- result-first `/analysis` workspace with compact source rail, central report/source canvas, and evidence/chat/chunks/runs companion panel
 - collapsible desktop app sidebar and mobile off-canvas navigation drawer
 - Telegram account management and sign-in flow
 - startup session restore
@@ -36,7 +36,7 @@ Implemented:
 - source groups for analysis
 - saved reports
 - follow-up chat on saved runs
-- analysis report preflight limits for large selected corpora
+- analysis report launch guards for missing source context, unusable provider profiles, source runtime problems, and large selected corpora
 - single-source NotebookLM export with local reply/thread/reaction metadata
 - reusable LLM provider profiles with active-profile selection
 - configurable OpenAI-compatible `base_url` support in `/settings`
@@ -84,7 +84,7 @@ Not implemented yet:
   - use the result-first research workspace layout
   - switch between report output/setup and source material in the central canvas
   - switch source context through the compact analysis rail
-  - inspect evidence, follow-up chat, and saved runs in the companion panel
+  - inspect evidence, follow-up chat, live chunk summaries, and saved runs in the companion panel
   - browse sources and inspect synced items
   - add Telegram sources manually or from dialogs
   - add YouTube videos and playlists by URL
@@ -204,4 +204,4 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 
 Related deep dive: `docs/takeout-source-import.md`.
 
-Recent verification: `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
+Recent verification: `docs/superpowers/plans/2026-05-14-analysis-chunk-stream-placement.md`.

@@ -42,8 +42,9 @@ Svelte owns:
 
 The current frontend workflow is result-first: `/analysis` keeps the opened
 report or source material in the central canvas, while source switching,
-evidence, follow-up chat, and saved runs stay nearby. The legacy `/sources`
-route remains only as a compatibility redirect to `/analysis`.
+evidence, follow-up chat, live chunk summaries, and saved runs stay nearby. The
+legacy `/sources` route remains only as a compatibility redirect to
+`/analysis`.
 
 Svelte 5 `$effect` blocks should keep their dependency surface narrow. An
 effect tracks synchronous `$state` and `$derived` reads, including reads inside
@@ -191,6 +192,9 @@ The report run stores:
 - result markdown
 - trace data
 - completion status
+
+While a run is streaming, chunk summaries are shown in the analysis companion as
+live UI state. They are intentionally not persisted with the saved run.
 
 ### 4.2 Immutable saved runs
 
