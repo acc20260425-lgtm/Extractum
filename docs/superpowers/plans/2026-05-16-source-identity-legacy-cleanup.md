@@ -781,7 +781,7 @@ Expected:
 **Files:**
 - Modify: `src-tauri/src/migrations/source_identity_cleanup.rs`
 
-- [ ] **Step 1: Add failing fresh-schema and index-shape tests**
+- [x] **Step 1: Add failing fresh-schema and index-shape tests**
 
 Add these tests to `src-tauri/src/migrations/source_identity_cleanup.rs`:
 
@@ -936,21 +936,21 @@ async fn assert_sources_index(
 }
 ```
 
-- [ ] **Step 2: Run the failing tests**
+- [x] **Step 2: Run the failing tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::v19_rebuild_removes_legacy_column_and_recreates_expected_indexes migrations::source_identity_cleanup::tests::v19_schema_checks_reject_invalid_implemented_provider_rows
+cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::v19_
 ```
 
 Expected:
 
 ```text
-v19_rebuild_removes_legacy_column_and_recreates_expected_indexes ... FAILED
+test result: FAILED. 0 passed; 2 failed
 ```
 
-- [ ] **Step 3: Add FK check helper**
+- [x] **Step 3: Add FK check helper**
 
 Add to `src-tauri/src/migrations/source_identity_cleanup.rs`:
 
@@ -992,7 +992,7 @@ async fn assert_foreign_key_check_clean(
 }
 ```
 
-- [ ] **Step 4: Add rebuild SQL helpers**
+- [x] **Step 4: Add rebuild SQL helpers**
 
 Add to `src-tauri/src/migrations/source_identity_cleanup.rs`:
 
@@ -1098,7 +1098,7 @@ async fn rebuild_sources_table(conn: &mut SqliteConnection) -> AppResult<()> {
 }
 ```
 
-- [ ] **Step 5: Implement FK-safe v19 rebuild sequence**
+- [x] **Step 5: Implement FK-safe v19 rebuild sequence**
 
 Replace the temporary no-op `run_source_identity_cleanup_rebuild` with:
 
@@ -1158,12 +1158,12 @@ async fn run_source_identity_cleanup_rebuild(
 }
 ```
 
-- [ ] **Step 6: Run the schema tests**
+- [x] **Step 6: Run the schema tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::v19_rebuild_removes_legacy_column_and_recreates_expected_indexes migrations::source_identity_cleanup::tests::v19_schema_checks_reject_invalid_implemented_provider_rows
+cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::v19_
 ```
 
 Expected:
@@ -1172,7 +1172,7 @@ Expected:
 test result: ok. 2 passed; 0 failed
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
