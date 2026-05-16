@@ -40,15 +40,15 @@ fn export_dc_id_for_home_dc(home_dc_id: i32) -> i32 {
 }
 
 pub(crate) fn takeout_init_request_for_source_kind(
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
 ) -> AppResult<tl::functions::account::InitTakeoutSession> {
-    let (message_chats, message_megagroups, message_channels) = match telegram_source_kind {
+    let (message_chats, message_megagroups, message_channels) = match telegram_source_subtype {
         TELEGRAM_KIND_GROUP => (true, false, false),
         TELEGRAM_KIND_SUPERGROUP => (false, true, false),
         TELEGRAM_KIND_CHANNEL => (false, false, true),
         other => {
             return Err(AppError::validation(format!(
-                "Unsupported telegram_source_kind '{other}'"
+                "Unsupported Telegram source_subtype '{other}'"
             )));
         }
     };

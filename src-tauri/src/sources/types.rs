@@ -97,6 +97,7 @@ pub(crate) struct SourceSyncTarget {
     pub(crate) id: i64,
     pub(crate) source_type: String,
     pub(crate) source_subtype: Option<String>,
+    #[allow(dead_code)]
     pub(crate) telegram_source_kind: String,
     pub(crate) account_id: Option<i64>,
     pub(crate) external_id: String,

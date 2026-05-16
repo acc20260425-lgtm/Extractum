@@ -48,7 +48,7 @@ pub(crate) enum TakeoutPaginationFallbackReason {
 }
 
 pub(crate) fn select_history_splits(
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     split_ranges: Vec<tl::enums::MessageRange>,
 ) -> AppResult<Vec<tl::enums::MessageRange>> {
     let mut ranges = if split_ranges.is_empty() {
@@ -57,13 +57,13 @@ pub(crate) fn select_history_splits(
         split_ranges
     };
 
-    match telegram_source_kind {
+    match telegram_source_subtype {
         TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
             Ok(vec![ranges.pop().unwrap_or_else(fallback_message_range)])
         }
         TELEGRAM_KIND_GROUP => Ok(ranges),
         other => Err(AppError::validation(format!(
-            "Unsupported telegram_source_kind '{other}'"
+            "Unsupported Telegram source_subtype '{other}'"
         ))),
     }
 }

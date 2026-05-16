@@ -2305,7 +2305,7 @@ git commit -m "feat: resolve telegram peers from typed identity"
 - Modify: `src-tauri/src/youtube/preview.rs`
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
 
-- [ ] **Step 1: Replace legacy kind reads in Takeout with typed subtype**
+- [x] **Step 1: Replace legacy kind reads in Takeout with typed subtype**
 
 In `src-tauri/src/takeout_import/mod.rs`, after loading source, load typed
 identity for Telegram source operations:
@@ -2318,7 +2318,7 @@ let telegram_source_subtype = identity.source_subtype.as_str();
 Pass `telegram_source_subtype` into existing helpers. Rename local variables
 only where it reduces confusion; keep enum values unchanged.
 
-- [ ] **Step 2: Update topic refresh supergroup check**
+- [x] **Step 2: Update topic refresh supergroup check**
 
 In `src-tauri/src/sources/topics.rs`, replace:
 
@@ -2333,20 +2333,20 @@ let identity = crate::sources::identity::load_telegram_source_identity(pool, sou
 if identity.source_subtype != TelegramSourceKind::Supergroup {
 ```
 
-- [ ] **Step 3: Keep YouTube behavior canonical**
+- [x] **Step 3: Keep YouTube behavior canonical**
 
 Ensure YouTube code uses `source.source_subtype.as_deref()` or the new
 non-optional string form, never `telegram_source_kind`, for routing. Existing
 YouTube insert helpers may still write `telegram_source_kind = ''` only as a
 compatibility insert field.
 
-- [ ] **Step 4: Update NotebookLM export source loading**
+- [x] **Step 4: Update NotebookLM export source loading**
 
 In `src-tauri/src/notebooklm_export/query.rs`, remove direct reliance on
 `telegram_source_kind` for source identity. Export source labels and provider
 routing should use canonical `source_type` and `source_subtype`.
 
-- [ ] **Step 5: Add or update targeted consumer tests**
+- [x] **Step 5: Add or update targeted consumer tests**
 
 Run existing targeted tests first:
 
@@ -2359,7 +2359,7 @@ Expected before code settles: compile failures around changed types.
 Update tests to build `telegram_sources` rows in fixtures when they exercise
 Telegram persisted source behavior.
 
-- [ ] **Step 6: Run targeted consumer tests after fixes**
+- [x] **Step 6: Run targeted consumer tests after fixes**
 
 Run:
 
@@ -2373,7 +2373,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 7: Commit consumer switch**
+- [x] **Step 7: Commit consumer switch**
 
 Run:
 

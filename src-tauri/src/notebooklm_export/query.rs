@@ -14,7 +14,7 @@ use crate::notebooklm_export::model::{NotebookLmExportMessage, NotebookLmExportS
 struct SourceRow {
     id: i64,
     source_type: String,
-    telegram_source_kind: String,
+    source_subtype: Option<String>,
     external_id: String,
     title: Option<String>,
 }
@@ -62,7 +62,7 @@ pub(crate) async fn load_export_source(
 ) -> AppResult<NotebookLmExportSource> {
     let source: SourceRow = sqlx::query_as(
         r#"
-        SELECT id, source_type, telegram_source_kind, external_id, title
+        SELECT id, source_type, source_subtype, external_id, title
         FROM sources
         WHERE id = ?
         "#,
@@ -78,20 +78,15 @@ pub(crate) async fn load_export_source(
             "Source {source_id} is not a Telegram source"
         )));
     }
-    if !matches!(
-        source.telegram_source_kind.as_str(),
-        "channel" | "supergroup" | "group"
-    ) {
-        return Err(AppError::validation(format!(
-            "Source {source_id} has unsupported Telegram kind '{}'",
-            source.telegram_source_kind
-        )));
-    }
+    let source_subtype = source
+        .source_subtype
+        .ok_or_else(|| AppError::validation(format!("Source {source_id} has no source_subtype")))?;
+    let source_subtype = crate::sources::TelegramSourceKind::from_source_subtype(&source_subtype)?;
 
     Ok(NotebookLmExportSource {
         id: source.id,
         source_type: source.source_type,
-        telegram_source_kind: source.telegram_source_kind,
+        telegram_source_kind: source_subtype.as_str().to_string(),
         external_id: source.external_id,
         title: source.title,
     })
@@ -319,13 +314,28 @@ fn base_query(where_clause: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::load_export_messages;
+    use super::{load_export_messages, load_export_source};
     use crate::compression::compress_text;
 
     async fn export_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_type TEXT NOT NULL,
+                source_subtype TEXT,
+                telegram_source_kind TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                title TEXT
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create sources");
         sqlx::query(
             r#"
             CREATE TABLE items (
@@ -366,6 +376,31 @@ mod tests {
         .await
         .expect("create telegram_forum_topics");
         pool
+    }
+
+    #[tokio::test]
+    async fn load_export_source_uses_canonical_subtype_not_legacy_kind() {
+        let pool = export_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, telegram_source_kind, external_id, title
+            )
+            VALUES (?, 'telegram', 'supergroup', 'channel', ?, ?)
+            "#,
+        )
+        .bind(7_i64)
+        .bind("12345")
+        .bind("Forum source")
+        .execute(&pool)
+        .await
+        .expect("insert source");
+
+        let source = load_export_source(&pool, 7)
+            .await
+            .expect("load export source");
+
+        assert_eq!(source.telegram_source_kind, "supergroup");
     }
 
     #[tokio::test]

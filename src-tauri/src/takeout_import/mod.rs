@@ -113,10 +113,10 @@ pub async fn run_takeout_export_dc_spike(
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
+    let telegram_source_subtype = load_takeout_source_subtype(&pool, source.id).await?;
     let runtime = get_authorized_runtime(&state, account_id).await?;
 
-    run_export_dc_spike_for_runtime(source.id, account_id, &source.telegram_source_kind, runtime)
-        .await
+    run_export_dc_spike_for_runtime(source.id, account_id, &telegram_source_subtype, runtime).await
 }
 
 async fn run_export_dc_spike_for_runtime(
@@ -310,7 +310,7 @@ async fn run_takeout_source_import(
         .ok_or_else(|| AppError::internal(format!("Takeout job {job_id} not found")))?
         .source_id;
     let source = load_source(&pool, source_id).await?;
-    ensure_supported_takeout_source_kind(&source.telegram_source_kind)?;
+    let telegram_source_subtype = load_takeout_source_subtype(&pool, source.id).await?;
 
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {} is not linked to an account", source.id))
@@ -339,7 +339,7 @@ async fn run_takeout_source_import(
         .await
         .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))?;
     let alias = prepare_export_dc_alias(&session).await?;
-    let init_request = takeout_init_request_for_source_kind(&source.telegram_source_kind)?;
+    let init_request = takeout_init_request_for_source_kind(&telegram_source_subtype)?;
     let mut warnings = Vec::new();
     let mut fallback_used = false;
     let takeout = export_dc_invoke(
@@ -358,6 +358,7 @@ async fn run_takeout_source_import(
         job_id,
         &pool,
         &source,
+        &telegram_source_subtype,
         resolved_peer,
         &client,
         &alias,
@@ -398,6 +399,7 @@ async fn run_started_takeout_source_import(
     job_id: &str,
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source: &crate::sources::SourceSyncTarget,
+    telegram_source_subtype: &str,
     resolved_peer: crate::sources::ResolvedSyncPeer,
     client: &Client,
     alias: &ExportDcAlias,
@@ -410,6 +412,7 @@ async fn run_started_takeout_source_import(
         job_id,
         pool,
         source,
+        telegram_source_subtype,
         resolved_peer,
         client,
         alias,
@@ -429,6 +432,7 @@ async fn run_started_takeout_source_import_inner(
     job_id: &str,
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source: &crate::sources::SourceSyncTarget,
+    telegram_source_subtype: &str,
     resolved_peer: crate::sources::ResolvedSyncPeer,
     client: &Client,
     alias: &ExportDcAlias,
@@ -449,7 +453,7 @@ async fn run_started_takeout_source_import_inner(
         &client,
         &alias,
         takeout_id,
-        &source.telegram_source_kind,
+        telegram_source_subtype,
         resolved_peer.peer,
         warnings,
         fallback_used,
@@ -459,7 +463,7 @@ async fn run_started_takeout_source_import_inner(
         client,
         alias,
         takeout_id,
-        &source.telegram_source_kind,
+        telegram_source_subtype,
         resolved_peer.peer,
         warnings,
         fallback_used,
@@ -483,7 +487,7 @@ async fn run_started_takeout_source_import_inner(
         fallback_used,
     )
     .await?;
-    let selected_ranges = select_history_splits(&source.telegram_source_kind, split_ranges)?;
+    let selected_ranges = select_history_splits(telegram_source_subtype, split_ranges)?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_COUNTING.to_string();
@@ -500,7 +504,7 @@ async fn run_started_takeout_source_import_inner(
             takeout_id,
             input_peer.clone(),
             range.clone(),
-            &source.telegram_source_kind,
+            telegram_source_subtype,
             warnings,
             fallback_used,
         )
@@ -531,7 +535,7 @@ async fn run_started_takeout_source_import_inner(
         counted_ranges,
         &source,
         total,
-        &source.telegram_source_kind,
+        telegram_source_subtype,
         warnings,
         fallback_used,
     )
@@ -584,6 +588,16 @@ struct TakeoutHistoryProbe {
 
 fn ensure_supported_takeout_source_kind(telegram_source_kind: &str) -> AppResult<()> {
     TelegramSourceKind::parse(telegram_source_kind).map(|_| ())
+}
+
+async fn load_takeout_source_subtype(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<String> {
+    let identity = crate::sources::identity::load_telegram_source_identity(pool, source_id).await?;
+    let source_subtype = identity.source_subtype.as_str();
+    ensure_supported_takeout_source_kind(source_subtype)?;
+    Ok(source_subtype.to_string())
 }
 
 async fn validate_takeout_peer(
@@ -1079,10 +1093,11 @@ fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::{
-        is_channel_private_error, supports_only_my_messages_fallback, TELEGRAM_KIND_CHANNEL,
-        TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        is_channel_private_error, load_takeout_source_subtype, supports_only_my_messages_fallback,
+        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::AppError;
+    use crate::sources::test_support::memory_pool_with_sources;
 
     #[test]
     fn only_my_messages_fallback_is_limited_to_channels() {
@@ -1099,5 +1114,54 @@ mod tests {
         assert!(!is_channel_private_error(&AppError::network(
             "Rpc error 400: TAKEOUT_INVALID"
         )));
+    }
+
+    #[tokio::test]
+    async fn takeout_subtype_load_uses_typed_identity_not_legacy_kind() {
+        let pool = memory_pool_with_sources().await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, telegram_source_kind, account_id,
+                external_id, title, metadata_zstd, last_sync_state, is_active, is_member,
+                created_at
+            )
+            VALUES (?, 'telegram', 'supergroup', 'channel', ?, ?, ?, NULL, NULL, 1, 1, ?)
+            "#,
+        )
+        .bind(7_i64)
+        .bind(42_i64)
+        .bind("12345")
+        .bind("Forum source")
+        .bind(1_i64)
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash, avatar_cache_key,
+                identity_refreshed_at, created_at, updated_at
+            )
+            VALUES (?, ?, 'supergroup', 'channel', ?, 'legacy_metadata', NULL, ?, NULL, ?, ?, ?)
+            "#,
+        )
+        .bind(7_i64)
+        .bind(42_i64)
+        .bind(12345_i64)
+        .bind(98765_i64)
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind(1_i64)
+        .execute(&pool)
+        .await
+        .expect("insert typed identity");
+
+        let source_subtype = load_takeout_source_subtype(&pool, 7)
+            .await
+            .expect("load takeout source subtype");
+
+        assert_eq!(source_subtype, TELEGRAM_KIND_SUPERGROUP);
     }
 }

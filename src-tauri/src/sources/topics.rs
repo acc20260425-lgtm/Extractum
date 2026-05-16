@@ -11,7 +11,7 @@ use crate::forum_topics::{
 };
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
-use super::types::{now_secs, SourceForumTopicRow, SourceSyncTarget, TELEGRAM_KIND_SUPERGROUP};
+use super::types::{now_secs, SourceForumTopicRow, SourceSyncTarget, TelegramSourceKind};
 
 #[derive(Serialize)]
 pub struct SourceForumTopicRecord {
@@ -49,7 +49,16 @@ pub(super) async fn refresh_forum_topics(
     peer: PeerRef,
     source: &SourceSyncTarget,
 ) -> Vec<String> {
-    if source.telegram_source_kind != TELEGRAM_KIND_SUPERGROUP {
+    let supports_forum_topics = match source_supports_forum_topics(pool, source.id).await {
+        Ok(supports_forum_topics) => supports_forum_topics,
+        Err(error) => {
+            return vec![format!(
+                "Forum topic refresh failed for source {}: {error}",
+                source.id
+            )];
+        }
+    };
+    if !supports_forum_topics {
         return Vec::new();
     }
 
@@ -78,6 +87,14 @@ pub(super) async fn refresh_forum_topics(
             source.id
         )],
     }
+}
+
+async fn source_supports_forum_topics(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<bool> {
+    let identity = crate::sources::identity::load_telegram_source_identity(pool, source_id).await?;
+    Ok(identity.source_subtype == TelegramSourceKind::Supergroup)
 }
 
 async fn fetch_all_forum_topics(
@@ -388,9 +405,67 @@ async fn list_source_forum_topics_from_pool(
 mod tests {
     use super::{
         is_non_forum_topic_refresh_error, list_source_forum_topics_from_pool,
-        upsert_forum_topics_from_refresh, ForumTopicSnapshot,
+        source_supports_forum_topics, upsert_forum_topics_from_refresh, ForumTopicSnapshot,
     };
     use crate::sources::test_support::memory_pool_with_source_items_and_topics;
+
+    #[tokio::test]
+    async fn forum_topic_refresh_gate_uses_typed_identity_not_legacy_kind() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        for (source_id, source_subtype, legacy_kind) in [
+            (10_i64, "channel", "supergroup"),
+            (11_i64, "supergroup", "channel"),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO sources (
+                    id, source_type, source_subtype, telegram_source_kind, account_id,
+                    external_id, title, metadata_zstd, last_sync_state, is_active, is_member,
+                    created_at
+                )
+                VALUES (?, 'telegram', ?, ?, ?, ?, ?, NULL, NULL, 1, 1, ?)
+                "#,
+            )
+            .bind(source_id)
+            .bind(source_subtype)
+            .bind(legacy_kind)
+            .bind(42_i64)
+            .bind(source_id.to_string())
+            .bind(format!("source {source_id}"))
+            .bind(1_i64)
+            .execute(&pool)
+            .await
+            .expect("insert source");
+            sqlx::query(
+                r#"
+                INSERT INTO telegram_sources (
+                    source_id, account_id, source_subtype, peer_kind, peer_id,
+                    resolution_strategy, username, access_hash, avatar_cache_key,
+                    identity_refreshed_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'channel', ?, 'legacy_metadata', NULL, ?, NULL, ?, ?, ?)
+                "#,
+            )
+            .bind(source_id)
+            .bind(42_i64)
+            .bind(source_subtype)
+            .bind(source_id)
+            .bind(1000_i64 + source_id)
+            .bind(1_i64)
+            .bind(1_i64)
+            .bind(1_i64)
+            .execute(&pool)
+            .await
+            .expect("insert typed identity");
+        }
+
+        assert!(!source_supports_forum_topics(&pool, 10)
+            .await
+            .expect("load channel identity"));
+        assert!(source_supports_forum_topics(&pool, 11)
+            .await
+            .expect("load supergroup identity"));
+    }
 
     #[tokio::test]
     async fn list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket() {
