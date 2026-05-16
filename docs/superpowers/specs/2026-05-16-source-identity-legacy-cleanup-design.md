@@ -90,8 +90,9 @@ build that includes the v18 source identity repair window.
 
 Failure behavior:
 
-- migration 19 runs in one transaction or otherwise guarantees that a failed
-  rebuild leaves the previous schema/data intact;
+- migration 19 runs the rebuild in one transaction after foreign-key
+  enforcement has been disabled in autocommit mode, or otherwise guarantees
+  that a failed rebuild leaves the previous schema/data intact;
 - if migration 19 fails, application startup must fail before source commands
   become available;
 - if migration 19 succeeds but the repair/integrity gate fails, source commands
@@ -289,8 +290,18 @@ accepts `CHECK` expressions that evaluate to `NULL`.
 
 ## Database Migration
 
-Add `src-tauri/migrations/19.sql` and register it in
-`src-tauri/src/migrations.rs` after version 18.
+Add version 19 as a source cleanup migration without rewriting migrations 1
+through 18. Under the current stack, version 19 must not be a plain
+`tauri-plugin-sql` SQL migration unless the migration runner is changed or
+proven to support a pre-transaction foreign-key-off phase. The current
+`tauri-plugin-sql` path hands migrations to SQLx, SQLx wraps SQLite migration
+SQL in a transaction, and the plugin's in-memory `Migration` adapter does not
+expose SQLx's `no_tx` migration flag.
+
+The implementation may keep a canonical migration SQL body for review and
+tests, but the applied v19 path must control the SQLite connection state and
+must record version 19 in `_sqlx_migrations` with the expected checksum and
+description so the plugin migration history stays coherent.
 
 SQLite cannot drop a column in a way that preserves all constraints and indexes
 across the supported environment, so migration 19 should rebuild `sources`:
@@ -306,10 +317,29 @@ across the supported environment, so migration 19 should rebuild `sources`:
 
 Migration 19 must use a foreign-key-safe table rebuild procedure that cannot
 cascade-delete dependent rows and must verify referential integrity after the
-rebuild. Because `sources` is a central parent table, disabling foreign-key
-enforcement for the rebuild is allowed only inside the migration transaction or
-connection-local migration scope, and only if the migration runs
-`PRAGMA foreign_key_check` afterward and fails on any result rows.
+rebuild. It must not rely on `PRAGMA foreign_keys` being toggled from inside an
+already-open migration transaction. SQLite ignores `PRAGMA foreign_keys`
+changes while the connection is inside a multi-statement transaction or
+savepoint, and `DROP TABLE` with foreign keys enabled performs an implicit
+delete that can invoke foreign-key actions.
+
+Required v19 rebuild sequence:
+
+1. Capture the existing `sources` `sqlite_sequence` value.
+2. Ensure the migration connection is in autocommit mode.
+3. Set `PRAGMA foreign_keys = OFF` before `BEGIN`.
+4. Begin the rebuild transaction.
+5. Rebuild `sources` using the post-v19 schema contract.
+6. Restore the captured `sources` `sqlite_sequence` high-water mark.
+7. Run `PRAGMA foreign_key_check` and fail/roll back on any result rows.
+8. Commit.
+9. Restore `PRAGMA foreign_keys = ON`.
+10. Run `PRAGMA foreign_key_check` again and fail startup on any result rows.
+
+If the migration framework cannot guarantee this ordering, v19 must not be
+implemented as a plain SQL migration file. It must be implemented as a
+runner-managed special migration, or the runner must be extended to support a
+pre-transaction FK-off phase for this migration.
 
 Migration 19 must preserve the previous `sqlite_sequence` high-water mark for
 `sources`. The next inserted source id after the rebuild must be greater than
@@ -337,6 +367,9 @@ Fresh-install migration tests should apply all migrations and assert that:
 - inserting an RSS/forum placeholder row with a provider-local subtype is still
   allowed by the database checks.
 - `PRAGMA foreign_key_check` returns no rows after migration 19.
+- tests prove the v19 applied path does not run through the current
+  plugin-managed SQLx migration transaction unless the runner has been changed
+  to support the required pre-transaction FK-off phase.
 
 Upgrade-style tests should construct a v18-shaped schema with source rows and
 typed Telegram rows, run migration 19, and assert that:
@@ -501,6 +534,8 @@ as:
 
 Likely Rust data shapes affected by the backend API/runtime contract:
 
+- migration preparation/runner code that can execute v19 before
+  `tauri-plugin-sql` applies ordinary migrations;
 - `SourceRecord`;
 - `SourceRowParts`;
 - `SourceSyncTarget`;
