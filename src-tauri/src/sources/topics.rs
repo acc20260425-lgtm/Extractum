@@ -412,23 +412,19 @@ mod tests {
     #[tokio::test]
     async fn forum_topic_refresh_gate_uses_typed_identity_not_legacy_kind() {
         let pool = memory_pool_with_source_items_and_topics().await;
-        for (source_id, source_subtype, legacy_kind) in [
-            (10_i64, "channel", "supergroup"),
-            (11_i64, "supergroup", "channel"),
-        ] {
+        for (source_id, source_subtype) in [(10_i64, "channel"), (11_i64, "supergroup")] {
             sqlx::query(
                 r#"
                 INSERT INTO sources (
-                    id, source_type, source_subtype, telegram_source_kind, account_id,
-                    external_id, title, metadata_zstd, last_sync_state, is_active, is_member,
+                    id, source_type, source_subtype, account_id, external_id,
+                    title, metadata_zstd, last_sync_state, is_active, is_member,
                     created_at
                 )
-                VALUES (?, 'telegram', ?, ?, ?, ?, ?, NULL, NULL, 1, 1, ?)
+                VALUES (?, 'telegram', ?, ?, ?, ?, NULL, NULL, 1, 1, ?)
                 "#,
             )
             .bind(source_id)
             .bind(source_subtype)
-            .bind(legacy_kind)
             .bind(42_i64)
             .bind(source_id.to_string())
             .bind(format!("source {source_id}"))

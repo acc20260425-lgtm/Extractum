@@ -305,10 +305,10 @@ mod tests {
         sqlx::query(
             r#"
             INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, account_id,
+                id, source_type, source_subtype, account_id,
                 external_id, title, is_active, is_member, created_at
             )
-            VALUES (101, 'telegram', 'channel', 'channel', 1, '12345', 'source', 1, 1, 100)
+            VALUES (101, 'telegram', 'channel', 1, '12345', 'source', 1, 1, 100)
             "#,
         )
         .execute(&pool)
@@ -343,10 +343,10 @@ mod tests {
         sqlx::query(
             r#"
             INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, account_id,
+                id, source_type, source_subtype, account_id,
                 external_id, title, is_active, is_member, created_at
             )
-            VALUES (101, 'telegram', 'channel', 'channel', 1, '12345', 'source', 1, 1, 100)
+            VALUES (101, 'telegram', 'channel', 1, '12345', 'source', 1, 1, 100)
             "#,
         )
         .execute(&pool)

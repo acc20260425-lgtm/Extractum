@@ -280,7 +280,6 @@ mod tests {
             id: 1,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
@@ -320,7 +319,6 @@ mod tests {
             id: 1,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
@@ -340,7 +338,6 @@ mod tests {
             id: 7,
             source_type: "youtube".to_string(),
             source_subtype: Some("video".to_string()),
-            telegram_source_kind: "".to_string(),
             account_id: None,
             external_id: "dQw4w9WgXcQ".to_string(),
             title: Some("Demo video".to_string()),
@@ -365,7 +362,6 @@ mod tests {
                 id,
                 source_type,
                 source_subtype,
-                telegram_source_kind,
                 account_id,
                 external_id,
                 title,
@@ -376,12 +372,11 @@ mod tests {
                 is_member,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(1_i64)
         .bind(TELEGRAM_SOURCE_TYPE)
-        .bind(TELEGRAM_KIND_CHANNEL)
         .bind(TELEGRAM_KIND_CHANNEL)
         .bind(1_i64)
         .bind("12345")

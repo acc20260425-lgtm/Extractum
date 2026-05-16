@@ -17,7 +17,6 @@ pub(crate) async fn memory_pool_with_sources() -> sqlx::SqlitePool {
             id INTEGER PRIMARY KEY,
             source_type TEXT NOT NULL,
             source_subtype TEXT,
-            telegram_source_kind TEXT,
             account_id INTEGER,
             external_id TEXT NOT NULL,
             title TEXT,

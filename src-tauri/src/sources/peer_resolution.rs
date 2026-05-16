@@ -134,9 +134,9 @@ fn legacy_peer_identity(
 
 fn add_source_resolution_strategy(
     source_ref: &str,
-    telegram_source_kind: Option<&str>,
+    source_subtype: Option<&str>,
 ) -> SourcePeerResolutionStrategy {
-    if telegram_source_kind.is_some() {
+    if source_subtype.is_some() {
         return SourcePeerResolutionStrategy::Dialog;
     }
 
@@ -150,13 +150,13 @@ fn add_source_resolution_strategy(
 
 pub(super) fn source_metadata_for_added_source(
     source_ref: &str,
-    telegram_source_kind: Option<&str>,
+    source_subtype: Option<&str>,
     resolved: &ResolvedTelegramSource,
     avatar_cache_key: Option<String>,
 ) -> SourceMetadata {
     SourceMetadata {
         peer_identity: Some(SourcePeerIdentity {
-            strategy: add_source_resolution_strategy(source_ref, telegram_source_kind),
+            strategy: add_source_resolution_strategy(source_ref, source_subtype),
             username: resolved.username.clone(),
             access_hash: resolved.access_hash,
         }),
@@ -211,7 +211,7 @@ fn source_peer_resolution_failure(source: &SourceSyncTarget, metadata: &SourceMe
             )
         }
         Some(SourcePeerResolutionStrategy::Dialog)
-            if source.telegram_source_kind == TELEGRAM_KIND_GROUP =>
+            if source.source_subtype.as_deref() == Some(TELEGRAM_KIND_GROUP) =>
         {
             format!(
                 "Source {} could not be resolved from dialogs. Small Telegram groups still depend on dialog availability; if this group disappeared from the account's dialogs, re-add it from that account.",
@@ -233,7 +233,7 @@ async fn resolve_telegram_source_by_username(
     client: &grammers_client::Client,
     username: &str,
     source_ref: &str,
-    expected_kind: Option<&str>,
+    expected_subtype: Option<&str>,
 ) -> AppResult<ResolvedTelegramSource> {
     let peer = client
         .resolve_username(username)
@@ -245,13 +245,13 @@ async fn resolve_telegram_source_by_username(
 
     let mut source = resolved_telegram_source_from_peer(&peer)
         .ok_or_else(|| AppError::validation("Not a Telegram channel, group, or supergroup"))?;
-    validate_expected_telegram_source_kind(&source, expected_kind)?;
+    validate_expected_telegram_source_subtype(&source, expected_subtype)?;
     source.avatar_bytes = peer_photo_bytes_with_timeout(client, &peer).await;
     Ok(source)
 }
 
-fn dialog_lookup_not_found_message(source_ref: &str, expected_kind: Option<&str>) -> String {
-    if expected_kind.is_some() {
+fn dialog_lookup_not_found_message(source_ref: &str, expected_subtype: Option<&str>) -> String {
+    if expected_subtype.is_some() {
         format!(
             "Telegram source '{}' was not found in this account's dialogs",
             source_ref
@@ -264,15 +264,18 @@ fn dialog_lookup_not_found_message(source_ref: &str, expected_kind: Option<&str>
     }
 }
 
-fn dialog_lookup_not_found_error(source_ref: &str, expected_kind: Option<&str>) -> AppError {
-    AppError::not_found(dialog_lookup_not_found_message(source_ref, expected_kind))
+fn dialog_lookup_not_found_error(source_ref: &str, expected_subtype: Option<&str>) -> AppError {
+    AppError::not_found(dialog_lookup_not_found_message(
+        source_ref,
+        expected_subtype,
+    ))
 }
 
 async fn resolve_telegram_source_from_dialogs(
     client: &grammers_client::Client,
     source_id: i64,
     source_ref: &str,
-    expected_kind: Option<&str>,
+    expected_subtype: Option<&str>,
 ) -> AppResult<ResolvedTelegramSource> {
     let mut dialogs = client.iter_dialogs();
     let mut found_wrong_kind = false;
@@ -283,7 +286,7 @@ async fn resolve_telegram_source_from_dialogs(
     {
         if dialog.peer().id().bare_id() == source_id {
             if let Some(source) = resolved_telegram_source_from_peer(dialog.peer()) {
-                if telegram_source_kind_matches(&source, expected_kind)? {
+                if telegram_source_subtype_matches(&source, expected_subtype)? {
                     let mut source = source;
                     source.avatar_bytes =
                         peer_photo_bytes_with_timeout(client, dialog.peer()).await;
@@ -296,28 +299,28 @@ async fn resolve_telegram_source_from_dialogs(
 
     if found_wrong_kind {
         return Err(AppError::validation(format!(
-            "Telegram source '{}' was found, but it has a different Telegram source kind than the requested source kind",
+            "Telegram source '{}' was found, but it has a different source subtype than the requested source subtype",
             source_ref
         )));
     }
 
-    Err(dialog_lookup_not_found_error(source_ref, expected_kind))
+    Err(dialog_lookup_not_found_error(source_ref, expected_subtype))
 }
 
 pub(super) async fn resolve_telegram_source(
     client: &grammers_client::Client,
     source_ref: &str,
-    expected_kind: Option<&str>,
+    expected_subtype: Option<&str>,
 ) -> AppResult<ResolvedTelegramSource> {
     let trimmed = source_ref.trim();
-    if expected_kind.is_none() {
+    if expected_subtype.is_none() {
         match parse_supported_manual_telegram_source_ref(trimmed)? {
             ManualTelegramSourceRef::Username(username) => {
                 return resolve_telegram_source_by_username(
                     client,
                     &username,
                     source_ref,
-                    expected_kind,
+                    expected_subtype,
                 )
                 .await
             }
@@ -326,7 +329,7 @@ pub(super) async fn resolve_telegram_source(
                     client,
                     source_id,
                     source_ref,
-                    expected_kind,
+                    expected_subtype,
                 )
                 .await
             }
@@ -335,8 +338,13 @@ pub(super) async fn resolve_telegram_source(
 
     let username = parse_username(trimmed);
     if !username.is_empty() && !username.chars().all(|char| char.is_ascii_digit()) {
-        return resolve_telegram_source_by_username(client, &username, source_ref, expected_kind)
-            .await;
+        return resolve_telegram_source_by_username(
+            client,
+            &username,
+            source_ref,
+            expected_subtype,
+        )
+        .await;
     }
 
     let Ok(source_id) = trimmed.parse::<i64>() else {
@@ -346,31 +354,31 @@ pub(super) async fn resolve_telegram_source(
         )));
     };
 
-    resolve_telegram_source_from_dialogs(client, source_id, source_ref, expected_kind).await
+    resolve_telegram_source_from_dialogs(client, source_id, source_ref, expected_subtype).await
 }
 
-fn telegram_source_kind_matches(
+fn telegram_source_subtype_matches(
     source: &ResolvedTelegramSource,
-    expected_kind: Option<&str>,
+    expected_subtype: Option<&str>,
 ) -> AppResult<bool> {
-    let Some(expected_kind) = expected_kind else {
+    let Some(expected_subtype) = expected_subtype else {
         return Ok(true);
     };
 
-    TelegramSourceKind::parse(expected_kind)?;
-    Ok(source.telegram_source_kind == expected_kind)
+    TelegramSourceKind::parse(expected_subtype)?;
+    Ok(source.telegram_source_kind == expected_subtype)
 }
 
-fn validate_expected_telegram_source_kind(
+fn validate_expected_telegram_source_subtype(
     source: &ResolvedTelegramSource,
-    expected_kind: Option<&str>,
+    expected_subtype: Option<&str>,
 ) -> AppResult<()> {
-    if telegram_source_kind_matches(source, expected_kind)? {
+    if telegram_source_subtype_matches(source, expected_subtype)? {
         Ok(())
     } else {
         Err(AppError::validation(format!(
-            "Resolved Telegram source has a different Telegram source kind than the requested source kind: expected '{}', got '{}'",
-            expected_kind.unwrap_or("unknown"),
+            "Resolved Telegram source has a different source subtype than the requested source subtype: requested {}, actual {}",
+            expected_subtype.unwrap_or("unknown"),
             source.telegram_source_kind
         )))
     }
@@ -380,7 +388,7 @@ fn resolved_telegram_source_from_peer(peer: &Peer) -> Option<ResolvedTelegramSou
     telegram_source_info_from_peer(peer).map(|source| ResolvedTelegramSource {
         external_id: source.id.to_string(),
         title: source.title,
-        telegram_source_kind: source.telegram_source_kind,
+        telegram_source_kind: source.source_subtype,
         is_member: source.is_member,
         username: source.username,
         access_hash: peer_access_hash(peer),
@@ -394,7 +402,7 @@ pub(super) fn telegram_source_info_from_peer(peer: &Peer) -> Option<TelegramSour
             id: channel.id().bare_id(),
             title: channel.title().to_string(),
             username: channel.username().map(|value| value.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
+            source_subtype: TELEGRAM_KIND_CHANNEL.to_string(),
             is_member: !channel.raw.left,
             photo_data_url: None,
         }),
@@ -402,7 +410,7 @@ pub(super) fn telegram_source_info_from_peer(peer: &Peer) -> Option<TelegramSour
             id: group.id().bare_id(),
             title: group.title().unwrap_or("Untitled group").to_string(),
             username: group.username().map(|value| value.to_string()),
-            telegram_source_kind: telegram_group_kind(group).to_string(),
+            source_subtype: telegram_group_kind(group).to_string(),
             is_member: telegram_group_is_member(group),
             photo_data_url: None,
         }),
@@ -598,25 +606,29 @@ fn source_peer_ref_from_identity(
         return Ok(None);
     };
 
-    match source.telegram_source_kind.as_str() {
-        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => Ok(Some(PeerRef {
+    match source.source_subtype.as_deref() {
+        Some(TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP) => Ok(Some(PeerRef {
             id: PeerId::channel(telegram_source_id),
             auth: PeerAuth::from_hash(access_hash),
         })),
-        TELEGRAM_KIND_GROUP => Ok(None),
-        other => Err(AppError::validation(format!(
-            "Source {} has unsupported telegram_source_kind '{}'",
+        Some(TELEGRAM_KIND_GROUP) => Ok(None),
+        Some(other) => Err(AppError::validation(format!(
+            "Source {} has unsupported source_subtype '{}'",
             source.id, other
+        ))),
+        None => Err(AppError::validation(format!(
+            "Source {} is missing source_subtype",
+            source.id
         ))),
     }
 }
 
-fn peer_ref_for_source_kind(
+fn peer_ref_for_source_subtype(
     peer: &Peer,
-    telegram_source_kind: &str,
+    source_subtype: &str,
     source_id: i64,
 ) -> AppResult<PeerRef> {
-    match (telegram_source_kind, peer) {
+    match (source_subtype, peer) {
         (TELEGRAM_KIND_CHANNEL, Peer::Channel(channel)) => Ok(channel.raw.clone().into()),
         (TELEGRAM_KIND_SUPERGROUP, Peer::Group(group)) if group.is_megagroup() => {
             Ok(group.raw.clone().into())
@@ -626,12 +638,12 @@ fn peer_ref_for_source_kind(
         }
         (TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP, _) => Err(
             AppError::validation(format!(
-                "Source {} resolved to a different Telegram source kind than the requested source kind",
+                "Source {} resolved to a different Telegram source subtype than the requested source subtype",
                 source_id
             )),
         ),
         (other, _) => Err(AppError::validation(format!(
-            "Source {} has unsupported telegram_source_kind '{}'",
+            "Source {} has unsupported source_subtype '{}'",
             source_id, other
         ))),
     }
@@ -642,7 +654,7 @@ fn peer_ref_for_typed_identity(
     source_id: i64,
     identity: &TelegramSourceIdentity,
 ) -> AppResult<PeerRef> {
-    peer_ref_for_source_kind(peer, identity.source_subtype.as_str(), source_id)
+    peer_ref_for_source_subtype(peer, identity.source_subtype.as_str(), source_id)
 }
 
 pub(crate) async fn resolve_and_refresh_peer(
@@ -896,7 +908,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_expected_telegram_source_kind_reports_requested_and_actual_kind() {
+    fn validate_expected_telegram_source_subtype_reports_requested_and_actual_subtype() {
         let source = ResolvedTelegramSource {
             external_id: "123".to_string(),
             title: "Example".to_string(),
@@ -907,10 +919,11 @@ mod tests {
             avatar_bytes: None,
         };
 
-        let error = validate_expected_telegram_source_kind(&source, Some(TELEGRAM_KIND_CHANNEL))
-            .expect_err("expected kind mismatch");
+        let error = validate_expected_telegram_source_subtype(&source, Some(TELEGRAM_KIND_CHANNEL))
+            .expect_err("expected subtype mismatch");
 
-        assert!(error.message.contains("requested source kind"));
+        assert!(error.message.contains("requested source subtype"));
+        assert!(!error.message.contains("telegram_source_kind"));
         assert!(error.message.contains(TELEGRAM_KIND_CHANNEL));
         assert!(error.message.contains(TELEGRAM_KIND_SUPERGROUP));
     }
@@ -921,7 +934,6 @@ mod tests {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
@@ -951,7 +963,6 @@ mod tests {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some(TELEGRAM_KIND_SUPERGROUP.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_SUPERGROUP.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
@@ -981,7 +992,6 @@ mod tests {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some(TELEGRAM_KIND_GROUP.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_GROUP.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
@@ -1009,7 +1019,6 @@ mod tests {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some("unsupported".to_string()),
-            telegram_source_kind: "unsupported".to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
@@ -1037,7 +1046,6 @@ mod tests {
             id: 7,
             source_type: "rss".to_string(),
             source_subtype: Some("feed".to_string()),
-            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
@@ -1057,7 +1065,6 @@ mod tests {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_CHANNEL.to_string(),
             account_id: Some(1),
             external_id: "not-a-number".to_string(),
             title: Some("Example".to_string()),
@@ -1077,7 +1084,6 @@ mod tests {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
             source_subtype: Some(TELEGRAM_KIND_GROUP.to_string()),
-            telegram_source_kind: TELEGRAM_KIND_GROUP.to_string(),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),

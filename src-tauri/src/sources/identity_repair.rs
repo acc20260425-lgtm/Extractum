@@ -486,6 +486,37 @@ mod tests {
         pool: &sqlx::SqlitePool,
         id: i64,
         subtype: Option<&str>,
+        account_id: Option<i64>,
+        external_id: &str,
+        metadata_json: Option<&[u8]>,
+    ) {
+        let metadata_zstd = metadata_json
+            .map(compress_json_bytes)
+            .transpose()
+            .expect("compress metadata");
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id,
+                title, metadata_zstd, is_active, is_member, created_at
+            )
+            VALUES (?, 'telegram', ?, ?, ?, 'source', ?, 1, 1, 100)
+            "#,
+        )
+        .bind(id)
+        .bind(subtype)
+        .bind(account_id)
+        .bind(external_id)
+        .bind(metadata_zstd)
+        .execute(pool)
+        .await
+        .expect("insert source");
+    }
+
+    async fn insert_legacy_telegram_source(
+        pool: &sqlx::SqlitePool,
+        id: i64,
+        subtype: Option<&str>,
         legacy_kind: Option<&str>,
         account_id: Option<i64>,
         external_id: &str,
@@ -512,7 +543,7 @@ mod tests {
         .bind(metadata_zstd)
         .execute(pool)
         .await
-        .expect("insert source");
+        .expect("insert legacy source");
     }
 
     async fn post_v19_repair_pool() -> sqlx::SqlitePool {
@@ -694,7 +725,6 @@ mod tests {
             &pool,
             101,
             Some("channel"),
-            Some("channel"),
             Some(1),
             "12345",
             Some(br#"{"peer_identity":{"strategy":"username","username":"Example","access_hash":77},"avatar_cache_key":"1_channel_12345.jpg"}"#),
@@ -721,7 +751,6 @@ mod tests {
         insert_telegram_source(
             &pool,
             101,
-            Some("channel"),
             Some("channel"),
             Some(1),
             "12345",
@@ -814,16 +843,7 @@ mod tests {
     #[tokio::test]
     async fn repair_ignores_malformed_metadata_when_canonical_identity_is_present() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("channel"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
         sqlx::query("UPDATE sources SET metadata_zstd = x'00' WHERE id = 101")
             .execute(&pool)
             .await
@@ -847,7 +867,7 @@ mod tests {
     async fn v17_upgrade_repair_preserves_source_id_and_creates_canonical_index() {
         let pool = memory_pool_with_migrations_through(17).await;
         insert_test_account(&pool, 1).await;
-        insert_telegram_source(
+        insert_legacy_telegram_source(
             &pool,
             101,
             Some("channel"),
@@ -939,7 +959,6 @@ mod tests {
             &pool,
             101,
             Some("channel"),
-            Some("channel"),
             Some(1),
             "12345",
             Some(br#"{"peer_identity":{"strategy":"username","username":"Example","access_hash":77}}"#),
@@ -968,26 +987,8 @@ mod tests {
     #[tokio::test]
     async fn repair_fails_on_conflicting_typed_projection_drift() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("channel"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
-        insert_telegram_source(
-            &pool,
-            102,
-            Some("supergroup"),
-            Some("supergroup"),
-            Some(1),
-            "67890",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
+        insert_telegram_source(&pool, 102, Some("supergroup"), Some(1), "67890", None).await;
         insert_existing_typed_projection(&pool, 101, "channel", "channel", 67890).await;
 
         let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
@@ -1005,16 +1006,7 @@ mod tests {
     async fn malformed_external_ids_fail_without_writing_typed_rows() {
         for external_id in ["+123", "-123", "00123", "123 ", "12a3"] {
             let pool = memory_pool_with_sources().await;
-            insert_telegram_source(
-                &pool,
-                101,
-                Some("channel"),
-                Some("channel"),
-                Some(1),
-                external_id,
-                None,
-            )
-            .await;
+            insert_telegram_source(&pool, 101, Some("channel"), Some(1), external_id, None).await;
 
             let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
                 .await
@@ -1033,16 +1025,7 @@ mod tests {
     #[tokio::test]
     async fn missing_account_id_is_fatal() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("channel"),
-            None,
-            "12345",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("channel"), None, "12345", None).await;
 
         let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
             .await
@@ -1052,22 +1035,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn legacy_kind_conflict_is_ignored_when_canonical_subtype_is_valid() {
+    async fn repair_uses_canonical_subtype_without_legacy_kind() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("supergroup"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
 
         let report = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
             .await
-            .expect("legacy mirror is ignored");
+            .expect("canonical subtype is used");
 
         assert_eq!(report.repaired_sources, vec![101]);
         let typed_subtype: String =
@@ -1081,26 +1055,8 @@ mod tests {
     #[tokio::test]
     async fn duplicate_canonical_identity_reports_conflicting_source_ids() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("channel"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
-        insert_telegram_source(
-            &pool,
-            102,
-            Some("channel"),
-            Some("channel"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
+        insert_telegram_source(&pool, 102, Some("channel"), Some(1), "12345", None).await;
 
         let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
             .await
@@ -1116,26 +1072,8 @@ mod tests {
     #[tokio::test]
     async fn duplicate_typed_peer_identity_reports_conflicting_source_ids() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("channel"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
-        insert_telegram_source(
-            &pool,
-            102,
-            Some("supergroup"),
-            Some("supergroup"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
+        insert_telegram_source(&pool, 102, Some("supergroup"), Some(1), "12345", None).await;
 
         let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
             .await
@@ -1151,16 +1089,7 @@ mod tests {
     #[tokio::test]
     async fn apply_repair_is_idempotent() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("group"),
-            Some("group"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("group"), Some(1), "12345", None).await;
 
         repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
             .await
@@ -1179,26 +1108,8 @@ mod tests {
     #[tokio::test]
     async fn fatal_repair_rolls_back_and_does_not_create_canonical_index() {
         let pool = memory_pool_with_sources().await;
-        insert_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("channel"),
-            Some(1),
-            "12345",
-            None,
-        )
-        .await;
-        insert_telegram_source(
-            &pool,
-            102,
-            Some("channel"),
-            Some("channel"),
-            None,
-            "67890",
-            None,
-        )
-        .await;
+        insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
+        insert_telegram_source(&pool, 102, Some("channel"), None, "67890", None).await;
 
         repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
             .await

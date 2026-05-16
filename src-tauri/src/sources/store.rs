@@ -32,7 +32,7 @@ use super::types::{
 pub struct AddTelegramSourceRequest {
     pub account_id: i64,
     pub source_ref: String,
-    pub expected_kind: Option<TelegramSourceKind>,
+    pub expected_subtype: Option<TelegramSourceKind>,
 }
 
 #[tauri::command]
@@ -97,7 +97,7 @@ pub(crate) async fn load_source(
     source_id: i64,
 ) -> AppResult<SourceSyncTarget> {
     sqlx::query_as(
-        "SELECT id, source_type, source_subtype, COALESCE(telegram_source_kind, '') AS telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
+        "SELECT id, source_type, source_subtype, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
     )
     .bind(source_id)
     .fetch_optional(pool)
@@ -113,8 +113,8 @@ pub(crate) async fn load_source_record(
 ) -> AppResult<SourceRecord> {
     let row: SourceRecordRow = sqlx::query_as(
         r#"
-        SELECT s.id, s.source_type, s.source_subtype, s.telegram_source_kind,
-               s.account_id, s.external_id, s.title, s.metadata_zstd,
+        SELECT s.id, s.source_type, s.source_subtype, s.account_id, s.external_id,
+               s.title, s.metadata_zstd,
                s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
                ts.username AS telegram_username,
                ts.avatar_cache_key AS telegram_avatar_cache_key
@@ -144,7 +144,6 @@ pub(crate) async fn upsert_youtube_video_source(
         INSERT INTO sources (
             source_type,
             source_subtype,
-            telegram_source_kind,
             account_id,
             external_id,
             title,
@@ -153,7 +152,7 @@ pub(crate) async fn upsert_youtube_video_source(
             is_member,
             created_at
         )
-        VALUES ('youtube', 'video', '', NULL, ?, ?, ?, 1, 0, ?)
+        VALUES ('youtube', 'video', NULL, ?, ?, ?, 1, 0, ?)
         ON CONFLICT(source_type, source_subtype, external_id)
         WHERE source_type = 'youtube' AND source_subtype = 'video'
         DO UPDATE SET
@@ -184,7 +183,6 @@ pub(crate) async fn upsert_youtube_playlist_source(
         INSERT INTO sources (
             source_type,
             source_subtype,
-            telegram_source_kind,
             account_id,
             external_id,
             title,
@@ -193,7 +191,7 @@ pub(crate) async fn upsert_youtube_playlist_source(
             is_member,
             created_at
         )
-        VALUES ('youtube', 'playlist', '', NULL, ?, ?, ?, 1, 0, ?)
+        VALUES ('youtube', 'playlist', NULL, ?, ?, ?, 1, 0, ?)
         ON CONFLICT(source_type, source_subtype, external_id)
         WHERE source_type = 'youtube' AND source_subtype = 'playlist'
         DO UPDATE SET
@@ -227,8 +225,8 @@ pub async fn add_telegram_source(
             .clone()
     };
 
-    let expected_kind = request.expected_kind.map(TelegramSourceKind::as_str);
-    let resolved = resolve_telegram_source(&client, &request.source_ref, expected_kind).await?;
+    let expected_subtype = request.expected_subtype.map(TelegramSourceKind::as_str);
+    let resolved = resolve_telegram_source(&client, &request.source_ref, expected_subtype).await?;
     let avatar_cache_key = if let Some(bytes) = resolved.avatar_bytes.as_deref() {
         cache_source_avatar(
             &handle,
@@ -242,7 +240,7 @@ pub async fn add_telegram_source(
     };
     let source_metadata = source_metadata_for_added_source(
         &request.source_ref,
-        expected_kind,
+        expected_subtype,
         &resolved,
         avatar_cache_key.clone(),
     );
@@ -251,13 +249,11 @@ pub async fn add_telegram_source(
 
     let pool = get_pool(&handle).await?;
     let mut tx = pool.begin().await.map_err(AppError::database)?;
-    // Deprecated DTO/database compatibility mirror. Canonical Telegram subtype is source_subtype.
     let source_id: i64 = sqlx::query_scalar(
         r#"
         INSERT INTO sources (
             source_type,
             source_subtype,
-            telegram_source_kind,
             external_id,
             title,
             metadata_zstd,
@@ -266,13 +262,12 @@ pub async fn add_telegram_source(
             account_id,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
         ON CONFLICT(account_id, source_type, source_subtype, external_id)
         WHERE source_type = 'telegram'
         DO UPDATE SET
             title = excluded.title,
             source_subtype = excluded.source_subtype,
-            telegram_source_kind = excluded.telegram_source_kind,
             metadata_zstd = excluded.metadata_zstd,
             is_member = excluded.is_member,
             account_id = excluded.account_id,
@@ -281,7 +276,6 @@ pub async fn add_telegram_source(
         "#,
     )
     .bind(SourceType::Telegram.as_str())
-    .bind(&resolved.telegram_source_kind)
     .bind(&resolved.telegram_source_kind)
     .bind(&resolved.external_id)
     .bind(&resolved.title)
@@ -318,8 +312,8 @@ pub async fn list_sources(
     let rows: Vec<SourceRecordRow> = if let Some(aid) = account_id {
         sqlx::query_as(
             r#"
-            SELECT s.id, s.source_type, s.source_subtype, s.telegram_source_kind,
-                   s.account_id, s.external_id, s.title, s.metadata_zstd,
+            SELECT s.id, s.source_type, s.source_subtype, s.account_id, s.external_id,
+                   s.title, s.metadata_zstd,
                    s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
                    ts.username AS telegram_username,
                    ts.avatar_cache_key AS telegram_avatar_cache_key
@@ -336,8 +330,8 @@ pub async fn list_sources(
     } else {
         sqlx::query_as(
             r#"
-            SELECT s.id, s.source_type, s.source_subtype, s.telegram_source_kind,
-                   s.account_id, s.external_id, s.title, s.metadata_zstd,
+            SELECT s.id, s.source_type, s.source_subtype, s.account_id, s.external_id,
+                   s.title, s.metadata_zstd,
                    s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
                    ts.username AS telegram_username,
                    ts.avatar_cache_key AS telegram_avatar_cache_key
@@ -362,18 +356,11 @@ fn source_record_from_row_parts(
     avatar_data_url: Option<String>,
 ) -> SourceRecord {
     let source_subtype = row.source_subtype.unwrap_or_else(|| "unknown".to_string());
-    // Deprecated DTO/database compatibility mirror. Canonical Telegram subtype is source_subtype.
-    let telegram_source_kind = if row.source_type == TELEGRAM_SOURCE_TYPE {
-        Some(source_subtype.clone())
-    } else {
-        None
-    };
 
     SourceRecord {
         id: row.id,
         source_type: row.source_type,
         source_subtype,
-        telegram_source_kind,
         account_id: row.account_id,
         external_id: row.external_id,
         title: row.title,
@@ -497,7 +484,6 @@ mod tests {
                 id: 10,
                 source_type: "youtube".to_string(),
                 source_subtype: Some("video".to_string()),
-                telegram_source_kind: None,
                 account_id: None,
                 external_id: "dQw4w9WgXcQ".to_string(),
                 title: Some("Demo video".to_string()),
@@ -516,46 +502,16 @@ mod tests {
 
         assert_eq!(record.source_type, "youtube");
         assert_eq!(record.source_subtype, "video");
-        assert_eq!(record.telegram_source_kind, None);
         assert_eq!(record.account_id, None);
     }
 
     #[test]
-    fn source_record_parts_hides_non_telegram_compatibility_kind() {
-        let record = source_record_from_row_parts(
-            SourceRecordRow {
-                id: 10,
-                source_type: "youtube".to_string(),
-                source_subtype: Some("video".to_string()),
-                telegram_source_kind: Some("channel".to_string()),
-                account_id: None,
-                external_id: "dQw4w9WgXcQ".to_string(),
-                title: Some("Demo video".to_string()),
-                metadata_zstd: None,
-                last_sync_state: None,
-                last_synced_at: None,
-                is_active: true,
-                is_member: false,
-                created_at: 1_700_500,
-                telegram_username: None,
-                telegram_avatar_cache_key: None,
-            },
-            None,
-            None,
-        );
-
-        assert_eq!(record.source_type, "youtube");
-        assert_eq!(record.telegram_source_kind, None);
-    }
-
-    #[test]
-    fn source_record_parts_mirrors_telegram_kind_from_source_subtype() {
+    fn source_record_parts_emit_only_source_subtype() {
         let record = source_record_from_row_parts(
             SourceRecordRow {
                 id: 1,
                 source_type: TELEGRAM_SOURCE_TYPE.to_string(),
                 source_subtype: Some("supergroup".to_string()),
-                telegram_source_kind: Some("channel".to_string()),
                 account_id: Some(1),
                 external_id: "12345".to_string(),
                 title: Some("source".to_string()),
@@ -572,8 +528,9 @@ mod tests {
             None,
         );
 
-        assert_eq!(record.source_subtype, "supergroup");
-        assert_eq!(record.telegram_source_kind.as_deref(), Some("supergroup"));
+        let json = serde_json::to_value(&record).expect("serialize source record");
+        assert_eq!(json["source_subtype"], "supergroup");
+        assert!(json.get("telegram_source_kind").is_none());
     }
 
     #[test]
@@ -587,7 +544,6 @@ mod tests {
             id: 10,
             source_type: "youtube".to_string(),
             source_subtype: Some("video".to_string()),
-            telegram_source_kind: None,
             account_id: None,
             external_id: "abc123".to_string(),
             title: Some("Demo".to_string()),
@@ -635,7 +591,7 @@ mod tests {
 
         assert_eq!(row.0, "youtube");
         assert_eq!(row.1, "video");
-        assert_eq!(row.2.as_deref(), Some(""));
+        assert_eq!(row.2.as_deref(), Some("channel"));
         assert_eq!(row.3, "dQw4w9WgXcQ");
     }
 
@@ -659,7 +615,7 @@ mod tests {
 
         assert_eq!(row.0, "youtube");
         assert_eq!(row.1, "playlist");
-        assert_eq!(row.2.as_deref(), Some(""));
+        assert_eq!(row.2.as_deref(), Some("channel"));
         assert_eq!(row.3, "PLdemo");
     }
 

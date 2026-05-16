@@ -2130,7 +2130,7 @@ Expected:
 - Modify: `src-tauri/src/sources/topics.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Add failing backend API/store tests**
+- [x] **Step 1: Add failing backend API/store tests**
 
 In `src-tauri/src/sources/store.rs`, replace existing mirror tests with:
 
@@ -2191,7 +2191,7 @@ fn validate_expected_telegram_source_subtype_reports_requested_and_actual_subtyp
 }
 ```
 
-- [ ] **Step 2: Run failing backend tests**
+- [x] **Step 2: Run failing backend tests**
 
 Run:
 
@@ -2205,7 +2205,7 @@ Expected:
 source_record_parts_emit_only_source_subtype ... FAILED
 ```
 
-- [ ] **Step 3: Remove legacy fields from backend types**
+- [x] **Step 3: Remove legacy fields from backend types**
 
 In `src-tauri/src/sources/types.rs`:
 
@@ -2219,7 +2219,7 @@ pub source_subtype: String,
 3. Remove `telegram_source_kind` from `SourceSyncTarget`.
 4. Remove `telegram_source_kind` from `SourceRecordRow`.
 
-- [ ] **Step 4: Rename add-source request field**
+- [x] **Step 4: Rename add-source request field**
 
 In `src-tauri/src/sources/store.rs`, change:
 
@@ -2236,7 +2236,7 @@ pub expected_subtype: Option<TelegramSourceKind>,
 Because the struct uses `#[serde(rename_all = "camelCase")]`, the frontend
 wire key becomes `expectedSubtype` and `expectedKind` is no longer accepted.
 
-- [ ] **Step 5: Stop selecting and writing the removed column**
+- [x] **Step 5: Stop selecting and writing the removed column**
 
 In `src-tauri/src/sources/store.rs`:
 
@@ -2261,7 +2261,7 @@ let resolved = resolve_telegram_source(&client, &request.source_ref, expected_su
 
 6. Bind `&resolved.telegram_source_kind` only once as `source_subtype`.
 
-- [ ] **Step 6: Stop emitting the persisted mirror**
+- [x] **Step 6: Stop emitting the persisted mirror**
 
 In `source_record_from_row_parts`, remove mirror creation and return:
 
@@ -2283,7 +2283,7 @@ SourceRecord {
 }
 ```
 
-- [ ] **Step 7: Rename live dialog DTO in peer resolution**
+- [x] **Step 7: Rename live dialog DTO in peer resolution**
 
 In `src-tauri/src/sources/peer_resolution.rs`:
 
@@ -2311,14 +2311,14 @@ fn validate_expected_telegram_source_subtype(
 }
 ```
 
-- [ ] **Step 8: Update runtime tests and fixtures**
+- [x] **Step 8: Update runtime tests and fixtures**
 
 In Rust tests that construct `SourceSyncTarget` or `SourceRecordRow`, delete
 `telegram_source_kind` initializers. In test SQL that creates a current
 `sources` table, remove `telegram_source_kind`; keep it only in old-schema
 tests whose name says `legacy`, `v18`, `pre_v19`, or `upgrade`.
 
-- [ ] **Step 9: Run backend source tests**
+- [x] **Step 9: Run backend source tests**
 
 Run:
 
@@ -2332,7 +2332,7 @@ Expected:
 test result: ok. ... 0 failed
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 Run:
 

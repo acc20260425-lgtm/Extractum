@@ -69,7 +69,7 @@ pub struct TelegramSourceInfo {
     pub id: i64,
     pub title: String,
     pub username: Option<String>,
-    pub telegram_source_kind: String,
+    pub source_subtype: String,
     pub is_member: bool,
     pub photo_data_url: Option<String>,
 }
@@ -79,7 +79,6 @@ pub struct SourceRecord {
     pub id: i64,
     pub source_type: String,
     pub source_subtype: String,
-    pub telegram_source_kind: Option<String>,
     pub account_id: Option<i64>,
     pub external_id: String,
     pub title: Option<String>,
@@ -97,8 +96,6 @@ pub(crate) struct SourceSyncTarget {
     pub(crate) id: i64,
     pub(crate) source_type: String,
     pub(crate) source_subtype: Option<String>,
-    #[allow(dead_code)]
-    pub(crate) telegram_source_kind: String,
     pub(crate) account_id: Option<i64>,
     pub(crate) external_id: String,
     pub(crate) title: Option<String>,
@@ -111,8 +108,6 @@ pub(super) struct SourceRecordRow {
     pub(super) id: i64,
     pub(super) source_type: String,
     pub(super) source_subtype: Option<String>,
-    #[allow(dead_code)]
-    pub(super) telegram_source_kind: Option<String>,
     pub(super) account_id: Option<i64>,
     pub(super) external_id: String,
     pub(super) title: Option<String>,
