@@ -118,7 +118,7 @@ Modify:
 **Files:**
 - No source edits.
 
-- [ ] **Step 1: Confirm clean main before branch creation**
+- [x] **Step 1: Confirm clean main before branch creation**
 
 Run:
 
@@ -132,7 +132,7 @@ Expected:
 ## main
 ```
 
-- [ ] **Step 2: Create the implementation worktree or branch**
+- [x] **Step 2: Create the implementation worktree or branch**
 
 Run the preferred setup from "Pre-Implementation Branch Rule":
 
@@ -148,7 +148,7 @@ Expected:
 ## feature/source-identity-legacy-cleanup
 ```
 
-- [ ] **Step 3: Run baseline Rust tests**
+- [x] **Step 3: Run baseline Rust tests**
 
 Run:
 
@@ -162,7 +162,7 @@ Expected:
 test result: ok. ... 0 failed
 ```
 
-- [ ] **Step 4: Run baseline frontend tests**
+- [x] **Step 4: Run baseline frontend tests**
 
 Run:
 
@@ -177,7 +177,7 @@ Test Files  ... passed
 Tests       ... passed
 ```
 
-- [ ] **Step 5: Run baseline Svelte check**
+- [x] **Step 5: Run baseline Svelte check**
 
 Run:
 
@@ -191,7 +191,7 @@ Expected:
 svelte-check found 0 errors and 0 warnings
 ```
 
-- [ ] **Step 6: Confirm no baseline changes**
+- [x] **Step 6: Confirm no baseline changes**
 
 Run:
 
