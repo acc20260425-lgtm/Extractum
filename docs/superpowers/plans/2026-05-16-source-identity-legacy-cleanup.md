@@ -1194,7 +1194,7 @@ Expected:
 **Files:**
 - Modify: `src-tauri/src/migrations/source_identity_cleanup.rs`
 
-- [ ] **Step 1: Add failing source graph preservation test**
+- [x] **Step 1: Add failing source graph preservation test**
 
 Add a test that constructs representative child rows before v19 and verifies
 their source ids after v19:
@@ -1394,7 +1394,7 @@ async fn seed_repaired_v18_graph(conn: &mut SqliteConnection) {
 }
 ```
 
-- [ ] **Step 2: Add failing negative migration tests**
+- [x] **Step 2: Add failing negative migration tests**
 
 Add one parameterized test for invalid rows:
 
@@ -1597,21 +1597,21 @@ async fn insert_typed_telegram_projection(
 }
 ```
 
-- [ ] **Step 3: Run failing graph and negative tests**
+- [x] **Step 3: Run failing graph and negative tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::v19_preserves_source_ids_sequence_and_reference_graph migrations::source_identity_cleanup::tests::v19_rejects_invalid_repaired_v18_inputs_without_partial_schema
+cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::v19_
 ```
 
 Expected:
 
 ```text
-v19_preserves_source_ids_sequence_and_reference_graph ... FAILED
+test result: FAILED. 3 passed; 1 failed
 ```
 
-- [ ] **Step 4: Add preflight diagnostics before table rebuild**
+- [x] **Step 4: Add preflight diagnostics before table rebuild**
 
 Before `rebuild_sources_table(conn).await?;` in
 `run_source_identity_cleanup_rebuild`, call:
@@ -1693,7 +1693,7 @@ async fn preflight_sources_for_v19(conn: &mut SqliteConnection) -> AppResult<()>
 The unique index creation in `rebuild_sources_table` handles duplicate
 canonical Telegram identity and duplicate YouTube identity.
 
-- [ ] **Step 5: Add unsupported pre-v18 direct-upgrade guard test**
+- [x] **Step 5: Add unsupported pre-v18 direct-upgrade guard test**
 
 Add:
 
@@ -1771,21 +1771,21 @@ async fn reject_unsupported_pre_v18_telegram_upgrade(
 }
 ```
 
-- [ ] **Step 6: Run the migration hardening tests**
+- [x] **Step 6: Run the migration hardening tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::v19_preserves_source_ids_sequence_and_reference_graph migrations::source_identity_cleanup::tests::v19_rejects_invalid_repaired_v18_inputs_without_partial_schema migrations::source_identity_cleanup::tests::pre_v18_database_with_telegram_rows_gets_repair_window_error
+cargo test --manifest-path src-tauri/Cargo.toml migrations::source_identity_cleanup::tests::
 ```
 
 Expected:
 
 ```text
-test result: ok. 3 passed; 0 failed
+test result: ok. 7 passed; 0 failed
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
