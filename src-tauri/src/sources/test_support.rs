@@ -33,7 +33,28 @@ pub(crate) async fn memory_pool_with_sources() -> sqlx::SqlitePool {
     .execute(&pool)
     .await
     .expect("create sources");
+    create_source_identity_tables(&pool).await;
     pool
+}
+
+pub(crate) async fn create_source_identity_tables(pool: &sqlx::SqlitePool) {
+    sqlx::raw_sql(include_str!("../../migrations/18.sql"))
+        .execute(pool)
+        .await
+        .expect("create source identity bridge schema");
+}
+
+pub(crate) async fn create_canonical_telegram_identity_index(pool: &sqlx::SqlitePool) {
+    sqlx::query(
+        r#"
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_telegram_identity
+            ON sources(account_id, source_type, source_subtype, external_id)
+            WHERE source_type = 'telegram'
+        "#,
+    )
+    .execute(pool)
+    .await
+    .expect("create canonical telegram identity index");
 }
 
 pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePool {
@@ -111,18 +132,35 @@ pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePo
 
 #[cfg(test)]
 mod tests {
-    use super::memory_pool_with_source_items_and_topics;
+    use super::{
+        create_canonical_telegram_identity_index, memory_pool_with_source_items_and_topics,
+    };
 
     #[tokio::test]
     async fn source_fixture_creates_expected_tables() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_canonical_telegram_identity_index(&pool).await;
 
-        for table in ["app_settings", "sources", "items", "telegram_forum_topics"] {
+        for table in [
+            "app_settings",
+            "sources",
+            "source_identity_repair_notes",
+            "telegram_sources",
+            "items",
+            "telegram_forum_topics",
+        ] {
             sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
                 .bind(table)
                 .fetch_one(&pool)
                 .await
                 .unwrap_or_else(|_| panic!("expected {table} table"));
         }
+
+        sqlx::query(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_sources_unique_telegram_identity'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("expected canonical telegram identity index helper to create index");
     }
 }

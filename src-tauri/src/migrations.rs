@@ -192,6 +192,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/17.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 18,
+            description: "add source identity bridge schema",
+            sql: include_str!("../migrations/18.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -309,6 +315,53 @@ mod tests {
             assert!(
                 migration.sql.contains(fragment),
                 "missing migration fragment {fragment}"
+            );
+        }
+    }
+
+    #[test]
+    fn includes_source_identity_schema_bridge_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 18)
+            .expect("version 18 migration is registered");
+
+        for fragment in [
+            "CREATE TABLE IF NOT EXISTS telegram_sources",
+            "source_identity_repair_notes",
+            "idx_telegram_sources_account_peer",
+            "idx_telegram_sources_account_subtype",
+            "idx_telegram_sources_account_username",
+            "SET source_subtype = telegram_source_kind",
+        ] {
+            assert!(
+                migration.sql.contains(fragment),
+                "missing migration fragment {fragment}"
+            );
+        }
+    }
+
+    #[test]
+    fn source_identity_schema_bridge_does_not_sql_backfill_typed_identity() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 18)
+            .expect("version 18 migration is registered");
+
+        let forbidden_fragments = [
+            "INSERT INTO telegram_sources",
+            "INSERT OR IGNORE INTO telegram_sources",
+            "CAST(external_id",
+            "GLOB",
+            "idx_sources_unique_telegram_identity",
+        ];
+
+        for fragment in forbidden_fragments {
+            assert!(
+                !migration.sql.contains(fragment),
+                "migration 18 must not contain {fragment}"
             );
         }
     }

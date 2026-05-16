@@ -221,7 +221,7 @@ No commit is created for this task.
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Write failing migration registration tests**
+- [x] **Step 1: Write failing migration registration tests**
 
 Add these tests to the existing `#[cfg(test)] mod tests` in
 `src-tauri/src/migrations.rs`:
@@ -275,7 +275,7 @@ fn source_identity_schema_bridge_does_not_sql_backfill_typed_identity() {
 }
 ```
 
-- [ ] **Step 2: Run the failing migration tests**
+- [x] **Step 2: Run the failing migration tests**
 
 Run:
 
@@ -289,7 +289,7 @@ Expected:
 includes_source_identity_schema_bridge_migration FAILED
 ```
 
-- [ ] **Step 3: Add migration 18 SQL**
+- [x] **Step 3: Add migration 18 SQL**
 
 Create `src-tauri/migrations/18.sql`:
 
@@ -350,7 +350,7 @@ CREATE INDEX IF NOT EXISTS idx_telegram_sources_account_username
     WHERE username IS NOT NULL;
 ```
 
-- [ ] **Step 4: Register migration 18**
+- [x] **Step 4: Register migration 18**
 
 In `src-tauri/src/migrations.rs`, append to `build_migrations()` after version
 17:
@@ -364,7 +364,7 @@ Migration {
 },
 ```
 
-- [ ] **Step 5: Extend in-memory source fixture schema**
+- [x] **Step 5: Extend in-memory source fixture schema**
 
 In `src-tauri/src/sources/test_support.rs`, after creating `sources`, create
 the two new tables and safe indexes by executing the same schema fragments used
@@ -394,7 +394,7 @@ pub(crate) async fn create_canonical_telegram_identity_index(pool: &sqlx::Sqlite
 }
 ```
 
-- [ ] **Step 6: Run migration tests**
+- [x] **Step 6: Run migration tests**
 
 Run:
 
@@ -408,7 +408,7 @@ Expected:
 test result: ok. 2 passed; 0 failed
 ```
 
-- [ ] **Step 7: Commit schema bridge**
+- [x] **Step 7: Commit schema bridge**
 
 Run:
 
