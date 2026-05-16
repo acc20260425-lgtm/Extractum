@@ -2138,7 +2138,7 @@ git commit -m "feat: switch source store to canonical identity"
 - Modify: `src-tauri/src/sources/sync.rs`
 - Modify: `src-tauri/src/sources/identity.rs`
 
-- [ ] **Step 1: Add typed peer resolution tests**
+- [x] **Step 1: Add typed peer resolution tests**
 
 In `src-tauri/src/sources/peer_resolution.rs`, add tests that exercise pure
 planning helpers without a live Telegram client:
@@ -2180,7 +2180,7 @@ fn typed_identity_rejects_subtype_peer_kind_mismatch() {
 }
 ```
 
-- [ ] **Step 2: Change `ResolvedSyncPeer` to update typed identity**
+- [x] **Step 2: Change `ResolvedSyncPeer` to update typed identity**
 
 In `peer_resolution.rs`, change:
 
@@ -2200,7 +2200,7 @@ pub(crate) struct ResolvedSyncPeer {
 }
 ```
 
-- [ ] **Step 3: Load typed identity in runtime resolution**
+- [x] **Step 3: Load typed identity in runtime resolution**
 
 Change `resolve_and_refresh_peer` to accept the pool or a preloaded
 `TelegramSourceIdentity`:
@@ -2227,7 +2227,7 @@ pub(crate) async fn resolve_and_refresh_peer(
 `resolve_source_peer_from_typed_identity` may use direct `peer_ref()`, username,
 and dialog scan. It must not call `decode_source_metadata`.
 
-- [ ] **Step 4: Keep legacy metadata decoder only for repair/add-source metadata**
+- [x] **Step 4: Keep legacy metadata decoder only for repair/add-source metadata**
 
 Leave `decode_source_metadata` available for `identity_repair.rs`, but remove
 its use from normal `resolve_source_peer`.
@@ -2250,7 +2250,7 @@ The remaining `peer_resolution.rs` matches must be metadata encode/decode tests
 or legacy helpers used by repair/add-source metadata only, not normal runtime
 peer resolution.
 
-- [ ] **Step 5: Update sync finalize to write typed avatar cache key**
+- [x] **Step 5: Update sync finalize to write typed avatar cache key**
 
 In `src-tauri/src/sources/sync.rs`, replace `metadata_zstd` refresh with an
 update to `telegram_sources`:
@@ -2268,7 +2268,7 @@ if let Some(cache_key) = resolved_peer.refreshed_avatar_cache_key {
 }
 ```
 
-- [ ] **Step 6: Run runtime peer tests**
+- [x] **Step 6: Run runtime peer tests**
 
 Run:
 
@@ -2282,7 +2282,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 7: Commit runtime peer switch**
+- [x] **Step 7: Commit runtime peer switch**
 
 Run:
 

@@ -177,7 +177,7 @@ pub(crate) async fn finalize_sync(
     source: &SourceSyncTarget,
     previous_last_sync: i64,
     max_message_id: i64,
-    refreshed_metadata_zstd: Option<Vec<u8>>,
+    refreshed_avatar_cache_key: Option<String>,
 ) -> AppResult<Option<i64>> {
     let sync_completed_at = now_secs();
     let last_sync_state = if max_message_id > previous_last_sync {
@@ -186,25 +186,23 @@ pub(crate) async fn finalize_sync(
         source.last_sync_state
     };
 
-    if let Some(metadata_zstd) = refreshed_metadata_zstd {
-        sqlx::query(
-            "UPDATE sources SET last_sync_state = ?, last_synced_at = ?, metadata_zstd = ? WHERE id = ?",
-        )
+    sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
         .bind(last_sync_state)
         .bind(sync_completed_at)
-        .bind(metadata_zstd)
         .bind(source.id)
         .execute(pool)
         .await
         .map_err(|e| AppError::internal(e.to_string()))?;
-    } else {
-        sqlx::query("UPDATE sources SET last_sync_state = ?, last_synced_at = ? WHERE id = ?")
-            .bind(last_sync_state)
-            .bind(sync_completed_at)
-            .bind(source.id)
-            .execute(pool)
-            .await
-            .map_err(|e| AppError::internal(e.to_string()))?;
+
+    if let Some(cache_key) = refreshed_avatar_cache_key {
+        sqlx::query(
+            "UPDATE telegram_sources SET avatar_cache_key = ?, updated_at = strftime('%s','now'), identity_refreshed_at = strftime('%s','now') WHERE source_id = ?",
+        )
+        .bind(cache_key)
+        .bind(source.id)
+        .execute(pool)
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?;
     }
 
     Ok(last_sync_state)
@@ -244,7 +242,8 @@ async fn sync_telegram_source(
 
     let runtime = crate::telegram::get_authorized_runtime(&state, account_id).await?;
     let client = runtime.client;
-    let resolved_peer = resolve_and_refresh_peer(&handle, &client, &source, account_id).await?;
+    let resolved_peer =
+        resolve_and_refresh_peer(&handle, &pool, &client, &source, account_id).await?;
     let forum_topic_warnings =
         refresh_forum_topics(&pool, &client, resolved_peer.peer, &source).await;
     let sync_policy = determine_sync_policy(&pool, &source).await?;
@@ -254,7 +253,7 @@ async fn sync_telegram_source(
         &source,
         sync_policy.previous_last_sync,
         ingest.max_message_id,
-        resolved_peer.refreshed_metadata_zstd,
+        resolved_peer.refreshed_avatar_cache_key,
     )
     .await?;
 
@@ -270,13 +269,9 @@ async fn sync_telegram_source(
 #[cfg(test)]
 mod tests {
     use super::{determine_sync_policy, finalize_sync, sync_provider_for_source, SyncProvider};
-    use crate::compression::{compress_json_bytes, decompress_bytes};
-    use crate::sources::peer_resolution::decode_source_metadata;
     use crate::sources::store::load_source;
     use crate::sources::test_support::memory_pool_with_sources;
-    use crate::sources::types::{
-        SourceRecordRow, SourceSyncTarget, TELEGRAM_KIND_CHANNEL, TELEGRAM_SOURCE_TYPE,
-    };
+    use crate::sources::types::{SourceSyncTarget, TELEGRAM_KIND_CHANNEL, TELEGRAM_SOURCE_TYPE};
 
     #[tokio::test]
     async fn determine_sync_policy_only_applies_initial_settings_on_first_sync() {
@@ -362,12 +357,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn finalize_sync_updates_source_state_and_metadata() {
+    async fn finalize_sync_updates_source_state_and_typed_avatar_cache() {
         let pool = memory_pool_with_sources().await;
-        let metadata_zstd = compress_json_bytes(
-            br#"{"peer_identity":{"strategy":"username","username":"before"}}"#,
-        )
-        .expect("encode initial metadata");
         sqlx::query(
             r#"
             INSERT INTO sources (
@@ -395,7 +386,7 @@ mod tests {
         .bind(1_i64)
         .bind("12345")
         .bind("Example")
-        .bind(metadata_zstd)
+        .bind(None::<Vec<u8>>)
         .bind(5_i64)
         .bind(10_i64)
         .bind(1_i64)
@@ -404,27 +395,38 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert source");
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash, avatar_cache_key
+            )
+            VALUES (1, 1, 'channel', 'channel', 12345, 'username', 'before', 77, 'old.jpg')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert typed identity");
 
         let source = load_source(&pool, 1).await.expect("load source");
-        let updated_metadata_zstd = compress_json_bytes(
-            br#"{"peer_identity":{"strategy":"username","username":"after"},"avatar_cache_key":"1_channel_12345.jpg"}"#,
-        )
-        .expect("encode updated metadata");
 
-        let last_sync_state = finalize_sync(&pool, &source, 5, 9, Some(updated_metadata_zstd))
-            .await
-            .expect("finalize sync");
+        let last_sync_state = finalize_sync(
+            &pool,
+            &source,
+            5,
+            9,
+            Some("1_channel_12345.jpg".to_string()),
+        )
+        .await
+        .expect("finalize sync");
         assert_eq!(last_sync_state, Some(9));
 
-        let row: SourceRecordRow = sqlx::query_as(
+        let row: (Option<i64>, Option<i64>, Option<Vec<u8>>, Option<String>) = sqlx::query_as(
             r#"
-            SELECT id, source_type, source_subtype, telegram_source_kind,
-                   account_id, external_id, title, metadata_zstd, last_sync_state,
-                   last_synced_at, is_active, is_member, created_at,
-                   NULL AS telegram_username,
-                   NULL AS telegram_avatar_cache_key
-            FROM sources
-            WHERE id = ?
+            SELECT s.last_sync_state, s.last_synced_at, s.metadata_zstd, ts.avatar_cache_key
+            FROM sources s
+            JOIN telegram_sources ts ON ts.source_id = s.id
+            WHERE s.id = ?
             "#,
         )
         .bind(1_i64)
@@ -432,23 +434,9 @@ mod tests {
         .await
         .expect("reload updated source");
 
-        assert_eq!(row.last_sync_state, Some(9));
-        assert!(row.last_synced_at.is_some());
-        let metadata_bytes = row.metadata_zstd.as_deref().expect("updated metadata");
-        let decoded_metadata =
-            decode_source_metadata(Some(metadata_bytes)).expect("decode metadata");
-        let raw_metadata: serde_json::Value =
-            serde_json::from_slice(&decompress_bytes(metadata_bytes).expect("decompress metadata"))
-                .expect("parse metadata");
-        assert_eq!(
-            raw_metadata
-                .pointer("/peer_identity/username")
-                .and_then(serde_json::Value::as_str),
-            Some("after")
-        );
-        assert_eq!(
-            decoded_metadata.avatar_cache_key.as_deref(),
-            Some("1_channel_12345.jpg")
-        );
+        assert_eq!(row.0, Some(9));
+        assert!(row.1.is_some());
+        assert_eq!(row.2, None);
+        assert_eq!(row.3.as_deref(), Some("1_channel_12345.jpg"));
     }
 }

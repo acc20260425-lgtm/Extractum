@@ -105,6 +105,11 @@ impl TelegramSourceIdentity {
                 id: PeerId::channel(self.peer_id),
                 auth: PeerAuth::from_hash(access_hash),
             })),
+            (
+                TelegramPeerKind::Channel,
+                TelegramSourceKind::Channel | TelegramSourceKind::Supergroup,
+                None,
+            ) => Ok(None),
             (TelegramPeerKind::Chat, TelegramSourceKind::Group, _) => Ok(None),
             _ => Err(AppError::validation(format!(
                 "Source {} has inconsistent Telegram typed identity",

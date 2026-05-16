@@ -324,7 +324,8 @@ async fn run_takeout_source_import(
         job.message = Some("Resolving Telegram source.".to_string());
     })
     .await;
-    let resolved_peer = resolve_and_refresh_peer(handle, &client, &source, account_id).await?;
+    let resolved_peer =
+        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id).await?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_STARTING_TAKEOUT.to_string();
@@ -552,7 +553,7 @@ async fn run_started_takeout_source_import_inner(
         &source,
         source.last_sync_state.unwrap_or(0),
         import.max_message_id,
-        resolved_peer.refreshed_metadata_zstd,
+        resolved_peer.refreshed_avatar_cache_key,
     )
     .await?;
 
