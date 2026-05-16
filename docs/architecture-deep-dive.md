@@ -92,10 +92,11 @@ Supported Telegram source kinds are:
 - `supergroup`
 - `group`
 
-`sources.telegram_source_kind` remains only as a deprecated database/API
-compatibility mirror during the transition window. Persisted source selection,
-capabilities, sync, Takeout, forum topics, and exports derive Telegram subtype
-from `source_subtype` or `telegram_sources`.
+Telegram source subtype is canonical in `sources.source_subtype`. Operational
+Telegram peer identity lives in `telegram_sources`, including `peer_kind`,
+`peer_id`, username/access-hash hints, and avatar cache keys. The former
+Telegram subtype compatibility mirror in `sources` was removed from the current
+schema by the source identity legacy cleanup slice.
 
 ### 2.3 Sync strategy
 

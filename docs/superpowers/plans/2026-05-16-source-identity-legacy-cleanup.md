@@ -2738,7 +2738,7 @@ Expected:
 - Modify: `docs/architecture-deep-dive.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Update database schema docs**
+- [x] **Step 1: Update database schema docs**
 
 In `docs/database-schema.md`:
 
@@ -2760,7 +2760,7 @@ In `docs/database-schema.md`:
 | 19 | `19.sql` | Runner-managed rebuild of `sources` without `telegram_source_kind`; records the sentinel checksum for SQLx history |
 ```
 
-- [ ] **Step 2: Update architecture docs**
+- [x] **Step 2: Update architecture docs**
 
 In `docs/architecture-deep-dive.md`, replace the paragraph that says
 `sources.telegram_source_kind` remains as a deprecated mirror with:
@@ -2773,7 +2773,7 @@ Telegram peer identity lives in `telegram_sources`, including `peer_kind`,
 current schema by the source identity legacy cleanup slice.
 ```
 
-- [ ] **Step 3: Prune backlog shipped entries**
+- [x] **Step 3: Prune backlog shipped entries**
 
 In `docs/backlog.md`, remove shipped cleanup bullets:
 
@@ -2791,7 +2791,7 @@ Keep open follow-ups only:
 - [ ] continue item/document identity cleanup
 ```
 
-- [ ] **Step 4: Run docs scan**
+- [x] **Step 4: Run docs scan**
 
 Run:
 
@@ -2807,7 +2807,7 @@ docs\superpowers\specs\2026-05-16-source-identity-legacy-cleanup-design.md: desi
 docs\superpowers\plans\2026-05-16-source-identity-legacy-cleanup.md: implementation plan history
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 

@@ -50,7 +50,7 @@
 Priority: high.
 
 - [ ] verify that `list_telegram_sources` returns broadcast channels, supergroups, and regular small groups
-- [ ] verify that adding from the dialog list stores the expected `telegram_source_kind` and peer identity metadata
+- [ ] verify that adding from the dialog list stores the expected `source_subtype` and peer identity metadata
 - [ ] verify that sync works for `channel`, `supergroup`, and `group`
 - [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
@@ -106,18 +106,9 @@ Analysis:
 
 - Full findings are recorded in `docs/database-schema-legacy-analysis.md`.
 
-- [ ] make `source_subtype` the canonical provider subtype and retire normal-path `telegram_source_kind` usage
-- [ ] move high-value Telegram and YouTube identity metadata out of `metadata_zstd` into typed provider tables
-- [ ] remove `telegram_source_kind` from DTOs and database writes after the compatibility window
-- [ ] rebuild the fresh current schema without the legacy `telegram_source_kind` column
+- [ ] move remaining Telegram display/avatar metadata out of `sources.metadata_zstd`
 - [ ] move YouTube identity/display metadata to typed source tables
-- [ ] continue item/document identity cleanup with provider-native item keys and analysis-ready document rows
-- [ ] replace `(source_id, external_id)` as the only item identity with provider-native identity and at least `(source_id, item_kind, external_id)` uniqueness
-- [ ] introduce a provider-neutral document/corpus layer for analysis and export text units
-- [ ] materialize Telegram forum topic membership instead of recomputing it in reader/export joins
-- [ ] harden analysis snapshots so new runs persist non-null provider/document fields before provider execution
-- [ ] simplify YouTube playlist entries by using stable video entities or always materialized video rows with availability state
-- [ ] add a current-schema baseline for fresh installs and isolate legacy migration/checksum repair paths
+- [ ] continue item/document identity cleanup
 
 Acceptance:
 

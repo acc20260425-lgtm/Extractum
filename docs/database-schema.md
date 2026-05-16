@@ -14,7 +14,6 @@ Important fields:
 - `id`
 - `source_type`
 - `source_subtype`
-- `telegram_source_kind`
 - `external_id`
 - `title`
 - `metadata_zstd`
@@ -50,25 +49,17 @@ Implemented ingest providers are `telegram` and `youtube`.
 - future RSS can use `feed`
 - future forums can use `thread`, `board`, or `site`
 
-`telegram_source_kind` values:
-
-- `channel`
-- `supergroup`
-- `group`
-
-`telegram_source_kind` is deprecated. During the compatibility window it is a
-database/API mirror of canonical `source_subtype` for Telegram rows; normal
-runtime behavior must not treat it as an independent source of truth.
-
 Notes:
 
 - older rows that used `source_type = 'telegram_channel'` are migrated to `source_type = 'telegram'`;
 - migration `15.sql` adds `source_subtype` and backfills existing Telegram rows
-  from `telegram_source_kind`;
+  from the legacy Telegram subtype mirror;
 - migration `18.sql` adds typed Telegram identity tables and a startup repair
   creates the canonical Telegram unique index only after duplicate preflight;
-- `telegram_source_kind` is a Telegram compatibility field and can be `NULL` for
-  future non-Telegram sources;
+- migration `19.sql` is runner-managed by Rust and removes the old Telegram
+  subtype compatibility mirror from the current `sources` schema;
+- Telegram source subtype is canonical in `sources.source_subtype`;
+- Telegram operational peer identity lives in `telegram_sources`.
 - uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
 - uniqueness includes `source_subtype` because Telegram bare ids are not enough to safely describe every peer shape.
 - `last_sync_state` and `last_synced_at` are advanced by normal sync and by successful Takeout import; failed or cancelled Takeout jobs leave these fields unchanged.
@@ -480,6 +471,7 @@ Purpose:
 | 16 | `16.sql` | Add YouTube source foundation, item kinds, playlist rows, transcript segments, YouTube analysis snapshot metadata, source-group provider type, and YouTube settings defaults |
 | 17 | `17.sql` | Add durable YouTube corpus mode metadata to `analysis_runs` |
 | 18 | `18.sql` | Add source identity bridge tables, safe Telegram subtype backfills, and repair diagnostics storage |
+| 19 | `19.sql` | Runner-managed rebuild of `sources` without `telegram_source_kind`; records the sentinel checksum for SQLx history |
 
 ## 4. Current behavior implications
 
