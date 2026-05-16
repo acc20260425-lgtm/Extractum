@@ -19,32 +19,32 @@ mod manual_ref;
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-enum SourcePeerResolutionStrategy {
+pub(super) enum SourcePeerResolutionStrategy {
     Username,
     Dialog,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct SourcePeerIdentity {
-    strategy: SourcePeerResolutionStrategy,
+pub(super) struct SourcePeerIdentity {
+    pub(super) strategy: SourcePeerResolutionStrategy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    username: Option<String>,
+    pub(super) username: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    access_hash: Option<i64>,
+    pub(super) access_hash: Option<i64>,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(super) struct SourceMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    peer_identity: Option<SourcePeerIdentity>,
+    pub(super) peer_identity: Option<SourcePeerIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) avatar_cache_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    username: Option<String>,
+    pub(super) username: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    added_from: Option<String>,
+    pub(super) added_from: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    access_hash: Option<i64>,
+    pub(super) access_hash: Option<i64>,
 }
 
 impl SourcePeerIdentity {

@@ -1,5 +1,6 @@
 mod avatar;
 pub(crate) mod identity;
+pub(crate) mod identity_repair;
 mod items;
 mod peer_resolution;
 mod settings;

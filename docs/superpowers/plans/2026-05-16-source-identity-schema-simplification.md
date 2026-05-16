@@ -755,7 +755,7 @@ git commit -m "feat: add typed source identity helpers"
 - Modify: `src-tauri/src/sources/peer_resolution.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Expose legacy metadata fields to repair only**
+- [x] **Step 1: Expose legacy metadata fields to repair only**
 
 In `src-tauri/src/sources/peer_resolution.rs`, make `SourceMetadata` fields
 needed by repair visible inside `sources`:
@@ -797,7 +797,7 @@ pub(super) struct SourcePeerIdentity {
 }
 ```
 
-- [ ] **Step 2: Write failing dry-run tests**
+- [x] **Step 2: Write failing dry-run tests**
 
 Create `src-tauri/src/sources/identity_repair.rs` with an empty test module
 first, then add tests:
@@ -908,7 +908,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run failing repair tests**
+- [x] **Step 3: Run failing repair tests**
 
 Run:
 
@@ -928,7 +928,7 @@ or:
 cannot find function `repair_source_identity`
 ```
 
-- [ ] **Step 4: Implement repair report and mode**
+- [x] **Step 4: Implement repair report and mode**
 
 In `src-tauri/src/sources/identity_repair.rs`, add:
 
@@ -1009,7 +1009,7 @@ impl SourceIdentityRepairState {
 }
 ```
 
-- [ ] **Step 5: Implement canonical derivation and repair loop**
+- [x] **Step 5: Implement canonical derivation and repair loop**
 
 Add row structs and `repair_source_identity`:
 
@@ -1118,7 +1118,7 @@ pub(crate) async fn repair_source_identity(
 }
 ```
 
-- [ ] **Step 6: Implement candidate derivation**
+- [x] **Step 6: Implement candidate derivation**
 
 Add helper functions:
 
@@ -1205,7 +1205,7 @@ fn derive_source_subtype(
 }
 ```
 
-- [ ] **Step 7: Implement duplicate preflight and upsert**
+- [x] **Step 7: Implement duplicate preflight and upsert**
 
 Add:
 
@@ -1328,7 +1328,7 @@ fn repair_failed_error(report: &SourceIdentityRepairReport) -> AppError {
 }
 ```
 
-- [ ] **Step 8: Export repair module**
+- [x] **Step 8: Export repair module**
 
 In `src-tauri/src/sources/mod.rs`, add:
 
@@ -1336,7 +1336,7 @@ In `src-tauri/src/sources/mod.rs`, add:
 pub(crate) mod identity_repair;
 ```
 
-- [ ] **Step 9: Run repair tests**
+- [x] **Step 9: Run repair tests**
 
 Run:
 
@@ -1350,7 +1350,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 10: Commit repair engine foundation**
+- [x] **Step 10: Commit repair engine foundation**
 
 Run:
 
