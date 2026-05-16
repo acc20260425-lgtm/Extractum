@@ -336,6 +336,12 @@ Required v19 rebuild sequence:
 9. Restore `PRAGMA foreign_keys = ON`.
 10. Run `PRAGMA foreign_key_check` again and fail startup on any result rows.
 
+The migration runner must execute `PRAGMA foreign_key_check`, consume all result
+rows, and convert any returned row into a migration/startup error. Merely
+including `PRAGMA foreign_key_check` in a SQL script is insufficient because the
+pragma returns diagnostics as rows and does not automatically abort the
+migration.
+
 If the migration framework cannot guarantee this ordering, v19 must not be
 implemented as a plain SQL migration file. It must be implemented as a
 runner-managed special migration, or the runner must be extended to support a
