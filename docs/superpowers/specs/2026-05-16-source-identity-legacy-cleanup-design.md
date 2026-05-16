@@ -17,6 +17,24 @@ frontend types, live Telegram dialog DTOs, command payloads, runtime queries,
 and normal tests. Historical migration files and upgrade fixtures may still
 mention `telegram_source_kind`; normal product code must not.
 
+## Reading This Spec
+
+The normative contract sections define what must be true after the slice:
+
+- supported upgrade matrix;
+- identity invariants;
+- post-v19 `sources` schema;
+- database migration contract;
+- backend API/runtime contract;
+- repair/integrity behavior;
+- frontend API/UI contract;
+- documentation contract;
+- completion criteria.
+
+Implementation hints and verification commands are intentionally separated near
+the end. They guide the implementation plan but are not an alternative source of
+truth for the product/data contract above.
+
 ## Accepted Decisions
 
 - Add a safe `v19` migration instead of rewriting old migration files.
@@ -72,7 +90,7 @@ as unsupported rather than papered over with a new SQL fallback.
 6. Keep source commands gated by source identity repair state.
 7. Keep the repair engine as an integrity check over canonical
    `sources.source_subtype` plus typed `telegram_sources`.
-8. Update docs and backlog so the completed compatibility window is clear.
+8. Update current-state docs and prune backlog so only open follow-ups remain.
 
 ## Non-Goals
 
@@ -299,21 +317,14 @@ Acceptance for v19 is stronger than “the migration succeeds”: every existing
 row that referenced `sources(id)` before v19 must still reference an existing
 source with the same id and semantic identity after v19.
 
-## Backend API And Runtime
+## Backend API And Runtime Contract
 
-Persisted source DTOs should expose only the canonical subtype. In Rust, remove
-`telegram_source_kind` from current source data shapes:
+Persisted source DTOs must expose only canonical `source_subtype` as source
+subtype identity. They must not emit `telegram_source_kind` or
+`telegramSourceKind`.
 
-- `SourceRecord`
-- `SourceRowParts`
-- `SourceSyncTarget`
-- store query row structs
-- NotebookLM export source models where the field is only a compatibility
-  mirror
-- analysis/test fixtures that build persisted source DTOs
-
-Queries should select `source_subtype` directly and stop selecting
-`telegram_source_kind`. Inserts and upserts should stop writing
+Normal runtime source queries must select `source_subtype` directly and must
+not select `telegram_source_kind`. Source inserts and upserts must not write
 `telegram_source_kind`.
 
 Live Telegram dialog DTOs should be renamed from `telegram_source_kind` to
@@ -353,10 +364,24 @@ After migration 19, repair should:
 - validate duplicate canonical identity before index creation;
 - validate duplicate typed peer identity;
 - validate projection drift between `sources` and `telegram_sources`;
-- upsert or refresh `telegram_sources` where the canonical source row and
-  legacy metadata make that safe;
 - keep dry-run behavior non-writing;
 - keep source commands blocked while repair is pending/running/failed.
+
+Repair safety cases:
+
+| Case | Repair action |
+| --- | --- |
+| `telegram_sources` row exists and matches `sources.account_id`, `sources.source_subtype`, and `sources.external_id` parsed as peer id | OK. Include the source in the report as checked/repaired according to the existing report convention, but do not rewrite `sources`. |
+| `telegram_sources` row is missing, and `sources` has valid Telegram `account_id`, supported `source_subtype`, and canonical `external_id` | Upsert `telegram_sources` from canonical `sources`. Derive `peer_kind` from `source_subtype`, derive `peer_id` from `external_id`, and copy username/access hash/resolution/avatar hints from `metadata_zstd` only if the metadata decodes cleanly. If metadata is absent, use `resolution_strategy = 'unknown'` and nullable hint fields. |
+| `telegram_sources` row is missing and `sources` lacks `account_id`, supported `source_subtype`, or canonical `external_id` | Fatal diagnostic. Do not partially write typed identity. |
+| `sources.source_subtype` conflicts with `telegram_sources.source_subtype` | Fatal projection drift diagnostic. |
+| `sources.account_id` conflicts with `telegram_sources.account_id` | Fatal projection drift diagnostic. |
+| `sources.external_id` parsed as peer id conflicts with `telegram_sources.peer_id` | Fatal projection drift diagnostic unless no other source can own the existing typed peer and the implementation deliberately treats this as non-conflicting repair drift. That non-conflicting drift path must be covered by a targeted test. |
+| Duplicate `(account_id, source_type, source_subtype, external_id)` among Telegram sources | Fatal duplicate canonical identity diagnostic naming the source ids. |
+| Duplicate `(account_id, peer_kind, peer_id)` among typed Telegram identities | Fatal duplicate typed peer identity diagnostic naming the source ids. |
+| Username, access hash, resolution strategy, or avatar hint is missing or differs but account/subtype/peer identity agrees | Non-fatal. Keep the existing typed row or refresh nullable hint fields from decodable metadata; do not block startup solely because optional hints are absent. |
+| `metadata_zstd` is malformed while canonical `sources` identity is valid and a matching typed row already exists | Non-fatal. Keep the typed row and record no fatal identity error. |
+| `metadata_zstd` is malformed while typed row is missing | Fatal only if the implementation cannot build the required typed row from canonical `sources`; otherwise upsert required identity fields and leave optional hints empty. |
 
 The diagnostic
 `telegram_subtype_legacy_kind_conflict` should be removed from normal tests and
@@ -403,14 +428,42 @@ canonical in `sources.source_subtype`, operational Telegram peer identity lives
 in `telegram_sources`, and the legacy mirror has been removed from the current
 schema.
 
-Update `docs/backlog.md` by marking the `telegram_source_kind` compatibility
-cleanup as complete or replacing it with narrower follow-ups:
+Update `docs/backlog.md` according to its open-work-only rule. Do not mark the
+`telegram_source_kind` cleanup as complete in backlog. Remove shipped
+compatibility-window cleanup entries and leave only still-open follow-ups such
+as:
 
 - move remaining Telegram display/avatar metadata out of `sources.metadata_zstd`;
 - move YouTube identity/display metadata to typed source tables;
 - continue item/document identity cleanup.
 
-## Verification Strategy
+## Implementation Hints
+
+Likely Rust data shapes affected by the backend API/runtime contract:
+
+- `SourceRecord`;
+- `SourceRowParts`;
+- `SourceSyncTarget`;
+- store query row structs;
+- live Telegram dialog DTOs;
+- add Telegram source request DTO;
+- NotebookLM export source models where the field is only a compatibility
+  mirror;
+- analysis/test fixtures that build persisted source DTOs.
+
+Likely frontend shapes affected:
+
+- persisted `Source`;
+- live `TelegramDialogSource`;
+- add-source input types;
+- source capability fixtures;
+- analysis source state fixtures;
+- source management dialog filters, sort keys, labels, and add-source payload.
+
+These are hints for plan writing. The implementation must still be driven by
+the normative contracts above and by compile/test feedback.
+
+## Verification Appendix
 
 Use TDD for each implementation task. Important red/green checks:
 
@@ -472,5 +525,6 @@ The slice is complete when:
 - add-source commands use `expectedSubtype`;
 - repair remains an integrity gate and no longer reads or writes the legacy
   mirror;
-- docs/backlog describe the completed compatibility cleanup;
+- current-state docs describe the completed compatibility cleanup and backlog
+  contains only open follow-ups;
 - full Rust tests, frontend tests, and Svelte check pass.
