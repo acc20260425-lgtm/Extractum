@@ -72,11 +72,21 @@ Supported scenarios:
 | Existing database at version 18 with no fatal source identity repair findings | Supported if canonical `sources` rows and typed `telegram_sources` rows already satisfy the invariants in this spec. Migration 19 must preserve that state. |
 | Existing database at version 18 where startup repair never ran or previously failed | Unsupported for this slice. Migration 19 may fail fast through schema constraints or index creation if canonical identity is incomplete or duplicated. The user should run a build containing the v18 repair first or restore a repaired database. |
 | Existing database before version 18 upgrading directly to this version | Unsupported for this slice when Telegram rows exist. Migrations 18 and 19 would run in one SQL batch before Rust startup repair can use the legacy mirror. |
-| Database with Telegram rows whose `account_id`, `source_subtype`, or `external_id` is invalid | Invalid database state. Migration tests and repair tests must cover failure or blocking behavior; implementation must not silently coerce or invent identity values. |
+| Database with implemented-provider rows whose required identity fields are invalid | Invalid database state. This includes Telegram rows with invalid `account_id`, `source_subtype`, or `external_id`, and YouTube rows with invalid `source_subtype` or `external_id`. Migration tests and repair tests must cover failure or blocking behavior; implementation must not silently coerce or invent identity values. |
 
 The implementation plan should include explicit tests for the supported
 fresh-install and repaired-v18 paths. Direct pre-v18 upgrade may be documented
 as unsupported rather than papered over with a new SQL fallback.
+
+Minimum supported direct upgrade inputs:
+
+- an empty or fresh database that applies migrations 1 through 19;
+- a database already at version 18 with successful source identity repair;
+- a database already at version 18 with canonical `sources` rows and typed
+  `telegram_sources` rows that have no fatal source identity repair findings.
+
+Existing pre-v18 databases containing Telegram sources must first be opened by a
+build that includes the v18 source identity repair window.
 
 Failure behavior:
 
@@ -87,7 +97,10 @@ Failure behavior:
 - if migration 19 succeeds but the repair/integrity gate fails, source commands
   remain blocked with the typed source identity repair error;
 - user-facing diagnostics should identify source identity migration or repair
-  failure without exposing raw compressed metadata payloads.
+  failure without exposing raw compressed metadata payloads;
+- unsupported pre-v18 direct upgrade diagnostics should explain that the
+  database must be opened by a v18-repair build or restored from a repaired
+  backup before applying this cleanup slice.
 
 ## Goals
 
@@ -287,6 +300,18 @@ across the supported environment, so migration 19 should rebuild `sources`:
 5. Rename `sources_new` to `sources`.
 6. Recreate the post-v19 indexes listed above.
 
+Migration 19 must use a foreign-key-safe table rebuild procedure that cannot
+cascade-delete dependent rows and must verify referential integrity after the
+rebuild. Because `sources` is a central parent table, disabling foreign-key
+enforcement for the rebuild is allowed only inside the migration transaction or
+connection-local migration scope, and only if the migration runs
+`PRAGMA foreign_key_check` afterward and fails on any result rows.
+
+Migration 19 must preserve the previous `sqlite_sequence` high-water mark for
+`sources`. The next inserted source id after the rebuild must be greater than
+or equal to the sequence value that existed before the rebuild, even when
+deleted historical source rows made that sequence larger than `MAX(id)`.
+
 Migration 19 must not use `telegram_source_kind` as a fallback source of truth.
 If a Telegram row reaches v19 without a valid `source_subtype`, that is a data
 integrity problem surfaced by the repair gate or migration tests, not a new SQL
@@ -307,11 +332,14 @@ Fresh-install migration tests should apply all migrations and assert that:
 - inserting a YouTube source with an unsupported `source_subtype` fails;
 - inserting an RSS/forum placeholder row with a provider-local subtype is still
   allowed by the database checks.
+- `PRAGMA foreign_key_check` returns no rows after migration 19.
 
 Upgrade-style tests should construct a v18-shaped schema with source rows and
 typed Telegram rows, run migration 19, and assert that:
 
 - source ids are unchanged;
+- the `sources` `sqlite_sequence` high-water mark is preserved when it is
+  greater than `MAX(id)`;
 - Telegram typed identity rows still point to the same `source_id`;
 - YouTube source ids and uniqueness remain stable;
 - the legacy column is gone.
