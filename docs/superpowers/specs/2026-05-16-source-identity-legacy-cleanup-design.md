@@ -69,6 +69,7 @@ Supported scenarios:
 | --- | --- |
 | Fresh install through migrations 1 to 19 | Succeeds. The final `sources` schema has no `telegram_source_kind`. Startup repair then runs against an empty or canonical database. |
 | Existing database at version 18 with startup repair already successful | Succeeds. Migration 19 rebuilds `sources`, preserves ids, and recreates current indexes without the legacy column. |
+| Existing database at version 18 with no fatal source identity repair findings | Supported if canonical `sources` rows and typed `telegram_sources` rows already satisfy the invariants in this spec. Migration 19 must preserve that state. |
 | Existing database at version 18 where startup repair never ran or previously failed | Unsupported for this slice. Migration 19 may fail fast through schema constraints or index creation if canonical identity is incomplete or duplicated. The user should run a build containing the v18 repair first or restore a repaired database. |
 | Existing database before version 18 upgrading directly to this version | Unsupported for this slice when Telegram rows exist. Migrations 18 and 19 would run in one SQL batch before Rust startup repair can use the legacy mirror. |
 | Database with Telegram rows whose `account_id`, `source_subtype`, or `external_id` is invalid | Invalid database state. Migration tests and repair tests must cover failure or blocking behavior; implementation must not silently coerce or invent identity values. |
@@ -76,6 +77,17 @@ Supported scenarios:
 The implementation plan should include explicit tests for the supported
 fresh-install and repaired-v18 paths. Direct pre-v18 upgrade may be documented
 as unsupported rather than papered over with a new SQL fallback.
+
+Failure behavior:
+
+- migration 19 runs in one transaction or otherwise guarantees that a failed
+  rebuild leaves the previous schema/data intact;
+- if migration 19 fails, application startup must fail before source commands
+  become available;
+- if migration 19 succeeds but the repair/integrity gate fails, source commands
+  remain blocked with the typed source identity repair error;
+- user-facing diagnostics should identify source identity migration or repair
+  failure without exposing raw compressed metadata payloads.
 
 ## Goals
 
@@ -98,9 +110,10 @@ as unsupported rather than papered over with a new SQL fallback.
 - Do not remove historical migration checksum repair logic.
 - Do not remove or migrate Telegram `sources.metadata_zstd` display/avatar
   payloads.
-- Do not rename the internal `TelegramSourceKind` enum unless it becomes a
-  small, local cleanup during implementation. The public and database
-  vocabulary is the important boundary.
+- Internal Rust names such as `TelegramSourceKind` are not part of the
+  public/database compatibility contract. The required boundary is DB, API,
+  DTO, and frontend vocabulary. Internal names may remain unless a small local
+  rename makes the implementation clearer.
 - Do not change YouTube typed metadata storage in this slice.
 - Do not refactor item/document identity in this slice.
 
@@ -334,14 +347,19 @@ Live Telegram dialog DTOs should be renamed from `telegram_source_kind` to
 - `supergroup`
 - `group`
 
+In live Telegram dialog DTOs, `source_subtype`/`sourceSubtype` means “the
+subtype that would be used if this dialog is registered as a source.” It is not
+a persisted source identity until `add_telegram_source` succeeds and a
+`sources` row plus typed `telegram_sources` row exist.
+
 The add Telegram source command should accept `expected_subtype` instead of
 `expected_kind`. The TypeScript API should expose `expectedSubtype` instead of
 `expectedKind`. No old aliases should be accepted.
 
 Peer-resolution helper names and error strings should move away from
 `telegram_source_kind` when the value is actually a canonical source subtype.
-The internal `TelegramSourceKind` enum can remain if renaming it would add
-noise without improving the boundary.
+Internal Rust names may remain historical; the compatibility boundary is the
+database/API/DTO/frontend vocabulary.
 
 ## Repair And Integrity Gate
 
@@ -489,10 +507,26 @@ rg -n "telegram_source_kind|telegramSourceKind|expectedKind|expected_kind" src-t
 The final scan may only match quarantined legacy zones if the command is run
 against the whole repository:
 
-- old migration SQL files;
-- migration registration and upgrade tests;
-- old-schema test fixtures;
+Allowed matches:
+
+- old migration SQL files: `src-tauri/migrations/11.sql`,
+  `src-tauri/migrations/12.sql`, `src-tauri/migrations/15.sql`, and
+  `src-tauri/migrations/18.sql`;
+- migration registration and upgrade tests that assert old migrations existed
+  or old schemas upgrade safely;
+- old-schema test fixtures used only for upgrade/regression setup;
 - docs describing migration history.
+
+Disallowed matches:
+
+- runtime source store, sync, peer-resolution, Takeout, topics, NotebookLM, and
+  YouTube source code;
+- command request/response payload structs for current APIs;
+- frontend API mapping;
+- persisted frontend `Source` and live dialog source types;
+- UI source filtering, sorting, labeling, keying, and add-source logic;
+- normal runtime/frontend tests that are not explicitly old-schema upgrade
+  fixtures.
 
 Normal runtime modules, frontend source APIs, and UI components must not match.
 
