@@ -116,7 +116,7 @@ Modify:
 **Files:**
 - No source edits.
 
-- [ ] **Step 1: Confirm clean main before branch creation**
+- [x] **Step 1: Confirm clean main before branch creation**
 
 Run:
 
@@ -130,7 +130,7 @@ Expected:
 ## main
 ```
 
-- [ ] **Step 2: Create the implementation branch/worktree**
+- [x] **Step 2: Create the implementation branch/worktree**
 
 Run the preferred setup from "Pre-Implementation Branch Rule":
 
@@ -146,7 +146,7 @@ Expected:
 ## feature/source-identity-schema
 ```
 
-- [ ] **Step 3: Run baseline frontend tests**
+- [x] **Step 3: Run baseline frontend tests**
 
 Run:
 
@@ -163,7 +163,7 @@ Tests       <all passed count> passed
 
 If this fails, stop and record the failing test names before implementation.
 
-- [ ] **Step 4: Run baseline frontend type check**
+- [x] **Step 4: Run baseline frontend type check**
 
 Run:
 
@@ -179,7 +179,7 @@ svelte-check found 0 errors and 0 warnings
 
 If existing warnings appear, record them before implementation.
 
-- [ ] **Step 5: Run baseline Rust tests**
+- [x] **Step 5: Run baseline Rust tests**
 
 Run:
 
@@ -196,7 +196,7 @@ test result: ok. <count> passed; 0 failed
 If dependency download is blocked by the sandbox, rerun with approval according
 to the active escalation rules.
 
-- [ ] **Step 6: Commit no changes**
+- [x] **Step 6: Commit no changes**
 
 Run:
 
