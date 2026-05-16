@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde::Serialize;
+use tauri::Manager;
 use tokio::sync::RwLock;
 
 use crate::error::{AppError, AppErrorKind, AppResult};
@@ -71,6 +72,53 @@ impl SourceIdentityRepairState {
     async fn set_status(&self, status: SourceIdentityRepairStatus) {
         *self.status.write().await = status;
     }
+}
+
+pub(crate) async fn run_startup_source_identity_repair(handle: tauri::AppHandle) {
+    let state = handle.state::<SourceIdentityRepairState>().inner().clone();
+    state.set_status(SourceIdentityRepairStatus::Running).await;
+
+    let result = async {
+        let pool = crate::db::get_pool(&handle).await?;
+        repair_source_identity(&pool, SourceIdentityRepairMode::Apply).await
+    }
+    .await;
+
+    match result {
+        Ok(_) => state.set_status(SourceIdentityRepairStatus::Ready).await,
+        Err(error) => {
+            state
+                .set_status(SourceIdentityRepairStatus::Failed { error })
+                .await
+        }
+    }
+}
+
+pub(crate) async fn require_source_identity_ready(
+    state: &SourceIdentityRepairState,
+) -> AppResult<()> {
+    match state.status().await {
+        SourceIdentityRepairStatus::Ready => Ok(()),
+        SourceIdentityRepairStatus::Failed { error } => Err(error),
+        SourceIdentityRepairStatus::Pending | SourceIdentityRepairStatus::Running => Err(
+            AppError::conflict("Source identity repair is still running"),
+        ),
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn get_source_identity_repair_status(
+    state: tauri::State<'_, SourceIdentityRepairState>,
+) -> AppResult<SourceIdentityRepairStatus> {
+    Ok(state.status().await)
+}
+
+#[tauri::command]
+pub(crate) async fn preview_source_identity_repair(
+    handle: tauri::AppHandle,
+) -> AppResult<SourceIdentityRepairReport> {
+    let pool = crate::db::get_pool(&handle).await?;
+    repair_source_identity(&pool, SourceIdentityRepairMode::DryRun).await
 }
 
 #[derive(sqlx::FromRow)]
@@ -695,5 +743,32 @@ mod tests {
         .await
         .expect("count canonical index");
         assert_eq!(index_count, 0);
+    }
+
+    #[tokio::test]
+    async fn source_identity_gate_blocks_while_running() {
+        let state = SourceIdentityRepairState::new();
+        state.set_status(SourceIdentityRepairStatus::Running).await;
+
+        let error = require_source_identity_ready(&state)
+            .await
+            .expect_err("running gate blocks");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Conflict);
+    }
+
+    #[tokio::test]
+    async fn source_identity_gate_returns_startup_failure() {
+        let state = SourceIdentityRepairState::new();
+        state
+            .set_status(SourceIdentityRepairStatus::Failed {
+                error: AppError::validation("Source identity repair failed: example"),
+            })
+            .await;
+
+        let error = require_source_identity_ready(&state)
+            .await
+            .expect_err("failed gate blocks");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("Source identity repair failed"));
     }
 }

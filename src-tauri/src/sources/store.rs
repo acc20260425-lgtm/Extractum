@@ -12,6 +12,7 @@ use super::avatar::{
     cache_source_avatar, peer_photo_data_url_with_timeout, read_source_avatar_data_url,
     TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS,
 };
+use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::peer_resolution::{
     decode_source_metadata, encode_source_metadata, resolve_telegram_source,
     source_metadata_for_added_source, telegram_source_info_from_peer,
@@ -32,9 +33,11 @@ pub struct AddTelegramSourceRequest {
 #[tauri::command]
 pub async fn delete_source(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     ingest_locks: tauri::State<'_, SourceIngestLocks>,
     source_id: i64,
 ) -> AppResult<()> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let _ingest_guard = ingest_locks
         .try_acquire(source_id, SourceIngestKind::Delete)
         .await?;
@@ -198,9 +201,11 @@ pub(crate) async fn upsert_youtube_playlist_source(
 #[tauri::command]
 pub async fn add_telegram_source(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     state: tauri::State<'_, TelegramState>,
     request: AddTelegramSourceRequest,
 ) -> AppResult<SourceRecord> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let client = {
         let accounts = state.accounts.lock().await;
         crate::telegram::get_client(&accounts, request.account_id)
@@ -285,8 +290,10 @@ pub async fn add_telegram_source(
 #[tauri::command]
 pub async fn list_sources(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     account_id: Option<i64>,
 ) -> AppResult<Vec<SourceRecord>> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let rows: Vec<SourceRecordRow> = if let Some(aid) = account_id {
         sqlx::query_as(

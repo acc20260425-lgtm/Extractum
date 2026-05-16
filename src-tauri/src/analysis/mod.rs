@@ -25,6 +25,7 @@ use self::store::{delete_saved_run, fetch_run_row, map_run_detail, map_run_summa
 use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
 
 pub use self::chat::{
     ask_analysis_run_question, clear_analysis_chat_messages, list_analysis_chat_messages,
@@ -154,7 +155,11 @@ Always keep the report concise, readable, and useful for later follow-up analysi
 }
 
 #[tauri::command]
-pub async fn list_analysis_sources(handle: AppHandle) -> AppResult<Vec<AnalysisSourceOption>> {
+pub async fn list_analysis_sources(
+    handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
+) -> AppResult<Vec<AnalysisSourceOption>> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     sqlx::query_as(
         r#"

@@ -8,6 +8,7 @@ use crate::media::extract_item_payload;
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::telegram::TelegramState;
 
+use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::items::{
     build_raw_payload, extract_telegram_context, insert_source_item, message_author,
     SourceItemInsert,
@@ -212,10 +213,12 @@ pub(crate) async fn finalize_sync(
 #[tauri::command]
 pub async fn sync_source(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     state: tauri::State<'_, TelegramState>,
     ingest_locks: tauri::State<'_, SourceIngestLocks>,
     source_id: i64,
 ) -> AppResult<SyncResult> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let _ingest_guard = ingest_locks
         .try_acquire(source_id, SourceIngestKind::Sync)
         .await?;

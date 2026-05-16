@@ -11,11 +11,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use time::{format_description, OffsetDateTime, UtcOffset};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
 
 use chunker::{build_chunks, should_export_message};
 use filename::{ensure_child_path, sanitize_path_component};
@@ -145,8 +146,10 @@ struct NotebookLmExportEvent {
 #[tauri::command]
 pub async fn export_source_to_notebooklm(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     request: NotebookLmExportRequest,
 ) -> AppResult<NotebookLmExportResult> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let config = validate_request(request)?;
     let generated_at = now_secs();
     let progress = NotebookLmExportProgress::new(
@@ -167,6 +170,11 @@ pub async fn export_source_to_notebooklm(
             return Err(error);
         }
     };
+    let repair_state = handle.state::<SourceIdentityRepairState>();
+    if let Err(error) = require_source_identity_ready(repair_state.inner()).await {
+        progress.emit_failed("loading", &error);
+        return Err(error);
+    }
     let source = match load_export_source(&pool, config.source_id).await {
         Ok(source) => source,
         Err(error) => {

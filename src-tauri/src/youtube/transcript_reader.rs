@@ -4,6 +4,7 @@ use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -135,8 +136,10 @@ pub(crate) async fn list_youtube_transcript_segments_from_pool(
 #[tauri::command]
 pub async fn list_youtube_transcript_segments(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     request: ListYoutubeTranscriptSegmentsRequest,
 ) -> AppResult<YoutubeTranscriptSegmentsPage> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     list_youtube_transcript_segments_from_pool(&pool, request).await
 }

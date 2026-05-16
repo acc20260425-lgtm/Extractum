@@ -8,8 +8,9 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::sources::{
-    finalize_sync, insert_source_item, load_source, resolve_and_refresh_peer, TelegramSourceKind,
-    TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    finalize_sync, insert_source_item, load_source, require_source_identity_ready,
+    resolve_and_refresh_peer, SourceIdentityRepairState, TelegramSourceKind, TELEGRAM_KIND_CHANNEL,
+    TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
 use crate::telegram::{get_authorized_runtime, AuthorizedTelegramRuntime, TelegramState};
 
@@ -55,9 +56,11 @@ pub(crate) struct TakeoutExportDcSpikeResult {
 #[tauri::command]
 pub async fn start_takeout_source_import(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     state: tauri::State<'_, TakeoutImportState>,
     source_id: i64,
 ) -> AppResult<StartTakeoutImportResponse> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let source = load_source(&pool, source_id).await?;
     let account_id = source.account_id.ok_or_else(|| {
@@ -100,9 +103,11 @@ pub async fn list_takeout_source_import_jobs(
 #[tauri::command]
 pub async fn run_takeout_export_dc_spike(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     state: tauri::State<'_, TelegramState>,
     source_id: i64,
 ) -> AppResult<TakeoutExportDcSpikeResult> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let source = load_source(&pool, source_id).await?;
     let account_id = source.account_id.ok_or_else(|| {
@@ -296,6 +301,8 @@ async fn run_takeout_source_import(
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let telegram_state = handle.state::<TelegramState>();
+    let repair_state = handle.state::<SourceIdentityRepairState>();
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(handle).await?;
     let source_id = takeout_state
         .update_job(job_id, |_| {})

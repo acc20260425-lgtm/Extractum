@@ -29,6 +29,7 @@ pub use topics::SourceForumTopicRecord;
 #[allow(unused_imports)]
 pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind};
 
+pub(crate) use identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 pub(crate) use items::{
     insert_source_item, upsert_youtube_comment_item, upsert_youtube_transcript_item,
     SourceItemInsert, TelegramItemContext,

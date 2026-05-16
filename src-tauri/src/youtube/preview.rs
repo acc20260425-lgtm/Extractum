@@ -5,7 +5,8 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::secret_store::SecretStoreState;
 use crate::sources::{
-    load_source_record, upsert_youtube_playlist_source, upsert_youtube_video_source, SourceRecord,
+    load_source_record, require_source_identity_ready, upsert_youtube_playlist_source,
+    upsert_youtube_video_source, SourceIdentityRepairState, SourceRecord,
 };
 
 use super::dto::{YoutubePlaylistMetadata, YoutubePreview, YoutubeVideoForm, YoutubeVideoMetadata};
@@ -41,9 +42,11 @@ pub async fn preview_youtube_source(
 #[tauri::command]
 pub async fn add_youtube_source(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     secrets: tauri::State<'_, SecretStoreState>,
     url: String,
 ) -> AppResult<SourceRecord> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let parsed = parse_youtube_url(&url)?;
     let pool = get_pool(&handle).await?;
     let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;

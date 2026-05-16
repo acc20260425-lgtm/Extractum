@@ -10,6 +10,7 @@ use crate::forum_topics::{
     FORUM_TOPIC_UNCATEGORIZED_KEY, FORUM_TOPIC_UNCATEGORIZED_TITLE,
 };
 
+use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::types::{now_secs, SourceForumTopicRow, SourceSyncTarget, TELEGRAM_KIND_SUPERGROUP};
 
 #[derive(Serialize)]
@@ -264,8 +265,10 @@ fn is_non_forum_topic_refresh_error(error: &str) -> bool {
 #[tauri::command]
 pub async fn list_source_forum_topics(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     source_id: i64,
 ) -> AppResult<Vec<SourceForumTopicRecord>> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     list_source_forum_topics_from_pool(&pool, source_id).await
 }

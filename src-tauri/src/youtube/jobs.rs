@@ -9,8 +9,9 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::secret_store::SecretStoreState;
 use crate::sources::{
-    load_source, upsert_youtube_comment_item, upsert_youtube_playlist_source,
-    upsert_youtube_transcript_item, upsert_youtube_video_source, SourceSyncTarget,
+    load_source, require_source_identity_ready, upsert_youtube_comment_item,
+    upsert_youtube_playlist_source, upsert_youtube_transcript_item, upsert_youtube_video_source,
+    SourceIdentityRepairState, SourceSyncTarget,
 };
 
 use super::captions::{
@@ -246,10 +247,12 @@ impl SourceJobState {
 #[tauri::command]
 pub(crate) async fn sync_youtube_source(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     state: tauri::State<'_, SourceJobState>,
     source_id: i64,
     options: YoutubeSyncOptions,
 ) -> AppResult<SourceJobRecord> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let source = load_source(&pool, source_id).await?;
     ensure_youtube_source(&source)?;
@@ -269,11 +272,13 @@ pub(crate) async fn sync_youtube_source(
 #[tauri::command]
 pub(crate) async fn sync_youtube_playlist_video(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     state: tauri::State<'_, SourceJobState>,
     playlist_source_id: i64,
     video_source_id: i64,
     options: YoutubeSyncOptions,
 ) -> AppResult<SourceJobRecord> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let record = state
         .create_job(
             playlist_source_id,
@@ -296,10 +301,12 @@ pub(crate) async fn sync_youtube_playlist_video(
 #[tauri::command]
 pub(crate) async fn retry_failed_youtube_playlist_videos(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     state: tauri::State<'_, SourceJobState>,
     source_id: i64,
     _options: YoutubeSyncOptions,
 ) -> AppResult<SourceJobRecord> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let retry_options = YoutubeSyncOptions {
         metadata: false,
         transcripts: true,
@@ -451,6 +458,8 @@ async fn run_source_job_steps(
     related_source_id: Option<i64>,
     options: &YoutubeSyncOptions,
 ) -> AppResult<Vec<String>> {
+    let repair_state = handle.state::<SourceIdentityRepairState>();
+    require_source_identity_ready(repair_state.inner()).await?;
     let mut warnings = Vec::new();
     let sync_source_id = related_source_id.unwrap_or(source_id);
     if options.metadata {
@@ -664,6 +673,8 @@ async fn run_retry_playlist_job(handle: AppHandle, job_id: String) {
     emit_source_job_event(&handle, &record);
 
     let result = async {
+        let repair_state = handle.state::<SourceIdentityRepairState>();
+        require_source_identity_ready(repair_state.inner()).await?;
         let pool = get_pool(&handle).await?;
         let rows = retryable_playlist_video_rows(&pool, record.source_id).await?;
         update_and_emit_source_job(&handle, &state, &job_id, |job| {

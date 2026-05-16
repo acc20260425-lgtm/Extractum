@@ -7,6 +7,7 @@ use tauri::AppHandle;
 use crate::compression::decompress_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
 
 use super::dto::{YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoMetadata};
 
@@ -94,8 +95,10 @@ pub struct YoutubePlaylistDetailDto {
 #[tauri::command]
 pub async fn list_youtube_source_summaries(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     source_ids: Vec<i64>,
 ) -> AppResult<Vec<YoutubeSourceSummaryDto>> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     list_youtube_source_summaries_from_pool(&pool, source_ids).await
 }
@@ -103,8 +106,10 @@ pub async fn list_youtube_source_summaries(
 #[tauri::command]
 pub async fn get_youtube_video_detail(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     source_id: i64,
 ) -> AppResult<YoutubeVideoDetailDto> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     get_youtube_video_detail_from_pool(&pool, source_id).await
 }
@@ -112,8 +117,10 @@ pub async fn get_youtube_video_detail(
 #[tauri::command]
 pub async fn get_youtube_playlist_detail(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     source_id: i64,
 ) -> AppResult<YoutubePlaylistDetailDto> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     get_youtube_playlist_detail_from_pool(&pool, source_id).await
 }

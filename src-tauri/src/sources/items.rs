@@ -8,6 +8,7 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::{decode_media_metadata, encode_media_metadata, ExtractedItemPayload};
 
+use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::types::{
     now_secs, StoredItemRow, ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
 };
@@ -276,8 +277,10 @@ pub(crate) async fn upsert_youtube_comment_item(
 #[tauri::command]
 pub async fn list_source_items(
     handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
     request: ListSourceItemsRequest,
 ) -> AppResult<Vec<ItemRecord>> {
+    require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let limit = request.limit.clamp(1, 200);
     let rows = load_item_rows_from_pool(

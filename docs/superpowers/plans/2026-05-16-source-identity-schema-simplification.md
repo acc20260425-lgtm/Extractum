@@ -1590,7 +1590,7 @@ git commit -m "test: cover source identity repair failures"
   `src-tauri/src/takeout_import/mod.rs`, and persisted-source YouTube command
   handlers.
 
-- [ ] **Step 1: Add startup state helpers**
+- [x] **Step 1: Add startup state helpers**
 
 In `src-tauri/src/sources/identity_repair.rs`, add:
 
@@ -1645,7 +1645,7 @@ pub(crate) async fn preview_source_identity_repair(
 }
 ```
 
-- [ ] **Step 2: Register repair state and commands**
+- [x] **Step 2: Register repair state and commands**
 
 In `src-tauri/src/lib.rs`, import:
 
@@ -1678,7 +1678,7 @@ get_source_identity_repair_status,
 preview_source_identity_repair,
 ```
 
-- [ ] **Step 3: Gate source commands**
+- [x] **Step 3: Gate source commands**
 
 At the beginning of every command that reads/writes persisted sources or
 source-derived rows, add a `SourceIdentityRepairState` parameter and call:
@@ -1715,7 +1715,7 @@ Also gate spawned job bodies that call `load_source()` after command return:
 YouTube source jobs, playlist-video jobs, Takeout jobs, and NotebookLM export
 jobs must check repair state before loading persisted source identity.
 
-- [ ] **Step 4: Add gate unit tests**
+- [x] **Step 4: Add gate unit tests**
 
 In `src-tauri/src/sources/identity_repair.rs`, add:
 
@@ -1750,7 +1750,7 @@ async fn source_identity_gate_returns_startup_failure() {
 }
 ```
 
-- [ ] **Step 5: Run repair gate tests**
+- [x] **Step 5: Run repair gate tests**
 
 Run:
 
@@ -1764,7 +1764,7 @@ Expected:
 test result: ok. 2 passed; 0 failed
 ```
 
-- [ ] **Step 6: Run Rust compile check via tests**
+- [x] **Step 6: Run Rust compile check via tests**
 
 Run:
 
@@ -1778,7 +1778,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 7: Commit startup gate**
+- [x] **Step 7: Commit startup gate**
 
 Run:
 

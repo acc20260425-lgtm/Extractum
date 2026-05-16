@@ -32,6 +32,10 @@ use takeout_import::{
 };
 
 mod sources;
+use sources::identity_repair::{
+    get_source_identity_repair_status, preview_source_identity_repair,
+    run_startup_source_identity_repair, SourceIdentityRepairState,
+};
 use sources::{
     add_telegram_source, delete_source, get_sync_settings, list_source_forum_topics,
     list_source_items, list_sources, list_telegram_sources, save_sync_settings, sync_source,
@@ -93,6 +97,7 @@ pub fn run() {
         .manage(SourceJobState::new())
         .manage(AnalysisState::new())
         .manage(LlmSchedulerState::new())
+        .manage(SourceIdentityRepairState::new())
         .manage(SecretStoreState::system())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -112,6 +117,10 @@ pub fn run() {
                 cleanup_interrupted_analysis_runs(handle.clone()).await;
                 restore_telegram_accounts(handle).await;
             });
+            let repair_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                run_startup_source_identity_repair(repair_handle).await;
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -129,6 +138,8 @@ pub fn run() {
             clear_account_phone,
             delete_account,
             delete_source,
+            get_source_identity_repair_status,
+            preview_source_identity_repair,
             list_telegram_sources,
             add_telegram_source,
             list_sources,
