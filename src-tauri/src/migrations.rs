@@ -206,6 +206,35 @@ mod tests {
     use super::{build_migrations, checksum_matches_line_ending_variant};
     use sha2::{Digest, Sha384};
 
+    #[tokio::test]
+    async fn fresh_schema_includes_source_identity_tables_after_all_migrations() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        for migration in build_migrations() {
+            sqlx::raw_sql(migration.sql)
+                .execute(&pool)
+                .await
+                .unwrap_or_else(|error| panic!("apply migration {}: {error}", migration.version));
+        }
+
+        for table in [
+            "sources",
+            "telegram_sources",
+            "source_identity_repair_notes",
+        ] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&pool)
+            .await
+            .expect("check table");
+            assert_eq!(exists, 1, "missing table {table}");
+        }
+    }
+
     #[test]
     fn includes_telegram_item_context_migration() {
         let migrations = build_migrations();

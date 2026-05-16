@@ -2551,7 +2551,7 @@ git commit -m "feat: prefer canonical source subtype in frontend"
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Add fresh schema regression test**
+- [x] **Step 1: Add fresh schema regression test**
 
 Add a test that applies all migrations to an in-memory database by iterating
 `build_migrations()` and executing each migration with
@@ -2570,7 +2570,7 @@ for table in ["sources", "telegram_sources", "source_identity_repair_notes"] {
 }
 ```
 
-- [ ] **Step 2: Add v17-style upgrade fixture test**
+- [x] **Step 2: Add v17-style upgrade fixture test**
 
 Create an old-schema fixture that has migrations through 17, insert a Telegram
 source with id `101`, run migration 18 SQL, then run repair. Assert:
@@ -2581,13 +2581,13 @@ assert_eq!(typed_source_id, 101);
 assert_eq!(canonical_index_count, 1);
 ```
 
-- [ ] **Step 3: Add YouTube unaffected regression test**
+- [x] **Step 3: Add YouTube unaffected regression test**
 
 Insert a YouTube video and playlist through existing helpers before and after
 repair. Assert both keep the same `id` on repeated upsert and no
 `telegram_sources` row is created for YouTube source ids.
 
-- [ ] **Step 4: Add existing typed projection drift tests**
+- [x] **Step 4: Add existing typed projection drift tests**
 
 Seed `telegram_sources` before repair:
 
@@ -2597,7 +2597,7 @@ Seed `telegram_sources` before repair:
 
 Assert conflict diagnostics include source id and do not expose raw metadata.
 
-- [ ] **Step 5: Run database regression tests**
+- [x] **Step 5: Run database regression tests**
 
 Run:
 
@@ -2611,7 +2611,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 6: Commit regression matrix**
+- [x] **Step 6: Commit regression matrix**
 
 Run:
 

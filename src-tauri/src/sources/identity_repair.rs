@@ -131,6 +131,14 @@ struct TelegramSourceRepairRow {
     metadata_zstd: Option<Vec<u8>>,
 }
 
+#[derive(sqlx::FromRow)]
+struct ExistingTelegramSourceProjection {
+    source_id: i64,
+    account_id: i64,
+    peer_kind: String,
+    peer_id: i64,
+}
+
 #[derive(Clone)]
 struct TelegramRepairCandidate {
     source_id: i64,
@@ -173,12 +181,27 @@ pub(crate) async fn repair_source_identity(
         }
     }
 
+    let existing_projections: Vec<ExistingTelegramSourceProjection> = sqlx::query_as(
+        r#"
+        SELECT source_id, account_id, peer_kind, peer_id
+        FROM telegram_sources
+        ORDER BY source_id
+        "#,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(AppError::database)?;
+
     report
         .fatal_errors
         .extend(duplicate_canonical_identity_errors(&candidates));
     report
         .fatal_errors
         .extend(duplicate_typed_peer_identity_errors(&candidates));
+    report.fatal_errors.extend(projection_drift_conflict_errors(
+        &candidates,
+        &existing_projections,
+    ));
 
     if !report.fatal_errors.is_empty() {
         tx.rollback().await.map_err(AppError::database)?;
@@ -371,6 +394,52 @@ fn duplicate_typed_peer_identity_errors(
         .collect()
 }
 
+fn projection_drift_conflict_errors(
+    candidates: &[TelegramRepairCandidate],
+    existing_projections: &[ExistingTelegramSourceProjection],
+) -> Vec<SourceIdentityRepairDiagnostic> {
+    let mut candidates_by_source_id = BTreeMap::new();
+    let mut candidate_source_ids_by_peer = BTreeMap::new();
+    for candidate in candidates {
+        let peer_key = (
+            candidate.account_id,
+            candidate.peer_kind.as_str().to_string(),
+            candidate.peer_id,
+        );
+        candidates_by_source_id.insert(candidate.source_id, peer_key.clone());
+        candidate_source_ids_by_peer.insert(peer_key, candidate.source_id);
+    }
+
+    existing_projections
+        .iter()
+        .filter_map(|projection| {
+            let current_peer_key = (
+                projection.account_id,
+                projection.peer_kind.clone(),
+                projection.peer_id,
+            );
+            let expected_peer_key = candidates_by_source_id.get(&projection.source_id)?;
+            if expected_peer_key == &current_peer_key {
+                return None;
+            }
+
+            let conflicting_source_id = candidate_source_ids_by_peer.get(&current_peer_key)?;
+            if *conflicting_source_id == projection.source_id {
+                return None;
+            }
+
+            Some(SourceIdentityRepairDiagnostic {
+                code: "telegram_projection_drift_conflict".to_string(),
+                source_ids: vec![projection.source_id, *conflicting_source_id],
+                detail: format!(
+                    "Existing Telegram typed projection for source {} conflicts with source {}",
+                    projection.source_id, conflicting_source_id
+                ),
+            })
+        })
+        .collect()
+}
+
 async fn upsert_telegram_source_identity(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     candidate: &TelegramRepairCandidate,
@@ -431,7 +500,13 @@ fn repair_failed_error(report: &SourceIdentityRepairReport) -> AppError {
 mod tests {
     use super::*;
     use crate::compression::compress_json_bytes;
+    use crate::migrations::build_migrations;
+    use crate::sources::store::{upsert_youtube_playlist_source, upsert_youtube_video_source};
     use crate::sources::test_support::memory_pool_with_sources;
+    use crate::youtube::dto::{
+        YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
+    };
+    use serde_json::json;
 
     async fn insert_telegram_source(
         pool: &sqlx::SqlitePool,
@@ -464,6 +539,105 @@ mod tests {
         .execute(pool)
         .await
         .expect("insert source");
+    }
+
+    async fn memory_pool_with_migrations_through(version: i64) -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        for migration in build_migrations()
+            .into_iter()
+            .filter(|migration| migration.version <= version)
+        {
+            sqlx::raw_sql(migration.sql)
+                .execute(&pool)
+                .await
+                .unwrap_or_else(|error| panic!("apply migration {}: {error}", migration.version));
+        }
+
+        pool
+    }
+
+    async fn insert_existing_typed_projection(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        source_subtype: &str,
+        peer_kind: &str,
+        peer_id: i64,
+    ) {
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash, avatar_cache_key
+            )
+            VALUES (?, 1, ?, ?, ?, 'unknown', NULL, NULL, NULL)
+            "#,
+        )
+        .bind(source_id)
+        .bind(source_subtype)
+        .bind(peer_kind)
+        .bind(peer_id)
+        .execute(pool)
+        .await
+        .expect("insert existing typed projection");
+    }
+
+    async fn insert_test_account(pool: &sqlx::SqlitePool, id: i64) {
+        sqlx::query(
+            r#"
+            INSERT INTO accounts (id, label, api_id, api_hash, phone, created_at)
+            VALUES (?, 'Test account', 12345, 'hash', NULL, 100)
+            "#,
+        )
+        .bind(id)
+        .execute(pool)
+        .await
+        .expect("insert account");
+    }
+
+    fn youtube_video_metadata() -> YoutubeVideoMetadata {
+        YoutubeVideoMetadata {
+            video_id: "dQw4w9WgXcQ".to_string(),
+            canonical_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string(),
+            title: Some("Demo video".to_string()),
+            channel_title: Some("Demo channel".to_string()),
+            channel_id: Some("channel-1".to_string()),
+            channel_handle: Some("@demo".to_string()),
+            channel_url: Some("https://www.youtube.com/@demo".to_string()),
+            author_display: Some("Demo channel".to_string()),
+            published_at: Some("2009-10-25".to_string()),
+            duration_seconds: Some(213),
+            description: Some("Demo description".to_string()),
+            thumbnail_url: None,
+            tags: Vec::new(),
+            chapters: Vec::new(),
+            view_count: Some(1),
+            like_count: Some(1),
+            comment_count: Some(1),
+            category: Some("Music".to_string()),
+            video_form: YoutubeVideoForm::Regular,
+            availability_status: YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: json!({ "id": "dQw4w9WgXcQ" }),
+        }
+    }
+
+    fn youtube_playlist_metadata() -> YoutubePlaylistMetadata {
+        YoutubePlaylistMetadata {
+            playlist_id: "PLdemo".to_string(),
+            canonical_url: "https://www.youtube.com/playlist?list=PLdemo".to_string(),
+            title: Some("Demo playlist".to_string()),
+            channel_title: Some("Demo channel".to_string()),
+            channel_id: Some("channel-1".to_string()),
+            channel_handle: Some("@demo".to_string()),
+            channel_url: Some("https://www.youtube.com/@demo".to_string()),
+            thumbnail_url: None,
+            video_count: Some(0),
+            items: Vec::new(),
+            availability_status: YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: json!({ "id": "PLdemo" }),
+        }
     }
 
     #[tokio::test]
@@ -529,6 +703,164 @@ mod tests {
         assert_eq!(row.4, "example");
         assert_eq!(row.5, Some(77));
         assert_eq!(row.6.as_deref(), Some("1_channel_12345.jpg"));
+    }
+
+    #[tokio::test]
+    async fn v17_upgrade_repair_preserves_source_id_and_creates_canonical_index() {
+        let pool = memory_pool_with_migrations_through(17).await;
+        insert_test_account(&pool, 1).await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            Some(br#"{"peer_identity":{"strategy":"username","username":"Example","access_hash":77}}"#),
+        )
+        .await;
+        let migration_18 = build_migrations()
+            .into_iter()
+            .find(|migration| migration.version == 18)
+            .expect("migration 18");
+        sqlx::raw_sql(migration_18.sql)
+            .execute(&pool)
+            .await
+            .expect("apply migration 18");
+
+        repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("repair succeeds");
+
+        let source_id_after_repair: i64 =
+            sqlx::query_scalar("SELECT id FROM sources WHERE external_id = '12345'")
+                .fetch_one(&pool)
+                .await
+                .expect("load source id");
+        let typed_source_id: i64 =
+            sqlx::query_scalar("SELECT source_id FROM telegram_sources WHERE source_id = 101")
+                .fetch_one(&pool)
+                .await
+                .expect("load typed source id");
+        let canonical_index_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_sources_unique_telegram_identity'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count canonical index");
+
+        assert_eq!(source_id_after_repair, 101);
+        assert_eq!(typed_source_id, 101);
+        assert_eq!(canonical_index_count, 1);
+    }
+
+    #[tokio::test]
+    async fn youtube_sources_are_unaffected_by_source_identity_repair() {
+        let pool = memory_pool_with_migrations_through(18).await;
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        let video_id = upsert_youtube_video_source(&mut tx, &youtube_video_metadata())
+            .await
+            .expect("upsert video before repair");
+        let playlist_id = upsert_youtube_playlist_source(&mut tx, &youtube_playlist_metadata())
+            .await
+            .expect("upsert playlist before repair");
+        tx.commit().await.expect("commit first upserts");
+
+        repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("repair succeeds");
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        let video_id_after = upsert_youtube_video_source(&mut tx, &youtube_video_metadata())
+            .await
+            .expect("upsert video after repair");
+        let playlist_id_after =
+            upsert_youtube_playlist_source(&mut tx, &youtube_playlist_metadata())
+                .await
+                .expect("upsert playlist after repair");
+        tx.commit().await.expect("commit second upserts");
+
+        assert_eq!(video_id_after, video_id);
+        assert_eq!(playlist_id_after, playlist_id);
+
+        let typed_rows_for_youtube: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM telegram_sources WHERE source_id IN (?, ?)")
+                .bind(video_id)
+                .bind(playlist_id)
+                .fetch_one(&pool)
+                .await
+                .expect("count typed rows for youtube sources");
+        assert_eq!(typed_rows_for_youtube, 0);
+    }
+
+    #[tokio::test]
+    async fn repair_updates_non_conflicting_typed_projection_drift() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            Some(br#"{"peer_identity":{"strategy":"username","username":"Example","access_hash":77}}"#),
+        )
+        .await;
+        insert_existing_typed_projection(&pool, 101, "supergroup", "channel", 12345).await;
+
+        repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("repair updates projection drift");
+
+        let row: (String, String, i64, Option<String>, Option<i64>) = sqlx::query_as(
+            "SELECT source_subtype, peer_kind, peer_id, username, access_hash FROM telegram_sources WHERE source_id = 101",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load repaired typed projection");
+
+        assert_eq!(row.0, "channel");
+        assert_eq!(row.1, "channel");
+        assert_eq!(row.2, 12345);
+        assert_eq!(row.3.as_deref(), Some("example"));
+        assert_eq!(row.4, Some(77));
+    }
+
+    #[tokio::test]
+    async fn repair_fails_on_conflicting_typed_projection_drift() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+        insert_telegram_source(
+            &pool,
+            102,
+            Some("supergroup"),
+            Some("supergroup"),
+            Some(1),
+            "67890",
+            None,
+        )
+        .await;
+        insert_existing_typed_projection(&pool, 101, "channel", "channel", 67890).await;
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("conflicting projection drift fails repair");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("telegram_projection_drift_conflict"));
+        assert!(error.message.contains("101"));
+        assert!(!error.message.contains("metadata_zstd"));
+        assert!(!error.message.contains("peer_identity"));
     }
 
     #[tokio::test]
