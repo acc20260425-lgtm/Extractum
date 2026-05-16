@@ -12,10 +12,15 @@ use super::avatar::{
     cache_source_avatar, peer_photo_data_url_with_timeout, read_source_avatar_data_url,
     TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS,
 };
+use super::identity::{
+    canonical_telegram_external_id, normalize_telegram_username, TelegramPeerKind,
+    TelegramResolutionStrategy,
+};
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::peer_resolution::{
-    decode_source_metadata, encode_source_metadata, resolve_telegram_source,
-    source_metadata_for_added_source, telegram_source_info_from_peer,
+    encode_source_metadata, resolve_telegram_source, source_metadata_for_added_source,
+    telegram_source_info_from_peer, ResolvedTelegramSource, SourceMetadata,
+    SourcePeerResolutionStrategy,
 };
 use super::types::{
     now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, SourceType, TelegramSourceInfo,
@@ -107,7 +112,16 @@ pub(crate) async fn load_source_record(
     source_id: i64,
 ) -> AppResult<SourceRecord> {
     let row: SourceRecordRow = sqlx::query_as(
-        "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE id = ?",
+        r#"
+        SELECT s.id, s.source_type, s.source_subtype, s.telegram_source_kind,
+               s.account_id, s.external_id, s.title, s.metadata_zstd,
+               s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
+               ts.username AS telegram_username,
+               ts.avatar_cache_key AS telegram_avatar_cache_key
+        FROM sources s
+        LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+        WHERE s.id = ?
+        "#,
     )
     .bind(source_id)
     .fetch_optional(pool)
@@ -226,16 +240,18 @@ pub async fn add_telegram_source(
     } else {
         None
     };
-    let metadata_zstd = encode_source_metadata(&source_metadata_for_added_source(
+    let source_metadata = source_metadata_for_added_source(
         &request.source_ref,
         expected_kind,
         &resolved,
-        avatar_cache_key,
-    ))?;
+        avatar_cache_key.clone(),
+    );
+    let metadata_zstd = encode_source_metadata(&source_metadata)?;
     let now = now_secs();
 
     let pool = get_pool(&handle).await?;
-    let row: SourceRecordRow = sqlx::query_as(
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    let source_id: i64 = sqlx::query_scalar(
         r#"
         INSERT INTO sources (
             source_type,
@@ -250,26 +266,17 @@ pub async fn add_telegram_source(
             created_at
         )
         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-        ON CONFLICT(account_id, source_type, telegram_source_kind, external_id) DO UPDATE SET
+        ON CONFLICT(account_id, source_type, source_subtype, external_id)
+        WHERE source_type = 'telegram'
+        DO UPDATE SET
             title = excluded.title,
             source_subtype = excluded.source_subtype,
+            telegram_source_kind = excluded.telegram_source_kind,
             metadata_zstd = excluded.metadata_zstd,
             is_member = excluded.is_member,
-            account_id = excluded.account_id
-        RETURNING
-            id,
-            source_type,
-            source_subtype,
-            telegram_source_kind,
-            account_id,
-            external_id,
-            title,
-            metadata_zstd,
-            last_sync_state,
-            last_synced_at,
-            is_active,
-            is_member,
-            created_at
+            account_id = excluded.account_id,
+            is_active = 1
+        RETURNING id
         "#,
     )
     .bind(SourceType::Telegram.as_str())
@@ -281,10 +288,22 @@ pub async fn add_telegram_source(
     .bind(resolved.is_member)
     .bind(request.account_id)
     .bind(now)
-    .fetch_one(&pool)
+    .fetch_one(&mut *tx)
     .await
-    .map_err(|e| AppError::internal(e.to_string()))?;
-    source_record_from_row(&handle, row)
+    .map_err(AppError::database)?;
+
+    upsert_telegram_source_identity_from_resolved(
+        &mut tx,
+        source_id,
+        request.account_id,
+        &resolved,
+        &source_metadata,
+        avatar_cache_key.as_deref(),
+    )
+    .await?;
+
+    tx.commit().await.map_err(AppError::database)?;
+    load_source_record(&handle, &pool, source_id).await
 }
 
 #[tauri::command]
@@ -297,7 +316,17 @@ pub async fn list_sources(
     let pool = get_pool(&handle).await?;
     let rows: Vec<SourceRecordRow> = if let Some(aid) = account_id {
         sqlx::query_as(
-            "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE account_id = ? ORDER BY created_at DESC",
+            r#"
+            SELECT s.id, s.source_type, s.source_subtype, s.telegram_source_kind,
+                   s.account_id, s.external_id, s.title, s.metadata_zstd,
+                   s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
+                   ts.username AS telegram_username,
+                   ts.avatar_cache_key AS telegram_avatar_cache_key
+            FROM sources s
+            LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+            WHERE s.account_id = ?
+            ORDER BY s.created_at DESC
+            "#,
         )
         .bind(aid)
         .fetch_all(&pool)
@@ -305,7 +334,16 @@ pub async fn list_sources(
         .map_err(|e| AppError::internal(e.to_string()))?
     } else {
         sqlx::query_as(
-            "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources ORDER BY created_at DESC",
+            r#"
+            SELECT s.id, s.source_type, s.source_subtype, s.telegram_source_kind,
+                   s.account_id, s.external_id, s.title, s.metadata_zstd,
+                   s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
+                   ts.username AS telegram_username,
+                   ts.avatar_cache_key AS telegram_avatar_cache_key
+            FROM sources s
+            LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+            ORDER BY s.created_at DESC
+            "#,
         )
         .fetch_all(&pool)
         .await
@@ -322,8 +360,9 @@ fn source_record_from_row_parts(
     telegram_username: Option<String>,
     avatar_data_url: Option<String>,
 ) -> SourceRecord {
+    let source_subtype = row.source_subtype.unwrap_or_else(|| "unknown".to_string());
     let telegram_source_kind = if row.source_type == TELEGRAM_SOURCE_TYPE {
-        row.telegram_source_kind
+        Some(source_subtype.clone())
     } else {
         None
     };
@@ -331,7 +370,7 @@ fn source_record_from_row_parts(
     SourceRecord {
         id: row.id,
         source_type: row.source_type,
-        source_subtype: row.source_subtype,
+        source_subtype,
         telegram_source_kind,
         account_id: row.account_id,
         external_id: row.external_id,
@@ -348,7 +387,7 @@ fn source_record_from_row_parts(
 
 fn source_record_from_row(handle: &AppHandle, row: SourceRecordRow) -> AppResult<SourceRecord> {
     let telegram_username = if row.source_type == TELEGRAM_SOURCE_TYPE {
-        decode_source_metadata(row.metadata_zstd.as_deref())?.peer_username()
+        row.telegram_username.clone()
     } else {
         None
     };
@@ -369,8 +408,69 @@ fn source_avatar_cache_key_from_row(row: &SourceRecordRow) -> AppResult<Option<S
         return Ok(None);
     }
 
-    let metadata = decode_source_metadata(row.metadata_zstd.as_deref())?;
-    Ok(metadata.avatar_cache_key)
+    Ok(row.telegram_avatar_cache_key.clone())
+}
+
+async fn upsert_telegram_source_identity_from_resolved(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    source_id: i64,
+    account_id: i64,
+    resolved: &ResolvedTelegramSource,
+    source_metadata: &SourceMetadata,
+    avatar_cache_key: Option<&str>,
+) -> AppResult<()> {
+    let source_subtype = TelegramSourceKind::from_source_subtype(&resolved.telegram_source_kind)?;
+    let peer_kind = TelegramPeerKind::from_source_subtype(source_subtype);
+    let peer_id = canonical_telegram_external_id(&resolved.external_id)?;
+    let resolution_strategy = source_metadata
+        .peer_identity
+        .as_ref()
+        .map(|identity| match identity.strategy {
+            SourcePeerResolutionStrategy::Username => TelegramResolutionStrategy::Username,
+            SourcePeerResolutionStrategy::Dialog => TelegramResolutionStrategy::Dialog,
+        })
+        .unwrap_or(TelegramResolutionStrategy::Unknown);
+    let access_hash = source_metadata
+        .peer_identity
+        .as_ref()
+        .and_then(|identity| identity.access_hash);
+    let username = normalize_telegram_username(resolved.username.as_deref());
+
+    sqlx::query(
+        r#"
+        INSERT INTO telegram_sources (
+            source_id, account_id, source_subtype, peer_kind, peer_id,
+            resolution_strategy, username, access_hash, avatar_cache_key,
+            identity_refreshed_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
+        ON CONFLICT(source_id) DO UPDATE SET
+            account_id = excluded.account_id,
+            source_subtype = excluded.source_subtype,
+            peer_kind = excluded.peer_kind,
+            peer_id = excluded.peer_id,
+            resolution_strategy = excluded.resolution_strategy,
+            username = excluded.username,
+            access_hash = excluded.access_hash,
+            avatar_cache_key = excluded.avatar_cache_key,
+            identity_refreshed_at = excluded.identity_refreshed_at,
+            updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(source_id)
+    .bind(account_id)
+    .bind(source_subtype.as_str())
+    .bind(peer_kind.as_str())
+    .bind(peer_id)
+    .bind(resolution_strategy.as_str())
+    .bind(username)
+    .bind(access_hash)
+    .bind(avatar_cache_key)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+
+    Ok(())
 }
 
 fn encode_youtube_metadata(metadata: &impl serde::Serialize) -> AppResult<Vec<u8>> {
@@ -405,13 +505,15 @@ mod tests {
                 is_active: true,
                 is_member: false,
                 created_at: 1_700_500,
+                telegram_username: None,
+                telegram_avatar_cache_key: None,
             },
             None,
             None,
         );
 
         assert_eq!(record.source_type, "youtube");
-        assert_eq!(record.source_subtype.as_deref(), Some("video"));
+        assert_eq!(record.source_subtype, "video");
         assert_eq!(record.telegram_source_kind, None);
         assert_eq!(record.account_id, None);
     }
@@ -433,6 +535,8 @@ mod tests {
                 is_active: true,
                 is_member: false,
                 created_at: 1_700_500,
+                telegram_username: None,
+                telegram_avatar_cache_key: None,
             },
             None,
             None,
@@ -440,6 +544,34 @@ mod tests {
 
         assert_eq!(record.source_type, "youtube");
         assert_eq!(record.telegram_source_kind, None);
+    }
+
+    #[test]
+    fn source_record_parts_mirrors_telegram_kind_from_source_subtype() {
+        let record = source_record_from_row_parts(
+            SourceRecordRow {
+                id: 1,
+                source_type: TELEGRAM_SOURCE_TYPE.to_string(),
+                source_subtype: Some("supergroup".to_string()),
+                telegram_source_kind: Some("channel".to_string()),
+                account_id: Some(1),
+                external_id: "12345".to_string(),
+                title: Some("source".to_string()),
+                metadata_zstd: None,
+                last_sync_state: None,
+                last_synced_at: None,
+                is_active: true,
+                is_member: true,
+                created_at: 100,
+                telegram_username: Some("example".to_string()),
+                telegram_avatar_cache_key: None,
+            },
+            Some("example".to_string()),
+            None,
+        );
+
+        assert_eq!(record.source_subtype, "supergroup");
+        assert_eq!(record.telegram_source_kind.as_deref(), Some("supergroup"));
     }
 
     #[test]
@@ -463,6 +595,8 @@ mod tests {
             is_active: true,
             is_member: false,
             created_at: 1,
+            telegram_username: None,
+            telegram_avatar_cache_key: None,
         };
 
         assert_eq!(source_avatar_cache_key_from_row(&row).unwrap(), None);

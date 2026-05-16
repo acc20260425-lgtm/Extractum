@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::error::{AppError, AppResult};
 
-use super::types::{now_secs, TelegramSourceKind, TELEGRAM_SOURCE_TYPE};
+use super::types::{now_secs, SourceSyncTarget, TelegramSourceKind, TELEGRAM_SOURCE_TYPE};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SourceIdentity {
@@ -114,6 +114,73 @@ impl TelegramSourceIdentity {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct TelegramSourceIdentityRow {
+    source_id: i64,
+    account_id: i64,
+    source_subtype: String,
+    peer_kind: String,
+    peer_id: i64,
+    resolution_strategy: String,
+    username: Option<String>,
+    access_hash: Option<i64>,
+    avatar_cache_key: Option<String>,
+}
+
+pub(crate) async fn load_telegram_source_identity(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<TelegramSourceIdentity> {
+    let row: TelegramSourceIdentityRow = sqlx::query_as(
+        r#"
+        SELECT source_id, account_id, source_subtype, peer_kind, peer_id,
+               resolution_strategy, username, access_hash, avatar_cache_key
+        FROM telegram_sources
+        WHERE source_id = ?
+        "#,
+    )
+    .bind(source_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?
+    .ok_or_else(|| {
+        AppError::internal(format!(
+            "Source {source_id} is missing Telegram typed identity after startup repair"
+        ))
+    })?;
+
+    Ok(TelegramSourceIdentity {
+        source_id: row.source_id,
+        account_id: row.account_id,
+        source_subtype: TelegramSourceKind::from_source_subtype(&row.source_subtype)?,
+        peer_kind: TelegramPeerKind::parse(&row.peer_kind)?,
+        peer_id: row.peer_id,
+        resolution_strategy: TelegramResolutionStrategy::parse(&row.resolution_strategy)?,
+        username: row.username,
+        access_hash: row.access_hash,
+        avatar_cache_key: row.avatar_cache_key,
+    })
+}
+
+pub(crate) struct TelegramRuntimeSource {
+    pub(crate) source: SourceSyncTarget,
+    pub(crate) identity: TelegramSourceIdentity,
+}
+
+pub(crate) async fn load_telegram_runtime_source(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<TelegramRuntimeSource> {
+    let source = crate::sources::store::load_source(pool, source_id).await?;
+    if source.source_type != TELEGRAM_SOURCE_TYPE {
+        return Err(AppError::validation(format!(
+            "Source {source_id} is not a Telegram source"
+        )));
+    }
+    let identity = load_telegram_source_identity(pool, source_id).await?;
+    Ok(TelegramRuntimeSource { source, identity })
+}
+
 pub(crate) fn canonical_telegram_external_id(value: &str) -> AppResult<i64> {
     let parsed = value
         .parse::<i64>()
@@ -203,5 +270,79 @@ mod tests {
             Some("mixedcase")
         );
         assert_eq!(normalize_telegram_username(Some("  ")), None);
+    }
+
+    #[tokio::test]
+    async fn load_telegram_identity_returns_typed_row() {
+        let pool = crate::sources::test_support::memory_pool_with_sources().await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, telegram_source_kind, account_id,
+                external_id, title, is_active, is_member, created_at
+            )
+            VALUES (101, 'telegram', 'channel', 'channel', 1, '12345', 'source', 1, 1, 100)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash
+            )
+            VALUES (101, 1, 'channel', 'channel', 12345, 'username', 'example', 77)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert typed row");
+
+        let identity = load_telegram_source_identity(&pool, 101)
+            .await
+            .expect("load typed identity");
+
+        assert_eq!(identity.source_id, 101);
+        assert_eq!(identity.source_subtype, TelegramSourceKind::Channel);
+        assert_eq!(identity.peer_kind, TelegramPeerKind::Channel);
+        assert_eq!(identity.username.as_deref(), Some("example"));
+    }
+
+    #[tokio::test]
+    async fn load_telegram_runtime_source_pairs_source_with_typed_identity() {
+        let pool = crate::sources::test_support::memory_pool_with_sources().await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, telegram_source_kind, account_id,
+                external_id, title, is_active, is_member, created_at
+            )
+            VALUES (101, 'telegram', 'channel', 'channel', 1, '12345', 'source', 1, 1, 100)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash
+            )
+            VALUES (101, 1, 'channel', 'channel', 12345, 'username', 'example', 77)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert typed row");
+
+        let runtime_source = load_telegram_runtime_source(&pool, 101)
+            .await
+            .expect("load runtime source");
+
+        assert_eq!(runtime_source.source.id, 101);
+        assert_eq!(runtime_source.identity.peer_id, 12345);
     }
 }

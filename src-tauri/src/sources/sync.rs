@@ -417,7 +417,15 @@ mod tests {
         assert_eq!(last_sync_state, Some(9));
 
         let row: SourceRecordRow = sqlx::query_as(
-            "SELECT id, source_type, source_subtype, telegram_source_kind, account_id, external_id, title, metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at FROM sources WHERE id = ?",
+            r#"
+            SELECT id, source_type, source_subtype, telegram_source_kind,
+                   account_id, external_id, title, metadata_zstd, last_sync_state,
+                   last_synced_at, is_active, is_member, created_at,
+                   NULL AS telegram_username,
+                   NULL AS telegram_avatar_cache_key
+            FROM sources
+            WHERE id = ?
+            "#,
         )
         .bind(1_i64)
         .fetch_one(&pool)

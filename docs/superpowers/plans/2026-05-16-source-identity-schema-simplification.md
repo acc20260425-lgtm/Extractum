@@ -1797,7 +1797,7 @@ git commit -m "feat: gate source commands on identity repair"
 - Modify: `src-tauri/src/sources/store.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Add typed identity loaders and writer tests**
+- [x] **Step 1: Add typed identity loaders and writer tests**
 
 In `src-tauri/src/sources/identity.rs`, add tests using
 `memory_pool_with_sources()`:
@@ -1842,7 +1842,7 @@ async fn load_telegram_identity_returns_typed_row() {
 }
 ```
 
-- [ ] **Step 2: Implement typed identity loaders**
+- [x] **Step 2: Implement typed identity loaders**
 
 Add to `src-tauri/src/sources/identity.rs`:
 
@@ -1896,7 +1896,7 @@ pub(crate) async fn load_telegram_source_identity(
 }
 ```
 
-- [ ] **Step 3: Add targeted Telegram runtime loader**
+- [x] **Step 3: Add targeted Telegram runtime loader**
 
 Do not remove `metadata_zstd` from `SourceSyncTarget` in this task. YouTube
 jobs still use `SourceSyncTarget.metadata_zstd` for YouTube metadata, so a
@@ -1925,7 +1925,7 @@ pub(crate) async fn load_telegram_runtime_source(
 }
 ```
 
-- [ ] **Step 4: Make DTO subtype non-optional on backend**
+- [x] **Step 4: Make DTO subtype non-optional on backend**
 
 In `src-tauri/src/sources/types.rs`, change:
 
@@ -1944,7 +1944,7 @@ for `SourceRecord`.
 Keep `SourceRecordRow.source_subtype: Option<String>` while old DB rows still
 exist before repair, then force canonical mapping in `store.rs`.
 
-- [ ] **Step 5: Map backend DTO compatibility mirror from canonical subtype**
+- [x] **Step 5: Map backend DTO compatibility mirror from canonical subtype**
 
 In `src-tauri/src/sources/store.rs`, update `source_record_from_row_parts`:
 
@@ -1978,7 +1978,7 @@ The `"unknown"` fallback should only be reachable in tests or repair-blocked
 startup windows; after Task 5, normal source commands are gated until repair
 has populated implemented-provider subtype.
 
-- [ ] **Step 6: Change Telegram add/upsert to canonical conflict**
+- [x] **Step 6: Change Telegram add/upsert to canonical conflict**
 
 In `add_telegram_source`, wrap `sources` and `telegram_sources` writes in one
 transaction:
@@ -2034,7 +2034,7 @@ tx.commit().await.map_err(AppError::database)?;
 Then upsert the matching typed row in the same transaction using canonical
 subtype and normalized username.
 
-- [ ] **Step 7: Read list display fields from typed table**
+- [x] **Step 7: Read list display fields from typed table**
 
 Update `list_sources` / `load_source_record` SELECT statements to left join
 `telegram_sources`:
@@ -2072,7 +2072,7 @@ pub(super) telegram_avatar_cache_key: Option<String>,
 
 Use those fields instead of decoding metadata for normal DTO display.
 
-- [ ] **Step 8: Update store tests**
+- [x] **Step 8: Update store tests**
 
 Update or add tests in `src-tauri/src/sources/store.rs`:
 
@@ -2106,7 +2106,7 @@ fn source_record_parts_mirrors_telegram_kind_from_source_subtype() {
 }
 ```
 
-- [ ] **Step 9: Run source store tests**
+- [x] **Step 9: Run source store tests**
 
 Run:
 
@@ -2120,7 +2120,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 10: Commit source store switch**
+- [x] **Step 10: Commit source store switch**
 
 Run:
 

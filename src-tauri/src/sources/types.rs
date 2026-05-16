@@ -78,7 +78,7 @@ pub struct TelegramSourceInfo {
 pub struct SourceRecord {
     pub id: i64,
     pub source_type: String,
-    pub source_subtype: Option<String>,
+    pub source_subtype: String,
     pub telegram_source_kind: Option<String>,
     pub account_id: Option<i64>,
     pub external_id: String,
@@ -110,16 +110,20 @@ pub(super) struct SourceRecordRow {
     pub(super) id: i64,
     pub(super) source_type: String,
     pub(super) source_subtype: Option<String>,
+    #[allow(dead_code)]
     pub(super) telegram_source_kind: Option<String>,
     pub(super) account_id: Option<i64>,
     pub(super) external_id: String,
     pub(super) title: Option<String>,
+    #[allow(dead_code)]
     pub(super) metadata_zstd: Option<Vec<u8>>,
     pub(super) last_sync_state: Option<i64>,
     pub(super) last_synced_at: Option<i64>,
     pub(super) is_active: bool,
     pub(super) is_member: bool,
     pub(super) created_at: i64,
+    pub(super) telegram_username: Option<String>,
+    pub(super) telegram_avatar_cache_key: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
