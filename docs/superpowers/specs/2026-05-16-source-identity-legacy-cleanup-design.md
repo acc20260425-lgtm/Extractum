@@ -247,6 +247,7 @@ Post-v19 `sources` constraints:
       source_type <> 'telegram'
       OR (
           account_id IS NOT NULL
+          AND source_subtype IS NOT NULL
           AND source_subtype IN ('channel', 'supergroup', 'group')
       )
   )
@@ -255,7 +256,10 @@ Post-v19 `sources` constraints:
   ```sql
   CHECK (
       source_type <> 'youtube'
-      OR source_subtype IN ('video', 'playlist')
+      OR (
+          source_subtype IS NOT NULL
+          AND source_subtype IN ('video', 'playlist')
+      )
   )
   ```
 
@@ -263,6 +267,8 @@ These checks are scoped to implemented provider rows so future RSS/forum
 placeholder rows are not blocked by a Telegram/YouTube-only enum. The canonical
 Telegram `external_id` string format remains enforced in Rust repair/add-source
 validation and regression tests rather than with SQLite string-pattern checks.
+The explicit `source_subtype IS NOT NULL` terms are required because SQLite
+accepts `CHECK` expressions that evaluate to `NULL`.
 
 ## Database Migration
 
@@ -295,7 +301,9 @@ Fresh-install migration tests should apply all migrations and assert that:
 - `idx_sources_unique_telegram_identity` exists.
 - `idx_sources_ext` does not exist.
 - inserting a Telegram source with `NULL account_id` fails;
+- inserting a Telegram source with `NULL source_subtype` fails;
 - inserting a Telegram source with an unsupported `source_subtype` fails;
+- inserting a YouTube source with `NULL source_subtype` fails;
 - inserting a YouTube source with an unsupported `source_subtype` fails;
 - inserting an RSS/forum placeholder row with a provider-local subtype is still
   allowed by the database checks.
