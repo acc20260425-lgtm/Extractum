@@ -175,13 +175,13 @@ For persisted Telegram sources:
   `sources.external_id`.
 
 The canonical Telegram `external_id` format is the exact decimal string form of
-the bare Telegram peer id. It has no provider prefix, no `@`, no username, no
-sign, no surrounding whitespace, no non-digit characters, and no leading zeroes
-except the literal string `0`. It must round-trip through the existing
-`canonical_telegram_external_id` helper and back to the same string. Channels,
-supergroups, and groups all use this same durable `external_id` format; their
-shape difference is represented by `source_subtype` and by
-`telegram_sources.peer_kind`.
+the bare Telegram peer id. It must be a positive non-zero decimal integer. It
+has no provider prefix, no `@`, no username, no sign, no surrounding
+whitespace, no non-digit characters, and no leading zeroes. The
+`canonical_telegram_external_id` helper must enforce this and round-trip valid
+ids back to the same string. Channels, supergroups, and groups all use this
+same durable `external_id` format; their shape difference is represented by
+`source_subtype` and by `telegram_sources.peer_kind`.
 
 `account_id` is part of Telegram identity, not optional display metadata.
 SQLite unique indexes do not protect identity uniqueness when any indexed
@@ -225,7 +225,7 @@ Migration 19 must leave `sources` with this exact current-schema contract:
 
 `sources` must not contain `telegram_source_kind` after migration 19.
 
-Post-v19 `sources` indexes:
+Post-v19 `sources` indexes, complete for this slice:
 
 - `idx_sources_unique_telegram_identity`
   ```sql
@@ -248,6 +248,10 @@ Post-v19 `sources` indexes:
 
 The old `idx_sources_ext` index must not exist after migration 19 because it is
 built on `telegram_source_kind`.
+
+No non-unique performance indexes on `sources` are required by this slice. If a
+later implementation discovers a current `sources` lookup index that must be
+preserved, the plan must name it explicitly before changing the migration.
 
 Post-v19 `sources` constraints:
 
@@ -345,6 +349,8 @@ typed Telegram rows, run migration 19, and assert that:
 - the legacy column is gone.
 - the foreign-key and logical-reference graph still resolves to the same source
   ids.
+- `PRAGMA foreign_key_check` returns no rows after migration 19.
+- repair rejects Telegram `external_id = '0'` as malformed source identity.
 
 The source-id graph that must be preserved includes physical foreign keys:
 
@@ -524,6 +530,8 @@ Use TDD for each implementation task. Important red/green checks:
 - migration registration fails before version 19 is added;
 - migration schema test fails while `sources.telegram_source_kind` still exists
   after all migrations;
+- repair/helper tests fail while Telegram `external_id = '0'` is still accepted
+  as canonical identity;
 - store tests fail while queries select or writes bind the removed column;
 - frontend API tests fail while `telegramSourceKind` remains on persisted
   `Source`;
@@ -571,6 +579,12 @@ Normal runtime modules, frontend source APIs, and UI components must not match.
 - **SQLite table rebuild can drop constraints or indexes.** Mitigate with
   migration tests that inspect columns and indexes after applying all
   migrations.
+- **SQLite `CHECK` constraints allow `NULL` unless `IS NOT NULL` is explicit.**
+  Mitigate with explicit `IS NOT NULL` terms and insert-failure tests for
+  implemented-provider `NULL source_subtype` rows.
+- **Rebuilding a parent table can break or cascade dependent rows if
+  foreign-key handling is wrong.** Mitigate with a foreign-key-safe rebuild
+  protocol, source-id graph fixtures, and `PRAGMA foreign_key_check`.
 - **Foreign-key relationships can break if ids change.** Mitigate with upgrade
   tests that assert source ids survive and typed `telegram_sources.source_id`
   still points at the same rows.
@@ -589,6 +603,8 @@ The slice is complete when:
 - migration 19 is registered and tested;
 - a fresh database after all migrations has no `sources.telegram_source_kind`;
 - a v18-style database upgrades through v19 without changing source ids;
+- the post-v19 database passes `PRAGMA foreign_key_check` and rejects
+  `NULL`/invalid implemented-provider subtypes;
 - persisted source DTOs and frontend `Source` types no longer include
   Telegram legacy kind fields;
 - live dialog source DTOs use `sourceSubtype`;
