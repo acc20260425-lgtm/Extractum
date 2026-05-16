@@ -187,10 +187,19 @@ pub(crate) async fn load_telegram_runtime_source(
 }
 
 pub(crate) fn canonical_telegram_external_id(value: &str) -> AppResult<i64> {
+    if value.is_empty()
+        || value.starts_with('0')
+        || !value.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(AppError::validation(
+            "Malformed Telegram external_id for source identity",
+        ));
+    }
+
     let parsed = value
         .parse::<i64>()
         .map_err(|_| AppError::validation("Malformed Telegram external_id for source identity"))?;
-    if parsed < 0 || parsed.to_string() != value {
+    if parsed <= 0 || parsed.to_string() != value {
         return Err(AppError::validation(
             "Malformed Telegram external_id for source identity",
         ));
@@ -255,7 +264,20 @@ mod tests {
 
     #[test]
     fn canonical_external_id_rejects_malformed_values() {
-        for value in ["+123", "-123", "00123", "123 ", "12a3", ""] {
+        for value in [
+            "",
+            "0",
+            "00123",
+            "-123",
+            "+123",
+            " 123",
+            "123 ",
+            "@name",
+            "name",
+            "telegram:123",
+            "12a3",
+            "１２３",
+        ] {
             assert!(
                 canonical_telegram_external_id(value).is_err(),
                 "{value} should be rejected"

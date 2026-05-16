@@ -125,7 +125,6 @@ pub(crate) async fn preview_source_identity_repair(
 struct TelegramSourceRepairRow {
     id: i64,
     source_subtype: Option<String>,
-    telegram_source_kind: Option<String>,
     account_id: Option<i64>,
     external_id: String,
     metadata_zstd: Option<Vec<u8>>,
@@ -161,7 +160,7 @@ pub(crate) async fn repair_source_identity(
 
     let rows: Vec<TelegramSourceRepairRow> = sqlx::query_as(
         r#"
-        SELECT id, source_subtype, telegram_source_kind, account_id, external_id, metadata_zstd
+        SELECT id, source_subtype, account_id, external_id, metadata_zstd
         FROM sources
         WHERE source_type = 'telegram'
         ORDER BY id
@@ -215,16 +214,6 @@ pub(crate) async fn repair_source_identity(
         report.repaired_sources.push(candidate.source_id);
         if mode == SourceIdentityRepairMode::Apply {
             upsert_telegram_source_identity(&mut tx, &candidate).await?;
-            sqlx::query(
-                // Deprecated DTO/database compatibility mirror. Canonical Telegram subtype is source_subtype.
-                "UPDATE sources SET source_subtype = ?, telegram_source_kind = ? WHERE id = ?",
-            )
-            .bind(&candidate.source_subtype_text)
-            .bind(&candidate.source_subtype_text)
-            .bind(candidate.source_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::database)?;
         }
     }
 
@@ -268,14 +257,10 @@ fn candidate_from_row(
             detail: format!("Telegram source {} has malformed external_id", row.id),
         }
     })?;
-    let metadata = decode_source_metadata(row.metadata_zstd.as_deref()).map_err(|_| {
-        SourceIdentityRepairDiagnostic {
-            code: "malformed_telegram_metadata".to_string(),
-            source_ids: vec![row.id],
-            detail: format!("Telegram source {} has malformed legacy metadata", row.id),
-        }
-    })?;
-    let identity = metadata.peer_identity.as_ref();
+    let metadata = decode_source_metadata(row.metadata_zstd.as_deref()).ok();
+    let identity = metadata
+        .as_ref()
+        .and_then(|metadata| metadata.peer_identity.as_ref());
     let strategy = match identity.map(|identity| identity.strategy) {
         Some(SourcePeerResolutionStrategy::Username) => TelegramResolutionStrategy::Username,
         Some(SourcePeerResolutionStrategy::Dialog) => TelegramResolutionStrategy::Dialog,
@@ -294,41 +279,27 @@ fn candidate_from_row(
             identity.and_then(|identity| identity.username.as_deref()),
         ),
         access_hash: identity.and_then(|identity| identity.access_hash),
-        avatar_cache_key: metadata.avatar_cache_key,
+        avatar_cache_key: metadata.and_then(|metadata| metadata.avatar_cache_key),
     })
 }
 
 fn derive_source_subtype(
     row: &TelegramSourceRepairRow,
 ) -> Result<TelegramSourceKind, SourceIdentityRepairDiagnostic> {
-    let canonical = row
-        .source_subtype
+    row.source_subtype
         .as_deref()
-        .and_then(|value| TelegramSourceKind::from_source_subtype(value).ok());
-    let legacy = row
-        .telegram_source_kind
-        .as_deref()
-        .and_then(|value| TelegramSourceKind::from_source_subtype(value).ok());
-
-    match (canonical, legacy) {
-        (Some(canonical), Some(legacy)) if canonical != legacy => {
-            Err(SourceIdentityRepairDiagnostic {
-                code: "telegram_subtype_legacy_kind_conflict".to_string(),
-                source_ids: vec![row.id],
-                detail: format!(
-                    "Telegram source {} has conflicting source_subtype and legacy mirror",
-                    row.id
-                ),
-            })
-        }
-        (Some(canonical), _) => Ok(canonical),
-        (None, Some(legacy)) => Ok(legacy),
-        (None, None) => Err(SourceIdentityRepairDiagnostic {
+        .map(TelegramSourceKind::from_source_subtype)
+        .transpose()
+        .map_err(|_| SourceIdentityRepairDiagnostic {
             code: "unsupported_telegram_source_subtype".to_string(),
             source_ids: vec![row.id],
-            detail: format!("Telegram source {} has no supported subtype", row.id),
-        }),
-    }
+            detail: format!("Telegram source {} has unsupported source_subtype", row.id),
+        })?
+        .ok_or_else(|| SourceIdentityRepairDiagnostic {
+            code: "unsupported_telegram_source_subtype".to_string(),
+            source_ids: vec![row.id],
+            detail: format!("Telegram source {} has no supported source_subtype", row.id),
+        })
 }
 
 fn duplicate_canonical_identity_errors(
@@ -424,17 +395,19 @@ fn projection_drift_conflict_errors(
                 return None;
             }
 
-            let conflicting_source_id = candidate_source_ids_by_peer.get(&current_peer_key)?;
-            if *conflicting_source_id == projection.source_id {
-                return None;
-            }
+            let source_ids = match candidate_source_ids_by_peer.get(&current_peer_key) {
+                Some(conflicting_source_id) if *conflicting_source_id != projection.source_id => {
+                    vec![projection.source_id, *conflicting_source_id]
+                }
+                _ => vec![projection.source_id],
+            };
 
             Some(SourceIdentityRepairDiagnostic {
                 code: "telegram_projection_drift_conflict".to_string(),
-                source_ids: vec![projection.source_id, *conflicting_source_id],
+                source_ids,
                 detail: format!(
-                    "Existing Telegram typed projection for source {} conflicts with source {}",
-                    projection.source_id, conflicting_source_id
+                    "Existing Telegram typed projection for source {} does not match canonical source identity",
+                    projection.source_id
                 ),
             })
         })
@@ -540,6 +513,79 @@ mod tests {
         .execute(pool)
         .await
         .expect("insert source");
+    }
+
+    async fn post_v19_repair_pool() -> sqlx::SqlitePool {
+        let pool = crate::sources::test_support::memory_pool().await;
+        sqlx::query(
+            r#"
+            CREATE TABLE accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                label TEXT NOT NULL,
+                api_id INTEGER NOT NULL,
+                api_hash TEXT NOT NULL,
+                phone TEXT,
+                created_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create accounts");
+        sqlx::query(
+            r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_type TEXT NOT NULL,
+                source_subtype TEXT,
+                external_id TEXT NOT NULL,
+                title TEXT,
+                metadata_zstd BLOB,
+                last_sync_state INTEGER,
+                is_active BOOLEAN DEFAULT 1,
+                is_member BOOLEAN DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+                last_synced_at INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create post-v19 sources");
+        crate::sources::test_support::create_source_identity_tables(&pool).await;
+        pool
+    }
+
+    async fn insert_post_v19_telegram_source(
+        pool: &sqlx::SqlitePool,
+        id: i64,
+        subtype: Option<&str>,
+        account_id: Option<i64>,
+        external_id: &str,
+        metadata_json: Option<&[u8]>,
+    ) {
+        let metadata_zstd = metadata_json
+            .map(compress_json_bytes)
+            .transpose()
+            .expect("compress metadata");
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id,
+                title, metadata_zstd, is_active, is_member, created_at
+            )
+            VALUES (?, 'telegram', ?, ?, ?, 'source', ?, 1, 1, 100)
+            "#,
+        )
+        .bind(id)
+        .bind(subtype)
+        .bind(account_id)
+        .bind(external_id)
+        .bind(metadata_zstd)
+        .execute(pool)
+        .await
+        .expect("insert post-v19 source");
     }
 
     async fn memory_pool_with_migrations_through(version: i64) -> sqlx::SqlitePool {
@@ -704,6 +750,97 @@ mod tests {
         assert_eq!(row.4, "example");
         assert_eq!(row.5, Some(77));
         assert_eq!(row.6.as_deref(), Some("1_channel_12345.jpg"));
+    }
+
+    #[tokio::test]
+    async fn repair_reads_post_v19_sources_without_legacy_column() {
+        let pool = post_v19_repair_pool().await;
+        insert_test_account(&pool, 1).await;
+        insert_post_v19_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
+
+        let report = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("repair succeeds without legacy column");
+
+        assert_eq!(report.repaired_sources, vec![101]);
+        let typed: (i64, String, i64) = sqlx::query_as(
+            "SELECT account_id, source_subtype, peer_id FROM telegram_sources WHERE source_id = 101",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("typed row");
+        assert_eq!(typed, (1, "channel".to_string(), 12345));
+    }
+
+    #[tokio::test]
+    async fn repair_rejects_zero_external_id() {
+        let pool = post_v19_repair_pool().await;
+        insert_test_account(&pool, 1).await;
+        insert_post_v19_telegram_source(&pool, 101, Some("channel"), Some(1), "0", None).await;
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("zero external id fails");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("malformed_telegram_external_id"));
+    }
+
+    #[tokio::test]
+    async fn repair_treats_typed_projection_mismatch_as_fatal() {
+        let pool = post_v19_repair_pool().await;
+        insert_test_account(&pool, 1).await;
+        insert_post_v19_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy
+            )
+            VALUES (101, 1, 'channel', 'channel', 67890, 'unknown')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert conflicting typed row");
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("projection drift fails");
+
+        assert!(error.message.contains("telegram_projection_drift_conflict"));
+    }
+
+    #[tokio::test]
+    async fn repair_ignores_malformed_metadata_when_canonical_identity_is_present() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+        sqlx::query("UPDATE sources SET metadata_zstd = x'00' WHERE id = 101")
+            .execute(&pool)
+            .await
+            .expect("damage metadata");
+
+        let report = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("repair ignores damaged optional metadata");
+
+        assert_eq!(report.repaired_sources, vec![101]);
+        let strategy: String = sqlx::query_scalar(
+            "SELECT resolution_strategy FROM telegram_sources WHERE source_id = 101",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load repair strategy");
+        assert_eq!(strategy, "unknown");
     }
 
     #[tokio::test]
@@ -915,7 +1052,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn source_subtype_and_legacy_kind_conflict_is_fatal() {
+    async fn legacy_kind_conflict_is_ignored_when_canonical_subtype_is_valid() {
         let pool = memory_pool_with_sources().await;
         insert_telegram_source(
             &pool,
@@ -928,13 +1065,17 @@ mod tests {
         )
         .await;
 
-        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+        let report = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
             .await
-            .expect_err("conflict fails repair");
-        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
-        assert!(error
-            .message
-            .contains("telegram_subtype_legacy_kind_conflict"));
+            .expect("legacy mirror is ignored");
+
+        assert_eq!(report.repaired_sources, vec![101]);
+        let typed_subtype: String =
+            sqlx::query_scalar("SELECT source_subtype FROM telegram_sources WHERE source_id = 101")
+                .fetch_one(&pool)
+                .await
+                .expect("load typed subtype");
+        assert_eq!(typed_subtype, "channel");
     }
 
     #[tokio::test]

@@ -1809,7 +1809,7 @@ Expected:
 - Modify: `src-tauri/src/sources/identity_repair.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Add failing canonical external id tests**
+- [x] **Step 1: Add failing canonical external id tests**
 
 In `src-tauri/src/sources/identity.rs`, extend
 `canonical_external_id_rejects_malformed_values`:
@@ -1840,7 +1840,7 @@ fn canonical_external_id_rejects_malformed_values() {
 }
 ```
 
-- [ ] **Step 2: Add failing repair tests without legacy column**
+- [x] **Step 2: Add failing repair tests without legacy column**
 
 In `src-tauri/src/sources/identity_repair.rs`, add tests:
 
@@ -1981,7 +1981,7 @@ async fn insert_post_v19_telegram_source(
 }
 ```
 
-- [ ] **Step 3: Run failing repair tests**
+- [x] **Step 3: Run failing repair tests**
 
 Run:
 
@@ -1995,7 +1995,7 @@ Expected:
 canonical_external_id_rejects_malformed_values ... FAILED
 ```
 
-- [ ] **Step 4: Tighten canonical external id parser**
+- [x] **Step 4: Tighten canonical external id parser**
 
 Replace `canonical_telegram_external_id` in `src-tauri/src/sources/identity.rs`
 with:
@@ -2023,7 +2023,7 @@ pub(crate) fn canonical_telegram_external_id(value: &str) -> AppResult<i64> {
 }
 ```
 
-- [ ] **Step 5: Remove legacy repair column reads/writes**
+- [x] **Step 5: Remove legacy repair column reads/writes**
 
 In `src-tauri/src/sources/identity_repair.rs`:
 
@@ -2070,7 +2070,7 @@ sqlx::query(
 
 Repair should only upsert `telegram_sources` after v19.
 
-- [ ] **Step 6: Make malformed metadata non-fatal when identity is enough**
+- [x] **Step 6: Make malformed metadata non-fatal when identity is enough**
 
 In `candidate_from_row`, change metadata decoding so a bad
 `metadata_zstd` yields empty optional hints instead of a fatal error:
@@ -2089,7 +2089,7 @@ let strategy = match identity.map(|identity| identity.strategy) {
 
 Set `avatar_cache_key` from `metadata.and_then(|metadata| metadata.avatar_cache_key)`.
 
-- [ ] **Step 7: Run repair tests**
+- [x] **Step 7: Run repair tests**
 
 Run:
 
@@ -2103,7 +2103,7 @@ Expected:
 test result: ok. ... 0 failed
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 
