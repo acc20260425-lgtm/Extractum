@@ -48,15 +48,19 @@ impl TelegramSourceKind {
         }
     }
 
-    pub(crate) fn parse(value: &str) -> crate::error::AppResult<Self> {
+    pub(crate) fn from_source_subtype(value: &str) -> crate::error::AppResult<Self> {
         match value {
             TELEGRAM_KIND_CHANNEL => Ok(Self::Channel),
             TELEGRAM_KIND_SUPERGROUP => Ok(Self::Supergroup),
             TELEGRAM_KIND_GROUP => Ok(Self::Group),
             other => Err(crate::error::AppError::validation(format!(
-                "Unsupported telegram_source_kind '{other}'"
+                "Unsupported Telegram source_subtype '{other}'"
             ))),
         }
+    }
+
+    pub(crate) fn parse(value: &str) -> crate::error::AppResult<Self> {
+        Self::from_source_subtype(value)
     }
 }
 
@@ -205,6 +209,29 @@ mod tests {
             TelegramSourceKind::parse("group").unwrap(),
             TelegramSourceKind::Group
         );
+    }
+
+    #[test]
+    fn telegram_source_kind_parses_from_canonical_source_subtype() {
+        assert_eq!(
+            TelegramSourceKind::from_source_subtype("channel").unwrap(),
+            TelegramSourceKind::Channel
+        );
+        assert_eq!(
+            TelegramSourceKind::from_source_subtype("supergroup").unwrap(),
+            TelegramSourceKind::Supergroup
+        );
+        assert_eq!(
+            TelegramSourceKind::from_source_subtype("group").unwrap(),
+            TelegramSourceKind::Group
+        );
+    }
+
+    #[test]
+    fn telegram_source_kind_rejects_unsupported_source_subtype() {
+        let error =
+            TelegramSourceKind::from_source_subtype("video").expect_err("unsupported subtype");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
     }
 
     #[test]

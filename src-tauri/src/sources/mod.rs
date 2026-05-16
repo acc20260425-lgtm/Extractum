@@ -1,4 +1,5 @@
 mod avatar;
+pub(crate) mod identity;
 mod items;
 mod peer_resolution;
 mod settings;

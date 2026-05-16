@@ -426,7 +426,7 @@ git commit -m "feat: add source identity bridge schema"
 - Modify: `src-tauri/src/sources/mod.rs`
 - Modify: `src-tauri/src/sources/types.rs`
 
-- [ ] **Step 1: Write failing enum/helper tests**
+- [x] **Step 1: Write failing enum/helper tests**
 
 Add tests in `src-tauri/src/sources/types.rs`:
 
@@ -454,7 +454,7 @@ fn telegram_source_kind_rejects_unsupported_source_subtype() {
 }
 ```
 
-- [ ] **Step 2: Run failing helper tests**
+- [x] **Step 2: Run failing helper tests**
 
 Run:
 
@@ -468,7 +468,7 @@ Expected:
 no function or associated item named `from_source_subtype`
 ```
 
-- [ ] **Step 3: Add canonical subtype parser**
+- [x] **Step 3: Add canonical subtype parser**
 
 In `src-tauri/src/sources/types.rs`, add:
 
@@ -493,7 +493,7 @@ pub(crate) fn parse(value: &str) -> crate::error::AppResult<Self> {
 }
 ```
 
-- [ ] **Step 4: Create typed identity module**
+- [x] **Step 4: Create typed identity module**
 
 Create `src-tauri/src/sources/identity.rs`:
 
@@ -663,7 +663,7 @@ pub(crate) fn identity_updated_at() -> i64 {
 }
 ```
 
-- [ ] **Step 5: Export module**
+- [x] **Step 5: Export module**
 
 In `src-tauri/src/sources/mod.rs`, add:
 
@@ -671,7 +671,7 @@ In `src-tauri/src/sources/mod.rs`, add:
 pub(crate) mod identity;
 ```
 
-- [ ] **Step 6: Add unit tests for identity helpers**
+- [x] **Step 6: Add unit tests for identity helpers**
 
 In `src-tauri/src/sources/identity.rs`, add:
 
@@ -722,7 +722,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 7: Run helper tests**
+- [x] **Step 7: Run helper tests**
 
 Run:
 
@@ -736,7 +736,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 8: Commit typed helpers**
+- [x] **Step 8: Commit typed helpers**
 
 Run:
 
