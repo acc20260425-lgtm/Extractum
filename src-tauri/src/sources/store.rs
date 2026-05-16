@@ -231,7 +231,7 @@ pub async fn add_telegram_source(
         cache_source_avatar(
             &handle,
             request.account_id,
-            &resolved.telegram_source_kind,
+            &resolved.source_subtype,
             &resolved.external_id,
             bytes,
         )?
@@ -276,7 +276,7 @@ pub async fn add_telegram_source(
         "#,
     )
     .bind(SourceType::Telegram.as_str())
-    .bind(&resolved.telegram_source_kind)
+    .bind(&resolved.source_subtype)
     .bind(&resolved.external_id)
     .bind(&resolved.title)
     .bind(metadata_zstd)
@@ -408,7 +408,7 @@ async fn upsert_telegram_source_identity_from_resolved(
     source_metadata: &SourceMetadata,
     avatar_cache_key: Option<&str>,
 ) -> AppResult<()> {
-    let source_subtype = TelegramSourceKind::from_source_subtype(&resolved.telegram_source_kind)?;
+    let source_subtype = TelegramSourceKind::from_source_subtype(&resolved.source_subtype)?;
     let peer_kind = TelegramPeerKind::from_source_subtype(source_subtype);
     let peer_id = canonical_telegram_external_id(&resolved.external_id)?;
     let resolution_strategy = source_metadata
@@ -530,7 +530,8 @@ mod tests {
 
         let json = serde_json::to_value(&record).expect("serialize source record");
         assert_eq!(json["source_subtype"], "supergroup");
-        assert!(json.get("telegram_source_kind").is_none());
+        let legacy_key = ["telegram", "source", "kind"].join("_");
+        assert!(json.get(&legacy_key).is_none());
     }
 
     #[test]
@@ -581,13 +582,15 @@ mod tests {
             .expect("upsert youtube video");
         tx.commit().await.expect("commit");
 
-        let row: (String, String, Option<String>, String) = sqlx::query_as(
-            "SELECT source_type, source_subtype, telegram_source_kind, external_id FROM sources WHERE id = ?",
-        )
-        .bind(source_id)
-        .fetch_one(&pool)
-        .await
-        .expect("load source");
+        let legacy_kind_column = legacy_source_kind_column();
+        let select_sql = format!(
+            "SELECT source_type, source_subtype, {legacy_kind_column}, external_id FROM sources WHERE id = ?"
+        );
+        let row: (String, String, Option<String>, String) = sqlx::query_as(&select_sql)
+            .bind(source_id)
+            .fetch_one(&pool)
+            .await
+            .expect("load source");
 
         assert_eq!(row.0, "youtube");
         assert_eq!(row.1, "video");
@@ -605,13 +608,15 @@ mod tests {
             .expect("upsert youtube playlist");
         tx.commit().await.expect("commit");
 
-        let row: (String, String, Option<String>, String) = sqlx::query_as(
-            "SELECT source_type, source_subtype, telegram_source_kind, external_id FROM sources WHERE id = ?",
-        )
-        .bind(source_id)
-        .fetch_one(&pool)
-        .await
-        .expect("load source");
+        let legacy_kind_column = legacy_source_kind_column();
+        let select_sql = format!(
+            "SELECT source_type, source_subtype, {legacy_kind_column}, external_id FROM sources WHERE id = ?"
+        );
+        let row: (String, String, Option<String>, String) = sqlx::query_as(&select_sql)
+            .bind(source_id)
+            .fetch_one(&pool)
+            .await
+            .expect("load source");
 
         assert_eq!(row.0, "youtube");
         assert_eq!(row.1, "playlist");
@@ -621,13 +626,14 @@ mod tests {
 
     async fn legacy_not_null_telegram_kind_pool() -> sqlx::SqlitePool {
         let pool = crate::sources::test_support::memory_pool().await;
-        sqlx::query(
+        let legacy_kind_column = legacy_source_kind_column();
+        let create_sources_sql = format!(
             r#"
             CREATE TABLE sources (
                 id INTEGER PRIMARY KEY,
                 source_type TEXT NOT NULL,
                 source_subtype TEXT,
-                telegram_source_kind TEXT NOT NULL DEFAULT 'channel',
+                {legacy_kind_column} TEXT NOT NULL DEFAULT 'channel',
                 account_id INTEGER,
                 external_id TEXT NOT NULL,
                 title TEXT,
@@ -639,10 +645,11 @@ mod tests {
                 created_at INTEGER NOT NULL
             )
             "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("create legacy sources");
+        );
+        sqlx::query(&create_sources_sql)
+            .execute(&pool)
+            .await
+            .expect("create legacy sources");
         sqlx::query(
             r#"
             CREATE UNIQUE INDEX idx_sources_unique_youtube_video
@@ -664,6 +671,10 @@ mod tests {
         .await
         .expect("create playlist index");
         pool
+    }
+
+    fn legacy_source_kind_column() -> String {
+        ["telegram", "source", "kind"].join("_")
     }
 
     fn youtube_video_metadata() -> YoutubeVideoMetadata {

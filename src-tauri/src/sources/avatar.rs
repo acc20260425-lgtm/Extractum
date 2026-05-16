@@ -65,12 +65,8 @@ fn photo_bytes_data_url(bytes: Vec<u8>) -> String {
     )
 }
 
-fn source_avatar_cache_key(
-    account_id: i64,
-    telegram_source_kind: &str,
-    external_id: &str,
-) -> String {
-    format!("{account_id}_{telegram_source_kind}_{external_id}.jpg")
+fn source_avatar_cache_key(account_id: i64, source_subtype: &str, external_id: &str) -> String {
+    format!("{account_id}_{source_subtype}_{external_id}.jpg")
 }
 
 fn source_avatar_cache_dir(handle: &AppHandle) -> AppResult<PathBuf> {
@@ -84,7 +80,7 @@ fn source_avatar_cache_dir(handle: &AppHandle) -> AppResult<PathBuf> {
 pub(super) fn cache_source_avatar(
     handle: &AppHandle,
     account_id: i64,
-    telegram_source_kind: &str,
+    source_subtype: &str,
     external_id: &str,
     bytes: &[u8],
 ) -> AppResult<Option<String>> {
@@ -92,7 +88,7 @@ pub(super) fn cache_source_avatar(
         return Ok(None);
     }
 
-    let cache_key = source_avatar_cache_key(account_id, telegram_source_kind, external_id);
+    let cache_key = source_avatar_cache_key(account_id, source_subtype, external_id);
     let cache_dir = source_avatar_cache_dir(handle)?;
     fs::create_dir_all(&cache_dir).map_err(|e| AppError::internal(e.to_string()))?;
     fs::write(cache_dir.join(&cache_key), bytes).map_err(|e| AppError::internal(e.to_string()))?;

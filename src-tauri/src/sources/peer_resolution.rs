@@ -85,7 +85,7 @@ impl SourceMetadata {
 pub(super) struct ResolvedTelegramSource {
     pub(super) external_id: String,
     pub(super) title: String,
-    pub(super) telegram_source_kind: String,
+    pub(super) source_subtype: String,
     pub(super) is_member: bool,
     pub(super) username: Option<String>,
     access_hash: Option<i64>,
@@ -366,7 +366,7 @@ fn telegram_source_subtype_matches(
     };
 
     TelegramSourceKind::parse(expected_subtype)?;
-    Ok(source.telegram_source_kind == expected_subtype)
+    Ok(source.source_subtype == expected_subtype)
 }
 
 fn validate_expected_telegram_source_subtype(
@@ -379,7 +379,7 @@ fn validate_expected_telegram_source_subtype(
         Err(AppError::validation(format!(
             "Resolved Telegram source has a different source subtype than the requested source subtype: requested {}, actual {}",
             expected_subtype.unwrap_or("unknown"),
-            source.telegram_source_kind
+            source.source_subtype
         )))
     }
 }
@@ -388,7 +388,7 @@ fn resolved_telegram_source_from_peer(peer: &Peer) -> Option<ResolvedTelegramSou
     telegram_source_info_from_peer(peer).map(|source| ResolvedTelegramSource {
         external_id: source.id.to_string(),
         title: source.title,
-        telegram_source_kind: source.source_subtype,
+        source_subtype: source.source_subtype,
         is_member: source.is_member,
         username: source.username,
         access_hash: peer_access_hash(peer),
@@ -912,7 +912,7 @@ mod tests {
         let source = ResolvedTelegramSource {
             external_id: "123".to_string(),
             title: "Example".to_string(),
-            telegram_source_kind: TELEGRAM_KIND_SUPERGROUP.to_string(),
+            source_subtype: TELEGRAM_KIND_SUPERGROUP.to_string(),
             is_member: true,
             username: Some("example".to_string()),
             access_hash: Some(42),
@@ -923,7 +923,8 @@ mod tests {
             .expect_err("expected subtype mismatch");
 
         assert!(error.message.contains("requested source subtype"));
-        assert!(!error.message.contains("telegram_source_kind"));
+        let legacy_key = ["telegram", "source", "kind"].join("_");
+        assert!(!error.message.contains(&legacy_key));
         assert!(error.message.contains(TELEGRAM_KIND_CHANNEL));
         assert!(error.message.contains(TELEGRAM_KIND_SUPERGROUP));
     }

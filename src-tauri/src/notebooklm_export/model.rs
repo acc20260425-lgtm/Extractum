@@ -57,7 +57,7 @@ pub struct NotebookLmExportFile {
 pub(crate) struct NotebookLmExportSource {
     pub(crate) id: i64,
     pub(crate) source_type: String,
-    pub(crate) telegram_source_kind: String,
+    pub(crate) source_subtype: String,
     pub(crate) external_id: String,
     pub(crate) title: Option<String>,
 }

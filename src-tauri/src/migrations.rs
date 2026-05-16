@@ -164,6 +164,23 @@ pub fn build_migrations() -> Vec<Migration> {
 }
 
 #[cfg(test)]
+pub(crate) async fn apply_all_migrations_for_test_pool(
+    pool: &sqlx::SqlitePool,
+) -> crate::error::AppResult<()> {
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(crate::error::AppError::database)?;
+    let conn = &mut *conn;
+    source_identity_cleanup::apply_standard_migrations_before_plugin_on_connection(
+        conn,
+        build_migrations(),
+    )
+    .await?;
+    source_identity_cleanup::apply_source_identity_cleanup_on_connection(conn).await
+}
+
+#[cfg(test)]
 mod tests {
     use super::{build_migrations, checksum_matches_line_ending_variant};
     use sha2::{Digest, Sha384};

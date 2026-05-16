@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn telegram_source_kind_parses_supported_values() {
+    fn telegram_source_subtype_parses_supported_values() {
         assert_eq!(
             TelegramSourceKind::parse("channel").unwrap(),
             TelegramSourceKind::Channel
@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn telegram_source_kind_parses_from_canonical_source_subtype() {
+    fn telegram_source_subtype_parses_from_canonical_source_subtype() {
         assert_eq!(
             TelegramSourceKind::from_source_subtype("channel").unwrap(),
             TelegramSourceKind::Channel
@@ -228,20 +228,20 @@ mod tests {
     }
 
     #[test]
-    fn telegram_source_kind_rejects_unsupported_source_subtype() {
+    fn telegram_source_subtype_rejects_unsupported_source_subtype() {
         let error =
             TelegramSourceKind::from_source_subtype("video").expect_err("unsupported subtype");
         assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
     }
 
     #[test]
-    fn telegram_source_kind_rejects_unknown_values_as_validation() {
+    fn telegram_source_subtype_rejects_unknown_values_as_validation() {
         let error = TelegramSourceKind::parse("user").expect_err("unsupported kind");
         assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
     }
 
     #[test]
-    fn telegram_source_kind_serializes_as_existing_wire_value() {
+    fn telegram_source_subtype_serializes_as_existing_wire_value() {
         let value = serde_json::to_string(&TelegramSourceKind::Supergroup).expect("serialize");
         assert_eq!(value, "\"supergroup\"");
     }

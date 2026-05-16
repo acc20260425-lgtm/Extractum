@@ -204,7 +204,7 @@ fn render_document_header(context: &DocumentRenderContext<'_>) -> String {
     output.push_str(&format!("- Source: {source_name}\n"));
     output.push_str(&format!(
         "- Source kind: {}\n",
-        context.source.telegram_source_kind
+        context.source.source_subtype
     ));
     output.push_str(&format!("- Topic: {}\n", context.topic.title));
     output.push_str(&format!(
@@ -394,7 +394,7 @@ mod tests {
         let source = NotebookLmExportSource {
             id: 1,
             source_type: "telegram".to_string(),
-            telegram_source_kind: "supergroup".to_string(),
+            source_subtype: "supergroup".to_string(),
             external_id: "123".to_string(),
             title: Some("Forum".to_string()),
         };

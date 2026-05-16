@@ -947,10 +947,10 @@ mod tests {
         sqlx::query(
             r#"
             INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, account_id, external_id,
+                id, source_type, source_subtype, account_id, external_id,
                 title, metadata_zstd, is_active, is_member, created_at
             )
-            VALUES (?, 'youtube', 'video', '', NULL, ?, ?, ?, 1, 0, 1)
+            VALUES (?, 'youtube', 'video', NULL, ?, ?, ?, 1, 0, 1)
             "#,
         )
         .bind(id)
@@ -967,10 +967,10 @@ mod tests {
         sqlx::query(
             r#"
             INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, account_id, external_id,
+                id, source_type, source_subtype, account_id, external_id,
                 title, metadata_zstd, is_active, is_member, created_at
             )
-            VALUES (?, 'youtube', 'playlist', '', NULL, ?, ?, ?, 1, 0, 1)
+            VALUES (?, 'youtube', 'playlist', NULL, ?, ?, ?, 1, 0, 1)
             "#,
         )
         .bind(id)

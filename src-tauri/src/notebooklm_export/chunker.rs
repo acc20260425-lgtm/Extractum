@@ -391,7 +391,7 @@ mod tests {
         NotebookLmExportSource {
             id: 1,
             source_type: "telegram".to_string(),
-            telegram_source_kind: "channel".to_string(),
+            source_subtype: "channel".to_string(),
             external_id: "123".to_string(),
             title: Some("My Source".to_string()),
         }

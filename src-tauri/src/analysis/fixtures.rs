@@ -177,13 +177,12 @@ async fn insert_telegram_source(
 ) -> AppResult<i64> {
     sqlx::query_scalar(
         "INSERT INTO sources (
-            source_type, source_subtype, telegram_source_kind, account_id, external_id, title,
+            source_type, source_subtype, account_id, external_id, title,
             metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
          )
-         VALUES ('telegram', ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+         VALUES ('telegram', ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
          RETURNING id",
     )
-    .bind(kind)
     .bind(kind)
     .bind(account_id)
     .bind(format!("{FIXTURE_EXTERNAL_PREFIX}{external_suffix}"))
@@ -208,10 +207,10 @@ async fn insert_youtube_video_source(tx: &mut sqlx::Transaction<'_, Sqlite>) -> 
     let video_id = format!("{FIXTURE_EXTERNAL_PREFIX}youtube-video");
     sqlx::query_scalar(
         "INSERT INTO sources (
-            source_type, source_subtype, telegram_source_kind, account_id, external_id, title,
+            source_type, source_subtype, account_id, external_id, title,
             metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
          )
-         VALUES ('youtube', 'video', '', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
+         VALUES ('youtube', 'video', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
          RETURNING id",
     )
     .bind(&video_id)
@@ -251,10 +250,10 @@ async fn insert_youtube_playlist_source(tx: &mut sqlx::Transaction<'_, Sqlite>) 
     let playlist_id = format!("{FIXTURE_EXTERNAL_PREFIX}youtube-playlist");
     sqlx::query_scalar(
         "INSERT INTO sources (
-            source_type, source_subtype, telegram_source_kind, account_id, external_id, title,
+            source_type, source_subtype, account_id, external_id, title,
             metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
          )
-         VALUES ('youtube', 'playlist', '', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
+         VALUES ('youtube', 'playlist', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
          RETURNING id",
     )
     .bind(&playlist_id)
@@ -1174,21 +1173,21 @@ fn rows_to_i64(rows: u64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
 
     async fn fixture_pool() -> Pool<Sqlite> {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
             .await
             .expect("connect memory sqlite");
+        crate::migrations::apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
         sqlx::query("PRAGMA foreign_keys = ON")
             .execute(&pool)
             .await
             .expect("enable foreign keys");
-        for migration in crate::migrations::build_migrations() {
-            sqlx::raw_sql(migration.sql)
-                .execute(&pool)
-                .await
-                .unwrap_or_else(|error| panic!("apply migration {}: {error}", migration.version));
-        }
         pool
     }
 
@@ -1264,11 +1263,11 @@ mod tests {
         .expect("insert fixture account");
         sqlx::query(
             "INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, account_id, external_id,
+                id, source_type, source_subtype, account_id, external_id,
                 title, last_synced_at, is_active, is_member, created_at
              )
              VALUES (
-                20, 'youtube', 'video', '', NULL,
+                20, 'youtube', 'video', NULL,
                 '__analysis_redesign_fixture__:clear-source',
                 '__analysis_redesign_fixture__ Clear Source',
                 10, 1, 0, 10
@@ -1403,10 +1402,10 @@ mod tests {
         .expect("insert non-fixture account");
         sqlx::query(
             "INSERT INTO sources (
-                source_type, source_subtype, telegram_source_kind, account_id, external_id,
+                source_type, source_subtype, account_id, external_id,
                 title, is_active, is_member, created_at
              )
-             VALUES ('telegram', 'channel', 'channel', 1, 'real-source', 'Real Source', 1, 1, 1)",
+             VALUES ('telegram', 'channel', 1, 'real-source', 'Real Source', 1, 1, 1)",
         )
         .execute(&pool)
         .await

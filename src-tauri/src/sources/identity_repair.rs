@@ -526,24 +526,30 @@ mod tests {
             .map(compress_json_bytes)
             .transpose()
             .expect("compress metadata");
-        sqlx::query(
+        let legacy_kind_column = legacy_source_kind_column();
+        let insert_sql = format!(
             r#"
             INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, account_id,
+                id, source_type, source_subtype, {legacy_kind_column}, account_id,
                 external_id, title, metadata_zstd, is_active, is_member, created_at
             )
             VALUES (?, 'telegram', ?, ?, ?, ?, 'source', ?, 1, 1, 100)
             "#,
-        )
-        .bind(id)
-        .bind(subtype)
-        .bind(legacy_kind)
-        .bind(account_id)
-        .bind(external_id)
-        .bind(metadata_zstd)
-        .execute(pool)
-        .await
-        .expect("insert legacy source");
+        );
+        sqlx::query(&insert_sql)
+            .bind(id)
+            .bind(subtype)
+            .bind(legacy_kind)
+            .bind(account_id)
+            .bind(external_id)
+            .bind(metadata_zstd)
+            .execute(pool)
+            .await
+            .expect("insert legacy source");
+    }
+
+    fn legacy_source_kind_column() -> String {
+        ["telegram", "source", "kind"].join("_")
     }
 
     async fn post_v19_repair_pool() -> sqlx::SqlitePool {

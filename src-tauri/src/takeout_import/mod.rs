@@ -22,7 +22,7 @@ mod state;
 
 use export_dc::{
     export_dc_invoke, finish_takeout_session, prepare_export_dc_alias,
-    takeout_init_request_for_source_kind, ExportDcAlias,
+    takeout_init_request_for_source_subtype, ExportDcAlias,
 };
 use pagination::{
     message_range_min_id, next_takeout_cursor, parse_takeout_page, select_history_splits,
@@ -43,7 +43,7 @@ use state::{
 pub(crate) struct TakeoutExportDcSpikeResult {
     pub(crate) source_id: i64,
     pub(crate) account_id: i64,
-    pub(crate) telegram_source_kind: String,
+    pub(crate) telegram_source_subtype: String,
     pub(crate) home_dc_id: i32,
     pub(crate) export_dc_id: i32,
     pub(crate) used_export_dc: bool,
@@ -122,7 +122,7 @@ pub async fn run_takeout_export_dc_spike(
 async fn run_export_dc_spike_for_runtime(
     source_id: i64,
     account_id: i64,
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     runtime: AuthorizedTelegramRuntime,
 ) -> AppResult<TakeoutExportDcSpikeResult> {
     let client = runtime.client;
@@ -134,7 +134,7 @@ async fn run_export_dc_spike_for_runtime(
         .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))?;
 
     let alias = prepare_export_dc_alias(&runtime.session).await?;
-    let init_request = takeout_init_request_for_source_kind(telegram_source_kind)?;
+    let init_request = takeout_init_request_for_source_subtype(telegram_source_subtype)?;
     let mut warnings = Vec::new();
     let mut fallback_used = false;
 
@@ -176,7 +176,7 @@ async fn run_export_dc_spike_for_runtime(
     Ok(TakeoutExportDcSpikeResult {
         source_id,
         account_id,
-        telegram_source_kind: telegram_source_kind.to_string(),
+        telegram_source_subtype: telegram_source_subtype.to_string(),
         home_dc_id: alias.home_dc_id,
         export_dc_id: alias.export_dc_id,
         used_export_dc: !fallback_used,
@@ -339,7 +339,7 @@ async fn run_takeout_source_import(
         .await
         .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))?;
     let alias = prepare_export_dc_alias(&session).await?;
-    let init_request = takeout_init_request_for_source_kind(&telegram_source_subtype)?;
+    let init_request = takeout_init_request_for_source_subtype(&telegram_source_subtype)?;
     let mut warnings = Vec::new();
     let mut fallback_used = false;
     let takeout = export_dc_invoke(
@@ -586,8 +586,8 @@ struct TakeoutHistoryProbe {
     only_my_messages: bool,
 }
 
-fn ensure_supported_takeout_source_kind(telegram_source_kind: &str) -> AppResult<()> {
-    TelegramSourceKind::parse(telegram_source_kind).map(|_| ())
+fn ensure_supported_takeout_source_subtype(source_subtype: &str) -> AppResult<()> {
+    TelegramSourceKind::from_source_subtype(source_subtype).map(|_| ())
 }
 
 async fn load_takeout_source_subtype(
@@ -596,7 +596,7 @@ async fn load_takeout_source_subtype(
 ) -> AppResult<String> {
     let identity = crate::sources::identity::load_telegram_source_identity(pool, source_id).await?;
     let source_subtype = identity.source_subtype.as_str();
-    ensure_supported_takeout_source_kind(source_subtype)?;
+    ensure_supported_takeout_source_subtype(source_subtype)?;
     Ok(source_subtype.to_string())
 }
 
@@ -604,12 +604,12 @@ async fn validate_takeout_peer(
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     peer: grammers_session::types::PeerRef,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
 ) -> AppResult<()> {
-    match telegram_source_kind {
+    match telegram_source_subtype {
         TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
             let input_channel: tl::enums::InputChannel = peer.into();
             export_dc_invoke(
@@ -643,7 +643,7 @@ async fn validate_takeout_peer(
         }
         other => {
             return Err(AppError::validation(format!(
-                "Unsupported telegram_source_kind '{other}'"
+                "Unsupported Telegram source_subtype '{other}'"
             )));
         }
     }
@@ -655,12 +655,12 @@ async fn detect_supergroup_migration(
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     peer: grammers_session::types::PeerRef,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
 ) -> AppResult<()> {
-    if telegram_source_kind != TELEGRAM_KIND_SUPERGROUP {
+    if telegram_source_subtype != TELEGRAM_KIND_SUPERGROUP {
         return Ok(());
     }
 
@@ -697,7 +697,7 @@ async fn takeout_history_count_probe(
     takeout_id: i64,
     input_peer: tl::enums::InputPeer,
     range: tl::enums::MessageRange,
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
 ) -> AppResult<TakeoutHistoryProbe> {
@@ -718,7 +718,7 @@ async fn takeout_history_count_probe(
     let response = match response {
         Ok(response) => response,
         Err(error)
-            if supports_only_my_messages_fallback(telegram_source_kind)
+            if supports_only_my_messages_fallback(telegram_source_subtype)
                 && is_channel_private_error(&error) =>
         {
             push_warning_once(
@@ -762,7 +762,7 @@ async fn import_takeout_history_ranges(
     ranges: Vec<CountedMessageRange>,
     source: &crate::sources::SourceSyncTarget,
     total: i64,
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
 ) -> AppResult<TakeoutHistoryImport> {
@@ -783,7 +783,7 @@ async fn import_takeout_history_ranges(
             counted_range,
             source,
             total,
-            telegram_source_kind,
+            telegram_source_subtype,
             imported,
             warnings,
             fallback_used,
@@ -804,7 +804,7 @@ async fn import_takeout_history_pages(
     counted_range: CountedMessageRange,
     source: &crate::sources::SourceSyncTarget,
     total: i64,
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     mut imported: TakeoutHistoryImport,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
@@ -831,7 +831,7 @@ async fn import_takeout_history_pages(
             input_peer.clone(),
             range.clone(),
             request,
-            telegram_source_kind,
+            telegram_source_subtype,
             &mut only_my_messages,
             warnings,
             fallback_used,
@@ -914,7 +914,7 @@ async fn takeout_history_page_response(
     input_peer: tl::enums::InputPeer,
     range: tl::enums::MessageRange,
     request: TakeoutPageRequest,
-    telegram_source_kind: &str,
+    telegram_source_subtype: &str,
     only_my_messages: &mut bool,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
@@ -951,7 +951,7 @@ async fn takeout_history_page_response(
     {
         Ok(response) => Ok(response),
         Err(error)
-            if supports_only_my_messages_fallback(telegram_source_kind)
+            if supports_only_my_messages_fallback(telegram_source_subtype)
                 && is_channel_private_error(&error) =>
         {
             push_warning_once(
@@ -1065,9 +1065,9 @@ async fn takeout_search_my_messages(
     .await
 }
 
-fn supports_only_my_messages_fallback(telegram_source_kind: &str) -> bool {
+fn supports_only_my_messages_fallback(telegram_source_subtype: &str) -> bool {
     matches!(
-        telegram_source_kind,
+        telegram_source_subtype,
         TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP
     )
 }
@@ -1122,11 +1122,11 @@ mod tests {
         sqlx::query(
             r#"
             INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, account_id,
+                id, source_type, source_subtype, account_id,
                 external_id, title, metadata_zstd, last_sync_state, is_active, is_member,
                 created_at
             )
-            VALUES (?, 'telegram', 'supergroup', 'channel', ?, ?, ?, NULL, NULL, 1, 1, ?)
+            VALUES (?, 'telegram', 'supergroup', ?, ?, ?, NULL, NULL, 1, 1, ?)
             "#,
         )
         .bind(7_i64)

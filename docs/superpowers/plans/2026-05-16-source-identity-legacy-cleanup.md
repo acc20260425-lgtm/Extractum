@@ -2363,7 +2363,7 @@ Expected:
 - Modify: `src-tauri/src/youtube/jobs.rs`
 - Modify: `src-tauri/src/analysis/fixtures.rs`
 
-- [ ] **Step 1: Run containment scan and record current runtime matches**
+- [x] **Step 1: Run containment scan and record current runtime matches**
 
 Run:
 
@@ -2373,7 +2373,7 @@ rg -n "telegram_source_kind|expected_kind" src-tauri\src -g '!target'
 
 Expected before this task: matches remain in runtime modules and tests.
 
-- [ ] **Step 2: Update Takeout naming without changing behavior**
+- [x] **Step 2: Update Takeout naming without changing behavior**
 
 In `src-tauri/src/takeout_import/mod.rs`, rename function parameters and fields
 that represent canonical source subtype:
@@ -2407,7 +2407,7 @@ Update all call sites in `mod.rs`, `pagination.rs`, and `export_dc.rs` to use
 `telegram_source_subtype` or `source_subtype` names. Keep string values
 unchanged.
 
-- [ ] **Step 3: Update NotebookLM source model**
+- [x] **Step 3: Update NotebookLM source model**
 
 In `src-tauri/src/notebooklm_export/model.rs`, change:
 
@@ -2431,7 +2431,7 @@ Ok(NotebookLmSource {
 In `renderer.rs` and `chunker.rs`, replace
 `context.source.telegram_source_kind` with `context.source.source_subtype`.
 
-- [ ] **Step 4: Update YouTube and analysis fixtures**
+- [x] **Step 4: Update YouTube and analysis fixtures**
 
 In `src-tauri/src/youtube/detail.rs`, remove `telegram_source_kind` from
 `SourceSyncTarget` fixture rows and test table definitions. In
@@ -2439,7 +2439,7 @@ In `src-tauri/src/youtube/detail.rs`, remove `telegram_source_kind` from
 current fixture inserts. If a fixture is intentionally old-schema, rename the
 helper or test to include `legacy_schema` and keep it quarantined.
 
-- [ ] **Step 5: Run targeted runtime tests**
+- [x] **Step 5: Run targeted runtime tests**
 
 Run:
 
@@ -2453,7 +2453,7 @@ Expected:
 test result: ok. ... 0 failed
 ```
 
-- [ ] **Step 6: Run containment scan for Rust normal code**
+- [x] **Step 6: Run containment scan for Rust normal code**
 
 Run:
 
@@ -2472,7 +2472,7 @@ If matches remain in `sources/store.rs`, `sources/peer_resolution.rs`,
 `takeout_import`, `notebooklm_export`, `youtube`, or normal analysis fixtures,
 finish removing them before committing.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 

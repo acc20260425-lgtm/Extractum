@@ -39,10 +39,10 @@ fn export_dc_id_for_home_dc(home_dc_id: i32) -> i32 {
     home_dc_id + EXPORT_DC_SHIFT
 }
 
-pub(crate) fn takeout_init_request_for_source_kind(
-    telegram_source_subtype: &str,
+pub(crate) fn takeout_init_request_for_source_subtype(
+    source_subtype: &str,
 ) -> AppResult<tl::functions::account::InitTakeoutSession> {
-    let (message_chats, message_megagroups, message_channels) = match telegram_source_subtype {
+    let (message_chats, message_megagroups, message_channels) = match source_subtype {
         TELEGRAM_KIND_GROUP => (true, false, false),
         TELEGRAM_KIND_SUPERGROUP => (false, true, false),
         TELEGRAM_KIND_CHANNEL => (false, false, true),
@@ -128,7 +128,7 @@ pub(crate) async fn finish_takeout_session(
 mod tests {
     use super::{
         export_dc_id_for_home_dc, should_fallback_export_dc_error,
-        takeout_init_request_for_source_kind, TAKEOUT_FILE_MAX_SIZE,
+        takeout_init_request_for_source_subtype, TAKEOUT_FILE_MAX_SIZE,
     };
     use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
     use grammers_mtsender::{InvocationError, RpcError};
@@ -139,22 +139,23 @@ mod tests {
     }
 
     #[test]
-    fn takeout_init_request_uses_source_kind_flags_and_file_limit() {
-        let group = takeout_init_request_for_source_kind(TELEGRAM_KIND_GROUP).expect("group flags");
+    fn takeout_init_request_uses_source_subtype_flags_and_file_limit() {
+        let group =
+            takeout_init_request_for_source_subtype(TELEGRAM_KIND_GROUP).expect("group flags");
         assert!(group.message_chats);
         assert!(!group.message_megagroups);
         assert!(!group.message_channels);
         assert!(group.files);
         assert_eq!(group.file_max_size, Some(TAKEOUT_FILE_MAX_SIZE));
 
-        let supergroup = takeout_init_request_for_source_kind(TELEGRAM_KIND_SUPERGROUP)
+        let supergroup = takeout_init_request_for_source_subtype(TELEGRAM_KIND_SUPERGROUP)
             .expect("supergroup flags");
         assert!(!supergroup.message_chats);
         assert!(supergroup.message_megagroups);
         assert!(!supergroup.message_channels);
 
         let channel =
-            takeout_init_request_for_source_kind(TELEGRAM_KIND_CHANNEL).expect("channel flags");
+            takeout_init_request_for_source_subtype(TELEGRAM_KIND_CHANNEL).expect("channel flags");
         assert!(!channel.message_chats);
         assert!(!channel.message_megagroups);
         assert!(channel.message_channels);

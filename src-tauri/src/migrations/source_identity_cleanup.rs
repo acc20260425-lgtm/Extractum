@@ -17,7 +17,9 @@ pub(super) async fn apply_source_identity_cleanup_if_needed(db_url: &str) -> App
     apply_source_identity_cleanup_on_connection(&mut conn).await
 }
 
-async fn apply_source_identity_cleanup_on_connection(conn: &mut SqliteConnection) -> AppResult<()> {
+pub(super) async fn apply_source_identity_cleanup_on_connection(
+    conn: &mut SqliteConnection,
+) -> AppResult<()> {
     ensure_not_missing_previous_migrations(conn).await?;
     if migration_19_recorded(conn).await? {
         return Ok(());
@@ -43,25 +45,32 @@ pub(super) async fn apply_standard_migrations_before_plugin(
     let mut conn = SqliteConnection::connect(db_url)
         .await
         .map_err(AppError::database)?;
-    ensure_sqlx_migrations_table(&mut conn).await?;
-    reject_unsupported_pre_v18_telegram_upgrade(&mut conn).await?;
+    apply_standard_migrations_before_plugin_on_connection(&mut conn, migrations).await
+}
+
+pub(super) async fn apply_standard_migrations_before_plugin_on_connection(
+    conn: &mut SqliteConnection,
+    migrations: Vec<tauri_plugin_sql::Migration>,
+) -> AppResult<()> {
+    ensure_sqlx_migrations_table(&mut *conn).await?;
+    reject_unsupported_pre_v18_telegram_upgrade(&mut *conn).await?;
 
     for migration in migrations
         .into_iter()
         .filter(|migration| migration.version < SOURCE_IDENTITY_CLEANUP_VERSION)
     {
-        let exists = migration_record_exists(&mut conn, migration.version).await?;
+        let exists = migration_record_exists(&mut *conn, migration.version).await?;
         if exists {
             continue;
         }
 
         let started_at = Instant::now();
         sqlx::raw_sql(migration.sql)
-            .execute(&mut conn)
+            .execute(&mut *conn)
             .await
             .map_err(AppError::database)?;
         record_migration_success(
-            &mut conn,
+            &mut *conn,
             migration.version,
             migration.description,
             Sha384::digest(migration.sql.as_bytes()).to_vec(),

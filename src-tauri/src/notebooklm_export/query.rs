@@ -86,7 +86,7 @@ pub(crate) async fn load_export_source(
     Ok(NotebookLmExportSource {
         id: source.id,
         source_type: source.source_type,
-        telegram_source_kind: source_subtype.as_str().to_string(),
+        source_subtype: source_subtype.as_str().to_string(),
         external_id: source.external_id,
         title: source.title,
     })
@@ -327,7 +327,6 @@ mod tests {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_type TEXT NOT NULL,
                 source_subtype TEXT,
-                telegram_source_kind TEXT NOT NULL,
                 external_id TEXT NOT NULL,
                 title TEXT
             )
@@ -384,9 +383,9 @@ mod tests {
         sqlx::query(
             r#"
             INSERT INTO sources (
-                id, source_type, source_subtype, telegram_source_kind, external_id, title
+                id, source_type, source_subtype, external_id, title
             )
-            VALUES (?, 'telegram', 'supergroup', 'channel', ?, ?)
+            VALUES (?, 'telegram', 'supergroup', ?, ?)
             "#,
         )
         .bind(7_i64)
@@ -400,7 +399,7 @@ mod tests {
             .await
             .expect("load export source");
 
-        assert_eq!(source.telegram_source_kind, "supergroup");
+        assert_eq!(source.source_subtype, "supergroup");
     }
 
     #[tokio::test]
