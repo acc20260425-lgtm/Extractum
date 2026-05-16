@@ -482,4 +482,218 @@ mod tests {
         assert_eq!(row.5, Some(77));
         assert_eq!(row.6.as_deref(), Some("1_channel_12345.jpg"));
     }
+
+    #[tokio::test]
+    async fn malformed_external_ids_fail_without_writing_typed_rows() {
+        for external_id in ["+123", "-123", "00123", "123 ", "12a3"] {
+            let pool = memory_pool_with_sources().await;
+            insert_telegram_source(
+                &pool,
+                101,
+                Some("channel"),
+                Some("channel"),
+                Some(1),
+                external_id,
+                None,
+            )
+            .await;
+
+            let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+                .await
+                .expect_err("malformed id fails repair");
+            assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+            assert!(error.message.contains("malformed_telegram_external_id"));
+
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM telegram_sources")
+                .fetch_one(&pool)
+                .await
+                .expect("count typed rows");
+            assert_eq!(count, 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_account_id_is_fatal() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            None,
+            "12345",
+            None,
+        )
+        .await;
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("missing account fails repair");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("telegram_source_missing_account"));
+    }
+
+    #[tokio::test]
+    async fn source_subtype_and_legacy_kind_conflict_is_fatal() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("supergroup"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("conflict fails repair");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error
+            .message
+            .contains("telegram_subtype_legacy_kind_conflict"));
+    }
+
+    #[tokio::test]
+    async fn duplicate_canonical_identity_reports_conflicting_source_ids() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+        insert_telegram_source(
+            &pool,
+            102,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("duplicate canonical identity fails repair");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error
+            .message
+            .contains("duplicate_canonical_telegram_identity"));
+        assert!(error.message.contains("101"));
+        assert!(error.message.contains("102"));
+    }
+
+    #[tokio::test]
+    async fn duplicate_typed_peer_identity_reports_conflicting_source_ids() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+        insert_telegram_source(
+            &pool,
+            102,
+            Some("supergroup"),
+            Some("supergroup"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("duplicate peer identity fails repair");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error
+            .message
+            .contains("duplicate_typed_telegram_peer_identity"));
+        assert!(error.message.contains("101"));
+        assert!(error.message.contains("102"));
+    }
+
+    #[tokio::test]
+    async fn apply_repair_is_idempotent() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("group"),
+            Some("group"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+
+        repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("first repair");
+        repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("second repair");
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM telegram_sources")
+            .fetch_one(&pool)
+            .await
+            .expect("count typed rows");
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn fatal_repair_rolls_back_and_does_not_create_canonical_index() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some("channel"),
+            Some(1),
+            "12345",
+            None,
+        )
+        .await;
+        insert_telegram_source(
+            &pool,
+            102,
+            Some("channel"),
+            Some("channel"),
+            None,
+            "67890",
+            None,
+        )
+        .await;
+
+        repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("repair fails");
+
+        let typed_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM telegram_sources")
+            .fetch_one(&pool)
+            .await
+            .expect("count typed rows");
+        assert_eq!(typed_count, 0);
+
+        let index_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_sources_unique_telegram_identity'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count canonical index");
+        assert_eq!(index_count, 0);
+    }
 }

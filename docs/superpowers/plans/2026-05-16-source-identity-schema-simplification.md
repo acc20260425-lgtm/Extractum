@@ -1366,7 +1366,7 @@ git commit -m "feat: add source identity repair engine"
 **Files:**
 - Modify: `src-tauri/src/sources/identity_repair.rs`
 
-- [ ] **Step 1: Add failing malformed external id test**
+- [x] **Step 1: Add failing malformed external id test**
 
 Add:
 
@@ -1401,7 +1401,7 @@ async fn malformed_external_ids_fail_without_writing_typed_rows() {
 }
 ```
 
-- [ ] **Step 2: Add failing missing account test**
+- [x] **Step 2: Add failing missing account test**
 
 Add:
 
@@ -1428,7 +1428,7 @@ async fn missing_account_id_is_fatal() {
 }
 ```
 
-- [ ] **Step 3: Add failing subtype conflict test**
+- [x] **Step 3: Add failing subtype conflict test**
 
 Add:
 
@@ -1455,7 +1455,7 @@ async fn source_subtype_and_legacy_kind_conflict_is_fatal() {
 }
 ```
 
-- [ ] **Step 4: Add failing duplicate canonical and typed peer tests**
+- [x] **Step 4: Add failing duplicate canonical and typed peer tests**
 
 Add:
 
@@ -1503,7 +1503,7 @@ async fn duplicate_typed_peer_identity_reports_conflicting_source_ids() {
 }
 ```
 
-- [ ] **Step 5: Add failing idempotency and rollback tests**
+- [x] **Step 5: Add failing idempotency and rollback tests**
 
 Add:
 
@@ -1556,7 +1556,7 @@ async fn fatal_repair_rolls_back_and_does_not_create_canonical_index() {
 }
 ```
 
-- [ ] **Step 6: Run fatal fixture tests**
+- [x] **Step 6: Run fatal fixture tests**
 
 Run:
 
@@ -1570,7 +1570,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 7: Commit repair regression guards**
+- [x] **Step 7: Commit repair regression guards**
 
 Run:
 
