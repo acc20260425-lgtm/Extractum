@@ -100,8 +100,9 @@ Specific costs:
 2. Add typed Telegram source identity storage for fields needed by sync,
    Takeout, avatar refresh, source listing, and peer resolution.
 3. Keep old databases readable and upgradable.
-4. Keep fresh installs and future schema baselines free from the historical
-   `telegram_source_kind NOT NULL` workaround.
+4. Remove normal-path dependence on the historical `telegram_source_kind NOT
+   NULL` workaround and prepare a future current-schema baseline where fresh
+   installs can omit the legacy column.
 5. Make Telegram-specific logic live behind Telegram-specific loaders and
    structs.
 6. Keep YouTube source behavior stable while removing its normal-path need to
@@ -143,6 +144,11 @@ switches normal backend reads and writes to those new boundaries. The old
 `telegram_source_kind` column remains present and populated where existing table
 shape requires it. It is treated as a deprecated compatibility mirror, not the
 source of truth.
+
+Target model, data invariants, migration behavior, runtime behavior,
+compatibility behavior, and acceptance criteria are normative for this slice.
+Concrete module names, file lists, and phase ordering below are implementation
+notes unless they are repeated as invariants or acceptance criteria.
 
 ### Why This Approach
 
@@ -198,6 +204,27 @@ Canonical combinations for implemented providers:
 For new rows, `source_subtype` must be non-null. Existing nullable rows are
 backfilled or handled through a legacy repair path.
 
+In this slice, non-null `source_subtype` is an application invariant for
+implemented providers, not necessarily a physical SQLite `NOT NULL` constraint
+on `sources`. The later current-schema baseline can make that invariant
+physical.
+
+For Telegram rows, `sources.external_id` must be the ASCII decimal string form
+of the Telegram bare peer id returned by `PeerId::bare_id()`:
+
+- no `-100` channel prefix;
+- no leading `+` or `-`;
+- no leading zero padding;
+- no whitespace;
+- no separators or non-decimal characters;
+- no empty string.
+
+Legacy Telegram rows whose `external_id` does not parse to a non-negative
+`i64` under this format are malformed for typed identity. Validation is an
+exact round trip: parse as `i64`, require `parsed >= 0`, then require
+`parsed.to_string() == sources.external_id`. Rust repair must not use SQLite
+`CAST` or `GLOB` to coerce invalid values.
+
 ### Deprecated Compatibility Mirror
 
 `sources.telegram_source_kind` remains in existing databases for now.
@@ -210,6 +237,11 @@ Rules:
 - YouTube write paths may continue writing `''` only inside a compatibility
   insert helper, never as business logic;
 - frontend code must prefer `source_subtype`;
+- backend DTOs may emit `telegram_source_kind` for one compatibility window,
+  but only as `Some(source_subtype)` for Telegram rows and as non-authoritative
+  deprecated data;
+- frontend capability decisions and tests for new behavior must not depend on
+  `telegram_source_kind`;
 - the field can be physically removed only in the later current-schema
   baseline / table-rebuild slice.
 
@@ -230,12 +262,16 @@ CREATE TABLE IF NOT EXISTS telegram_sources (
     username TEXT,
     access_hash INTEGER,
     avatar_cache_key TEXT,
-    added_from TEXT,
     identity_refreshed_at INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
     CHECK (source_subtype IN ('channel', 'supergroup', 'group')),
     CHECK (peer_kind IN ('channel', 'chat')),
+    CHECK (
+        (source_subtype IN ('channel', 'supergroup') AND peer_kind = 'channel')
+        OR
+        (source_subtype = 'group' AND peer_kind = 'chat')
+    ),
     CHECK (resolution_strategy IN ('username', 'dialog', 'legacy_metadata', 'unknown'))
 );
 ```
@@ -248,6 +284,28 @@ scoped. The application must keep `sources.account_id` and
 `source_subtype` is also duplicated intentionally. It lets Telegram-specific
 queries and indexes avoid joining `sources` just to decide peer construction.
 The application must keep it aligned with `sources.source_subtype`.
+
+For every `telegram_sources` row, these invariants must hold:
+
+- `sources.id = telegram_sources.source_id` exists;
+- `sources.source_type = 'telegram'`;
+- `sources.account_id = telegram_sources.account_id`;
+- `sources.source_subtype = telegram_sources.source_subtype`;
+- `sources.source_subtype IN ('channel', 'supergroup', 'group')`;
+- `sources.source_subtype IN ('channel', 'supergroup')` implies
+  `telegram_sources.peer_kind = 'channel'`;
+- `sources.source_subtype = 'group'` implies
+  `telegram_sources.peer_kind = 'chat'`;
+- `sources.external_id` parses as the canonical Telegram bare id text and
+  equals `telegram_sources.peer_id` as text.
+
+`sources` is the source of truth for generic source identity:
+`account_id`, `source_subtype`, and `external_id`. `telegram_sources` is the
+typed operational projection. If repair finds drift, it may update
+`telegram_sources` from `sources` when the typed row is otherwise
+non-conflicting. If the typed row conflicts with the canonical source identity
+or with another typed peer identity, repair must fail startup instead of picking
+a winner.
 
 `peer_kind` describes the Telegram peer address needed to construct peer refs:
 
@@ -270,6 +328,33 @@ The application must keep it aligned with `sources.source_subtype`.
 - `unknown`: row was backfilled enough to stay readable, but lacks a trusted
   strategy.
 
+Legacy `metadata_zstd.added_from` may be read only to derive
+`resolution_strategy`; it is not persisted in `telegram_sources`.
+
+A `telegram_sources` row can be complete or partial:
+
+- direct channel/supergroup identity requires `peer_kind = 'channel'`,
+  `peer_id`, and `access_hash`;
+- username identity requires a non-empty canonical `username`;
+- small group rows use `peer_kind = 'chat'`; `peer_id` is the durable typed id,
+  but dialog fallback may still be needed depending on the Telegram client
+  session;
+- partial identity may still sync through username or dialog fallback, but the
+  normal path must not decode `sources.metadata_zstd` when a typed row exists.
+
+Store `username` as lowercase canonical operational identity, without a leading
+`@`, without `t.me/` URL syntax, and without trailing path/query fragments.
+Display casing is not preserved in this table. All username writes normalize
+before persistence, and lookups compare the exact normalized value. Username
+changes update `telegram_sources`, not the generic source identity.
+
+Timestamp semantics:
+
+- `created_at` is the first time the typed projection row was created;
+- `updated_at` changes whenever any `telegram_sources` field changes;
+- `identity_refreshed_at` changes only after a successful live Telegram
+  identity refresh, not during legacy metadata backfill.
+
 Indexes:
 
 ```sql
@@ -279,8 +364,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_sources_account_peer
 CREATE INDEX IF NOT EXISTS idx_telegram_sources_account_subtype
     ON telegram_sources(account_id, source_subtype);
 
-CREATE INDEX IF NOT EXISTS idx_telegram_sources_username
-    ON telegram_sources(username)
+CREATE INDEX IF NOT EXISTS idx_telegram_sources_account_username
+    ON telegram_sources(account_id, username)
     WHERE username IS NOT NULL;
 ```
 
@@ -289,15 +374,29 @@ The unique peer index is intentionally based on Telegram peer address, not
 `sources.external_id` as the generic provider-native id used by existing UI and
 analysis contracts.
 
+A Telegram peer address maps to at most one Extractum Telegram source subtype
+for a given account. `source_subtype` is product classification, while
+`peer_kind` and `peer_id` are the MTProto peer address. If an upgraded database
+contains the same `(account_id, peer_kind, peer_id)` with different
+`source_subtype` values, this is a malformed identity conflict and must not be
+auto-merged.
+
 ### Source Uniqueness
 
-Add a canonical Telegram identity index:
+Add a canonical Telegram identity index after duplicate preflight and typed
+repair have succeeded:
 
 ```sql
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_telegram_identity
     ON sources(account_id, source_type, source_subtype, external_id)
     WHERE source_type = 'telegram';
 ```
+
+This is the target uniqueness contract for new Telegram upserts. It should not
+be created before the implementation has proved that every upgraded Telegram
+row has a valid canonical subtype and that no duplicate canonical identities
+exist. Rust upgrade repair must perform that preflight and then create this
+index idempotently. SQL migration `18.sql` must not create this index.
 
 Keep existing YouTube partial indexes for this slice:
 
@@ -315,10 +414,10 @@ Do not drop the old `idx_sources_ext` index in this slice unless the
 implementation proves all old conflict targets are gone and upgrade tests pass.
 Keeping it during the transition is acceptable.
 
-### Optional Source Identity Audit Table
+### Source Identity Repair Notes Table
 
-If migration preflight finds malformed rows that cannot be safely normalized,
-record them instead of deleting data:
+If migration preflight finds non-fatal enrichment gaps that do not prevent
+safe sync or listing, record them instead of deleting data:
 
 ```sql
 CREATE TABLE IF NOT EXISTS source_identity_repair_notes (
@@ -326,22 +425,53 @@ CREATE TABLE IF NOT EXISTS source_identity_repair_notes (
     source_id INTEGER NOT NULL,
     issue_code TEXT NOT NULL,
     detail TEXT,
-    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE CASCADE,
+    UNIQUE(source_id, issue_code)
 );
 ```
 
-This table is optional. The implementation can instead fail startup with a
-clear validation error if unrecoverable duplicate identity rows are detected.
-The important rule is: do not silently delete or merge user sources.
+This table is part of migration `18.sql`, not an optional later enhancement.
+Use it for non-fatal enrichment gaps only. A missing username or avatar key is
+non-fatal only when the row has a defined supported resolution path:
+
+- channel/supergroup rows have `access_hash`, canonical username, or dialog
+  fallback explicitly available for that account/session;
+- group rows have chat peer id plus dialog fallback when required by the
+  Telegram client.
+
+Otherwise the row is incomplete identity, not enrichment, and must fail startup
+or wait for a future explicit quarantine/manual repair path. Duplicate
+canonical Telegram identities are fatal and must fail startup with a clear
+validation error that lists the conflicting `source_id` values. The important
+rule is: do not silently delete or merge user sources.
+
+Repair notes are diagnostic breadcrumbs, not a quarantine system:
+
+- no user-facing repair-notes UI is required in this slice; tests, logs, and
+  future support tooling are the readers;
+- affected sources may still be listed;
+- affected source sync may continue only when typed identity is sufficient for
+  a supported username or dialog fallback path;
+- notes do not downgrade canonical duplicate or malformed identity conflicts
+  into warnings;
+- inactive or apparently unreferenced malformed identity rows are still fatal
+  unless a deliberate manual quarantine path is implemented in a later slice;
+- `detail` must be redacted and must not contain raw metadata, `access_hash`,
+  session data, auth material, or full compressed payloads.
 
 ## Migration Strategy
 
 Use a two-part migration:
 
-1. SQL migration creates columns/indexes/tables and performs simple relational
-   backfills.
+1. SQL migration creates columns, tables, and non-conflicting indexes, then
+   performs simple relational backfills.
 2. Rust upgrade repair decodes compressed legacy metadata and fills typed
-   Telegram fields that SQL cannot derive.
+   Telegram fields that SQL cannot derive. It also performs duplicate
+   preflight before enabling the canonical Telegram source unique index.
+   Startup must gate source commands on this repair: list, sync, add, and
+   Takeout source commands cannot run until repair succeeds or fails with a
+   typed startup error.
 
 ### SQL Migration
 
@@ -372,46 +502,27 @@ WHERE source_type = 'telegram'
 This makes the legacy value a repair input only. After migration, canonical
 code reads `source_subtype`.
 
-3. Create `telegram_sources`.
+SQL must not overwrite a valid but conflicting pair such as
+`source_subtype = 'channel'` and `telegram_source_kind = 'supergroup'`.
+Rust repair treats that as a fatal malformed identity conflict.
 
-4. Insert minimal typed rows from `sources`:
+3. Create `source_identity_repair_notes`.
 
-```sql
-INSERT OR IGNORE INTO telegram_sources (
-    source_id,
-    account_id,
-    source_subtype,
-    peer_kind,
-    peer_id,
-    resolution_strategy
-)
-SELECT
-    id,
-    account_id,
-    source_subtype,
-    CASE
-        WHEN source_subtype IN ('channel', 'supergroup') THEN 'channel'
-        ELSE 'chat'
-    END AS peer_kind,
-    CAST(external_id AS INTEGER) AS peer_id,
-    'unknown'
-FROM sources
-WHERE source_type = 'telegram'
-  AND account_id IS NOT NULL
-  AND source_subtype IN ('channel', 'supergroup', 'group')
-  AND external_id GLOB '-[0-9]*' = 0
-  AND external_id GLOB '[0-9]*';
-```
+4. Create `telegram_sources`.
 
-The final numeric predicate may need adjustment because SQLite glob patterns
-are limited. If SQL cannot safely validate all numeric ids, do only table/index
-creation in SQL and move row insertion into Rust repair.
+5. Create typed-table indexes that are safe on an empty typed table.
 
-5. Create the new Telegram source identity index.
+6. Do not insert typed `telegram_sources` rows in SQL. SQLite `GLOB` cannot
+   safely express the required "entire string is a signed integer" predicate,
+   and `CAST(external_id AS INTEGER)` can silently coerce malformed values.
+   Rust repair must parse `external_id` with `parse::<i64>()` and decide
+   whether the row is repairable.
 
-6. Create typed-table indexes.
+7. Do not create `idx_sources_unique_telegram_identity` in SQL migration
+   `18.sql`. Rust repair creates the canonical unique index after successful
+   validation/backfill.
 
-7. Do not alter `sources.telegram_source_kind` nullability in this slice.
+8. Do not alter `sources.telegram_source_kind` nullability in this slice.
 
 ### Rust Upgrade Repair
 
@@ -423,31 +534,67 @@ or a provider-specific module:
 
 - `src-tauri/src/sources/identity_migration.rs`
 
-The function should run during startup after SQL migrations are applied. It
-must be idempotent.
+The function should run during startup after SQL migrations are applied and
+before normal source sync/list operations can use the database. It must be
+idempotent.
+
+Run the repair inside one database transaction per startup repair attempt:
+
+- duplicate preflight;
+- legacy metadata decode and typed identity derivation;
+- `source_subtype` backfill;
+- `telegram_sources` upsert;
+- non-fatal `source_identity_repair_notes` upsert;
+- canonical Telegram source unique index creation.
+
+If a fatal row is found, roll back the transaction and fail startup with a
+specific error. If the process is interrupted, the next startup reruns the
+repair from the last committed database state.
+
+Migration must never recreate `sources` rows with new ids. Existing `source_id`
+values are stable contracts for items, source groups, analysis scopes, saved
+runs, NotebookLM export, and source browsing.
 
 Responsibilities:
 
-1. Load Telegram `sources` rows missing `telegram_sources`.
-2. Parse `sources.external_id` into `peer_id`.
+1. Load all Telegram `sources` rows and all existing `telegram_sources` rows.
+2. Validate `sources.external_id` by exact round trip before deriving
+   `peer_id`: parse as `i64`, require `parsed >= 0`, and require
+   `parsed.to_string() == sources.external_id`.
 3. Derive `source_subtype`:
    - prefer valid `sources.source_subtype`;
    - fallback to valid `sources.telegram_source_kind`;
-   - otherwise record/fail with a clear repair error.
-4. Decode `sources.metadata_zstd` with the existing compatibility decoder.
-5. Fill typed fields:
+   - if both fields are valid and different, fail startup with a typed conflict
+     error instead of choosing one silently;
+   - otherwise fail with a clear repair error unless the row is explicitly
+     handled as a non-fatal enrichment gap.
+4. Treat any Telegram `sources` row with `account_id IS NULL` as a fatal
+   malformed identity row. Do not create `telegram_sources` or the canonical
+   unique index until it is fixed.
+5. Decode `sources.metadata_zstd` with the existing compatibility decoder.
+6. Backfill missing typed rows.
+7. Validate existing typed rows against canonical `sources` identity:
+   - repair non-conflicting projection drift from `sources`;
+   - fail startup on orphan typed rows, conflicting projection drift, or
+     duplicate typed peer identity.
+8. Fill typed fields:
    - `resolution_strategy`
    - `username`
    - `access_hash`
    - `avatar_cache_key`
-   - `added_from` if still useful for provenance.
-6. Insert or update `telegram_sources`.
-7. Backfill `sources.source_subtype` where still null.
-8. Optionally mirror `sources.telegram_source_kind = source_subtype` for
+9. Derive candidate typed peer identities and preflight duplicates by
+   `(account_id, peer_kind, peer_id)` before inserting/updating
+   `telegram_sources`, so diagnostics can list conflicting `source_id` values
+   instead of surfacing generic SQLite constraint errors.
+10. Insert or update `telegram_sources`.
+11. Upsert `source_identity_repair_notes` for non-fatal gaps.
+12. Backfill `sources.source_subtype` where still null.
+13. Optionally mirror `sources.telegram_source_kind = source_subtype` for
    Telegram rows whose legacy field is null or empty.
-9. Detect duplicates under the new canonical key and fail with a specific
-   migration error before unique index creation if the SQL migration cannot
-   guarantee safety.
+14. Detect duplicates under the new canonical key and fail with a specific
+    migration error before unique index creation.
+15. Create `idx_sources_unique_telegram_identity` idempotently after duplicate
+    detection succeeds.
 
 ### Duplicate Handling
 
@@ -469,9 +616,9 @@ If duplicates exist:
 
 - do not delete rows automatically;
 - do not pick a winner silently;
-- fail startup with a message that lists conflicting `source_id` values, or
-  record repair notes and leave the old index active until a manual repair path
-  is implemented.
+- fail startup with a message that lists conflicting `source_id` values;
+- do not create `idx_sources_unique_telegram_identity` until the user or a
+  manual repair path resolves the conflict.
 
 For this app, failing fast is safer than silent merge because source deletion,
 analysis scopes, saved runs, and group membership all reference `source_id`.
@@ -555,7 +702,9 @@ For a smaller first implementation, keep `SourceSyncTarget` but remove its
 normal-path dependency on `telegram_source_kind`:
 
 - make `source_subtype: String`, not `Option<String>`;
-- remove `telegram_source_kind`;
+- either remove `telegram_source_kind`, or keep it as a temporary
+  compatibility field populated from canonical `source_subtype` until Phase 4
+  moves sync, Takeout, topics, and avatar refresh to typed identity;
 - add a separate `load_telegram_source_identity` call inside Telegram sync and
   Takeout.
 
@@ -635,22 +784,34 @@ Target normal path:
 
 - load `TelegramSourceIdentity`;
 - build peer resolution plan from typed fields;
-- use `peer_kind`, `peer_id`, and `access_hash` to build `PeerRef` where
-  possible;
-- use username fallback when configured;
-- use dialog scan as a repair/fallback path;
+- use `peer_kind`, `peer_id`, and `access_hash` to build `PeerRef` directly
+  where possible;
+- use username fallback when a canonical username is present;
+- use dialog scan as a normal typed fallback for partial identities;
 - refresh avatar cache key in `telegram_sources`, not in
   `sources.metadata_zstd`.
 
-Legacy fallback:
+Typed identity presence does not guarantee direct peer construction. It means
+normal peer resolution has all durable identity data outside the compressed
+metadata blob. For partial identities, normal resolution may still use username
+or dialog scan. It must not decode `sources.metadata_zstd` except in the legacy
+startup repair path that repairs missing typed identity or non-conflicting
+projection drift.
+
+Runtime Telegram peer resolution must not perform legacy metadata repair. If a
+`telegram_sources` row is missing after startup repair succeeded, or if typed
+identity violates the invariants above, the command must fail with a typed
+internal/validation error.
+
+Startup repair fallback:
 
 - if `telegram_sources` row is missing, decode metadata with the old decoder;
 - insert typed identity if enough information exists;
 - continue with typed path;
-- otherwise use old dialog scan and record the row for repair.
+- otherwise fail startup unless the row qualifies as a non-fatal enrichment gap.
 
-This preserves old databases while letting well-formed rows avoid compressed
-metadata decoding during normal sync.
+This preserves old databases during startup repair while letting well-formed
+rows avoid compressed metadata decoding during normal sync.
 
 ### Takeout Import
 
@@ -694,6 +855,13 @@ This can remain for compatibility, but creation should pass canonical
 
 `telegram_sources.avatar_cache_key` becomes the active field. Existing
 `sources.metadata_zstd.avatar_cache_key` is read only as a migration fallback.
+YouTube and other non-Telegram legacy rows with `telegram_source_kind = ''`
+never created Telegram avatar cache keys, so this slice should not create or
+repair avatar rows for them.
+
+New avatar refreshes must write only `telegram_sources.avatar_cache_key`.
+`sources.metadata_zstd` is not the source of truth after repair, and the cache
+key format remains a compatibility detail rather than identity.
 
 ### YouTube Source Upsert
 
@@ -734,6 +902,15 @@ pub struct SourceRecord {
 
 - `Some(source_subtype)` for Telegram only;
 - `None` for YouTube and future providers.
+
+During this compatibility window:
+
+- backend `source_subtype` is authoritative;
+- `telegram_source_kind` is emitted only as a mirror for Telegram rows;
+- frontend code must not use `telegramSourceKind` for capability decisions;
+- tests for new behavior should assert `sourceSubtype`, not the deprecated
+  mirror;
+- removing the mirror is a separate compatibility-breaking cleanup.
 
 Long-term DTO:
 
@@ -805,21 +982,48 @@ Cases:
    - dialog strategy is preserved.
 5. Existing old metadata payload:
    - `username` only backfills `resolution_strategy = username`;
-   - `added_from = dialog` and `access_hash` backfill dialog identity.
+   - legacy `added_from = dialog` only derives `resolution_strategy = dialog`;
+   - `access_hash` backfills stored peer identity where applicable.
 6. Telegram row with null `source_subtype`:
    - backfilled from valid `telegram_source_kind`.
 7. Telegram row with invalid subtype and valid legacy kind:
    - repaired to legacy kind.
 8. Malformed Telegram row:
    - migration does not delete it;
-   - repair reports a clear error or records a repair note.
+   - startup repair fails with typed, redacted diagnostics;
+   - no repair note downgrade is allowed.
 9. YouTube video/playlist rows:
    - unaffected;
    - existing unique indexes still work;
    - upsert still returns existing id.
 10. Duplicate canonical Telegram identity:
-    - startup fails or records repair notes;
+    - startup fails with typed, redacted diagnostics listing conflicting
+      `source_id` values;
+    - no repair note downgrade is allowed;
     - no source row is silently merged.
+11. Telegram row with `account_id IS NULL`:
+    - startup repair fails with typed, redacted diagnostics;
+    - no `telegram_sources` row is created;
+    - no canonical unique index is created.
+12. Existing `telegram_sources` row drift:
+    - non-conflicting projection drift is repaired from `sources`;
+    - orphan typed rows, conflicting projection drift, and duplicate typed peer
+      identities fail startup.
+13. Non-fatal enrichment gap:
+    - repair records `source_identity_repair_notes`;
+    - source remains listable;
+    - sync may continue only if typed identity supports a defined fallback path.
+14. Telegram `external_id` malformed forms:
+    - `+123`, `-123`, `00123`, `123 `, and `12a3` fail exact round-trip
+      validation with typed, redacted diagnostics;
+    - no typed row or canonical index is created.
+15. Existing `telegram_sources` row with subtype/peer-kind mismatch:
+    - startup repair fails with typed, redacted diagnostics;
+    - no correction is guessed from the typed row.
+16. Duplicate typed peer identity:
+    - repair detects conflicting `(account_id, peer_kind, peer_id)` candidates
+      before upserting `telegram_sources`;
+    - diagnostics list conflicting `source_id` values.
 
 ### Rust Unit Tests
 
@@ -948,12 +1152,17 @@ Tasks:
    possible.
 6. Keep compatibility serialization of `telegram_source_kind` only at DTO
    edge.
+7. Keep any temporary `SourceSyncTarget.telegram_source_kind` value derived
+   from canonical `source_subtype`, not from `sources.telegram_source_kind`.
 
 Exit criteria:
 
 - add/list source tests pass;
 - YouTube upsert tests pass;
 - generic source mapping does not require legacy Telegram field.
+- `load_source_for_sync` either no longer exposes `telegram_source_kind`, or
+  exposes it only as a temporary compatibility copy of `source_subtype` for
+  Phase 4 consumers.
 
 ### Phase 4: Sync, Takeout, Topics
 
@@ -973,6 +1182,8 @@ Tasks:
 3. Pass `TelegramSourceKind` / source subtype through Takeout.
 4. Route topic refresh by typed subtype.
 5. Keep metadata fallback only for missing typed rows.
+6. Remove the temporary normal-path dependency on
+   `SourceSyncTarget.telegram_source_kind`, if Phase 3 kept it for sequencing.
 
 Exit criteria:
 
@@ -1014,21 +1225,37 @@ The slice is complete when all of these are true:
 
 1. New and upgraded Telegram rows have canonical `source_subtype` and a
    `telegram_sources` row.
-2. Telegram add/upsert conflict handling uses
+2. Migration never recreates `sources` rows with new ids.
+3. Telegram add/upsert conflict handling uses
    `(account_id, source_type, source_subtype, external_id)`.
-3. Telegram sync and Takeout read subtype/peer identity from typed storage in
+4. Creating or updating a Telegram source updates `sources`,
+   `telegram_sources`, and the legacy mirror in one transaction.
+5. Telegram sync and Takeout read subtype/peer identity from typed storage in
    the normal path.
-4. `sources.metadata_zstd` is no longer required for normal Telegram peer
-   resolution when `telegram_sources` is present.
-5. YouTube video and playlist upserts still work and do not expose
+6. `sources.metadata_zstd` is no longer required for normal Telegram peer
+   resolution when `telegram_sources` is present, except as a startup/legacy
+   repair fallback for missing typed identity or non-conflicting projection
+   drift.
+7. YouTube video and playlist upserts still work and do not expose
    Telegram-specific fields outside a compatibility insert boundary.
-6. `list_sources` returns canonical non-null `source_subtype` for implemented
+8. `list_sources` returns canonical non-null `source_subtype` for implemented
    providers.
-7. Frontend source mapping no longer needs `telegram_source_kind` for normal
+9. Frontend source mapping no longer needs `telegram_source_kind` for normal
    current backend responses.
-8. Existing databases upgrade without losing source ids.
-9. Fresh installs create the new bridge schema.
-10. Migration/repair code is idempotent.
+10. Existing databases upgrade without losing source ids.
+11. Fresh installs create the new bridge schema while still replaying legacy
+    migrations until the later current-schema baseline work.
+12. Migration/repair code is idempotent and transactional.
+13. Duplicate canonical identities, duplicate typed peer identities, and valid
+    but conflicting `source_subtype` / `telegram_source_kind` rows fail startup
+    with typed, redacted diagnostics.
+14. No list, sync, add, or Takeout source command can run against the database
+    until source identity repair has succeeded or failed with a typed startup
+    error.
+15. Runtime Telegram peer resolution never decodes `sources.metadata_zstd` to
+    repair missing or invalid typed identity after the startup repair gate.
+16. `telegram_sources.source_subtype` and `telegram_sources.peer_kind` always
+    satisfy the subtype-to-peer-kind invariant.
 
 ## Risks And Mitigations
 
@@ -1044,8 +1271,9 @@ Mitigation:
 Mitigation:
 
 - detect before relying on the new unique index;
-- fail clearly or record repair notes;
-- never delete or merge source rows automatically.
+- fail startup with typed, redacted diagnostics listing conflicting `source_id`
+  values;
+- never delete, merge, or downgrade to repair notes in this slice.
 
 ### Risk: Existing Tests Encode Legacy Shape
 
@@ -1122,20 +1350,11 @@ approval:
 
 1. Whether `load_source_for_sync` should become a provider enum immediately or
    whether `SourceSyncTarget` should be narrowed first.
-2. Whether malformed source identity rows should fail startup or be recorded in
-   `source_identity_repair_notes`.
-3. Whether SQL migration should insert minimal `telegram_sources` rows or leave
-   all typed backfill to Rust repair.
-4. Whether frontend `telegramSourceKind` can be removed in the same slice or
-   should stay for one release as deprecated compatibility.
 
 Recommended choices:
 
 1. Narrow `SourceSyncTarget` first, then introduce a provider enum if the diff
    stays manageable.
-2. Fail startup on duplicate canonical identities; record notes only for
-   non-fatal metadata enrichment gaps.
-3. Let Rust repair perform typed backfill because it can parse ids and decode
-   zstd metadata safely.
-4. Keep `telegramSourceKind` in the wire DTO for this slice, but make normal
-   frontend behavior depend on `sourceSubtype`.
+2. Let Rust repair perform typed backfill because it can parse ids, decode zstd
+   metadata safely, and create the canonical Telegram unique index after
+   duplicate preflight.
