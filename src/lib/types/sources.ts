@@ -40,6 +40,8 @@ export interface Source {
   id: number;
   sourceType: SourceType;
   sourceSubtype: SourceSubtype | null;
+  // Deprecated compatibility mirror for persisted Telegram sources.
+  // Current UI behavior must derive Telegram subtype from sourceSubtype.
   telegramSourceKind: TelegramSourceKind | null;
   accountId: number | null;
   externalId: string;

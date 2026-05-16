@@ -5,8 +5,8 @@ import type {
   TelegramSourceKind,
 } from "$lib/types/sources";
 
-function telegramKind(source: Pick<Source, "telegramSourceKind" | "sourceSubtype">) {
-  return source.telegramSourceKind ?? telegramSubtype(source.sourceSubtype);
+function telegramKind(source: Pick<Source, "sourceSubtype">) {
+  return telegramSubtype(source.sourceSubtype);
 }
 
 function telegramSubtype(subtype: SourceSubtype | null): TelegramSourceKind | null {

@@ -73,7 +73,7 @@
     return new Set(
       existingSources
         .filter((source) => source.accountId === accountId)
-        .map((source) => `${source.telegramSourceKind}:${source.externalId}`),
+        .map((source) => `${source.sourceSubtype}:${source.externalId}`),
     );
   });
 

@@ -62,6 +62,34 @@ describe("sources api wrappers", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("list_sources", { accountId: null });
   });
 
+  it("does not derive persisted sourceSubtype from deprecated telegram_source_kind", async () => {
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        source_type: "telegram",
+        source_subtype: null,
+        telegram_source_kind: "channel",
+        account_id: 7,
+        external_id: "12345",
+        title: "Legacy row",
+        last_sync_state: null,
+        last_synced_at: null,
+        is_member: true,
+        is_active: true,
+        created_at: 100,
+        telegram_username: null,
+        avatar_data_url: null,
+      },
+    ]);
+
+    await expect(listSources(7)).resolves.toMatchObject([
+      {
+        sourceSubtype: null,
+        telegramSourceKind: "channel",
+      },
+    ]);
+  });
+
   it("adds telegram sources with a request wrapper", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 8,

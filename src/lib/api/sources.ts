@@ -268,7 +268,7 @@ function mapSource(source: RawSource): Source {
   return {
     id: source.id,
     sourceType: source.source_type,
-    sourceSubtype: source.source_subtype ?? source.telegram_source_kind ?? null,
+    sourceSubtype: source.source_subtype ?? null,
     telegramSourceKind: source.telegram_source_kind ?? null,
     accountId: source.account_id,
     externalId: source.external_id,

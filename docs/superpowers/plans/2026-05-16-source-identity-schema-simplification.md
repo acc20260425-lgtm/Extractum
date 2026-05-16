@@ -2395,7 +2395,7 @@ git commit -m "feat: use typed identity in source consumers"
 - Modify: `src/lib/source-capabilities.test.ts`
 - Modify affected source/analysis tests that construct `Source`.
 
-- [ ] **Step 1: Add failing mapSource no-fallback test**
+- [x] **Step 1: Add failing mapSource no-fallback test**
 
 In `src/lib/api/sources.test.ts`, add:
 
@@ -2429,7 +2429,7 @@ it("does not derive persisted sourceSubtype from deprecated telegram_source_kind
 });
 ```
 
-- [ ] **Step 2: Run failing frontend DTO test**
+- [x] **Step 2: Run failing frontend DTO test**
 
 Run:
 
@@ -2444,7 +2444,7 @@ FAIL src/lib/api/sources.test.ts
 expected sourceSubtype to be null
 ```
 
-- [ ] **Step 3: Remove persisted fallback**
+- [x] **Step 3: Remove persisted fallback**
 
 In `src/lib/api/sources.ts`, change:
 
@@ -2458,7 +2458,7 @@ to:
 sourceSubtype: source.source_subtype ?? null,
 ```
 
-- [ ] **Step 4: Derive Telegram behavior from canonical subtype**
+- [x] **Step 4: Derive Telegram behavior from canonical subtype**
 
 In `src/lib/source-capabilities.ts`, change:
 
@@ -2476,7 +2476,7 @@ function telegramKind(source: Pick<Source, "sourceSubtype">) {
 }
 ```
 
-- [ ] **Step 5: Update persisted source keying in source management dialog**
+- [x] **Step 5: Update persisted source keying in source management dialog**
 
 In `src/lib/components/analysis/source-management-dialog.svelte`, change
 existing source keys:
@@ -2497,7 +2497,7 @@ Keep live dialog source keying as:
 return `${source.telegramSourceKind}:${source.id}`;
 ```
 
-- [ ] **Step 6: Document deprecated TS field**
+- [x] **Step 6: Document deprecated TS field**
 
 In `src/lib/types/sources.ts`, add a comment:
 
@@ -2507,7 +2507,7 @@ In `src/lib/types/sources.ts`, add a comment:
 telegramSourceKind: TelegramSourceKind | null;
 ```
 
-- [ ] **Step 7: Update frontend tests**
+- [x] **Step 7: Update frontend tests**
 
 Run:
 
@@ -2518,7 +2518,7 @@ rg -n "telegramSourceKind" src\lib src\routes
 For each test fixture that sets both fields, keep `telegramSourceKind` only as
 compatibility data and assert behavior through `sourceSubtype`.
 
-- [ ] **Step 8: Run targeted frontend tests**
+- [x] **Step 8: Run targeted frontend tests**
 
 Run:
 
@@ -2533,7 +2533,7 @@ Test Files  4 passed
 Tests       <count> passed
 ```
 
-- [ ] **Step 9: Commit frontend compatibility update**
+- [x] **Step 9: Commit frontend compatibility update**
 
 Run:
 

@@ -67,6 +67,21 @@ describe("source capabilities", () => {
     }))).toBe("supergroup");
   });
 
+  it("derives Telegram behavior from canonical sourceSubtype", () => {
+    const conflictingMirror = source({
+      sourceSubtype: "supergroup",
+      telegramSourceKind: "channel",
+      isMember: false,
+    });
+
+    expect(sourceCapabilities(conflictingMirror)).toMatchObject({
+      canImportArchive: true,
+      hasTopics: true,
+    });
+    expect(sourceKindLabel(conflictingMirror)).toBe("supergroup");
+    expect(membershipLabel(conflictingMirror)).toBe("not a member");
+  });
+
   it("syncs manual YouTube videos without Telegram assumptions", () => {
     const video = source({
       sourceType: "youtube",
