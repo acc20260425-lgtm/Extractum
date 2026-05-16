@@ -429,7 +429,7 @@ Expected:
 - Modify: `src-tauri/src/migrations/source_identity_cleanup.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write failing tests for runner ordering**
+- [x] **Step 1: Write failing tests for runner ordering**
 
 Add these tests to `src-tauri/src/migrations.rs`:
 
@@ -531,21 +531,21 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the failing tests**
+- [x] **Step 2: Run the failing tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation migrations::source_identity_cleanup::tests::migration_19_sentinel_checksum_is_recorded migrations::source_identity_cleanup::tests::migration_19_is_idempotent_when_checksum_matches
+cargo test --manifest-path src-tauri/Cargo.toml migrations::
 ```
 
 Expected:
 
 ```text
-migration_19_sentinel_checksum_is_recorded ... FAILED
+test result: FAILED. 12 passed; 2 failed
 ```
 
-- [ ] **Step 3: Add SQLx history helpers**
+- [x] **Step 3: Add SQLx history helpers**
 
 In `src-tauri/src/migrations/source_identity_cleanup.rs`, add:
 
@@ -594,7 +594,7 @@ async fn record_migration_success(
 }
 ```
 
-- [ ] **Step 4: Add standard migration pre-runner for 1..18**
+- [x] **Step 4: Add standard migration pre-runner for 1..18**
 
 In `src-tauri/src/migrations/source_identity_cleanup.rs`, add:
 
@@ -650,7 +650,7 @@ async fn migration_record_exists(
 }
 ```
 
-- [ ] **Step 5: Record v19 success after the rebuild placeholder**
+- [x] **Step 5: Record v19 success after the rebuild placeholder**
 
 Replace the placeholder error in `apply_source_identity_cleanup_on_connection`
 with:
@@ -679,7 +679,7 @@ async fn run_source_identity_cleanup_rebuild(
 }
 ```
 
-- [ ] **Step 6: Change `prepare_database` to return an app result**
+- [x] **Step 6: Change `prepare_database` to return an app result**
 
 In `src-tauri/src/migrations.rs`, change:
 
@@ -731,7 +731,7 @@ async fn patch_migrations(db_path: &Path) -> crate::error::AppResult<()> {
 }
 ```
 
-- [ ] **Step 7: Fail startup if preparation fails**
+- [x] **Step 7: Fail startup if preparation fails**
 
 In `src-tauri/src/lib.rs`, replace:
 
@@ -745,21 +745,21 @@ with:
 prepare_database().expect("database preparation failed");
 ```
 
-- [ ] **Step 8: Run the runner tests**
+- [x] **Step 8: Run the runner tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation migrations::source_identity_cleanup::tests::migration_19_sentinel_checksum_is_recorded migrations::source_identity_cleanup::tests::migration_19_is_idempotent_when_checksum_matches
+cargo test --manifest-path src-tauri/Cargo.toml migrations::
 ```
 
 Expected:
 
 ```text
-test result: ok. 3 passed; 0 failed
+test result: ok. 14 passed; 0 failed
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 

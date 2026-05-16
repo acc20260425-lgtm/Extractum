@@ -88,7 +88,7 @@ fn ping_db() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    prepare_database();
+    prepare_database().expect("database preparation failed");
 
     let builder = tauri::Builder::default()
         .manage(TelegramState::new())

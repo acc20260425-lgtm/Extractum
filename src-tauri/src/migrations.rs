@@ -1,6 +1,5 @@
 #![allow(clippy::items_after_test_module)]
 
-#[allow(dead_code)]
 mod source_identity_cleanup;
 
 use sha2::{Digest, Sha384};
@@ -12,83 +11,37 @@ const DB_FILENAME: &str = "extractum.db";
 
 /// Before the sql plugin runs, remove stale migration records whose SQL has changed.
 /// This allows us to update migration files without deleting the database.
-async fn patch_migrations(db_path: &Path) {
+async fn patch_migrations(db_path: &Path) -> crate::error::AppResult<()> {
     use sqlx::SqlitePool;
 
-    if !db_path.exists() {
-        return;
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
     }
 
     let url = format!("sqlite:{}", db_path.to_string_lossy());
-    if let Ok(pool) = SqlitePool::connect(&url).await {
-        repair_line_ending_migration_checksums(&pool).await;
+    source_identity_cleanup::apply_standard_migrations_before_plugin(&url, build_migrations())
+        .await?;
 
-        let expected_checksum =
-            Sha384::digest(include_str!("../migrations/2.sql").as_bytes()).to_vec();
-        let has_v3 = sqlx::query_scalar::<_, i64>(
-            "SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = 3)",
-        )
-        .fetch_one(&pool)
+    let pool = SqlitePool::connect(&url)
         .await
-        .map(|exists| exists != 0)
-        .unwrap_or(false);
+        .map_err(crate::error::AppError::database)?;
+    repair_line_ending_migration_checksums(&pool).await;
+    repair_legacy_v2_migration_checksum(&pool).await;
+    pool.close().await;
 
-        let v2_checksum = sqlx::query_scalar::<_, Vec<u8>>(
-            "SELECT checksum FROM _sqlx_migrations WHERE version = 2",
-        )
-        .fetch_optional(&pool)
-        .await
-        .ok()
-        .flatten();
-
-        match v2_checksum {
-            Some(checksum) if checksum != expected_checksum => {
-                if has_v3 {
-                    // Once later migrations are applied, deleting v2 leaves a gap that sqlx will not backfill.
-                    // Update the metadata in place so startup validation passes without replaying schema changes.
-                    let _ = sqlx::query(
-                        "UPDATE _sqlx_migrations
-                         SET description = ?, success = 1, checksum = ?
-                         WHERE version = 2",
-                    )
-                    .bind("add is_member to sources")
-                    .bind(&expected_checksum)
-                    .execute(&pool)
-                    .await;
-                } else {
-                    // Safe only before later migrations exist: let sqlx replay the no-op v2 with the new checksum.
-                    let _ = sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 2")
-                        .execute(&pool)
-                        .await;
-                }
-            }
-            None if has_v3 => {
-                // Repair older upgraded databases that lost v2 metadata after the previous patch strategy.
-                let _ = sqlx::query(
-                    "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
-                     VALUES (?, ?, 1, ?, 0)",
-                )
-                .bind(2_i64)
-                .bind("add is_member to sources")
-                .bind(&expected_checksum)
-                .execute(&pool)
-                .await;
-            }
-            _ => {}
-        }
-
-        pool.close().await;
-    }
+    source_identity_cleanup::apply_source_identity_cleanup_if_needed(&url).await
 }
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
 }
 
-pub fn prepare_database() {
-    if let Some(db_path) = app_config_db_path() {
-        tauri::async_runtime::block_on(patch_migrations(&db_path));
-    }
+pub fn prepare_database() -> crate::error::AppResult<()> {
+    let Some(db_path) = app_config_db_path() else {
+        return Ok(());
+    };
+    tauri::async_runtime::block_on(patch_migrations(&db_path))
 }
 
 pub fn build_migrations() -> Vec<Migration> {
@@ -391,10 +344,7 @@ mod tests {
             .find(|migration| migration.version == 19)
             .expect("version 19 migration is registered");
 
-        assert_eq!(
-            migration.description,
-            "remove legacy telegram source kind"
-        );
+        assert_eq!(migration.description, "remove legacy telegram source kind");
         assert!(
             migration
                 .sql
@@ -413,6 +363,16 @@ mod tests {
         assert!(!migration.sql.contains("DROP TABLE sources"));
         assert!(!migration.sql.contains("ALTER TABLE sources"));
         assert!(!migration.sql.contains("CREATE TABLE sources_new"));
+    }
+
+    #[test]
+    fn build_migrations_contains_all_versions_for_sqlx_validation() {
+        let versions = build_migrations()
+            .into_iter()
+            .map(|migration| migration.version)
+            .collect::<Vec<_>>();
+
+        assert_eq!(versions, (1_i64..=19_i64).collect::<Vec<_>>());
     }
 
     #[test]
@@ -508,5 +468,55 @@ async fn repair_line_ending_migration_checksums(pool: &sqlx::SqlitePool) {
         .bind(migration.version)
         .execute(pool)
         .await;
+    }
+}
+
+async fn repair_legacy_v2_migration_checksum(pool: &sqlx::SqlitePool) {
+    let expected_checksum = Sha384::digest(include_str!("../migrations/2.sql").as_bytes()).to_vec();
+    let has_v3 = sqlx::query_scalar::<_, i64>(
+        "SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = 3)",
+    )
+    .fetch_one(pool)
+    .await
+    .map(|exists| exists != 0)
+    .unwrap_or(false);
+
+    let v2_checksum =
+        sqlx::query_scalar::<_, Vec<u8>>("SELECT checksum FROM _sqlx_migrations WHERE version = 2")
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+
+    match v2_checksum {
+        Some(checksum) if checksum != expected_checksum => {
+            if has_v3 {
+                let _ = sqlx::query(
+                    "UPDATE _sqlx_migrations
+                     SET description = ?, success = 1, checksum = ?
+                     WHERE version = 2",
+                )
+                .bind("add is_member to sources")
+                .bind(&expected_checksum)
+                .execute(pool)
+                .await;
+            } else {
+                let _ = sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 2")
+                    .execute(pool)
+                    .await;
+            }
+        }
+        None if has_v3 => {
+            let _ = sqlx::query(
+                "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+                 VALUES (?, ?, 1, ?, 0)",
+            )
+            .bind(2_i64)
+            .bind("add is_member to sources")
+            .bind(&expected_checksum)
+            .execute(pool)
+            .await;
+        }
+        _ => {}
     }
 }
