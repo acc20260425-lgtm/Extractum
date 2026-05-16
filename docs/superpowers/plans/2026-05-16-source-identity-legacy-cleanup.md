@@ -2829,7 +2829,7 @@ Expected:
 **Files:**
 - No planned source edits. Fix only failures found by the commands in this task.
 
-- [ ] **Step 1: Run full Rust tests**
+- [x] **Step 1: Run full Rust tests**
 
 Run:
 
@@ -2843,7 +2843,7 @@ Expected:
 test result: ok. ... 0 failed
 ```
 
-- [ ] **Step 2: Run frontend tests**
+- [x] **Step 2: Run frontend tests**
 
 Run:
 
@@ -2858,7 +2858,7 @@ Test Files  ... passed
 Tests       ... passed
 ```
 
-- [ ] **Step 3: Run Svelte check**
+- [x] **Step 3: Run Svelte check**
 
 Run:
 
@@ -2872,7 +2872,7 @@ Expected:
 svelte-check found 0 errors and 0 warnings
 ```
 
-- [ ] **Step 4: Run whitespace check**
+- [x] **Step 4: Run whitespace check**
 
 Run:
 
@@ -2882,7 +2882,7 @@ git diff --check
 
 Expected: no output.
 
-- [ ] **Step 5: Run normal-code containment scan**
+- [x] **Step 5: Run normal-code containment scan**
 
 Run:
 
@@ -2914,7 +2914,7 @@ src\lib\components\analysis\source-management-dialog.svelte
 src\routes
 ```
 
-- [ ] **Step 6: Verify migration 19 does not run through plugin SQL**
+- [x] **Step 6: Verify migration 19 does not run through plugin SQL**
 
 Run:
 
@@ -2932,7 +2932,7 @@ src-tauri\src\migrations\source_identity_cleanup.rs: PRAGMA foreign_keys = OFF
 src-tauri\src\migrations\source_identity_cleanup.rs: PRAGMA foreign_key_check
 ```
 
-- [ ] **Step 7: Commit final fixes if any**
+- [x] **Step 7: Commit final fixes if any**
 
 If the verification commands required fixes, run:
 
@@ -2949,7 +2949,7 @@ Expected:
 
 If no files changed after verification, do not create a commit.
 
-- [ ] **Step 8: Show final status**
+- [x] **Step 8: Show final status**
 
 Run:
 
