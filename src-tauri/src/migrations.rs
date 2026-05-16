@@ -1,5 +1,8 @@
 #![allow(clippy::items_after_test_module)]
 
+#[allow(dead_code)]
+mod source_identity_cleanup;
+
 use sha2::{Digest, Sha384};
 use std::path::{Path, PathBuf};
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -198,6 +201,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/18.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 19,
+            description: "remove legacy telegram source kind",
+            sql: include_str!("../migrations/19.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -207,12 +216,15 @@ mod tests {
     use sha2::{Digest, Sha384};
 
     #[tokio::test]
-    async fn fresh_schema_includes_source_identity_tables_after_all_migrations() {
+    async fn fresh_schema_includes_source_identity_tables_after_sql_managed_migrations() {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("connect memory sqlite");
 
-        for migration in build_migrations() {
+        for migration in build_migrations()
+            .into_iter()
+            .filter(|migration| migration.version < 19)
+        {
             sqlx::raw_sql(migration.sql)
                 .execute(&pool)
                 .await
@@ -369,6 +381,38 @@ mod tests {
                 "missing migration fragment {fragment}"
             );
         }
+    }
+
+    #[test]
+    fn includes_runner_managed_source_identity_cleanup_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 19)
+            .expect("version 19 migration is registered");
+
+        assert_eq!(
+            migration.description,
+            "remove legacy telegram source kind"
+        );
+        assert!(
+            migration
+                .sql
+                .contains("extractum_runner_managed_migration_19"),
+            "v19 must fail if plugin-managed SQLx applies it directly"
+        );
+    }
+
+    #[test]
+    fn plugin_migration_list_keeps_v19_as_sentinel_only() {
+        let migration = build_migrations()
+            .into_iter()
+            .find(|migration| migration.version == 19)
+            .expect("version 19 migration is registered");
+
+        assert!(!migration.sql.contains("DROP TABLE sources"));
+        assert!(!migration.sql.contains("ALTER TABLE sources"));
+        assert!(!migration.sql.contains("CREATE TABLE sources_new"));
     }
 
     #[test]

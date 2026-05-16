@@ -216,7 +216,7 @@ No commit is created for this task.
 - Create: `src-tauri/src/migrations/source_identity_cleanup.rs`
 - Modify: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Write failing migration registration tests**
+- [x] **Step 1: Write failing migration registration tests**
 
 Add these tests to `src-tauri/src/migrations.rs` inside the existing
 `#[cfg(test)] mod tests`:
@@ -253,12 +253,12 @@ fn plugin_migration_list_keeps_v19_as_sentinel_only() {
 }
 ```
 
-- [ ] **Step 2: Run the failing tests**
+- [x] **Step 2: Run the failing tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runner_managed_source_identity_cleanup_migration migrations::tests::plugin_migration_list_keeps_v19_as_sentinel_only
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::
 ```
 
 Expected:
@@ -267,7 +267,7 @@ Expected:
 includes_runner_managed_source_identity_cleanup_migration ... FAILED
 ```
 
-- [ ] **Step 3: Add sentinel migration SQL**
+- [x] **Step 3: Add sentinel migration SQL**
 
 Create `src-tauri/migrations/19.sql` with this exact content:
 
@@ -279,7 +279,7 @@ Create `src-tauri/migrations/19.sql` with this exact content:
 SELECT extractum_runner_managed_migration_19();
 ```
 
-- [ ] **Step 4: Register version 19**
+- [x] **Step 4: Register version 19**
 
 In `src-tauri/src/migrations.rs`, add a migration entry after version 18:
 
@@ -292,7 +292,7 @@ Migration {
 },
 ```
 
-- [ ] **Step 5: Create the special migration module shell**
+- [x] **Step 5: Create the special migration module shell**
 
 Create `src-tauri/src/migrations/source_identity_cleanup.rs` with this initial
 content:
@@ -380,7 +380,7 @@ fn expected_migration_19_checksum() -> Vec<u8> {
 }
 ```
 
-- [ ] **Step 6: Wire the module into `migrations.rs` without running it yet**
+- [x] **Step 6: Wire the module into `migrations.rs` without running it yet**
 
 At the top of `src-tauri/src/migrations.rs`, add:
 
@@ -391,21 +391,21 @@ mod source_identity_cleanup;
 Do not call `apply_source_identity_cleanup_if_needed` in this task. Task 2 adds
 the runner call with tests.
 
-- [ ] **Step 7: Run registration tests**
+- [x] **Step 7: Run registration tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runner_managed_source_identity_cleanup_migration migrations::tests::plugin_migration_list_keeps_v19_as_sentinel_only
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::
 ```
 
 Expected:
 
 ```text
-test result: ok. 2 passed; 0 failed
+test result: ok. 11 passed; 0 failed
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 
