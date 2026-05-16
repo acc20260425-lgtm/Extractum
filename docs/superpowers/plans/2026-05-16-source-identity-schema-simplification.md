@@ -2708,7 +2708,7 @@ git commit -m "docs: document source identity bridge"
 **Files:**
 - No new source edits unless verification finds failures.
 
-- [ ] **Step 1: Run Rust full test suite**
+- [x] **Step 1: Run Rust full test suite**
 
 Run:
 
@@ -2722,7 +2722,7 @@ Expected:
 test result: ok. <count> passed; 0 failed
 ```
 
-- [ ] **Step 2: Run frontend test suite**
+- [x] **Step 2: Run frontend test suite**
 
 Run:
 
@@ -2737,7 +2737,7 @@ Test Files  <count> passed
 Tests       <count> passed
 ```
 
-- [ ] **Step 3: Run frontend type check**
+- [x] **Step 3: Run frontend type check**
 
 Run:
 
@@ -2751,7 +2751,7 @@ Expected:
 svelte-check found 0 errors and 0 warnings
 ```
 
-- [ ] **Step 4: Run SQL/diff hygiene checks**
+- [x] **Step 4: Run SQL/diff hygiene checks**
 
 Run:
 
@@ -2769,7 +2769,7 @@ rg forbidden SQL coercion: no matches
 rg frontend fallback: no matches
 ```
 
-- [ ] **Step 5: Run legacy-field containment scan**
+- [x] **Step 5: Run legacy-field containment scan**
 
 Run:
 
@@ -2786,7 +2786,7 @@ Expected: every remaining match is in one of these categories:
 - compatibility tests;
 - temporary insert mirror.
 
-- [ ] **Step 6: Inspect final git status**
+- [x] **Step 6: Inspect final git status**
 
 Run:
 
