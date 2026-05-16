@@ -6,6 +6,7 @@ import {
   listSourceForumTopics,
   listSourceItems,
   listSources,
+  listTelegramSources,
   previewYoutubeSource,
   saveSyncSettings,
 } from "./sources";
@@ -27,7 +28,6 @@ describe("sources api wrappers", () => {
         id: 7,
         source_type: "telegram",
         source_subtype: "channel",
-        telegram_source_kind: "channel",
         account_id: 2,
         external_id: "123",
         title: "News",
@@ -46,7 +46,6 @@ describe("sources api wrappers", () => {
         id: 7,
         sourceType: "telegram",
         sourceSubtype: "channel",
-        telegramSourceKind: "channel",
         accountId: 2,
         externalId: "123",
         title: "News",
@@ -62,40 +61,11 @@ describe("sources api wrappers", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("list_sources", { accountId: null });
   });
 
-  it("does not derive persisted sourceSubtype from deprecated telegram_source_kind", async () => {
-    invokeMock.mockResolvedValueOnce([
-      {
-        id: 1,
-        source_type: "telegram",
-        source_subtype: null,
-        telegram_source_kind: "channel",
-        account_id: 7,
-        external_id: "12345",
-        title: "Legacy row",
-        last_sync_state: null,
-        last_synced_at: null,
-        is_member: true,
-        is_active: true,
-        created_at: 100,
-        telegram_username: null,
-        avatar_data_url: null,
-      },
-    ]);
-
-    await expect(listSources(7)).resolves.toMatchObject([
-      {
-        sourceSubtype: null,
-        telegramSourceKind: "channel",
-      },
-    ]);
-  });
-
-  it("adds telegram sources with a request wrapper", async () => {
+  it("adds telegram sources with expectedSubtype", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 8,
       source_type: "telegram",
       source_subtype: "supergroup",
-      telegram_source_kind: "supergroup",
       account_id: 3,
       external_id: "456",
       title: "Forum",
@@ -111,16 +81,40 @@ describe("sources api wrappers", () => {
       addTelegramSource({
         accountId: 3,
         sourceRef: "456",
-        expectedKind: "supergroup",
+        expectedSubtype: "supergroup",
       }),
     ).resolves.toMatchObject({
       id: 8,
-      telegramSourceKind: "supergroup",
+      sourceSubtype: "supergroup",
       accountId: 3,
     });
     expect(invokeMock).toHaveBeenLastCalledWith("add_telegram_source", {
-      request: { accountId: 3, sourceRef: "456", expectedKind: "supergroup" },
+      request: { accountId: 3, sourceRef: "456", expectedSubtype: "supergroup" },
     });
+  });
+
+  it("maps live telegram dialogs with sourceSubtype", async () => {
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: 123,
+        title: "Forum",
+        username: "forum",
+        source_subtype: "supergroup",
+        is_member: true,
+        photo_data_url: null,
+      },
+    ]);
+
+    await expect(listTelegramSources(3)).resolves.toEqual([
+      {
+        id: 123,
+        title: "Forum",
+        username: "forum",
+        sourceSubtype: "supergroup",
+        isMember: true,
+        photoDataUrl: null,
+      },
+    ]);
   });
 
   it("previews youtube sources with a url argument", async () => {
@@ -178,7 +172,7 @@ describe("sources api wrappers", () => {
     });
   });
 
-  it("maps non-Telegram source fields without requiring telegram_source_kind", async () => {
+  it("maps non-Telegram source fields without legacy Telegram fields", async () => {
     invokeMock.mockResolvedValueOnce([
       {
         id: 10,
@@ -201,7 +195,6 @@ describe("sources api wrappers", () => {
         id: 10,
         sourceType: "youtube",
         sourceSubtype: "video",
-        telegramSourceKind: null,
         accountId: null,
         externalId: "dQw4w9WgXcQ",
         title: "Demo video",

@@ -36,7 +36,6 @@ function source(overrides: Partial<Source>): Source {
     id: 1,
     sourceType: "telegram",
     sourceSubtype: "channel",
-    telegramSourceKind: "channel",
     accountId: 1,
     externalId: "@extractum",
     title: "Extractum",
@@ -81,35 +80,28 @@ describe("analysis-source-state", () => {
 
   it("formats Telegram source kind and membership labels", () => {
     expect(sourceKindLabel(source({
-      telegramSourceKind: "channel",
       sourceSubtype: "channel",
     }))).toBe("channel");
     expect(sourceKindLabel(source({
-      telegramSourceKind: "supergroup",
       sourceSubtype: "supergroup",
     }))).toBe("supergroup");
     expect(sourceKindLabel(source({
-      telegramSourceKind: "group",
       sourceSubtype: "group",
     }))).toBe("group");
 
     expect(membershipLabel(source({
-      telegramSourceKind: "channel",
       sourceSubtype: "channel",
       isMember: true,
     }))).toBe("subscribed");
     expect(membershipLabel(source({
-      telegramSourceKind: "channel",
       sourceSubtype: "channel",
       isMember: false,
     }))).toBe("not subscribed");
     expect(membershipLabel(source({
-      telegramSourceKind: "group",
       sourceSubtype: "group",
       isMember: true,
     }))).toBe("member");
     expect(membershipLabel(source({
-      telegramSourceKind: "group",
       sourceSubtype: "group",
       isMember: false,
     }))).toBe("not a member");
@@ -156,7 +148,6 @@ describe("analysis-source-state", () => {
     expect(sourceSyncDisabledReason(source({
       sourceType: "youtube",
       sourceSubtype: "video",
-      telegramSourceKind: null,
       accountId: null,
       isMember: false,
     }), {})).toBeNull();
@@ -166,7 +157,6 @@ describe("analysis-source-state", () => {
     const youtubeVideoSource = source({
       sourceType: "youtube",
       sourceSubtype: "video",
-      telegramSourceKind: null,
       accountId: null,
       isMember: false,
     });

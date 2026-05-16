@@ -31,7 +31,7 @@ export interface TelegramDialogSource {
   id: number;
   title: string;
   username: string | null;
-  telegramSourceKind: TelegramSourceKind;
+  sourceSubtype: TelegramSourceKind;
   isMember: boolean;
   photoDataUrl: string | null;
 }
@@ -40,9 +40,6 @@ export interface Source {
   id: number;
   sourceType: SourceType;
   sourceSubtype: SourceSubtype | null;
-  // Deprecated compatibility mirror for persisted Telegram sources.
-  // Current UI behavior must derive Telegram subtype from sourceSubtype.
-  telegramSourceKind: TelegramSourceKind | null;
   accountId: number | null;
   externalId: string;
   title: string | null;
@@ -97,7 +94,7 @@ export type ForumTopicFilter =
 export interface AddTelegramSourceInput {
   accountId: number;
   sourceRef: string;
-  expectedKind: TelegramSourceKind | null;
+  expectedSubtype: TelegramSourceKind | null;
 }
 
 export interface YoutubeCaptionsEstimate {

@@ -243,7 +243,6 @@ function sourceRecord(overrides: Partial<Source>): Source {
     id: 1,
     sourceType: "telegram",
     sourceSubtype: "channel",
-    telegramSourceKind: "channel",
     accountId: null,
     externalId: "external-a",
     title: "Announcements",
@@ -1019,11 +1018,9 @@ describe("analysis-state", () => {
   it("shows topic selector only for single-source supergroup topic workflows", () => {
     const supergroup = sourceRecord({
       sourceSubtype: "supergroup",
-      telegramSourceKind: "supergroup",
     });
     const channel = sourceRecord({
       sourceSubtype: "channel",
-      telegramSourceKind: "channel",
     });
     const topics = [
       topic({ kind: "uncategorized", key: "uncategorized", topicId: null }),
@@ -1045,20 +1042,17 @@ describe("analysis-state", () => {
     const youtubeVideo = sourceRecord({
       sourceType: "youtube",
       sourceSubtype: "video",
-      telegramSourceKind: null,
       accountId: null,
       isMember: false,
     });
     const forumThread = sourceRecord({
       sourceType: "forum",
       sourceSubtype: "thread",
-      telegramSourceKind: null,
       accountId: null,
       isMember: false,
     });
     const supergroup = sourceRecord({
       sourceSubtype: "supergroup",
-      telegramSourceKind: "supergroup",
     });
 
     expect(shouldShowTopicSelector(youtubeVideo, "single_source", true, [])).toBe(false);

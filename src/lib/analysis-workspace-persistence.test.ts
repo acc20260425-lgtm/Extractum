@@ -37,7 +37,6 @@ function source(id: number): Source {
     id,
     sourceType: "telegram",
     sourceSubtype: "channel",
-    telegramSourceKind: "channel",
     accountId: 1,
     externalId: `source-${id}`,
     title: `Source ${id}`,

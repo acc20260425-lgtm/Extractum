@@ -18,7 +18,6 @@ function source(overrides: Partial<Source> = {}): Source {
     id: 1,
     sourceType: "telegram",
     sourceSubtype: "channel",
-    telegramSourceKind: "channel",
     accountId: 1,
     externalId: "@extractum",
     title: "Extractum",

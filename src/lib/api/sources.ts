@@ -38,7 +38,7 @@ interface RawTelegramDialogSource {
   id: number;
   title: string;
   username: string | null;
-  telegram_source_kind: TelegramSourceKind;
+  source_subtype: TelegramSourceKind;
   is_member: boolean;
   photo_data_url: string | null;
 }
@@ -47,7 +47,6 @@ interface RawSource {
   id: number;
   source_type: Source["sourceType"];
   source_subtype?: SourceSubtype | null;
-  telegram_source_kind?: TelegramSourceKind | null;
   account_id: number | null;
   external_id: string;
   title: string | null;
@@ -179,7 +178,7 @@ export function addTelegramSource(input: AddTelegramSourceInput) {
     request: {
       accountId: input.accountId,
       sourceRef: input.sourceRef,
-      expectedKind: input.expectedKind,
+      expectedSubtype: input.expectedSubtype,
     },
   }).then(mapSource);
 }
@@ -258,7 +257,7 @@ function mapTelegramDialogSource(source: RawTelegramDialogSource): TelegramDialo
     id: source.id,
     title: source.title,
     username: source.username,
-    telegramSourceKind: source.telegram_source_kind,
+    sourceSubtype: source.source_subtype,
     isMember: source.is_member,
     photoDataUrl: source.photo_data_url,
   };
@@ -269,7 +268,6 @@ function mapSource(source: RawSource): Source {
     id: source.id,
     sourceType: source.source_type,
     sourceSubtype: source.source_subtype ?? null,
-    telegramSourceKind: source.telegram_source_kind ?? null,
     accountId: source.account_id,
     externalId: source.external_id,
     title: source.title,

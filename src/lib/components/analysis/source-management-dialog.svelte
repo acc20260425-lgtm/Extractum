@@ -81,7 +81,7 @@
     const query = dialogQuery.trim().toLocaleLowerCase();
     return dialogSources
       .filter((source) => {
-        const matchesKind = kindFilter === "all" || source.telegramSourceKind === kindFilter;
+        const matchesKind = kindFilter === "all" || source.sourceSubtype === kindFilter;
         if (!matchesKind) return false;
         if (!query) return true;
         return (
@@ -107,7 +107,7 @@
   }
 
   function dialogSourceKey(source: TelegramDialogSource) {
-    return `${source.telegramSourceKind}:${source.id}`;
+    return `${source.sourceSubtype}:${source.id}`;
   }
 
   function sourceAlreadyAdded(source: TelegramDialogSource) {
@@ -135,7 +135,7 @@
     );
     if (titleDelta !== 0) return titleDelta;
 
-    const kindDelta = compareSortText(left.telegramSourceKind, right.telegramSourceKind);
+    const kindDelta = compareSortText(left.sourceSubtype, right.sourceSubtype);
     if (kindDelta !== 0) return kindDelta;
 
     const usernameDelta = compareSortText(
@@ -164,7 +164,11 @@
     }
   }
 
-  async function addSource(sourceRef: string, telegramSourceKind: TelegramSourceKind | null, key: string) {
+  async function addSource(
+    sourceRef: string,
+    sourceSubtype: TelegramSourceKind | null,
+    key: string,
+  ) {
     if (!activeAccountId || !sourceRef.trim()) {
       return;
     }
@@ -175,7 +179,7 @@
       const source = await addTelegramSource({
         accountId: Number(activeAccountId),
         sourceRef: sourceRef.trim(),
-        expectedKind: telegramSourceKind,
+        expectedSubtype: sourceSubtype,
       });
       onStatus(`Source "${source.title ?? source.externalId}" added.`);
       await onSourcesChanged(source.id);
@@ -190,7 +194,7 @@
   }
 
   function addDialogSource(source: TelegramDialogSource) {
-    return addSource(String(source.id), source.telegramSourceKind, dialogSourceKey(source));
+    return addSource(String(source.id), source.sourceSubtype, dialogSourceKey(source));
   }
 
   function addManualSource() {
@@ -373,7 +377,7 @@
               <div class="dialog-copy">
                 <strong>{source.title}</strong>
                 <div class="dialog-meta">
-                  <span>{sourceKindLabel(source.telegramSourceKind)}</span>
+                  <span>{sourceKindLabel(source.sourceSubtype)}</span>
                   {#if source.username}
                     <span>@{source.username}</span>
                   {:else}

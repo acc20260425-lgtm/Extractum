@@ -11,7 +11,6 @@ function source(overrides: Partial<Source>): Source {
     id: 1,
     sourceType: "telegram",
     sourceSubtype: "channel",
-    telegramSourceKind: "channel",
     accountId: 1,
     externalId: "123",
     title: "Source",
@@ -45,10 +44,9 @@ describe("source capabilities", () => {
   });
 
   it("allows Takeout import for every Telegram source kind", () => {
-    for (const telegramSourceKind of ["channel", "supergroup", "group"] as const) {
+    for (const telegramSourceSubtype of ["channel", "supergroup", "group"] as const) {
       expect(sourceCapabilities(source({
-        sourceSubtype: telegramSourceKind,
-        telegramSourceKind,
+        sourceSubtype: telegramSourceSubtype,
       })).canImportArchive).toBe(true);
     }
   });
@@ -56,37 +54,33 @@ describe("source capabilities", () => {
   it("marks Telegram supergroups as topic and Takeout capable", () => {
     const capabilities = sourceCapabilities(source({
       sourceSubtype: "supergroup",
-      telegramSourceKind: "supergroup",
     }));
 
     expect(capabilities.hasTopics).toBe(true);
     expect(capabilities.canImportArchive).toBe(true);
     expect(sourceKindLabel(source({
       sourceSubtype: "supergroup",
-      telegramSourceKind: "supergroup",
     }))).toBe("supergroup");
   });
 
   it("derives Telegram behavior from canonical sourceSubtype", () => {
-    const conflictingMirror = source({
+    const supergroup = source({
       sourceSubtype: "supergroup",
-      telegramSourceKind: "channel",
       isMember: false,
     });
 
-    expect(sourceCapabilities(conflictingMirror)).toMatchObject({
+    expect(sourceCapabilities(supergroup)).toMatchObject({
       canImportArchive: true,
       hasTopics: true,
     });
-    expect(sourceKindLabel(conflictingMirror)).toBe("supergroup");
-    expect(membershipLabel(conflictingMirror)).toBe("not a member");
+    expect(sourceKindLabel(supergroup)).toBe("supergroup");
+    expect(membershipLabel(supergroup)).toBe("not a member");
   });
 
   it("syncs manual YouTube videos without Telegram assumptions", () => {
     const video = source({
       sourceType: "youtube",
       sourceSubtype: "video",
-      telegramSourceKind: null,
       accountId: null,
       externalId: "dQw4w9WgXcQ",
       isMember: false,
@@ -109,7 +103,6 @@ describe("source capabilities", () => {
     const playlist = source({
       sourceType: "youtube",
       sourceSubtype: "playlist",
-      telegramSourceKind: null,
       accountId: null,
       isMember: false,
     });

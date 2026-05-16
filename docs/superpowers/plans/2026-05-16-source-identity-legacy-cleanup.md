@@ -2503,7 +2503,7 @@ Expected:
 - Modify: `src/lib/analysis-workspace-workflow.test.ts`
 - Modify: `src/lib/components/analysis/source-management-dialog.svelte`
 
-- [ ] **Step 1: Add failing API tests for new wire contract**
+- [x] **Step 1: Add failing API tests for new wire contract**
 
 In `src/lib/api/sources.test.ts`, update the first source mapping test so raw
 source rows omit `telegram_source_kind` and expected mapped sources omit
@@ -2572,7 +2572,7 @@ it("maps live telegram dialogs with sourceSubtype", async () => {
 Delete the old test named
 `does not derive persisted sourceSubtype from deprecated telegram_source_kind`.
 
-- [ ] **Step 2: Run failing frontend API tests**
+- [x] **Step 2: Run failing frontend API tests**
 
 Run:
 
@@ -2586,7 +2586,7 @@ Expected:
 FAIL src/lib/api/sources.test.ts
 ```
 
-- [ ] **Step 3: Update frontend types**
+- [x] **Step 3: Update frontend types**
 
 In `src/lib/types/sources.ts`:
 
@@ -2614,7 +2614,7 @@ export interface AddTelegramSourceInput {
 }
 ```
 
-- [ ] **Step 4: Update frontend API mapping**
+- [x] **Step 4: Update frontend API mapping**
 
 In `src/lib/api/sources.ts`:
 
@@ -2643,7 +2643,7 @@ sourceSubtype: source.source_subtype,
 
 5. Remove `telegramSourceKind` from `mapSource`.
 
-- [ ] **Step 5: Update source management dialog**
+- [x] **Step 5: Update source management dialog**
 
 In `src/lib/components/analysis/source-management-dialog.svelte`, replace live
 dialog references:
@@ -2677,7 +2677,7 @@ expectedSubtype: sourceSubtype,
 Keep existing UI labels, filters, sort order, and keys using the same subtype
 values.
 
-- [ ] **Step 6: Update frontend fixtures and tests**
+- [x] **Step 6: Update frontend fixtures and tests**
 
 In every frontend test fixture under `src/lib/*.test.ts`, delete
 `telegramSourceKind` from persisted `Source` objects. For Telegram sources,
@@ -2685,7 +2685,7 @@ keep `sourceSubtype` set to `"channel"`, `"supergroup"`, or `"group"`. For
 YouTube sources, keep `sourceSubtype` as `"video"` or `"playlist"`. For tests
 that asserted null legacy fields, delete those assertions.
 
-- [ ] **Step 7: Run frontend tests**
+- [x] **Step 7: Run frontend tests**
 
 Run:
 
@@ -2700,7 +2700,7 @@ Test Files  ... passed
 Tests       ... passed
 ```
 
-- [ ] **Step 8: Run Svelte check**
+- [x] **Step 8: Run Svelte check**
 
 Run:
 
@@ -2714,7 +2714,7 @@ Expected:
 svelte-check found 0 errors and 0 warnings
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 
