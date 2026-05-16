@@ -199,7 +199,7 @@ For YouTube sources:
 - `source_subtype` must be `video` or `playlist`;
 - `external_id` is the provider id: video id for videos, playlist id for
   playlists;
-- `account_id` is currently `NULL`.
+- `account_id` must be `NULL`.
 
 RSS and forum remain provider-model placeholders. The schema should not add
 hard database checks that prevent future placeholder source types or subtypes
@@ -230,19 +230,19 @@ Post-v19 `sources` indexes, complete for this slice:
 
 - `idx_sources_unique_telegram_identity`
   ```sql
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_telegram_identity
+  CREATE UNIQUE INDEX idx_sources_unique_telegram_identity
       ON sources(account_id, source_type, source_subtype, external_id)
       WHERE source_type = 'telegram';
   ```
 - `idx_sources_unique_youtube_video`
   ```sql
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_youtube_video
+  CREATE UNIQUE INDEX idx_sources_unique_youtube_video
       ON sources(source_type, source_subtype, external_id)
       WHERE source_type = 'youtube' AND source_subtype = 'video';
   ```
 - `idx_sources_unique_youtube_playlist`
   ```sql
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_youtube_playlist
+  CREATE UNIQUE INDEX idx_sources_unique_youtube_playlist
       ON sources(source_type, source_subtype, external_id)
       WHERE source_type = 'youtube' AND source_subtype = 'playlist';
   ```
@@ -275,7 +275,8 @@ Post-v19 `sources` constraints:
   CHECK (
       source_type <> 'youtube'
       OR (
-          source_subtype IS NOT NULL
+          account_id IS NULL
+          AND source_subtype IS NOT NULL
           AND source_subtype IN ('video', 'playlist')
       )
   )
@@ -314,6 +315,12 @@ across the supported environment, so migration 19 should rebuild `sources`:
 4. Drop the old `sources` table.
 5. Rename `sources_new` to `sources`.
 6. Recreate the post-v19 indexes listed above.
+
+The three post-v19 indexes should be created without `IF NOT EXISTS` in the
+final migration path unless the implementation first proves that any existing
+same-name index has the exact expected table, uniqueness, columns, and partial
+`WHERE` clause. Silent tolerance of a same-name, wrong-shape index is not
+allowed.
 
 Migration 19 must use a foreign-key-safe table rebuild procedure that cannot
 cascade-delete dependent rows and must verify referential integrity after the
@@ -370,12 +377,16 @@ Fresh-install migration tests should apply all migrations and assert that:
 - inserting a Telegram source with an unsupported `source_subtype` fails;
 - inserting a YouTube source with `NULL source_subtype` fails;
 - inserting a YouTube source with an unsupported `source_subtype` fails;
+- inserting a YouTube source with non-`NULL account_id` fails;
 - inserting an RSS/forum placeholder row with a provider-local subtype is still
   allowed by the database checks.
 - `PRAGMA foreign_key_check` returns no rows after migration 19.
 - tests prove the v19 applied path does not run through the current
   plugin-managed SQLx migration transaction unless the runner has been changed
   to support the required pre-transaction FK-off phase.
+- migration tests inspect `sqlite_schema`/`PRAGMA index_list`/`PRAGMA
+  index_info` for every post-v19 `sources` index and compare table name,
+  uniqueness, indexed columns, and partial `WHERE` clause against this spec.
 
 Upgrade-style tests should construct a v18-shaped schema with source rows and
 typed Telegram rows, run migration 19, and assert that:
@@ -390,6 +401,21 @@ typed Telegram rows, run migration 19, and assert that:
   ids.
 - `PRAGMA foreign_key_check` returns no rows after migration 19.
 - repair rejects Telegram `external_id = '0'` as malformed source identity.
+
+Negative migration fixtures must also cover:
+
+- v18 database with a Telegram source whose `account_id` is `NULL`;
+- v18 database with a Telegram source whose `source_subtype` is `NULL`;
+- v18 database with duplicate canonical Telegram identity;
+- v18 database with duplicate typed Telegram peer identity;
+- v18 database with malformed Telegram `external_id`;
+- v18 database with invalid YouTube `source_subtype`;
+- v18 database with YouTube `account_id` set to a non-`NULL` account id;
+- failure during v19 with child rows under representative dependent tables,
+  proving the failed migration leaves no partial `sources_new`, no dropped
+  `sources`, and no deleted child rows;
+- unsupported pre-v18-style database with Telegram rows, proving the error
+  points to the required v18 repair-window upgrade path.
 
 The source-id graph that must be preserved includes physical foreign keys:
 
@@ -475,7 +501,7 @@ Repair safety cases:
 | `telegram_sources` row is missing and `sources` lacks `account_id`, supported `source_subtype`, or canonical `external_id` | Fatal diagnostic. Do not partially write typed identity. |
 | `sources.source_subtype` conflicts with `telegram_sources.source_subtype` | Fatal projection drift diagnostic. |
 | `sources.account_id` conflicts with `telegram_sources.account_id` | Fatal projection drift diagnostic. |
-| `sources.external_id` parsed as peer id conflicts with `telegram_sources.peer_id` | Fatal projection drift diagnostic unless no other source can own the existing typed peer and the implementation deliberately treats this as non-conflicting repair drift. That non-conflicting drift path must be covered by a targeted test. |
+| `sources.external_id` parsed as peer id conflicts with `telegram_sources.peer_id` | Fatal projection drift diagnostic. Automatic correction is out of scope for this slice because it could silently rebind a source to a different Telegram peer. |
 | Duplicate `(account_id, source_type, source_subtype, external_id)` among Telegram sources | Fatal duplicate canonical identity diagnostic naming the source ids. |
 | Duplicate `(account_id, peer_kind, peer_id)` among typed Telegram identities | Fatal duplicate typed peer identity diagnostic naming the source ids. |
 | Username, access hash, resolution strategy, or avatar hint is missing or differs but account/subtype/peer identity agrees | Non-fatal. Keep the existing typed row or refresh nullable hint fields from decodable metadata; do not block startup solely because optional hints are absent. |
@@ -573,6 +599,11 @@ Use TDD for each implementation task. Important red/green checks:
   after all migrations;
 - repair/helper tests fail while Telegram `external_id = '0'` is still accepted
   as canonical identity;
+- repair/helper tests reject every malformed Telegram external id required by
+  the canonical format: empty string, `0`, leading zeroes such as `00123`,
+  signed values such as `-123` and `+123`, surrounding whitespace such as
+  ` 123` and `123 `, usernames such as `@name` or `name`, prefixed ids such as
+  `telegram:123`, non-ASCII digits, and any other non-ASCII-decimal form;
 - store tests fail while queries select or writes bind the removed column;
 - frontend API tests fail while `telegramSourceKind` remains on persisted
   `Source`;
