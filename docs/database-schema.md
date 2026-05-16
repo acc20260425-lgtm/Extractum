@@ -27,7 +27,8 @@ Important fields:
 
 Important constraints / indexes:
 
-- unique source by `(account_id, source_type, telegram_source_kind, external_id)`
+- canonical Telegram source identity by `(account_id, source_type, source_subtype, external_id)`
+  where `source_type = 'telegram'`
 - unique YouTube video source by `(source_type, source_subtype, external_id)`
   where `source_type = 'youtube' AND source_subtype = 'video'`
 - unique YouTube playlist source by `(source_type, source_subtype, external_id)`
@@ -55,20 +56,93 @@ Implemented ingest providers are `telegram` and `youtube`.
 - `supergroup`
 - `group`
 
+`telegram_source_kind` is deprecated. During the compatibility window it is a
+database/API mirror of canonical `source_subtype` for Telegram rows; normal
+runtime behavior must not treat it as an independent source of truth.
+
 Notes:
 
 - older rows that used `source_type = 'telegram_channel'` are migrated to `source_type = 'telegram'`;
 - migration `15.sql` adds `source_subtype` and backfills existing Telegram rows
   from `telegram_source_kind`;
+- migration `18.sql` adds typed Telegram identity tables and a startup repair
+  creates the canonical Telegram unique index only after duplicate preflight;
 - `telegram_source_kind` is a Telegram compatibility field and can be `NULL` for
   future non-Telegram sources;
 - uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
-- uniqueness includes `telegram_source_kind` because Telegram bare ids are not enough to safely describe every peer shape.
+- uniqueness includes `source_subtype` because Telegram bare ids are not enough to safely describe every peer shape.
 - `last_sync_state` and `last_synced_at` are advanced by normal sync and by successful Takeout import; failed or cancelled Takeout jobs leave these fields unchanged.
 - YouTube source rows keep metadata in `metadata_zstd`; video rows store the canonical video metadata and playlist rows store playlist metadata.
 - YouTube source jobs are in memory in the MVP; they may update `last_synced_at`, but active job records are not restored after app restart.
 
-### 1.2 `items`
+### 1.2 `telegram_sources`
+
+Stores typed operational identity for Telegram sources. Generic provider
+identity stays in `sources`; Telegram peer identity, peer resolution hints, and
+Telegram display cache fields live here.
+
+Important fields:
+
+- `source_id`
+- `account_id`
+- `source_subtype`
+- `peer_kind`
+- `peer_id`
+- `resolution_strategy`
+- `username`
+- `access_hash`
+- `avatar_cache_key`
+- `identity_refreshed_at`
+- `created_at`
+- `updated_at`
+
+Important constraints / indexes:
+
+- primary key and `ON DELETE CASCADE` foreign key by `source_id`
+- unique Telegram peer by `(account_id, peer_kind, peer_id)`
+- lookup index by `(account_id, source_subtype)`
+- username lookup index by `(account_id, username)` where `username IS NOT NULL`
+- checks keep `source_subtype`, `peer_kind`, and `resolution_strategy` in the
+  supported enum sets and enforce subtype/peer-kind consistency
+
+Notes:
+
+- `source_subtype` uses the same Telegram values as `sources.source_subtype`.
+- `peer_kind = 'channel'` is used for Telegram channels and supergroups;
+  `peer_kind = 'chat'` is used for small groups.
+- `resolution_strategy` records how the peer was or can be resolved:
+  `username`, `dialog`, `legacy_metadata`, or `unknown`.
+- normal Telegram sync, Takeout, forum topic refresh, source list display, and
+  NotebookLM source loading use this typed identity instead of decoding legacy
+  `sources.metadata_zstd`.
+- legacy metadata is decoded during startup repair and compatibility paths, not
+  as the normal runtime source identity fallback.
+
+### 1.3 `source_identity_repair_notes`
+
+Stores non-fatal source identity repair notes for diagnostics.
+
+Important fields:
+
+- `id`
+- `source_id`
+- `issue_code`
+- `detail`
+- `created_at`
+
+Important constraints / indexes:
+
+- `source_id` foreign key to `sources(id)` with `ON DELETE CASCADE`
+- unique note by `(source_id, issue_code)`
+
+Notes:
+
+- fatal identity problems stop startup repair and block source commands with a
+  typed repair error.
+- notes are for non-fatal enrichment gaps only; duplicate or malformed identity
+  rows are not silently downgraded into notes.
+
+### 1.4 `items`
 
 Stores locally ingested source items. Current rows include Telegram messages,
 YouTube transcript items, and YouTube comment items. The table remains the
@@ -136,7 +210,7 @@ YouTube implication:
 - comments are stored as `youtube_comment` items;
 - YouTube description text used by analysis is synthesized from source metadata and is not stored as an `items` row.
 
-### 1.3 `app_settings`
+### 1.5 `app_settings`
 
 Simple key/value storage for app-wide settings.
 
@@ -160,7 +234,7 @@ Saved LLM API keys live in OS secure storage under
 `llm.profile.<profile_id>.api_key`; the backend migrates old non-empty
 `app_settings` key rows after a successful secure-store write.
 
-### 1.4 `telegram_forum_topics`
+### 1.6 `telegram_forum_topics`
 
 Stores the local catalog of Telegram forum topics for `supergroup` sources.
 
@@ -200,7 +274,7 @@ Notes:
 - this distinction matters in production data: many Telegram forum messages carry `reply_to_top_id = topic_id`, not `reply_to_top_id = top_message_id`, and some omit `reply_to_top_id` while keeping `reply_to_msg_id = topic_id`, so treating `top_message_id` as the normal join key or skipping the fallbacks misclassifies topic traffic;
 - topic records are retained locally even if a later catalog refresh omits them, so historical message-to-topic matches can survive.
 
-### 1.5 `youtube_playlist_items`
+### 1.7 `youtube_playlist_items`
 
 Stores playlist membership rows and per-entry availability state.
 
@@ -234,7 +308,7 @@ Notes:
 - `availability_status` distinguishes available, upcoming, live, no-captions, auth-gated, deleted, removed, and unknown-unavailable rows.
 - `is_removed_from_playlist` marks rows that disappeared from a later playlist metadata sync without deleting historical local state.
 
-### 1.6 `youtube_transcript_segments`
+### 1.8 `youtube_transcript_segments`
 
 Stores timestamped transcript segments for `youtube_transcript` items.
 
@@ -265,7 +339,7 @@ Notes:
 - `is_auto_generated` preserves whether the selected track came from auto captions.
 - Analysis trace refs can resolve segment timestamps into YouTube links.
 
-### 1.7 `accounts`
+### 1.9 `accounts`
 
 Stores configured Telegram accounts.
 
@@ -405,6 +479,7 @@ Purpose:
 | 15 | `15.sql` | Add provider-local `source_subtype` to `sources` and backfill Telegram rows |
 | 16 | `16.sql` | Add YouTube source foundation, item kinds, playlist rows, transcript segments, YouTube analysis snapshot metadata, source-group provider type, and YouTube settings defaults |
 | 17 | `17.sql` | Add durable YouTube corpus mode metadata to `analysis_runs` |
+| 18 | `18.sql` | Add source identity bridge tables, safe Telegram subtype backfills, and repair diagnostics storage |
 
 ## 4. Current behavior implications
 

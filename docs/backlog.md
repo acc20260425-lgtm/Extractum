@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-15
+> **Updated:** 2026-05-16
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Open Gaps
@@ -108,6 +108,10 @@ Analysis:
 
 - [ ] make `source_subtype` the canonical provider subtype and retire normal-path `telegram_source_kind` usage
 - [ ] move high-value Telegram and YouTube identity metadata out of `metadata_zstd` into typed provider tables
+- [ ] remove `telegram_source_kind` from DTOs and database writes after the compatibility window
+- [ ] rebuild the fresh current schema without the legacy `telegram_source_kind` column
+- [ ] move YouTube identity/display metadata to typed source tables
+- [ ] continue item/document identity cleanup with provider-native item keys and analysis-ready document rows
 - [ ] replace `(source_id, external_id)` as the only item identity with provider-native identity and at least `(source_id, item_kind, external_id)` uniqueness
 - [ ] introduce a provider-neutral document/corpus layer for analysis and export text units
 - [ ] materialize Telegram forum topic membership instead of recomputing it in reader/export joins

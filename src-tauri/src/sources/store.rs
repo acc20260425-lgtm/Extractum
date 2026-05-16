@@ -251,6 +251,7 @@ pub async fn add_telegram_source(
 
     let pool = get_pool(&handle).await?;
     let mut tx = pool.begin().await.map_err(AppError::database)?;
+    // Deprecated DTO/database compatibility mirror. Canonical Telegram subtype is source_subtype.
     let source_id: i64 = sqlx::query_scalar(
         r#"
         INSERT INTO sources (
@@ -361,6 +362,7 @@ fn source_record_from_row_parts(
     avatar_data_url: Option<String>,
 ) -> SourceRecord {
     let source_subtype = row.source_subtype.unwrap_or_else(|| "unknown".to_string());
+    // Deprecated DTO/database compatibility mirror. Canonical Telegram subtype is source_subtype.
     let telegram_source_kind = if row.source_type == TELEGRAM_SOURCE_TYPE {
         Some(source_subtype.clone())
     } else {

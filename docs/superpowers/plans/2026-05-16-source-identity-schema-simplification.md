@@ -2630,7 +2630,7 @@ git commit -m "test: cover source identity schema regressions"
 - Modify: `docs/backlog.md`
 - Modify code comments at compatibility boundaries only.
 
-- [ ] **Step 1: Add compatibility boundary comments**
+- [x] **Step 1: Add compatibility boundary comments**
 
 Add short comments only where the legacy field is intentionally mirrored:
 
@@ -2641,7 +2641,7 @@ Add short comments only where the legacy field is intentionally mirrored:
 Use this near the `telegram_source_kind` DTO assignment and Telegram insert
 mirror, not throughout the codebase.
 
-- [ ] **Step 2: Run legacy field scan**
+- [x] **Step 2: Run legacy field scan**
 
 Run:
 
@@ -2662,7 +2662,7 @@ If normal runtime peer resolution, Takeout, topics, frontend capabilities, or
 persisted-source mapping still read the legacy field as authoritative, fix
 those call sites before continuing.
 
-- [ ] **Step 3: Update database schema docs**
+- [x] **Step 3: Update database schema docs**
 
 In `docs/database-schema.md`, add sections for:
 
@@ -2672,7 +2672,7 @@ In `docs/database-schema.md`, add sections for:
   `(account_id, source_type, source_subtype, external_id)`;
 - `telegram_source_kind` marked deprecated compatibility mirror.
 
-- [ ] **Step 4: Update architecture docs**
+- [x] **Step 4: Update architecture docs**
 
 In `docs/architecture-deep-dive.md`, add a concise source identity boundary:
 
@@ -2683,7 +2683,7 @@ identity lives in `sources`. Runtime source flows use canonical
 only during startup repair.
 ```
 
-- [ ] **Step 5: Update backlog**
+- [x] **Step 5: Update backlog**
 
 In `docs/backlog.md`, add follow-up entries:
 
@@ -2692,7 +2692,7 @@ In `docs/backlog.md`, add follow-up entries:
 - move YouTube metadata to typed source tables;
 - item/document identity cleanup.
 
-- [ ] **Step 6: Commit documentation**
+- [x] **Step 6: Commit documentation**
 
 Run:
 

@@ -216,6 +216,7 @@ pub(crate) async fn repair_source_identity(
         if mode == SourceIdentityRepairMode::Apply {
             upsert_telegram_source_identity(&mut tx, &candidate).await?;
             sqlx::query(
+                // Deprecated DTO/database compatibility mirror. Canonical Telegram subtype is source_subtype.
                 "UPDATE sources SET source_subtype = ?, telegram_source_kind = ? WHERE id = ?",
             )
             .bind(&candidate.source_subtype_text)

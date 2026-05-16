@@ -54,18 +54,23 @@ Sources can be added:
 - by username / `t.me` reference;
 - from the current account's dialogs.
 
-Persisted Telegram source metadata now stores an explicit `peer_identity` contract:
+Telegram operational identity lives in `telegram_sources`; generic provider
+identity lives in `sources`. Runtime source flows use canonical
+`source_subtype` and typed Telegram peer identity. Legacy metadata is decoded
+only during startup repair.
+
+Typed Telegram source identity stores an explicit peer contract:
 
 - `strategy = username` for public sources added by `@username` or `t.me/name`
 - `strategy = dialog` for dialog-backed sources, including private channels / groups and numeric refs resolved from dialogs
 - optional `username` for public fallback behavior
 - optional `access_hash` for stable `channel` / `supergroup` peer reconstruction when Telegram exposes it
 
-`resolve_source_peer` follows an explicit rules pipeline:
+`resolve_source_peer` follows an explicit rules pipeline over typed identity:
 
-1. username strategy -> resolve stored username -> fallback dialog scan for compatibility
-2. dialog strategy -> reconstruct from stored peer identity -> optional username fallback -> fallback dialog scan
-3. empty / older metadata -> compatibility dialog scan only
+1. stored `PeerRef` when peer kind, subtype, and access hash allow it;
+2. stored normalized username when available;
+3. account dialog scan for dialog-backed or username-less sources.
 
 Supported source refs are:
 
@@ -86,6 +91,11 @@ Supported Telegram source kinds are:
 - `channel`
 - `supergroup`
 - `group`
+
+`sources.telegram_source_kind` remains only as a deprecated database/API
+compatibility mirror during the transition window. Persisted source selection,
+capabilities, sync, Takeout, forum topics, and exports derive Telegram subtype
+from `source_subtype` or `telegram_sources`.
 
 ### 2.3 Sync strategy
 
