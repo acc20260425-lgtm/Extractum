@@ -22,7 +22,8 @@ mention `telegram_source_kind`; normal product code must not.
 - Add a safe `v19` migration instead of rewriting old migration files.
 - The local project database has already applied migration 18 and the source
   identity repair index exists. This slice may assume databases have passed
-  the v18 compatibility window before v19 removes the legacy column.
+  the v18 compatibility window before v19 removes the legacy column. This is a
+  supported upgrade precondition, not an implicit repair fallback.
 - Fresh installs still run the full migration chain, but the final schema after
   migration 19 must not contain `sources.telegram_source_kind`.
 - Do not provide wire aliases for old payload names. The desktop frontend and
@@ -37,6 +38,26 @@ mention `telegram_source_kind`; normal product code must not.
   except for code changes required by removing `telegram_source_kind`.
 - Allow quarantined legacy references only in old migrations, upgrade tests,
   old-schema fixtures, and docs that describe migration history.
+
+## Supported Upgrade Matrix
+
+Migration 19 runs before startup repair in the current Tauri SQL plugin flow.
+Because of that ordering, migration 19 cannot depend on repair reading the
+legacy column after the migration has dropped it.
+
+Supported scenarios:
+
+| Scenario | Expected behavior |
+| --- | --- |
+| Fresh install through migrations 1 to 19 | Succeeds. The final `sources` schema has no `telegram_source_kind`. Startup repair then runs against an empty or canonical database. |
+| Existing database at version 18 with startup repair already successful | Succeeds. Migration 19 rebuilds `sources`, preserves ids, and recreates current indexes without the legacy column. |
+| Existing database at version 18 where startup repair never ran or previously failed | Unsupported for this slice. Migration 19 may fail fast through schema constraints or index creation if canonical identity is incomplete or duplicated. The user should run a build containing the v18 repair first or restore a repaired database. |
+| Existing database before version 18 upgrading directly to this version | Unsupported for this slice when Telegram rows exist. Migrations 18 and 19 would run in one SQL batch before Rust startup repair can use the legacy mirror. |
+| Database with Telegram rows whose `account_id`, `source_subtype`, or `external_id` is invalid | Invalid database state. Migration tests and repair tests must cover failure or blocking behavior; implementation must not silently coerce or invent identity values. |
+
+The implementation plan should include explicit tests for the supported
+fresh-install and repaired-v18 paths. Direct pre-v18 upgrade may be documented
+as unsupported rather than papered over with a new SQL fallback.
 
 ## Goals
 
@@ -87,6 +108,131 @@ The frontend currently still exposes `telegramSourceKind` on persisted
 for peer classification. The next implementation must separate those concepts
 by using only `sourceSubtype` everywhere in frontend source flows.
 
+## Identity Invariants
+
+The current source identity boundary after this slice is:
+
+- generic provider identity lives in `sources`;
+- Telegram operational peer identity lives in `telegram_sources`;
+- `sources.telegram_source_kind` no longer exists in the current schema.
+
+For persisted Telegram sources:
+
+- `source_type` must be `telegram`;
+- `source_subtype` must be one of `channel`, `supergroup`, or `group`;
+- `account_id` must be non-`NULL`;
+- `external_id` must be the canonical decimal Telegram peer id;
+- `telegram_sources.source_id` must match `sources.id`;
+- `telegram_sources.account_id` must match `sources.account_id`;
+- `telegram_sources.source_subtype` must match `sources.source_subtype`;
+- `telegram_sources.peer_id` must match `sources.external_id` parsed as the
+  canonical Telegram peer id;
+- usernames are resolution hints and must not be stored as
+  `sources.external_id`.
+
+The canonical Telegram `external_id` format is the exact decimal string form of
+the bare Telegram peer id. It has no provider prefix, no `@`, no username, no
+sign, no surrounding whitespace, no non-digit characters, and no leading zeroes
+except the literal string `0`. It must round-trip through the existing
+`canonical_telegram_external_id` helper and back to the same string. Channels,
+supergroups, and groups all use this same durable `external_id` format; their
+shape difference is represented by `source_subtype` and by
+`telegram_sources.peer_kind`.
+
+`account_id` is part of Telegram identity, not optional display metadata.
+SQLite unique indexes do not protect identity uniqueness when any indexed
+column is `NULL`, so this invariant must be enforced in all of these places:
+
+- migration 19 final schema contract;
+- startup repair validation;
+- Telegram add-source request handling and source upsert;
+- migration and repair regression tests.
+
+For YouTube sources:
+
+- `source_type` must be `youtube`;
+- `source_subtype` must be `video` or `playlist`;
+- `external_id` is the provider id: video id for videos, playlist id for
+  playlists;
+- `account_id` is currently `NULL`.
+
+RSS and forum remain provider-model placeholders. The schema should not add
+hard database checks that prevent future placeholder source types or subtypes
+unless those checks are explicitly scoped to implemented providers.
+
+## Post-v19 Sources Schema Contract
+
+Migration 19 must leave `sources` with this exact current-schema contract:
+
+| Column | Type | Nullability / default | Meaning |
+| --- | --- | --- | --- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | Stable source id. Must be preserved across the table rebuild. |
+| `source_type` | `TEXT` | `NOT NULL` | Provider family such as `telegram` or `youtube`. |
+| `source_subtype` | `TEXT` | nullable | Provider-local subtype. Required by application invariants for implemented Telegram and YouTube rows. |
+| `external_id` | `TEXT` | `NOT NULL` | Provider-native durable id. For Telegram, canonical decimal peer id. |
+| `title` | `TEXT` | nullable | Display title. |
+| `metadata_zstd` | `BLOB` | nullable | Provider metadata payload retained by this slice. |
+| `last_sync_state` | `INTEGER` | nullable | Provider sync cursor. |
+| `is_active` | `BOOLEAN` | default `1` | Source is active unless disabled/deleted by product flow. |
+| `is_member` | `BOOLEAN` | default `0` | Membership/subscription flag where applicable. |
+| `created_at` | `INTEGER` | `NOT NULL` | Unix timestamp, UTC. |
+| `account_id` | `INTEGER` | nullable, `REFERENCES accounts(id) ON DELETE CASCADE` | Local account owner. Required for Telegram rows. |
+| `last_synced_at` | `INTEGER` | nullable | Timestamp of last successful sync/import. |
+
+`sources` must not contain `telegram_source_kind` after migration 19.
+
+Post-v19 `sources` indexes:
+
+- `idx_sources_unique_telegram_identity`
+  ```sql
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_telegram_identity
+      ON sources(account_id, source_type, source_subtype, external_id)
+      WHERE source_type = 'telegram';
+  ```
+- `idx_sources_unique_youtube_video`
+  ```sql
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_youtube_video
+      ON sources(source_type, source_subtype, external_id)
+      WHERE source_type = 'youtube' AND source_subtype = 'video';
+  ```
+- `idx_sources_unique_youtube_playlist`
+  ```sql
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique_youtube_playlist
+      ON sources(source_type, source_subtype, external_id)
+      WHERE source_type = 'youtube' AND source_subtype = 'playlist';
+  ```
+
+The old `idx_sources_ext` index must not exist after migration 19 because it is
+built on `telegram_source_kind`.
+
+Post-v19 `sources` constraints:
+
+- preserve `id INTEGER PRIMARY KEY AUTOINCREMENT`;
+- preserve `account_id REFERENCES accounts(id) ON DELETE CASCADE`;
+- preserve existing nullability and defaults listed above;
+- add a table-level Telegram check:
+  ```sql
+  CHECK (
+      source_type <> 'telegram'
+      OR (
+          account_id IS NOT NULL
+          AND source_subtype IN ('channel', 'supergroup', 'group')
+      )
+  )
+  ```
+- add a table-level YouTube check:
+  ```sql
+  CHECK (
+      source_type <> 'youtube'
+      OR source_subtype IN ('video', 'playlist')
+  )
+  ```
+
+These checks are scoped to implemented provider rows so future RSS/forum
+placeholder rows are not blocked by a Telegram/YouTube-only enum. The canonical
+Telegram `external_id` string format remains enforced in Rust repair/add-source
+validation and regression tests rather than with SQLite string-pattern checks.
+
 ## Database Migration
 
 Add `src-tauri/migrations/19.sql` and register it in
@@ -95,22 +241,14 @@ Add `src-tauri/migrations/19.sql` and register it in
 SQLite cannot drop a column in a way that preserves all constraints and indexes
 across the supported environment, so migration 19 should rebuild `sources`:
 
-1. Create `sources_new` with the current intended columns, omitting
-   `telegram_source_kind`.
+1. Create `sources_new` using the exact post-v19 schema contract above.
 2. Copy every row from `sources` into `sources_new`, preserving `id`,
    `source_type`, `source_subtype`, `account_id`, `external_id`, title,
-   metadata, sync state, active/member flags, timestamps, and other current
-   columns.
+   metadata, sync state, active/member flags, and timestamps.
 3. Drop indexes that depend on the old table shape.
 4. Drop the old `sources` table.
 5. Rename `sources_new` to `sources`.
-6. Recreate current indexes, including:
-   - canonical Telegram uniqueness on
-     `(account_id, source_type, source_subtype, external_id)` where
-     `source_type = 'telegram'`;
-   - YouTube video and playlist partial unique indexes;
-   - generic source/account indexes that are still present in the current
-     schema.
+6. Recreate the post-v19 indexes listed above.
 
 Migration 19 must not use `telegram_source_kind` as a fallback source of truth.
 If a Telegram row reaches v19 without a valid `source_subtype`, that is a data
@@ -124,6 +262,12 @@ Fresh-install migration tests should apply all migrations and assert that:
 - `source_identity_repair_notes` exists;
 - `sources.telegram_source_kind` does not exist;
 - `idx_sources_unique_telegram_identity` exists.
+- `idx_sources_ext` does not exist.
+- inserting a Telegram source with `NULL account_id` fails;
+- inserting a Telegram source with an unsupported `source_subtype` fails;
+- inserting a YouTube source with an unsupported `source_subtype` fails;
+- inserting an RSS/forum placeholder row with a provider-local subtype is still
+  allowed by the database checks.
 
 Upgrade-style tests should construct a v18-shaped schema with source rows and
 typed Telegram rows, run migration 19, and assert that:
@@ -132,6 +276,28 @@ typed Telegram rows, run migration 19, and assert that:
 - Telegram typed identity rows still point to the same `source_id`;
 - YouTube source ids and uniqueness remain stable;
 - the legacy column is gone.
+- the foreign-key and logical-reference graph still resolves to the same source
+  ids.
+
+The source-id graph that must be preserved includes physical foreign keys:
+
+- `items.source_id`;
+- `analysis_source_group_members.source_id`;
+- `source_identity_repair_notes.source_id`;
+- `telegram_forum_topics.source_id`;
+- `telegram_sources.source_id`;
+- `youtube_playlist_items.playlist_source_id`;
+- `youtube_playlist_items.video_source_id`;
+- `youtube_transcript_segments.source_id`.
+
+It also includes logical references without a current SQLite foreign key:
+
+- `analysis_runs.source_id`;
+- `analysis_run_messages.source_id`.
+
+Acceptance for v19 is stronger than “the migration succeeds”: every existing
+row that referenced `sources(id)` before v19 must still reference an existing
+source with the same id and semantic identity after v19.
 
 ## Backend API And Runtime
 
@@ -180,8 +346,10 @@ After migration 19, repair should:
 
 - read Telegram rows from `sources` without `telegram_source_kind`;
 - require a supported `source_subtype`;
-- require `account_id`;
-- require a canonical Telegram `external_id`;
+- require non-`NULL` `account_id`;
+- require canonical Telegram `external_id` as defined in this spec;
+- require `sources` and `telegram_sources` account/subtype/peer identity to
+  agree;
 - validate duplicate canonical identity before index creation;
 - validate duplicate typed peer identity;
 - validate projection drift between `sources` and `telegram_sources`;
