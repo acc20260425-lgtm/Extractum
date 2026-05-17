@@ -969,7 +969,7 @@ git commit -m "feat: prefer typed telegram identity during repair"
 - Modify: `src-tauri/src/sources/topics.rs`
 - Test: same files
 
-- [ ] **Step 1: Add sync tests for null and legacy metadata preservation**
+- [x] **Step 1: Add sync tests for null and legacy metadata preservation**
 
 In `sync.rs` tests, add:
 
@@ -1033,7 +1033,7 @@ async fn finalize_sync_preserves_existing_legacy_metadata_blob() {
 
 The existing `finalize_sync_updates_source_state_and_typed_avatar_cache` already proves a `NULL` blob stays `NULL`; keep it.
 
-- [ ] **Step 2: Add Takeout typed identity test with corrupt blob**
+- [x] **Step 2: Add Takeout typed identity test with corrupt blob**
 
 In `takeout_import/mod.rs`, update or add a test:
 
@@ -1088,7 +1088,7 @@ async fn takeout_subtype_load_ignores_malformed_source_metadata_when_typed_ident
 }
 ```
 
-- [ ] **Step 3: Add forum topic typed identity test with corrupt blob**
+- [x] **Step 3: Add forum topic typed identity test with corrupt blob**
 
 In `topics.rs`, add a source with `metadata_zstd = x'00'` to the existing forum gate test or add:
 
@@ -1129,7 +1129,7 @@ async fn forum_topic_gate_ignores_malformed_source_metadata_when_typed_identity_
 }
 ```
 
-- [ ] **Step 4: Run focused runtime tests**
+- [x] **Step 4: Run focused runtime tests**
 
 Run:
 
@@ -1141,7 +1141,7 @@ cargo test --manifest-path src-tauri/Cargo.toml forum_topic_gate_ignores_malform
 
 Expected: all pass. These may already pass before implementation; if so, record that they are characterization tests rather than RED tests.
 
-- [ ] **Step 5: Run runtime module tests**
+- [x] **Step 5: Run runtime module tests**
 
 Run:
 
@@ -1153,7 +1153,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::topics
 
 Expected: all selected module tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 

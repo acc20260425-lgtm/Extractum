@@ -1164,4 +1164,53 @@ mod tests {
 
         assert_eq!(source_subtype, TELEGRAM_KIND_SUPERGROUP);
     }
+
+    #[tokio::test]
+    async fn takeout_subtype_load_ignores_malformed_source_metadata_when_typed_identity_exists() {
+        let pool = memory_pool_with_sources().await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, account_id,
+                external_id, title, metadata_zstd, last_sync_state, is_active, is_member,
+                created_at
+            )
+            VALUES (?, 'telegram', 'supergroup', ?, ?, ?, x'00', NULL, 1, 1, ?)
+            "#,
+        )
+        .bind(7_i64)
+        .bind(42_i64)
+        .bind("12345")
+        .bind("Forum source")
+        .bind(1_i64)
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash, avatar_cache_key,
+                identity_refreshed_at, created_at, updated_at
+            )
+            VALUES (?, ?, 'supergroup', 'channel', ?, 'legacy_metadata', NULL, ?, NULL, ?, ?, ?)
+            "#,
+        )
+        .bind(7_i64)
+        .bind(42_i64)
+        .bind(12345_i64)
+        .bind(98765_i64)
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind(1_i64)
+        .execute(&pool)
+        .await
+        .expect("insert typed identity");
+
+        let source_subtype = load_takeout_source_subtype(&pool, 7)
+            .await
+            .expect("load takeout source subtype");
+
+        assert_eq!(source_subtype, TELEGRAM_KIND_SUPERGROUP);
+    }
 }

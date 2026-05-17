@@ -464,6 +464,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn forum_topic_gate_ignores_malformed_source_metadata_when_typed_identity_exists() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id,
+                title, metadata_zstd, last_sync_state, is_active, is_member,
+                created_at
+            )
+            VALUES (11, 'telegram', 'supergroup', 42, '11', 'source 11', x'00', NULL, 1, 1, 1)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash, avatar_cache_key,
+                identity_refreshed_at, created_at, updated_at
+            )
+            VALUES (11, 42, 'supergroup', 'channel', 11, 'legacy_metadata', NULL, 1011, NULL, 1, 1, 1)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert typed identity");
+
+        assert!(source_supports_forum_topics(&pool, 11)
+            .await
+            .expect("load typed identity"));
+    }
+
+    #[tokio::test]
     async fn list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket() {
         let pool = memory_pool_with_source_items_and_topics().await;
 

@@ -434,4 +434,60 @@ mod tests {
         assert_eq!(row.2, None);
         assert_eq!(row.3.as_deref(), Some("1_channel_12345.jpg"));
     }
+
+    #[tokio::test]
+    async fn finalize_sync_preserves_existing_legacy_metadata_blob() {
+        let pool = memory_pool_with_sources().await;
+        let legacy_blob = crate::compression::compress_json_bytes(
+            br#"{"peer_identity":{"strategy":"username","username":"legacy"}}"#,
+        )
+        .expect("compress legacy metadata");
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id, title,
+                metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
+            )
+            VALUES (1, ?, ?, 1, '12345', 'Example', ?, 5, 10, 1, 1, 20)
+            "#,
+        )
+        .bind(TELEGRAM_SOURCE_TYPE)
+        .bind(TELEGRAM_KIND_CHANNEL)
+        .bind(&legacy_blob)
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id,
+                resolution_strategy, username, access_hash, avatar_cache_key
+            )
+            VALUES (1, 1, 'channel', 'channel', 12345, 'username', 'before', 77, 'old.jpg')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert typed identity");
+
+        let source = load_source(&pool, 1).await.expect("load source");
+        finalize_sync(&pool, &source, 5, 9, Some("new.jpg".to_string()))
+            .await
+            .expect("finalize sync");
+
+        let row: (Option<Vec<u8>>, Option<String>) = sqlx::query_as(
+            r#"
+            SELECT s.metadata_zstd, ts.avatar_cache_key
+            FROM sources s
+            JOIN telegram_sources ts ON ts.source_id = s.id
+            WHERE s.id = 1
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load row");
+
+        assert_eq!(row.0.as_deref(), Some(legacy_blob.as_slice()));
+        assert_eq!(row.1.as_deref(), Some("new.jpg"));
+    }
 }
