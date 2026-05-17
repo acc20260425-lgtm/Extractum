@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use serde_json::Value;
-use sqlx::{Executor, Sqlite};
+use sqlx::{Executor, Sqlite, SqliteConnection};
 
 use crate::compression::compress_json_bytes;
 use crate::error::{AppError, AppResult};
@@ -177,9 +177,7 @@ pub(crate) fn availability_status_wire(status: &YoutubeAvailabilityStatus) -> &'
         YoutubeAvailabilityStatus::Available => "available",
         YoutubeAvailabilityStatus::Upcoming => "upcoming",
         YoutubeAvailabilityStatus::LiveNow => "live_now",
-        YoutubeAvailabilityStatus::LiveEndedTranscriptPending => {
-            "live_ended_transcript_pending"
-        }
+        YoutubeAvailabilityStatus::LiveEndedTranscriptPending => "live_ended_transcript_pending",
         YoutubeAvailabilityStatus::NoCaptions => "no_captions",
         YoutubeAvailabilityStatus::PrivateOrAuthRequired => "private_or_auth_required",
         YoutubeAvailabilityStatus::MembersOnly => "members_only",
@@ -337,6 +335,185 @@ where
     Ok(())
 }
 
+pub(crate) fn decode_legacy_video_source_metadata(bytes: &[u8]) -> Option<YoutubeVideoMetadata> {
+    let json = crate::compression::decompress_bytes(bytes).ok()?;
+    serde_json::from_slice(&json).ok()
+}
+
+pub(crate) fn decode_legacy_playlist_source_metadata(
+    bytes: &[u8],
+) -> Option<YoutubePlaylistMetadata> {
+    let json = crate::compression::decompress_bytes(bytes).ok()?;
+    serde_json::from_slice(&json).ok()
+}
+
+pub(crate) async fn insert_video_source_metadata_on_connection(
+    conn: &mut SqliteConnection,
+    source_id: i64,
+    metadata: &YoutubeVideoMetadata,
+) -> AppResult<()> {
+    let columns = YoutubeVideoSourceColumns::try_from_metadata(metadata)?;
+    insert_video_source_columns(conn, source_id, &columns).await
+}
+
+pub(crate) async fn insert_playlist_source_metadata_on_connection(
+    conn: &mut SqliteConnection,
+    source_id: i64,
+    metadata: &YoutubePlaylistMetadata,
+) -> AppResult<()> {
+    let columns = YoutubePlaylistSourceColumns::try_from_metadata(metadata)?;
+    insert_playlist_source_columns(conn, source_id, &columns).await
+}
+
+async fn insert_video_source_columns(
+    conn: &mut SqliteConnection,
+    source_id: i64,
+    columns: &YoutubeVideoSourceColumns,
+) -> AppResult<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO youtube_video_sources (
+            source_id,
+            video_id,
+            canonical_url,
+            title,
+            channel_title,
+            channel_id,
+            channel_handle,
+            channel_url,
+            author_display,
+            published_at,
+            duration_seconds,
+            description,
+            thumbnail_url,
+            tags_json,
+            chapters_json,
+            view_count,
+            like_count,
+            comment_count,
+            category,
+            video_form,
+            availability_status,
+            caption_language_override,
+            raw_metadata_version,
+            raw_metadata_zstd
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_id) DO UPDATE SET
+            video_id = excluded.video_id,
+            canonical_url = excluded.canonical_url,
+            title = excluded.title,
+            channel_title = excluded.channel_title,
+            channel_id = excluded.channel_id,
+            channel_handle = excluded.channel_handle,
+            channel_url = excluded.channel_url,
+            author_display = excluded.author_display,
+            published_at = excluded.published_at,
+            duration_seconds = excluded.duration_seconds,
+            description = excluded.description,
+            thumbnail_url = excluded.thumbnail_url,
+            tags_json = excluded.tags_json,
+            chapters_json = excluded.chapters_json,
+            view_count = excluded.view_count,
+            like_count = excluded.like_count,
+            comment_count = excluded.comment_count,
+            category = excluded.category,
+            video_form = excluded.video_form,
+            availability_status = excluded.availability_status,
+            caption_language_override = excluded.caption_language_override,
+            raw_metadata_version = excluded.raw_metadata_version,
+            raw_metadata_zstd = excluded.raw_metadata_zstd,
+            updated_at = strftime('%s','now')
+        "#,
+    )
+    .bind(source_id)
+    .bind(&columns.video_id)
+    .bind(&columns.canonical_url)
+    .bind(&columns.title)
+    .bind(&columns.channel_title)
+    .bind(&columns.channel_id)
+    .bind(&columns.channel_handle)
+    .bind(&columns.channel_url)
+    .bind(&columns.author_display)
+    .bind(&columns.published_at)
+    .bind(columns.duration_seconds)
+    .bind(&columns.description)
+    .bind(&columns.thumbnail_url)
+    .bind(&columns.tags_json)
+    .bind(&columns.chapters_json)
+    .bind(columns.view_count)
+    .bind(columns.like_count)
+    .bind(columns.comment_count)
+    .bind(&columns.category)
+    .bind(&columns.video_form)
+    .bind(&columns.availability_status)
+    .bind(&columns.caption_language_override)
+    .bind(columns.raw_metadata_version)
+    .bind(columns.raw_metadata_zstd.as_deref())
+    .execute(conn)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn insert_playlist_source_columns(
+    conn: &mut SqliteConnection,
+    source_id: i64,
+    columns: &YoutubePlaylistSourceColumns,
+) -> AppResult<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO youtube_playlist_sources (
+            source_id,
+            playlist_id,
+            canonical_url,
+            title,
+            channel_title,
+            channel_id,
+            channel_handle,
+            channel_url,
+            thumbnail_url,
+            video_count,
+            availability_status,
+            raw_metadata_version,
+            raw_metadata_zstd
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_id) DO UPDATE SET
+            playlist_id = excluded.playlist_id,
+            canonical_url = excluded.canonical_url,
+            title = excluded.title,
+            channel_title = excluded.channel_title,
+            channel_id = excluded.channel_id,
+            channel_handle = excluded.channel_handle,
+            channel_url = excluded.channel_url,
+            thumbnail_url = excluded.thumbnail_url,
+            video_count = excluded.video_count,
+            availability_status = excluded.availability_status,
+            raw_metadata_version = excluded.raw_metadata_version,
+            raw_metadata_zstd = excluded.raw_metadata_zstd,
+            updated_at = strftime('%s','now')
+        "#,
+    )
+    .bind(source_id)
+    .bind(&columns.playlist_id)
+    .bind(&columns.canonical_url)
+    .bind(&columns.title)
+    .bind(&columns.channel_title)
+    .bind(&columns.channel_id)
+    .bind(&columns.channel_handle)
+    .bind(&columns.channel_url)
+    .bind(&columns.thumbnail_url)
+    .bind(columns.video_count)
+    .bind(&columns.availability_status)
+    .bind(columns.raw_metadata_version)
+    .bind(columns.raw_metadata_zstd.as_deref())
+    .execute(conn)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -364,7 +541,10 @@ mod tests {
         assert_eq!(columns.caption_language_override.as_deref(), Some("en"));
         assert_eq!(columns.tags_json, r#"["tag-one"]"#);
         assert!(columns.chapters_json.contains("\"start_ms\":1000"));
-        assert_eq!(columns.raw_metadata_version, Some(YOUTUBE_RAW_METADATA_VERSION));
+        assert_eq!(
+            columns.raw_metadata_version,
+            Some(YOUTUBE_RAW_METADATA_VERSION)
+        );
 
         let raw = decode_raw_payload_for_test(columns.raw_metadata_zstd.as_deref().unwrap());
         assert_eq!(raw["caption_language_override"], "en");
@@ -407,7 +587,10 @@ mod tests {
 
         assert_eq!(columns.playlist_id, "PLdemo");
         assert_eq!(columns.availability_status, "available");
-        assert_eq!(columns.raw_metadata_version, Some(YOUTUBE_RAW_METADATA_VERSION));
+        assert_eq!(
+            columns.raw_metadata_version,
+            Some(YOUTUBE_RAW_METADATA_VERSION)
+        );
         let raw = decode_raw_payload_for_test(columns.raw_metadata_zstd.as_deref().unwrap());
         assert!(raw.get("headers").is_none());
     }

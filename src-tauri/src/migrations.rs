@@ -1,6 +1,7 @@
 #![allow(clippy::items_after_test_module)]
 
-mod source_identity_cleanup;
+pub(crate) mod source_identity_cleanup;
+pub(crate) mod youtube_typed_source_metadata;
 
 use sha2::{Digest, Sha384};
 use std::path::{Path, PathBuf};
@@ -30,7 +31,8 @@ async fn patch_migrations(db_path: &Path) -> crate::error::AppResult<()> {
     repair_legacy_v2_migration_checksum(&pool).await;
     pool.close().await;
 
-    source_identity_cleanup::apply_source_identity_cleanup_if_needed(&url).await
+    source_identity_cleanup::apply_source_identity_cleanup_if_needed(&url).await?;
+    youtube_typed_source_metadata::apply_youtube_typed_source_metadata_if_needed(&url).await
 }
 
 fn app_config_db_path() -> Option<PathBuf> {
@@ -183,7 +185,8 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
         build_migrations(),
     )
     .await?;
-    source_identity_cleanup::apply_source_identity_cleanup_on_connection(conn).await
+    source_identity_cleanup::apply_source_identity_cleanup_on_connection(conn).await?;
+    youtube_typed_source_metadata::apply_youtube_typed_source_metadata_on_connection(conn).await
 }
 
 #[cfg(test)]
@@ -396,10 +399,7 @@ mod tests {
             .find(|migration| migration.version == 20)
             .expect("version 20 migration is registered");
 
-        assert_eq!(
-            migration.description,
-            "add youtube typed source metadata"
-        );
+        assert_eq!(migration.description, "add youtube typed source metadata");
         assert!(
             migration
                 .sql
@@ -416,7 +416,9 @@ mod tests {
             .expect("version 20 migration is registered");
 
         assert!(!migration.sql.contains("CREATE TABLE youtube_video_sources"));
-        assert!(!migration.sql.contains("CREATE TABLE youtube_playlist_sources"));
+        assert!(!migration
+            .sql
+            .contains("CREATE TABLE youtube_playlist_sources"));
         assert!(!migration.sql.contains("INSERT INTO youtube_video_sources"));
     }
 

@@ -753,7 +753,7 @@ git commit -m "feat: add youtube typed metadata conversion"
 - Modify: `src-tauri/src/youtube/source_metadata.rs`
 - Test: `src-tauri/src/migrations/youtube_typed_source_metadata.rs`
 
-- [ ] **Step 1: Add RED migration 20 tests**
+- [x] **Step 1: Add RED migration 20 tests**
 
 Create `src-tauri/src/migrations/youtube_typed_source_metadata.rs` with constants and tests first:
 
@@ -995,7 +995,7 @@ async fn insert_legacy_source_blob<T: serde::Serialize>(
 }
 ```
 
-- [ ] **Step 2: Run migration 20 tests and verify RED**
+- [x] **Step 2: Run migration 20 tests and verify RED**
 
 Run:
 
@@ -1005,7 +1005,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::youtube_typed_source
 
 Expected: fail because the module is not registered and migration functions are not implemented.
 
-- [ ] **Step 3: Register the migration module and runner call**
+- [x] **Step 3: Register the migration module and runner call**
 
 At the top of `src-tauri/src/migrations.rs`, add:
 
@@ -1032,7 +1032,7 @@ In `apply_all_migrations_for_test_pool`, after the v19 call, add:
 youtube_typed_source_metadata::apply_youtube_typed_source_metadata_on_connection(conn).await
 ```
 
-- [ ] **Step 4: Implement migration 20 recording, table creation, and backfill**
+- [x] **Step 4: Implement migration 20 recording, table creation, and backfill**
 
 In `src-tauri/src/migrations/youtube_typed_source_metadata.rs`, implement the public runner functions:
 
@@ -1230,7 +1230,7 @@ async fn clear_source_blob(conn: &mut SqliteConnection, source_id: i64) -> AppRe
 }
 ```
 
-- [ ] **Step 5: Add connection insert and legacy decode helpers**
+- [x] **Step 5: Add connection insert and legacy decode helpers**
 
 In `src-tauri/src/youtube/source_metadata.rs`, add:
 
@@ -1266,7 +1266,7 @@ pub(crate) async fn insert_playlist_source_metadata_on_connection(
 
 Add private `insert_video_source_columns` and `insert_playlist_source_columns` SQL helpers with `ON CONFLICT(source_id) DO UPDATE SET` for every typed field plus `updated_at = strftime('%s','now')`. Bind `tags_json`, `chapters_json`, `raw_metadata_version`, and `raw_metadata_zstd` from the columns structs.
 
-- [ ] **Step 6: Run migration 20 tests and verify GREEN**
+- [x] **Step 6: Run migration 20 tests and verify GREEN**
 
 Run:
 
@@ -1280,7 +1280,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Run full migration tests**
+- [x] **Step 7: Run full migration tests**
 
 Run:
 
@@ -1294,7 +1294,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/migrations.rs src-tauri/src/migrations/youtube_typed_source_metadata.rs src-tauri/src/youtube/source_metadata.rs
