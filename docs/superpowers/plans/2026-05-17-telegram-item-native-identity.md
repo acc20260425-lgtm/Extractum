@@ -52,7 +52,7 @@
 - Read: `docs/superpowers/specs/2026-05-17-telegram-item-native-identity-design.md`
 - Verify: Git status and focused baseline tests
 
-- [ ] **Step 1: Confirm clean starting point**
+- [x] **Step 1: Confirm clean starting point**
 
 Run:
 
@@ -70,7 +70,7 @@ a10c123 (HEAD -> main) docs: tighten telegram item row invariants
 
 If the working tree contains user changes, inspect them and keep them intact.
 
-- [ ] **Step 2: Create an implementation branch or worktree**
+- [x] **Step 2: Create an implementation branch or worktree**
 
 Use `superpowers:using-git-worktrees` before execution. A safe branch name is:
 
@@ -84,7 +84,7 @@ If using a linked worktree, use:
 git worktree add .worktrees/telegram-item-native-identity -b feature/telegram-item-native-identity
 ```
 
-- [ ] **Step 3: Run focused baseline tests**
+- [x] **Step 3: Run focused baseline tests**
 
 Run:
 
@@ -98,7 +98,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 4: Confirm no baseline changes**
+- [x] **Step 4: Confirm no baseline changes**
 
 Run:
 
