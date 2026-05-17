@@ -201,6 +201,11 @@ job-owned provider commands may refresh them explicitly, while read-only
 listing, detail, and analysis return controlled missing-metadata or degraded
 state and do not fall back to source blobs.
 
+`canonical_url` is intentionally required for full typed validity because
+analysis evidence refs and provider work both need a stable provider URL. A row
+with a valid provider id but missing or malformed `canonical_url` is degraded
+until explicit metadata refresh rewrites the typed metadata.
+
 ## Raw Provider Payload Policy
 
 The typed tables may store an optional compressed raw provider payload:
@@ -310,7 +315,10 @@ Source list DTOs may keep the generic `SourceRecord` shape. `sources.title` is
 a generic display snapshot derived from typed metadata when available, not
 provider-authoritative metadata. YouTube provider-specific authoritative title,
 channel, thumbnail, and availability fields live in typed YouTube metadata and
-detail aggregation, not in generic source blobs.
+detail aggregation, not in generic source blobs. Generic source lists may still
+render `sources.title` as a fallback label when typed metadata is missing or
+invalid, but they must not decode source blobs or call provider work to produce
+that fallback.
 
 ### Failure Behavior
 
