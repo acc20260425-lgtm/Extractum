@@ -4,7 +4,11 @@ use sha2::{Digest, Sha384};
 use sqlx::{Connection, SqliteConnection};
 
 use crate::error::{AppError, AppResult};
-use crate::topic_memberships::create_topic_membership_schema;
+use crate::topic_memberships::{
+    assert_all_topic_membership_invariants, catalog_backed_supergroup_source_ids,
+    create_topic_membership_schema, ensure_never_run_state_for_supergroups_without_catalog,
+    rebuild_topic_memberships_for_source_on_connection,
+};
 
 pub(super) const TOPIC_MEMBERSHIP_MATERIALIZATION_VERSION: i64 = 22;
 pub(super) const TOPIC_MEMBERSHIP_MATERIALIZATION_DESCRIPTION: &str =
@@ -37,7 +41,13 @@ pub(super) async fn apply_topic_membership_materialization_on_connection(
 
     let result = async {
         create_topic_membership_schema(conn).await?;
-        Ok::<(), AppError>(())
+        let now = now_secs();
+        let source_ids = catalog_backed_supergroup_source_ids(conn).await?;
+        for source_id in source_ids {
+            rebuild_topic_memberships_for_source_on_connection(conn, source_id, now, false).await?;
+        }
+        ensure_never_run_state_for_supergroups_without_catalog(conn, now).await?;
+        assert_all_topic_membership_invariants(conn).await
     }
     .await;
 
@@ -120,6 +130,13 @@ fn expected_migration_22_checksum() -> Vec<u8> {
     Sha384::digest(TOPIC_MEMBERSHIP_MATERIALIZATION_SENTINEL_SQL.as_bytes()).to_vec()
 }
 
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,6 +200,70 @@ mod tests {
         assert_eq!(row.2, expected_migration_22_checksum());
     }
 
+    #[tokio::test]
+    async fn migration_22_rebuilds_catalog_sources_and_creates_never_run_state() {
+        let mut conn = memory_conn_with_history_through_21().await;
+        seed_supergroup_source(&mut conn, 10, true).await;
+        seed_supergroup_source(&mut conn, 20, false).await;
+        seed_channel_source(&mut conn, 30).await;
+        seed_topic(&mut conn, 10, 200, 700, "Roadmap").await;
+        seed_item(&mut conn, 1001, 10, "701", Some(200), None).await;
+        seed_item(&mut conn, 1002, 10, "999", Some(404), None).await;
+
+        apply_topic_membership_materialization_on_connection(&mut conn)
+            .await
+            .expect("apply v22");
+
+        let memberships: Vec<(i64, i64, String)> = sqlx::query_as(
+            "SELECT item_id, topic_id, match_kind FROM item_topic_memberships ORDER BY item_id",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .expect("load memberships");
+        assert_eq!(
+            memberships,
+            vec![(1001, 200, "reply_to_top_id".to_string())]
+        );
+
+        let states: Vec<(i64, String, i64)> = sqlx::query_as(
+            "SELECT source_id, status, unresolved_count FROM telegram_topic_resolution_state ORDER BY source_id",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .expect("load states");
+        assert_eq!(
+            states,
+            vec![
+                (10, "ready".to_string(), 1),
+                (20, "never_run".to_string(), 0),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_22_rejects_state_rows_for_non_supergroups() {
+        let mut conn = memory_conn_with_history_through_21().await;
+        seed_channel_source(&mut conn, 30).await;
+        crate::topic_memberships::create_topic_membership_schema(&mut conn)
+            .await
+            .expect("schema");
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (30, 1, 'ready', 0, 0)",
+        )
+        .execute(&mut conn)
+        .await
+        .expect("dirty state row");
+
+        let error = apply_topic_membership_materialization_on_connection(&mut conn)
+            .await
+            .expect_err("state invariant fails");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("telegram_topic_resolution_state"));
+    }
+
     async fn memory_conn_with_history_through_21() -> SqliteConnection {
         let mut conn = SqliteConnection::connect("sqlite::memory:")
             .await
@@ -238,5 +319,108 @@ mod tests {
         .expect("apply v21");
 
         conn
+    }
+
+    async fn seed_supergroup_source(
+        conn: &mut SqliteConnection,
+        source_id: i64,
+        with_identity: bool,
+    ) {
+        seed_account(conn).await;
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (
+                id, source_type, source_subtype, account_id, external_id, title,
+                is_active, is_member, created_at
+             ) VALUES (?, 'telegram', 'supergroup', 1, ?, 'Supergroup', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .bind(source_id.to_string())
+        .execute(&mut *conn)
+        .await
+        .expect("seed supergroup");
+        if with_identity {
+            sqlx::query(
+                "INSERT OR IGNORE INTO telegram_sources (
+                    source_id, account_id, source_subtype, peer_kind, peer_id, resolution_strategy
+                 ) VALUES (?, 1, 'supergroup', 'channel', ?, 'dialog')",
+            )
+            .bind(source_id)
+            .bind(source_id)
+            .execute(&mut *conn)
+            .await
+            .expect("seed telegram source identity");
+        }
+    }
+
+    async fn seed_channel_source(conn: &mut SqliteConnection, source_id: i64) {
+        seed_account(conn).await;
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (
+                id, source_type, source_subtype, account_id, external_id, title,
+                is_active, is_member, created_at
+             ) VALUES (?, 'telegram', 'channel', 1, ?, 'Channel', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .bind(source_id.to_string())
+        .execute(&mut *conn)
+        .await
+        .expect("seed channel");
+    }
+
+    async fn seed_account(conn: &mut SqliteConnection) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO accounts (id, label, api_id, api_hash, created_at)
+             VALUES (1, 'Test', 1, 'hash', 1)",
+        )
+        .execute(&mut *conn)
+        .await
+        .expect("seed account");
+    }
+
+    async fn seed_topic(
+        conn: &mut SqliteConnection,
+        source_id: i64,
+        topic_id: i64,
+        top_message_id: i64,
+        title: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO telegram_forum_topics (
+                source_id, topic_id, top_message_id, title, last_seen_at, updated_at
+             ) VALUES (?, ?, ?, ?, 100, 100)",
+        )
+        .bind(source_id)
+        .bind(topic_id)
+        .bind(top_message_id)
+        .bind(title)
+        .execute(&mut *conn)
+        .await
+        .expect("seed topic");
+    }
+
+    async fn seed_item(
+        conn: &mut SqliteConnection,
+        item_id: i64,
+        source_id: i64,
+        external_id: &str,
+        reply_to_top_id: Option<i64>,
+        reply_to_msg_id: Option<i64>,
+    ) {
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at,
+                ingested_at, content_kind, has_media, reply_to_top_id, reply_to_msg_id
+             ) VALUES (?, ?, ?, 'telegram_message', 'alice', ?, ?, 'text_only', 0, ?, ?)",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(external_id)
+        .bind(item_id)
+        .bind(item_id)
+        .bind(reply_to_top_id)
+        .bind(reply_to_msg_id)
+        .execute(&mut *conn)
+        .await
+        .expect("seed item");
     }
 }

@@ -236,6 +236,115 @@ pub(crate) async fn load_topic_resolution_state(
     .map_err(AppError::database)
 }
 
+pub(crate) async fn catalog_backed_supergroup_source_ids(
+    conn: &mut SqliteConnection,
+) -> AppResult<Vec<i64>> {
+    sqlx::query_scalar(
+        "SELECT DISTINCT sources.id
+         FROM sources
+         JOIN telegram_forum_topics topics ON topics.source_id = sources.id
+         WHERE sources.source_type = 'telegram'
+           AND sources.source_subtype = 'supergroup'
+         ORDER BY sources.id",
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(AppError::database)
+}
+
+pub(crate) async fn ensure_never_run_state_for_supergroups_without_catalog(
+    conn: &mut SqliteConnection,
+    updated_at: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "INSERT INTO telegram_topic_resolution_state (
+            source_id, resolver_version, catalog_refreshed_at, memberships_refreshed_at,
+            status, unresolved_count, pending_item_count, last_error, updated_at
+         )
+         SELECT
+            sources.id, ?, NULL, NULL, 'never_run', 0, 0, NULL, ?
+         FROM sources
+         WHERE sources.source_type = 'telegram'
+           AND sources.source_subtype = 'supergroup'
+           AND NOT EXISTS (
+               SELECT 1 FROM telegram_forum_topics topics WHERE topics.source_id = sources.id
+           )
+         ON CONFLICT(source_id) DO UPDATE SET
+            resolver_version = excluded.resolver_version,
+            catalog_refreshed_at = NULL,
+            memberships_refreshed_at = NULL,
+            status = 'never_run',
+            unresolved_count = 0,
+            pending_item_count = 0,
+            last_error = NULL,
+            updated_at = excluded.updated_at",
+    )
+    .bind(CURRENT_TOPIC_RESOLVER_VERSION)
+    .bind(updated_at)
+    .execute(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+pub(crate) async fn assert_all_topic_membership_invariants(
+    conn: &mut SqliteConnection,
+) -> AppResult<()> {
+    assert_foreign_key_check_clean(conn).await?;
+    assert_state_rows_only_for_supergroups(conn).await?;
+    Ok(())
+}
+
+#[derive(sqlx::FromRow)]
+struct ForeignKeyCheckRow {
+    table: String,
+    rowid: Option<i64>,
+    parent: String,
+    fkid: i64,
+}
+
+async fn assert_foreign_key_check_clean(conn: &mut SqliteConnection) -> AppResult<()> {
+    let rows: Vec<ForeignKeyCheckRow> = sqlx::query_as("PRAGMA foreign_key_check")
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let detail = rows
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{} rowid {:?} references {} via fk {}",
+                row.table, row.rowid, row.parent, row.fkid
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    Err(AppError::validation(format!(
+        "Topic membership materialization migration 22 foreign_key_check failed: {detail}"
+    )))
+}
+
+async fn assert_state_rows_only_for_supergroups(conn: &mut SqliteConnection) -> AppResult<()> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)
+         FROM telegram_topic_resolution_state st
+         JOIN sources s ON s.id = st.source_id
+         WHERE s.source_type <> 'telegram'
+            OR s.source_subtype <> 'supergroup'",
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+    if count != 0 {
+        return Err(AppError::validation(format!(
+            "Migration 22 found {count} telegram_topic_resolution_state rows for non-supergroup sources"
+        )));
+    }
+    Ok(())
+}
+
 async fn eligible_item_count(conn: &mut SqliteConnection, source_id: i64) -> AppResult<i64> {
     sqlx::query_scalar(
         "SELECT COUNT(*)

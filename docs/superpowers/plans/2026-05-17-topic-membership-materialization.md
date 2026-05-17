@@ -1273,7 +1273,7 @@ git commit -m "feat: rebuild topic memberships with shared resolver"
 - Modify: `src-tauri/src/migrations/topic_membership_materialization.rs`
 - Modify: `src-tauri/src/topic_memberships.rs`
 
-- [ ] **Step 1: Add RED migration data tests**
+- [x] **Step 1: Add RED migration data tests**
 
 In `src-tauri/src/migrations/topic_membership_materialization.rs`, add:
 
@@ -1423,17 +1423,18 @@ async fn seed_item(
 }
 ```
 
-- [ ] **Step 2: Run migration data tests and verify RED**
+- [x] **Step 2: Run migration data tests and verify RED**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_rebuilds_catalog_sources_and_creates_never_run_state migrations::topic_membership_materialization::tests::migration_22_rejects_state_rows_for_non_supergroups
+cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_rebuilds_catalog_sources_and_creates_never_run_state
+cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_rejects_state_rows_for_non_supergroups
 ```
 
 Expected: fail because migration 22 only creates schema.
 
-- [ ] **Step 3: Add source selection and never-run state helpers**
+- [x] **Step 3: Add source selection and never-run state helpers**
 
 In `src-tauri/src/topic_memberships.rs`, add:
 
@@ -1547,7 +1548,7 @@ async fn assert_state_rows_only_for_supergroups(conn: &mut SqliteConnection) -> 
 }
 ```
 
-- [ ] **Step 4: Wire rebuild into migration**
+- [x] **Step 4: Wire rebuild into migration**
 
 In `src-tauri/src/migrations/topic_membership_materialization.rs`, import:
 
@@ -1573,12 +1574,13 @@ ensure_never_run_state_for_supergroups_without_catalog(conn, now).await?;
 assert_all_topic_membership_invariants(conn).await
 ```
 
-- [ ] **Step 5: Run migration data tests and focused migration suite**
+- [x] **Step 5: Run migration data tests and focused migration suite**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization:: migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation
+cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation
 ```
 
 Expected:
@@ -1587,7 +1589,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/migrations/topic_membership_materialization.rs src-tauri/src/topic_memberships.rs
