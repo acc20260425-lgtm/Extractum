@@ -1270,7 +1270,7 @@ git commit -m "refactor: contain telegram metadata compatibility helpers"
 - Verify all changed Rust/docs files
 - Modify: `docs/superpowers/plans/2026-05-17-telegram-metadata-legacy-cleanup.md`
 
-- [ ] **Step 1: Run full Rust tests**
+- [x] **Step 1: Run full Rust tests**
 
 Run:
 
@@ -1284,7 +1284,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 2: Run Rust formatting check**
+- [x] **Step 2: Run Rust formatting check**
 
 Run:
 
@@ -1294,7 +1294,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
 Expected: exit code 0.
 
-- [ ] **Step 3: Run frontend checks only if frontend files changed**
+- [x] **Step 3: Run frontend checks only if frontend files changed**
 
 If this plan touches only Rust and docs, skip this step and record that no frontend files changed.
 
@@ -1312,7 +1312,7 @@ Test Files ... passed
 svelte-check found 0 errors and 0 warnings
 ```
 
-- [ ] **Step 4: Run final containment scans**
+- [x] **Step 4: Run final containment scans**
 
 Run:
 
@@ -1329,7 +1329,7 @@ Expected:
 - YouTube metadata writes remain intact;
 - current docs describe new Telegram rows as `NULL` and old blobs as legacy input.
 
-- [ ] **Step 5: Run whitespace check**
+- [x] **Step 5: Run whitespace check**
 
 Run:
 
@@ -1339,7 +1339,7 @@ git diff --check
 
 Expected: exit code 0, with no whitespace errors. CRLF warnings are acceptable if exit code is 0 and there are no whitespace errors.
 
-- [ ] **Step 6: Commit final plan bookkeeping if needed**
+- [x] **Step 6: Commit final plan bookkeeping if needed**
 
 If only the plan checklist changed after verification, commit it:
 
@@ -1351,7 +1351,7 @@ git commit -m "docs: mark telegram metadata cleanup verification complete"
 
 If no files changed after verification, do not create a commit.
 
-- [ ] **Step 7: Show final status**
+- [x] **Step 7: Show final status**
 
 Run:
 
