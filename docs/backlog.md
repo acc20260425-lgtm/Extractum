@@ -106,7 +106,7 @@ Analysis:
 
 - Full findings are recorded in `docs/database-schema-legacy-analysis.md`.
 
-- [ ] move remaining Telegram display/avatar metadata out of `sources.metadata_zstd`
+- [ ] optionally clear old Telegram `sources.metadata_zstd` blobs after successful typed repair
 - [ ] move YouTube identity/display metadata to typed source tables
 - [ ] continue item/document identity cleanup
 

@@ -1170,7 +1170,7 @@ git commit -m "test: cover telegram metadata runtime boundaries"
 - Modify: `docs/backlog.md`
 - Modify: `docs/superpowers/plans/2026-05-17-telegram-metadata-legacy-cleanup.md`
 
-- [ ] **Step 1: Update database schema docs**
+- [x] **Step 1: Update database schema docs**
 
 In `docs/database-schema.md`, update the `sources` notes and `telegram_sources` notes so they say:
 
@@ -1184,7 +1184,7 @@ In `docs/database-schema.md`, update the `sources` notes and `telegram_sources` 
 - YouTube source rows still keep video/playlist metadata in `metadata_zstd`.
 ```
 
-- [ ] **Step 2: Update backlog**
+- [x] **Step 2: Update backlog**
 
 In `docs/backlog.md`, replace:
 
@@ -1200,7 +1200,7 @@ with:
 
 Keep the YouTube typed metadata item unchanged.
 
-- [ ] **Step 3: Run containment scans**
+- [x] **Step 3: Run containment scans**
 
 Run:
 
@@ -1217,7 +1217,7 @@ Expected:
 - Telegram add/upsert no longer has `metadata_zstd = excluded.metadata_zstd`.
 - YouTube source upserts still have `metadata_zstd = excluded.metadata_zstd`.
 
-- [ ] **Step 4: Remove unused legacy encode helpers if scan proves they are dead**
+- [x] **Step 4: Remove unused legacy encode helpers if scan proves they are dead**
 
 If `source_metadata_for_added_source` is unused after Task 1, remove it from `peer_resolution.rs`.
 
@@ -1231,23 +1231,23 @@ let encoded = compress_json_bytes(
 let decoded = decode_source_metadata(Some(&encoded)).expect("decode");
 ```
 
-- [ ] **Step 5: Run docs and containment checks**
+- [x] **Step 5: Run docs and containment checks**
 
 Run:
 
 ```powershell
-rg -n "move remaining Telegram display/avatar metadata out of `sources.metadata_zstd`" docs
+rg -n "move remaining Telegram display/avatar metadata out of `sources.metadata_zstd`" docs\backlog.md
 rg -n "new Telegram source rows keep|old Telegram blobs|optionally clear old Telegram" docs\database-schema.md docs\backlog.md
 git diff --check
 ```
 
 Expected:
 
-- old backlog wording is absent from current docs;
+- old backlog wording is absent from `docs/backlog.md`;
 - new Telegram legacy-blob wording appears in current docs;
 - `git diff --check` exits 0, ignoring CRLF warnings if there are no whitespace errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 

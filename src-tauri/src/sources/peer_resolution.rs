@@ -15,7 +15,7 @@ use super::types::{
     SourceSyncTarget, TelegramSourceInfo, TelegramSourceKind, TELEGRAM_KIND_CHANNEL,
     TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
-use crate::compression::{compress_json_bytes, decompress_bytes};
+use crate::compression::decompress_bytes;
 use crate::error::{AppError, AppResult};
 
 use manual_ref::{
@@ -145,23 +145,6 @@ pub(super) fn add_source_resolution_strategy(
         SourcePeerResolutionStrategy::Dialog
     } else {
         SourcePeerResolutionStrategy::Username
-    }
-}
-
-pub(super) fn source_metadata_for_added_source(
-    source_ref: &str,
-    source_subtype: Option<&str>,
-    resolved: &ResolvedTelegramSource,
-    avatar_cache_key: Option<String>,
-) -> SourceMetadata {
-    SourceMetadata {
-        peer_identity: Some(SourcePeerIdentity {
-            strategy: add_source_resolution_strategy(source_ref, source_subtype),
-            username: resolved.username.clone(),
-            access_hash: resolved.access_hash,
-        }),
-        avatar_cache_key,
-        ..SourceMetadata::default()
     }
 }
 
@@ -448,12 +431,6 @@ fn peer_access_hash(peer: &Peer) -> Option<i64> {
         },
         Peer::User(_) => None,
     }
-}
-
-pub(super) fn encode_source_metadata(metadata: &SourceMetadata) -> AppResult<Vec<u8>> {
-    let json = serde_json::to_vec(&metadata.normalized())
-        .map_err(|e| AppError::internal(e.to_string()))?;
-    compress_json_bytes(&json).map_err(AppError::internal)
 }
 
 pub(super) fn decode_source_metadata(bytes: Option<&[u8]>) -> AppResult<SourceMetadata> {
@@ -808,8 +785,8 @@ mod tests {
     }
 
     #[test]
-    fn source_metadata_roundtrip_preserves_peer_identity() {
-        let original = SourceMetadata {
+    fn source_metadata_decodes_typed_peer_identity_payloads() {
+        let expected = SourceMetadata {
             peer_identity: Some(SourcePeerIdentity {
                 strategy: SourcePeerResolutionStrategy::Dialog,
                 username: Some("example".to_string()),
@@ -819,10 +796,13 @@ mod tests {
             ..SourceMetadata::default()
         };
 
-        let encoded = encode_source_metadata(&original).expect("encode");
+        let encoded = compress_json_bytes(
+            br#"{"peer_identity":{"strategy":"dialog","username":"example","access_hash":42},"avatar_cache_key":"1_channel_42.jpg"}"#,
+        )
+        .expect("encode");
         let decoded = decode_source_metadata(Some(&encoded)).expect("decode");
 
-        assert_eq!(decoded, original);
+        assert_eq!(decoded, expected);
     }
 
     #[test]

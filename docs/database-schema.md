@@ -60,6 +60,14 @@ Notes:
   subtype compatibility mirror from the current `sources` schema;
 - Telegram source subtype is canonical in `sources.source_subtype`;
 - Telegram operational peer identity lives in `telegram_sources`.
+- new Telegram source rows keep `metadata_zstd` `NULL`; old Telegram blobs may
+  remain in existing databases as legacy repair input until a separate cleanup
+  decision;
+- normal Telegram runtime updates preserve old Telegram blobs rather than
+  clearing them opportunistically;
+- normal Telegram sync, Takeout, forum topic refresh, source list display, and
+  source resolution use typed identity and display cache fields in
+  `telegram_sources`, not Telegram source metadata blobs;
 - uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
 - uniqueness includes `source_subtype` because Telegram bare ids are not enough to safely describe every peer shape.
 - `last_sync_state` and `last_synced_at` are advanced by normal sync and by successful Takeout import; failed or cancelled Takeout jobs leave these fields unchanged.
