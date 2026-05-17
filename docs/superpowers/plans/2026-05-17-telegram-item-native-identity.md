@@ -1827,7 +1827,7 @@ git commit -m "feat: sync telegram items by native identity"
 - Modify: `src-tauri/src/takeout_import/raw_parse.rs`
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Add RED raw-parse test for history peer identity**
+- [x] **Step 1: Add RED raw-parse test for history peer identity**
 
 In `src-tauri/src/takeout_import/raw_parse.rs`, add assertions to `parses_text_message_with_reply_and_reactions`:
 
@@ -1881,7 +1881,7 @@ fn parse_raw_message_carries_raw_history_peer_for_overlapping_message_ids() {
 }
 ```
 
-- [ ] **Step 2: Run raw parser tests and verify RED**
+- [x] **Step 2: Run raw parser tests and verify RED**
 
 Run:
 
@@ -1891,7 +1891,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_import::raw_parse::
 
 Expected: fail because `SourceItemInsert` has no `telegram_identity`.
 
-- [ ] **Step 3: Add optional identity to `SourceItemInsert` and parse it**
+- [x] **Step 3: Add optional identity to `SourceItemInsert` and parse it**
 
 In `src-tauri/src/sources/items.rs`, update `SourceItemInsert`:
 
@@ -1936,7 +1936,7 @@ Set the parsed item field:
 telegram_identity: Some(raw_message_identity(&message)),
 ```
 
-- [ ] **Step 4: Wire Takeout import through `insert_telegram_source_item`**
+- [x] **Step 4: Wire Takeout import through `insert_telegram_source_item`**
 
 In `src-tauri/src/takeout_import/mod.rs`, replace imports:
 
@@ -1959,7 +1959,7 @@ let identity = item.telegram_identity.clone().ok_or_else(|| {
 if insert_telegram_source_item(&pool, source.id, identity, item).await? {
 ```
 
-- [ ] **Step 5: Add Takeout boundary test**
+- [x] **Step 5: Add Takeout boundary test**
 
 In `src-tauri/src/takeout_import/mod.rs`, extend the test imports:
 
@@ -2073,7 +2073,7 @@ fn takeout_raw_message_for_identity_test(
 }
 ```
 
-- [ ] **Step 6: Run Takeout and item tests**
+- [x] **Step 6: Run Takeout and item tests**
 
 Run:
 
@@ -2087,7 +2087,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Containment scan for generic Telegram insert path**
+- [x] **Step 7: Containment scan for generic Telegram insert path**
 
 Run:
 
@@ -2097,7 +2097,7 @@ rg -n "insert_source_item\\(" src-tauri\src\sources src-tauri\src\takeout_import
 
 Expected: no production normal sync or Takeout import calls. Test references may remain only if they specifically exercise legacy/non-Telegram helper behavior.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/sources/items.rs src-tauri/src/takeout_import/raw_parse.rs src-tauri/src/takeout_import/mod.rs

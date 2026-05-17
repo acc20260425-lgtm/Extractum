@@ -64,6 +64,7 @@ pub struct ListSourceItemsRequest {
 }
 
 pub(crate) struct SourceItemInsert {
+    #[allow(dead_code)]
     pub(crate) external_id: String,
     pub(crate) item_kind: String,
     pub(crate) author: Option<String>,
@@ -71,6 +72,7 @@ pub(crate) struct SourceItemInsert {
     pub(crate) payload: ExtractedItemPayload,
     pub(crate) raw_data: Vec<u8>,
     pub(crate) telegram_context: TelegramItemContext,
+    pub(crate) telegram_identity: Option<TelegramMessageIdentity>,
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
@@ -123,6 +125,7 @@ fn prepare_source_item(item: &SourceItemInsert) -> AppResult<Option<PreparedSour
     }))
 }
 
+#[allow(dead_code)]
 pub(crate) async fn insert_source_item(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
@@ -665,6 +668,7 @@ mod tests {
                     reply_to_top_id: Some(5),
                     reaction_count: Some(3),
                 },
+                telegram_identity: None,
             },
         )
         .await
@@ -686,6 +690,7 @@ mod tests {
                 },
                 raw_data: br#"{"id":42,"duplicate":true}"#.to_vec(),
                 telegram_context: TelegramItemContext::default(),
+                telegram_identity: None,
             },
         )
         .await
@@ -1099,6 +1104,7 @@ mod tests {
             raw_data: serde_json::to_vec(&serde_json::json!({ "id": external_id }))
                 .expect("raw json"),
             telegram_context: TelegramItemContext::default(),
+            telegram_identity: None,
         }
     }
 }

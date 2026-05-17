@@ -5,7 +5,9 @@ use crate::media::{
     derive_content_kind, derive_document_media_kind, media_label, DocumentSignals,
     ExtractedItemPayload, ExtractedMediaPayload, ItemMediaMetadata,
 };
-use crate::sources::{SourceItemInsert, TelegramItemContext, ITEM_KIND_TELEGRAM_MESSAGE};
+use crate::sources::{
+    SourceItemInsert, TelegramItemContext, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+};
 
 pub(crate) fn parse_raw_message(
     source_title: &Option<String>,
@@ -28,6 +30,7 @@ pub(crate) fn parse_raw_message(
     };
     let author = raw_message_author(&message);
     let telegram_context = extract_raw_telegram_context(&message);
+    let telegram_identity = raw_message_identity(&message);
     let raw_data = serde_json::to_vec(&json!({
         "id": message.id,
         "peer_id": peer_id_string(&message.peer_id),
@@ -52,6 +55,7 @@ pub(crate) fn parse_raw_message(
         payload,
         raw_data,
         telegram_context,
+        telegram_identity: Some(telegram_identity),
     }))
 }
 
@@ -224,6 +228,22 @@ fn extract_raw_telegram_context(message: &tl::types::Message) -> TelegramItemCon
     }
 
     context
+}
+
+fn raw_message_identity(message: &tl::types::Message) -> TelegramMessageIdentity {
+    let (history_peer_kind, history_peer_id) = match &message.peer_id {
+        tl::enums::Peer::User(peer) => ("user", peer.user_id),
+        tl::enums::Peer::Chat(peer) => ("chat", peer.chat_id),
+        tl::enums::Peer::Channel(peer) => ("channel", peer.channel_id),
+    };
+
+    TelegramMessageIdentity {
+        history_peer_kind: history_peer_kind.to_string(),
+        history_peer_id,
+        telegram_message_id: i64::from(message.id),
+        migration_domain: None,
+        is_migrated_history: false,
+    }
 }
 
 fn reaction_count(reactions: &tl::enums::MessageReactions) -> i64 {
@@ -440,6 +460,70 @@ mod tests {
         );
         assert_eq!(item.telegram_context.reply_to_top_id, Some(5));
         assert_eq!(item.telegram_context.reaction_count, Some(3));
+        assert_eq!(
+            item.telegram_identity
+                .as_ref()
+                .expect("identity")
+                .history_peer_kind,
+            "channel"
+        );
+        assert_eq!(
+            item.telegram_identity
+                .as_ref()
+                .expect("identity")
+                .history_peer_id,
+            10
+        );
+        assert_eq!(
+            item.telegram_identity
+                .as_ref()
+                .expect("identity")
+                .telegram_message_id,
+            42
+        );
+    }
+
+    #[test]
+    fn parse_raw_message_carries_raw_history_peer_for_overlapping_message_ids() {
+        let mut current = raw_message(42);
+        current.message = "current".to_string();
+        current.peer_id = peer_channel(12345);
+        let mut migrated = raw_message(42);
+        migrated.message = "migrated".to_string();
+        migrated.peer_id = tl::types::PeerChat { chat_id: 777 }.into();
+
+        let current_item = parse_raw_message(&None, current)
+            .expect("parse current")
+            .expect("current item");
+        let migrated_item = parse_raw_message(&None, migrated)
+            .expect("parse migrated")
+            .expect("migrated item");
+
+        assert_eq!(
+            current_item
+                .telegram_identity
+                .as_ref()
+                .unwrap()
+                .history_peer_kind,
+            "channel"
+        );
+        assert_eq!(
+            migrated_item
+                .telegram_identity
+                .as_ref()
+                .unwrap()
+                .history_peer_kind,
+            "chat"
+        );
+        assert_eq!(
+            migrated_item
+                .telegram_identity
+                .as_ref()
+                .unwrap()
+                .history_peer_id,
+            777
+        );
+        assert_eq!(current_item.external_id, migrated_item.external_id);
     }
 
     #[test]

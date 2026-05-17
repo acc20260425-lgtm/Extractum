@@ -8,7 +8,7 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::sources::{
-    finalize_sync, insert_source_item, load_source, require_source_identity_ready,
+    finalize_sync, insert_telegram_source_item, load_source, require_source_identity_ready,
     resolve_and_refresh_peer, SourceIdentityRepairState, TelegramSourceKind, TELEGRAM_KIND_CHANNEL,
     TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
@@ -873,7 +873,12 @@ async fn import_takeout_history_pages(
             imported.max_message_id = imported.max_message_id.max(i64::from(message_id));
             match raw_parse::parse_raw_message(&source.title, message) {
                 Ok(Some(item)) => {
-                    if insert_source_item(&pool, source.id, item).await? {
+                    let identity = item.telegram_identity.clone().ok_or_else(|| {
+                        AppError::validation(
+                            "Parsed Takeout Telegram item is missing native message identity",
+                        )
+                    })?;
+                    if insert_telegram_source_item(&pool, source.id, identity, item).await? {
                         imported.inserted += 1;
                     } else {
                         imported.skipped += 1;
@@ -1093,11 +1098,16 @@ fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::{
-        is_channel_private_error, load_takeout_source_subtype, supports_only_my_messages_fallback,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        is_channel_private_error, load_takeout_source_subtype, raw_parse,
+        supports_only_my_messages_fallback, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+        TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::AppError;
-    use crate::sources::test_support::memory_pool_with_sources;
+    use crate::sources::insert_telegram_source_item;
+    use crate::sources::test_support::{
+        memory_pool_with_source_items_and_topics, memory_pool_with_sources,
+    };
+    use grammers_client::tl;
 
     #[test]
     fn only_my_messages_fallback_is_limited_to_channels() {
@@ -1212,5 +1222,122 @@ mod tests {
             .expect("load takeout source subtype");
 
         assert_eq!(source_subtype, TELEGRAM_KIND_SUPERGROUP);
+    }
+
+    #[tokio::test]
+    async fn takeout_parsed_items_with_same_message_id_insert_under_different_history_peers() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_item_source(&pool, 1).await;
+
+        let current = takeout_raw_message_for_identity_test(
+            42,
+            tl::types::PeerChannel { channel_id: 12345 }.into(),
+            "current",
+        );
+        let migrated = takeout_raw_message_for_identity_test(
+            42,
+            tl::types::PeerChat { chat_id: 777 }.into(),
+            "migrated",
+        );
+
+        let current_item = raw_parse::parse_raw_message(&None, current)
+            .expect("parse current")
+            .expect("current item");
+        let current_identity = current_item
+            .telegram_identity
+            .clone()
+            .expect("current identity");
+        let migrated_item = raw_parse::parse_raw_message(&None, migrated)
+            .expect("parse migrated")
+            .expect("migrated item");
+        let migrated_identity = migrated_item
+            .telegram_identity
+            .clone()
+            .expect("migrated identity");
+
+        assert!(
+            insert_telegram_source_item(&pool, 1, current_identity, current_item)
+                .await
+                .expect("insert current")
+        );
+        assert!(
+            insert_telegram_source_item(&pool, 1, migrated_identity, migrated_item)
+                .await
+                .expect("insert migrated")
+        );
+
+        let item_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM items WHERE source_id = 1 AND external_id = '42'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count overlapping ids");
+        assert_eq!(item_count, 2);
+    }
+
+    async fn seed_item_source(pool: &sqlx::SqlitePool, source_id: i64) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
+             VALUES (?, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .execute(pool)
+        .await
+        .expect("seed source");
+    }
+
+    fn takeout_raw_message_for_identity_test(
+        id: i32,
+        peer_id: tl::enums::Peer,
+        text: &str,
+    ) -> tl::types::Message {
+        tl::types::Message {
+            out: false,
+            mentioned: false,
+            media_unread: false,
+            silent: false,
+            post: false,
+            from_scheduled: false,
+            legacy: false,
+            edit_hide: false,
+            pinned: false,
+            noforwards: false,
+            invert_media: false,
+            offline: false,
+            video_processing_pending: false,
+            paid_suggested_post_stars: false,
+            paid_suggested_post_ton: false,
+            id,
+            from_id: None,
+            from_boosts_applied: None,
+            peer_id,
+            saved_peer_id: None,
+            fwd_from: None,
+            via_bot_id: None,
+            via_business_bot_id: None,
+            reply_to: None,
+            date: 1234,
+            message: text.to_string(),
+            media: None,
+            reply_markup: None,
+            entities: None,
+            views: None,
+            forwards: None,
+            replies: None,
+            edit_date: None,
+            post_author: None,
+            grouped_id: None,
+            reactions: None,
+            restriction_reason: None,
+            ttl_period: None,
+            quick_reply_shortcut_id: None,
+            effect: None,
+            factcheck: None,
+            report_delivery_until_date: None,
+            paid_message_stars: None,
+            suggested_post: None,
+            schedule_repeat_period: None,
+            summary_from_language: None,
+        }
     }
 }

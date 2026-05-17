@@ -147,6 +147,7 @@ async fn persist_items(
         let raw_data = build_raw_payload(&message, &source.title, &author, &item_payload)?;
 
         let identity = fallback_message_identity(peer, message_id);
+        let telegram_identity = Some(identity.clone());
         let inserted_item = insert_telegram_source_item(
             pool,
             source.id,
@@ -159,6 +160,7 @@ async fn persist_items(
                 payload: item_payload,
                 raw_data,
                 telegram_context,
+                telegram_identity,
             },
         )
         .await?;
