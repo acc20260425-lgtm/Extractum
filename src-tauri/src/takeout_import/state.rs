@@ -38,6 +38,7 @@ pub struct CancelTakeoutImportResponse {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct TakeoutImportJobRecord {
     pub job_id: String,
+    pub batch_id: i64,
     pub source_id: i64,
     pub account_id: i64,
     pub status: String,
@@ -76,6 +77,7 @@ impl TakeoutImportState {
         &self,
         source_id: i64,
         account_id: i64,
+        batch_id: i64,
     ) -> AppResult<TakeoutImportJobRecord> {
         let mut inner = self.inner.lock().await;
         if let Some(job_id) = inner.active_by_source.get(&source_id) {
@@ -88,6 +90,7 @@ impl TakeoutImportState {
         let job_id = format!("takeout-{}", inner.next_job_id);
         let record = TakeoutImportJobRecord {
             job_id: job_id.clone(),
+            batch_id,
             source_id,
             account_id,
             status: STATUS_QUEUED.to_string(),
@@ -209,21 +212,22 @@ mod tests {
     #[tokio::test]
     async fn job_state_rejects_duplicate_active_source_jobs() {
         let state = TakeoutImportState::new();
-        let first = state.create_job(7, 1).await.expect("create first job");
+        let first = state.create_job(7, 1, 100).await.expect("create first job");
 
         let error = state
-            .create_job(7, 1)
+            .create_job(7, 1, 101)
             .await
             .expect_err("duplicate source job should fail");
 
         assert_eq!(first.job_id, "takeout-1");
+        assert_eq!(first.batch_id, 100);
         assert_eq!(error.kind, AppErrorKind::Conflict);
     }
 
     #[tokio::test]
     async fn job_state_can_cancel_and_finish_job() {
         let state = TakeoutImportState::new();
-        let job = state.create_job(7, 1).await.expect("create job");
+        let job = state.create_job(7, 1, 100).await.expect("create job");
 
         let cancelled = state
             .request_cancel(&job.job_id)
@@ -243,7 +247,8 @@ mod tests {
         assert!(finished.finished_at.is_some());
         assert!(!state.is_cancel_requested(&job.job_id).await);
 
-        let next = state.create_job(7, 1).await.expect("source released");
+        let next = state.create_job(7, 1, 101).await.expect("source released");
         assert_eq!(next.job_id, "takeout-2");
+        assert_eq!(next.batch_id, 101);
     }
 }

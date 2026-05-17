@@ -1613,7 +1613,7 @@ Expected: commit succeeds with normal sync behavior preserved.
 - Test: `src-tauri/src/takeout_import/state.rs`
 - Test: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Add `batch_id` to job state tests first**
+- [x] **Step 1: Add `batch_id` to job state tests first**
 
 In `src-tauri/src/takeout_import/state.rs`, update existing tests to call `create_job(7, 1, 100)` and assert:
 
@@ -1629,7 +1629,7 @@ assert_eq!(next.job_id, "takeout-2");
 assert_eq!(next.batch_id, 101);
 ```
 
-- [ ] **Step 2: Run state tests and confirm failure**
+- [x] **Step 2: Run state tests and confirm failure**
 
 Run:
 
@@ -1639,7 +1639,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_import::state::tests::
 
 Expected: compile fails because `batch_id` and the new `create_job` argument do not exist.
 
-- [ ] **Step 3: Implement job correlation**
+- [x] **Step 3: Implement job correlation**
 
 In `TakeoutImportJobRecord`, add:
 
@@ -1666,7 +1666,7 @@ batch_id,
 
 Update all call sites to pass a batch id.
 
-- [ ] **Step 4: Extract start-record creation after lock acquisition**
+- [x] **Step 4: Extract start-record creation after lock acquisition**
 
 In `src-tauri/src/takeout_import/mod.rs`, import:
 
@@ -1703,7 +1703,7 @@ async fn create_locked_takeout_start_records(
 }
 ```
 
-- [ ] **Step 5: Move source lock acquisition out of the background task**
+- [x] **Step 5: Move source lock acquisition out of the background task**
 
 In `start_takeout_source_import`, after loading the source/account/subtype, add:
 
@@ -1741,7 +1741,7 @@ async fn run_takeout_import_job(
 
 Remove the lock acquisition block from inside `run_takeout_import_job`. Keep `drop(ingest_guard);` at the end and on the early cancellation path so the lifetime is explicit.
 
-- [ ] **Step 6: Add lock-conflict side-effect test**
+- [x] **Step 6: Add lock-conflict side-effect test**
 
 In `src-tauri/src/takeout_import/mod.rs` tests, import:
 
@@ -1796,7 +1796,7 @@ async fn locked_start_conflict_creates_no_provenance_rows() {
 }
 ```
 
-- [ ] **Step 7: Add concurrent start helper test**
+- [x] **Step 7: Add concurrent start helper test**
 
 Add:
 
@@ -1841,7 +1841,7 @@ async fn locked_start_allows_only_one_batch_for_same_source() {
 }
 ```
 
-- [ ] **Step 8: Run start locking tests**
+- [x] **Step 8: Run start locking tests**
 
 Run:
 
@@ -1851,7 +1851,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_import::state::tests:: t
 
 Expected: tests pass after imports and call sites are updated.
 
-- [ ] **Step 9: Commit start locking and batch correlation**
+- [x] **Step 9: Commit start locking and batch correlation**
 
 Run:
 

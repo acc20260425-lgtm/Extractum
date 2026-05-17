@@ -6,7 +6,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
-use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
+use crate::ingest_provenance::{create_telegram_takeout_batch, CreateTelegramTakeoutBatch};
+use crate::source_ingest::{SourceIngestGuard, SourceIngestKind, SourceIngestLocks};
 use crate::sources::{
     finalize_sync, insert_telegram_source_item, load_source, require_source_identity_ready,
     resolve_and_refresh_peer, SourceIdentityRepairState, TelegramSourceKind, TELEGRAM_KIND_CHANNEL,
@@ -66,18 +67,52 @@ pub async fn start_takeout_source_import(
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
-    let record = state.create_job(source_id, account_id).await?;
+    let telegram_source_subtype = load_takeout_source_subtype(&pool, source.id).await?;
+    let ingest_locks = handle.state::<SourceIngestLocks>();
+    let (record, ingest_guard) = create_locked_takeout_start_records(
+        &pool,
+        &ingest_locks,
+        state.inner(),
+        source_id,
+        account_id,
+        telegram_source_subtype,
+    )
+    .await?;
     emit_takeout_import_event(&handle, &record);
 
     let job_id = record.job_id.clone();
     let task_handle = handle.clone();
     tauri::async_runtime::spawn(async move {
-        run_takeout_import_job(task_handle, job_id).await;
+        run_takeout_import_job(task_handle, job_id, ingest_guard).await;
     });
 
     Ok(StartTakeoutImportResponse {
         job_id: record.job_id,
     })
+}
+
+async fn create_locked_takeout_start_records(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    ingest_locks: &SourceIngestLocks,
+    state: &TakeoutImportState,
+    source_id: i64,
+    account_id: i64,
+    source_subtype: String,
+) -> AppResult<(TakeoutImportJobRecord, SourceIngestGuard)> {
+    let ingest_guard = ingest_locks
+        .try_acquire(source_id, SourceIngestKind::TakeoutImport)
+        .await?;
+    let batch_id = create_telegram_takeout_batch(
+        pool,
+        CreateTelegramTakeoutBatch {
+            source_id,
+            account_id,
+            source_subtype,
+        },
+    )
+    .await?;
+    let record = state.create_job(source_id, account_id, batch_id).await?;
+    Ok((record, ingest_guard))
 }
 
 #[tauri::command]
@@ -187,9 +222,12 @@ async fn run_export_dc_spike_for_runtime(
     })
 }
 
-async fn run_takeout_import_job(handle: AppHandle, job_id: String) {
+async fn run_takeout_import_job(
+    handle: AppHandle,
+    job_id: String,
+    ingest_guard: SourceIngestGuard,
+) {
     let takeout_state = handle.state::<TakeoutImportState>();
-    let ingest_locks = handle.state::<SourceIngestLocks>();
 
     let Some(running_record) = takeout_state
         .update_job(&job_id, |job| {
@@ -199,30 +237,10 @@ async fn run_takeout_import_job(handle: AppHandle, job_id: String) {
         })
         .await
     else {
+        drop(ingest_guard);
         return;
     };
     emit_takeout_import_event(&handle, &running_record);
-
-    let ingest_guard = match ingest_locks
-        .try_acquire(running_record.source_id, SourceIngestKind::TakeoutImport)
-        .await
-    {
-        Ok(guard) => guard,
-        Err(error) => {
-            if let Some(record) = takeout_state
-                .finish_job(&job_id, |job| {
-                    job.status = STATUS_FAILED.to_string();
-                    job.phase = PHASE_FAILED.to_string();
-                    job.message = None;
-                    job.error = Some(error.to_string());
-                })
-                .await
-            {
-                emit_takeout_import_event(&handle, &record);
-            }
-            return;
-        }
-    };
 
     if takeout_state.is_cancel_requested(&job_id).await {
         if let Some(record) = takeout_state
@@ -1098,15 +1116,18 @@ fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::{
-        is_channel_private_error, load_takeout_source_subtype, raw_parse,
-        supports_only_my_messages_fallback, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+        create_locked_takeout_start_records, is_channel_private_error, load_takeout_source_subtype,
+        raw_parse, supports_only_my_messages_fallback, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
         TELEGRAM_KIND_SUPERGROUP,
     };
-    use crate::error::AppError;
+    use crate::error::{AppError, AppErrorKind};
+    use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
     use crate::sources::insert_telegram_source_item;
     use crate::sources::test_support::{
-        memory_pool_with_source_items_and_topics, memory_pool_with_sources,
+        create_ingest_provenance_tables, memory_pool_with_source_items_and_topics,
+        memory_pool_with_sources,
     };
+    use crate::takeout_import::state::TakeoutImportState;
     use grammers_client::tl;
 
     #[test]
@@ -1332,6 +1353,84 @@ mod tests {
         .await
         .expect("load topic state");
         assert_eq!(state, ("ready".to_string(), 1));
+    }
+
+    #[tokio::test]
+    async fn locked_start_conflict_creates_no_provenance_rows() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        let locks = SourceIngestLocks::new();
+        let _existing = locks
+            .try_acquire(1, SourceIngestKind::Sync)
+            .await
+            .expect("hold existing lock");
+        let state = TakeoutImportState::new();
+
+        let error = create_locked_takeout_start_records(
+            &pool,
+            &locks,
+            &state,
+            1,
+            10,
+            "supergroup".to_string(),
+        )
+        .await
+        .expect_err("conflicting lock should reject start");
+
+        assert_eq!(error.kind, AppErrorKind::Conflict);
+        for table in [
+            "ingest_batches",
+            "telegram_takeout_batches",
+            "ingest_item_observations",
+            "ingest_batch_warnings",
+        ] {
+            let query = format!("SELECT COUNT(*) FROM {table}");
+            let count: i64 = sqlx::query_scalar(&query)
+                .fetch_one(&pool)
+                .await
+                .unwrap_or_else(|err| panic!("count {table}: {err}"));
+            assert_eq!(count, 0, "unexpected rows in {table}");
+        }
+    }
+
+    #[tokio::test]
+    async fn locked_start_allows_only_one_batch_for_same_source() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        let locks = SourceIngestLocks::new();
+        let state = TakeoutImportState::new();
+
+        let first = create_locked_takeout_start_records(
+            &pool,
+            &locks,
+            &state,
+            1,
+            10,
+            "supergroup".to_string(),
+        )
+        .await
+        .expect("first start");
+
+        let second = create_locked_takeout_start_records(
+            &pool,
+            &locks,
+            &state,
+            1,
+            10,
+            "supergroup".to_string(),
+        )
+        .await;
+
+        assert!(second.is_err());
+        let batch_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ingest_batches")
+            .fetch_one(&pool)
+            .await
+            .expect("count batches");
+        assert_eq!(batch_count, 1);
+
+        drop(first);
     }
 
     async fn seed_item_source(pool: &sqlx::SqlitePool, source_id: i64) {
