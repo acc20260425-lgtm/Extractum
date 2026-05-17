@@ -128,13 +128,17 @@ Native Telegram duplicate identity is:
 source_id + history_peer_kind + history_peer_id + telegram_message_id
 ```
 
-`migration_domain` is intentionally not part of the first unique key. The
-history domain is the Telegram history peer kind/id pair. For non-migrated
-current history, `history_peer_kind` and `history_peer_id` usually equal the
-resolved source peer. For migrated history, they must identify the original
-Telegram history domain, not necessarily the current source peer. If live validation later
-proves that a second discriminator is required, a future migration can promote
-`migration_domain` into the unique identity.
+`migration_domain` is intentionally not part of the first unique key. In this
+slice it is diagnostic and future-proofing metadata only. Runtime code must not
+use `migration_domain` for duplicate detection, topic matching, or ref
+resolution unless a future migration explicitly promotes it into the identity
+contract. The history domain for this slice is the Telegram history peer
+kind/id pair. For non-migrated current history, `history_peer_kind` and
+`history_peer_id` usually equal the resolved source peer. For migrated history,
+they must identify the original Telegram history domain, not necessarily the
+current source peer. If live validation later proves that a second
+discriminator is required, a future migration can promote `migration_domain`
+into the unique identity.
 
 `history_peer_id` must use the same normalized integer representation already
 used by `telegram_sources.peer_id`. Migration 21 must not add a stronger
@@ -186,6 +190,9 @@ Backfill is best-effort:
 Malformed legacy item rows must not fail the whole migration. They remain
 readable through compatibility paths, but they are not valid typed Telegram
 message rows until a future repair or re-ingest writes the child row.
+Migration tests should verify the number of backfilled and skipped rows in
+representative fixtures. Runtime diagnostics may expose backfilled and skipped
+counts in logs, but must not include raw payload contents.
 
 The replacement non-Telegram uniqueness should protect current YouTube item
 upserts without blocking duplicate Telegram message ids. This design uses
@@ -372,6 +379,8 @@ Migration tests:
   `ux_items_non_telegram_external` is created;
 - valid legacy Telegram message rows are backfilled;
 - malformed `items.external_id` rows are skipped without failing migration;
+- representative migration fixtures assert exact backfilled and skipped row
+  counts;
 - duplicate Telegram message ids with different peer domains are allowed;
 - duplicate native Telegram identity is rejected by the child-table unique
   index;
