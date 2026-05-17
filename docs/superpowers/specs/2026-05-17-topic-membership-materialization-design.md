@@ -167,6 +167,18 @@ successfully for all inserted items, it normally remains `0`.
 `unresolved_count` counts eligible Telegram forum items processed by the
 current resolver version that did not receive a real topic membership row.
 
+Migration 22 creates a persistent `telegram_topic_resolution_state` row for
+every known Telegram `supergroup` source. Sources with catalog rows become
+`ready` after rebuild. Sources without catalog rows become `never_run`.
+Runtime readers still treat missing state defensively as `never_run` for older
+or partially repaired databases, but normal post-migration state should be
+persisted.
+
+`telegram_topic_resolution_state` rows are valid only for sources where
+`source_type = 'telegram'` and `source_subtype = 'supergroup'`. This provider
+subtype invariant cannot be expressed by the table foreign key and must be
+validated by migration/runtime checks.
+
 ## Core Semantics
 
 An eligible Telegram forum item means:
@@ -242,8 +254,8 @@ Migration 22 must:
 2. Create `telegram_topic_resolution_state`.
 3. For every Telegram `supergroup` source with at least one local
    `telegram_forum_topics` row, run a full source-level rebuild.
-4. For Telegram `supergroup` sources without catalog rows, create or synthesize
-   `never_run` resolution state.
+4. For every Telegram `supergroup` source without catalog rows, create a
+   persistent `never_run` resolution state row.
 5. Fail fast on source rebuild or integrity errors.
 6. Record migration success only after schema, rebuilds, and integrity checks
    complete.
@@ -304,8 +316,20 @@ Post-rebuild invariants:
 - every membership `source_id` equals the referenced `items.source_id`;
 - every membership `topic_id` references a real `telegram_forum_topics` row;
 - every membership `item_id` belongs to an eligible Telegram forum item;
+- every `telegram_topic_resolution_state` row belongs to a Telegram
+  `supergroup` source;
 - `state.status = 'ready'` only after these checks pass;
 - `PRAGMA foreign_key_check` returns no rows after migration.
+
+Provider subtype invariant check:
+
+```sql
+SELECT s.id
+FROM telegram_topic_resolution_state st
+JOIN sources s ON s.id = st.source_id
+WHERE s.source_type <> 'telegram'
+   OR s.source_subtype <> 'supergroup';
+```
 
 ## Runtime Flow
 
@@ -320,6 +344,13 @@ The correctness boundary is the full source rebuild after every successful
 topic catalog refresh. Insert-time/scoped resolution is an operational
 freshness optimization, not the only source of truth.
 
+Runtime full rebuild and scoped resolution for the same source must serialize
+writes to `item_topic_memberships` and `telegram_topic_resolution_state`. Use
+the existing source-level ingest/topic lock if it already covers these writes,
+or introduce a dedicated topic-resolution source lock. A topic refresh rebuild
+must not interleave its delete-plus-bulk-insert membership write with sync or
+Takeout scoped resolution for the same source.
+
 Normal Telegram sync:
 
 1. Insert `items` and `telegram_messages` through the native Telegram identity
@@ -328,8 +359,9 @@ Normal Telegram sync:
    run scoped resolution for inserted item ids.
 3. If scoped resolution succeeds for all inserted eligible items and the source
    was `ready`, keep it `ready` and keep `pending_item_count = 0`.
-4. If newly processed items do not receive a membership row, count them as
-   unresolved, not pending, if incremental accounting is maintained.
+4. When state is `ready` and scoped resolution succeeds for inserted eligible
+   items, increment `unresolved_count` by the number of inserted eligible items
+   that produced no membership row. These rows are unresolved, not pending.
 5. If scoped resolution is skipped or fails, do not delete existing
    memberships. Mark the source `dirty` or `failed` according to severity,
    record `last_error` without raw payload contents, and require a later full
@@ -424,7 +456,7 @@ Migration tests:
 - migration 22 is registered after migration 21;
 - schema contains both new tables and expected indexes;
 - migration 22 rebuilds existing catalog-backed Telegram supergroup sources;
-- sources without catalog end in or synthesize `never_run`;
+- sources without catalog get persistent `never_run` state rows;
 - migration uses typed root matching through `telegram_messages`;
 - legacy root fallback works only for rows without typed child identity;
 - retained hidden/deleted topics are eligible match targets;
