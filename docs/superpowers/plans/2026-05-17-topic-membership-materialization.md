@@ -543,7 +543,7 @@ git commit -m "feat: add topic membership migration sentinel"
 - Modify: `src-tauri/src/sources/test_support.rs`
 - Modify: `src-tauri/src/migrations/topic_membership_materialization.rs`
 
-- [ ] **Step 1: Add RED schema tests**
+- [x] **Step 1: Add RED schema tests**
 
 In `src-tauri/src/migrations/topic_membership_materialization.rs`, add tests:
 
@@ -668,17 +668,19 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run schema tests and verify RED**
+- [x] **Step 2: Run schema tests and verify RED**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_creates_membership_and_state_schema migrations::topic_membership_materialization::tests::migration_22_records_sentinel_checksum_and_is_idempotent
+cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_creates_membership_and_state_schema
+cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_records_sentinel_checksum_and_is_idempotent
+cargo test --manifest-path src-tauri/Cargo.toml sources::test_support::tests::source_fixture_creates_expected_tables
 ```
 
-Expected: fail because schema creation is not yet wired into the migration skeleton or module visibility is incomplete.
+Expected: migration schema tests may pass if schema creation was wired in Task 1; fixture test fails until `memory_pool_with_source_items_and_topics` creates the new tables.
 
-- [ ] **Step 3: Add test fixture helper for membership tables**
+- [x] **Step 3: Add test fixture helper for membership tables**
 
 In `src-tauri/src/sources/test_support.rs`, add:
 
@@ -704,12 +706,14 @@ In `source_fixture_creates_expected_tables`, include:
 "telegram_topic_resolution_state",
 ```
 
-- [ ] **Step 4: Run schema tests and fixture test**
+- [x] **Step 4: Run schema tests and fixture test**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_creates_membership_and_state_schema migrations::topic_membership_materialization::tests::migration_22_records_sentinel_checksum_and_is_idempotent sources::test_support::tests::source_fixture_creates_expected_tables
+cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_creates_membership_and_state_schema
+cargo test --manifest-path src-tauri/Cargo.toml migrations::topic_membership_materialization::tests::migration_22_records_sentinel_checksum_and_is_idempotent
+cargo test --manifest-path src-tauri/Cargo.toml sources::test_support::tests::source_fixture_creates_expected_tables
 ```
 
 Expected:
@@ -718,7 +722,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/migrations/topic_membership_materialization.rs src-tauri/src/sources/test_support.rs src-tauri/src/topic_memberships.rs

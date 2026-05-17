@@ -101,6 +101,13 @@ pub(crate) async fn create_telegram_messages_table(pool: &sqlx::SqlitePool) {
         .expect("create telegram_messages");
 }
 
+pub(crate) async fn create_topic_membership_tables(pool: &sqlx::SqlitePool) {
+    let mut conn = pool.acquire().await.expect("acquire sqlite connection");
+    crate::topic_memberships::create_topic_membership_schema(&mut conn)
+        .await
+        .expect("create topic membership schema");
+}
+
 pub(crate) async fn create_canonical_telegram_identity_index(pool: &sqlx::SqlitePool) {
     sqlx::query(
         r#"
@@ -177,6 +184,7 @@ pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePo
     .execute(&pool)
     .await
     .expect("create telegram_forum_topics unique index");
+    create_topic_membership_tables(&pool).await;
     pool
 }
 
@@ -214,6 +222,8 @@ mod tests {
             "telegram_sources",
             "items",
             "telegram_forum_topics",
+            "item_topic_memberships",
+            "telegram_topic_resolution_state",
         ] {
             sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
                 .bind(table)

@@ -119,3 +119,124 @@ async fn record_migration_success(
 fn expected_migration_22_checksum() -> Vec<u8> {
     Sha384::digest(TOPIC_MEMBERSHIP_MATERIALIZATION_SENTINEL_SQL.as_bytes()).to_vec()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::migrations::build_migrations;
+    use sha2::{Digest, Sha384};
+    use sqlx::SqliteConnection;
+
+    #[tokio::test]
+    async fn migration_22_creates_membership_and_state_schema() {
+        let mut conn = memory_conn_with_history_through_21().await;
+
+        apply_topic_membership_materialization_on_connection(&mut conn)
+            .await
+            .expect("apply v22");
+
+        for table in ["item_topic_memberships", "telegram_topic_resolution_state"] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&mut conn)
+            .await
+            .expect("check table");
+            assert_eq!(exists, 1, "missing table {table}");
+        }
+
+        for index in [
+            "idx_item_topic_memberships_source_topic",
+            "idx_item_topic_memberships_source_item",
+        ] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
+            )
+            .bind(index)
+            .fetch_one(&mut conn)
+            .await
+            .expect("check index");
+            assert_eq!(exists, 1, "missing index {index}");
+        }
+    }
+
+    #[tokio::test]
+    async fn migration_22_records_sentinel_checksum_and_is_idempotent() {
+        let mut conn = memory_conn_with_history_through_21().await;
+
+        apply_topic_membership_materialization_on_connection(&mut conn)
+            .await
+            .expect("first v22");
+        apply_topic_membership_materialization_on_connection(&mut conn)
+            .await
+            .expect("second v22");
+
+        let row: (String, bool, Vec<u8>) = sqlx::query_as(
+            "SELECT description, success, checksum FROM _sqlx_migrations WHERE version = 22",
+        )
+        .fetch_one(&mut conn)
+        .await
+        .expect("load v22 history");
+        assert_eq!(row.0, TOPIC_MEMBERSHIP_MATERIALIZATION_DESCRIPTION);
+        assert!(row.1);
+        assert_eq!(row.2, expected_migration_22_checksum());
+    }
+
+    async fn memory_conn_with_history_through_21() -> SqliteConnection {
+        let mut conn = SqliteConnection::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS _sqlx_migrations (
+                version BIGINT PRIMARY KEY,
+                description TEXT NOT NULL,
+                installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                success BOOLEAN NOT NULL,
+                checksum BLOB NOT NULL,
+                execution_time BIGINT NOT NULL
+            )",
+        )
+        .execute(&mut conn)
+        .await
+        .expect("create migration history");
+
+        for migration in build_migrations()
+            .into_iter()
+            .filter(|migration| migration.version < 19)
+        {
+            sqlx::raw_sql(migration.sql)
+                .execute(&mut conn)
+                .await
+                .unwrap_or_else(|error| panic!("apply migration {}: {error}", migration.version));
+            sqlx::query(
+                "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (?, ?, 1, ?, 0)",
+            )
+            .bind(migration.version)
+            .bind(migration.description)
+            .bind(Sha384::digest(migration.sql.as_bytes()).to_vec())
+            .execute(&mut conn)
+            .await
+            .expect("record standard migration");
+        }
+
+        crate::migrations::source_identity_cleanup::apply_source_identity_cleanup_on_connection(
+            &mut conn,
+        )
+        .await
+        .expect("apply v19");
+        crate::migrations::youtube_typed_source_metadata::apply_youtube_typed_source_metadata_on_connection(
+            &mut conn,
+        )
+        .await
+        .expect("apply v20");
+        crate::migrations::telegram_item_native_identity::apply_telegram_item_native_identity_on_connection(
+            &mut conn,
+        )
+        .await
+        .expect("apply v21");
+
+        conn
+    }
+}
