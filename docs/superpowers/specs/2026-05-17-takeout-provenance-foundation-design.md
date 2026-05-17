@@ -156,7 +156,9 @@ Counter semantics:
 
 If `outcome = 'failed'` is used, it contributes to `item_observed_count` but
 not to the three narrower counters unless a later migration adds a dedicated
-failed counter.
+failed counter. This intentional `>=` relationship must be documented in
+`docs/database-schema.md` after implementation so a later reader does not treat
+the difference between observed and summed narrow counters as drift by default.
 
 ### `telegram_takeout_batches`
 
@@ -269,6 +271,13 @@ and store it in `item_id`. If an exceptional compatibility case cannot resolve
 the existing item id, the observation may store `item_id = NULL` with a
 `reason_code`, but that is not the expected path.
 
+The generic text identity is an intentional foundation-slice compromise. It
+keeps `ingest_item_observations` provider-neutral instead of adding
+Telegram-only columns. If observation volume or identity lookups become a
+storage/performance problem, a later migration can add typed provider identity
+columns such as `history_peer_kind`, `history_peer_id`, and
+`telegram_message_id` with narrower indexes.
+
 ### `ingest_batch_warnings`
 
 ```sql
@@ -351,10 +360,13 @@ no durable side effects:
 After lock acquisition:
 
 - create the in-memory `TakeoutImportJobRecord`;
-- create `ingest_batches` with `provider = 'telegram'`,
-  `ingest_kind = 'takeout'`, `status = 'running'`,
-  `completeness = 'unknown'`;
-- create the matching `telegram_takeout_batches` row.
+- create `ingest_batches` and the matching `telegram_takeout_batches` row in
+  one transaction. If the detail insert fails, no orphan `ingest_batches` row
+  may remain.
+
+The `ingest_batches` row starts with `provider = 'telegram'`,
+`ingest_kind = 'takeout'`, `status = 'running'`, and
+`completeness = 'unknown'`.
 
 The in-memory job record should gain `batch_id` as a durable correlation id.
 This does not require a batch-history UI in this slice.
@@ -491,6 +503,7 @@ Completeness rules:
 - `partial`: completed run with `only_my_messages = 1`.
 - `partial`: completed run with
   `migrated_history_detected = 1 AND migrated_history_imported = 0`.
+- `partial`: completed run with `history_scope = 'mixed_partial'`.
 - `unknown`: no observations, or still `running`.
 
 The migrated-history rule is intentionally strict: current history may have
@@ -504,6 +517,10 @@ Persisted `status = 'running'` survives restart. The UI or query layer may
 derive and display an interrupted state when a durable running batch has no
 active in-memory job after restart, but the schema does not persist
 `interrupted`.
+
+The implementation plan must choose where that derived state is computed:
+startup restoration, lazy source-detail loading, source-list loading, or an
+internal query helper. This design only fixes the persisted schema behavior.
 
 ## API And Query Boundaries
 
@@ -543,6 +560,9 @@ immediate implementation need appears.
 - Takeout creates `ingest_batches` and `telegram_takeout_batches` only after
   acquiring the same-source lock.
 - Lock conflict creates no durable side effects in provenance tables.
+- Two concurrent `start_takeout_source_import` calls for the same source allow
+  at most one durable batch and reject the other through the existing
+  same-source lock/conflict behavior.
 - Successful Takeout marks the batch `completed`.
 - Failure after partial item writes marks the batch `failed`,
   `completeness = 'partial'`, and does not advance source watermark.
@@ -565,6 +585,9 @@ immediate implementation need appears.
   rows.
 - Failed `finishTakeoutSession(success=false)` cleanup writes
   `finish_takeout_failed`.
+- Sanitized terminal errors and warning messages are bounded in length and do
+  not contain raw JSON/TL-looking payloads, for example raw messages starting
+  with `{`, compressed payload dumps, auth material, or secrets.
 
 ### Containment Tests And Scans
 
@@ -574,6 +597,9 @@ immediate implementation need appears.
 - Warning rows are sanitized and bounded.
 - No provenance table stores raw TL payloads, compressed payloads, secrets,
   session contents, auth material, cookies, or headers.
+
+The implementation plan should set concrete maximum lengths for
+`terminal_error` and warning `message` values and test those bounds.
 
 ## Acceptance Criteria
 
@@ -611,6 +637,8 @@ Update `docs/database-schema.md` after implementation:
 - explain that normal sync does not write provenance yet;
 - explain that Takeout uses durable provenance while job events remain
   current-session runtime UI state.
+- explain why `item_observed_count` may be greater than inserted + duplicate +
+  skipped counts when item-level failed observations exist.
 
 Update `docs/takeout-source-import.md` after implementation:
 
@@ -626,6 +654,11 @@ wording needs clarification.
 
 1. Add a UI for batch history and batch detail inspection.
 2. Add startup/query derived interrupted display state.
-3. Wire normal `sync_source` into generic ingest provenance.
-4. Enable migrated-history Takeout import after real-data validation.
-5. Use provenance rows to drive repair or cleanup tooling for partial imports.
+3. Decide normal `sync_source` provenance granularity: one batch per
+   incremental sync, per page, or per source session.
+4. Wire normal `sync_source` into generic ingest provenance after that design
+   question is settled.
+5. Define retention/compaction policy for high-volume observation rows,
+   especially repeated Takeout runs over large channels.
+6. Enable migrated-history Takeout import after real-data validation.
+7. Use provenance rows to drive repair or cleanup tooling for partial imports.
