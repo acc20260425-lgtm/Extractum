@@ -18,9 +18,8 @@ use super::identity::{
 };
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::peer_resolution::{
-    encode_source_metadata, resolve_telegram_source, source_metadata_for_added_source,
-    telegram_source_info_from_peer, ResolvedTelegramSource, SourceMetadata,
-    SourcePeerResolutionStrategy,
+    add_source_resolution_strategy, resolve_telegram_source, telegram_source_info_from_peer,
+    ResolvedTelegramSource, SourcePeerResolutionStrategy,
 };
 use super::types::{
     now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, SourceType, TelegramSourceInfo,
@@ -238,18 +237,65 @@ pub async fn add_telegram_source(
     } else {
         None
     };
-    let source_metadata = source_metadata_for_added_source(
+    let pool = get_pool(&handle).await?;
+    let source_id = upsert_telegram_source_with_identity(
+        &pool,
+        request.account_id,
         &request.source_ref,
         expected_subtype,
         &resolved,
-        avatar_cache_key.clone(),
-    );
-    let metadata_zstd = encode_source_metadata(&source_metadata)?;
-    let now = now_secs();
+        avatar_cache_key.as_deref(),
+    )
+    .await?;
 
-    let pool = get_pool(&handle).await?;
+    load_source_record(&handle, &pool, source_id).await
+}
+
+async fn upsert_telegram_source_with_identity(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    account_id: i64,
+    source_ref: &str,
+    expected_subtype: Option<&str>,
+    resolved: &ResolvedTelegramSource,
+    avatar_cache_key: Option<&str>,
+) -> AppResult<i64> {
     let mut tx = pool.begin().await.map_err(AppError::database)?;
-    let source_id: i64 = sqlx::query_scalar(
+
+    let result = async {
+        let source_id = upsert_telegram_source_row(&mut tx, account_id, resolved).await?;
+        upsert_telegram_source_identity_from_resolved(
+            &mut tx,
+            source_id,
+            account_id,
+            source_ref,
+            expected_subtype,
+            resolved,
+            avatar_cache_key,
+        )
+        .await?;
+        Ok(source_id)
+    }
+    .await;
+
+    match result {
+        Ok(source_id) => {
+            tx.commit().await.map_err(AppError::database)?;
+            Ok(source_id)
+        }
+        Err(error) => {
+            tx.rollback().await.map_err(AppError::database)?;
+            Err(error)
+        }
+    }
+}
+
+async fn upsert_telegram_source_row(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    account_id: i64,
+    resolved: &ResolvedTelegramSource,
+) -> AppResult<i64> {
+    let now = now_secs();
+    sqlx::query_scalar(
         r#"
         INSERT INTO sources (
             source_type,
@@ -262,13 +308,12 @@ pub async fn add_telegram_source(
             account_id,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, NULL, 1, ?, ?, ?)
         ON CONFLICT(account_id, source_type, source_subtype, external_id)
         WHERE source_type = 'telegram'
         DO UPDATE SET
             title = excluded.title,
             source_subtype = excluded.source_subtype,
-            metadata_zstd = excluded.metadata_zstd,
             is_member = excluded.is_member,
             account_id = excluded.account_id,
             is_active = 1
@@ -279,26 +324,12 @@ pub async fn add_telegram_source(
     .bind(&resolved.source_subtype)
     .bind(&resolved.external_id)
     .bind(&resolved.title)
-    .bind(metadata_zstd)
     .bind(resolved.is_member)
-    .bind(request.account_id)
+    .bind(account_id)
     .bind(now)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
-    .map_err(AppError::database)?;
-
-    upsert_telegram_source_identity_from_resolved(
-        &mut tx,
-        source_id,
-        request.account_id,
-        &resolved,
-        &source_metadata,
-        avatar_cache_key.as_deref(),
-    )
-    .await?;
-
-    tx.commit().await.map_err(AppError::database)?;
-    load_source_record(&handle, &pool, source_id).await
+    .map_err(AppError::database)
 }
 
 #[tauri::command]
@@ -404,25 +435,18 @@ async fn upsert_telegram_source_identity_from_resolved(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     source_id: i64,
     account_id: i64,
+    source_ref: &str,
+    expected_subtype: Option<&str>,
     resolved: &ResolvedTelegramSource,
-    source_metadata: &SourceMetadata,
     avatar_cache_key: Option<&str>,
 ) -> AppResult<()> {
     let source_subtype = TelegramSourceKind::from_source_subtype(&resolved.source_subtype)?;
     let peer_kind = TelegramPeerKind::from_source_subtype(source_subtype);
     let peer_id = canonical_telegram_external_id(&resolved.external_id)?;
-    let resolution_strategy = source_metadata
-        .peer_identity
-        .as_ref()
-        .map(|identity| match identity.strategy {
-            SourcePeerResolutionStrategy::Username => TelegramResolutionStrategy::Username,
-            SourcePeerResolutionStrategy::Dialog => TelegramResolutionStrategy::Dialog,
-        })
-        .unwrap_or(TelegramResolutionStrategy::Unknown);
-    let access_hash = source_metadata
-        .peer_identity
-        .as_ref()
-        .and_then(|identity| identity.access_hash);
+    let resolution_strategy = match add_source_resolution_strategy(source_ref, expected_subtype) {
+        SourcePeerResolutionStrategy::Username => TelegramResolutionStrategy::Username,
+        SourcePeerResolutionStrategy::Dialog => TelegramResolutionStrategy::Dialog,
+    };
     let username = normalize_telegram_username(resolved.username.as_deref());
 
     sqlx::query(
@@ -453,7 +477,7 @@ async fn upsert_telegram_source_identity_from_resolved(
     .bind(peer_id)
     .bind(resolution_strategy.as_str())
     .bind(username)
-    .bind(access_hash)
+    .bind(resolved.access_hash)
     .bind(avatar_cache_key)
     .execute(&mut **tx)
     .await
@@ -471,7 +495,10 @@ fn encode_youtube_metadata(metadata: &impl serde::Serialize) -> AppResult<Vec<u8
 mod tests {
     use super::*;
     use crate::error::AppErrorKind;
-    use crate::sources::test_support::memory_pool_with_sources;
+    use crate::sources::test_support::{
+        create_canonical_telegram_identity_index, memory_pool_with_sources,
+    };
+    use crate::sources::types::TELEGRAM_KIND_CHANNEL;
     use crate::youtube::dto::{
         YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
     };
@@ -573,6 +600,181 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn telegram_source_upsert_inserts_null_metadata() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let resolved = resolved_telegram_source(
+            "12345",
+            "Example channel",
+            TELEGRAM_KIND_CHANNEL,
+            Some("Example"),
+            Some(77),
+            None,
+        );
+
+        let source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@Example",
+            None,
+            &resolved,
+            Some("1_channel_12345.jpg"),
+        )
+        .await
+        .expect("upsert telegram source");
+
+        let metadata: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT metadata_zstd FROM sources WHERE id = ?")
+                .bind(source_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load metadata");
+
+        assert_eq!(metadata, None);
+    }
+
+    #[tokio::test]
+    async fn telegram_source_upsert_preserves_existing_legacy_metadata_blob() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let legacy_blob = crate::compression::compress_json_bytes(
+            br#"{"peer_identity":{"strategy":"username","username":"legacy","access_hash":11}}"#,
+        )
+        .expect("compress legacy metadata");
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id,
+                title, metadata_zstd, is_active, is_member, created_at
+            )
+            VALUES (101, 'telegram', 'channel', 1, '12345', 'old', ?, 1, 1, 100)
+            "#,
+        )
+        .bind(&legacy_blob)
+        .execute(&pool)
+        .await
+        .expect("insert legacy source");
+
+        let resolved = resolved_telegram_source(
+            "12345",
+            "Renamed channel",
+            TELEGRAM_KIND_CHANNEL,
+            Some("Example"),
+            Some(77),
+            None,
+        );
+
+        let source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@Example",
+            None,
+            &resolved,
+            Some("1_channel_12345.jpg"),
+        )
+        .await
+        .expect("upsert existing telegram source");
+
+        assert_eq!(source_id, 101);
+        let metadata: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT metadata_zstd FROM sources WHERE id = ?")
+                .bind(source_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load metadata");
+        assert_eq!(metadata.as_deref(), Some(legacy_blob.as_slice()));
+    }
+
+    #[tokio::test]
+    async fn telegram_source_upsert_writes_required_identity_and_available_optional_fields() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let resolved = resolved_telegram_source(
+            "12345",
+            "Example channel",
+            TELEGRAM_KIND_CHANNEL,
+            Some("Example"),
+            Some(77),
+            None,
+        );
+
+        let source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@Example",
+            None,
+            &resolved,
+            Some("1_channel_12345.jpg"),
+        )
+        .await
+        .expect("upsert telegram source");
+
+        let row: (
+            i64,
+            String,
+            String,
+            i64,
+            String,
+            Option<String>,
+            Option<i64>,
+            Option<String>,
+        ) = sqlx::query_as(
+            r#"
+            SELECT account_id, source_subtype, peer_kind, peer_id,
+                   resolution_strategy, username, access_hash, avatar_cache_key
+            FROM telegram_sources
+            WHERE source_id = ?
+            "#,
+        )
+        .bind(source_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load typed identity");
+
+        assert_eq!(row.0, 1);
+        assert_eq!(row.1, TELEGRAM_KIND_CHANNEL);
+        assert_eq!(row.2, "channel");
+        assert_eq!(row.3, 12345);
+        assert_eq!(row.4, "username");
+        assert_eq!(row.5.as_deref(), Some("example"));
+        assert_eq!(row.6, Some(77));
+        assert_eq!(row.7.as_deref(), Some("1_channel_12345.jpg"));
+    }
+
+    #[tokio::test]
+    async fn telegram_source_upsert_rolls_back_source_when_typed_identity_fails() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let resolved = resolved_telegram_source(
+            "00123",
+            "Invalid channel",
+            TELEGRAM_KIND_CHANNEL,
+            Some("Example"),
+            Some(77),
+            None,
+        );
+
+        let error = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@Example",
+            None,
+            &resolved,
+            Some("1_channel_00123.jpg"),
+        )
+        .await
+        .expect_err("invalid typed identity fails");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sources WHERE external_id = '00123'")
+                .fetch_one(&pool)
+                .await
+                .expect("count source rows");
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
     async fn upsert_youtube_video_source_handles_legacy_not_null_telegram_kind() {
         let pool = legacy_not_null_telegram_kind_pool().await;
         let mut tx = pool.begin().await.expect("begin tx");
@@ -671,6 +873,25 @@ mod tests {
         .await
         .expect("create playlist index");
         pool
+    }
+
+    fn resolved_telegram_source(
+        external_id: &str,
+        title: &str,
+        source_subtype: &str,
+        username: Option<&str>,
+        access_hash: Option<i64>,
+        avatar_bytes: Option<Vec<u8>>,
+    ) -> ResolvedTelegramSource {
+        ResolvedTelegramSource {
+            external_id: external_id.to_string(),
+            title: title.to_string(),
+            source_subtype: source_subtype.to_string(),
+            is_member: true,
+            username: username.map(str::to_string),
+            access_hash,
+            avatar_bytes,
+        }
     }
 
     fn legacy_source_kind_column() -> String {

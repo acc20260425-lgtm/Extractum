@@ -88,7 +88,7 @@ pub(super) struct ResolvedTelegramSource {
     pub(super) source_subtype: String,
     pub(super) is_member: bool,
     pub(super) username: Option<String>,
-    access_hash: Option<i64>,
+    pub(super) access_hash: Option<i64>,
     pub(super) avatar_bytes: Option<Vec<u8>>,
 }
 
@@ -132,7 +132,7 @@ fn legacy_peer_identity(
     })
 }
 
-fn add_source_resolution_strategy(
+pub(super) fn add_source_resolution_strategy(
     source_ref: &str,
     source_subtype: Option<&str>,
 ) -> SourcePeerResolutionStrategy {

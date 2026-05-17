@@ -107,7 +107,7 @@ Expected: only the branch header, with no modified files.
 - Modify: `src-tauri/src/sources/peer_resolution.rs`
 - Test: `src-tauri/src/sources/store.rs`
 
-- [ ] **Step 1: Add RED tests for Telegram source-row metadata behavior**
+- [x] **Step 1: Add RED tests for Telegram source-row metadata behavior**
 
 In `src-tauri/src/sources/store.rs`, inside `#[cfg(test)] mod tests`, add these tests near the existing source-store tests.
 
@@ -204,7 +204,7 @@ async fn telegram_source_upsert_preserves_existing_legacy_metadata_blob() {
 }
 ```
 
-- [ ] **Step 2: Add RED tests for typed identity and rollback**
+- [x] **Step 2: Add RED tests for typed identity and rollback**
 
 Add these tests in the same module.
 
@@ -288,7 +288,7 @@ async fn telegram_source_upsert_rolls_back_source_when_typed_identity_fails() {
 }
 ```
 
-- [ ] **Step 3: Add test helper for resolved Telegram sources**
+- [x] **Step 3: Add test helper for resolved Telegram sources**
 
 Still in `store.rs` tests, add:
 
@@ -313,7 +313,7 @@ fn resolved_telegram_source(
 }
 ```
 
-- [ ] **Step 4: Run RED tests**
+- [x] **Step 4: Run RED tests**
 
 Run:
 
@@ -323,7 +323,7 @@ cargo test --manifest-path src-tauri/Cargo.toml telegram_source_upsert_
 
 Expected: failures because `upsert_telegram_source_with_identity` and the helper visibility changes do not exist yet.
 
-- [ ] **Step 5: Expose add resolution strategy and resolved access hash**
+- [x] **Step 5: Expose add resolution strategy and resolved access hash**
 
 In `src-tauri/src/sources/peer_resolution.rs`, change `ResolvedTelegramSource.access_hash` to `pub(super)` and change `add_source_resolution_strategy` to `pub(super)`.
 
@@ -357,7 +357,7 @@ pub(super) fn add_source_resolution_strategy(
 }
 ```
 
-- [ ] **Step 6: Replace add flow metadata encoding with atomic typed upsert helpers**
+- [x] **Step 6: Replace add flow metadata encoding with atomic typed upsert helpers**
 
 In `src-tauri/src/sources/store.rs`, change imports from `peer_resolution` to:
 
@@ -470,7 +470,7 @@ let source_id = upsert_telegram_source_with_identity(
 load_source_record(&handle, &pool, source_id).await
 ```
 
-- [ ] **Step 7: Change typed identity helper to avoid `SourceMetadata`**
+- [x] **Step 7: Change typed identity helper to avoid `SourceMetadata`**
 
 Replace `upsert_telegram_source_identity_from_resolved` with:
 
@@ -531,7 +531,7 @@ async fn upsert_telegram_source_identity_from_resolved(
 }
 ```
 
-- [ ] **Step 8: Run store GREEN tests**
+- [x] **Step 8: Run store GREEN tests**
 
 Run:
 
@@ -541,7 +541,7 @@ cargo test --manifest-path src-tauri/Cargo.toml telegram_source_upsert_
 
 Expected: all tests with `telegram_source_upsert_` pass.
 
-- [ ] **Step 9: Run store module tests**
+- [x] **Step 9: Run store module tests**
 
 Run:
 
@@ -551,7 +551,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::store
 
 Expected: store tests pass.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 Run:
 
