@@ -85,8 +85,8 @@ Add a new provider-specific table:
 CREATE TABLE telegram_messages (
     item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-    telegram_peer_kind TEXT NOT NULL,
-    telegram_peer_id INTEGER NOT NULL,
+    history_peer_kind TEXT NOT NULL,
+    history_peer_id INTEGER NOT NULL,
     telegram_message_id INTEGER NOT NULL,
     migration_domain TEXT,
     is_migrated_history INTEGER NOT NULL DEFAULT 0,
@@ -97,8 +97,7 @@ CREATE TABLE telegram_messages (
     reaction_count INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
-    CHECK (telegram_peer_kind IN ('channel', 'chat', 'user')),
-    CHECK (telegram_peer_id > 0),
+    CHECK (history_peer_kind IN ('channel', 'chat', 'user')),
     CHECK (telegram_message_id > 0),
     CHECK (is_migrated_history IN (0, 1)),
     CHECK (
@@ -111,8 +110,8 @@ CREATE TABLE telegram_messages (
 CREATE UNIQUE INDEX ux_telegram_messages_native_identity
     ON telegram_messages (
         source_id,
-        telegram_peer_kind,
-        telegram_peer_id,
+        history_peer_kind,
+        history_peer_id,
         telegram_message_id
     );
 
@@ -126,13 +125,23 @@ CREATE INDEX idx_telegram_messages_source_reply_top
 Native Telegram duplicate identity is:
 
 ```text
-source_id + telegram_peer_kind + telegram_peer_id + telegram_message_id
+source_id + history_peer_kind + history_peer_id + telegram_message_id
 ```
 
 `migration_domain` is intentionally not part of the first unique key. The
-history domain is the Telegram peer kind/id pair. If live validation later
+history domain is the Telegram history peer kind/id pair. For non-migrated
+current history, `history_peer_kind` and `history_peer_id` usually equal the
+resolved source peer. For migrated history, they must identify the original
+Telegram history domain, not necessarily the current source peer. If live validation later
 proves that a second discriminator is required, a future migration can promote
 `migration_domain` into the unique identity.
+
+`history_peer_id` must use the same normalized integer representation already
+used by `telegram_sources.peer_id`. Migration 21 must not add a stronger
+database check for `history_peer_id` than `telegram_sources.peer_id` has unless
+implementation tests prove that all supported stored peer ids satisfy that
+check. If the normalized representation can be signed, the schema must allow
+signed values before migration 21 ships.
 
 `items.external_id` remains the message id string for compatibility. It is not
 the authoritative Telegram duplicate key after this slice.
@@ -213,10 +222,18 @@ must choose an equivalent deterministic YouTube upsert strategy before dropping
 Introduce a Telegram-specific insert path, for example
 `insert_telegram_source_item`.
 
+The Rust identity type should use the same vocabulary as the schema. If the
+type is named `TelegramMessageIdentity`, its `history_peer_*` fields should
+carry an inline comment equivalent to:
+
+```rust
+/// Telegram history/origin peer for this message, not necessarily the current source peer.
+```
+
 The insert path must:
 
 1. Receive or derive a `TelegramMessageIdentity` containing
-   `telegram_peer_kind`, `telegram_peer_id`, and `telegram_message_id`.
+   `history_peer_kind`, `history_peer_id`, and `telegram_message_id`.
 2. Run in a transaction.
 3. Check or insert by `telegram_messages` native unique identity.
 4. Insert a new `items` row when the native identity does not already exist.
@@ -312,7 +329,7 @@ Runtime tests:
 - Telegram insert allows the same message id for different peer domains under
   one source;
 - normal sync helper builds typed identity from message peer/id;
-- Takeout raw parse propagates peer kind/id and message id into the insert
+- Takeout raw parse propagates history peer kind/id and message id into the insert
   request;
 - Takeout import can insert two synthetic messages with the same message id and
   different raw peer domains;
