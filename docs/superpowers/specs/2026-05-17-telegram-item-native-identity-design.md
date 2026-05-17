@@ -146,6 +146,12 @@ signed values before migration 21 ships.
 `items.external_id` remains the message id string for compatibility. It is not
 the authoritative Telegram duplicate key after this slice.
 
+`telegram_messages.item_id` must always reference an `items` row whose
+`item_kind = 'telegram_message'`. This is an application invariant for the
+first slice rather than a database trigger. Migration and runtime tests must
+enforce the invariant. If later code creates a need for database-level
+enforcement, add a trigger in a separate hardening slice.
+
 ## Migration Contract
 
 Add migration 21.
@@ -227,6 +233,16 @@ DO UPDATE SET
 If SQLite or SQLx rejects that conflict-target shape in local tests, the plan
 must choose an equivalent deterministic YouTube upsert strategy before dropping
 `idx_items_ext`.
+
+Post-migration integrity checks:
+
+- `PRAGMA foreign_key_check` returns no rows.
+- No `telegram_messages` row points to a non-Telegram source item.
+- Every `telegram_messages.item_id` has a matching `items` row with
+  `items.item_kind = 'telegram_message'`.
+- No duplicate native Telegram identities exist.
+- Non-Telegram duplicate rows by `(source_id, external_id)` are detected before
+  creating `ux_items_non_telegram_external`.
 
 ## Runtime Contract
 
@@ -323,6 +339,7 @@ Migration errors:
 - Creating the new table or indexes failing is a startup migration error.
 - Backfill skips malformed legacy rows instead of failing the migration.
 - Foreign-key violations after migration are a migration failure.
+- Post-migration integrity check failures are migration failures.
 
 Runtime errors:
 
@@ -348,6 +365,11 @@ Migration tests:
   before replacing `idx_items_ext`;
 - `ux_telegram_messages_native_identity` exists with the expected columns;
 - non-Telegram partial uniqueness exists;
+- `PRAGMA foreign_key_check` returns no rows after migration 21;
+- a fixture with `telegram_messages.item_id` pointing to a non-telegram item
+  violates the application invariant in migration/runtime validation tests;
+- non-Telegram duplicate `(source_id, external_id)` rows are detected before
+  `ux_items_non_telegram_external` is created;
 - valid legacy Telegram message rows are backfilled;
 - malformed `items.external_id` rows are skipped without failing migration;
 - duplicate Telegram message ids with different peer domains are allowed;
