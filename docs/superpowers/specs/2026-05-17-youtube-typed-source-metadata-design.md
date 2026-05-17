@@ -138,6 +138,69 @@ SQLite cannot enforce cross-table subtype checks directly with ordinary CHECK
 constraints, so Rust upsert/backfill code must validate these invariants and
 tests must cover mismatch rejection.
 
+### Value Domains
+
+`video_form` uses the existing `YoutubeVideoForm` snake_case wire values:
+
+- `regular`
+- `short`
+- `live`
+
+`availability_status` uses the existing `YoutubeAvailabilityStatus` snake_case
+wire values:
+
+- `available`
+- `upcoming`
+- `live_now`
+- `live_ended_transcript_pending`
+- `no_captions`
+- `private_or_auth_required`
+- `members_only`
+- `age_restricted`
+- `geo_blocked`
+- `deleted`
+- `removed_from_playlist`
+- `unavailable_unknown`
+
+Video and playlist source rows share this vocabulary with
+`youtube_playlist_items.availability_status` for compatibility, but the meaning
+is scoped to the owning table. In typed source tables, it describes the source's
+current availability. In `youtube_playlist_items`, it describes the playlist
+entry's availability and lifecycle. Direct video/playlist metadata refresh
+should not produce source-level `removed_from_playlist`; that value remains
+valid for playlist entry lifecycle and legacy compatibility.
+
+`tags_json` stores a JSON array of strings. `chapters_json` stores a JSON array
+of chapter objects with `index`, `title`, `start_ms`, and optional `end_ms`.
+Empty arrays are stored as `[]`. Invalid JSON or non-array values make the typed
+row invalid for normal runtime until explicit metadata refresh or managed
+migration/backfill code rewrites the row.
+
+### Valid Typed Metadata
+
+A YouTube typed metadata row is valid when all of these are true:
+
+- the matching parent `sources` row exists;
+- the parent source has `source_type = 'youtube'`;
+- a video typed row has parent `source_subtype = 'video'`;
+- a playlist typed row has parent `source_subtype = 'playlist'`;
+- `youtube_video_sources.video_id` or `youtube_playlist_sources.playlist_id`
+  equals `sources.external_id`;
+- `canonical_url` is non-empty after trimming and parses as a supported YouTube
+  URL for the row subtype;
+- video rows have `video_form` set to one of the supported `YoutubeVideoForm`
+  wire values;
+- `availability_status` is one of the supported `YoutubeAvailabilityStatus`
+  wire values;
+- `tags_json` and `chapters_json` parse as arrays;
+- `created_at` and `updated_at` are present and non-negative when supplied by
+  migration or upsert code.
+
+Rows that fail these checks are treated the same as missing typed metadata:
+job-owned provider commands may refresh them explicitly, while read-only
+listing, detail, and analysis return controlled missing-metadata or degraded
+state and do not fall back to source blobs.
+
 ## Raw Provider Payload Policy
 
 The typed tables may store an optional compressed raw provider payload:
@@ -148,10 +211,15 @@ The typed tables may store an optional compressed raw provider payload:
 - Normal listing, detail, jobs, and analysis paths must not decode
   `raw_metadata_zstd`.
 - Runtime provider work should use typed columns. Any provider-work field needed
-  after source creation, such as `caption_language_override`, must be promoted
-  to a typed column or treated as absent.
+  after source creation must be promoted to a typed column or treated as absent.
 - Reparse/debug tooling may decode `raw_metadata_zstd`, but that must be an
   explicit compatibility/debug path, not a normal read path.
+
+`caption_language_override` is a typed provider hint copied from the video
+metadata payload when present. It is not a user setting, not the selected
+transcript language, and not segment evidence. Jobs may pass it to caption
+selection as a provider-supplied preference for that video. Persisted transcript
+language and track evidence remains in `youtube_transcript_segments`.
 
 ## Migration And Backfill
 
