@@ -7,6 +7,12 @@ pub(crate) const FORUM_SOURCE_TYPE: &str = "forum";
 pub(crate) const TELEGRAM_KIND_CHANNEL: &str = "channel";
 pub(crate) const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
 pub(crate) const TELEGRAM_KIND_GROUP: &str = "group";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_PEER_KIND_CHANNEL: &str = "channel";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_PEER_KIND_CHAT: &str = "chat";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_PEER_KIND_USER: &str = "user";
 pub(crate) const ITEM_KIND_TELEGRAM_MESSAGE: &str = "telegram_message";
 pub(crate) const ITEM_KIND_YOUTUBE_TRANSCRIPT: &str = "youtube_transcript";
 pub(crate) const ITEM_KIND_YOUTUBE_COMMENT: &str = "youtube_comment";
@@ -72,6 +78,50 @@ pub struct TelegramSourceInfo {
     pub source_subtype: String,
     pub is_member: bool,
     pub photo_data_url: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) struct TelegramMessageIdentity {
+    /// Telegram history/origin peer for this message, not necessarily the current source peer.
+    pub(crate) history_peer_kind: String,
+    pub(crate) history_peer_id: i64,
+    pub(crate) telegram_message_id: i64,
+    pub(crate) migration_domain: Option<String>,
+    pub(crate) is_migrated_history: bool,
+}
+
+#[allow(dead_code)]
+impl TelegramMessageIdentity {
+    pub(crate) fn validate(&self) -> crate::error::AppResult<()> {
+        if !matches!(
+            self.history_peer_kind.as_str(),
+            TELEGRAM_PEER_KIND_CHANNEL | TELEGRAM_PEER_KIND_CHAT | TELEGRAM_PEER_KIND_USER
+        ) {
+            return Err(crate::error::AppError::validation(format!(
+                "Unsupported Telegram history peer kind '{}'",
+                self.history_peer_kind
+            )));
+        }
+        if self.history_peer_id <= 0 {
+            return Err(crate::error::AppError::validation(
+                "Telegram history peer id must be positive",
+            ));
+        }
+        if self.telegram_message_id <= 0 {
+            return Err(crate::error::AppError::validation(
+                "Telegram message id must be positive",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) struct TelegramSourcePeerIdentity {
+    pub(crate) peer_kind: String,
+    pub(crate) peer_id: i64,
 }
 
 #[derive(Serialize)]
@@ -170,8 +220,8 @@ pub(super) fn now_secs() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        SourceType, TelegramSourceKind, ITEM_KIND_TELEGRAM_MESSAGE, ITEM_KIND_YOUTUBE_COMMENT,
-        ITEM_KIND_YOUTUBE_TRANSCRIPT,
+        SourceType, TelegramMessageIdentity, TelegramSourceKind, ITEM_KIND_TELEGRAM_MESSAGE,
+        ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT, TELEGRAM_PEER_KIND_CHANNEL,
     };
 
     #[test]
@@ -250,5 +300,32 @@ mod tests {
         assert_eq!(ITEM_KIND_TELEGRAM_MESSAGE, "telegram_message");
         assert_eq!(ITEM_KIND_YOUTUBE_TRANSCRIPT, "youtube_transcript");
         assert_eq!(ITEM_KIND_YOUTUBE_COMMENT, "youtube_comment");
+    }
+
+    #[test]
+    fn telegram_message_identity_validation_rejects_invalid_values() {
+        let invalid_kind = TelegramMessageIdentity {
+            history_peer_kind: "supergroup".to_string(),
+            history_peer_id: 1,
+            telegram_message_id: 1,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+        assert_eq!(
+            invalid_kind.validate().expect_err("reject kind").kind,
+            crate::error::AppErrorKind::Validation
+        );
+
+        let invalid_message = TelegramMessageIdentity {
+            history_peer_kind: TELEGRAM_PEER_KIND_CHANNEL.to_string(),
+            history_peer_id: 1,
+            telegram_message_id: 0,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+        assert_eq!(
+            invalid_message.validate().expect_err("reject id").kind,
+            crate::error::AppErrorKind::Validation
+        );
     }
 }

@@ -94,6 +94,13 @@ pub(crate) async fn create_youtube_typed_source_tables(pool: &sqlx::SqlitePool) 
         .expect("create youtube typed source metadata tables");
 }
 
+pub(crate) async fn create_telegram_messages_table(pool: &sqlx::SqlitePool) {
+    sqlx::raw_sql(crate::migrations::telegram_item_native_identity::TELEGRAM_MESSAGES_SCHEMA_SQL)
+        .execute(pool)
+        .await
+        .expect("create telegram_messages");
+}
+
 pub(crate) async fn create_canonical_telegram_identity_index(pool: &sqlx::SqlitePool) {
     sqlx::query(
         r#"
@@ -137,6 +144,7 @@ pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePo
     .await
     .expect("create items");
     create_item_identity_indexes(&pool).await;
+    create_telegram_messages_table(&pool).await;
     sqlx::query(
         r#"
         CREATE TABLE telegram_forum_topics (

@@ -30,9 +30,10 @@ pub use topics::SourceForumTopicRecord;
 pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind};
 
 pub(crate) use identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
+#[allow(unused_imports)]
 pub(crate) use items::{
-    insert_source_item, upsert_youtube_comment_item, upsert_youtube_transcript_item,
-    SourceItemInsert, TelegramItemContext,
+    insert_source_item, insert_telegram_source_item, upsert_youtube_comment_item,
+    upsert_youtube_transcript_item, SourceItemInsert, TelegramItemContext,
 };
 pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
 pub(crate) use store::{

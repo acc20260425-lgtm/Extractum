@@ -1209,7 +1209,7 @@ git commit -m "feat: target non-telegram item upsert uniqueness"
 - Modify: `src-tauri/src/sources/items.rs`
 - Modify: `src-tauri/src/sources/mod.rs`
 
-- [ ] **Step 1: Add Telegram identity types**
+- [x] **Step 1: Add Telegram identity types**
 
 In `src-tauri/src/sources/types.rs`, add constants:
 
@@ -1294,7 +1294,7 @@ fn telegram_message_identity_validation_rejects_invalid_values() {
 }
 ```
 
-- [ ] **Step 2: Add test helper for `telegram_messages`**
+- [x] **Step 2: Add test helper for `telegram_messages`**
 
 In `src-tauri/src/sources/test_support.rs`, add:
 
@@ -1315,7 +1315,7 @@ pub(crate) const TELEGRAM_MESSAGES_SCHEMA_SQL: &str = r#"...";
 
 Call `create_telegram_messages_table(&pool).await;` from `memory_pool_with_source_items_and_topics`.
 
-- [ ] **Step 3: Add RED tests for Telegram native insert behavior**
+- [x] **Step 3: Add RED tests for Telegram native insert behavior**
 
 In `src-tauri/src/sources/items.rs`, add tests:
 
@@ -1427,7 +1427,7 @@ fn telegram_insert(external_id: &str, content: &str) -> SourceItemInsert {
 
 Update the test imports to include `insert_telegram_source_item` and `TelegramMessageIdentity`.
 
-- [ ] **Step 4: Run Telegram insert tests and verify RED**
+- [x] **Step 4: Run Telegram insert tests and verify RED**
 
 Run:
 
@@ -1437,7 +1437,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::items::insert_telegram_
 
 Expected: fail because the helper does not exist.
 
-- [ ] **Step 5: Implement `insert_telegram_source_item`**
+- [x] **Step 5: Implement `insert_telegram_source_item`**
 
 In `src-tauri/src/sources/items.rs`, import `TelegramMessageIdentity`.
 
@@ -1654,7 +1654,7 @@ pub(crate) use items::{
 };
 ```
 
-- [ ] **Step 6: Run Telegram insert tests and verify GREEN**
+- [x] **Step 6: Run Telegram insert tests and verify GREEN**
 
 Run:
 
@@ -1668,7 +1668,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Run item and type tests**
+- [x] **Step 7: Run item and type tests**
 
 Run:
 
@@ -1682,7 +1682,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/sources/types.rs src-tauri/src/sources/test_support.rs src-tauri/src/sources/items.rs src-tauri/src/sources/mod.rs src-tauri/src/migrations/telegram_item_native_identity.rs

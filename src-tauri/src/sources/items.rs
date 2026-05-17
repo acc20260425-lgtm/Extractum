@@ -10,7 +10,8 @@ use crate::media::{decode_media_metadata, encode_media_metadata, ExtractedItemPa
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::types::{
-    now_secs, StoredItemRow, ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
+    now_secs, StoredItemRow, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+    ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
 };
 use query::load_item_rows_from_pool;
 
@@ -81,11 +82,16 @@ pub(crate) struct TelegramItemContext {
     pub(crate) reaction_count: Option<i64>,
 }
 
-pub(crate) async fn insert_source_item(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    source_id: i64,
-    item: SourceItemInsert,
-) -> AppResult<bool> {
+struct PreparedSourceItem {
+    content_zstd: Option<Vec<u8>>,
+    raw_data_zstd: Vec<u8>,
+    content_kind: String,
+    has_media: bool,
+    media_kind: Option<String>,
+    media_metadata_zstd: Option<Vec<u8>>,
+}
+
+fn prepare_source_item(item: &SourceItemInsert) -> AppResult<Option<PreparedSourceItem>> {
     let content_zstd = item
         .payload
         .content
@@ -103,10 +109,28 @@ pub(crate) async fn insert_source_item(
         .map_err(AppError::internal)?;
 
     if content_zstd.is_none() && media_metadata_zstd.is_none() {
-        return Ok(false);
+        return Ok(None);
     }
 
     let raw_data_zstd = compress_json_bytes(&item.raw_data).map_err(AppError::internal)?;
+    Ok(Some(PreparedSourceItem {
+        content_zstd,
+        raw_data_zstd,
+        content_kind: item.payload.content_kind.to_string(),
+        has_media: item.payload.media.is_some(),
+        media_kind,
+        media_metadata_zstd,
+    }))
+}
+
+pub(crate) async fn insert_source_item(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    item: SourceItemInsert,
+) -> AppResult<bool> {
+    let Some(prepared) = prepare_source_item(&item)? else {
+        return Ok(false);
+    };
     let result = sqlx::query(
         r#"
         INSERT INTO items (
@@ -138,12 +162,12 @@ pub(crate) async fn insert_source_item(
     .bind(&item.author)
     .bind(item.published_at)
     .bind(now_secs())
-    .bind(content_zstd)
-    .bind(raw_data_zstd)
-    .bind(item.payload.content_kind)
-    .bind(item.payload.media.is_some())
-    .bind(&media_kind)
-    .bind(media_metadata_zstd)
+    .bind(prepared.content_zstd)
+    .bind(prepared.raw_data_zstd)
+    .bind(prepared.content_kind)
+    .bind(prepared.has_media)
+    .bind(prepared.media_kind)
+    .bind(prepared.media_metadata_zstd)
     .bind(item.telegram_context.reply_to_msg_id)
     .bind(&item.telegram_context.reply_to_peer_kind)
     .bind(&item.telegram_context.reply_to_peer_id)
@@ -154,6 +178,161 @@ pub(crate) async fn insert_source_item(
     .map_err(|e| AppError::internal(e.to_string()))?;
 
     Ok(result.rows_affected() == 1)
+}
+
+#[allow(dead_code)]
+pub(crate) async fn insert_telegram_source_item(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    identity: TelegramMessageIdentity,
+    item: SourceItemInsert,
+) -> AppResult<bool> {
+    identity.validate()?;
+    if item.item_kind != ITEM_KIND_TELEGRAM_MESSAGE {
+        return Err(AppError::validation(format!(
+            "insert_telegram_source_item requires item_kind '{ITEM_KIND_TELEGRAM_MESSAGE}'"
+        )));
+    }
+    let Some(prepared) = prepare_source_item(&item)? else {
+        return Ok(false);
+    };
+
+    let mut conn = pool.acquire().await.map_err(AppError::database)?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+
+    let result: AppResult<bool> = async {
+        let existing: Option<i64> = sqlx::query_scalar(
+            r#"
+            SELECT item_id
+            FROM telegram_messages
+            WHERE source_id = ?
+              AND history_peer_kind = ?
+              AND history_peer_id = ?
+              AND telegram_message_id = ?
+            "#,
+        )
+        .bind(source_id)
+        .bind(&identity.history_peer_kind)
+        .bind(identity.history_peer_id)
+        .bind(identity.telegram_message_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+        if existing.is_some() {
+            return Ok(false);
+        }
+
+        let item_id: i64 = sqlx::query_scalar(
+            r#"
+            INSERT INTO items (
+                source_id,
+                external_id,
+                item_kind,
+                author,
+                published_at,
+                ingested_at,
+                content_zstd,
+                raw_data_zstd,
+                content_kind,
+                has_media,
+                media_kind,
+                media_metadata_zstd,
+                reply_to_msg_id,
+                reply_to_peer_kind,
+                reply_to_peer_id,
+                reply_to_top_id,
+                reaction_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            "#,
+        )
+        .bind(source_id)
+        .bind(identity.telegram_message_id.to_string())
+        .bind(&item.item_kind)
+        .bind(&item.author)
+        .bind(item.published_at)
+        .bind(now_secs())
+        .bind(prepared.content_zstd)
+        .bind(prepared.raw_data_zstd)
+        .bind(prepared.content_kind)
+        .bind(prepared.has_media)
+        .bind(prepared.media_kind)
+        .bind(prepared.media_metadata_zstd)
+        .bind(item.telegram_context.reply_to_msg_id)
+        .bind(&item.telegram_context.reply_to_peer_kind)
+        .bind(&item.telegram_context.reply_to_peer_id)
+        .bind(item.telegram_context.reply_to_top_id)
+        .bind(item.telegram_context.reaction_count)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO telegram_messages (
+                item_id,
+                source_id,
+                history_peer_kind,
+                history_peer_id,
+                telegram_message_id,
+                migration_domain,
+                is_migrated_history,
+                reply_to_msg_id,
+                reply_to_peer_kind,
+                reply_to_peer_id,
+                reply_to_top_id,
+                reaction_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(&identity.history_peer_kind)
+        .bind(identity.history_peer_id)
+        .bind(identity.telegram_message_id)
+        .bind(&identity.migration_domain)
+        .bind(i64::from(identity.is_migrated_history))
+        .bind(item.telegram_context.reply_to_msg_id)
+        .bind(&item.telegram_context.reply_to_peer_kind)
+        .bind(
+            item.telegram_context
+                .reply_to_peer_id
+                .as_deref()
+                .and_then(|value| value.parse::<i64>().ok()),
+        )
+        .bind(item.telegram_context.reply_to_top_id)
+        .bind(item.telegram_context.reaction_count)
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+
+        Ok(true)
+    }
+    .await;
+
+    match result {
+        Ok(inserted) => {
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(AppError::database)?;
+            Ok(inserted)
+        }
+        Err(error) => {
+            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+            if error.kind == crate::error::AppErrorKind::Conflict
+                || error.message.contains("telegram_messages")
+            {
+                return Ok(false);
+            }
+            Err(error)
+        }
+    }
 }
 
 pub(crate) async fn upsert_youtube_transcript_item(
@@ -403,9 +582,10 @@ pub(super) fn build_raw_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_media_metadata, encode_media_metadata, insert_source_item, reply_peer_context, tl,
-        upsert_youtube_comment_item, upsert_youtube_transcript_item, ForumTopicFilter,
-        SourceItemInsert, StoredItemRow, TelegramItemContext,
+        decode_media_metadata, encode_media_metadata, insert_source_item,
+        insert_telegram_source_item, reply_peer_context, tl, upsert_youtube_comment_item,
+        upsert_youtube_transcript_item, ForumTopicFilter, SourceItemInsert, StoredItemRow,
+        TelegramItemContext,
     };
     use crate::compression::{compress_text, decompress_bytes, decompress_text};
     use crate::media::{
@@ -415,7 +595,7 @@ mod tests {
     use crate::sources::test_support::{
         create_item_identity_indexes, memory_pool_with_source_items_and_topics,
     };
-    use crate::sources::types::ITEM_KIND_TELEGRAM_MESSAGE;
+    use crate::sources::types::{TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE};
 
     #[test]
     fn forum_topic_filter_deserializes_camel_case_topic_id() {
@@ -555,6 +735,97 @@ mod tests {
             decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
             br#"{"id":42}"#.to_vec()
         );
+    }
+
+    #[tokio::test]
+    async fn insert_telegram_source_item_skips_duplicate_native_identity_without_updating_payload()
+    {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_item_source(&pool, 1).await;
+        let identity = TelegramMessageIdentity {
+            history_peer_kind: "channel".to_string(),
+            history_peer_id: 12345,
+            telegram_message_id: 42,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+
+        let inserted = insert_telegram_source_item(
+            &pool,
+            1,
+            identity.clone(),
+            telegram_insert("42", "first payload"),
+        )
+        .await
+        .expect("insert first");
+        assert!(inserted);
+
+        let duplicate = insert_telegram_source_item(
+            &pool,
+            1,
+            identity,
+            telegram_insert("42", "second payload"),
+        )
+        .await
+        .expect("skip duplicate");
+        assert!(!duplicate);
+
+        let content: Vec<u8> = sqlx::query_scalar(
+            "SELECT content_zstd FROM items WHERE source_id = 1 AND external_id = '42'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load content");
+        assert_eq!(
+            decompress_text(&content).expect("decode content"),
+            "first payload"
+        );
+
+        let child_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM telegram_messages")
+            .fetch_one(&pool)
+            .await
+            .expect("count child rows");
+        assert_eq!(child_count, 1);
+    }
+
+    #[tokio::test]
+    async fn insert_telegram_source_item_allows_same_message_id_in_different_history_domains() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_item_source(&pool, 1).await;
+
+        let first = TelegramMessageIdentity {
+            history_peer_kind: "channel".to_string(),
+            history_peer_id: 12345,
+            telegram_message_id: 42,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+        let second = TelegramMessageIdentity {
+            history_peer_kind: "chat".to_string(),
+            history_peer_id: 777,
+            telegram_message_id: 42,
+            migration_domain: Some("migrated_from_chat".to_string()),
+            is_migrated_history: true,
+        };
+
+        assert!(
+            insert_telegram_source_item(&pool, 1, first, telegram_insert("42", "current"))
+                .await
+                .expect("insert current")
+        );
+        assert!(
+            insert_telegram_source_item(&pool, 1, second, telegram_insert("42", "migrated"))
+                .await
+                .expect("insert migrated")
+        );
+
+        let item_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM items WHERE source_id = 1 AND external_id = '42'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count items");
+        assert_eq!(item_count, 2);
     }
 
     #[tokio::test]
@@ -802,5 +1073,33 @@ mod tests {
         .execute(pool)
         .await
         .expect("create legacy items unique index");
+    }
+
+    async fn seed_item_source(pool: &sqlx::SqlitePool, source_id: i64) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
+             VALUES (?, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .execute(pool)
+        .await
+        .expect("seed source");
+    }
+
+    fn telegram_insert(external_id: &str, content: &str) -> SourceItemInsert {
+        SourceItemInsert {
+            external_id: external_id.to_string(),
+            item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
+            author: Some("alice".to_string()),
+            published_at: 1234,
+            payload: ExtractedItemPayload {
+                content: Some(content.to_string()),
+                content_kind: CONTENT_KIND_TEXT_ONLY,
+                media: None,
+            },
+            raw_data: serde_json::to_vec(&serde_json::json!({ "id": external_id }))
+                .expect("raw json"),
+            telegram_context: TelegramItemContext::default(),
+        }
     }
 }
