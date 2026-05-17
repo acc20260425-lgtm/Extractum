@@ -115,7 +115,7 @@ Expected: only the branch header, with no modified files.
 - Create: `src-tauri/src/migrations/telegram_item_native_identity.rs`
 - Modify: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Add RED migration registration tests**
+- [x] **Step 1: Add RED migration registration tests**
 
 In `src-tauri/src/migrations.rs`, add the module declaration near the other migration modules:
 
@@ -162,7 +162,7 @@ Update the existing version-list assertion:
 assert_eq!(versions, (1_i64..=21_i64).collect::<Vec<_>>());
 ```
 
-- [ ] **Step 2: Run registration tests and verify RED**
+- [x] **Step 2: Run registration tests and verify RED**
 
 Run:
 
@@ -172,7 +172,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runn
 
 Expected: fail because migration 21 is not registered yet.
 
-- [ ] **Step 3: Add the sentinel SQL file**
+- [x] **Step 3: Add the sentinel SQL file**
 
 Create `src-tauri/migrations/21.sql`:
 
@@ -185,7 +185,7 @@ Create `src-tauri/migrations/21.sql`:
 SELECT extractum_runner_managed_migration_21();
 ```
 
-- [ ] **Step 4: Register migration 21**
+- [x] **Step 4: Register migration 21**
 
 In `src-tauri/src/migrations.rs`, append this entry after version 20:
 
@@ -212,7 +212,7 @@ youtube_typed_source_metadata::apply_youtube_typed_source_metadata_on_connection
 telegram_item_native_identity::apply_telegram_item_native_identity_on_connection(conn).await
 ```
 
-- [ ] **Step 5: Add the runner-managed migration skeleton**
+- [x] **Step 5: Add the runner-managed migration skeleton**
 
 Create `src-tauri/src/migrations/telegram_item_native_identity.rs`:
 
@@ -409,7 +409,7 @@ CREATE INDEX IF NOT EXISTS idx_telegram_messages_source_reply_top
 "#;
 ```
 
-- [ ] **Step 6: Run registration tests and verify GREEN**
+- [x] **Step 6: Run registration tests and verify GREEN**
 
 Run:
 
@@ -423,7 +423,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/migrations/21.sql src-tauri/src/migrations.rs src-tauri/src/migrations/telegram_item_native_identity.rs
