@@ -283,7 +283,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
 
@@ -322,7 +321,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
 
@@ -341,7 +339,6 @@ mod tests {
             account_id: None,
             external_id: "dQw4w9WgXcQ".to_string(),
             title: Some("Demo video".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
 

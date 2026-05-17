@@ -918,7 +918,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
         let metadata = SourceMetadata {
@@ -947,7 +946,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
         let metadata = SourceMetadata {
@@ -976,7 +974,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
         let metadata = SourceMetadata {
@@ -1003,7 +1000,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
         let metadata = SourceMetadata {
@@ -1030,7 +1026,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
 
@@ -1049,7 +1044,6 @@ mod tests {
             account_id: Some(1),
             external_id: "not-a-number".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
 
@@ -1068,7 +1062,6 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
-            metadata_zstd: None,
             last_sync_state: None,
         };
         let metadata = SourceMetadata {

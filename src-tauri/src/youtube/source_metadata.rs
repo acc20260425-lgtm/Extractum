@@ -101,6 +101,45 @@ pub(crate) struct YoutubeVideoDescriptionMetadata {
     pub(crate) description: Option<String>,
 }
 
+impl YoutubeVideoSourceMetadata {
+    pub(crate) fn video_form_for_provider(&self) -> Option<YoutubeVideoForm> {
+        match self.video_form.as_str() {
+            "regular" => Some(YoutubeVideoForm::Regular),
+            "short" => Some(YoutubeVideoForm::Short),
+            "live" => Some(YoutubeVideoForm::Live),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn to_provider_metadata(&self) -> YoutubeVideoMetadata {
+        YoutubeVideoMetadata {
+            video_id: self.video_id.clone(),
+            canonical_url: self.canonical_url.clone(),
+            title: self.title.clone(),
+            channel_title: self.channel_title.clone(),
+            channel_id: None,
+            channel_handle: self.channel_handle.clone(),
+            channel_url: None,
+            author_display: self.author_display.clone(),
+            published_at: self.published_at.clone(),
+            duration_seconds: self.duration_seconds,
+            description: self.description.clone(),
+            thumbnail_url: self.thumbnail_url.clone(),
+            tags: Vec::new(),
+            chapters: Vec::new(),
+            view_count: None,
+            like_count: None,
+            comment_count: None,
+            category: None,
+            video_form: self
+                .video_form_for_provider()
+                .unwrap_or(YoutubeVideoForm::Regular),
+            availability_status: availability_status_from_wire(&self.availability_status),
+            raw_metadata_json: Value::Null,
+        }
+    }
+}
+
 impl YoutubeVideoSourceColumns {
     pub(crate) fn try_from_metadata(metadata: &YoutubeVideoMetadata) -> AppResult<Self> {
         validate_video_canonical_url(&metadata.video_id, &metadata.canonical_url)?;
@@ -539,6 +578,23 @@ fn is_availability_status_wire(value: &str) -> bool {
     )
 }
 
+fn availability_status_from_wire(value: &str) -> YoutubeAvailabilityStatus {
+    match value {
+        "available" => YoutubeAvailabilityStatus::Available,
+        "upcoming" => YoutubeAvailabilityStatus::Upcoming,
+        "live_now" => YoutubeAvailabilityStatus::LiveNow,
+        "live_ended_transcript_pending" => YoutubeAvailabilityStatus::LiveEndedTranscriptPending,
+        "no_captions" => YoutubeAvailabilityStatus::NoCaptions,
+        "private_or_auth_required" => YoutubeAvailabilityStatus::PrivateOrAuthRequired,
+        "members_only" => YoutubeAvailabilityStatus::MembersOnly,
+        "age_restricted" => YoutubeAvailabilityStatus::AgeRestricted,
+        "geo_blocked" => YoutubeAvailabilityStatus::GeoBlocked,
+        "deleted" => YoutubeAvailabilityStatus::Deleted,
+        "removed_from_playlist" => YoutubeAvailabilityStatus::RemovedFromPlaylist,
+        _ => YoutubeAvailabilityStatus::UnavailableUnknown,
+    }
+}
+
 fn json_text_is_array(value: &str) -> bool {
     serde_json::from_str::<Value>(value).is_ok_and(|value| value.is_array())
 }
@@ -724,6 +780,20 @@ pub(crate) async fn upsert_video_source_metadata(
 ) -> AppResult<()> {
     let columns = YoutubeVideoSourceColumns::try_from_metadata(metadata)?;
     insert_video_source_columns(&mut **tx, source_id, &columns).await
+}
+
+#[cfg(test)]
+pub(crate) async fn insert_video_source_metadata_for_pool_test(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+    metadata: &YoutubeVideoMetadata,
+) {
+    let columns =
+        YoutubeVideoSourceColumns::try_from_metadata(metadata).expect("valid video metadata");
+    let mut conn = pool.acquire().await.expect("acquire sqlite connection");
+    insert_video_source_columns(&mut conn, source_id, &columns)
+        .await
+        .expect("insert typed video metadata");
 }
 
 pub(crate) async fn upsert_playlist_source_metadata(

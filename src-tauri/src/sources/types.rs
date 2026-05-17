@@ -99,7 +99,6 @@ pub(crate) struct SourceSyncTarget {
     pub(crate) account_id: Option<i64>,
     pub(crate) external_id: String,
     pub(crate) title: Option<String>,
-    pub(crate) metadata_zstd: Option<Vec<u8>>,
     pub(crate) last_sync_state: Option<i64>,
 }
 

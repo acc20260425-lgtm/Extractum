@@ -99,7 +99,7 @@ pub(crate) async fn load_source(
     source_id: i64,
 ) -> AppResult<SourceSyncTarget> {
     sqlx::query_as(
-        "SELECT id, source_type, source_subtype, account_id, external_id, title, metadata_zstd, last_sync_state FROM sources WHERE id = ?",
+        "SELECT id, source_type, source_subtype, account_id, external_id, title, last_sync_state FROM sources WHERE id = ?",
     )
     .bind(source_id)
     .fetch_optional(pool)

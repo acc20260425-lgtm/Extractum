@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
-use crate::compression::decompress_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::secret_store::SecretStoreState;
@@ -22,6 +21,9 @@ use super::dto::{YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata
 use super::metadata::{fetch_playlist_metadata, fetch_video_metadata};
 use super::playlist::upsert_playlist_items;
 use super::settings::load_youtube_auth_cookies_from_state;
+use super::source_metadata::{
+    load_playlist_source_metadata_map, load_video_source_metadata_map, YoutubeVideoSourceMetadata,
+};
 
 pub(crate) const SOURCE_JOB_EVENT: &str = "sources://source-job";
 
@@ -492,6 +494,43 @@ async fn run_source_job_steps(
     Ok(warnings)
 }
 
+async fn load_video_metadata_or_refresh<F, Fut>(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+    refresh: F,
+) -> AppResult<YoutubeVideoSourceMetadata>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = AppResult<()>>,
+{
+    if let Some(metadata) = load_video_source_metadata_map(pool, &[source_id])
+        .await?
+        .remove(&source_id)
+    {
+        return Ok(metadata);
+    }
+
+    refresh().await?;
+
+    load_video_source_metadata_map(pool, &[source_id])
+        .await?
+        .remove(&source_id)
+        .ok_or_else(|| {
+            AppError::validation(format!(
+                "Source {source_id} has missing or invalid typed YouTube video metadata"
+            ))
+        })
+}
+
+async fn load_playlist_metadata_for_refresh(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+) -> AppResult<Option<crate::youtube::source_metadata::YoutubePlaylistSourceMetadata>> {
+    Ok(load_playlist_source_metadata_map(pool, &[source_id])
+        .await?
+        .remove(&source_id))
+}
+
 async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<()> {
     let pool = get_pool(handle).await?;
     let source = load_source(&pool, source_id).await?;
@@ -505,18 +544,25 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
     }
 
     let payload = match source.source_subtype.as_deref() {
-        Some("playlist") => MetadataSyncPayload::Playlist(
-            fetch_playlist_metadata(&playlist_canonical_url(&source), cookies).await?,
-        ),
+        Some("playlist") => {
+            let typed = load_playlist_metadata_for_refresh(&pool, source_id).await?;
+            let canonical_url = typed
+                .as_ref()
+                .map(|metadata| metadata.canonical_url.clone())
+                .unwrap_or_else(|| playlist_canonical_url(&source));
+            MetadataSyncPayload::Playlist(fetch_playlist_metadata(&canonical_url, cookies).await?)
+        }
         _ => {
-            let existing = decode_video_metadata(&source);
-            let canonical_url = existing
+            let typed = load_video_source_metadata_map(&pool, &[source_id])
+                .await?
+                .remove(&source_id);
+            let canonical_url = typed
                 .as_ref()
                 .map(|metadata| metadata.canonical_url.clone())
                 .unwrap_or_else(|| video_canonical_url(&source));
-            let video_form = existing
+            let video_form = typed
                 .as_ref()
-                .map(|metadata| metadata.video_form.clone())
+                .and_then(|metadata| metadata.video_form_for_provider())
                 .unwrap_or(YoutubeVideoForm::Regular);
             MetadataSyncPayload::Video(
                 fetch_video_metadata(&canonical_url, video_form, cookies).await?,
@@ -541,7 +587,7 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
 
 async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResult<()> {
     let pool = get_pool(handle).await?;
-    let mut source = load_source(&pool, source_id).await?;
+    let source = load_source(&pool, source_id).await?;
     ensure_youtube_source(&source)?;
     if source.source_subtype.as_deref() != Some("video") {
         return Err(AppError::validation(format!(
@@ -549,21 +595,18 @@ async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResul
         )));
     }
 
-    if decode_video_metadata(&source).is_none() {
-        sync_youtube_metadata(handle, source_id).await?;
-        source = load_source(&pool, source_id).await?;
-    }
-
-    let metadata = decode_video_metadata(&source).ok_or_else(|| {
-        AppError::validation(format!("Source {source_id} has no YouTube video metadata"))
-    })?;
+    let metadata = load_video_metadata_or_refresh(&pool, source_id, || {
+        sync_youtube_metadata(handle, source_id)
+    })
+    .await?;
+    let metadata_for_provider = metadata.to_provider_metadata();
     let preferred_language = load_preferred_caption_language(&pool).await?;
     let secrets = handle.state::<SecretStoreState>();
     let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
     let transcript = fetch_transcript_for_video(
-        &metadata,
+        &metadata_for_provider,
         Some(preferred_language.as_str()),
-        caption_language_override(&metadata).as_deref(),
+        metadata.caption_language_override.as_deref(),
         cookies,
     )
     .await?;
@@ -612,7 +655,7 @@ async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResul
 
 async fn sync_youtube_comments(handle: &AppHandle, source_id: i64) -> AppResult<Vec<String>> {
     let pool = get_pool(handle).await?;
-    let mut source = load_source(&pool, source_id).await?;
+    let source = load_source(&pool, source_id).await?;
     ensure_youtube_source(&source)?;
     if source.source_subtype.as_deref() != Some("video") {
         return Err(AppError::validation(format!(
@@ -620,18 +663,15 @@ async fn sync_youtube_comments(handle: &AppHandle, source_id: i64) -> AppResult<
         )));
     }
 
-    if decode_video_metadata(&source).is_none() {
-        sync_youtube_metadata(handle, source_id).await?;
-        source = load_source(&pool, source_id).await?;
-    }
-
-    let metadata = decode_video_metadata(&source).ok_or_else(|| {
-        AppError::validation(format!("Source {source_id} has no YouTube video metadata"))
-    })?;
+    let metadata = load_video_metadata_or_refresh(&pool, source_id, || {
+        sync_youtube_metadata(handle, source_id)
+    })
+    .await?;
+    let metadata_for_provider = metadata.to_provider_metadata();
     let secrets = handle.state::<SecretStoreState>();
     let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
     let comments = fetch_comments_for_video(
-        &metadata,
+        &metadata_for_provider,
         DEFAULT_MAX_COMMENTS_PER_VIDEO,
         now_secs(),
         cookies,
@@ -794,31 +834,10 @@ fn video_canonical_url(source: &SourceSyncTarget) -> String {
 }
 
 fn playlist_canonical_url(source: &SourceSyncTarget) -> String {
-    decode_playlist_metadata(source)
-        .map(|metadata| metadata.canonical_url)
-        .unwrap_or_else(|| {
-            format!(
-                "https://www.youtube.com/playlist?list={}",
-                source.external_id
-            )
-        })
-}
-
-fn decode_video_metadata(source: &SourceSyncTarget) -> Option<YoutubeVideoMetadata> {
-    decode_youtube_metadata(source.metadata_zstd.as_deref())
-}
-
-fn decode_playlist_metadata(source: &SourceSyncTarget) -> Option<YoutubePlaylistMetadata> {
-    decode_youtube_metadata(source.metadata_zstd.as_deref())
-}
-
-fn decode_youtube_metadata<T>(metadata_zstd: Option<&[u8]>) -> Option<T>
-where
-    T: serde::de::DeserializeOwned,
-{
-    let metadata = metadata_zstd?;
-    let json = decompress_bytes(metadata).ok()?;
-    serde_json::from_slice(&json).ok()
+    format!(
+        "https://www.youtube.com/playlist?list={}",
+        source.external_id
+    )
 }
 
 async fn load_preferred_caption_language(pool: &sqlx::SqlitePool) -> AppResult<String> {
@@ -828,14 +847,6 @@ async fn load_preferred_caption_language(pool: &sqlx::SqlitePool) -> AppResult<S
         .await
         .map_err(AppError::database)?;
     Ok(value.unwrap_or_else(|| "original".to_string()))
-}
-
-fn caption_language_override(metadata: &YoutubeVideoMetadata) -> Option<String> {
-    metadata
-        .raw_metadata_json
-        .get("caption_language_override")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
 }
 
 fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
@@ -884,6 +895,67 @@ mod tests {
         SourceJobType, YoutubeSyncOptions,
     };
     use crate::error::AppErrorKind;
+
+    #[tokio::test]
+    async fn jobs_reload_missing_typed_video_metadata_after_refresh_callback() {
+        let pool = crate::sources::test_support::memory_pool_with_sources().await;
+        crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd, is_active, is_member, created_at) VALUES (701, 'youtube', 'video', 'jobvideo', 'Job video', x'00', 1, 0, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+
+        let refreshed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let refreshed_for_callback = refreshed.clone();
+        let metadata = super::load_video_metadata_or_refresh(&pool, 701, || {
+            let pool = pool.clone();
+            async move {
+                refreshed_for_callback.store(true, std::sync::atomic::Ordering::SeqCst);
+                insert_typed_video_metadata_for_job_test(&pool, 701, "jobvideo").await;
+                Ok(())
+            }
+        })
+        .await
+        .expect("load refreshed metadata");
+
+        assert!(refreshed.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(metadata.video_id, "jobvideo");
+        assert_eq!(
+            metadata.canonical_url,
+            "https://www.youtube.com/watch?v=jobvideo"
+        );
+    }
+
+    #[tokio::test]
+    async fn jobs_missing_typed_video_metadata_errors_after_failed_refresh() {
+        let pool = crate::sources::test_support::memory_pool_with_sources().await;
+        crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd, is_active, is_member, created_at) VALUES (702, 'youtube', 'video', 'jobmissing', 'Job missing', x'00', 1, 0, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+
+        let error = super::load_video_metadata_or_refresh(&pool, 702, || async { Ok(()) })
+            .await
+            .expect_err("missing typed metadata rejected");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert!(error.to_string().contains("typed YouTube video metadata"));
+        assert!(!error.to_string().contains("metadata_zstd"));
+    }
+
+    #[test]
+    fn source_jobs_no_longer_decode_source_metadata_blobs() {
+        let source = std::fs::read_to_string("src/youtube/jobs.rs").expect("read jobs.rs");
+        let decode_symbol = ["decode", "youtube", "metadata"].join("_");
+        let decompress_symbol = ["decompress", "bytes"].join("_");
+        assert!(!source.contains(&decode_symbol));
+        assert!(!source.contains(&decompress_symbol));
+    }
 
     #[tokio::test]
     async fn job_state_rejects_duplicate_active_scope_but_allows_different_job_types() {
@@ -1110,5 +1182,42 @@ mod tests {
             vec!["retry-live", "retry-none", "retry-unknown"]
         );
         assert!(rows.iter().all(|row| row.video_source_id.is_some()));
+    }
+
+    async fn insert_typed_video_metadata_for_job_test(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        video_id: &str,
+    ) {
+        let metadata = crate::youtube::dto::YoutubeVideoMetadata {
+            video_id: video_id.to_string(),
+            canonical_url: format!("https://www.youtube.com/watch?v={video_id}"),
+            title: Some("Job typed video".to_string()),
+            channel_title: Some("Job channel".to_string()),
+            channel_id: None,
+            channel_handle: None,
+            channel_url: None,
+            author_display: Some("Job channel".to_string()),
+            published_at: Some("2026-05-17".to_string()),
+            duration_seconds: Some(30),
+            description: None,
+            thumbnail_url: None,
+            tags: Vec::new(),
+            chapters: Vec::new(),
+            view_count: None,
+            like_count: None,
+            comment_count: None,
+            category: None,
+            video_form: crate::youtube::dto::YoutubeVideoForm::Regular,
+            availability_status: crate::youtube::dto::YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: serde_json::json!({
+                "id": video_id,
+                "caption_language_override": "en"
+            }),
+        };
+        crate::youtube::source_metadata::insert_video_source_metadata_for_pool_test(
+            pool, source_id, &metadata,
+        )
+        .await;
     }
 }

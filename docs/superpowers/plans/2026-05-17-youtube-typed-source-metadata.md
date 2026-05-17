@@ -2242,7 +2242,7 @@ git commit -m "feat: read youtube analysis corpus from typed metadata"
 - Modify: `src-tauri/src/youtube/source_metadata.rs`
 - Test: `src-tauri/src/youtube/jobs.rs`
 
-- [ ] **Step 1: Add RED job helper tests**
+- [x] **Step 1: Add RED job helper tests**
 
 In `src-tauri/src/youtube/jobs.rs`, inside tests, add:
 
@@ -2344,7 +2344,7 @@ async fn insert_typed_video_metadata_for_job_test(
 }
 ```
 
-- [ ] **Step 2: Run job tests and verify RED**
+- [x] **Step 2: Run job tests and verify RED**
 
 Run:
 
@@ -2354,7 +2354,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::jobs::
 
 Expected: fail because jobs still decode `sources.metadata_zstd` and reload helper does not exist.
 
-- [ ] **Step 3: Add a test-only pool insert helper**
+- [x] **Step 3: Add a test-only pool insert helper**
 
 In `src-tauri/src/youtube/source_metadata.rs`, add:
 
@@ -2373,7 +2373,7 @@ pub(crate) async fn insert_video_source_metadata_for_pool_test(
 }
 ```
 
-- [ ] **Step 4: Replace jobs metadata decode with typed loaders**
+- [x] **Step 4: Replace jobs metadata decode with typed loaders**
 
 In `src-tauri/src/youtube/jobs.rs`:
 
@@ -2441,7 +2441,7 @@ async fn load_playlist_metadata_for_refresh(
 }
 ```
 
-- [ ] **Step 5: Update metadata refresh canonical URL selection**
+- [x] **Step 5: Update metadata refresh canonical URL selection**
 
 In `sync_youtube_metadata`, replace source blob decode usage:
 
@@ -2485,7 +2485,7 @@ pub(crate) fn video_form_for_provider(&self) -> Option<YoutubeVideoForm> {
 }
 ```
 
-- [ ] **Step 6: Update transcript/comment sync dependent metadata**
+- [x] **Step 6: Update transcript/comment sync dependent metadata**
 
 In `sync_youtube_transcript`, replace the missing-metadata branch and decode with:
 
@@ -2513,7 +2513,7 @@ Add `YoutubeVideoSourceMetadata::to_provider_metadata()` in `source_metadata.rs`
 
 Apply the same adapter in `sync_youtube_comments`.
 
-- [ ] **Step 7: Run job tests and verify GREEN**
+- [x] **Step 7: Run job tests and verify GREEN**
 
 Run:
 
@@ -2527,7 +2527,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/youtube/jobs.rs src-tauri/src/youtube/source_metadata.rs
