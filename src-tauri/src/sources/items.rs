@@ -93,6 +93,28 @@ struct PreparedSourceItem {
     media_metadata_zstd: Option<Vec<u8>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TelegramItemInsertOutcome {
+    Inserted { item_id: i64 },
+    DuplicateObserved { item_id: i64 },
+    Skipped { reason_code: &'static str },
+}
+
+impl TelegramItemInsertOutcome {
+    pub(crate) fn is_inserted(self) -> bool {
+        matches!(self, Self::Inserted { .. })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn observation_parts(self) -> (&'static str, Option<i64>, Option<&'static str>) {
+        match self {
+            Self::Inserted { item_id } => ("inserted", Some(item_id), None),
+            Self::DuplicateObserved { item_id } => ("duplicate_observed", Some(item_id), None),
+            Self::Skipped { reason_code } => ("skipped", None, Some(reason_code)),
+        }
+    }
+}
+
 fn prepare_source_item(item: &SourceItemInsert) -> AppResult<Option<PreparedSourceItem>> {
     let content_zstd = item
         .payload
@@ -189,6 +211,108 @@ pub(crate) async fn insert_telegram_source_item(
     identity: TelegramMessageIdentity,
     item: SourceItemInsert,
 ) -> AppResult<bool> {
+    Ok(
+        insert_telegram_source_item_outcome(pool, source_id, identity, item)
+            .await?
+            .is_inserted(),
+    )
+}
+
+pub(crate) async fn insert_telegram_source_item_outcome(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    identity: TelegramMessageIdentity,
+    item: SourceItemInsert,
+) -> AppResult<TelegramItemInsertOutcome> {
+    let mut conn = pool.acquire().await.map_err(AppError::database)?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+
+    let result =
+        insert_telegram_source_item_on_connection(&mut conn, source_id, identity, item).await;
+
+    match result {
+        Ok(outcome) => {
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(AppError::database)?;
+            Ok(outcome)
+        }
+        Err(error) => {
+            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+            if error.kind == crate::error::AppErrorKind::Conflict
+                || error.message.contains("telegram_messages")
+            {
+                return Ok(TelegramItemInsertOutcome::Skipped {
+                    reason_code: "conflict_without_item_id",
+                });
+            }
+            Err(error)
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) async fn insert_telegram_source_item_with_observation(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    source_id: i64,
+    identity: TelegramMessageIdentity,
+    item: SourceItemInsert,
+) -> AppResult<TelegramItemInsertOutcome> {
+    let provider_identity = crate::ingest_provenance::telegram_provider_identity(&identity);
+    let mut conn = pool.acquire().await.map_err(AppError::database)?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+
+    let result: AppResult<TelegramItemInsertOutcome> = async {
+        let outcome =
+            insert_telegram_source_item_on_connection(&mut conn, source_id, identity, item).await?;
+        let (outcome_name, item_id, reason_code) = outcome.observation_parts();
+        crate::ingest_provenance::record_ingest_observation_on_connection(
+            &mut conn,
+            crate::ingest_provenance::IngestObservation {
+                batch_id,
+                source_id,
+                item_id,
+                provider_item_kind: ITEM_KIND_TELEGRAM_MESSAGE,
+                provider_identity_kind: "telegram_message",
+                provider_identity,
+                outcome: outcome_name,
+                reason_code,
+            },
+        )
+        .await?;
+        Ok(outcome)
+    }
+    .await;
+
+    match result {
+        Ok(outcome) => {
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(AppError::database)?;
+            Ok(outcome)
+        }
+        Err(error) => {
+            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+            Err(error)
+        }
+    }
+}
+
+async fn insert_telegram_source_item_on_connection(
+    conn: &mut sqlx::SqliteConnection,
+    source_id: i64,
+    identity: TelegramMessageIdentity,
+    item: SourceItemInsert,
+) -> AppResult<TelegramItemInsertOutcome> {
     identity.validate()?;
     if item.item_kind != ITEM_KIND_TELEGRAM_MESSAGE {
         return Err(AppError::validation(format!(
@@ -196,18 +320,13 @@ pub(crate) async fn insert_telegram_source_item(
         )));
     }
     let Some(prepared) = prepare_source_item(&item)? else {
-        return Ok(false);
+        return Ok(TelegramItemInsertOutcome::Skipped {
+            reason_code: "empty_payload",
+        });
     };
 
-    let mut conn = pool.acquire().await.map_err(AppError::database)?;
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
-
-    let result: AppResult<bool> = async {
-        let existing: Option<i64> = sqlx::query_scalar(
-            r#"
+    let existing: Option<i64> = sqlx::query_scalar(
+        r#"
             SELECT item_id
             FROM telegram_messages
             WHERE source_id = ?
@@ -215,20 +334,20 @@ pub(crate) async fn insert_telegram_source_item(
               AND history_peer_id = ?
               AND telegram_message_id = ?
             "#,
-        )
-        .bind(source_id)
-        .bind(&identity.history_peer_kind)
-        .bind(identity.history_peer_id)
-        .bind(identity.telegram_message_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
-        if existing.is_some() {
-            return Ok(false);
-        }
+    )
+    .bind(source_id)
+    .bind(&identity.history_peer_kind)
+    .bind(identity.history_peer_id)
+    .bind(identity.telegram_message_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+    if let Some(item_id) = existing {
+        return Ok(TelegramItemInsertOutcome::DuplicateObserved { item_id });
+    }
 
-        let item_id: i64 = sqlx::query_scalar(
-            r#"
+    let item_id: i64 = sqlx::query_scalar(
+        r#"
             INSERT INTO items (
                 source_id,
                 external_id,
@@ -251,30 +370,30 @@ pub(crate) async fn insert_telegram_source_item(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             "#,
-        )
-        .bind(source_id)
-        .bind(identity.telegram_message_id.to_string())
-        .bind(&item.item_kind)
-        .bind(&item.author)
-        .bind(item.published_at)
-        .bind(now_secs())
-        .bind(prepared.content_zstd)
-        .bind(prepared.raw_data_zstd)
-        .bind(prepared.content_kind)
-        .bind(prepared.has_media)
-        .bind(prepared.media_kind)
-        .bind(prepared.media_metadata_zstd)
-        .bind(item.telegram_context.reply_to_msg_id)
-        .bind(&item.telegram_context.reply_to_peer_kind)
-        .bind(&item.telegram_context.reply_to_peer_id)
-        .bind(item.telegram_context.reply_to_top_id)
-        .bind(item.telegram_context.reaction_count)
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    )
+    .bind(source_id)
+    .bind(identity.telegram_message_id.to_string())
+    .bind(&item.item_kind)
+    .bind(&item.author)
+    .bind(item.published_at)
+    .bind(now_secs())
+    .bind(prepared.content_zstd)
+    .bind(prepared.raw_data_zstd)
+    .bind(prepared.content_kind)
+    .bind(prepared.has_media)
+    .bind(prepared.media_kind)
+    .bind(prepared.media_metadata_zstd)
+    .bind(item.telegram_context.reply_to_msg_id)
+    .bind(&item.telegram_context.reply_to_peer_kind)
+    .bind(&item.telegram_context.reply_to_peer_id)
+    .bind(item.telegram_context.reply_to_top_id)
+    .bind(item.telegram_context.reaction_count)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
 
-        sqlx::query(
-            r#"
+    sqlx::query(
+        r#"
             INSERT INTO telegram_messages (
                 item_id,
                 source_id,
@@ -291,58 +410,37 @@ pub(crate) async fn insert_telegram_source_item(
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
-        )
-        .bind(item_id)
-        .bind(source_id)
-        .bind(&identity.history_peer_kind)
-        .bind(identity.history_peer_id)
-        .bind(identity.telegram_message_id)
-        .bind(&identity.migration_domain)
-        .bind(i64::from(identity.is_migrated_history))
-        .bind(item.telegram_context.reply_to_msg_id)
-        .bind(&item.telegram_context.reply_to_peer_kind)
-        .bind(
-            item.telegram_context
-                .reply_to_peer_id
-                .as_deref()
-                .and_then(|value| value.parse::<i64>().ok()),
-        )
-        .bind(item.telegram_context.reply_to_top_id)
-        .bind(item.telegram_context.reaction_count)
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    )
+    .bind(item_id)
+    .bind(source_id)
+    .bind(&identity.history_peer_kind)
+    .bind(identity.history_peer_id)
+    .bind(identity.telegram_message_id)
+    .bind(&identity.migration_domain)
+    .bind(i64::from(identity.is_migrated_history))
+    .bind(item.telegram_context.reply_to_msg_id)
+    .bind(&item.telegram_context.reply_to_peer_kind)
+    .bind(
+        item.telegram_context
+            .reply_to_peer_id
+            .as_deref()
+            .and_then(|value| value.parse::<i64>().ok()),
+    )
+    .bind(item.telegram_context.reply_to_top_id)
+    .bind(item.telegram_context.reaction_count)
+    .execute(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
 
-        crate::topic_memberships::resolve_scoped_topic_memberships_on_connection(
-            &mut conn,
-            source_id,
-            &[item_id],
-            now_secs(),
-        )
-        .await?;
+    crate::topic_memberships::resolve_scoped_topic_memberships_on_connection(
+        conn,
+        source_id,
+        &[item_id],
+        now_secs(),
+    )
+    .await?;
 
-        Ok(true)
-    }
-    .await;
-
-    match result {
-        Ok(inserted) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-            Ok(inserted)
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            if error.kind == crate::error::AppErrorKind::Conflict
-                || error.message.contains("telegram_messages")
-            {
-                return Ok(false);
-            }
-            Err(error)
-        }
-    }
+    Ok(TelegramItemInsertOutcome::Inserted { item_id })
 }
 
 pub(crate) async fn upsert_youtube_transcript_item(
@@ -593,9 +691,10 @@ pub(super) fn build_raw_payload(
 mod tests {
     use super::{
         decode_media_metadata, encode_media_metadata, insert_source_item,
-        insert_telegram_source_item, reply_peer_context, tl, upsert_youtube_comment_item,
-        upsert_youtube_transcript_item, ForumTopicFilter, SourceItemInsert, StoredItemRow,
-        TelegramItemContext,
+        insert_telegram_source_item, insert_telegram_source_item_outcome,
+        insert_telegram_source_item_with_observation, reply_peer_context, tl,
+        upsert_youtube_comment_item, upsert_youtube_transcript_item, ForumTopicFilter,
+        SourceItemInsert, StoredItemRow, TelegramItemContext, TelegramItemInsertOutcome,
     };
     use crate::compression::{compress_text, decompress_bytes, decompress_text};
     use crate::media::{
@@ -603,7 +702,8 @@ mod tests {
         CONTENT_KIND_TEXT_WITH_MEDIA,
     };
     use crate::sources::test_support::{
-        create_item_identity_indexes, memory_pool_with_source_items_and_topics,
+        create_ingest_provenance_tables, create_item_identity_indexes,
+        memory_pool_with_source_items_and_topics,
     };
     use crate::sources::types::{TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE};
 
@@ -798,6 +898,146 @@ mod tests {
             .await
             .expect("count child rows");
         assert_eq!(child_count, 1);
+    }
+
+    #[tokio::test]
+    async fn telegram_insert_outcome_returns_item_ids_for_insert_and_duplicate() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_item_source(&pool, 1).await;
+        let identity = TelegramMessageIdentity {
+            history_peer_kind: "channel".to_string(),
+            history_peer_id: 12345,
+            telegram_message_id: 42,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+
+        let inserted = insert_telegram_source_item_outcome(
+            &pool,
+            1,
+            identity.clone(),
+            telegram_insert("42", "first payload"),
+        )
+        .await
+        .expect("insert first");
+        let first_id = match inserted {
+            TelegramItemInsertOutcome::Inserted { item_id } => item_id,
+            other => panic!("expected inserted outcome, got {other:?}"),
+        };
+
+        let duplicate = insert_telegram_source_item_outcome(
+            &pool,
+            1,
+            identity,
+            telegram_insert("42", "second payload"),
+        )
+        .await
+        .expect("observe duplicate");
+        assert_eq!(
+            duplicate,
+            TelegramItemInsertOutcome::DuplicateObserved { item_id: first_id }
+        );
+    }
+
+    #[tokio::test]
+    async fn telegram_insert_with_observation_records_insert_duplicate_and_skipped_rows() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        let batch_id = crate::ingest_provenance::create_telegram_takeout_batch(
+            &pool,
+            crate::ingest_provenance::CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+        let identity = TelegramMessageIdentity {
+            history_peer_kind: "channel".to_string(),
+            history_peer_id: 12345,
+            telegram_message_id: 42,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+
+        let inserted = insert_telegram_source_item_with_observation(
+            &pool,
+            batch_id,
+            1,
+            identity.clone(),
+            telegram_insert("42", "first payload"),
+        )
+        .await
+        .expect("insert with observation");
+        let item_id = match inserted {
+            TelegramItemInsertOutcome::Inserted { item_id } => item_id,
+            other => panic!("expected insert, got {other:?}"),
+        };
+
+        let duplicate = insert_telegram_source_item_with_observation(
+            &pool,
+            batch_id,
+            1,
+            identity.clone(),
+            telegram_insert("42", "duplicate payload"),
+        )
+        .await
+        .expect("duplicate with observation");
+        assert_eq!(
+            duplicate,
+            TelegramItemInsertOutcome::DuplicateObserved { item_id }
+        );
+
+        let empty_item = SourceItemInsert {
+            payload: ExtractedItemPayload {
+                content: None,
+                content_kind: CONTENT_KIND_TEXT_ONLY,
+                media: None,
+            },
+            ..telegram_insert("43", "")
+        };
+        let skipped_identity = TelegramMessageIdentity {
+            telegram_message_id: 43,
+            ..identity
+        };
+        let skipped = insert_telegram_source_item_with_observation(
+            &pool,
+            batch_id,
+            1,
+            skipped_identity,
+            empty_item,
+        )
+        .await
+        .expect("skipped with observation");
+        assert_eq!(
+            skipped,
+            TelegramItemInsertOutcome::Skipped {
+                reason_code: "empty_payload"
+            }
+        );
+
+        let rows: Vec<(String, Option<i64>, String, Option<String>)> = sqlx::query_as(
+            "SELECT outcome, item_id, provider_identity, reason_code
+             FROM ingest_item_observations
+             WHERE batch_id = ?
+             ORDER BY id",
+        )
+        .bind(batch_id)
+        .fetch_all(&pool)
+        .await
+        .expect("load observations");
+
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].0, "inserted");
+        assert_eq!(rows[0].1, Some(item_id));
+        assert_eq!(rows[0].2, "telegram:history_peer:channel:12345:message:42");
+        assert_eq!(rows[1].0, "duplicate_observed");
+        assert_eq!(rows[1].1, Some(item_id));
+        assert_eq!(rows[2].0, "skipped");
+        assert_eq!(rows[2].1, None);
+        assert_eq!(rows[2].3.as_deref(), Some("empty_payload"));
     }
 
     #[tokio::test]

@@ -1137,7 +1137,7 @@ Expected: commit succeeds with storage helpers and tests.
 - Modify: `src-tauri/src/sources/mod.rs`
 - Test: `src-tauri/src/sources/items.rs`
 
-- [ ] **Step 1: Write failing item outcome/observation tests**
+- [x] **Step 1: Write failing item outcome/observation tests**
 
 In `src-tauri/src/sources/items.rs`, update the test imports:
 
@@ -1299,7 +1299,7 @@ async fn telegram_insert_with_observation_records_insert_duplicate_and_skipped_r
 }
 ```
 
-- [ ] **Step 2: Run item tests and confirm failure**
+- [x] **Step 2: Run item tests and confirm failure**
 
 Run:
 
@@ -1309,7 +1309,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::items::tests::telegram_
 
 Expected: compile fails because the outcome enum and observation wrapper do not exist.
 
-- [ ] **Step 3: Add outcome enum and bool compatibility wrapper**
+- [x] **Step 3: Add outcome enum and bool compatibility wrapper**
 
 In `src-tauri/src/sources/items.rs`, add near `PreparedSourceItem`:
 
@@ -1336,7 +1336,7 @@ impl TelegramItemInsertOutcome {
 }
 ```
 
-- [ ] **Step 4: Split Telegram insert into an open-transaction helper**
+- [x] **Step 4: Split Telegram insert into an open-transaction helper**
 
 Keep the public `insert_telegram_source_item(...) -> AppResult<bool>` signature and rewrite it as:
 
@@ -1508,7 +1508,7 @@ async fn insert_telegram_source_item_on_connection(
 }
 ```
 
-- [ ] **Step 5: Add the provenance-aware wrapper**
+- [x] **Step 5: Add the provenance-aware wrapper**
 
 In `src-tauri/src/sources/items.rs`, add:
 
@@ -1565,7 +1565,7 @@ pub(crate) async fn insert_telegram_source_item_with_observation(
 }
 ```
 
-- [ ] **Step 6: Export the new crate-private helpers**
+- [x] **Step 6: Export the new crate-private helpers**
 
 In `src-tauri/src/sources/mod.rs`, extend the crate-private export:
 
@@ -1578,11 +1578,11 @@ pub(crate) use items::{
 };
 ```
 
-- [ ] **Step 7: Update existing bool tests for outcome internals**
+- [x] **Step 7: Update existing bool tests for outcome internals**
 
 Existing tests that call `insert_telegram_source_item` should still pass because the bool wrapper remains. Do not change normal sync call sites in this task.
 
-- [ ] **Step 8: Run item tests**
+- [x] **Step 8: Run item tests**
 
 Run:
 
@@ -1592,7 +1592,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::items::tests::
 
 Expected: all source item tests pass.
 
-- [ ] **Step 9: Commit item outcome work**
+- [x] **Step 9: Commit item outcome work**
 
 Run:
 
