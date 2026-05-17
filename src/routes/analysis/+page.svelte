@@ -187,9 +187,8 @@
   import {
     defaultAnalysisWorkspaceUiState,
     legacyScopeFromWorkspaceSelection,
-    openRunWorkspaceState,
-    selectSourceGroupWorkspace,
-    selectSourceWorkspace,
+    transitionAnalysisWorkspaceState,
+    type AnalysisWorkspaceEvent,
     type AnalysisWorkspaceUiState,
     type CanvasMode,
     type CompanionTab,
@@ -629,10 +628,7 @@
     if ("resolvedTraceRefs" in patch) resolvedTraceRefs = patch.resolvedTraceRefs ?? [];
     if ("selectedTraceRef" in patch) selectedTraceRef = patch.selectedTraceRef ?? null;
     if ("companionTab" in patch && patch.companionTab) {
-      workspaceUiState = {
-        ...workspaceUiState,
-        companionTab: patch.companionTab,
-      };
+      changeCompanionTab(patch.companionTab);
     }
     if ("status" in patch && patch.status !== undefined) status = patch.status;
   }
@@ -845,26 +841,28 @@
     workspaceUiState = next;
   }
 
+  function dispatchWorkspaceEvent(event: AnalysisWorkspaceEvent) {
+    const next = transitionAnalysisWorkspaceState(workspaceUiState, event);
+    applyWorkspaceUiState(next);
+    return next;
+  }
+
   function changeCanvasMode(mode: CanvasMode) {
-    applyWorkspaceUiState({
-      ...workspaceUiState,
+    dispatchWorkspaceEvent({
+      type: "change_canvas_mode",
       canvasMode: mode,
     });
   }
 
   function viewLiveSourceForOpenedRun() {
-    applyWorkspaceUiState({
-      ...workspaceUiState,
-      canvasMode: "source",
-      sourceViewBasis: "live_source",
+    dispatchWorkspaceEvent({
+      type: "view_live_source_for_opened_run",
     });
   }
 
   function backToRunSnapshot() {
-    applyWorkspaceUiState({
-      ...workspaceUiState,
-      canvasMode: "source",
-      sourceViewBasis: "run_snapshot",
+    dispatchWorkspaceEvent({
+      type: "back_to_run_snapshot",
     });
   }
 
@@ -959,16 +957,18 @@
   }
 
   function alignWorkspaceToOpenedRun(run: AnalysisRunDetail) {
-    const next = openRunWorkspaceState(workspaceUiState, {
-      runId: run.id,
-      status: run.status,
-      sourceId: run.source_id,
-      sourceGroupId: run.source_group_id,
-      liveScopeExists: liveScopeExistsForRun(run),
-    });
+    const event: AnalysisWorkspaceEvent = {
+      type: "open_run",
+      run: {
+        runId: run.id,
+        status: run.status,
+        sourceId: run.source_id,
+        sourceGroupId: run.source_group_id,
+        liveScopeExists: liveScopeExistsForRun(run),
+      },
+    };
 
-    applyWorkspaceUiState(next);
-
+    const next = dispatchWorkspaceEvent(event);
     const legacy = legacyScopeFromWorkspaceSelection(next.workspaceSelection);
     analysisScope = legacy.analysisScope;
     selectedSourceId = legacy.selectedSourceId;
@@ -1175,10 +1175,10 @@
   }
 
   function changeCompanionTab(nextTab: CompanionTab) {
-    workspaceUiState = {
-      ...workspaceUiState,
+    dispatchWorkspaceEvent({
+      type: "change_companion_tab",
       companionTab: nextTab,
-    };
+    });
   }
 
   async function focusTraceRef(ref: string) {
@@ -1319,12 +1319,12 @@
     }
 
     selectedTraceRef = decision.highlightedRef;
-    workspaceUiState = {
-      ...workspaceUiState,
+    dispatchWorkspaceEvent({
+      type: "show_evidence_in_source",
       canvasMode: decision.canvasMode,
       sourceViewBasis: decision.sourceViewBasis,
-      companionTab: "evidence",
-    };
+      highlightedRef: decision.highlightedRef,
+    });
 
     if (decision.kind === "live_source") {
       status = decision.warning;
@@ -1349,10 +1349,7 @@
       return;
     }
 
-    workspaceUiState = {
-      ...workspaceUiState,
-      companionTab: "chat",
-    };
+    changeCompanionTab("chat");
     await chatWorkflow.askRunQuestion();
   }
 
@@ -1604,7 +1601,10 @@
     { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
   ) {
     const previousWorkspaceState = workspaceUiState;
-    applyWorkspaceUiState(selectSourceWorkspace(workspaceUiState, sourceId));
+    dispatchWorkspaceEvent({
+      type: "select_source",
+      sourceId,
+    });
     historyScope = "current";
     if (activeChatRequestId !== null) {
       void cancelChat({ silent: true });
@@ -1646,7 +1646,10 @@
     { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
   ) {
     const previousWorkspaceState = workspaceUiState;
-    applyWorkspaceUiState(selectSourceGroupWorkspace(workspaceUiState, groupId));
+    dispatchWorkspaceEvent({
+      type: "select_source_group",
+      sourceGroupId: groupId,
+    });
     historyScope = "current";
     if (activeChatRequestId !== null) {
       void cancelChat({ silent: true });

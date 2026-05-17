@@ -19,6 +19,7 @@ families behind the shared source model.
 Implemented:
 
 - result-first `/analysis` workspace with compact source rail, central report/source canvas, and evidence/chat/chunks/runs companion panel
+- typed event-driven `/analysis` workspace UI state transitions, ready for a future state-machine library if the workflow outgrows the local reducer
 - collapsible desktop app sidebar and mobile off-canvas navigation drawer
 - Telegram account management and sign-in flow
 - startup session restore

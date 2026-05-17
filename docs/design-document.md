@@ -46,6 +46,14 @@ evidence, follow-up chat, live chunk summaries, and saved runs stay nearby. The
 legacy `/sources` route remains only as a compatibility redirect to
 `/analysis`.
 
+The `/analysis` workspace mode state is centralized in a small typed
+state-machine module. `AnalysisWorkspaceEvent` values describe route-level user
+and system actions, `transitionAnalysisWorkspaceState` computes the next pure
+UI state, and the Svelte route applies those events through a single dispatcher.
+Route effects and workflow calls stay outside that transition layer, which keeps
+invalid combinations such as run-bound companion tabs without an opened run from
+spreading across component-local booleans.
+
 Svelte 5 `$effect` blocks should keep their dependency surface narrow. An
 effect tracks synchronous `$state` and `$derived` reads, including reads inside
 functions it calls. Route effects that call workflow functions must be reviewed

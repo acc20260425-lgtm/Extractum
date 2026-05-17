@@ -14,9 +14,7 @@ function functionSlice(name: string, nextName: string) {
 describe("analysis route workspace state", () => {
   it("imports workspace state and persistence helpers", () => {
     expect(analysisPageSource).toContain("defaultAnalysisWorkspaceUiState");
-    expect(analysisPageSource).toContain("openRunWorkspaceState");
-    expect(analysisPageSource).toContain("selectSourceWorkspace");
-    expect(analysisPageSource).toContain("selectSourceGroupWorkspace");
+    expect(analysisPageSource).toContain("transitionAnalysisWorkspaceState");
     expect(analysisPageSource).toContain("loadPersistedAnalysisWorkspaceState");
     expect(analysisPageSource).toContain("savePersistedAnalysisWorkspaceState");
     expect(analysisPageSource).toContain("fallbackWorkspaceSelection");
@@ -27,6 +25,22 @@ describe("analysis route workspace state", () => {
     expect(analysisPageSource).toContain("let workspacePersistenceReady = $state(false);");
     expect(analysisPageSource).toContain("let restoredWorkspaceSelection = $state<WorkspaceSelection | null>(null);");
     expect(analysisPageSource).toContain("defaultAnalysisWorkspaceUiState()");
+  });
+
+  it("dispatches workspace events through a single route boundary", () => {
+    const dispatcher = functionSlice(
+      "function dispatchWorkspaceEvent",
+      "function changeCanvasMode",
+    );
+    const handlers = analysisPageSource.slice(
+      analysisPageSource.indexOf("  function changeCanvasMode"),
+    );
+
+    expect(analysisPageSource).toContain("type AnalysisWorkspaceEvent");
+    expect(dispatcher).toContain("event: AnalysisWorkspaceEvent");
+    expect(dispatcher).toContain("transitionAnalysisWorkspaceState(workspaceUiState, event)");
+    expect(handlers).toContain("dispatchWorkspaceEvent({");
+    expect(handlers).not.toContain("transitionAnalysisWorkspaceState(workspaceUiState");
   });
 
   it("restores persisted workspace state before loading active runs", () => {
@@ -61,7 +75,7 @@ describe("analysis route workspace state", () => {
     expect(saveFunction).not.toContain("sourceManagerOpen");
   });
 
-  it("uses workspace transition helpers for source, group, and run opening", () => {
+  it("uses workspace transition events for source, group, and run opening", () => {
     const sourceFunction = functionSlice(
       "async function selectSource",
       "function selectGroup",
@@ -75,11 +89,11 @@ describe("analysis route workspace state", () => {
       "async function loadChatMessages",
     );
 
-    expect(sourceFunction).toContain("selectSourceWorkspace(workspaceUiState, sourceId)");
+    expect(sourceFunction).toContain('type: "select_source"');
     expect(sourceFunction).toContain("clearCurrentRunForWorkspaceSwitch();");
-    expect(groupFunction).toContain("selectSourceGroupWorkspace(workspaceUiState, groupId)");
+    expect(groupFunction).toContain('type: "select_source_group"');
     expect(groupFunction).toContain("clearCurrentRunForWorkspaceSwitch();");
-    expect(runFunction).toContain("openRunWorkspaceState(workspaceUiState");
+    expect(runFunction).toContain('type: "open_run"');
     expect(runFunction).toContain("legacyScopeFromWorkspaceSelection");
   });
 

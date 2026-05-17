@@ -525,6 +525,17 @@ Because `OpenRunState` is not persisted, restored UI state must be normalized be
 
 State keys should be versioned or namespaced so future layout changes can discard incompatible saved UI state without breaking the route.
 
+Implementation note: `/analysis` workspace state is now intentionally modeled
+as a small typed state machine. `src/lib/analysis-workspace-state.ts` owns the
+`AnalysisWorkspaceUiState`, `AnalysisWorkspaceEvent`, and pure
+`transitionAnalysisWorkspaceState(current, event)` function. The route applies
+workspace changes through a single `dispatchWorkspaceEvent(event)` boundary and
+keeps side effects such as loading runs, loading source pages, persistence, and
+legacy scope synchronization outside the pure transition. This gives the
+result-first UI FSA-style invariants today while keeping a future migration to
+XState or another state-machine library mechanical: the route already sends
+events, and the transition module is the only place that computes next state.
+
 ## Interaction Rules
 
 - Opening a completed run sets `OpenRunState = { kind: "saved", runId }`, aligns `WorkspaceSelection` to the run scope when that live scope still exists, sets `canvasMode = "report"`, and sets `companionTab = "evidence"`.

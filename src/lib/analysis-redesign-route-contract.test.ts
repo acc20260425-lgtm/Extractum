@@ -45,9 +45,10 @@ describe("analysis redesign final route contract", () => {
   });
 
   it("keeps source switching, run opening, and canvas switching on separate state paths", () => {
-    expect(analysisPageSource).toContain("selectSourceWorkspace");
-    expect(analysisPageSource).toContain("selectSourceGroupWorkspace");
-    expect(analysisPageSource).toContain("openRunWorkspaceState");
+    expect(analysisPageSource).toContain("transitionAnalysisWorkspaceState");
+    expect(analysisPageSource).toContain('type: "select_source"');
+    expect(analysisPageSource).toContain('type: "select_source_group"');
+    expect(analysisPageSource).toContain('type: "open_run"');
     expect(analysisPageSource).toContain("workspaceUiState.canvasMode");
     expect(analysisPageSource).toContain("workspaceUiState.sourceViewBasis");
     expect(analysisPageSource).toContain("workspaceUiState.companionTab");

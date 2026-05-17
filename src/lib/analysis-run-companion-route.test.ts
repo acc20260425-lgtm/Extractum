@@ -3,6 +3,16 @@ import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 import chatWorkflowSource from "./analysis-chat-workflow.ts?raw";
 import traceWorkflowSource from "./analysis-trace-workflow.ts?raw";
 
+function functionSlice(name: string, nextName: string) {
+  const start = analysisPageSource.indexOf(`  ${name}`);
+  const end = analysisPageSource.indexOf(`\n  ${nextName}`, start + 1);
+
+  expect(start, `${name} should exist`).toBeGreaterThan(-1);
+  expect(end, `${nextName} should follow ${name}`).toBeGreaterThan(start);
+
+  return analysisPageSource.slice(start, end);
+}
+
 describe("analysis route run companion wiring", () => {
   it("renders RunCompanionTabs instead of WorkspaceInspector", () => {
     expect(analysisPageSource).toContain(
@@ -35,11 +45,12 @@ describe("analysis route run companion wiring", () => {
 
   it("activates Evidence for trace clicks and Show in source prefers snapshot", () => {
     expect(analysisPageSource).toContain("async function focusTraceRef");
-    expect(analysisPageSource).toContain('companionTab: "evidence"');
+    expect(analysisPageSource).toContain('changeCompanionTab("evidence")');
     expect(analysisPageSource).toContain("async function showSelectedTraceInSource");
     expect(analysisPageSource).toContain("evidenceSourceActionDecision");
-    expect(analysisPageSource).toContain('sourceViewBasis: "run_snapshot"');
-    expect(analysisPageSource).toContain('sourceViewBasis: "live_source"');
+    expect(analysisPageSource).toContain('type: "show_evidence_in_source"');
+    expect(analysisPageSource).toContain("canvasMode: decision.canvasMode");
+    expect(analysisPageSource).toContain("sourceViewBasis: decision.sourceViewBasis");
     expect(analysisPageSource).toContain("await loadSourcePageAroundTrace(decision, trace)");
     expect(analysisPageSource).toContain("selectedSnapshotSourceId = trace.source_id");
     expect(analysisPageSource).toContain("sourceId: trace.source_id");
@@ -47,9 +58,16 @@ describe("analysis route run companion wiring", () => {
   });
 
   it("activates Chat only through tab selection or question submission", () => {
+    const submitQuestion = functionSlice(
+      "async function submitRunQuestionFromCompanion",
+      "function changeRunsFilter",
+    );
+
     expect(analysisPageSource).toContain("submitRunQuestionFromCompanion");
     expect(analysisPageSource).toContain("chatAvailabilityForRun");
-    expect(analysisPageSource).toContain('companionTab: "chat"');
+    expect(analysisPageSource).toContain('type: "change_companion_tab"');
+    expect(submitQuestion).toContain('changeCompanionTab("chat")');
+    expect(submitQuestion).not.toContain('companionTab: "chat"');
     expect(analysisPageSource).not.toContain("onFocusChat");
     expect(chatWorkflowSource).not.toContain("companionTab");
   });

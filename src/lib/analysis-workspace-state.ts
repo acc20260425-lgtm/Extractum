@@ -38,10 +38,43 @@ export interface RunWorkspaceInput {
   liveScopeExists?: boolean;
 }
 
+export type AnalysisWorkspaceEvent =
+  | { type: "open_run"; run: RunWorkspaceInput }
+  | { type: "select_source"; sourceId: number }
+  | { type: "select_source_group"; sourceGroupId: number }
+  | { type: "change_canvas_mode"; canvasMode: CanvasMode }
+  | { type: "view_live_source_for_opened_run" }
+  | { type: "back_to_run_snapshot" }
+  | { type: "change_companion_tab"; companionTab: CompanionTab }
+  | {
+      type: "show_evidence_in_source";
+      canvasMode: CanvasMode;
+      sourceViewBasis: SourceViewBasis;
+      highlightedRef: string;
+    }
+  | { type: "restore_persisted_state"; state: AnalysisWorkspaceUiState };
+
 function numericId(value: string) {
   if (!value.trim()) return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function isRunBoundCompanionTab(tab: CompanionTab) {
+  return tab === "evidence" || tab === "chat" || tab === "chunks";
+}
+
+function normalizeWorkspaceState(state: AnalysisWorkspaceUiState): AnalysisWorkspaceUiState {
+  if (state.openRunState.kind !== "none") {
+    return state;
+  }
+
+  return {
+    ...state,
+    sourceViewBasis: "live_source",
+    companionTab: isRunBoundCompanionTab(state.companionTab) ? "runs" : state.companionTab,
+    selectedTraceRef: null,
+  };
 }
 
 export function defaultAnalysisWorkspaceUiState(): AnalysisWorkspaceUiState {
@@ -140,15 +173,7 @@ export function openRunWorkspaceState(
   current: AnalysisWorkspaceUiState,
   run: RunWorkspaceInput,
 ): AnalysisWorkspaceUiState {
-  return {
-    ...current,
-    workspaceSelection: workspaceSelectionFromRunScope(run),
-    openRunState: openRunStateForStatus(run.status, run.runId),
-    canvasMode: "report",
-    sourceViewBasis: "run_snapshot",
-    companionTab: defaultCompanionTabForRun(run.status),
-    selectedTraceRef: null,
-  };
+  return transitionAnalysisWorkspaceState(current, { type: "open_run", run });
 }
 
 export function clearRunBoundWorkspaceState(
@@ -167,40 +192,109 @@ export function selectSourceWorkspace(
   current: AnalysisWorkspaceUiState,
   sourceId: number,
 ): AnalysisWorkspaceUiState {
-  return {
-    ...clearRunBoundWorkspaceState(current),
-    workspaceSelection: { kind: "source", sourceId },
-    canvasMode: "source",
-  };
+  return transitionAnalysisWorkspaceState(current, { type: "select_source", sourceId });
 }
 
 export function selectSourceGroupWorkspace(
   current: AnalysisWorkspaceUiState,
   sourceGroupId: number,
 ): AnalysisWorkspaceUiState {
-  return {
-    ...clearRunBoundWorkspaceState(current),
-    workspaceSelection: { kind: "source_group", sourceGroupId },
-    canvasMode: "source",
-  };
+  return transitionAnalysisWorkspaceState(current, {
+    type: "select_source_group",
+    sourceGroupId,
+  });
 }
 
 export function normalizeRestoredWorkspaceState(
   state: AnalysisWorkspaceUiState,
 ): AnalysisWorkspaceUiState {
-  if (state.openRunState.kind !== "none") {
-    return state;
-  }
+  return transitionAnalysisWorkspaceState(defaultAnalysisWorkspaceUiState(), {
+    type: "restore_persisted_state",
+    state,
+  });
+}
 
-  return {
-    ...state,
-    sourceViewBasis: "live_source",
-    companionTab:
-      state.companionTab === "evidence" ||
-      state.companionTab === "chat" ||
-      state.companionTab === "chunks"
-        ? "runs"
-        : state.companionTab,
-    selectedTraceRef: null,
-  };
+export function transitionAnalysisWorkspaceState(
+  current: AnalysisWorkspaceUiState,
+  event: AnalysisWorkspaceEvent,
+): AnalysisWorkspaceUiState {
+  switch (event.type) {
+    case "open_run":
+      return {
+        ...current,
+        workspaceSelection: workspaceSelectionFromRunScope(event.run),
+        openRunState: openRunStateForStatus(event.run.status, event.run.runId),
+        canvasMode: "report",
+        sourceViewBasis: "run_snapshot",
+        companionTab: defaultCompanionTabForRun(event.run.status),
+        selectedTraceRef: null,
+      };
+
+    case "select_source":
+      return {
+        ...clearRunBoundWorkspaceState(current),
+        workspaceSelection: { kind: "source", sourceId: event.sourceId },
+        canvasMode: "source",
+      };
+
+    case "select_source_group":
+      return {
+        ...clearRunBoundWorkspaceState(current),
+        workspaceSelection: { kind: "source_group", sourceGroupId: event.sourceGroupId },
+        canvasMode: "source",
+      };
+
+    case "change_canvas_mode":
+      return normalizeWorkspaceState({
+        ...current,
+        canvasMode: event.canvasMode,
+      });
+
+    case "view_live_source_for_opened_run":
+      return {
+        ...current,
+        canvasMode: "source",
+        sourceViewBasis: "live_source",
+      };
+
+    case "back_to_run_snapshot":
+      if (current.openRunState.kind === "none") {
+        return normalizeWorkspaceState({
+          ...current,
+          canvasMode: "source",
+        });
+      }
+
+      return {
+        ...current,
+        canvasMode: "source",
+        sourceViewBasis: "run_snapshot",
+      };
+
+    case "change_companion_tab":
+      return normalizeWorkspaceState({
+        ...current,
+        companionTab: event.companionTab,
+      });
+
+    case "show_evidence_in_source":
+      if (current.openRunState.kind === "none") {
+        return normalizeWorkspaceState({
+          ...current,
+          canvasMode: event.canvasMode,
+          sourceViewBasis: event.sourceViewBasis,
+        });
+      }
+
+      return {
+        ...current,
+        canvasMode: event.canvasMode,
+        sourceViewBasis: event.sourceViewBasis,
+        companionTab: "evidence",
+        selectedTraceRef: event.highlightedRef,
+      };
+
+    case "restore_persisted_state":
+      return normalizeWorkspaceState(event.state);
+  }
 }

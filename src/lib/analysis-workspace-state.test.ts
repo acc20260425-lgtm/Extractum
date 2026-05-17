@@ -6,6 +6,7 @@ import {
   openRunWorkspaceState,
   selectSourceGroupWorkspace,
   selectSourceWorkspace,
+  transitionAnalysisWorkspaceState,
   workspaceSelectionFromLegacy,
   workspaceSelectionFromRunScope,
   type AnalysisWorkspaceUiState,
@@ -55,12 +56,15 @@ describe("analysis-workspace-state", () => {
   });
 
   it("opens a completed run as a saved report and defaults companion to evidence", () => {
-    const next = openRunWorkspaceState(baseState(), {
-      runId: 42,
-      status: "completed",
-      sourceId: 7,
-      sourceGroupId: null,
-      liveScopeExists: true,
+    const next = transitionAnalysisWorkspaceState(baseState(), {
+      type: "open_run",
+      run: {
+        runId: 42,
+        status: "completed",
+        sourceId: 7,
+        sourceGroupId: null,
+        liveScopeExists: true,
+      },
     });
 
     expect(next).toMatchObject({
@@ -207,6 +211,69 @@ describe("analysis-workspace-state", () => {
       openRunState: { kind: "active", runId: 42 },
       sourceViewBasis: "run_snapshot",
       companionTab: "chunks",
+    });
+  });
+
+  it("keeps run-bound companion tabs unavailable without an opened run", () => {
+    const next = transitionAnalysisWorkspaceState(baseState(), {
+      type: "change_companion_tab",
+      companionTab: "chat",
+    });
+
+    expect(next).toMatchObject({
+      openRunState: { kind: "none" },
+      companionTab: "runs",
+    });
+  });
+
+  it("allows run-bound companion tabs while a run is open", () => {
+    const next = transitionAnalysisWorkspaceState(baseState({
+      openRunState: { kind: "saved", runId: 42 },
+      companionTab: "evidence",
+    }), {
+      type: "change_companion_tab",
+      companionTab: "chat",
+    });
+
+    expect(next).toMatchObject({
+      openRunState: { kind: "saved", runId: 42 },
+      companionTab: "chat",
+    });
+  });
+
+  it("shows selected evidence in the source canvas through a transition event", () => {
+    const next = transitionAnalysisWorkspaceState(baseState({
+      openRunState: { kind: "saved", runId: 42 },
+      canvasMode: "report",
+      sourceViewBasis: "run_snapshot",
+      companionTab: "chat",
+    }), {
+      type: "show_evidence_in_source",
+      canvasMode: "source",
+      sourceViewBasis: "run_snapshot",
+      highlightedRef: "s7-i11",
+    });
+
+    expect(next).toMatchObject({
+      canvasMode: "source",
+      sourceViewBasis: "run_snapshot",
+      companionTab: "evidence",
+      selectedTraceRef: "s7-i11",
+    });
+  });
+
+  it("does not switch back to a run snapshot when no run is open", () => {
+    const next = transitionAnalysisWorkspaceState(baseState({
+      canvasMode: "report",
+      sourceViewBasis: "live_source",
+    }), {
+      type: "back_to_run_snapshot",
+    });
+
+    expect(next).toMatchObject({
+      openRunState: { kind: "none" },
+      canvasMode: "source",
+      sourceViewBasis: "live_source",
     });
   });
 });
