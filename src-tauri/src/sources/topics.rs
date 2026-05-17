@@ -285,6 +285,9 @@ async fn upsert_forum_topics_from_refresh(
         .map_err(|e| AppError::internal(e.to_string()))?;
     }
 
+    crate::topic_memberships::rebuild_topic_memberships_for_source(pool, source_id, refreshed_at)
+        .await?;
+
     Ok(())
 }
 
@@ -643,6 +646,14 @@ mod tests {
     #[tokio::test]
     async fn upsert_forum_topics_refresh_preserves_missing_topics_and_marks_deleted() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, external_id, title, is_active, is_member, created_at
+             ) VALUES (1, 'telegram', 'supergroup', '1', 'Forum', 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
 
         sqlx::query(
             r#"
@@ -733,6 +744,62 @@ mod tests {
         assert_eq!(rows[0], (10, "Keep me".to_string(), 0, 10));
         assert_eq!(rows[1], (20, "Delete me".to_string(), 1, 1234));
         assert_eq!(rows[2], (30, "Fresh".to_string(), 0, 1234));
+    }
+
+    #[tokio::test]
+    async fn topic_refresh_rebuilds_materialized_memberships() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, account_id, external_id, title, is_active, is_member, created_at)
+             VALUES (1, 'telegram', 'supergroup', 42, '1', 'Forum', 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at,
+                ingested_at, content_kind, has_media, reply_to_top_id
+             ) VALUES (10, 1, '10', 'telegram_message', 'alice', 10, 10, 'text_only', 0, 55)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed item");
+
+        upsert_forum_topics_from_refresh(
+            &pool,
+            1,
+            &[ForumTopicSnapshot {
+                topic_id: 55,
+                top_message_id: 500,
+                title: "Fresh".to_string(),
+                icon_color: 1,
+                icon_emoji_id: None,
+                is_closed: false,
+                is_pinned: false,
+                is_hidden: false,
+                sort_order: 0,
+            }],
+            &[],
+            2000,
+        )
+        .await
+        .expect("refresh topics and rebuild");
+
+        let topic_id: i64 =
+            sqlx::query_scalar("SELECT topic_id FROM item_topic_memberships WHERE item_id = 10")
+                .fetch_one(&pool)
+                .await
+                .expect("load membership");
+        assert_eq!(topic_id, 55);
+
+        let state: (String, i64) = sqlx::query_as(
+            "SELECT status, unresolved_count FROM telegram_topic_resolution_state WHERE source_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load state");
+        assert_eq!(state, ("ready".to_string(), 0));
     }
 
     #[test]

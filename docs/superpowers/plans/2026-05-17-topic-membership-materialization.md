@@ -2101,7 +2101,7 @@ git commit -m "feat: read materialized topic memberships"
 - Modify: `src-tauri/src/topic_memberships.rs`
 - Modify: `src-tauri/src/source_ingest.rs` if lock enum labels need a topic-specific variant
 
-- [ ] **Step 1: Add RED refresh rebuild test**
+- [x] **Step 1: Add RED refresh rebuild test**
 
 In `src-tauri/src/sources/topics.rs`, add:
 
@@ -2164,7 +2164,7 @@ async fn topic_refresh_rebuilds_materialized_memberships() {
 }
 ```
 
-- [ ] **Step 2: Run refresh test and verify RED**
+- [x] **Step 2: Run refresh test and verify RED**
 
 Run:
 
@@ -2174,7 +2174,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::topics::tests::topic_re
 
 Expected: fail because `upsert_forum_topics_from_refresh` does not rebuild memberships yet.
 
-- [ ] **Step 3: Add pool wrapper for full rebuild and failure state**
+- [x] **Step 3: Add pool wrapper for full rebuild and failure state**
 
 In `src-tauri/src/topic_memberships.rs`, add:
 
@@ -2245,7 +2245,7 @@ pub(crate) async fn mark_topic_resolution_failed(
 
 This bounds `last_error` to `TOPIC_LAST_ERROR_MAX_CHARS` and avoids using state as a log store.
 
-- [ ] **Step 4: Rebuild after successful topic refresh**
+- [x] **Step 4: Rebuild after successful topic refresh**
 
 In `upsert_forum_topics_from_refresh`, after deleted-topic updates and before `Ok(())`, call:
 
@@ -2260,12 +2260,13 @@ crate::topic_memberships::rebuild_topic_memberships_for_source(
 
 This call is already serialized for sync and Takeout by `SourceIngestLocks`; if a standalone topic refresh command is added, it must acquire the same source ingest lock before calling this helper.
 
-- [ ] **Step 5: Run refresh/topic tests**
+- [x] **Step 5: Run refresh/topic tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml sources::topics:: topic_memberships::
+cargo test --manifest-path src-tauri/Cargo.toml sources::topics::
+cargo test --manifest-path src-tauri/Cargo.toml topic_memberships::
 ```
 
 Expected:
@@ -2274,7 +2275,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/sources/topics.rs src-tauri/src/topic_memberships.rs

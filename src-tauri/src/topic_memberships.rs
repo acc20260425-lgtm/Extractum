@@ -201,6 +201,70 @@ pub(crate) async fn rebuild_topic_memberships_for_source_on_connection(
     })
 }
 
+pub(crate) async fn rebuild_topic_memberships_for_source(
+    pool: &sqlx::Pool<Sqlite>,
+    source_id: i64,
+    refreshed_at: i64,
+) -> AppResult<TopicRebuildStats> {
+    let mut conn = pool.acquire().await.map_err(AppError::database)?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+
+    let result = rebuild_topic_memberships_for_source_on_connection(
+        &mut conn,
+        source_id,
+        refreshed_at,
+        true,
+    )
+    .await;
+
+    match result {
+        Ok(stats) => {
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(AppError::database)?;
+            Ok(stats)
+        }
+        Err(error) => {
+            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+            mark_topic_resolution_failed(pool, source_id, &error.to_string(), refreshed_at).await?;
+            Err(error)
+        }
+    }
+}
+
+pub(crate) async fn mark_topic_resolution_failed(
+    pool: &sqlx::Pool<Sqlite>,
+    source_id: i64,
+    error: &str,
+    updated_at: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "INSERT INTO telegram_topic_resolution_state (
+            source_id, resolver_version, status, unresolved_count, pending_item_count,
+            last_error, updated_at
+         )
+         VALUES (?, ?, ?, 0, 0, ?, ?)
+         ON CONFLICT(source_id) DO UPDATE SET
+            resolver_version = excluded.resolver_version,
+            status = excluded.status,
+            last_error = excluded.last_error,
+            updated_at = excluded.updated_at",
+    )
+    .bind(source_id)
+    .bind(CURRENT_TOPIC_RESOLVER_VERSION)
+    .bind(TOPIC_STATE_FAILED)
+    .bind(truncate_topic_resolution_error(error))
+    .bind(updated_at)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 pub(crate) async fn resolve_scoped_topic_memberships_on_connection(
     conn: &mut SqliteConnection,
     source_id: i64,
