@@ -437,41 +437,59 @@ describe("sources api wrappers", () => {
   });
 
   it("maps source forum topic fields", async () => {
-    invokeMock.mockResolvedValueOnce([
-      {
-        kind: "topic",
-        key: "topic:200",
-        title: "Announcements",
-        message_count: 3,
-        topic_id: 200,
-        top_message_id: 700,
-        icon_color: 1,
-        icon_emoji_id: 2,
-        is_closed: false,
-        is_pinned: true,
-        is_hidden: false,
-        is_deleted: false,
-        sort_order: 4,
+    invokeMock.mockResolvedValueOnce({
+      topics: [
+        {
+          kind: "topic",
+          key: "topic:200",
+          title: "Announcements",
+          message_count: 3,
+          topic_id: 200,
+          top_message_id: 700,
+          icon_color: 1,
+          icon_emoji_id: 2,
+          is_closed: false,
+          is_pinned: true,
+          is_hidden: false,
+          is_deleted: false,
+          sort_order: 4,
+        },
+      ],
+      topic_resolution_state: {
+        status: "ready",
+        resolver_version: 1,
+        unresolved_count: 0,
+        pending_item_count: 0,
+        memberships_refreshed_at: 1234,
       },
-    ]);
+    });
 
-    await expect(listSourceForumTopics(7)).resolves.toEqual([
-      {
-        kind: "topic",
-        key: "topic:200",
-        title: "Announcements",
-        messageCount: 3,
-        topicId: 200,
-        topMessageId: 700,
-        iconColor: 1,
-        iconEmojiId: 2,
-        isClosed: false,
-        isPinned: true,
-        isHidden: false,
-        isDeleted: false,
-        sortOrder: 4,
+    await expect(listSourceForumTopics(7)).resolves.toEqual({
+      topics: [
+        {
+          kind: "topic",
+          key: "topic:200",
+          title: "Announcements",
+          messageCount: 3,
+          topicId: 200,
+          topMessageId: 700,
+          iconColor: 1,
+          iconEmojiId: 2,
+          isClosed: false,
+          isPinned: true,
+          isHidden: false,
+          isDeleted: false,
+          sortOrder: 4,
+        },
+      ],
+      topicResolutionState: {
+        status: "ready",
+        resolverVersion: 1,
+        unresolvedCount: 0,
+        pendingItemCount: 0,
+        membershipsRefreshedAt: 1234,
       },
-    ]);
+    });
     expect(invokeMock).toHaveBeenLastCalledWith("list_source_forum_topics", { sourceId: 7 });
   });
 });

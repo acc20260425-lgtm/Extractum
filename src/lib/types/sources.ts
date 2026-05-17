@@ -177,6 +177,21 @@ export interface SourceForumTopic {
   sortOrder: number | null;
 }
 
+export type TopicResolutionStatus = "never_run" | "ready" | "dirty" | "rebuilding" | "failed";
+
+export interface TopicResolutionStateSummary {
+  status: TopicResolutionStatus;
+  resolverVersion: number;
+  unresolvedCount: number;
+  pendingItemCount: number;
+  membershipsRefreshedAt: number | null;
+}
+
+export interface SourceForumTopicsResult {
+  topics: SourceForumTopic[];
+  topicResolutionState: TopicResolutionStateSummary;
+}
+
 export interface SyncSourceResult {
   inserted: number;
   skipped: number;

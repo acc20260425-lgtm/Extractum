@@ -5,10 +5,7 @@ use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
-use crate::forum_topics::{
-    resolved_topic_join, resolved_topic_predicate, ResolvedTopicAliases,
-    FORUM_TOPIC_UNCATEGORIZED_KEY, FORUM_TOPIC_UNCATEGORIZED_TITLE,
-};
+use crate::forum_topics::{FORUM_TOPIC_UNCATEGORIZED_KEY, FORUM_TOPIC_UNCATEGORIZED_TITLE};
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::types::{now_secs, SourceForumTopicRow, SourceSyncTarget, TelegramSourceKind};
@@ -28,6 +25,22 @@ pub struct SourceForumTopicRecord {
     pub is_hidden: bool,
     pub is_deleted: bool,
     pub sort_order: Option<i64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TopicResolutionStateSummary {
+    pub status: String,
+    pub resolver_version: i64,
+    pub unresolved_count: i64,
+    pub pending_item_count: i64,
+    pub memberships_refreshed_at: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct SourceForumTopicsResponse {
+    pub topics: Vec<SourceForumTopicRecord>,
+    pub topic_resolution_state: TopicResolutionStateSummary,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -284,7 +297,7 @@ pub async fn list_source_forum_topics(
     handle: AppHandle,
     repair_state: tauri::State<'_, SourceIdentityRepairState>,
     source_id: i64,
-) -> AppResult<Vec<SourceForumTopicRecord>> {
+) -> AppResult<SourceForumTopicsResponse> {
     require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     list_source_forum_topics_from_pool(&pool, source_id).await
@@ -293,14 +306,10 @@ pub async fn list_source_forum_topics(
 async fn list_source_forum_topics_from_pool(
     pool: &sqlx::SqlitePool,
     source_id: i64,
-) -> AppResult<Vec<SourceForumTopicRecord>> {
-    let topic_match = resolved_topic_predicate(&ResolvedTopicAliases {
-        item: "items",
-        telegram_message: "telegram_messages",
-        topic: "topics",
-        matched_topic: "matched_topics",
-    });
-    let rows_sql = format!(
+) -> AppResult<SourceForumTopicsResponse> {
+    let state = crate::topic_memberships::load_topic_resolution_state(pool, source_id).await?;
+    let is_ready = crate::topic_memberships::is_ready_current_state(state.as_ref());
+    let rows: Vec<SourceForumTopicRow> = sqlx::query_as(
         r#"
         SELECT
             topics.topic_id,
@@ -313,14 +322,11 @@ async fn list_source_forum_topics_from_pool(
             topics.is_hidden,
             topics.is_deleted,
             topics.sort_order,
-            COUNT(items.id) AS message_count
+            COUNT(memberships.item_id) AS message_count
         FROM telegram_forum_topics AS topics
-        LEFT JOIN (
-            items
-            LEFT JOIN telegram_messages AS telegram_messages
-              ON telegram_messages.item_id = items.id
-        )
-          ON {topic_match}
+        LEFT JOIN item_topic_memberships AS memberships
+          ON memberships.source_id = topics.source_id
+         AND memberships.topic_id = topics.topic_id
         WHERE topics.source_id = ?
         GROUP BY
             topics.topic_id,
@@ -339,33 +345,11 @@ async fn list_source_forum_topics_from_pool(
             topics.title COLLATE NOCASE ASC,
             topics.topic_id ASC
         "#,
-    );
-    let rows: Vec<SourceForumTopicRow> = sqlx::query_as(&rows_sql)
-        .bind(source_id)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| AppError::internal(e.to_string()))?;
-
-    let topic_join = resolved_topic_join(&ResolvedTopicAliases {
-        item: "items",
-        telegram_message: "telegram_messages",
-        topic: "forum_topics",
-        matched_topic: "matched_topics",
-    });
-    let uncategorized_sql = format!(
-        r#"
-        SELECT COUNT(*)
-        FROM items
-        {topic_join}
-        WHERE items.source_id = ?
-          AND forum_topics.topic_id IS NULL
-        "#,
-    );
-    let uncategorized_count: i64 = sqlx::query_scalar(&uncategorized_sql)
-        .bind(source_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| AppError::internal(e.to_string()))?;
+    )
+    .bind(source_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))?;
 
     let mut records = rows
         .into_iter()
@@ -386,12 +370,13 @@ async fn list_source_forum_topics_from_pool(
         })
         .collect::<Vec<_>>();
 
-    if uncategorized_count > 0 {
+    let unresolved_count = state.as_ref().map(|row| row.unresolved_count).unwrap_or(0);
+    if is_ready && unresolved_count > 0 {
         records.push(SourceForumTopicRecord {
             kind: "uncategorized".to_string(),
             key: FORUM_TOPIC_UNCATEGORIZED_KEY.to_string(),
             title: FORUM_TOPIC_UNCATEGORIZED_TITLE.to_string(),
-            message_count: uncategorized_count,
+            message_count: unresolved_count,
             topic_id: None,
             top_message_id: None,
             icon_color: None,
@@ -404,7 +389,31 @@ async fn list_source_forum_topics_from_pool(
         });
     }
 
-    Ok(records)
+    Ok(SourceForumTopicsResponse {
+        topics: records,
+        topic_resolution_state: state_summary_from_row(state.as_ref()),
+    })
+}
+
+fn state_summary_from_row(
+    row: Option<&crate::topic_memberships::TopicResolutionStateRow>,
+) -> TopicResolutionStateSummary {
+    match row {
+        Some(row) => TopicResolutionStateSummary {
+            status: row.status.clone(),
+            resolver_version: row.resolver_version,
+            unresolved_count: row.unresolved_count,
+            pending_item_count: row.pending_item_count,
+            memberships_refreshed_at: row.memberships_refreshed_at,
+        },
+        None => TopicResolutionStateSummary {
+            status: crate::topic_memberships::TOPIC_STATE_NEVER_RUN.to_string(),
+            resolver_version: crate::topic_memberships::CURRENT_TOPIC_RESOLVER_VERSION,
+            unresolved_count: 0,
+            pending_item_count: 0,
+            memberships_refreshed_at: None,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -507,6 +516,14 @@ mod tests {
     #[tokio::test]
     async fn list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (
+                id, source_type, source_subtype, external_id, title, is_active, is_member, created_at
+             ) VALUES (1, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
 
         for (id, topic_id, top_message_id, title, is_pinned, sort_order) in [
             (1_i64, 22_i64, 900_i64, "beta", 0_i64, 2_i64),
@@ -577,10 +594,38 @@ mod tests {
             .await
             .expect("insert item");
         }
+        for (item_id, topic_id, match_kind) in [
+            (1_i64, 11_i64, "legacy_root_external_id"),
+            (2_i64, 11_i64, "reply_to_top_id"),
+            (3_i64, 1_i64, "general_fallback"),
+            (4_i64, 22_i64, "reply_to_top_id"),
+            (5_i64, 22_i64, "reply_to_msg_id"),
+        ] {
+            sqlx::query(
+                "INSERT INTO item_topic_memberships (
+                    item_id, source_id, topic_id, match_kind, resolver_version
+                 ) VALUES (?, 1, ?, ?, 1)",
+            )
+            .bind(item_id)
+            .bind(topic_id)
+            .bind(match_kind)
+            .execute(&pool)
+            .await
+            .expect("insert topic membership");
+        }
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 1, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert ready topic state");
 
-        let records = list_source_forum_topics_from_pool(&pool, 1)
+        let response = list_source_forum_topics_from_pool(&pool, 1)
             .await
             .expect("list source forum topics");
+        let records = response.topics;
 
         assert_eq!(records.len(), 4);
         assert_eq!(records[0].kind, "topic");

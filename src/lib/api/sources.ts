@@ -7,12 +7,14 @@ import type {
   ListYoutubeTranscriptSegmentsInput,
   Source,
   SourceForumTopic,
+  SourceForumTopicsResult,
   SourceItem,
   SourceSubtype,
   SyncSettings,
   SyncSourceResult,
   TelegramDialogSource,
   TelegramSourceKind,
+  TopicResolutionStatus,
   YoutubeAvailabilityStatus,
   YoutubePreview,
   YoutubePreviewKind,
@@ -148,6 +150,19 @@ interface RawSourceForumTopic {
   sort_order: number | null;
 }
 
+interface RawTopicResolutionStateSummary {
+  status: TopicResolutionStatus;
+  resolver_version: number;
+  unresolved_count: number;
+  pending_item_count: number;
+  memberships_refreshed_at: number | null;
+}
+
+interface RawSourceForumTopicsResponse {
+  topics: RawSourceForumTopic[];
+  topic_resolution_state: RawTopicResolutionStateSummary;
+}
+
 interface RawSyncResult {
   inserted: number;
   skipped: number;
@@ -227,9 +242,9 @@ export function listSourceItems(input: ListSourceItemsInput) {
 }
 
 export function listSourceForumTopics(sourceId: number) {
-  return invoke<RawSourceForumTopic[]>(SOURCE_COMMANDS.listSourceForumTopics, {
+  return invoke<RawSourceForumTopicsResponse>(SOURCE_COMMANDS.listSourceForumTopics, {
     sourceId,
-  }).then((topics) => topics.map(mapSourceForumTopic));
+  }).then(mapSourceForumTopicsResponse);
 }
 
 export function listYoutubeTranscriptSegments(input: ListYoutubeTranscriptSegmentsInput) {
@@ -375,6 +390,21 @@ function mapSourceForumTopic(topic: RawSourceForumTopic): SourceForumTopic {
     isHidden: topic.is_hidden,
     isDeleted: topic.is_deleted,
     sortOrder: topic.sort_order,
+  };
+}
+
+function mapSourceForumTopicsResponse(
+  response: RawSourceForumTopicsResponse,
+): SourceForumTopicsResult {
+  return {
+    topics: response.topics.map(mapSourceForumTopic),
+    topicResolutionState: {
+      status: response.topic_resolution_state.status,
+      resolverVersion: response.topic_resolution_state.resolver_version,
+      unresolvedCount: response.topic_resolution_state.unresolved_count,
+      pendingItemCount: response.topic_resolution_state.pending_item_count,
+      membershipsRefreshedAt: response.topic_resolution_state.memberships_refreshed_at,
+    },
   };
 }
 

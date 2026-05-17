@@ -1602,12 +1602,13 @@ git commit -m "feat: materialize topic memberships during migration"
 - Modify: `src-tauri/src/sources/topics.rs`
 - Modify: `src-tauri/src/sources/items/query.rs`
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
+- Modify: `src-tauri/src/forum_topics.rs`
 - Modify: `src/lib/types/sources.ts`
 - Modify: `src/lib/api/sources.ts`
 - Modify: `src/routes/analysis/+page.svelte`
 - Modify: `src/lib/api/sources.test.ts`
 
-- [ ] **Step 1: Add RED backend reader tests**
+- [x] **Step 1: Add RED backend reader tests**
 
 Update existing tests in `src-tauri/src/sources/topics.rs` and `src-tauri/src/sources/items/query.rs` so fixtures insert `item_topic_memberships` and `telegram_topic_resolution_state` instead of relying on inference.
 
@@ -1715,17 +1716,20 @@ async fn seed_materialized_topic_schema(pool: &sqlx::SqlitePool) {
 }
 ```
 
-- [ ] **Step 2: Run reader tests and verify RED**
+- [x] **Step 2: Run reader tests and verify RED**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml sources::topics::tests::list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket sources::items::query::tests::uncategorized_filter_returns_empty_when_topic_resolution_is_not_ready notebooklm_export::query::tests::load_export_messages_reads_materialized_topic_memberships
+cargo test --manifest-path src-tauri/Cargo.toml sources::topics::tests::list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::query::tests::uncategorized_filter_returns_empty_when_topic_resolution_is_not_ready
+cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::query::tests::load_export_messages_reads_materialized_topic_memberships
+npm.cmd test -- --run src/lib/api/sources.test.ts
 ```
 
 Expected: fail because readers still use inference joins and old topic response shape.
 
-- [ ] **Step 3: Update backend topic response DTO**
+- [x] **Step 3: Update backend topic response DTO**
 
 In `src-tauri/src/sources/topics.rs`, add:
 
@@ -1778,7 +1782,7 @@ fn state_summary_from_row(
 }
 ```
 
-- [ ] **Step 4: Replace topic list query with membership counts**
+- [x] **Step 4: Replace topic list query with membership counts**
 
 In `list_source_forum_topics_from_pool`, remove `resolved_topic_predicate` and count through `item_topic_memberships`:
 
@@ -1855,7 +1859,7 @@ Ok(SourceForumTopicsResponse {
 })
 ```
 
-- [ ] **Step 5: Replace item reader joins**
+- [x] **Step 5: Replace item reader joins**
 
 In `src-tauri/src/sources/items/query.rs`, remove `resolved_topic_join` import. Build SQL with:
 
@@ -1909,7 +1913,7 @@ match topic_filter {
 }
 ```
 
-- [ ] **Step 6: Replace NotebookLM export join**
+- [x] **Step 6: Replace NotebookLM export join**
 
 In `src-tauri/src/notebooklm_export/query.rs`, remove `resolved_topic_join` import. In `base_query`, replace `{topic_join}` with:
 
@@ -1923,7 +1927,7 @@ LEFT JOIN telegram_forum_topics AS forum_topics
 
 Keep the selected fields unchanged.
 
-- [ ] **Step 7: Update frontend types and mapper**
+- [x] **Step 7: Update frontend types and mapper**
 
 In `src/lib/types/sources.ts`, add:
 
@@ -1999,7 +2003,7 @@ sourceTopics = result.topics;
 
 No visual state display is required in this slice.
 
-- [ ] **Step 8: Update frontend API test**
+- [x] **Step 8: Update frontend API test**
 
 In `src/lib/api/sources.test.ts`, replace the forum topic mock with:
 
@@ -2063,13 +2067,16 @@ await expect(listSourceForumTopics(7)).resolves.toEqual({
 });
 ```
 
-- [ ] **Step 9: Run reader/frontend tests**
+- [x] **Step 9: Run reader/frontend tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml sources::topics:: sources::items::query:: notebooklm_export::query::
-npm test -- --run src/lib/api/sources.test.ts src/lib/analysis-state.test.ts
+cargo test --manifest-path src-tauri/Cargo.toml sources::topics::
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::query::
+cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::query::
+npm.cmd test -- --run src/lib/api/sources.test.ts src/lib/analysis-state.test.ts
+npm.cmd run check
 ```
 
 Expected:
@@ -2080,10 +2087,10 @@ test result: ok
 
 and Vitest passes.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```powershell
-git add src-tauri/src/sources/topics.rs src-tauri/src/sources/items/query.rs src-tauri/src/notebooklm_export/query.rs src/lib/types/sources.ts src/lib/api/sources.ts src/routes/analysis/+page.svelte src/lib/api/sources.test.ts
+git add src-tauri/src/sources/topics.rs src-tauri/src/sources/items/query.rs src-tauri/src/notebooklm_export/query.rs src-tauri/src/forum_topics.rs src/lib/types/sources.ts src/lib/api/sources.ts src/routes/analysis/+page.svelte src/lib/api/sources.test.ts
 git commit -m "feat: read materialized topic memberships"
 ```
 

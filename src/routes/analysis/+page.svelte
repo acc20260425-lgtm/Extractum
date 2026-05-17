@@ -1426,9 +1426,9 @@
     const preferredKey = preserveSelection ? selectedTopicKey : "__all_topics__";
     loadingSourceTopics = true;
     try {
-      const topics = await listSourceForumTopics(sourceId);
-      sourceTopics = topics;
-      selectedTopicKey = normalizeSelectedTopicKey(topics, preferredKey);
+      const result = await listSourceForumTopics(sourceId);
+      sourceTopics = result.topics;
+      selectedTopicKey = normalizeSelectedTopicKey(result.topics, preferredKey);
     } catch (error) {
       sourceTopics = [];
       selectedTopicKey = "__all_topics__";

@@ -1,5 +1,4 @@
 use crate::error::{AppError, AppResult};
-use crate::forum_topics::{resolved_topic_join, ResolvedTopicAliases};
 use crate::sources::types::StoredItemRow;
 
 use super::ForumTopicFilter;
@@ -25,13 +24,13 @@ pub(super) async fn load_item_rows_from_pool(
         None
     };
 
-    let topic_join = resolved_topic_join(&ResolvedTopicAliases {
-        item: "items",
-        telegram_message: "telegram_messages",
-        topic: "forum_topics",
-        matched_topic: "matched_topics",
-    });
-    let mut sql = format!(
+    let state = crate::topic_memberships::load_topic_resolution_state(pool, source_id).await?;
+    let is_ready = crate::topic_memberships::is_ready_current_state(state.as_ref());
+    if matches!(topic_filter.as_ref(), Some(ForumTopicFilter::Uncategorized)) && !is_ready {
+        return Ok(Vec::new());
+    }
+
+    let mut sql = String::from(
         r#"
         SELECT
             items.id,
@@ -55,7 +54,11 @@ pub(super) async fn load_item_rows_from_pool(
             forum_topics.title AS forum_topic_title,
             forum_topics.top_message_id AS forum_topic_top_message_id
         FROM items
-        {topic_join}
+        LEFT JOIN item_topic_memberships AS memberships
+          ON memberships.item_id = items.id
+        LEFT JOIN telegram_forum_topics AS forum_topics
+          ON forum_topics.source_id = memberships.source_id
+         AND forum_topics.topic_id = memberships.topic_id
         WHERE items.source_id = ?
         "#,
     );
@@ -66,12 +69,12 @@ pub(super) async fn load_item_rows_from_pool(
         sql.push_str(" AND items.published_at <= ?");
     }
 
-    match topic_filter {
+    match topic_filter.as_ref() {
         Some(ForumTopicFilter::Topic { .. }) => {
-            sql.push_str(" AND forum_topics.topic_id = ?");
+            sql.push_str(" AND memberships.topic_id = ?");
         }
         Some(ForumTopicFilter::Uncategorized) => {
-            sql.push_str(" AND forum_topics.topic_id IS NULL");
+            sql.push_str(" AND memberships.item_id IS NULL");
         }
         None => {}
     }
@@ -84,8 +87,8 @@ pub(super) async fn load_item_rows_from_pool(
     } else if let Some(around) = around_published_at {
         query = query.bind(around);
     }
-    if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter {
-        query = query.bind(topic_id);
+    if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter.as_ref() {
+        query = query.bind(*topic_id);
     }
 
     query
@@ -193,6 +196,32 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert typed message identity");
+        for (item_id, topic_id, match_kind) in [
+            (1_i64, 200_i64, "typed_root_top_message_id"),
+            (2_i64, 200_i64, "reply_to_top_id"),
+            (3_i64, 200_i64, "reply_to_msg_id"),
+            (4_i64, 1_i64, "general_fallback"),
+        ] {
+            sqlx::query(
+                "INSERT INTO item_topic_memberships (
+                    item_id, source_id, topic_id, match_kind, resolver_version
+                 ) VALUES (?, 1, ?, ?, 1)",
+            )
+            .bind(item_id)
+            .bind(topic_id)
+            .bind(match_kind)
+            .execute(&pool)
+            .await
+            .expect("insert topic membership");
+        }
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 1, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert ready topic state");
 
         let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
             .await
@@ -248,6 +277,48 @@ mod tests {
         .expect("load uncategorized rows");
         assert_eq!(uncategorized_rows.len(), 1);
         assert_eq!(uncategorized_rows[0].external_id, "1000");
+    }
+
+    #[tokio::test]
+    async fn uncategorized_filter_returns_empty_when_topic_resolution_is_not_ready() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'dirty', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed dirty state");
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                content_kind, has_media
+             ) VALUES (1, 1, '100', 'telegram_message', 'alice', 100, 100, 'text_only', 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed item");
+
+        let rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            20,
+            None,
+            Some(ForumTopicFilter::Uncategorized),
+            None,
+        )
+        .await
+        .expect("load uncategorized rows");
+
+        assert!(rows.is_empty());
     }
 
     #[tokio::test]

@@ -4,7 +4,6 @@ use sqlx::FromRow;
 
 use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
-use crate::forum_topics::{resolved_topic_join, ResolvedTopicAliases};
 use crate::media::decode_media_metadata;
 use crate::notebooklm_export::links::detect_urls;
 use crate::notebooklm_export::media::render_media_placeholders;
@@ -277,13 +276,6 @@ fn truncate_snippet(value: &str, max_chars: usize) -> String {
 }
 
 fn base_query(where_clause: &str) -> String {
-    let topic_join = resolved_topic_join(&ResolvedTopicAliases {
-        item: "items",
-        telegram_message: "telegram_messages",
-        topic: "forum_topics",
-        matched_topic: "matched_topics",
-    });
-
     format!(
         r#"
     SELECT
@@ -306,7 +298,11 @@ fn base_query(where_clause: &str) -> String {
         forum_topics.title AS forum_topic_title,
         forum_topics.top_message_id AS forum_topic_top_message_id
     FROM items
-    {topic_join}
+    LEFT JOIN item_topic_memberships AS memberships
+      ON memberships.item_id = items.id
+    LEFT JOIN telegram_forum_topics AS forum_topics
+      ON forum_topics.source_id = memberships.source_id
+     AND forum_topics.topic_id = memberships.topic_id
     WHERE {where_clause}
     ORDER BY items.published_at ASC, items.id ASC
 "#
@@ -375,13 +371,27 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create telegram_forum_topics");
+        sqlx::query(
+            r#"
+            CREATE UNIQUE INDEX idx_telegram_forum_topics_source_topic
+            ON telegram_forum_topics(source_id, topic_id)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create telegram_forum_topics source/topic index");
         sqlx::raw_sql(
             crate::migrations::telegram_item_native_identity::TELEGRAM_MESSAGES_SCHEMA_SQL,
         )
         .execute(&pool)
         .await
         .expect("create telegram_messages");
+        seed_materialized_topic_schema(&pool).await;
         pool
+    }
+
+    async fn seed_materialized_topic_schema(pool: &sqlx::SqlitePool) {
+        crate::sources::test_support::create_topic_membership_tables(pool).await;
     }
 
     #[tokio::test]
@@ -614,6 +624,22 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert typed message identity");
+        for external_id in ["701", "702", "not-numeric-root"] {
+            let item_id: i64 = sqlx::query_scalar("SELECT id FROM items WHERE external_id = ?")
+                .bind(external_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load item id for membership");
+            sqlx::query(
+                "INSERT INTO item_topic_memberships (
+                    item_id, source_id, topic_id, match_kind, resolver_version
+                 ) VALUES (?, 1, 200, 'reply_to_top_id', 1)",
+            )
+            .bind(item_id)
+            .execute(&pool)
+            .await
+            .expect("insert topic membership");
+        }
 
         let messages = load_export_messages(&pool, 1, None, None)
             .await
@@ -634,6 +660,14 @@ mod tests {
     #[tokio::test]
     async fn load_export_messages_attaches_general_topic_when_topic_header_is_missing() {
         let pool = export_pool().await;
+
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
 
         sqlx::query(
             r#"
@@ -680,6 +714,19 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert general message");
+        let item_id: i64 = sqlx::query_scalar("SELECT id FROM items WHERE external_id = '999'")
+            .fetch_one(&pool)
+            .await
+            .expect("load general item id");
+        sqlx::query(
+            "INSERT INTO item_topic_memberships (
+                item_id, source_id, topic_id, match_kind, resolver_version
+             ) VALUES (?, 1, 1, 'general_fallback', 1)",
+        )
+        .bind(item_id)
+        .execute(&pool)
+        .await
+        .expect("insert general membership");
 
         let messages = load_export_messages(&pool, 1, None, None)
             .await
@@ -749,5 +796,50 @@ mod tests {
         assert_eq!(messages[0].forum_topic_id, None);
         assert_eq!(messages[0].forum_topic_title, None);
         assert_eq!(messages[0].forum_topic_top_message_id, None);
+    }
+
+    #[tokio::test]
+    async fn load_export_messages_reads_materialized_topic_memberships() {
+        let pool = export_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO telegram_forum_topics (
+                source_id, topic_id, top_message_id, title, is_deleted
+             ) VALUES (1, 200, 700, 'Roadmap', 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed topic");
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, author, published_at, content_zstd,
+                content_kind, has_media
+             ) VALUES (1, 1, '701', 'Ada', 100, ?, 'text_only', 0)",
+        )
+        .bind(compress_text("Reply in topic").expect("compress"))
+        .execute(&pool)
+        .await
+        .expect("seed item");
+        sqlx::query(
+            "INSERT INTO item_topic_memberships (
+                item_id, source_id, topic_id, match_kind, resolver_version
+             ) VALUES (1, 1, 200, 'reply_to_top_id', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed membership");
+
+        let messages = load_export_messages(&pool, 1, None, None)
+            .await
+            .expect("load export messages");
+
+        assert_eq!(messages[0].forum_topic_id, Some(200));
+        assert_eq!(messages[0].forum_topic_title.as_deref(), Some("Roadmap"));
     }
 }
