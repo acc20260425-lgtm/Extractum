@@ -1931,7 +1931,7 @@ git commit -m "feat: read youtube detail from typed metadata"
 - Modify: `src-tauri/src/youtube/source_metadata.rs`
 - Test: `src-tauri/src/analysis/corpus.rs`
 
-- [ ] **Step 1: Add RED analysis tests**
+- [x] **Step 1: Add RED analysis tests**
 
 In `src-tauri/src/analysis/corpus.rs`, update YouTube test schemas to create `youtube_video_sources`. Add:
 
@@ -2030,7 +2030,7 @@ async fn youtube_transcript_segment_evidence_uses_typed_source_context() {
 }
 ```
 
-- [ ] **Step 2: Run analysis tests and verify RED**
+- [x] **Step 2: Run analysis tests and verify RED**
 
 Run:
 
@@ -2040,7 +2040,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::youtube_
 
 Expected: fail because corpus still decodes `sources.metadata_zstd`.
 
-- [ ] **Step 3: Add description metadata loader**
+- [x] **Step 3: Add description metadata loader**
 
 In `src-tauri/src/youtube/source_metadata.rs`, add:
 
@@ -2097,7 +2097,7 @@ pub(crate) async fn load_video_description_metadata(
 
 The `valid_description_metadata_from_row` helper must reject rows whose provider id does not equal `sources.external_id`, whose canonical URL is invalid, whose availability wire value is unsupported, or whose `tags_json`/`chapters_json` do not parse as arrays.
 
-- [ ] **Step 4: Update transcript segment query and metadata builder**
+- [x] **Step 4: Update transcript segment query and metadata builder**
 
 In `load_youtube_transcript_segment_messages`, replace `sources.metadata_zstd AS source_metadata_zstd` with typed fields:
 
@@ -2157,7 +2157,7 @@ fn youtube_segment_metadata_zstd(row: &YoutubeTranscriptSegmentRow) -> Result<Ve
 }
 ```
 
-- [ ] **Step 5: Update description rows**
+- [x] **Step 5: Update description rows**
 
 Replace `YoutubeSourceMetadataRow` and `load_youtube_description_messages` source-blob query with `load_video_description_metadata(pool, &request.source_ids)`. Build messages from typed metadata:
 
@@ -2210,11 +2210,11 @@ for metadata in crate::youtube::source_metadata::load_video_description_metadata
 
 Change `youtube_description_metadata_zstd` to accept `&YoutubeVideoDescriptionMetadata`.
 
-- [ ] **Step 6: Remove source blob decoder from analysis corpus**
+- [x] **Step 6: Remove source blob decoder from analysis corpus**
 
 Delete `decode_youtube_video_metadata` and remove the top-level `use crate::youtube::dto::YoutubeVideoMetadata;` unless tests still need DTO fixtures. Test fixtures that generate old source blobs should be replaced with typed table inserts for normal analysis tests.
 
-- [ ] **Step 7: Run analysis tests and verify GREEN**
+- [x] **Step 7: Run analysis tests and verify GREEN**
 
 Run:
 
@@ -2228,7 +2228,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/analysis/corpus.rs src-tauri/src/youtube/source_metadata.rs

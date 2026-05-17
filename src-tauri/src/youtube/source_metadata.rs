@@ -89,6 +89,18 @@ pub(crate) struct YoutubePlaylistSourceMetadata {
     pub(crate) availability_status: String,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct YoutubeVideoDescriptionMetadata {
+    pub(crate) source_id: i64,
+    pub(crate) video_id: String,
+    pub(crate) canonical_url: String,
+    pub(crate) title: Option<String>,
+    pub(crate) channel_title: Option<String>,
+    pub(crate) channel_handle: Option<String>,
+    pub(crate) published_at: Option<String>,
+    pub(crate) description: Option<String>,
+}
+
 impl YoutubeVideoSourceColumns {
     pub(crate) fn try_from_metadata(metadata: &YoutubeVideoMetadata) -> AppResult<Self> {
         validate_video_canonical_url(&metadata.video_id, &metadata.canonical_url)?;
@@ -300,6 +312,52 @@ pub(crate) async fn load_playlist_source_metadata_map(
     playlist_metadata_rows_to_map(rows)
 }
 
+pub(crate) async fn load_video_description_metadata(
+    pool: &sqlx::SqlitePool,
+    source_ids: &[i64],
+) -> AppResult<Vec<YoutubeVideoDescriptionMetadata>> {
+    if source_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut query = QueryBuilder::new(
+        r#"
+        SELECT
+            s.id AS source_id,
+            s.external_id,
+            yvs.video_id,
+            yvs.canonical_url,
+            yvs.title,
+            yvs.channel_title,
+            yvs.channel_handle,
+            yvs.published_at,
+            yvs.description,
+            yvs.tags_json,
+            yvs.chapters_json,
+            yvs.availability_status
+        FROM sources s
+        JOIN youtube_video_sources yvs ON yvs.source_id = s.id
+        WHERE s.source_type = 'youtube'
+          AND s.source_subtype = 'video'
+          AND s.id IN (
+        "#,
+    );
+    push_i64_list_for_source_metadata(&mut query, source_ids);
+    query.push(") ORDER BY s.id ASC");
+    let rows = query
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)?;
+
+    let mut metadata = Vec::new();
+    for row in rows {
+        if let Some(row_metadata) = valid_description_metadata_from_row(row)? {
+            metadata.push(row_metadata);
+        }
+    }
+    Ok(metadata)
+}
+
 fn video_metadata_rows_to_map(
     rows: Vec<sqlx::sqlite::SqliteRow>,
 ) -> AppResult<HashMap<i64, YoutubeVideoSourceMetadata>> {
@@ -357,6 +415,52 @@ fn video_metadata_rows_to_map(
         );
     }
     Ok(metadata)
+}
+
+fn valid_description_metadata_from_row(
+    row: sqlx::sqlite::SqliteRow,
+) -> AppResult<Option<YoutubeVideoDescriptionMetadata>> {
+    let source_id = row
+        .try_get::<i64, _>("source_id")
+        .map_err(AppError::database)?;
+    let external_id = row
+        .try_get::<String, _>("external_id")
+        .map_err(AppError::database)?;
+    let video_id = row
+        .try_get::<String, _>("video_id")
+        .map_err(AppError::database)?;
+    let canonical_url = row
+        .try_get::<String, _>("canonical_url")
+        .map_err(AppError::database)?;
+    let availability_status = row
+        .try_get::<String, _>("availability_status")
+        .map_err(AppError::database)?;
+    let tags_json = row
+        .try_get::<String, _>("tags_json")
+        .map_err(AppError::database)?;
+    let chapters_json = row
+        .try_get::<String, _>("chapters_json")
+        .map_err(AppError::database)?;
+
+    if external_id != video_id
+        || !is_availability_status_wire(&availability_status)
+        || validate_video_canonical_url(&video_id, &canonical_url).is_err()
+        || !json_text_is_array(&tags_json)
+        || !json_text_is_array(&chapters_json)
+    {
+        return Ok(None);
+    }
+
+    Ok(Some(YoutubeVideoDescriptionMetadata {
+        source_id,
+        video_id,
+        canonical_url,
+        title: row.try_get("title").map_err(AppError::database)?,
+        channel_title: row.try_get("channel_title").map_err(AppError::database)?,
+        channel_handle: row.try_get("channel_handle").map_err(AppError::database)?,
+        published_at: row.try_get("published_at").map_err(AppError::database)?,
+        description: row.try_get("description").map_err(AppError::database)?,
+    }))
 }
 
 fn playlist_metadata_rows_to_map(
@@ -433,6 +537,10 @@ fn is_availability_status_wire(value: &str) -> bool {
             | "removed_from_playlist"
             | "unavailable_unknown"
     )
+}
+
+fn json_text_is_array(value: &str) -> bool {
+    serde_json::from_str::<Value>(value).is_ok_and(|value| value.is_array())
 }
 
 fn raw_metadata_columns(raw: &Value) -> AppResult<(Option<i64>, Option<Vec<u8>>)> {

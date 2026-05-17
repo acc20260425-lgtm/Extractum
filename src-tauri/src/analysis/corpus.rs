@@ -11,7 +11,7 @@ use super::store::fetch_source_group;
 use super::{ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP};
 use crate::compression::{compress_json_bytes, decompress_bytes, decompress_text};
 use crate::error::{AppError, AppResult};
-use crate::youtube::dto::YoutubeVideoMetadata;
+use crate::youtube::source_metadata::YoutubeVideoDescriptionMetadata;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AnalysisRunPreflightLimits {
@@ -434,7 +434,11 @@ struct YoutubeTranscriptSegmentRow {
     published_at: i64,
     source_external_id: String,
     source_title: Option<String>,
-    source_metadata_zstd: Option<Vec<u8>>,
+    typed_video_id: Option<String>,
+    typed_canonical_url: Option<String>,
+    typed_title: Option<String>,
+    typed_channel_title: Option<String>,
+    typed_channel_handle: Option<String>,
     start_ms: i64,
     end_ms: Option<i64>,
     text: String,
@@ -456,7 +460,11 @@ async fn load_youtube_transcript_segment_messages(
             items.published_at,
             sources.external_id AS source_external_id,
             sources.title AS source_title,
-            sources.metadata_zstd AS source_metadata_zstd,
+            yvs.video_id AS typed_video_id,
+            yvs.canonical_url AS typed_canonical_url,
+            yvs.title AS typed_title,
+            yvs.channel_title AS typed_channel_title,
+            yvs.channel_handle AS typed_channel_handle,
             segments.start_ms,
             segments.end_ms,
             segments.text,
@@ -465,6 +473,7 @@ async fn load_youtube_transcript_segment_messages(
         FROM items
         JOIN sources ON sources.id = items.source_id
         JOIN youtube_transcript_segments segments ON segments.item_id = items.id
+        LEFT JOIN youtube_video_sources yvs ON yvs.source_id = sources.id
         WHERE items.published_at >=
         "#,
     );
@@ -510,12 +519,6 @@ async fn load_youtube_transcript_segment_messages(
         .collect()
 }
 
-#[derive(sqlx::FromRow)]
-struct YoutubeSourceMetadataRow {
-    id: i64,
-    metadata_zstd: Option<Vec<u8>>,
-}
-
 async fn load_youtube_description_messages(
     pool: &Pool<Sqlite>,
     request: &CorpusLoadRequest,
@@ -524,29 +527,12 @@ async fn load_youtube_description_messages(
         return Ok(Vec::new());
     }
 
-    let mut query = QueryBuilder::<Sqlite>::new(
-        "SELECT id, metadata_zstd FROM sources WHERE source_type = 'youtube' AND source_subtype = 'video' AND id IN (",
-    );
-    {
-        let mut separated = query.separated(", ");
-        for source_id in &request.source_ids {
-            separated.push_bind(source_id);
-        }
-    }
-    query.push(") ORDER BY id ASC");
-
-    let rows: Vec<YoutubeSourceMetadataRow> = query
-        .build_query_as()
-        .fetch_all(pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
     let mut messages = Vec::new();
-    for row in rows {
-        let Some(metadata_zstd) = row.metadata_zstd.as_deref() else {
-            continue;
-        };
-        let metadata = decode_youtube_video_metadata(metadata_zstd)?;
+    for metadata in
+        crate::youtube::source_metadata::load_video_description_metadata(pool, &request.source_ids)
+            .await
+            .map_err(|error| error.to_string())?
+    {
         let Some(description) = metadata.description.as_deref().map(str::trim) else {
             continue;
         };
@@ -579,12 +565,12 @@ async fn load_youtube_description_messages(
 
         messages.push(CorpusMessage {
             item_id: 0,
-            source_id: row.id,
+            source_id: metadata.source_id,
             external_id: format!("description:{}", metadata.video_id),
             published_at,
             author: metadata.channel_title.clone(),
             content,
-            r#ref: format!("s{}-i0", row.id),
+            r#ref: format!("s{}-i0", metadata.source_id),
             item_kind: Some("youtube_description".to_string()),
             source_type: Some("youtube".to_string()),
             source_subtype: Some("video".to_string()),
@@ -596,38 +582,24 @@ async fn load_youtube_description_messages(
 }
 
 fn youtube_segment_metadata_zstd(row: &YoutubeTranscriptSegmentRow) -> Result<Vec<u8>, String> {
-    let source_metadata = row
-        .source_metadata_zstd
+    let video_id = row
+        .typed_video_id
         .as_deref()
-        .and_then(|bytes| decode_youtube_video_metadata(bytes).ok());
-
-    let video_id = source_metadata
-        .as_ref()
-        .map(|metadata| metadata.video_id.as_str())
         .unwrap_or(row.source_external_id.as_str());
-    let canonical_url = source_metadata
-        .as_ref()
-        .map(|metadata| metadata.canonical_url.as_str())
+    let canonical_url = row
+        .typed_canonical_url
+        .as_deref()
         .filter(|value| !value.trim().is_empty())
         .map(ToString::to_string)
         .unwrap_or_else(|| format!("https://www.youtube.com/watch?v={video_id}"));
-    let title = source_metadata
-        .as_ref()
-        .and_then(|metadata| metadata.title.as_deref())
-        .or(row.source_title.as_deref());
-    let channel_title = source_metadata
-        .as_ref()
-        .and_then(|metadata| metadata.channel_title.as_deref());
-    let channel_handle = source_metadata
-        .as_ref()
-        .and_then(|metadata| metadata.channel_handle.as_deref());
+    let title = row.typed_title.as_deref().or(row.source_title.as_deref());
 
     let metadata = serde_json::json!({
         "video_id": video_id,
         "canonical_url": canonical_url,
         "title": title,
-        "channel_title": channel_title,
-        "channel_handle": channel_handle,
+        "channel_title": &row.typed_channel_title,
+        "channel_handle": &row.typed_channel_handle,
         "caption_language": &row.caption_language,
         "caption_track_kind": &row.caption_track_kind,
         "segment_start_ms": row.start_ms,
@@ -638,7 +610,9 @@ fn youtube_segment_metadata_zstd(row: &YoutubeTranscriptSegmentRow) -> Result<Ve
     compress_json_bytes(&json)
 }
 
-fn youtube_description_metadata_zstd(metadata: &YoutubeVideoMetadata) -> Result<Vec<u8>, String> {
+fn youtube_description_metadata_zstd(
+    metadata: &YoutubeVideoDescriptionMetadata,
+) -> Result<Vec<u8>, String> {
     let description_metadata = serde_json::json!({
         "video_id": &metadata.video_id,
         "canonical_url": &metadata.canonical_url,
@@ -649,11 +623,6 @@ fn youtube_description_metadata_zstd(metadata: &YoutubeVideoMetadata) -> Result<
     });
     let json = serde_json::to_vec(&description_metadata).map_err(|e| e.to_string())?;
     compress_json_bytes(&json)
-}
-
-fn decode_youtube_video_metadata(bytes: &[u8]) -> Result<YoutubeVideoMetadata, String> {
-    let decoded = decompress_bytes(bytes)?;
-    serde_json::from_slice(&decoded).map_err(|e| e.to_string())
 }
 
 fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
@@ -1052,6 +1021,7 @@ mod tests {
         estimate_message_input_chars, estimate_preflight_chunk_count,
         list_run_snapshot_messages_page, live_corpus_ref, load_corpus_messages,
         load_run_corpus_messages, load_run_snapshot_messages, load_trace_resolution_messages,
+        load_youtube_description_messages, load_youtube_transcript_segment_messages,
         preflight_analysis_run, preflight_limit_error, resolve_analysis_sources,
         resolve_run_source_ids, AnalysisRunPreflight, AnalysisRunPreflightLimits,
         CorpusLoadRequest, ListRunSnapshotMessagesRequest, YoutubeCorpusMode,
@@ -1213,6 +1183,7 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create youtube transcript segments");
+        crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
 
         sqlx::query(
             r#"
@@ -1314,21 +1285,77 @@ mod tests {
     }
 
     async fn insert_youtube_video_source(pool: &SqlitePool, source_id: i64) {
+        insert_youtube_video_source_with_typed_metadata(
+            pool,
+            source_id,
+            &format!("video{source_id}"),
+            &format!("Video {source_id}"),
+            None,
+            Some("2026-05-01"),
+        )
+        .await;
+    }
+
+    async fn insert_youtube_video_source_with_typed_metadata(
+        pool: &SqlitePool,
+        source_id: i64,
+        video_id: &str,
+        title: &str,
+        description: Option<&str>,
+        published_at: Option<&str>,
+    ) {
         sqlx::query(
             "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd)
              VALUES (?, 'youtube', 'video', ?, ?, ?)",
         )
         .bind(source_id)
-        .bind(format!("video{source_id}"))
-        .bind(format!("Video {source_id}"))
+        .bind(video_id)
+        .bind(title)
         .bind(youtube_metadata_zstd(
-            &format!("video{source_id}"),
-            &format!("Video {source_id}"),
-            None,
+            video_id,
+            title,
+            description,
         ))
         .execute(pool)
         .await
         .expect("insert youtube video source");
+        insert_typed_youtube_video_source(
+            pool,
+            source_id,
+            video_id,
+            title,
+            description,
+            published_at,
+        )
+        .await;
+    }
+
+    async fn insert_typed_youtube_video_source(
+        pool: &SqlitePool,
+        source_id: i64,
+        video_id: &str,
+        title: &str,
+        description: Option<&str>,
+        published_at: Option<&str>,
+    ) {
+        sqlx::query(
+            r#"
+            INSERT INTO youtube_video_sources (
+                source_id, video_id, canonical_url, title, channel_title,
+                channel_handle, published_at, description, video_form, availability_status
+            )
+            VALUES (?, ?, ?, ?, 'Channel', '@channel', ?, ?, 'regular', 'available')
+            "#,
+        )
+        .bind(source_id)
+        .bind(video_id)
+        .bind(format!("https://www.youtube.com/watch?v={video_id}"))
+        .bind(title)
+        .bind(published_at)
+        .bind(description)
+        .execute(pool)
+        .await
+        .expect("insert typed youtube video source");
     }
 
     async fn insert_youtube_transcript_segment(
@@ -1353,6 +1380,121 @@ mod tests {
         .execute(pool)
         .await
         .expect("insert youtube transcript segment");
+    }
+
+    #[tokio::test]
+    async fn youtube_description_rows_use_typed_metadata_with_corrupt_source_blob() {
+        let pool = snapshot_pool().await;
+        insert_youtube_video_source_with_typed_metadata(
+            &pool,
+            401,
+            "video401",
+            "Typed title",
+            Some("Typed description"),
+            Some("2026-05-17"),
+        )
+        .await;
+        sqlx::query("UPDATE sources SET metadata_zstd = x'00' WHERE id = 401")
+            .execute(&pool)
+            .await
+            .expect("corrupt source blob");
+
+        let request = CorpusLoadRequest {
+            source_type: "youtube".to_string(),
+            source_ids: vec![401],
+            period_from: 1,
+            period_to: i64::MAX,
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+        };
+        let messages = load_youtube_description_messages(&pool, &request)
+            .await
+            .expect("load descriptions");
+
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].content.contains("Typed description"));
+        assert!(messages[0]
+            .content
+            .contains("URL: https://www.youtube.com/watch?v=video401"));
+    }
+
+    #[tokio::test]
+    async fn youtube_description_missing_typed_metadata_skips_without_decoding_source_blob() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd) VALUES (402, 'youtube', 'video', 'video402', 'Generic title', x'00')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+
+        let request = CorpusLoadRequest {
+            source_type: "youtube".to_string(),
+            source_ids: vec![402],
+            period_from: 1,
+            period_to: i64::MAX,
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+        };
+        let messages = load_youtube_description_messages(&pool, &request)
+            .await
+            .expect("load descriptions");
+
+        assert!(messages.is_empty());
+    }
+
+    #[tokio::test]
+    async fn youtube_transcript_segment_evidence_uses_typed_source_context() {
+        let pool = snapshot_pool().await;
+        insert_youtube_video_source_with_typed_metadata(
+            &pool,
+            403,
+            "video403",
+            "Typed title",
+            None,
+            Some("2026-05-17"),
+        )
+        .await;
+        sqlx::query("UPDATE sources SET title = 'Generic title' WHERE id = 403")
+            .execute(&pool)
+            .await
+            .expect("set generic source title");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at)
+             VALUES (9001, 403, 'transcript:video403:en:manual', 'youtube_transcript', 'Channel', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert transcript item");
+        insert_youtube_transcript_segment(&pool, 9001, 403, 12_000, "segment text").await;
+        sqlx::query("UPDATE sources SET metadata_zstd = x'00' WHERE id = 403")
+            .execute(&pool)
+            .await
+            .expect("corrupt source blob");
+
+        let request = CorpusLoadRequest {
+            source_type: "youtube".to_string(),
+            source_ids: vec![403],
+            period_from: 1,
+            period_to: i64::MAX,
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptOnly,
+        };
+        let messages = load_youtube_transcript_segment_messages(&pool, &request)
+            .await
+            .expect("load transcript segments");
+
+        let metadata_json = decode_message_metadata_for_test(&messages[0]);
+        assert_eq!(metadata_json["video_id"], "video403");
+        assert_eq!(
+            metadata_json["canonical_url"],
+            "https://www.youtube.com/watch?v=video403"
+        );
+        assert_eq!(metadata_json["title"], "Typed title");
+        assert_eq!(metadata_json["segment_start_ms"], 12_000);
+    }
+
+    fn decode_message_metadata_for_test(message: &CorpusMessage) -> serde_json::Value {
+        let bytes = message.metadata_zstd.as_deref().expect("message metadata");
+        let decoded = crate::compression::decompress_bytes(bytes).expect("decompress metadata");
+        serde_json::from_slice(&decoded).expect("parse metadata")
     }
 
     fn sample_run() -> AnalysisRunDetail {
@@ -2207,21 +2349,15 @@ mod tests {
     #[tokio::test]
     async fn description_mode_creates_synthetic_description_message() {
         let pool = snapshot_pool().await;
-        sqlx::query(
-            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd)
-             VALUES (?, 'youtube', 'video', ?, ?, ?)",
-        )
-        .bind(20_i64)
-        .bind("video1")
-        .bind("Video 1")
-        .bind(youtube_metadata_zstd(
+        insert_youtube_video_source_with_typed_metadata(
+            &pool,
+            20,
             "video1",
             "Video 1",
             Some("Description body"),
-        ))
-        .execute(&pool)
-        .await
-        .expect("insert video source");
+            Some("2026-05-01"),
+        )
+        .await;
 
         let corpus = load_corpus_messages(
             &pool,
@@ -2245,21 +2381,15 @@ mod tests {
     #[tokio::test]
     async fn preflight_count_matches_loader_for_youtube_corpus_modes() {
         let pool = snapshot_pool().await;
-        sqlx::query(
-            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd)
-             VALUES (?, 'youtube', 'video', ?, ?, ?)",
-        )
-        .bind(20_i64)
-        .bind("video1")
-        .bind("Video 1")
-        .bind(youtube_metadata_zstd(
+        insert_youtube_video_source_with_typed_metadata(
+            &pool,
+            20,
             "video1",
             "Video 1",
             Some("Description body"),
-        ))
-        .execute(&pool)
-        .await
-        .expect("insert video source");
+            Some("2026-05-01"),
+        )
+        .await;
         sqlx::query(
             "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, content_zstd)
              VALUES (?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?)",
