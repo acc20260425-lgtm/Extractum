@@ -27,6 +27,7 @@ pub(super) async fn load_item_rows_from_pool(
 
     let topic_join = resolved_topic_join(&ResolvedTopicAliases {
         item: "items",
+        telegram_message: "telegram_messages",
         topic: "forum_topics",
         matched_topic: "matched_topics",
     });
@@ -103,6 +104,13 @@ mod tests {
     #[tokio::test]
     async fn load_item_rows_attaches_topic_metadata_and_root_matches() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
         for (id, topic_id, top_message_id, title, sort_order) in [
             (1_i64, 200_i64, 700_i64, "Announcements", 1_i64),
             (2_i64, 1_i64, 1_i64, "General", 2_i64),
@@ -133,7 +141,7 @@ mod tests {
         }
 
         for (id, external_id, published_at, reply_to_msg_id, reply_to_top_id, reaction_count) in [
-            (1_i64, "700", 500_i64, None, None, None),
+            (1_i64, "not-numeric-root", 500_i64, None, None, None),
             (2_i64, "701", 400_i64, None, Some(200_i64), Some(2_i64)),
             (3_i64, "702", 300_i64, Some(200_i64), None, Some(3_i64)),
             (4_i64, "999", 200_i64, None, None, None),
@@ -178,6 +186,13 @@ mod tests {
             .await
             .expect("insert item");
         }
+        sqlx::query(
+            "INSERT INTO telegram_messages (item_id, source_id, history_peer_kind, history_peer_id, telegram_message_id)
+             VALUES (1, 1, 'channel', 12345, 700)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert typed message identity");
 
         let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
             .await

@@ -2111,7 +2111,7 @@ git commit -m "feat: propagate takeout telegram history identity"
 - Modify: `src-tauri/src/sources/items/query.rs`
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
 
-- [ ] **Step 1: Add RED unit test for typed join text and isolated legacy fallback**
+- [x] **Step 1: Add RED unit test for typed join text and isolated legacy fallback**
 
 In `src-tauri/src/forum_topics.rs`, update tests with:
 
@@ -2138,7 +2138,7 @@ let source = std::fs::read_to_string("src/forum_topics.rs").expect("read forum_t
 assert!(source.contains("legacy_external_id_message_id_expr"));
 ```
 
-- [ ] **Step 2: Run forum topic tests and verify RED**
+- [x] **Step 2: Run forum topic tests and verify RED**
 
 Run:
 
@@ -2148,7 +2148,7 @@ cargo test --manifest-path src-tauri/Cargo.toml forum_topics::
 
 Expected: fail because `ResolvedTopicAliases` has no `telegram_message` alias and the join does not use typed ids.
 
-- [ ] **Step 3: Implement typed topic join with explicit legacy fallback**
+- [x] **Step 3: Implement typed topic join with explicit legacy fallback**
 
 In `src-tauri/src/forum_topics.rs`, change aliases:
 
@@ -2204,7 +2204,7 @@ OR (
 
 Also update the `NOT EXISTS` branch to prefer typed `telegram_messages` and only use the legacy expression when the typed child row is absent.
 
-- [ ] **Step 4: Update query call sites**
+- [x] **Step 4: Update query call sites**
 
 In `src-tauri/src/sources/items/query.rs`, update:
 
@@ -2219,7 +2219,7 @@ let topic_join = resolved_topic_join(&ResolvedTopicAliases {
 
 In `src-tauri/src/notebooklm_export/query.rs`, update the same call in `base_query`.
 
-- [ ] **Step 5: Add browsing/export behavior tests for typed root match**
+- [x] **Step 5: Add browsing/export behavior tests for typed root match**
 
 In `src-tauri/src/sources/items/query.rs`, add a typed-root case to `load_item_rows_attaches_topic_metadata_and_root_matches`:
 
@@ -2241,7 +2241,7 @@ assert_eq!(rows[0].forum_topic_id, Some(200));
 
 In `src-tauri/src/notebooklm_export/query.rs`, add the same pattern to `load_export_messages_attaches_topic_metadata_for_reply_and_root_messages`: root item `external_id = 'not-numeric-root'`, typed child `telegram_message_id = 700`, expected topic metadata still attaches.
 
-- [ ] **Step 6: Run topic/browser/export tests**
+- [x] **Step 6: Run topic/browser/export tests**
 
 Run:
 
@@ -2255,7 +2255,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Containment scan for external-id integer casts**
+- [x] **Step 7: Containment scan for external-id integer casts**
 
 Run:
 
@@ -2265,7 +2265,7 @@ rg -n "CAST\\(.*external_id AS INTEGER\\)|external_id NOT GLOB" src-tauri\src
 
 Expected: matches only in `src-tauri\src\forum_topics.rs` inside `legacy_external_id_message_id_expr` or tests.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/forum_topics.rs src-tauri/src/sources/items/query.rs src-tauri/src/notebooklm_export/query.rs

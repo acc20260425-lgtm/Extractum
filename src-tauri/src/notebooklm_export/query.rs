@@ -279,6 +279,7 @@ fn truncate_snippet(value: &str, max_chars: usize) -> String {
 fn base_query(where_clause: &str) -> String {
     let topic_join = resolved_topic_join(&ResolvedTopicAliases {
         item: "items",
+        telegram_message: "telegram_messages",
         topic: "forum_topics",
         matched_topic: "matched_topics",
     });
@@ -374,6 +375,12 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create telegram_forum_topics");
+        sqlx::raw_sql(
+            crate::migrations::telegram_item_native_identity::TELEGRAM_MESSAGES_SCHEMA_SQL,
+        )
+        .execute(&pool)
+        .await
+        .expect("create telegram_messages");
         pool
     }
 
@@ -487,6 +494,13 @@ mod tests {
     #[tokio::test]
     async fn load_export_messages_attaches_topic_metadata_for_reply_and_root_messages() {
         let pool = export_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
 
         sqlx::query(
             r#"
@@ -578,7 +592,7 @@ mod tests {
             "#,
         )
         .bind(1_i64)
-        .bind("700")
+        .bind("not-numeric-root")
         .bind("Bob")
         .bind(102_i64)
         .bind(compress_text("Root topic message").expect("compress root"))
@@ -587,6 +601,19 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert topic root");
+        let root_item_id: i64 =
+            sqlx::query_scalar("SELECT id FROM items WHERE external_id = 'not-numeric-root'")
+                .fetch_one(&pool)
+                .await
+                .expect("load root item id");
+        sqlx::query(
+            "INSERT INTO telegram_messages (item_id, source_id, history_peer_kind, history_peer_id, telegram_message_id)
+             VALUES (?, 1, 'channel', 12345, 700)",
+        )
+        .bind(root_item_id)
+        .execute(&pool)
+        .await
+        .expect("insert typed message identity");
 
         let messages = load_export_messages(&pool, 1, None, None)
             .await

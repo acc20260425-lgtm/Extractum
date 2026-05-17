@@ -296,6 +296,7 @@ async fn list_source_forum_topics_from_pool(
 ) -> AppResult<Vec<SourceForumTopicRecord>> {
     let topic_match = resolved_topic_predicate(&ResolvedTopicAliases {
         item: "items",
+        telegram_message: "telegram_messages",
         topic: "topics",
         matched_topic: "matched_topics",
     });
@@ -314,7 +315,11 @@ async fn list_source_forum_topics_from_pool(
             topics.sort_order,
             COUNT(items.id) AS message_count
         FROM telegram_forum_topics AS topics
-        LEFT JOIN items
+        LEFT JOIN (
+            items
+            LEFT JOIN telegram_messages AS telegram_messages
+              ON telegram_messages.item_id = items.id
+        )
           ON {topic_match}
         WHERE topics.source_id = ?
         GROUP BY
@@ -343,6 +348,7 @@ async fn list_source_forum_topics_from_pool(
 
     let topic_join = resolved_topic_join(&ResolvedTopicAliases {
         item: "items",
+        telegram_message: "telegram_messages",
         topic: "forum_topics",
         matched_topic: "matched_topics",
     });
