@@ -9,7 +9,7 @@ blobs and into typed YouTube source tables. After this slice, YouTube typed
 source tables own both hot typed metadata and an optional versioned raw provider
 payload. Typed columns are authoritative for normal runtime. `raw_metadata_zstd`
 is retained only for archive, debug, reparse, and migration compatibility, and
-must not be decoded in normal source listing, detail, or analysis paths.
+must not be decoded in normal source listing, detail, jobs, or analysis paths.
 
 `sources.metadata_zstd` is not the owner of YouTube runtime metadata after this
 slice.
@@ -44,7 +44,8 @@ work with unclear ownership boundaries.
 - Backfill existing valid YouTube source blobs into typed rows during a managed
   migration.
 - Clear `sources.metadata_zstd` after successful typed backfill or successful
-  typed source upsert.
+  typed source upsert. Clearing is part of the same transaction as the typed
+  metadata write and must not happen if the typed row write fails.
 - Keep invalid or unbackfillable legacy blobs inert: they may remain for
   diagnosis, but normal runtime must not read them.
 - Preserve YouTube playlist items, transcript segments, comments, analysis
@@ -144,7 +145,7 @@ The typed tables may store an optional compressed raw provider payload:
 - `raw_metadata_version` identifies the payload shape.
 - `raw_metadata_zstd` stores compressed JSON from the provider payload, not
   cookies, request headers, command arguments, auth diagnostics, or logs.
-- Normal listing, detail, and analysis paths must not decode
+- Normal listing, detail, jobs, and analysis paths must not decode
   `raw_metadata_zstd`.
 - Runtime provider work should use typed columns. Any provider-work field needed
   after source creation, such as `caption_language_override`, must be promoted
@@ -287,7 +288,7 @@ Containment scans:
 
 - normal YouTube listing/detail/analysis paths do not call
   `decode_youtube_metadata` on `sources.metadata_zstd`;
-- normal listing/detail/analysis paths do not decode `raw_metadata_zstd`;
+- normal listing/detail/jobs/analysis paths do not decode `raw_metadata_zstd`;
 - YouTube source upserts no longer bind compressed metadata into
   `sources.metadata_zstd`;
 - Telegram legacy metadata compatibility remains scoped to the Telegram repair
@@ -301,10 +302,14 @@ Containment scans:
   to `NULL`.
 - Existing valid YouTube source blobs are backfilled into typed rows during
   managed migration.
+- Missing, corrupt, wrong-shape, or mismatched legacy YouTube source blobs do
+  not fail the whole migration, do not create typed rows, remain inert
+  diagnostic artifacts, and lead to controlled missing-metadata behavior in
+  normal runtime.
 - Normal YouTube listing, detail, jobs, and analysis runtime reads typed
   columns and do not decode `sources.metadata_zstd`.
 - `raw_metadata_zstd` is optional, versioned, secret-safe, and not decoded by
-  normal source listing, detail, or analysis.
+  normal source listing, detail, jobs, or analysis.
 - Corrupt source blobs and corrupt raw payloads do not break normal runtime
   when typed columns are valid.
 - Missing or invalid typed metadata produces controlled missing-metadata
