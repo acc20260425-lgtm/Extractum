@@ -2542,7 +2542,7 @@ git commit -m "feat: load youtube jobs from typed metadata"
 - Modify: `docs/backlog.md`
 - Verify: containment scans
 
-- [ ] **Step 1: Add RED playlist integration assertion**
+- [x] **Step 1: Add RED playlist integration assertion**
 
 In `src-tauri/src/youtube/playlist.rs`, extend the existing playlist tests with:
 
@@ -2589,7 +2589,7 @@ async fn playlist_item_video_source_upsert_writes_typed_video_metadata_not_sourc
 
 If the helper names in the file differ, use the local helpers already present in `playlist.rs` and add only the missing typed table creation call.
 
-- [ ] **Step 2: Run playlist tests and verify RED or GREEN**
+- [x] **Step 2: Run playlist tests and verify RED or GREEN**
 
 Run:
 
@@ -2599,7 +2599,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::playlist::
 
 Expected: if Task 4 already covers the behavior through `upsert_youtube_video_source`, this may pass immediately. If it fails, add typed table creation to playlist tests or fix the playlist fixture schema.
 
-- [ ] **Step 3: Update docs**
+- [x] **Step 3: Update docs**
 
 In `docs/database-schema.md`:
 
@@ -2674,7 +2674,7 @@ Notes:
 
 Renumber later headings if the document uses sequential section numbers.
 
-- [ ] **Step 4: Update backlog**
+- [x] **Step 4: Update backlog**
 
 In `docs/backlog.md`, find the YouTube typed metadata ownership item and mark it complete, or add this completed note under the YouTube backend section if no matching item exists:
 
@@ -2682,7 +2682,7 @@ In `docs/backlog.md`, find the YouTube typed metadata ownership item and mark it
 - [x] Move YouTube source runtime metadata from generic `sources.metadata_zstd` into typed video/playlist source tables; keep raw provider payload optional and out of normal listing/detail/jobs/analysis paths.
 ```
 
-- [ ] **Step 5: Run containment scans**
+- [x] **Step 5: Run containment scans**
 
 Run:
 
@@ -2700,7 +2700,7 @@ Expected:
 - No YouTube source upsert writes `metadata_zstd = excluded.metadata_zstd`.
 - No normal detail/jobs/analysis query selects `sources.metadata_zstd` for YouTube provider metadata.
 
-- [ ] **Step 6: Run focused test suites**
+- [x] **Step 6: Run focused test suites**
 
 Run:
 
@@ -2714,7 +2714,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Run full verification**
+- [x] **Step 7: Run full verification**
 
 Run:
 
@@ -2732,7 +2732,7 @@ test result: ok
 
 `cargo fmt --check` and `git diff --check` should exit 0.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/youtube/playlist.rs docs/database-schema.md docs/backlog.md

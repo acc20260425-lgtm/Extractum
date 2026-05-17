@@ -211,6 +211,7 @@ mod tests {
 
     async fn youtube_pool() -> sqlx::SqlitePool {
         let pool = crate::sources::test_support::memory_pool_with_sources().await;
+        crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
         sqlx::query(
             r#"
             CREATE UNIQUE INDEX idx_sources_unique_youtube_video
@@ -355,6 +356,49 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0], ("private01".to_string(), None, 0));
         assert_eq!(rows[1], ("video01".to_string(), Some(existing_video_id), 0));
+    }
+
+    #[tokio::test]
+    async fn playlist_item_video_source_upsert_writes_typed_video_metadata_not_source_blob() {
+        let pool = youtube_pool().await;
+        let mut tx = pool.begin().await.expect("begin tx");
+        let playlist_source_id = upsert_youtube_playlist_source(
+            &mut tx,
+            &playlist_metadata(vec![playlist_item(
+                "video01",
+                YoutubeAvailabilityStatus::Available,
+            )]),
+        )
+        .await
+        .expect("upsert playlist source");
+
+        upsert_playlist_items(
+            &mut tx,
+            playlist_source_id,
+            &playlist_metadata(vec![playlist_item(
+                "video01",
+                YoutubeAvailabilityStatus::Available,
+            )]),
+        )
+        .await
+        .expect("upsert playlist items");
+        tx.commit().await.expect("commit");
+
+        let row: (Option<Vec<u8>>, String) = sqlx::query_as(
+            r#"
+            SELECT sources.metadata_zstd, youtube_video_sources.video_id
+            FROM youtube_playlist_items
+            JOIN sources ON sources.id = youtube_playlist_items.video_source_id
+            JOIN youtube_video_sources ON youtube_video_sources.source_id = sources.id
+            WHERE youtube_playlist_items.video_id = 'video01'
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load linked typed video");
+
+        assert_eq!(row.0, None);
+        assert_eq!(row.1, "video01");
     }
 
     #[tokio::test]

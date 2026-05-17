@@ -107,7 +107,10 @@ Analysis:
 - Full findings are recorded in `docs/database-schema-legacy-analysis.md`.
 
 - [ ] optionally clear old Telegram `sources.metadata_zstd` blobs after successful typed repair
-- [ ] move YouTube identity/display metadata to typed source tables
+- [x] Move YouTube source runtime metadata from generic
+  `sources.metadata_zstd` into typed video/playlist source tables; keep raw
+  provider payload optional and out of normal listing/detail/jobs/analysis
+  paths.
 - [ ] continue item/document identity cleanup
 
 Acceptance:

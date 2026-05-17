@@ -71,7 +71,12 @@ Notes:
 - uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
 - uniqueness includes `source_subtype` because Telegram bare ids are not enough to safely describe every peer shape.
 - `last_sync_state` and `last_synced_at` are advanced by normal sync and by successful Takeout import; failed or cancelled Takeout jobs leave these fields unchanged.
-- YouTube source rows keep metadata in `metadata_zstd`; video rows store the canonical video metadata and playlist rows store playlist metadata.
+- YouTube source rows keep `sources.metadata_zstd` `NULL` after successful
+  typed writes. Existing invalid or unbackfillable legacy YouTube blobs may
+  remain inert, but normal YouTube listing, detail, jobs, and analysis do not
+  decode them.
+- YouTube video and playlist runtime metadata lives in `youtube_video_sources`
+  and `youtube_playlist_sources`.
 - YouTube source jobs are in memory in the MVP; they may update `last_synced_at`, but active job records are not restored after app restart.
 
 ### 1.2 `telegram_sources`
@@ -117,7 +122,71 @@ Notes:
 - legacy metadata is decoded during startup repair and compatibility paths, not
   as the normal runtime source identity fallback.
 
-### 1.3 `source_identity_repair_notes`
+### 1.3 `youtube_video_sources`
+
+Stores typed runtime metadata for direct YouTube video sources. Generic identity
+and display snapshot fields remain in `sources`; provider-specific title,
+channel, thumbnail, canonical URL, availability, description, and provider-work
+hints live here.
+
+Important fields:
+
+- `source_id`
+- `video_id`
+- `canonical_url`
+- `title`
+- `channel_title`
+- `channel_id`
+- `channel_handle`
+- `channel_url`
+- `author_display`
+- `published_at`
+- `duration_seconds`
+- `description`
+- `thumbnail_url`
+- `tags_json`
+- `chapters_json`
+- `video_form`
+- `availability_status`
+- `caption_language_override`
+- `raw_metadata_version`
+- `raw_metadata_zstd`
+
+Notes:
+
+- `source_id` references `sources(id)` with `ON DELETE CASCADE`.
+- `video_id` must match `sources.external_id`; Rust upsert/backfill code
+  validates this cross-table invariant.
+- `raw_metadata_zstd` is optional archive/debug/reparse/migration payload only.
+  Normal listing, detail, jobs, and analysis do not decode it.
+
+### 1.4 `youtube_playlist_sources`
+
+Stores typed runtime metadata for YouTube playlist sources.
+
+Important fields:
+
+- `source_id`
+- `playlist_id`
+- `canonical_url`
+- `title`
+- `channel_title`
+- `channel_id`
+- `channel_handle`
+- `channel_url`
+- `thumbnail_url`
+- `video_count`
+- `availability_status`
+- `raw_metadata_version`
+- `raw_metadata_zstd`
+
+Notes:
+
+- `playlist_id` must match `sources.external_id`; Rust upsert/backfill code
+  validates this cross-table invariant.
+- Playlist entry payloads remain in `youtube_playlist_items.metadata_zstd`.
+
+### 1.5 `source_identity_repair_notes`
 
 Stores non-fatal source identity repair notes for diagnostics.
 
@@ -141,7 +210,7 @@ Notes:
 - notes are for non-fatal enrichment gaps only; duplicate or malformed identity
   rows are not silently downgraded into notes.
 
-### 1.4 `items`
+### 1.6 `items`
 
 Stores locally ingested source items. Current rows include Telegram messages,
 YouTube transcript items, and YouTube comment items. The table remains the
@@ -209,7 +278,7 @@ YouTube implication:
 - comments are stored as `youtube_comment` items;
 - YouTube description text used by analysis is synthesized from source metadata and is not stored as an `items` row.
 
-### 1.5 `app_settings`
+### 1.7 `app_settings`
 
 Simple key/value storage for app-wide settings.
 
@@ -233,7 +302,7 @@ Saved LLM API keys live in OS secure storage under
 `llm.profile.<profile_id>.api_key`; the backend migrates old non-empty
 `app_settings` key rows after a successful secure-store write.
 
-### 1.6 `telegram_forum_topics`
+### 1.8 `telegram_forum_topics`
 
 Stores the local catalog of Telegram forum topics for `supergroup` sources.
 
@@ -273,7 +342,7 @@ Notes:
 - this distinction matters in production data: many Telegram forum messages carry `reply_to_top_id = topic_id`, not `reply_to_top_id = top_message_id`, and some omit `reply_to_top_id` while keeping `reply_to_msg_id = topic_id`, so treating `top_message_id` as the normal join key or skipping the fallbacks misclassifies topic traffic;
 - topic records are retained locally even if a later catalog refresh omits them, so historical message-to-topic matches can survive.
 
-### 1.7 `youtube_playlist_items`
+### 1.9 `youtube_playlist_items`
 
 Stores playlist membership rows and per-entry availability state.
 
@@ -307,7 +376,7 @@ Notes:
 - `availability_status` distinguishes available, upcoming, live, no-captions, auth-gated, deleted, removed, and unknown-unavailable rows.
 - `is_removed_from_playlist` marks rows that disappeared from a later playlist metadata sync without deleting historical local state.
 
-### 1.8 `youtube_transcript_segments`
+### 1.10 `youtube_transcript_segments`
 
 Stores timestamped transcript segments for `youtube_transcript` items.
 
@@ -338,7 +407,7 @@ Notes:
 - `is_auto_generated` preserves whether the selected track came from auto captions.
 - Analysis trace refs can resolve segment timestamps into YouTube links.
 
-### 1.9 `accounts`
+### 1.11 `accounts`
 
 Stores configured Telegram accounts.
 
@@ -480,6 +549,7 @@ Purpose:
 | 17 | `17.sql` | Add durable YouTube corpus mode metadata to `analysis_runs` |
 | 18 | `18.sql` | Add source identity bridge tables, safe Telegram subtype backfills, and repair diagnostics storage |
 | 19 | `19.sql` | Runner-managed rebuild of `sources` without `telegram_source_kind`; records the sentinel checksum for SQLx history |
+| 20 | `20.sql` | Runner-managed creation and backfill of typed YouTube video/playlist source metadata tables |
 
 ## 4. Current behavior implications
 
@@ -488,6 +558,8 @@ Purpose:
 - `/analysis` loads text-bearing Telegram rows and YouTube transcript/comment/description corpus rows according to the selected YouTube corpus mode;
 - playlist analysis expands linked `youtube_playlist_items.video_source_id` rows and skips unavailable/unlinked playlist rows;
 - YouTube source jobs are in-memory and are not resumed after app restart;
+- YouTube source runtime metadata is read from typed YouTube source tables;
+  `sources.metadata_zstd` is not the owner of YouTube runtime metadata;
 - YouTube auth cookies are stored in OS secure storage, not SQLite;
 - NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
