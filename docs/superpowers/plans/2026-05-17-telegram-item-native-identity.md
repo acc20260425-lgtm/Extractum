@@ -2499,7 +2499,7 @@ git commit -m "feat: detect ambiguous legacy telegram refs"
 - Modify: `docs/backlog.md`
 - Verify: containment scans and focused tests
 
-- [ ] **Step 1: Update database schema docs**
+- [x] **Step 1: Update database schema docs**
 
 In `docs/database-schema.md`, add a new section after `telegram_sources`:
 
@@ -2558,7 +2558,7 @@ Update the `telegram_forum_topics` note that mentions `CAST(items.external_id AS
 - root-message fallback first uses `telegram_messages.telegram_message_id`; the old `CAST(items.external_id AS INTEGER)` path remains only for legacy Telegram rows that were not backfilled into `telegram_messages`.
 ```
 
-- [ ] **Step 2: Update backlog open work**
+- [x] **Step 2: Update backlog open work**
 
 In `docs/backlog.md`, under `4.4 Database Schema Simplification`, replace:
 
@@ -2574,7 +2574,7 @@ with:
 
 Do not add a completed-work history note; this backlog tracks open work only.
 
-- [ ] **Step 3: Run containment scans**
+- [x] **Step 3: Run containment scans**
 
 Run:
 
@@ -2592,7 +2592,7 @@ Expected:
 - `items.external_id` integer casts appear only in explicit legacy fallback logic or tests;
 - `telegram_messages` appears in migration, test support, Telegram insert paths, topic/query code, docs, and tests.
 
-- [ ] **Step 4: Run focused compatibility tests**
+- [x] **Step 4: Run focused compatibility tests**
 
 Run:
 
@@ -2606,7 +2606,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add docs/database-schema.md docs/backlog.md

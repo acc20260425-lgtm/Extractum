@@ -122,7 +122,56 @@ Notes:
 - legacy metadata is decoded during startup repair and compatibility paths, not
   as the normal runtime source identity fallback.
 
-### 1.3 `youtube_video_sources`
+### 1.3 `telegram_messages`
+
+Stores typed native identity and Telegram message context for `telegram_message`
+items. `items` remains the local item/archive container; this table gives
+Telegram duplicate detection and topic/ref logic a provider-native identity.
+
+Important fields:
+
+- `item_id`
+- `source_id`
+- `history_peer_kind`
+- `history_peer_id`
+- `telegram_message_id`
+- `migration_domain`
+- `is_migrated_history`
+- `reply_to_msg_id`
+- `reply_to_peer_kind`
+- `reply_to_peer_id`
+- `reply_to_top_id`
+- `reaction_count`
+- `created_at`
+- `updated_at`
+
+Important constraints / indexes:
+
+- primary key and `ON DELETE CASCADE` foreign key by `item_id`
+- native Telegram identity by `(source_id, history_peer_kind, history_peer_id,
+  telegram_message_id)`
+- lookup index by `(source_id, telegram_message_id)`
+- topic fallback lookup index by `(source_id, reply_to_top_id)`
+
+Notes:
+
+- `history_peer_kind` and `history_peer_id` identify the Telegram
+  history/origin peer for the message, not necessarily the current resolved
+  source peer.
+- for non-migrated current history, `history_peer_*` usually equals
+  `telegram_sources.peer_*`.
+- for migrated history, `history_peer_*` identifies the original Telegram
+  history domain.
+- `migration_domain` is diagnostic/future-proofing metadata in this slice and
+  is not used for duplicate detection, topic matching, or ref resolution.
+- `telegram_messages.source_id` must equal `items.source_id`, and
+  `telegram_messages.item_id` must point to an item whose `item_kind` is
+  `telegram_message`; migration/runtime tests enforce this application
+  invariant.
+- `updated_at` is set on child-row creation in this slice. Duplicate skips do
+  not update `telegram_messages.updated_at`.
+
+### 1.4 `youtube_video_sources`
 
 Stores typed runtime metadata for direct YouTube video sources. Generic identity
 and display snapshot fields remain in `sources`; provider-specific title,
@@ -160,7 +209,7 @@ Notes:
 - `raw_metadata_zstd` is optional archive/debug/reparse/migration payload only.
   Normal listing, detail, jobs, and analysis do not decode it.
 
-### 1.4 `youtube_playlist_sources`
+### 1.5 `youtube_playlist_sources`
 
 Stores typed runtime metadata for YouTube playlist sources.
 
@@ -186,7 +235,7 @@ Notes:
   validates this cross-table invariant.
 - Playlist entry payloads remain in `youtube_playlist_items.metadata_zstd`.
 
-### 1.5 `source_identity_repair_notes`
+### 1.6 `source_identity_repair_notes`
 
 Stores non-fatal source identity repair notes for diagnostics.
 
@@ -210,7 +259,7 @@ Notes:
 - notes are for non-fatal enrichment gaps only; duplicate or malformed identity
   rows are not silently downgraded into notes.
 
-### 1.6 `items`
+### 1.7 `items`
 
 Stores locally ingested source items. Current rows include Telegram messages,
 YouTube transcript items, and YouTube comment items. The table remains the
@@ -255,6 +304,10 @@ Notes:
 - rows without both text and useful media metadata are skipped during ingest.
 - rows can be inserted by normal `sync_source` or by Takeout import;
 - Takeout import does not add a separate provenance column and does not create a separate archive table;
+- Telegram duplicate detection now uses `telegram_messages`, not
+  `(source_id, external_id)`.
+- `items.external_id` remains a compatibility/display/debug value for Telegram
+  messages and is still populated with the Telegram message id string.
 - Telegram context fields are nullable and are populated only for rows inserted after migration `13.sql` and the updated ingest code;
 - `NULL` in Telegram context fields means metadata is unavailable, the row predates the migration, or Telegram did not expose that value;
 - `reply_to_peer_kind` uses Telegram peer values (`user`, `chat`, `channel`), not Extractum source-kind values (`channel`, `supergroup`, `group`);
@@ -262,15 +315,20 @@ Notes:
 
 Important constraints / indexes:
 
-- unique item by `(source_id, external_id)`
+- non-Telegram item uniqueness by `(source_id, external_id)` where
+  `item_kind <> 'telegram_message'`
+- non-unique compatibility lookup index on `(source_id, external_id)`
 - browse index on `(source_id, published_at DESC)`
 - provider item-kind browse index on `(source_id, item_kind, published_at DESC)`
 - author index on `author`
 
 Takeout implication:
 
-- repeated Takeout runs, or a Takeout run after normal sync, rely on `(source_id, external_id)` conflict handling to skip duplicates;
-- migrated supergroup history is currently not inserted by Takeout because old small-group ids may collide with current supergroup ids under this key.
+- repeated Takeout runs, or a Takeout run after normal sync, rely on
+  `telegram_messages` native identity handling to skip Telegram duplicates;
+- migrated supergroup history has a typed identity boundary, but enabling full
+  migrated-history import still requires the separate Takeout provenance and
+  validation slice.
 
 YouTube implication:
 
@@ -278,7 +336,7 @@ YouTube implication:
 - comments are stored as `youtube_comment` items;
 - YouTube description text used by analysis is synthesized from source metadata and is not stored as an `items` row.
 
-### 1.7 `app_settings`
+### 1.8 `app_settings`
 
 Simple key/value storage for app-wide settings.
 
@@ -302,7 +360,7 @@ Saved LLM API keys live in OS secure storage under
 `llm.profile.<profile_id>.api_key`; the backend migrates old non-empty
 `app_settings` key rows after a successful secure-store write.
 
-### 1.8 `telegram_forum_topics`
+### 1.9 `telegram_forum_topics`
 
 Stores the local catalog of Telegram forum topics for `supergroup` sources.
 
@@ -335,14 +393,14 @@ Notes:
 - `topic_id` is the stable Telegram topic identifier used by API/DTO layers;
 - `top_message_id` is the Telegram root message id for the topic and is still useful metadata, but it is not the primary join key for ordinary topic messages;
 - `items.reply_to_top_id` must be interpreted as the forum topic identifier for ordinary topic messages, so the primary local join is `items.reply_to_top_id -> telegram_forum_topics.topic_id`;
-- `top_message_id` is only needed as a root-message fallback when the stored message itself is the topic root and therefore has no `reply_to_top_id`; in that case the local match is `CAST(items.external_id AS INTEGER) = telegram_forum_topics.top_message_id`;
+- `top_message_id` is only needed as a root-message fallback when the stored message itself is the topic root and therefore has no `reply_to_top_id`; that fallback first uses `telegram_messages.telegram_message_id`, while the old `CAST(items.external_id AS INTEGER)` path remains only for legacy Telegram rows that were not backfilled into `telegram_messages`;
 - if `reply_to_top_id` is missing but `reply_to_msg_id = topic_id`, the row still belongs to that forum topic; this mirrors Telegram Desktop's `reply_to_top_id` / `reply_to_msg_id` fallback when deriving the topic root id;
 - if no specific topic match is found and the catalog contains the real Telegram `General` topic (`topic_id = 1`), messages without explicit topic metadata are attached to that real topic;
 - rows that still have no match after the full resolver go to the synthetic `Unrecognized topic` bucket; this bucket is intentionally separate from `General`;
 - this distinction matters in production data: many Telegram forum messages carry `reply_to_top_id = topic_id`, not `reply_to_top_id = top_message_id`, and some omit `reply_to_top_id` while keeping `reply_to_msg_id = topic_id`, so treating `top_message_id` as the normal join key or skipping the fallbacks misclassifies topic traffic;
 - topic records are retained locally even if a later catalog refresh omits them, so historical message-to-topic matches can survive.
 
-### 1.9 `youtube_playlist_items`
+### 1.10 `youtube_playlist_items`
 
 Stores playlist membership rows and per-entry availability state.
 
@@ -376,7 +434,7 @@ Notes:
 - `availability_status` distinguishes available, upcoming, live, no-captions, auth-gated, deleted, removed, and unknown-unavailable rows.
 - `is_removed_from_playlist` marks rows that disappeared from a later playlist metadata sync without deleting historical local state.
 
-### 1.10 `youtube_transcript_segments`
+### 1.11 `youtube_transcript_segments`
 
 Stores timestamped transcript segments for `youtube_transcript` items.
 
@@ -407,7 +465,7 @@ Notes:
 - `is_auto_generated` preserves whether the selected track came from auto captions.
 - Analysis trace refs can resolve segment timestamps into YouTube links.
 
-### 1.11 `accounts`
+### 1.12 `accounts`
 
 Stores configured Telegram accounts.
 
@@ -550,6 +608,7 @@ Purpose:
 | 18 | `18.sql` | Add source identity bridge tables, safe Telegram subtype backfills, and repair diagnostics storage |
 | 19 | `19.sql` | Runner-managed rebuild of `sources` without `telegram_source_kind`; records the sentinel checksum for SQLx history |
 | 20 | `20.sql` | Runner-managed creation and backfill of typed YouTube video/playlist source metadata tables |
+| 21 | `21.sql` | Runner-managed creation/backfill of typed Telegram message identity rows and replacement item uniqueness |
 
 ## 4. Current behavior implications
 
@@ -563,6 +622,9 @@ Purpose:
 - YouTube auth cookies are stored in OS secure storage, not SQLite;
 - NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
+- Telegram duplicate detection and legacy message-ref resolution use typed
+  `telegram_messages` identity where available, keeping `items.external_id` as
+  a compatibility value rather than the owner of Telegram message identity;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - `analysis_runs.youtube_corpus_mode` preserves the selected YouTube corpus scope used by the run, rather than reconstructing it from current source defaults.
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;
