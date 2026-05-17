@@ -55,7 +55,7 @@
 - Read: `docs/superpowers/specs/2026-05-17-youtube-typed-source-metadata-design.md`
 - Verify: Git status and focused baseline tests
 
-- [ ] **Step 1: Confirm clean starting point**
+- [x] **Step 1: Confirm clean starting point**
 
 Run:
 
@@ -73,7 +73,7 @@ Expected:
 
 If the working tree contains user changes, inspect them and keep them intact.
 
-- [ ] **Step 2: Create an implementation branch or worktree**
+- [x] **Step 2: Create an implementation branch or worktree**
 
 Use `superpowers:using-git-worktrees` before execution. A safe branch name is:
 
@@ -87,7 +87,7 @@ If using a linked worktree, use:
 git worktree add .worktrees/youtube-typed-source-metadata -b feature/youtube-typed-source-metadata
 ```
 
-- [ ] **Step 3: Run focused baseline tests**
+- [x] **Step 3: Run focused baseline tests**
 
 Run:
 
@@ -101,7 +101,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 4: Confirm no baseline changes**
+- [x] **Step 4: Confirm no baseline changes**
 
 Run:
 
