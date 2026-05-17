@@ -113,6 +113,11 @@ CREATE INDEX idx_item_topic_memberships_source_item
 forum topic in this model. If future providers or features need multi-topic
 membership, that should be a separate schema extension.
 
+Row-level `item_topic_memberships.resolver_version` is diagnostic and useful
+for audits, tests, and rebuild debugging. Reader truth is determined by the
+source-level `telegram_topic_resolution_state`, not by mixed per-row resolver
+version semantics.
+
 `source_id` is duplicated for fast source/topic queries and for the composite
 foreign key to `telegram_forum_topics`. The application invariant is:
 
@@ -316,6 +321,8 @@ Post-rebuild invariants:
 - every membership `source_id` equals the referenced `items.source_id`;
 - every membership `topic_id` references a real `telegram_forum_topics` row;
 - every membership `item_id` belongs to an eligible Telegram forum item;
+- every membership `resolver_version` equals the source
+  `telegram_topic_resolution_state.resolver_version` for ready sources;
 - every `telegram_topic_resolution_state` row belongs to a Telegram
   `supergroup` source;
 - `state.status = 'ready'` only after these checks pass;
@@ -398,13 +405,16 @@ Real topic counts use indexed joins from `telegram_forum_topics` to
 
 `Unrecognized` count/filter uses eligible items without membership rows only
 when source resolution state is `ready` for the current resolver version.
+The backend, not the frontend, decides whether `state.resolver_version` is the
+current resolver version. DTOs expose `resolverVersion` for diagnostics and
+display only.
 
 If `topicFilter = Unrecognized` and topic resolution state is not ready,
 backend must not silently return all missing-membership rows as unrecognized.
-For the first slice, the compatible behavior is to return an empty item result
-and provide topic resolution state metadata through the topic list API, so the
-current UI can avoid mislabeling rows while a later UI can show a better
-status.
+For the first slice, `list_source_items` returns an empty item result for a
+non-ready `Unrecognized` filter. Callers must use `list_source_forum_topics` to
+inspect topic resolution state. This keeps the current item-list response shape
+stable while avoiding mislabeled rows.
 
 `list_source_forum_topics` should return:
 
@@ -494,6 +504,8 @@ Reader/export tests:
 - `list_source_items` topic filtering uses memberships;
 - NotebookLM export uses memberships;
 - reader/export code no longer embeds resolver match order.
+- ready-source memberships have the same `resolver_version` as the source
+  resolution state.
 
 Containment scans:
 
@@ -507,7 +519,9 @@ Expected:
 
 - `items.external_id` integer casts appear only in resolver legacy fallback or
   tests;
-- reader/export paths do not encode topic resolver order;
+- topic resolver fields such as `top_message_id` are allowed in resolver,
+  migration, tests, and docs, but disallowed as embedded inference logic in
+  readers/export;
 - new membership/state tables appear in migration, resolver/runtime code,
   docs, and tests.
 
@@ -538,9 +552,9 @@ into a shipped-work changelog.
    state.
 4. Move `list_source_forum_topics`, `list_source_items`, and NotebookLM export
    to materialized joins.
-5. Add scoped runtime resolution for normal Telegram sync and Takeout insert
+5. Run full source rebuild after successful topic refresh.
+6. Add scoped runtime resolution for normal Telegram sync and Takeout insert
    paths.
-6. Run full source rebuild after successful topic refresh.
 7. Update docs and containment scans.
 
 ## Acceptance Criteria
