@@ -2669,7 +2669,7 @@ git commit -m "docs: document topic membership materialization"
 - Modify: this plan if task checkboxes were updated during execution
 - Verify: full project status
 
-- [ ] **Step 1: Run full Rust verification**
+- [x] **Step 1: Run full Rust verification**
 
 Use `superpowers:verification-before-completion`, then run:
 
@@ -2687,13 +2687,13 @@ test result: ok
 
 `cargo fmt --check` and `git diff --check` exit 0.
 
-- [ ] **Step 2: Run frontend verification**
+- [x] **Step 2: Run frontend verification**
 
 Because this plan changes TypeScript API types and `+page.svelte`, run:
 
 ```powershell
-npm run check
-npm test -- --run
+npm.cmd run check
+npm.cmd test -- --run
 ```
 
 Expected:
@@ -2704,7 +2704,7 @@ Expected:
 
 and Vitest passes.
 
-- [ ] **Step 3: Final git status**
+- [x] **Step 3: Final git status**
 
 Run:
 
@@ -2715,7 +2715,7 @@ git --no-pager log -12 --oneline --decorate
 
 Expected: only expected committed branch state.
 
-- [ ] **Step 4: Commit plan checkbox updates if changed**
+- [x] **Step 4: Commit plan checkbox updates if changed**
 
 If this plan was updated during execution:
 
