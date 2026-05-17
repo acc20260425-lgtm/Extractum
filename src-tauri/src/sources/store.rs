@@ -1,12 +1,15 @@
 use tauri::AppHandle;
 use tokio::time::{Duration, Instant};
 
-use crate::compression::compress_json_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::telegram::TelegramState;
 use crate::youtube::dto::{YoutubePlaylistMetadata, YoutubeVideoMetadata};
+use crate::youtube::source_metadata::{
+    upsert_playlist_source_metadata, upsert_video_source_metadata, YoutubePlaylistSourceColumns,
+    YoutubeVideoSourceColumns,
+};
 
 use super::avatar::{
     cache_source_avatar, peer_photo_data_url_with_timeout, read_source_avatar_data_url,
@@ -135,10 +138,10 @@ pub(crate) async fn upsert_youtube_video_source(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     metadata: &YoutubeVideoMetadata,
 ) -> AppResult<i64> {
-    let metadata_zstd = encode_youtube_metadata(metadata)?;
+    let _validated = YoutubeVideoSourceColumns::try_from_metadata(metadata)?;
     let now = now_secs();
 
-    sqlx::query_scalar(
+    let source_id: i64 = sqlx::query_scalar(
         r#"
         INSERT INTO sources (
             source_type,
@@ -151,33 +154,35 @@ pub(crate) async fn upsert_youtube_video_source(
             is_member,
             created_at
         )
-        VALUES ('youtube', 'video', NULL, ?, ?, ?, 1, 0, ?)
+        VALUES ('youtube', 'video', NULL, ?, ?, NULL, 1, 0, ?)
         ON CONFLICT(source_type, source_subtype, external_id)
         WHERE source_type = 'youtube' AND source_subtype = 'video'
         DO UPDATE SET
             title = excluded.title,
-            metadata_zstd = excluded.metadata_zstd,
+            metadata_zstd = NULL,
             is_active = 1
         RETURNING id
         "#,
     )
     .bind(&metadata.video_id)
     .bind(&metadata.title)
-    .bind(metadata_zstd)
     .bind(now)
     .fetch_one(&mut **tx)
     .await
-    .map_err(AppError::database)
+    .map_err(AppError::database)?;
+
+    upsert_video_source_metadata(tx, source_id, metadata).await?;
+    Ok(source_id)
 }
 
 pub(crate) async fn upsert_youtube_playlist_source(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     metadata: &YoutubePlaylistMetadata,
 ) -> AppResult<i64> {
-    let metadata_zstd = encode_youtube_metadata(metadata)?;
+    let _validated = YoutubePlaylistSourceColumns::try_from_metadata(metadata)?;
     let now = now_secs();
 
-    sqlx::query_scalar(
+    let source_id: i64 = sqlx::query_scalar(
         r#"
         INSERT INTO sources (
             source_type,
@@ -190,23 +195,25 @@ pub(crate) async fn upsert_youtube_playlist_source(
             is_member,
             created_at
         )
-        VALUES ('youtube', 'playlist', NULL, ?, ?, ?, 1, 0, ?)
+        VALUES ('youtube', 'playlist', NULL, ?, ?, NULL, 1, 0, ?)
         ON CONFLICT(source_type, source_subtype, external_id)
         WHERE source_type = 'youtube' AND source_subtype = 'playlist'
         DO UPDATE SET
             title = excluded.title,
-            metadata_zstd = excluded.metadata_zstd,
+            metadata_zstd = NULL,
             is_active = 1
         RETURNING id
         "#,
     )
     .bind(&metadata.playlist_id)
     .bind(&metadata.title)
-    .bind(metadata_zstd)
     .bind(now)
     .fetch_one(&mut **tx)
     .await
-    .map_err(AppError::database)
+    .map_err(AppError::database)?;
+
+    upsert_playlist_source_metadata(tx, source_id, metadata).await?;
+    Ok(source_id)
 }
 
 #[tauri::command]
@@ -486,17 +493,13 @@ async fn upsert_telegram_source_identity_from_resolved(
     Ok(())
 }
 
-fn encode_youtube_metadata(metadata: &impl serde::Serialize) -> AppResult<Vec<u8>> {
-    let json = serde_json::to_vec(metadata).map_err(|e| AppError::internal(e.to_string()))?;
-    compress_json_bytes(&json).map_err(AppError::internal)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::AppErrorKind;
     use crate::sources::test_support::{
-        create_canonical_telegram_identity_index, memory_pool_with_sources,
+        create_canonical_telegram_identity_index, create_youtube_typed_source_tables,
+        memory_pool_with_sources,
     };
     use crate::sources::types::TELEGRAM_KIND_CHANNEL;
     use crate::youtube::dto::{
@@ -826,6 +829,141 @@ mod tests {
         assert_eq!(row.3, "PLdemo");
     }
 
+    #[tokio::test]
+    async fn upsert_youtube_video_source_writes_typed_row_and_null_source_metadata() {
+        let pool = memory_pool_with_sources().await;
+        create_youtube_typed_source_tables(&pool).await;
+        create_youtube_unique_indexes(&pool).await;
+        let mut tx = pool.begin().await.expect("begin tx");
+
+        let source_id = upsert_youtube_video_source(&mut tx, &youtube_video_metadata())
+            .await
+            .expect("upsert youtube video");
+        tx.commit().await.expect("commit");
+
+        let source_metadata: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT metadata_zstd FROM sources WHERE id = ?")
+                .bind(source_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load source metadata");
+        assert_eq!(source_metadata, None);
+
+        let typed: (String, Option<String>, String, String, Option<Vec<u8>>) = sqlx::query_as(
+            "SELECT video_id, title, canonical_url, availability_status, raw_metadata_zstd FROM youtube_video_sources WHERE source_id = ?",
+        )
+        .bind(source_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load typed video source");
+        assert_eq!(typed.0, "dQw4w9WgXcQ");
+        assert_eq!(typed.1.as_deref(), Some("Demo video"));
+        assert_eq!(typed.2, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        assert_eq!(typed.3, "available");
+        assert!(typed.4.is_some());
+    }
+
+    #[tokio::test]
+    async fn upsert_youtube_playlist_source_writes_typed_row_and_null_source_metadata() {
+        let pool = memory_pool_with_sources().await;
+        create_youtube_typed_source_tables(&pool).await;
+        create_youtube_unique_indexes(&pool).await;
+        let mut tx = pool.begin().await.expect("begin tx");
+
+        let source_id = upsert_youtube_playlist_source(&mut tx, &youtube_playlist_metadata())
+            .await
+            .expect("upsert youtube playlist");
+        tx.commit().await.expect("commit");
+
+        let source_metadata: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT metadata_zstd FROM sources WHERE id = ?")
+                .bind(source_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load source metadata");
+        assert_eq!(source_metadata, None);
+
+        let typed: (String, Option<String>, String, i64) = sqlx::query_as(
+            "SELECT playlist_id, title, canonical_url, video_count FROM youtube_playlist_sources WHERE source_id = ?",
+        )
+        .bind(source_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load typed playlist source");
+        assert_eq!(typed.0, "PLdemo");
+        assert_eq!(typed.1.as_deref(), Some("Demo playlist"));
+        assert_eq!(typed.2, "https://www.youtube.com/playlist?list=PLdemo");
+        assert_eq!(typed.3, 0);
+    }
+
+    #[tokio::test]
+    async fn upsert_youtube_video_source_conflict_clears_existing_legacy_blob() {
+        let pool = memory_pool_with_sources().await;
+        create_youtube_typed_source_tables(&pool).await;
+        create_youtube_unique_indexes(&pool).await;
+        let legacy_blob = crate::compression::compress_json_bytes(br#"{"legacy":true}"#)
+            .expect("compress legacy");
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd, is_active, is_member, created_at) VALUES (77, 'youtube', 'video', 'dQw4w9WgXcQ', 'Old', ?, 1, 0, 1)",
+        )
+        .bind(legacy_blob)
+        .execute(&pool)
+        .await
+        .expect("insert legacy source");
+        let mut tx = pool.begin().await.expect("begin tx");
+
+        let source_id = upsert_youtube_video_source(&mut tx, &youtube_video_metadata())
+            .await
+            .expect("upsert existing youtube video");
+        tx.commit().await.expect("commit");
+
+        assert_eq!(source_id, 77);
+        let source_metadata: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT metadata_zstd FROM sources WHERE id = 77")
+                .fetch_one(&pool)
+                .await
+                .expect("load source metadata");
+        assert_eq!(source_metadata, None);
+    }
+
+    #[tokio::test]
+    async fn upsert_youtube_video_source_rejects_invalid_canonical_url_without_source_row() {
+        let pool = memory_pool_with_sources().await;
+        create_youtube_typed_source_tables(&pool).await;
+        create_youtube_unique_indexes(&pool).await;
+        let mut metadata = youtube_video_metadata();
+        metadata.canonical_url = "https://example.com/watch?v=dQw4w9WgXcQ".to_string();
+        let mut tx = pool.begin().await.expect("begin tx");
+
+        let error = upsert_youtube_video_source(&mut tx, &metadata)
+            .await
+            .expect_err("invalid metadata rejected");
+        tx.rollback().await.expect("rollback");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sources WHERE external_id = 'dQw4w9WgXcQ'")
+                .fetch_one(&pool)
+                .await
+                .expect("count source rows");
+        assert_eq!(count, 0);
+    }
+
+    async fn create_youtube_unique_indexes(pool: &sqlx::SqlitePool) {
+        sqlx::query(
+            "CREATE UNIQUE INDEX idx_sources_unique_youtube_video ON sources(source_type, source_subtype, external_id) WHERE source_type = 'youtube' AND source_subtype = 'video'",
+        )
+        .execute(pool)
+        .await
+        .expect("create video index");
+        sqlx::query(
+            "CREATE UNIQUE INDEX idx_sources_unique_youtube_playlist ON sources(source_type, source_subtype, external_id) WHERE source_type = 'youtube' AND source_subtype = 'playlist'",
+        )
+        .execute(pool)
+        .await
+        .expect("create playlist index");
+    }
+
     async fn legacy_not_null_telegram_kind_pool() -> sqlx::SqlitePool {
         let pool = crate::sources::test_support::memory_pool().await;
         let legacy_kind_column = legacy_source_kind_column();
@@ -872,6 +1010,7 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create playlist index");
+        create_youtube_typed_source_tables(&pool).await;
         pool
     }
 

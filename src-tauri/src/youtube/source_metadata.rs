@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde_json::Value;
 use sqlx::{Executor, Sqlite, SqliteConnection};
 
@@ -11,10 +9,8 @@ use super::dto::{
 };
 use super::url::{parse_youtube_url, YoutubeUrlKind};
 
-#[allow(dead_code)]
 pub(crate) const YOUTUBE_RAW_METADATA_VERSION: i64 = 1;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(crate) struct YoutubeVideoSourceColumns {
     pub(crate) video_id: String,
@@ -42,7 +38,6 @@ pub(crate) struct YoutubeVideoSourceColumns {
     pub(crate) raw_metadata_zstd: Option<Vec<u8>>,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(crate) struct YoutubePlaylistSourceColumns {
     pub(crate) playlist_id: String,
@@ -238,7 +233,6 @@ fn caption_language_override_from_raw(raw: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-#[allow(dead_code)]
 pub(crate) const YOUTUBE_TYPED_SOURCE_TABLES_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS youtube_video_sources (
     source_id INTEGER PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
@@ -323,7 +317,6 @@ CREATE INDEX IF NOT EXISTS idx_youtube_playlist_sources_playlist_id
     ON youtube_playlist_sources(playlist_id);
 "#;
 
-#[allow(dead_code)]
 pub(crate) async fn create_youtube_typed_source_tables<'e, E>(executor: E) -> AppResult<()>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -363,6 +356,24 @@ pub(crate) async fn insert_playlist_source_metadata_on_connection(
 ) -> AppResult<()> {
     let columns = YoutubePlaylistSourceColumns::try_from_metadata(metadata)?;
     insert_playlist_source_columns(conn, source_id, &columns).await
+}
+
+pub(crate) async fn upsert_video_source_metadata(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    source_id: i64,
+    metadata: &YoutubeVideoMetadata,
+) -> AppResult<()> {
+    let columns = YoutubeVideoSourceColumns::try_from_metadata(metadata)?;
+    insert_video_source_columns(&mut **tx, source_id, &columns).await
+}
+
+pub(crate) async fn upsert_playlist_source_metadata(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    source_id: i64,
+    metadata: &YoutubePlaylistMetadata,
+) -> AppResult<()> {
+    let columns = YoutubePlaylistSourceColumns::try_from_metadata(metadata)?;
+    insert_playlist_source_columns(&mut **tx, source_id, &columns).await
 }
 
 async fn insert_video_source_columns(

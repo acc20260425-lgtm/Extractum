@@ -1308,7 +1308,7 @@ git commit -m "feat: backfill youtube typed source metadata"
 - Modify: `src-tauri/src/youtube/source_metadata.rs`
 - Test: `src-tauri/src/sources/store.rs`
 
-- [ ] **Step 1: Add RED write-path tests**
+- [x] **Step 1: Add RED write-path tests**
 
 In `src-tauri/src/sources/store.rs`, inside `#[cfg(test)] mod tests`, add:
 
@@ -1460,7 +1460,7 @@ async fn create_youtube_unique_indexes(pool: &sqlx::SqlitePool) {
 }
 ```
 
-- [ ] **Step 2: Run source-store tests and verify RED**
+- [x] **Step 2: Run source-store tests and verify RED**
 
 Run:
 
@@ -1470,7 +1470,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::store::upsert_youtube
 
 Expected: fail because upserts still write source blobs and do not create typed rows.
 
-- [ ] **Step 3: Add transaction upsert helpers**
+- [x] **Step 3: Add transaction upsert helpers**
 
 In `src-tauri/src/youtube/source_metadata.rs`, add transaction wrappers:
 
@@ -1494,7 +1494,7 @@ pub(crate) async fn upsert_playlist_source_metadata(
 }
 ```
 
-- [ ] **Step 4: Update video source upsert**
+- [x] **Step 4: Update video source upsert**
 
 In `src-tauri/src/sources/store.rs`, remove `use crate::compression::compress_json_bytes;` if it is only used by YouTube source upserts, and add:
 
@@ -1549,7 +1549,7 @@ pub(crate) async fn upsert_youtube_video_source(
 }
 ```
 
-- [ ] **Step 5: Update playlist source upsert**
+- [x] **Step 5: Update playlist source upsert**
 
 Replace `upsert_youtube_playlist_source` with:
 
@@ -1597,7 +1597,7 @@ pub(crate) async fn upsert_youtube_playlist_source(
 }
 ```
 
-- [ ] **Step 6: Update legacy NOT NULL tests**
+- [x] **Step 6: Update legacy NOT NULL tests**
 
 In `legacy_not_null_telegram_kind_pool()`, call typed table creation after creating the YouTube unique indexes:
 
@@ -1605,7 +1605,7 @@ In `legacy_not_null_telegram_kind_pool()`, call typed table creation after creat
 create_youtube_typed_source_tables(&pool).await;
 ```
 
-- [ ] **Step 7: Run source-store tests and verify GREEN**
+- [x] **Step 7: Run source-store tests and verify GREEN**
 
 Run:
 
@@ -1619,7 +1619,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/sources/store.rs src-tauri/src/youtube/source_metadata.rs
