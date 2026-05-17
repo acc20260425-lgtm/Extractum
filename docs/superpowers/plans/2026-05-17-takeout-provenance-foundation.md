@@ -2297,7 +2297,7 @@ Expected: commit succeeds.
 - Modify: `docs/takeout-source-import.md`
 - Optionally modify: `docs/database-schema-legacy-analysis.md`
 
-- [ ] **Step 1: Update database schema docs**
+- [x] **Step 1: Update database schema docs**
 
 In `docs/database-schema.md`, add a section for ingest provenance after the source/item identity sections. Include this exact semantic content:
 
@@ -2337,7 +2337,7 @@ store raw Telegram TL payloads, session data, auth material, cookies, headers,
 or compressed payload dumps.
 ```
 
-- [ ] **Step 2: Update Takeout docs**
+- [x] **Step 2: Update Takeout docs**
 
 In `docs/takeout-source-import.md`, replace the old provenance gap wording with:
 
@@ -2361,7 +2361,7 @@ is detected, Takeout records `migrated_history_detected = 1`,
 partial completeness.
 ```
 
-- [ ] **Step 3: Run documentation scans**
+- [x] **Step 3: Run documentation scans**
 
 Run:
 
@@ -2371,7 +2371,7 @@ rg -n "completed_at|runner-managed.*23|migrated history import is enabled|T[O]DO
 
 Expected: no misleading new matches. Existing historical references outside this slice may remain only if they describe old migrations or old plans.
 
-- [ ] **Step 4: Run targeted tests**
+- [x] **Step 4: Run targeted tests**
 
 Run:
 
@@ -2381,7 +2381,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests:: ingest_prove
 
 Expected: all targeted tests pass.
 
-- [ ] **Step 5: Run full Rust test suite**
+- [x] **Step 5: Run full Rust test suite**
 
 Run:
 
@@ -2391,7 +2391,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: full Rust test suite passes.
 
-- [ ] **Step 6: Check formatting and diff**
+- [x] **Step 6: Check formatting and diff**
 
 Run:
 
@@ -2403,7 +2403,7 @@ git status --short
 
 Expected: formatting check passes, diff check has no whitespace errors, and status shows only intended files.
 
-- [ ] **Step 7: Commit documentation and final verification updates**
+- [x] **Step 7: Commit documentation and final verification updates**
 
 Run:
 

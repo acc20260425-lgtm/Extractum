@@ -171,7 +171,41 @@ Notes:
 - `updated_at` is set on child-row creation in this slice. Duplicate skips do
   not update `telegram_messages.updated_at`.
 
-### 1.4 `youtube_video_sources`
+### 1.4 Ingest provenance
+
+Migration `23.sql` adds generic ingest provenance tables. Runtime wiring in
+this slice is Telegram Takeout-only; normal `sync_source` does not write these
+tables yet.
+
+`ingest_batches` stores one durable row per actually-started locked ingest
+attempt. `status` is persisted as `running`, `completed`, `failed`, or
+`cancelled`; crash-interrupted imports remain `running` and can be interpreted
+by query/UI code as interrupted when no in-memory job exists after restart.
+
+`completeness` is separate from status. A completed zero-message traversal can
+be `complete` when selected history traversal finished normally and no partial
+flags were set. Only-my-messages fallback and migrated-history deferment are
+`partial`.
+
+`item_observed_count` counts all item-level observation rows. It can be greater
+than `item_inserted_count + item_duplicate_count + item_skipped_count` when
+`outcome = 'failed'` rows exist, because there is no dedicated failed counter in
+the foundation schema.
+
+`telegram_takeout_batches.account_id` is a historical identity snapshot for the
+Takeout run. The source/batch relationship owns provenance retention; deleting
+an account must not delete the detail row while leaving the generic batch row.
+
+`ingest_item_observations.provider_identity` is a generic text identity. For
+Telegram it uses `telegram:history_peer:<kind>:<id>:message:<message_id>`,
+where the peer is the message history peer from `telegram_messages`, not the
+current resolved source peer.
+
+Warning messages and terminal errors are bounded and sanitized. They must not
+store raw Telegram TL payloads, session data, auth material, cookies, headers,
+or compressed payload dumps.
+
+### 1.5 `youtube_video_sources`
 
 Stores typed runtime metadata for direct YouTube video sources. Generic identity
 and display snapshot fields remain in `sources`; provider-specific title,
@@ -209,7 +243,7 @@ Notes:
 - `raw_metadata_zstd` is optional archive/debug/reparse/migration payload only.
   Normal listing, detail, jobs, and analysis do not decode it.
 
-### 1.5 `youtube_playlist_sources`
+### 1.6 `youtube_playlist_sources`
 
 Stores typed runtime metadata for YouTube playlist sources.
 
@@ -235,7 +269,7 @@ Notes:
   validates this cross-table invariant.
 - Playlist entry payloads remain in `youtube_playlist_items.metadata_zstd`.
 
-### 1.6 `source_identity_repair_notes`
+### 1.7 `source_identity_repair_notes`
 
 Stores non-fatal source identity repair notes for diagnostics.
 
@@ -259,7 +293,7 @@ Notes:
 - notes are for non-fatal enrichment gaps only; duplicate or malformed identity
   rows are not silently downgraded into notes.
 
-### 1.7 `items`
+### 1.8 `items`
 
 Stores locally ingested source items. Current rows include Telegram messages,
 YouTube transcript items, and YouTube comment items. The table remains the
@@ -303,8 +337,8 @@ Notes:
 - rows may have text, media metadata, or both;
 - rows without both text and useful media metadata are skipped during ingest.
 - rows can be inserted by normal `sync_source` or by Takeout import;
-- Takeout import does not add a separate provenance column, ingest-batch table,
-  or archive table yet;
+- Takeout item rows are correlated to durable ingest batches through
+  `ingest_item_observations`, not through a column on `items`;
 - Telegram duplicate detection now uses `telegram_messages`, not
   `(source_id, external_id)`.
 - `items.external_id` remains a compatibility/display/debug value for Telegram
@@ -328,11 +362,10 @@ Takeout implication:
 - repeated Takeout runs, or a Takeout run after normal sync, rely on
   `telegram_messages` native identity handling to skip Telegram duplicates;
 - migrated supergroup history has a typed identity boundary, but enabling full
-  migrated-history import still requires the separate Takeout provenance and
-  validation slice.
-- the recommended provenance direction is a generic ingest-batch table plus
-  Telegram Takeout batch details and item origin/observation rows, not raw
-  Telegram payload storage.
+  migrated-history import still requires a separate validation slice.
+- Telegram Takeout writes generic ingest batch rows, Telegram Takeout batch
+  detail, warnings, and item observations; it does not persist raw Telegram
+  payloads as provenance.
 
 YouTube implication:
 
@@ -341,7 +374,7 @@ YouTube implication:
 - YouTube description text used by analysis is synthesized from typed source
   metadata and is not stored as an `items` row.
 
-### 1.8 `app_settings`
+### 1.9 `app_settings`
 
 Simple key/value storage for app-wide settings.
 
@@ -365,7 +398,7 @@ Saved LLM API keys live in OS secure storage under
 `llm.profile.<profile_id>.api_key`; the backend migrates old non-empty
 `app_settings` key rows after a successful secure-store write.
 
-### 1.9 `telegram_forum_topics`
+### 1.10 `telegram_forum_topics`
 
 Stores the local catalog of Telegram forum topics for `supergroup` sources.
 
@@ -405,7 +438,7 @@ Notes:
 - this distinction matters in production data: many Telegram forum messages carry `reply_to_top_id = topic_id`, not `reply_to_top_id = top_message_id`, and some omit `reply_to_top_id` while keeping `reply_to_msg_id = topic_id`, so treating `top_message_id` as the normal join key or skipping the fallbacks misclassifies topic traffic;
 - topic records are retained locally even if a later catalog refresh omits them, so historical message-to-topic matches can survive.
 
-### 1.10 `item_topic_memberships`
+### 1.11 `item_topic_memberships`
 
 Stores materialized Telegram forum topic memberships for items.
 
@@ -440,7 +473,7 @@ Notes:
 - Full rebuilds delete and reinsert source memberships, so stale row-level
   resolver versions are cleared at the correctness boundary.
 
-### 1.11 `telegram_topic_resolution_state`
+### 1.12 `telegram_topic_resolution_state`
 
 Stores source-level state for Telegram forum topic membership materialization.
 
@@ -474,7 +507,7 @@ Notes:
   `ready` and current for the backend resolver version.
 - `last_error` is bounded and is not a raw payload log.
 
-### 1.12 `youtube_playlist_items`
+### 1.13 `youtube_playlist_items`
 
 Stores playlist membership rows and per-entry availability state.
 
@@ -508,7 +541,7 @@ Notes:
 - `availability_status` distinguishes available, upcoming, live, no-captions, auth-gated, deleted, removed, and unknown-unavailable rows.
 - `is_removed_from_playlist` marks rows that disappeared from a later playlist metadata sync without deleting historical local state.
 
-### 1.13 `youtube_transcript_segments`
+### 1.14 `youtube_transcript_segments`
 
 Stores timestamped transcript segments for `youtube_transcript` items.
 
@@ -539,7 +572,7 @@ Notes:
 - `is_auto_generated` preserves whether the selected track came from auto captions.
 - Analysis trace refs can resolve segment timestamps into YouTube links.
 
-### 1.14 `accounts`
+### 1.15 `accounts`
 
 Stores configured Telegram accounts.
 
@@ -684,6 +717,7 @@ Purpose:
 | 20 | `20.sql` | Runner-managed creation and backfill of typed YouTube video/playlist source metadata tables |
 | 21 | `21.sql` | Runner-managed creation/backfill of typed Telegram message identity rows and replacement item uniqueness |
 | 22 | `22.sql` | Runner-managed creation and rebuild of Telegram forum topic membership materialization tables |
+| 23 | `23.sql` | Add generic ingest provenance tables and Telegram Takeout batch detail |
 
 ## 4. Current behavior implications
 
@@ -697,9 +731,9 @@ Purpose:
 - YouTube auth cookies are stored in OS secure storage, not SQLite;
 - NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
-- Takeout import does not yet persist durable ingest-batch provenance; failed
-  or cancelled imports can leave partial item rows without advancing
-  `sources.last_sync_state`;
+- Telegram Takeout import persists durable ingest-batch provenance after the
+  same-source ingest lock is acquired; failed or cancelled imports can leave
+  partial item rows without advancing `sources.last_sync_state`;
 - Telegram duplicate detection and legacy message-ref resolution use typed
   `telegram_messages` identity where available, keeping `items.external_id` as
   a compatibility value rather than the owner of Telegram message identity;

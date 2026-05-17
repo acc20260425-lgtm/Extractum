@@ -15,9 +15,9 @@ Both paths write to the same local tables:
 - `telegram_messages`
 - `item_topic_memberships` when topic resolution state is ready/current
 
-There is no Takeout-specific archive table or durable provenance table yet.
-Telegram duplicate rows are protected by typed native identity in
-`telegram_messages`, not by `(source_id, external_id)` alone.
+Telegram Takeout also writes durable ingest provenance after the same-source
+ingest lock is acquired. Telegram duplicate rows are protected by typed native
+identity in `telegram_messages`, not by `(source_id, external_id)` alone.
 
 ## 2. User-Facing Behavior
 
@@ -48,6 +48,7 @@ The event payload for `sources://takeout-import` is the full latest `TakeoutImpo
 
 The job record tracks:
 
+- `batch_id` as the durable provenance correlation id;
 - source/account identity;
 - status and phase;
 - inserted/skipped counts;
@@ -66,6 +67,10 @@ The lock is shared by:
 - `delete_source`.
 
 Different sources can still ingest independently. The important invariant is that two writers do not write or delete the same `source_id` at the same time.
+
+Durable Takeout batch rows are created only after this same-source lock is
+acquired. A lock conflict rejects the start without creating batch, detail,
+observation, or warning rows.
 
 ## 5. Takeout Session Flow
 
@@ -145,7 +150,9 @@ This can import only the current user's visible/outgoing subset. That warning sh
 
 ## 9. Persistence Semantics
 
-Takeout import writes through the Telegram item insert helper.
+Takeout import writes through the Telegram item insert helper and records
+item-level observations for inserted, duplicate-observed, and skipped Telegram
+messages.
 
 Inserted rows preserve the same storage dimensions as normal sync where raw TL data exposes them:
 
@@ -157,28 +164,33 @@ Inserted rows preserve the same storage dimensions as normal sync where raw TL d
 
 Takeout import does not download media bytes, thumbnails, previews, custom emoji documents, or other Telegram Desktop export assets.
 
-Successful Takeout import updates `sources.last_sync_state` and `sources.last_synced_at` only after `finishTakeoutSession(success=true)` succeeds. Failed and cancelled jobs leave partial inserted rows in `items`, but they do not advance the source watermark.
+Successful Takeout import updates `sources.last_sync_state` and
+`sources.last_synced_at` only after `finishTakeoutSession(success=true)` and
+`finalize_sync(...)` succeed. Failed and cancelled jobs leave partial inserted
+rows in `items`, but they do not advance the source watermark.
 
 Inserted Telegram rows also receive typed native identity in
 `telegram_messages`. If a source's forum topic resolver state is ready/current,
 the insert helper resolves scoped `item_topic_memberships` in the same
 transaction; otherwise topic membership waits for the next full source rebuild.
 
-Current provenance gap:
+Telegram Takeout imports now create durable ingest provenance after the
+same-source ingest lock is acquired. The in-memory job remains the current UI
+state mechanism, and `batch_id` is a correlation id for tests and future UI.
 
-- active job state is in memory only;
-- failed or cancelled jobs can leave partial rows without a durable batch row;
-- existing rows do not record the Takeout job that first inserted or later
-  observed them;
-- warnings such as export-DC fallback and only-my-messages fallback are visible
-  in the runtime job record, but are not preserved as structured database
-  provenance.
+Successful Takeout marks the batch `completed`. Failed and cancelled runs mark
+the batch `failed` or `cancelled` and leave already inserted rows linked to the
+batch through item observations. Source watermarks still advance only after
+`finishTakeoutSession(success=true)` and `finalize_sync(...)` succeed.
 
-The recommended next storage slice is a generic ingest-batch model with a
-Telegram Takeout detail table and item origin/observation rows. That design
-should distinguish completed, failed, and cancelled imports; complete history
-from partial history; normal inserted rows from duplicates seen by a repeat
-run; and migrated-history detection from migrated-history import enablement.
+`running` batches survive restart. The schema does not persist an
+`interrupted` status; query/UI code may derive that display state from a
+durable running batch with no active in-memory job.
+
+Migrated supergroup history remains disabled in this foundation slice. When it
+is detected, Takeout records `migrated_history_detected = 1`,
+`migrated_history_imported = 0`, a `migrated_history_deferred` warning, and
+partial completeness.
 
 The current Takeout path finalizes source state after a successful import. The
 regular sync path still owns the forum-topic refresh helper. If Takeout later
@@ -196,4 +208,4 @@ Recorded baseline from the Takeout pagination work:
 
 Open validation still belongs in the backlog: broader real-account coverage for
 supergroups, groups, private/left sources, shifted export DC behavior,
-incomplete-import provenance, and migrated-history import policy.
+provenance queries/UI, and migrated-history import policy.
