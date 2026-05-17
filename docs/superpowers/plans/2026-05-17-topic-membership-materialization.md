@@ -2724,12 +2724,70 @@ git add docs/superpowers/plans/2026-05-17-topic-membership-materialization.md
 git commit -m "docs: update topic membership plan progress"
 ```
 
+- [x] **Step 4a: Update broader project documentation after final review**
+
+The interrupted documentation continuation updated current-state docs outside
+`docs/superpowers` so they match the shipped topic membership, typed Telegram
+item identity, typed YouTube source metadata, and Takeout provenance boundaries.
+
+Commit:
+
+```text
+0fe0770 docs: update project documentation for topic memberships
+```
+
+Files:
+
+- `docs/architecture-deep-dive.md`
+- `docs/backlog.md`
+- `docs/database-schema-legacy-analysis.md`
+- `docs/database-schema.md`
+- `docs/design-document.md`
+- `docs/project.md`
+- `docs/takeout-source-import.md`
+
+Fresh verification after that commit:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
+npm.cmd run check
+npm.cmd test -- --run
+git diff --check
+git status --short --branch
+git --no-pager log -5 --oneline --decorate
+```
+
+Results:
+
+- Rust tests: 427 passed, 0 failed.
+- Rust doc tests: 0 passed, 0 failed.
+- `cargo fmt --check`: exit 0.
+- `svelte-check`: 0 errors, 0 warnings.
+- Vitest: 50 files passed, 429 tests passed.
+- `git diff --check`: exit 0.
+- Branch status clean:
+
+```text
+## feature/topic-membership-materialization
+```
+
+Recent log:
+
+```text
+0fe0770 (HEAD -> feature/topic-membership-materialization) docs: update project documentation for topic memberships
+9044503 docs: update topic membership plan progress
+5af0ddb docs: document topic membership materialization
+2668151 feat: resolve topic membership for inserted telegram items
+2793008 feat: rebuild topic memberships after topic refresh
+```
+
 - [ ] **Step 5: Finish the branch**
 
 Use `superpowers:finishing-a-development-branch`. Present merge/push/keep/discard options after verification passes.
 
 ## Self-Review
 
-- Spec coverage: Tasks 1-4 cover migration 22, schema, persistent state rows, full rebuild, resolver order, retained topics, and migration invariants. Task 5 covers readers/export, state-aware `Unrecognized`, backend-owned resolver-version freshness, and frontend API unwrapping. Task 6 covers the topic refresh correctness boundary and bounded `last_error`. Task 7 covers scoped sync/Takeout resolution, same-transaction unresolved deltas, duplicate insert behavior, and stale resolver-version replacement through rebuilds. Task 8 covers docs and containment scans. Task 9 covers final verification.
+- Spec coverage: Tasks 1-4 cover migration 22, schema, persistent state rows, full rebuild, resolver order, retained topics, and migration invariants. Task 5 covers readers/export, state-aware `Unrecognized`, backend-owned resolver-version freshness, and frontend API unwrapping. Task 6 covers the topic refresh correctness boundary and bounded `last_error`. Task 7 covers scoped sync/Takeout resolution, same-transaction unresolved deltas, duplicate insert behavior, and stale resolver-version replacement through rebuilds. Task 8 covers schema/backlog docs and containment scans. Task 9 covers final verification and the post-final current-state documentation sync.
 - Placeholder scan: No task uses deferred-work markers. Each code-changing task names files, tests, commands, and expected results.
 - Type consistency: The plan consistently uses `item_topic_memberships`, `telegram_topic_resolution_state`, `CURRENT_TOPIC_RESOLVER_VERSION`, `TopicResolutionStateRow`, `SourceForumTopicsResponse`, `TopicResolutionStateSummary`, `resolverVersion`, `unresolvedCount`, and `pendingItemCount`.
