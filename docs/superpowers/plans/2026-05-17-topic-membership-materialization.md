@@ -56,7 +56,7 @@
 - Read: `docs/superpowers/specs/2026-05-17-topic-membership-materialization-design.md`
 - Verify: git status and focused baseline tests
 
-- [ ] **Step 1: Confirm clean starting point**
+- [x] **Step 1: Confirm clean starting point**
 
 Run:
 
@@ -74,7 +74,7 @@ Expected:
 
 If working tree contains user changes, inspect them and keep them intact.
 
-- [ ] **Step 2: Create an implementation branch or worktree**
+- [x] **Step 2: Create an implementation branch or worktree**
 
 Use `superpowers:using-git-worktrees` before execution. A safe branch name is:
 
@@ -88,13 +88,17 @@ If using a linked worktree, use:
 git worktree add .worktrees/topic-membership-materialization -b feature/topic-membership-materialization
 ```
 
-- [ ] **Step 3: Run focused baseline tests**
+- [x] **Step 3: Run focused baseline tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations:: sources::topics:: sources::items::query:: notebooklm_export::query:: source_ingest::
-npm test -- --run src/lib/api/sources.test.ts src/lib/analysis-state.test.ts
+cargo test --manifest-path src-tauri/Cargo.toml migrations::
+cargo test --manifest-path src-tauri/Cargo.toml sources::topics::
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::query::
+cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::query::
+cargo test --manifest-path src-tauri/Cargo.toml source_ingest::
+npm.cmd test -- --run src/lib/api/sources.test.ts src/lib/analysis-state.test.ts
 ```
 
 Expected:
@@ -105,7 +109,7 @@ test result: ok
 
 and Vitest passes.
 
-- [ ] **Step 4: Confirm no baseline changes**
+- [x] **Step 4: Confirm no baseline changes**
 
 Run:
 
