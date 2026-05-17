@@ -734,7 +734,7 @@ git commit -m "feat: add topic membership schema"
 **Files:**
 - Modify: `src-tauri/src/topic_memberships.rs`
 
-- [ ] **Step 1: Add RED resolver tests**
+- [x] **Step 1: Add RED resolver tests**
 
 Inside `#[cfg(test)] mod tests` in `src-tauri/src/topic_memberships.rs`, add tests named:
 
@@ -946,7 +946,7 @@ async fn seed_typed_message(
 }
 ```
 
-- [ ] **Step 2: Run resolver tests and verify RED**
+- [x] **Step 2: Run resolver tests and verify RED**
 
 Run:
 
@@ -956,7 +956,7 @@ cargo test --manifest-path src-tauri/Cargo.toml topic_memberships::tests::rebuil
 
 Expected: fail because rebuild returns an internal error.
 
-- [ ] **Step 3: Implement set-based resolver SQL**
+- [x] **Step 3: Implement set-based resolver SQL**
 
 In `src-tauri/src/topic_memberships.rs`, add SQL constants and helper functions:
 
@@ -1246,7 +1246,7 @@ async fn assert_ready_source_invariants(
 }
 ```
 
-- [ ] **Step 4: Run resolver tests and verify GREEN**
+- [x] **Step 4: Run resolver tests and verify GREEN**
 
 Run:
 
@@ -1260,7 +1260,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/topic_memberships.rs
