@@ -130,12 +130,17 @@ struct TelegramSourceRepairRow {
     metadata_zstd: Option<Vec<u8>>,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(Clone, sqlx::FromRow)]
 struct ExistingTelegramSourceProjection {
     source_id: i64,
     account_id: i64,
+    source_subtype: String,
     peer_kind: String,
     peer_id: i64,
+    resolution_strategy: String,
+    username: Option<String>,
+    access_hash: Option<i64>,
+    avatar_cache_key: Option<String>,
 }
 
 #[derive(Clone)]
@@ -150,6 +155,16 @@ struct TelegramRepairCandidate {
     username: Option<String>,
     access_hash: Option<i64>,
     avatar_cache_key: Option<String>,
+}
+
+#[derive(Clone)]
+struct TelegramRequiredIdentity {
+    source_id: i64,
+    account_id: i64,
+    source_subtype: TelegramSourceKind,
+    source_subtype_text: String,
+    peer_kind: TelegramPeerKind,
+    peer_id: i64,
 }
 
 pub(crate) async fn repair_source_identity(
@@ -170,19 +185,10 @@ pub(crate) async fn repair_source_identity(
     .await
     .map_err(AppError::database)?;
 
-    let mut report = SourceIdentityRepairReport::default();
-    let mut candidates = Vec::new();
-
-    for row in rows {
-        match candidate_from_row(&row) {
-            Ok(candidate) => candidates.push(candidate),
-            Err(diagnostic) => report.fatal_errors.push(diagnostic),
-        }
-    }
-
     let existing_projections: Vec<ExistingTelegramSourceProjection> = sqlx::query_as(
         r#"
-        SELECT source_id, account_id, peer_kind, peer_id
+        SELECT source_id, account_id, source_subtype, peer_kind, peer_id,
+               resolution_strategy, username, access_hash, avatar_cache_key
         FROM telegram_sources
         ORDER BY source_id
         "#,
@@ -190,6 +196,26 @@ pub(crate) async fn repair_source_identity(
     .fetch_all(&mut *tx)
     .await
     .map_err(AppError::database)?;
+
+    let existing_projections_by_source_id: BTreeMap<i64, ExistingTelegramSourceProjection> =
+        existing_projections
+            .iter()
+            .cloned()
+            .map(|projection| (projection.source_id, projection))
+            .collect();
+
+    let mut report = SourceIdentityRepairReport::default();
+    let mut candidates = Vec::new();
+
+    for row in rows {
+        match candidate_from_row_and_existing_projection(
+            &row,
+            existing_projections_by_source_id.get(&row.id),
+        ) {
+            Ok(candidate) => candidates.push(candidate),
+            Err(diagnostic) => report.fatal_errors.push(diagnostic),
+        }
+    }
 
     report
         .fatal_errors
@@ -237,9 +263,9 @@ pub(crate) async fn repair_source_identity(
     Ok(report)
 }
 
-fn candidate_from_row(
+fn required_identity_from_row(
     row: &TelegramSourceRepairRow,
-) -> Result<TelegramRepairCandidate, SourceIdentityRepairDiagnostic> {
+) -> Result<TelegramRequiredIdentity, SourceIdentityRepairDiagnostic> {
     let account_id = row
         .account_id
         .ok_or_else(|| SourceIdentityRepairDiagnostic {
@@ -257,6 +283,21 @@ fn candidate_from_row(
             detail: format!("Telegram source {} has malformed external_id", row.id),
         }
     })?;
+
+    Ok(TelegramRequiredIdentity {
+        source_id: row.id,
+        account_id,
+        peer_kind: TelegramPeerKind::from_source_subtype(source_subtype),
+        source_subtype,
+        source_subtype_text,
+        peer_id,
+    })
+}
+
+fn candidate_from_required_and_legacy_metadata(
+    row: &TelegramSourceRepairRow,
+    required: TelegramRequiredIdentity,
+) -> TelegramRepairCandidate {
     let metadata = decode_source_metadata(row.metadata_zstd.as_deref()).ok();
     let identity = metadata
         .as_ref()
@@ -267,19 +308,61 @@ fn candidate_from_row(
         None => TelegramResolutionStrategy::Unknown,
     };
 
-    Ok(TelegramRepairCandidate {
-        source_id: row.id,
-        account_id,
-        peer_kind: TelegramPeerKind::from_source_subtype(source_subtype),
-        source_subtype,
-        source_subtype_text,
-        peer_id,
+    TelegramRepairCandidate {
+        source_id: required.source_id,
+        account_id: required.account_id,
+        peer_kind: required.peer_kind,
+        source_subtype: required.source_subtype,
+        source_subtype_text: required.source_subtype_text,
+        peer_id: required.peer_id,
         resolution_strategy: strategy,
         username: normalize_telegram_username(
             identity.and_then(|identity| identity.username.as_deref()),
         ),
         access_hash: identity.and_then(|identity| identity.access_hash),
         avatar_cache_key: metadata.and_then(|metadata| metadata.avatar_cache_key),
+    }
+}
+
+fn candidate_from_row_and_existing_projection(
+    row: &TelegramSourceRepairRow,
+    existing: Option<&ExistingTelegramSourceProjection>,
+) -> Result<TelegramRepairCandidate, SourceIdentityRepairDiagnostic> {
+    let required = required_identity_from_row(row)?;
+    let Some(existing) = existing else {
+        return Ok(candidate_from_required_and_legacy_metadata(row, required));
+    };
+
+    let expected_peer_kind = required.peer_kind.as_str();
+    if existing.account_id != required.account_id
+        || existing.source_subtype != required.source_subtype_text
+        || existing.peer_kind != expected_peer_kind
+        || existing.peer_id != required.peer_id
+    {
+        return Ok(candidate_from_required_and_legacy_metadata(row, required));
+    }
+
+    let resolution_strategy = TelegramResolutionStrategy::parse(&existing.resolution_strategy)
+        .map_err(|_| SourceIdentityRepairDiagnostic {
+            code: "telegram_projection_drift_conflict".to_string(),
+            source_ids: vec![row.id],
+            detail: format!(
+                "Existing Telegram typed projection for source {} has invalid resolution_strategy",
+                row.id
+            ),
+        })?;
+
+    Ok(TelegramRepairCandidate {
+        source_id: required.source_id,
+        account_id: required.account_id,
+        source_subtype: required.source_subtype,
+        source_subtype_text: required.source_subtype_text,
+        peer_kind: required.peer_kind,
+        peer_id: required.peer_id,
+        resolution_strategy,
+        username: existing.username.clone(),
+        access_hash: existing.access_hash,
+        avatar_cache_key: existing.avatar_cache_key.clone(),
     })
 }
 
@@ -867,6 +950,124 @@ mod tests {
         .await
         .expect("load repair strategy");
         assert_eq!(strategy, "unknown");
+    }
+
+    #[tokio::test]
+    async fn repair_skips_malformed_metadata_when_typed_identity_is_valid() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", None).await;
+        insert_existing_typed_projection(&pool, 101, "channel", "channel", 12345).await;
+        sqlx::query(
+            "UPDATE telegram_sources SET resolution_strategy = 'username', username = 'typed', access_hash = 77, avatar_cache_key = 'typed.jpg' WHERE source_id = 101",
+        )
+        .execute(&pool)
+        .await
+        .expect("enrich typed row");
+        sqlx::query("UPDATE sources SET metadata_zstd = x'00' WHERE id = 101")
+            .execute(&pool)
+            .await
+            .expect("damage legacy metadata");
+
+        let report = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("valid typed row wins");
+
+        assert!(report.fatal_errors.is_empty());
+        let row: (String, Option<String>, Option<i64>, Option<String>) = sqlx::query_as(
+            "SELECT resolution_strategy, username, access_hash, avatar_cache_key FROM telegram_sources WHERE source_id = 101",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load typed row");
+        assert_eq!(row.0, "username");
+        assert_eq!(row.1.as_deref(), Some("typed"));
+        assert_eq!(row.2, Some(77));
+        assert_eq!(row.3.as_deref(), Some("typed.jpg"));
+    }
+
+    #[tokio::test]
+    async fn repair_ignores_optional_enrichment_gaps_when_typed_identity_is_valid() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("group"),
+            Some(1),
+            "12345",
+            Some(br#"{"peer_identity":{"strategy":"username","username":"legacy","access_hash":77},"avatar_cache_key":"legacy.jpg"}"#),
+        )
+        .await;
+        insert_existing_typed_projection(&pool, 101, "group", "chat", 12345).await;
+
+        let report = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect("optional gaps are valid");
+
+        assert!(report.fatal_errors.is_empty());
+        let row: (String, Option<String>, Option<i64>, Option<String>) = sqlx::query_as(
+            "SELECT resolution_strategy, username, access_hash, avatar_cache_key FROM telegram_sources WHERE source_id = 101",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load typed row");
+        assert_eq!(row.0, "unknown");
+        assert_eq!(row.1, None);
+        assert_eq!(row.2, None);
+        assert_eq!(row.3, None);
+    }
+
+    #[tokio::test]
+    async fn repair_creates_minimal_typed_identity_when_legacy_metadata_is_missing_or_malformed() {
+        for metadata in [None, Some(b"not json metadata".as_slice())] {
+            let pool = memory_pool_with_sources().await;
+            insert_telegram_source(&pool, 101, Some("channel"), Some(1), "12345", metadata).await;
+
+            let report = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+                .await
+                .expect("canonical identity is enough");
+
+            assert_eq!(report.repaired_sources, vec![101]);
+            let row: (String, String, i64, String, Option<String>, Option<i64>, Option<String>) =
+                sqlx::query_as(
+                    "SELECT source_subtype, peer_kind, peer_id, resolution_strategy, username, access_hash, avatar_cache_key FROM telegram_sources WHERE source_id = 101",
+                )
+                .fetch_one(&pool)
+                .await
+                .expect("load minimal typed identity");
+            assert_eq!(row.0, "channel");
+            assert_eq!(row.1, "channel");
+            assert_eq!(row.2, 12345);
+            assert_eq!(row.3, "unknown");
+            assert_eq!(row.4, None);
+            assert_eq!(row.5, None);
+            assert_eq!(row.6, None);
+        }
+    }
+
+    #[tokio::test]
+    async fn repair_fails_when_canonical_identity_is_invalid_even_with_legacy_peer_metadata() {
+        let pool = memory_pool_with_sources().await;
+        insert_telegram_source(
+            &pool,
+            101,
+            Some("channel"),
+            Some(1),
+            "00123",
+            Some(br#"{"peer_identity":{"strategy":"username","username":"Example","access_hash":77}}"#),
+        )
+        .await;
+
+        let error = repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
+            .await
+            .expect_err("non-canonical external id fails");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("malformed_telegram_external_id"));
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM telegram_sources")
+            .fetch_one(&pool)
+            .await
+            .expect("count typed rows");
+        assert_eq!(count, 0);
     }
 
     #[tokio::test]

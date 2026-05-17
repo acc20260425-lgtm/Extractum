@@ -567,7 +567,7 @@ git commit -m "feat: stop writing telegram source metadata blobs"
 - Modify: `src-tauri/src/sources/identity_repair.rs`
 - Test: `src-tauri/src/sources/identity_repair.rs`
 
-- [ ] **Step 1: Add RED tests for valid typed row wins**
+- [x] **Step 1: Add RED tests for valid typed row wins**
 
 In `identity_repair.rs` tests, add:
 
@@ -633,7 +633,7 @@ async fn repair_ignores_optional_enrichment_gaps_when_typed_identity_is_valid() 
 }
 ```
 
-- [ ] **Step 2: Add RED tests for legacy fallback outcomes**
+- [x] **Step 2: Add RED tests for legacy fallback outcomes**
 
 Add:
 
@@ -693,7 +693,7 @@ async fn repair_fails_when_canonical_identity_is_invalid_even_with_legacy_peer_m
 }
 ```
 
-- [ ] **Step 3: Run RED repair tests**
+- [x] **Step 3: Run RED repair tests**
 
 Run each focused filter separately because Cargo accepts one filter per command in this environment:
 
@@ -706,7 +706,7 @@ cargo test --manifest-path src-tauri/Cargo.toml repair_fails_when_canonical_iden
 
 Expected: at least the first two fail because repair currently decodes legacy metadata and overwrites typed optional fields.
 
-- [ ] **Step 4: Extend existing typed projection row fields**
+- [x] **Step 4: Extend existing typed projection row fields**
 
 In `identity_repair.rs`, replace `ExistingTelegramSourceProjection` with:
 
@@ -741,7 +741,7 @@ let existing_projections: Vec<ExistingTelegramSourceProjection> = sqlx::query_as
 .map_err(AppError::database)?;
 ```
 
-- [ ] **Step 5: Split required identity from legacy metadata decoding**
+- [x] **Step 5: Split required identity from legacy metadata decoding**
 
 Add this required identity struct near `TelegramRepairCandidate`:
 
@@ -893,7 +893,7 @@ for row in rows {
 
 Keep duplicate and projection-drift checks after candidates are built.
 
-- [ ] **Step 6: Adjust candidate order if needed**
+- [x] **Step 6: Adjust candidate order if needed**
 
 If the compiler reports `existing_projections` is used before it is defined, move the existing projection query above candidate construction. The final order in `repair_source_identity` should be:
 
@@ -928,7 +928,7 @@ for row in rows {
 }
 ```
 
-- [ ] **Step 7: Run GREEN repair tests**
+- [x] **Step 7: Run GREEN repair tests**
 
 Run:
 
@@ -941,7 +941,7 @@ cargo test --manifest-path src-tauri/Cargo.toml repair_fails_when_canonical_iden
 
 Expected: all four pass.
 
-- [ ] **Step 8: Run full repair module tests**
+- [x] **Step 8: Run full repair module tests**
 
 Run:
 
@@ -951,7 +951,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::identity_repair
 
 Expected: all identity repair tests pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 
