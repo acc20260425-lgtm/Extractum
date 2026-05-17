@@ -159,14 +159,13 @@ struct ParsedTraceRef {
 
 fn parse_structured_ref(reference: &str) -> Option<ParsedTraceRef> {
     let reference = normalize_ref(reference)?;
-    let (source_part, item_part, kind) = if let Some((source_part, item_part)) =
-        reference.split_once("-i")
-    {
-        (source_part, item_part, TraceRefKind::Item)
-    } else {
-        let (source_part, item_part) = reference.split_once("-m")?;
-        (source_part, item_part, TraceRefKind::LegacyMessage)
-    };
+    let (source_part, item_part, kind) =
+        if let Some((source_part, item_part)) = reference.split_once("-i") {
+            (source_part, item_part, TraceRefKind::Item)
+        } else {
+            let (source_part, item_part) = reference.split_once("-m")?;
+            (source_part, item_part, TraceRefKind::LegacyMessage)
+        };
     let source_id = source_part.strip_prefix('s')?.parse::<i64>().ok()?;
     let (item_digits, timestamp_ms) = match item_part.split_once('@') {
         Some((digits, suffix)) => {
@@ -202,11 +201,9 @@ fn find_trace_message_checked<'a>(
     };
 
     match parsed.kind {
-        TraceRefKind::Item => Ok(corpus
-            .iter()
-            .find(|message| {
-                message.source_id == parsed.source_id && message.item_id == parsed.item_id
-            })),
+        TraceRefKind::Item => Ok(corpus.iter().find(|message| {
+            message.source_id == parsed.source_id && message.item_id == parsed.item_id
+        })),
         TraceRefKind::LegacyMessage => {
             let message_id = parsed.item_id.to_string();
             let candidates = corpus
