@@ -205,7 +205,16 @@ state and do not fall back to source blobs.
 
 The typed tables may store an optional compressed raw provider payload:
 
-- `raw_metadata_version` identifies the payload shape.
+- `raw_metadata_version` identifies the Extractum raw metadata envelope shape,
+  not the `yt-dlp` binary version.
+- `raw_metadata_version` controls future reparse compatibility for
+  `raw_metadata_zstd`.
+- missing `raw_metadata_version` means the raw payload is absent or its envelope
+  shape is unknown.
+- unknown `raw_metadata_version` must not break normal runtime because normal
+  runtime must not decode the raw payload.
+- this slice does not require storing the `yt-dlp` version. If that is needed
+  later, it should be added as a separate typed field or raw envelope field.
 - `raw_metadata_zstd` stores compressed JSON from the provider payload, not
   cookies, request headers, command arguments, auth diagnostics, or logs.
 - Normal listing, detail, jobs, and analysis paths must not decode
@@ -247,6 +256,8 @@ Backfill rules:
   `sources.metadata_zstd` for that source;
 - missing, corrupt, wrong-shape, or mismatched blobs do not create typed rows
   and may remain in `sources.metadata_zstd` as inert diagnostic artifacts;
+- if typed metadata cannot be written during backfill, the old source blob is
+  not cleared;
 - migration diagnostics should be testable and should not expose raw payload
   contents in errors.
 
@@ -268,12 +279,14 @@ watermarks.
 metadata and optional versioned raw provider payload.
 
 New YouTube source inserts bind `sources.metadata_zstd = NULL`. Conflict
-updates must not create or replace `sources.metadata_zstd`; once typed metadata
-has been written successfully, conflict updates clear `sources.metadata_zstd`
-to `NULL`.
+updates must not create or replace `sources.metadata_zstd`.
 
 The source row and typed metadata row must be written in one transaction. A
-typed metadata failure rolls back the source row update.
+typed metadata failure rolls back the source row update. Clearing
+`sources.metadata_zstd` is part of the same transaction as the typed metadata
+write. If typed metadata is successfully written, any old source blob is cleared
+to `NULL`; if typed metadata cannot be written or backfilled, the old blob may
+remain as an inert diagnostic artifact.
 
 ### Read Path
 
@@ -293,9 +306,11 @@ Transcript timing and caption evidence remain owned by
 `youtube_transcript_segments`. Analysis must not decode `sources.metadata_zstd`
 or call `yt-dlp`.
 
-Source list DTOs may keep the generic `SourceRecord` shape. YouTube
-provider-specific display state comes from typed YouTube metadata/detail
-aggregation, not from generic source blobs.
+Source list DTOs may keep the generic `SourceRecord` shape. `sources.title` is
+a generic display snapshot derived from typed metadata when available, not
+provider-authoritative metadata. YouTube provider-specific authoritative title,
+channel, thumbnail, and availability fields live in typed YouTube metadata and
+detail aggregation, not in generic source blobs.
 
 ### Failure Behavior
 
@@ -354,9 +369,10 @@ Read-path tests:
 
 Containment scans:
 
-- normal YouTube listing/detail/analysis paths do not call
+- normal YouTube listing/detail/jobs/analysis paths do not call
   `decode_youtube_metadata` on `sources.metadata_zstd`;
-- normal listing/detail/jobs/analysis paths do not decode `raw_metadata_zstd`;
+- normal listing/detail/jobs/analysis paths do not decode `raw_metadata_zstd`
+  except explicit debug, reparse, or migration tests;
 - YouTube source upserts no longer bind compressed metadata into
   `sources.metadata_zstd`;
 - Telegram legacy metadata compatibility remains scoped to the Telegram repair
@@ -378,6 +394,8 @@ Containment scans:
   columns and do not decode `sources.metadata_zstd`.
 - `raw_metadata_zstd` is optional, versioned, secret-safe, and not decoded by
   normal source listing, detail, jobs, or analysis.
+- Unknown `raw_metadata_version` does not break normal runtime and does not
+  imply a `yt-dlp` version.
 - Corrupt source blobs and corrupt raw payloads do not break normal runtime
   when typed columns are valid.
 - Missing or invalid typed metadata produces controlled missing-metadata
