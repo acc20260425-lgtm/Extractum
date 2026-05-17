@@ -123,6 +123,11 @@ CREATE TABLE ingest_batches (
   )),
   CHECK (status IN ('running', 'completed', 'failed', 'cancelled')),
   CHECK (completeness IN ('unknown', 'complete', 'partial')),
+  CHECK (
+    (status = 'running' AND finished_at IS NULL)
+    OR
+    (status IN ('completed', 'failed', 'cancelled') AND finished_at IS NOT NULL)
+  ),
   CHECK (item_inserted_count >= 0),
   CHECK (item_observed_count >= 0),
   CHECK (item_duplicate_count >= 0),
@@ -137,7 +142,8 @@ CREATE TABLE ingest_batches (
 
 `completeness` is separate from terminal status:
 
-- `completed + complete`: selected current history completed normally.
+- `completed + complete`: selected current history traversal finished normally,
+  even if it observed zero items.
 - `completed + partial`: only-my-messages fallback or migrated history was
   detected and deferred.
 - `failed + partial`: the run inserted or observed some items before failing.
@@ -166,7 +172,7 @@ the difference between observed and summed narrow counters as drift by default.
 CREATE TABLE telegram_takeout_batches (
   batch_id INTEGER PRIMARY KEY REFERENCES ingest_batches(id) ON DELETE CASCADE,
 
-  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  account_id INTEGER NOT NULL,
   source_subtype TEXT NOT NULL,
 
   resolved_peer_kind TEXT,
@@ -216,10 +222,19 @@ this foundation-only slice, runtime and tests must keep it `0`. A future
 migrated-history enablement slice can set it to `1` without rebuilding this
 table just to relax a CHECK.
 
+`account_id` is captured historical identity for the Takeout run. The
+source/batch relationship owns provenance retention. Deleting an account must
+not delete only the Telegram detail row while leaving the generic batch row
+behind.
+
 `message_count_estimate` is nullable and best-effort. It may be based on split
 ranges and count probes, but it must not drive correctness. Takeout pagination
 correctness remains owned by the explicit TDesktop-first cursor state machine
 and the current descending fallback rules.
+
+`max_message_id` is also best-effort diagnostic metadata from selected ranges
+and pages. It must not be used as a correctness boundary or as the source
+watermark.
 
 ### `ingest_item_observations`
 
@@ -504,7 +519,8 @@ Completeness rules:
 - `partial`: completed run with
   `migrated_history_detected = 1 AND migrated_history_imported = 0`.
 - `partial`: completed run with `history_scope = 'mixed_partial'`.
-- `unknown`: no observations, or still `running`.
+- `unknown`: still `running`, or terminal traversal/evidence is insufficient to
+  classify completeness.
 
 The migrated-history rule is intentionally strict: current history may have
 completed, but the Telegram lineage is incomplete.
