@@ -7,11 +7,8 @@ pub(crate) const FORUM_SOURCE_TYPE: &str = "forum";
 pub(crate) const TELEGRAM_KIND_CHANNEL: &str = "channel";
 pub(crate) const TELEGRAM_KIND_SUPERGROUP: &str = "supergroup";
 pub(crate) const TELEGRAM_KIND_GROUP: &str = "group";
-#[allow(dead_code)]
 pub(crate) const TELEGRAM_PEER_KIND_CHANNEL: &str = "channel";
-#[allow(dead_code)]
 pub(crate) const TELEGRAM_PEER_KIND_CHAT: &str = "chat";
-#[allow(dead_code)]
 pub(crate) const TELEGRAM_PEER_KIND_USER: &str = "user";
 pub(crate) const ITEM_KIND_TELEGRAM_MESSAGE: &str = "telegram_message";
 pub(crate) const ITEM_KIND_YOUTUBE_TRANSCRIPT: &str = "youtube_transcript";
@@ -81,7 +78,6 @@ pub struct TelegramSourceInfo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) struct TelegramMessageIdentity {
     /// Telegram history/origin peer for this message, not necessarily the current source peer.
     pub(crate) history_peer_kind: String,
@@ -91,7 +87,6 @@ pub(crate) struct TelegramMessageIdentity {
     pub(crate) is_migrated_history: bool,
 }
 
-#[allow(dead_code)]
 impl TelegramMessageIdentity {
     pub(crate) fn validate(&self) -> crate::error::AppResult<()> {
         if !matches!(

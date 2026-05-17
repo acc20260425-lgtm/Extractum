@@ -180,7 +180,6 @@ pub(crate) async fn insert_source_item(
     Ok(result.rows_affected() == 1)
 }
 
-#[allow(dead_code)]
 pub(crate) async fn insert_telegram_source_item(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,

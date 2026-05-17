@@ -1695,7 +1695,7 @@ git commit -m "feat: insert telegram items by native identity"
 - Modify: `src-tauri/src/sources/sync.rs`
 - Modify: `src-tauri/src/sources/items.rs`
 
-- [ ] **Step 1: Add RED unit test for live sync identity derivation**
+- [x] **Step 1: Add RED unit test for live sync identity derivation**
 
 In `src-tauri/src/sources/sync.rs`, add a pure fallback test that does not require constructing a grammers `Message`:
 
@@ -1720,7 +1720,7 @@ fn fallback_peer_identity_uses_telegram_history_peer_vocabulary() {
 }
 ```
 
-- [ ] **Step 2: Run sync tests and verify RED**
+- [x] **Step 2: Run sync tests and verify RED**
 
 Run:
 
@@ -1730,7 +1730,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::sync::fallback_peer_ide
 
 Expected: fail because the helper is not implemented or grammers peer mapping is missing.
 
-- [ ] **Step 3: Implement sync identity helpers and wire insert path**
+- [x] **Step 3: Implement sync identity helpers and wire insert path**
 
 In `src-tauri/src/sources/sync.rs`, replace imports:
 
@@ -1790,7 +1790,7 @@ let inserted_item = insert_telegram_source_item(
 
 and pass `identity` before `SourceItemInsert`.
 
-- [ ] **Step 4: Run sync and item tests**
+- [x] **Step 4: Run sync and item tests**
 
 Run:
 
@@ -1804,7 +1804,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 5: Run containment scan for old Telegram duplicate path**
+- [x] **Step 5: Run containment scan for old Telegram duplicate path**
 
 Run:
 
@@ -1814,7 +1814,7 @@ rg -n "insert_source_item\\(" src-tauri\src\sources src-tauri\src\takeout_import
 
 Expected at this point: `insert_source_item` may still appear in Takeout and tests, but no normal `src-tauri\src\sources\sync.rs` call remains.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/sources/sync.rs src-tauri/src/sources/items.rs

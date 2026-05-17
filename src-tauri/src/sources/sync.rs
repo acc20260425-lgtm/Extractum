@@ -1,4 +1,4 @@
-use grammers_session::types::PeerRef;
+use grammers_session::types::{PeerKind, PeerRef};
 use serde::Serialize;
 use tauri::AppHandle;
 
@@ -10,7 +10,7 @@ use crate::telegram::TelegramState;
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::items::{
-    build_raw_payload, extract_telegram_context, insert_source_item, message_author,
+    build_raw_payload, extract_telegram_context, insert_telegram_source_item, message_author,
     SourceItemInsert,
 };
 use super::peer_resolution::resolve_and_refresh_peer;
@@ -20,7 +20,10 @@ use super::settings::{
 };
 use super::store::load_source;
 use super::topics::refresh_forum_topics;
-use super::types::{now_secs, SourceSyncTarget, ITEM_KIND_TELEGRAM_MESSAGE};
+use super::types::{
+    now_secs, SourceSyncTarget, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+    TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,
+};
 
 #[derive(Serialize)]
 pub struct SyncResult {
@@ -143,9 +146,11 @@ async fn persist_items(
         let telegram_context = extract_telegram_context(&message);
         let raw_data = build_raw_payload(&message, &source.title, &author, &item_payload)?;
 
-        let inserted_item = insert_source_item(
+        let identity = fallback_message_identity(peer, message_id);
+        let inserted_item = insert_telegram_source_item(
             pool,
             source.id,
+            identity,
             SourceItemInsert {
                 external_id: message_id.to_string(),
                 item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
@@ -170,6 +175,34 @@ async fn persist_items(
         skipped,
         max_message_id,
     })
+}
+
+fn fallback_message_identity(
+    fallback_peer: grammers_session::types::PeerRef,
+    telegram_message_id: i64,
+) -> TelegramMessageIdentity {
+    let history_peer_kind = match fallback_peer.id.kind() {
+        PeerKind::User | PeerKind::UserSelf => TELEGRAM_PEER_KIND_USER,
+        PeerKind::Chat => TELEGRAM_PEER_KIND_CHAT,
+        PeerKind::Channel => TELEGRAM_PEER_KIND_CHANNEL,
+    }
+    .to_string();
+
+    TelegramMessageIdentity {
+        history_peer_kind,
+        history_peer_id: fallback_peer.id.bare_id(),
+        telegram_message_id,
+        migration_domain: None,
+        is_migrated_history: false,
+    }
+}
+
+#[cfg(test)]
+fn fallback_message_identity_for_test(
+    fallback_peer: grammers_session::types::PeerRef,
+    telegram_message_id: i64,
+) -> TelegramMessageIdentity {
+    fallback_message_identity(fallback_peer, telegram_message_id)
 }
 
 pub(crate) async fn finalize_sync(
@@ -268,10 +301,32 @@ async fn sync_telegram_source(
 
 #[cfg(test)]
 mod tests {
-    use super::{determine_sync_policy, finalize_sync, sync_provider_for_source, SyncProvider};
+    use super::{
+        determine_sync_policy, fallback_message_identity_for_test, finalize_sync,
+        sync_provider_for_source, SyncProvider,
+    };
     use crate::sources::store::load_source;
     use crate::sources::test_support::memory_pool_with_sources;
     use crate::sources::types::{SourceSyncTarget, TELEGRAM_KIND_CHANNEL, TELEGRAM_SOURCE_TYPE};
+
+    #[test]
+    fn fallback_peer_identity_uses_telegram_history_peer_vocabulary() {
+        use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+
+        let identity = fallback_message_identity_for_test(
+            PeerRef {
+                id: PeerId::channel(12345),
+                auth: PeerAuth::from_hash(99),
+            },
+            42,
+        );
+
+        assert_eq!(identity.history_peer_kind, "channel");
+        assert_eq!(identity.history_peer_id, 12345);
+        assert_eq!(identity.telegram_message_id, 42);
+        assert_eq!(identity.migration_domain, None);
+        assert!(!identity.is_migrated_history);
+    }
 
     #[tokio::test]
     async fn determine_sync_policy_only_applies_initial_settings_on_first_sync() {
