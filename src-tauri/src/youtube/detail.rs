@@ -4,12 +4,13 @@ use serde::Serialize;
 use sqlx::{QueryBuilder, Row};
 use tauri::AppHandle;
 
-use crate::compression::decompress_bytes;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
-
-use super::dto::{YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoMetadata};
+use crate::youtube::source_metadata::{
+    load_playlist_source_metadata_map, load_video_source_metadata_map,
+    YoutubePlaylistSourceMetadata, YoutubeVideoSourceMetadata,
+};
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -135,6 +136,8 @@ pub(crate) async fn list_youtube_source_summaries_from_pool(
 
     let rows = load_source_rows(pool, &source_ids).await?;
     let source_ids_from_rows = rows.iter().map(|row| row.id).collect::<Vec<_>>();
+    let video_metadata = load_video_source_metadata_map(pool, &source_ids_from_rows).await?;
+    let playlist_metadata = load_playlist_source_metadata_map(pool, &source_ids_from_rows).await?;
     let source_caption_counts =
         load_direct_content_counts(pool, &source_ids_from_rows, "youtube_transcript").await?;
     let source_comment_counts =
@@ -147,6 +150,8 @@ pub(crate) async fn list_youtube_source_summaries_from_pool(
 
     let mut summaries = HashMap::new();
     for row in rows {
+        let typed_video = video_metadata.get(&row.id);
+        let typed_playlist = playlist_metadata.get(&row.id);
         let playlist_stats = playlist_counts.get(&row.id);
         let captions_counts = if row.source_subtype.as_deref() == Some("playlist") {
             playlist_caption_counts.get(&row.id)
@@ -165,6 +170,8 @@ pub(crate) async fn list_youtube_source_summaries_from_pool(
                 captions_counts.copied().unwrap_or_default(),
                 comments_counts.copied().unwrap_or_default(),
                 playlist_stats.copied(),
+                typed_video,
+                typed_playlist,
             ),
         );
     }
@@ -186,6 +193,12 @@ pub(crate) async fn get_youtube_video_detail_from_pool(
     if summary.source_subtype != "video" {
         return Err(AppError::validation(format!(
             "Source {source_id} is not a YouTube video source"
+        )));
+    }
+    let typed = load_video_source_metadata_map(pool, &[source_id]).await?;
+    if !typed.contains_key(&source_id) {
+        return Err(AppError::validation(format!(
+            "Source {source_id} has missing or invalid typed YouTube video metadata"
         )));
     }
 
@@ -236,6 +249,12 @@ pub(crate) async fn get_youtube_playlist_detail_from_pool(
             "Source {source_id} is not a YouTube playlist source"
         )));
     }
+    let typed = load_playlist_source_metadata_map(pool, &[source_id]).await?;
+    if !typed.contains_key(&source_id) {
+        return Err(AppError::validation(format!(
+            "Source {source_id} has missing or invalid typed YouTube playlist metadata"
+        )));
+    }
 
     let rows = sqlx::query_as::<_, PlaylistItemRow>(
         r#"
@@ -249,9 +268,14 @@ pub(crate) async fn get_youtube_playlist_detail_from_pool(
             youtube_playlist_items.availability_status,
             youtube_playlist_items.is_removed_from_playlist,
             sources.title AS video_source_title,
-            sources.metadata_zstd AS video_metadata_zstd
+            yvs.title AS typed_video_title,
+            yvs.canonical_url AS typed_video_canonical_url,
+            yvs.thumbnail_url AS typed_video_thumbnail_url,
+            yvs.duration_seconds AS typed_video_duration_seconds,
+            yvs.published_at AS typed_video_published_at
         FROM youtube_playlist_items
         LEFT JOIN sources ON sources.id = youtube_playlist_items.video_source_id
+        LEFT JOIN youtube_video_sources yvs ON yvs.source_id = youtube_playlist_items.video_source_id
         WHERE youtube_playlist_items.playlist_source_id = ?
         ORDER BY youtube_playlist_items.position IS NULL,
                  youtube_playlist_items.position,
@@ -275,27 +299,16 @@ pub(crate) async fn get_youtube_playlist_detail_from_pool(
     let items = rows
         .into_iter()
         .map(|row| {
-            let metadata =
-                decode_youtube_metadata::<YoutubeVideoMetadata>(row.video_metadata_zstd.as_deref());
-            let title = metadata
-                .as_ref()
-                .and_then(|metadata| metadata.title.clone())
+            let title = row
+                .typed_video_title
                 .or(row.video_source_title)
                 .or(row.title_snapshot);
-            let canonical_url = metadata
-                .as_ref()
-                .map(|metadata| metadata.canonical_url.clone())
-                .or(row.url);
-            let thumbnail_url = metadata
-                .as_ref()
-                .and_then(|metadata| metadata.thumbnail_url.clone())
-                .or(row.thumbnail_url);
-            let duration_seconds = metadata
-                .as_ref()
-                .and_then(|metadata| metadata.duration_seconds);
-            let published_at = metadata
-                .as_ref()
-                .and_then(|metadata| metadata.published_at.as_deref())
+            let canonical_url = row.typed_video_canonical_url.or(row.url);
+            let thumbnail_url = row.typed_video_thumbnail_url.or(row.thumbnail_url);
+            let duration_seconds = row.typed_video_duration_seconds;
+            let published_at = row
+                .typed_video_published_at
+                .as_deref()
                 .and_then(ymd_to_unix_midnight);
             let availability_status = row.availability_status;
             let captions = row
@@ -333,7 +346,6 @@ struct SourceSummaryRow {
     source_subtype: Option<String>,
     external_id: String,
     title: Option<String>,
-    metadata_zstd: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -369,7 +381,11 @@ struct PlaylistItemRow {
     availability_status: String,
     is_removed_from_playlist: bool,
     video_source_title: Option<String>,
-    video_metadata_zstd: Option<Vec<u8>>,
+    typed_video_title: Option<String>,
+    typed_video_canonical_url: Option<String>,
+    typed_video_thumbnail_url: Option<String>,
+    typed_video_duration_seconds: Option<i64>,
+    typed_video_published_at: Option<String>,
 }
 
 async fn load_source_rows(
@@ -378,7 +394,7 @@ async fn load_source_rows(
 ) -> AppResult<Vec<SourceSummaryRow>> {
     let mut query = QueryBuilder::new(
         r#"
-        SELECT id, source_subtype, external_id, title, metadata_zstd
+        SELECT id, source_subtype, external_id, title
         FROM sources
         WHERE source_type = 'youtube' AND id IN (
         "#,
@@ -559,30 +575,25 @@ fn summary_from_row(
     caption_counts: ContentCounts,
     comment_counts: ContentCounts,
     playlist_counts: Option<PlaylistCounts>,
+    video_metadata: Option<&YoutubeVideoSourceMetadata>,
+    playlist_metadata: Option<&YoutubePlaylistSourceMetadata>,
 ) -> YoutubeSourceSummaryDto {
     let source_subtype = row.source_subtype.unwrap_or_default();
     match source_subtype.as_str() {
         "playlist" => {
-            let metadata =
-                decode_youtube_metadata::<YoutubePlaylistMetadata>(row.metadata_zstd.as_deref());
-            let availability_status = metadata
-                .as_ref()
-                .map(|metadata| availability_status_wire(&metadata.availability_status));
+            let availability_status =
+                playlist_metadata.map(|metadata| metadata.availability_status.clone());
             YoutubeSourceSummaryDto {
                 source_id: row.id,
                 source_subtype,
-                title: metadata
-                    .as_ref()
+                title: playlist_metadata
                     .and_then(|metadata| metadata.title.clone())
                     .or(row.title),
-                channel_title: metadata
-                    .as_ref()
+                channel_title: playlist_metadata
                     .and_then(|metadata| metadata.channel_title.clone()),
-                channel_handle: metadata
-                    .as_ref()
+                channel_handle: playlist_metadata
                     .and_then(|metadata| metadata.channel_handle.clone()),
-                canonical_url: metadata
-                    .as_ref()
+                canonical_url: playlist_metadata
                     .map(|metadata| metadata.canonical_url.clone())
                     .or_else(|| {
                         Some(format!(
@@ -590,14 +601,12 @@ fn summary_from_row(
                             row.external_id
                         ))
                     }),
-                thumbnail_url: metadata
-                    .as_ref()
+                thumbnail_url: playlist_metadata
                     .and_then(|metadata| metadata.thumbnail_url.clone()),
                 duration_seconds: None,
                 published_at: None,
                 availability_status,
-                video_count: metadata
-                    .as_ref()
+                video_count: playlist_metadata
                     .and_then(|metadata| metadata.video_count)
                     .or_else(|| playlist_counts.map(|counts| counts.total_count)),
                 linked_video_count: playlist_counts.map(|counts| counts.linked_count),
@@ -607,26 +616,17 @@ fn summary_from_row(
             }
         }
         _ => {
-            let metadata =
-                decode_youtube_metadata::<YoutubeVideoMetadata>(row.metadata_zstd.as_deref());
-            let availability_status = metadata
-                .as_ref()
-                .map(|metadata| availability_status_wire(&metadata.availability_status));
+            let availability_status =
+                video_metadata.map(|metadata| metadata.availability_status.clone());
             YoutubeSourceSummaryDto {
                 source_id: row.id,
                 source_subtype,
-                title: metadata
-                    .as_ref()
+                title: video_metadata
                     .and_then(|metadata| metadata.title.clone())
                     .or(row.title),
-                channel_title: metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.channel_title.clone()),
-                channel_handle: metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.channel_handle.clone()),
-                canonical_url: metadata
-                    .as_ref()
+                channel_title: video_metadata.and_then(|metadata| metadata.channel_title.clone()),
+                channel_handle: video_metadata.and_then(|metadata| metadata.channel_handle.clone()),
+                canonical_url: video_metadata
                     .map(|metadata| metadata.canonical_url.clone())
                     .or_else(|| {
                         Some(format!(
@@ -634,14 +634,9 @@ fn summary_from_row(
                             row.external_id
                         ))
                     }),
-                thumbnail_url: metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.thumbnail_url.clone()),
-                duration_seconds: metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.duration_seconds),
-                published_at: metadata
-                    .as_ref()
+                thumbnail_url: video_metadata.and_then(|metadata| metadata.thumbnail_url.clone()),
+                duration_seconds: video_metadata.and_then(|metadata| metadata.duration_seconds),
+                published_at: video_metadata
                     .and_then(|metadata| metadata.published_at.as_deref())
                     .and_then(ymd_to_unix_midnight),
                 availability_status: availability_status.clone(),
@@ -722,21 +717,6 @@ fn captions_unavailable_for_status(status: &str) -> bool {
     )
 }
 
-fn decode_youtube_metadata<T>(metadata_zstd: Option<&[u8]>) -> Option<T>
-where
-    T: serde::de::DeserializeOwned,
-{
-    let json = decompress_bytes(metadata_zstd?).ok()?;
-    serde_json::from_slice(&json).ok()
-}
-
-fn availability_status_wire(status: &YoutubeAvailabilityStatus) -> String {
-    serde_json::to_value(status)
-        .ok()
-        .and_then(|value| value.as_str().map(str::to_string))
-        .unwrap_or_else(|| "unavailable_unknown".to_string())
-}
-
 fn push_i64_list(query: &mut QueryBuilder<'_, sqlx::Sqlite>, values: &[i64]) {
     let mut separated = query.separated(", ");
     for value in values {
@@ -772,6 +752,7 @@ mod tests {
         get_youtube_playlist_detail_from_pool, get_youtube_video_detail_from_pool,
         list_youtube_source_summaries_from_pool, YoutubeContentSyncState,
     };
+    use crate::error::AppErrorKind;
 
     #[tokio::test]
     async fn video_detail_reports_synced_transcript_comments_and_playlist_memberships() {
@@ -881,8 +862,108 @@ mod tests {
         assert_eq!(summaries[1].captions.label, "Captions unavailable");
     }
 
+    #[tokio::test]
+    async fn summaries_use_typed_video_metadata_with_corrupt_source_blob() {
+        let pool = youtube_detail_pool().await;
+        let source_id =
+            insert_youtube_video_source(&pool, "video01", "Generic title", "available").await;
+        sqlx::query("UPDATE sources SET metadata_zstd = x'00' WHERE id = ?")
+            .bind(source_id)
+            .execute(&pool)
+            .await
+            .expect("corrupt source blob");
+
+        let summaries = list_youtube_source_summaries_from_pool(&pool, vec![source_id])
+            .await
+            .expect("list summaries");
+
+        assert_eq!(summaries[0].title.as_deref(), Some("Typed video title"));
+        assert_eq!(
+            summaries[0].canonical_url.as_deref(),
+            Some("https://www.youtube.com/watch?v=video01")
+        );
+        assert_eq!(
+            summaries[0].availability_status.as_deref(),
+            Some("available")
+        );
+    }
+
+    #[tokio::test]
+    async fn source_summary_missing_typed_metadata_uses_generic_title_without_blob_decode() {
+        let pool = youtube_detail_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd, is_active, is_member, created_at) VALUES (901, 'youtube', 'video', 'missing01', 'Generic fallback', x'00', 1, 0, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+
+        let summaries = list_youtube_source_summaries_from_pool(&pool, vec![901])
+            .await
+            .expect("list summaries");
+
+        assert_eq!(summaries[0].title.as_deref(), Some("Generic fallback"));
+        assert_eq!(
+            summaries[0].canonical_url.as_deref(),
+            Some("https://www.youtube.com/watch?v=missing01")
+        );
+        assert_eq!(summaries[0].availability_status, None);
+    }
+
+    #[tokio::test]
+    async fn video_detail_missing_typed_metadata_returns_controlled_error() {
+        let pool = youtube_detail_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, metadata_zstd, is_active, is_member, created_at) VALUES (902, 'youtube', 'video', 'missing02', 'Generic fallback', x'00', 1, 0, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+
+        let error = get_youtube_video_detail_from_pool(&pool, 902)
+            .await
+            .expect_err("missing typed metadata rejected");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert!(error.to_string().contains("typed YouTube video metadata"));
+        assert!(!error.to_string().contains("metadata_zstd"));
+    }
+
+    #[tokio::test]
+    async fn playlist_detail_uses_typed_linked_video_metadata_with_corrupt_source_blob() {
+        let pool = youtube_detail_pool().await;
+        let playlist_id = insert_youtube_playlist_source(&pool, "PLdemo", "Generic playlist").await;
+        let video_id =
+            insert_youtube_video_source(&pool, "video02", "Generic linked video", "available")
+                .await;
+        sqlx::query("UPDATE sources SET metadata_zstd = x'00' WHERE id = ?")
+            .bind(video_id)
+            .execute(&pool)
+            .await
+            .expect("corrupt source blob");
+        insert_playlist_item(
+            &pool,
+            playlist_id,
+            Some(video_id),
+            "video02",
+            "Snapshot title",
+        )
+        .await;
+
+        let detail = get_youtube_playlist_detail_from_pool(&pool, playlist_id)
+            .await
+            .expect("playlist detail");
+
+        assert_eq!(detail.items[0].title.as_deref(), Some("Typed video title"));
+        assert_eq!(
+            detail.items[0].canonical_url.as_deref(),
+            Some("https://www.youtube.com/watch?v=video02")
+        );
+    }
+
     async fn youtube_detail_pool() -> sqlx::SqlitePool {
         let pool = crate::sources::test_support::memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
         sqlx::query(
             r#"
             CREATE TABLE youtube_playlist_items (
@@ -960,6 +1041,7 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed video");
+        insert_typed_video_source(pool, id, video_id, title, availability).await;
     }
 
     async fn seed_playlist(pool: &sqlx::SqlitePool, id: i64, playlist_id: &str, title: &str) {
@@ -980,6 +1062,152 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed playlist");
+        insert_typed_playlist_source(pool, id, playlist_id, title, Some(3)).await;
+    }
+
+    async fn insert_youtube_video_source(
+        pool: &sqlx::SqlitePool,
+        video_id: &str,
+        generic_title: &str,
+        availability: &str,
+    ) -> i64 {
+        let metadata_zstd = youtube_video_metadata_zstd(video_id, generic_title, availability);
+        let source_id: i64 = sqlx::query_scalar(
+            r#"
+            INSERT INTO sources (
+                source_type, source_subtype, account_id, external_id, title,
+                metadata_zstd, is_active, is_member, created_at
+            )
+            VALUES ('youtube', 'video', NULL, ?, ?, ?, 1, 0, 1)
+            RETURNING id
+            "#,
+        )
+        .bind(video_id)
+        .bind(generic_title)
+        .bind(metadata_zstd)
+        .fetch_one(pool)
+        .await
+        .expect("insert youtube video source");
+        insert_typed_video_source(pool, source_id, video_id, "Typed video title", availability)
+            .await;
+        source_id
+    }
+
+    async fn insert_youtube_playlist_source(
+        pool: &sqlx::SqlitePool,
+        playlist_id: &str,
+        generic_title: &str,
+    ) -> i64 {
+        let metadata_zstd = youtube_playlist_metadata_zstd(playlist_id, generic_title);
+        let source_id: i64 = sqlx::query_scalar(
+            r#"
+            INSERT INTO sources (
+                source_type, source_subtype, account_id, external_id, title,
+                metadata_zstd, is_active, is_member, created_at
+            )
+            VALUES ('youtube', 'playlist', NULL, ?, ?, ?, 1, 0, 1)
+            RETURNING id
+            "#,
+        )
+        .bind(playlist_id)
+        .bind(generic_title)
+        .bind(metadata_zstd)
+        .fetch_one(pool)
+        .await
+        .expect("insert youtube playlist source");
+        insert_typed_playlist_source(pool, source_id, playlist_id, "Typed playlist title", None)
+            .await;
+        source_id
+    }
+
+    async fn insert_typed_video_source(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        video_id: &str,
+        title: &str,
+        availability: &str,
+    ) {
+        sqlx::query(
+            r#"
+            INSERT INTO youtube_video_sources (
+                source_id, video_id, canonical_url, title, channel_title,
+                channel_handle, author_display, published_at, duration_seconds,
+                description, thumbnail_url, video_form, availability_status
+            )
+            VALUES (?, ?, ?, ?, 'Demo Channel', '@demo', 'Demo Channel', '2026-05-01',
+                    120, 'Demo description', ?, 'regular', ?)
+            "#,
+        )
+        .bind(source_id)
+        .bind(video_id)
+        .bind(format!("https://www.youtube.com/watch?v={video_id}"))
+        .bind(title)
+        .bind(format!(
+            "https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        ))
+        .bind(availability)
+        .execute(pool)
+        .await
+        .expect("insert typed video source");
+    }
+
+    async fn insert_typed_playlist_source(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        playlist_id: &str,
+        title: &str,
+        video_count: Option<i64>,
+    ) {
+        sqlx::query(
+            r#"
+            INSERT INTO youtube_playlist_sources (
+                source_id, playlist_id, canonical_url, title, channel_title,
+                channel_handle, thumbnail_url, video_count, availability_status
+            )
+            VALUES (?, ?, ?, ?, 'Demo Channel', '@demo',
+                    'https://img.youtube.com/playlist.jpg', ?, 'available')
+            "#,
+        )
+        .bind(source_id)
+        .bind(playlist_id)
+        .bind(format!(
+            "https://www.youtube.com/playlist?list={playlist_id}"
+        ))
+        .bind(title)
+        .bind(video_count)
+        .execute(pool)
+        .await
+        .expect("insert typed playlist source");
+    }
+
+    async fn insert_playlist_item(
+        pool: &sqlx::SqlitePool,
+        playlist_source_id: i64,
+        video_source_id: Option<i64>,
+        video_id: &str,
+        title_snapshot: &str,
+    ) {
+        sqlx::query(
+            r#"
+            INSERT INTO youtube_playlist_items (
+                playlist_source_id, video_source_id, video_id, position, title_snapshot, url,
+                thumbnail_url, availability_status, is_removed_from_playlist, last_seen_at,
+                created_at, updated_at
+            )
+            VALUES (?, ?, ?, 1, ?, ?, ?, 'available', 0, 1, 1, 1)
+            "#,
+        )
+        .bind(playlist_source_id)
+        .bind(video_source_id)
+        .bind(video_id)
+        .bind(title_snapshot)
+        .bind(format!("https://www.youtube.com/watch?v={video_id}"))
+        .bind(format!(
+            "https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        ))
+        .execute(pool)
+        .await
+        .expect("insert playlist item");
     }
 
     async fn seed_playlist_item(

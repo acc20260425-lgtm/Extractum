@@ -1633,7 +1633,7 @@ git commit -m "feat: write youtube typed source metadata"
 - Modify: `src-tauri/src/youtube/source_metadata.rs`
 - Test: `src-tauri/src/youtube/detail.rs`
 
-- [ ] **Step 1: Add RED detail/listing tests**
+- [x] **Step 1: Add RED detail/listing tests**
 
 In `src-tauri/src/youtube/detail.rs`, update the test fixture helpers so they call `create_youtube_typed_source_tables(&pool).await` and insert typed rows for valid YouTube source metadata.
 
@@ -1727,7 +1727,7 @@ async fn playlist_detail_uses_typed_linked_video_metadata_with_corrupt_source_bl
 }
 ```
 
-- [ ] **Step 2: Run detail tests and verify RED**
+- [x] **Step 2: Run detail tests and verify RED**
 
 Run:
 
@@ -1737,7 +1737,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::detail::
 
 Expected: fail because detail still decodes `sources.metadata_zstd`.
 
-- [ ] **Step 3: Add typed metadata runtime row loaders**
+- [x] **Step 3: Add typed metadata runtime row loaders**
 
 In `src-tauri/src/youtube/source_metadata.rs`, add runtime structs:
 
@@ -1819,7 +1819,7 @@ pub(crate) async fn load_video_source_metadata_map(
 
 Add the equivalent `load_playlist_source_metadata_map`. In both row parsers, treat rows as invalid and omit them when source subtype/id/canonical URL/availability checks fail. Invalid JSON checks for `tags_json` and `chapters_json` should be done in SQL row parsers when those columns are loaded in later analysis code.
 
-- [ ] **Step 4: Update summary loading**
+- [x] **Step 4: Update summary loading**
 
 In `src-tauri/src/youtube/detail.rs`:
 
@@ -1859,7 +1859,7 @@ playlist_metadata: Option<&YoutubePlaylistSourceMetadata>,
 - Build playlist summaries from `playlist_metadata` when present, otherwise use `sources.title`, generated playlist URL, and `None` for provider fields.
 - Build video summaries from `video_metadata` when present, otherwise use `sources.title`, generated video URL, and `None` for provider fields.
 
-- [ ] **Step 5: Update detail missing-metadata behavior**
+- [x] **Step 5: Update detail missing-metadata behavior**
 
 In `get_youtube_video_detail_from_pool`, after checking subtype, enforce typed metadata:
 
@@ -1883,7 +1883,7 @@ if !typed.contains_key(&source_id) {
 }
 ```
 
-- [ ] **Step 6: Update playlist item detail query**
+- [x] **Step 6: Update playlist item detail query**
 
 Replace `sources.metadata_zstd AS video_metadata_zstd` with a left join to `youtube_video_sources`:
 
@@ -1903,7 +1903,7 @@ yvs.published_at AS typed_video_published_at
 
 Update `PlaylistItemRow` and item mapping so typed values win, then generic `sources.title`, then playlist item snapshots. Remove `decode_youtube_metadata` and the local `availability_status_wire` helper if unused.
 
-- [ ] **Step 7: Run detail tests and verify GREEN**
+- [x] **Step 7: Run detail tests and verify GREEN**
 
 Run:
 
@@ -1917,7 +1917,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/youtube/detail.rs src-tauri/src/youtube/source_metadata.rs

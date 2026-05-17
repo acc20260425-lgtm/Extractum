@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use serde_json::Value;
-use sqlx::{Executor, Sqlite, SqliteConnection};
+use sqlx::{Executor, QueryBuilder, Row, Sqlite, SqliteConnection};
 
 use crate::compression::compress_json_bytes;
 use crate::error::{AppError, AppResult};
@@ -52,6 +54,39 @@ pub(crate) struct YoutubePlaylistSourceColumns {
     pub(crate) availability_status: String,
     pub(crate) raw_metadata_version: Option<i64>,
     pub(crate) raw_metadata_zstd: Option<Vec<u8>>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct YoutubeVideoSourceMetadata {
+    pub(crate) source_id: i64,
+    pub(crate) video_id: String,
+    pub(crate) canonical_url: String,
+    pub(crate) title: Option<String>,
+    pub(crate) channel_title: Option<String>,
+    pub(crate) channel_handle: Option<String>,
+    pub(crate) author_display: Option<String>,
+    pub(crate) published_at: Option<String>,
+    pub(crate) duration_seconds: Option<i64>,
+    pub(crate) description: Option<String>,
+    pub(crate) thumbnail_url: Option<String>,
+    pub(crate) video_form: String,
+    pub(crate) availability_status: String,
+    pub(crate) caption_language_override: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct YoutubePlaylistSourceMetadata {
+    pub(crate) source_id: i64,
+    pub(crate) playlist_id: String,
+    pub(crate) canonical_url: String,
+    pub(crate) title: Option<String>,
+    pub(crate) channel_title: Option<String>,
+    pub(crate) channel_handle: Option<String>,
+    pub(crate) thumbnail_url: Option<String>,
+    pub(crate) video_count: Option<i64>,
+    pub(crate) availability_status: String,
 }
 
 impl YoutubeVideoSourceColumns {
@@ -182,6 +217,222 @@ pub(crate) fn availability_status_wire(status: &YoutubeAvailabilityStatus) -> &'
         YoutubeAvailabilityStatus::RemovedFromPlaylist => "removed_from_playlist",
         YoutubeAvailabilityStatus::UnavailableUnknown => "unavailable_unknown",
     }
+}
+
+pub(crate) async fn load_video_source_metadata_map(
+    pool: &sqlx::SqlitePool,
+    source_ids: &[i64],
+) -> AppResult<HashMap<i64, YoutubeVideoSourceMetadata>> {
+    if source_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let mut query = QueryBuilder::new(
+        r#"
+        SELECT
+            s.id AS source_id,
+            s.external_id,
+            yvs.video_id,
+            yvs.canonical_url,
+            yvs.title,
+            yvs.channel_title,
+            yvs.channel_handle,
+            yvs.author_display,
+            yvs.published_at,
+            yvs.duration_seconds,
+            yvs.description,
+            yvs.thumbnail_url,
+            yvs.video_form,
+            yvs.availability_status,
+            yvs.caption_language_override
+        FROM sources s
+        JOIN youtube_video_sources yvs ON yvs.source_id = s.id
+        WHERE s.source_type = 'youtube'
+          AND s.source_subtype = 'video'
+          AND s.id IN (
+        "#,
+    );
+    push_i64_list_for_source_metadata(&mut query, source_ids);
+    query.push(")");
+    let rows = query
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)?;
+    video_metadata_rows_to_map(rows)
+}
+
+pub(crate) async fn load_playlist_source_metadata_map(
+    pool: &sqlx::SqlitePool,
+    source_ids: &[i64],
+) -> AppResult<HashMap<i64, YoutubePlaylistSourceMetadata>> {
+    if source_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let mut query = QueryBuilder::new(
+        r#"
+        SELECT
+            s.id AS source_id,
+            s.external_id,
+            yps.playlist_id,
+            yps.canonical_url,
+            yps.title,
+            yps.channel_title,
+            yps.channel_handle,
+            yps.thumbnail_url,
+            yps.video_count,
+            yps.availability_status
+        FROM sources s
+        JOIN youtube_playlist_sources yps ON yps.source_id = s.id
+        WHERE s.source_type = 'youtube'
+          AND s.source_subtype = 'playlist'
+          AND s.id IN (
+        "#,
+    );
+    push_i64_list_for_source_metadata(&mut query, source_ids);
+    query.push(")");
+    let rows = query
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)?;
+    playlist_metadata_rows_to_map(rows)
+}
+
+fn video_metadata_rows_to_map(
+    rows: Vec<sqlx::sqlite::SqliteRow>,
+) -> AppResult<HashMap<i64, YoutubeVideoSourceMetadata>> {
+    let mut metadata = HashMap::new();
+    for row in rows {
+        let source_id = row
+            .try_get::<i64, _>("source_id")
+            .map_err(AppError::database)?;
+        let external_id = row
+            .try_get::<String, _>("external_id")
+            .map_err(AppError::database)?;
+        let video_id = row
+            .try_get::<String, _>("video_id")
+            .map_err(AppError::database)?;
+        let canonical_url = row
+            .try_get::<String, _>("canonical_url")
+            .map_err(AppError::database)?;
+        let video_form = row
+            .try_get::<String, _>("video_form")
+            .map_err(AppError::database)?;
+        let availability_status = row
+            .try_get::<String, _>("availability_status")
+            .map_err(AppError::database)?;
+
+        if external_id != video_id
+            || !is_video_form_wire(&video_form)
+            || !is_availability_status_wire(&availability_status)
+            || validate_video_canonical_url(&video_id, &canonical_url).is_err()
+        {
+            continue;
+        }
+
+        metadata.insert(
+            source_id,
+            YoutubeVideoSourceMetadata {
+                source_id,
+                video_id,
+                canonical_url,
+                title: row.try_get("title").map_err(AppError::database)?,
+                channel_title: row.try_get("channel_title").map_err(AppError::database)?,
+                channel_handle: row.try_get("channel_handle").map_err(AppError::database)?,
+                author_display: row.try_get("author_display").map_err(AppError::database)?,
+                published_at: row.try_get("published_at").map_err(AppError::database)?,
+                duration_seconds: row
+                    .try_get("duration_seconds")
+                    .map_err(AppError::database)?,
+                description: row.try_get("description").map_err(AppError::database)?,
+                thumbnail_url: row.try_get("thumbnail_url").map_err(AppError::database)?,
+                video_form,
+                availability_status,
+                caption_language_override: row
+                    .try_get("caption_language_override")
+                    .map_err(AppError::database)?,
+            },
+        );
+    }
+    Ok(metadata)
+}
+
+fn playlist_metadata_rows_to_map(
+    rows: Vec<sqlx::sqlite::SqliteRow>,
+) -> AppResult<HashMap<i64, YoutubePlaylistSourceMetadata>> {
+    let mut metadata = HashMap::new();
+    for row in rows {
+        let source_id = row
+            .try_get::<i64, _>("source_id")
+            .map_err(AppError::database)?;
+        let external_id = row
+            .try_get::<String, _>("external_id")
+            .map_err(AppError::database)?;
+        let playlist_id = row
+            .try_get::<String, _>("playlist_id")
+            .map_err(AppError::database)?;
+        let canonical_url = row
+            .try_get::<String, _>("canonical_url")
+            .map_err(AppError::database)?;
+        let availability_status = row
+            .try_get::<String, _>("availability_status")
+            .map_err(AppError::database)?;
+
+        if external_id != playlist_id
+            || !is_availability_status_wire(&availability_status)
+            || validate_playlist_canonical_url(&playlist_id, &canonical_url).is_err()
+        {
+            continue;
+        }
+
+        metadata.insert(
+            source_id,
+            YoutubePlaylistSourceMetadata {
+                source_id,
+                playlist_id,
+                canonical_url,
+                title: row.try_get("title").map_err(AppError::database)?,
+                channel_title: row.try_get("channel_title").map_err(AppError::database)?,
+                channel_handle: row.try_get("channel_handle").map_err(AppError::database)?,
+                thumbnail_url: row.try_get("thumbnail_url").map_err(AppError::database)?,
+                video_count: row.try_get("video_count").map_err(AppError::database)?,
+                availability_status,
+            },
+        );
+    }
+    Ok(metadata)
+}
+
+fn push_i64_list_for_source_metadata(query: &mut QueryBuilder<'_, sqlx::Sqlite>, values: &[i64]) {
+    let mut separated = query.separated(", ");
+    for value in values {
+        separated.push_bind(*value);
+    }
+    separated.push_unseparated(" ");
+}
+
+fn is_video_form_wire(value: &str) -> bool {
+    matches!(value, "regular" | "short" | "live")
+}
+
+fn is_availability_status_wire(value: &str) -> bool {
+    matches!(
+        value,
+        "available"
+            | "upcoming"
+            | "live_now"
+            | "live_ended_transcript_pending"
+            | "no_captions"
+            | "private_or_auth_required"
+            | "members_only"
+            | "age_restricted"
+            | "geo_blocked"
+            | "deleted"
+            | "removed_from_playlist"
+            | "unavailable_unknown"
+    )
 }
 
 fn raw_metadata_columns(raw: &Value) -> AppResult<(Option<i64>, Option<Vec<u8>>)> {
