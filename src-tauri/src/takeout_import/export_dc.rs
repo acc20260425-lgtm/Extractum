@@ -16,6 +16,34 @@ pub(crate) struct ExportDcAlias {
     pub(crate) export_dc_id: i32,
 }
 
+#[derive(Default)]
+pub(crate) struct ExportDcAttemptState {
+    attempted_export_dc_id: Option<i32>,
+    fallback_recorded: bool,
+}
+
+impl ExportDcAttemptState {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn mark_attempted(&mut self, export_dc_id: i32) -> bool {
+        if self.attempted_export_dc_id == Some(export_dc_id) {
+            return false;
+        }
+        self.attempted_export_dc_id = Some(export_dc_id);
+        true
+    }
+
+    pub(crate) fn mark_fallback(&mut self, message: String) -> Option<String> {
+        if self.fallback_recorded {
+            return None;
+        }
+        self.fallback_recorded = true;
+        Some(message)
+    }
+}
+
 pub(crate) async fn prepare_export_dc_alias(
     session: &Arc<MemorySession>,
 ) -> AppResult<ExportDcAlias> {
@@ -128,7 +156,7 @@ pub(crate) async fn finish_takeout_session(
 mod tests {
     use super::{
         export_dc_id_for_home_dc, should_fallback_export_dc_error,
-        takeout_init_request_for_source_subtype, TAKEOUT_FILE_MAX_SIZE,
+        takeout_init_request_for_source_subtype, ExportDcAttemptState, TAKEOUT_FILE_MAX_SIZE,
     };
     use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
     use grammers_mtsender::{InvocationError, RpcError};
@@ -136,6 +164,17 @@ mod tests {
     #[test]
     fn export_dc_id_applies_tdesktop_shift() {
         assert_eq!(export_dc_id_for_home_dc(2), 40_002);
+    }
+
+    #[test]
+    fn export_dc_attempt_state_detects_first_fallback_transition() {
+        let mut state = ExportDcAttemptState::new();
+        assert!(state.mark_attempted(40002));
+        assert!(!state.mark_attempted(40002));
+        assert!(state
+            .mark_fallback("fallback message".to_string())
+            .is_some());
+        assert!(state.mark_fallback("second fallback".to_string()).is_none());
     }
 
     #[test]

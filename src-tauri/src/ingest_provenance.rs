@@ -630,4 +630,72 @@ mod tests {
         assert!(!warning_message.starts_with('{'));
         assert!(!warning_message.contains("api_hash"));
     }
+
+    #[tokio::test]
+    async fn completed_zero_observation_batch_is_complete_without_partial_flags() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_source(&pool).await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+
+        finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
+            .await
+            .expect("finalize complete empty batch");
+
+        let completeness: String =
+            sqlx::query_scalar("SELECT completeness FROM ingest_batches WHERE id = ?")
+                .bind(batch_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load completeness");
+        assert_eq!(completeness, "complete");
+    }
+
+    #[tokio::test]
+    async fn mixed_partial_scope_finalizes_as_partial() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_source(&pool).await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+        mark_takeout_only_my_messages_fallback(&pool, batch_id, "private history")
+            .await
+            .expect("mark private fallback");
+        mark_takeout_migrated_history_deferred(&pool, batch_id, "migrated deferred")
+            .await
+            .expect("mark migrated deferred");
+
+        finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
+            .await
+            .expect("finalize partial batch");
+
+        let row: (String, String) = sqlx::query_as(
+            "SELECT b.completeness, t.history_scope
+             FROM ingest_batches b
+             JOIN telegram_takeout_batches t ON t.batch_id = b.id
+             WHERE b.id = ?",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load final state");
+        assert_eq!(row, ("partial".to_string(), "mixed_partial".to_string()));
+    }
 }

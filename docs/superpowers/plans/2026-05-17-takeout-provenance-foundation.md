@@ -1872,7 +1872,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/takeout_import/export_dc.rs`
 - Test: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Add export-DC fallback signal tests**
+- [x] **Step 1: Add export-DC fallback signal tests**
 
 In `src-tauri/src/takeout_import/export_dc.rs`, extend tests with a small unit around a new helper:
 
@@ -1887,7 +1887,7 @@ fn export_dc_attempt_state_detects_first_fallback_transition() {
 }
 ```
 
-- [ ] **Step 2: Implement export-DC attempt state**
+- [x] **Step 2: Implement export-DC attempt state**
 
 In `export_dc.rs`, add:
 
@@ -1923,7 +1923,7 @@ impl ExportDcAttemptState {
 
 Keep `export_dc_invoke` signature unchanged; the Takeout flow will compare `fallback_used` before/after each call and use this state to avoid duplicate durable fallback warnings for one batch.
 
-- [ ] **Step 3: Add Takeout helper functions for durable warning/detail updates**
+- [x] **Step 3: Add Takeout helper functions for durable warning/detail updates**
 
 In `takeout_import/mod.rs`, import:
 
@@ -1985,7 +1985,7 @@ fn peer_ref_identity(peer: PeerRef) -> (&'static str, i64) {
 }
 ```
 
-- [ ] **Step 4: Thread `batch_id` and export attempt state through Takeout flow**
+- [x] **Step 4: Thread `batch_id` and export attempt state through Takeout flow**
 
 Add `batch_id: i64` to:
 
@@ -2036,7 +2036,7 @@ record_export_dc_fallback_if_needed(
 
 Use the same pattern around `finish_takeout_session(...)`.
 
-- [ ] **Step 5: Write resolved peer and session details**
+- [x] **Step 5: Write resolved peer and session details**
 
 After `resolve_and_refresh_peer(...)`:
 
@@ -2059,7 +2059,7 @@ After `takeout_id` is known:
 update_takeout_session_started(&pool, batch_id, takeout_id).await?;
 ```
 
-- [ ] **Step 6: Persist split/count metadata and scope warnings**
+- [x] **Step 6: Persist split/count metadata and scope warnings**
 
 Immediately after `let split_ranges = ...`:
 
@@ -2107,7 +2107,7 @@ mark_takeout_only_my_messages_fallback(
 .await?;
 ```
 
-- [ ] **Step 7: Replace Takeout item insertion with observation wrapper**
+- [x] **Step 7: Replace Takeout item insertion with observation wrapper**
 
 In `import_takeout_history_pages`, replace:
 
@@ -2147,7 +2147,7 @@ After updating `imported.max_message_id`, persist diagnostic max id cheaply:
 update_takeout_max_message_id(&pool, batch_id, imported.max_message_id).await?;
 ```
 
-- [ ] **Step 8: Add terminal batch finalization**
+- [x] **Step 8: Add terminal batch finalization**
 
 On success, before emitting the final job record and after `finalize_sync(...)`, call:
 
@@ -2193,7 +2193,7 @@ let _ = record_ingest_batch_warning(
 
 Ignore the result of terminal provenance updates only when the job is already failing; keep a best-effort in-memory job error if the provenance update itself fails during the success path.
 
-- [ ] **Step 9: Add pure completeness tests for terminal helper behavior**
+- [x] **Step 9: Add pure completeness tests for terminal helper behavior**
 
 In `src-tauri/src/ingest_provenance.rs`, add tests for zero-message success and mixed partial:
 
@@ -2267,7 +2267,7 @@ async fn mixed_partial_scope_finalizes_as_partial() {
 }
 ```
 
-- [ ] **Step 10: Run targeted Takeout/provenance tests**
+- [x] **Step 10: Run targeted Takeout/provenance tests**
 
 Run:
 
@@ -2277,7 +2277,7 @@ cargo test --manifest-path src-tauri/Cargo.toml ingest_provenance::tests:: takeo
 
 Expected: targeted tests pass.
 
-- [ ] **Step 11: Commit Takeout runtime wiring**
+- [x] **Step 11: Commit Takeout runtime wiring**
 
 Run:
 

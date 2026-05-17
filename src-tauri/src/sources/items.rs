@@ -105,7 +105,6 @@ impl TelegramItemInsertOutcome {
         matches!(self, Self::Inserted { .. })
     }
 
-    #[allow(dead_code)]
     pub(crate) fn observation_parts(self) -> (&'static str, Option<i64>, Option<&'static str>) {
         match self {
             Self::Inserted { item_id } => ("inserted", Some(item_id), None),
@@ -255,7 +254,6 @@ pub(crate) async fn insert_telegram_source_item_outcome(
     }
 }
 
-#[allow(dead_code)]
 pub(crate) async fn insert_telegram_source_item_with_observation(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     batch_id: i64,

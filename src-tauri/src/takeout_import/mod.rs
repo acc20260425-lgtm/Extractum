@@ -6,14 +6,21 @@ use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
-use crate::ingest_provenance::{create_telegram_takeout_batch, CreateTelegramTakeoutBatch};
+use crate::ingest_provenance::{
+    create_telegram_takeout_batch, finalize_ingest_batch, mark_takeout_export_dc_attempted,
+    mark_takeout_export_dc_fallback, mark_takeout_migrated_history_deferred,
+    mark_takeout_only_my_messages_fallback, record_ingest_batch_warning,
+    update_takeout_max_message_id, update_takeout_resolved_peer, update_takeout_session_started,
+    update_takeout_split_metadata, CreateTelegramTakeoutBatch, TerminalBatchStatus,
+};
 use crate::source_ingest::{SourceIngestGuard, SourceIngestKind, SourceIngestLocks};
 use crate::sources::{
-    finalize_sync, insert_telegram_source_item, load_source, require_source_identity_ready,
-    resolve_and_refresh_peer, SourceIdentityRepairState, TelegramSourceKind, TELEGRAM_KIND_CHANNEL,
-    TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    finalize_sync, load_source, require_source_identity_ready, resolve_and_refresh_peer,
+    SourceIdentityRepairState, TelegramSourceKind, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+    TELEGRAM_KIND_SUPERGROUP,
 };
 use crate::telegram::{get_authorized_runtime, AuthorizedTelegramRuntime, TelegramState};
+use grammers_session::types::{PeerKind, PeerRef};
 
 mod export_dc;
 mod pagination;
@@ -23,7 +30,7 @@ mod state;
 
 use export_dc::{
     export_dc_invoke, finish_takeout_session, prepare_export_dc_alias,
-    takeout_init_request_for_source_subtype, ExportDcAlias,
+    takeout_init_request_for_source_subtype, ExportDcAlias, ExportDcAttemptState,
 };
 use pagination::{
     message_range_min_id, next_takeout_cursor, parse_takeout_page, select_history_splits,
@@ -113,6 +120,99 @@ async fn create_locked_takeout_start_records(
     .await?;
     let record = state.create_job(source_id, account_id, batch_id).await?;
     Ok((record, ingest_guard))
+}
+
+async fn record_export_dc_attempt_if_needed(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    alias: &ExportDcAlias,
+    attempts: &mut ExportDcAttemptState,
+) -> AppResult<()> {
+    if attempts.mark_attempted(alias.export_dc_id) {
+        mark_takeout_export_dc_attempted(pool, batch_id, alias.export_dc_id).await?;
+    }
+    Ok(())
+}
+
+async fn record_export_dc_fallback_if_needed(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    warnings: &[String],
+    fallback_before: bool,
+    fallback_after: bool,
+    attempts: &mut ExportDcAttemptState,
+) -> AppResult<()> {
+    if !fallback_before && fallback_after {
+        let message = warnings
+            .last()
+            .cloned()
+            .unwrap_or_else(|| "Export DC fallback was used.".to_string());
+        if let Some(message) = attempts.mark_fallback(message) {
+            mark_takeout_export_dc_fallback(pool, batch_id, &message).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn export_dc_invoke_with_provenance<R: tl::RemoteCall>(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    client: &Client,
+    alias: &ExportDcAlias,
+    request: &R,
+    warnings: &mut Vec<String>,
+    fallback_used: &mut bool,
+    attempts: &mut ExportDcAttemptState,
+) -> AppResult<R::Return> {
+    let fallback_before = *fallback_used;
+    record_export_dc_attempt_if_needed(pool, batch_id, alias, attempts).await?;
+    let response = export_dc_invoke(client, alias, request, warnings, fallback_used).await;
+    match response {
+        Ok(response) => {
+            record_export_dc_fallback_if_needed(
+                pool,
+                batch_id,
+                warnings,
+                fallback_before,
+                *fallback_used,
+                attempts,
+            )
+            .await?;
+            Ok(response)
+        }
+        Err(error) => {
+            let _ = record_export_dc_fallback_if_needed(
+                pool,
+                batch_id,
+                warnings,
+                fallback_before,
+                *fallback_used,
+                attempts,
+            )
+            .await;
+            Err(error)
+        }
+    }
+}
+
+fn peer_ref_identity(peer: PeerRef) -> (&'static str, i64) {
+    let kind = match peer.id.kind() {
+        PeerKind::User | PeerKind::UserSelf => "user",
+        PeerKind::Chat => "chat",
+        PeerKind::Channel => "channel",
+    };
+    (kind, peer.id.bare_id())
+}
+
+async fn finalize_terminal_batch_best_effort(
+    handle: &AppHandle,
+    batch_id: i64,
+    status: TerminalBatchStatus,
+    terminal_error: Option<&str>,
+) {
+    if let Ok(pool) = get_pool(handle).await {
+        let _ = finalize_ingest_batch(&pool, batch_id, status, terminal_error).await;
+    }
 }
 
 #[tauri::command]
@@ -241,8 +341,16 @@ async fn run_takeout_import_job(
         return;
     };
     emit_takeout_import_event(&handle, &running_record);
+    let batch_id = running_record.batch_id;
 
     if takeout_state.is_cancel_requested(&job_id).await {
+        finalize_terminal_batch_best_effort(
+            &handle,
+            batch_id,
+            TerminalBatchStatus::Cancelled,
+            None,
+        )
+        .await;
         if let Some(record) = takeout_state
             .finish_job(&job_id, |job| {
                 job.status = STATUS_CANCELLED.to_string();
@@ -257,7 +365,7 @@ async fn run_takeout_import_job(
         return;
     }
 
-    match run_takeout_source_import(&handle, &job_id).await {
+    match run_takeout_source_import(&handle, &job_id, batch_id).await {
         Ok(outcome) => {
             if let Some(record) = takeout_state
                 .finish_job(&job_id, |job| {
@@ -280,6 +388,13 @@ async fn run_takeout_import_job(
         }
         Err(error) => {
             if takeout_state.is_cancel_requested(&job_id).await {
+                finalize_terminal_batch_best_effort(
+                    &handle,
+                    batch_id,
+                    TerminalBatchStatus::Cancelled,
+                    None,
+                )
+                .await;
                 if let Some(record) = takeout_state
                     .finish_job(&job_id, |job| {
                         job.status = STATUS_CANCELLED.to_string();
@@ -290,16 +405,26 @@ async fn run_takeout_import_job(
                 {
                     emit_takeout_import_event(&handle, &record);
                 }
-            } else if let Some(record) = takeout_state
-                .finish_job(&job_id, |job| {
-                    job.status = STATUS_FAILED.to_string();
-                    job.phase = PHASE_FAILED.to_string();
-                    job.message = None;
-                    job.error = Some(error.to_string());
-                })
-                .await
-            {
-                emit_takeout_import_event(&handle, &record);
+            } else {
+                let terminal_error = error.to_string();
+                if let Some(record) = takeout_state
+                    .finish_job(&job_id, |job| {
+                        job.status = STATUS_FAILED.to_string();
+                        job.phase = PHASE_FAILED.to_string();
+                        job.message = None;
+                        job.error = Some(terminal_error.clone());
+                    })
+                    .await
+                {
+                    finalize_terminal_batch_best_effort(
+                        &handle,
+                        batch_id,
+                        TerminalBatchStatus::Failed,
+                        Some(&terminal_error),
+                    )
+                    .await;
+                    emit_takeout_import_event(&handle, &record);
+                }
             }
         }
     }
@@ -316,6 +441,7 @@ struct TakeoutImportOutcome {
 async fn run_takeout_source_import(
     handle: &AppHandle,
     job_id: &str,
+    batch_id: i64,
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let telegram_state = handle.state::<TelegramState>();
@@ -344,6 +470,16 @@ async fn run_takeout_source_import(
     .await;
     let resolved_peer =
         resolve_and_refresh_peer(handle, &pool, &client, &source, account_id).await?;
+    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer);
+    update_takeout_resolved_peer(
+        &pool,
+        batch_id,
+        resolved_peer_kind,
+        resolved_peer_id,
+        resolved_peer_kind,
+        resolved_peer_id,
+    )
+    .await?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_STARTING_TAKEOUT.to_string();
@@ -360,20 +496,26 @@ async fn run_takeout_source_import(
     let init_request = takeout_init_request_for_source_subtype(&telegram_source_subtype)?;
     let mut warnings = Vec::new();
     let mut fallback_used = false;
-    let takeout = export_dc_invoke(
+    let mut export_attempts = ExportDcAttemptState::new();
+    let takeout = export_dc_invoke_with_provenance(
+        &pool,
+        batch_id,
         &client,
         &alias,
         &init_request,
         &mut warnings,
         &mut fallback_used,
+        &mut export_attempts,
     )
     .await?;
     let tl::enums::account::Takeout::Takeout(takeout) = takeout;
     let takeout_id = takeout.id;
+    update_takeout_session_started(&pool, batch_id, takeout_id).await?;
 
     let started_result = run_started_takeout_source_import(
         handle,
         job_id,
+        batch_id,
         &pool,
         &source,
         &telegram_source_subtype,
@@ -383,12 +525,17 @@ async fn run_takeout_source_import(
         takeout_id,
         warnings,
         fallback_used,
+        &mut export_attempts,
     )
     .await;
 
     match started_result {
         Ok(outcome) => Ok(outcome),
         Err((error, mut warnings, mut fallback_used)) => {
+            let fallback_before = fallback_used;
+            let _ =
+                record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut export_attempts)
+                    .await;
             if let Err(finish_error) = finish_takeout_session(
                 &client,
                 &alias,
@@ -402,7 +549,25 @@ async fn run_takeout_source_import(
                 warnings.push(format!(
                     "Failed to finish Takeout session after error: {finish_error}"
                 ));
+                let _ = record_ingest_batch_warning(
+                    &pool,
+                    batch_id,
+                    "finish_takeout_failed",
+                    &format!(
+                        "Failed to finish Takeout session after terminal error: {finish_error}"
+                    ),
+                )
+                .await;
             }
+            let _ = record_export_dc_fallback_if_needed(
+                &pool,
+                batch_id,
+                &warnings,
+                fallback_before,
+                fallback_used,
+                &mut export_attempts,
+            )
+            .await;
             update_and_emit(handle, &takeout_state, job_id, |job| {
                 job.warnings = warnings;
             })
@@ -415,6 +580,7 @@ async fn run_takeout_source_import(
 async fn run_started_takeout_source_import(
     handle: &AppHandle,
     job_id: &str,
+    batch_id: i64,
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source: &crate::sources::SourceSyncTarget,
     telegram_source_subtype: &str,
@@ -424,10 +590,12 @@ async fn run_started_takeout_source_import(
     takeout_id: i64,
     mut warnings: Vec<String>,
     mut fallback_used: bool,
+    export_attempts: &mut ExportDcAttemptState,
 ) -> Result<TakeoutImportOutcome, (AppError, Vec<String>, bool)> {
     match run_started_takeout_source_import_inner(
         handle,
         job_id,
+        batch_id,
         pool,
         source,
         telegram_source_subtype,
@@ -437,6 +605,7 @@ async fn run_started_takeout_source_import(
         takeout_id,
         &mut warnings,
         &mut fallback_used,
+        export_attempts,
     )
     .await
     {
@@ -448,6 +617,7 @@ async fn run_started_takeout_source_import(
 async fn run_started_takeout_source_import_inner(
     handle: &AppHandle,
     job_id: &str,
+    batch_id: i64,
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source: &crate::sources::SourceSyncTarget,
     telegram_source_subtype: &str,
@@ -457,6 +627,7 @@ async fn run_started_takeout_source_import_inner(
     takeout_id: i64,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let input_peer: tl::enums::InputPeer = resolved_peer.peer.into();
@@ -468,6 +639,8 @@ async fn run_started_takeout_source_import_inner(
     })
     .await;
     validate_takeout_peer(
+        pool,
+        batch_id,
         &client,
         &alias,
         takeout_id,
@@ -475,9 +648,12 @@ async fn run_started_takeout_source_import_inner(
         resolved_peer.peer,
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await?;
-    detect_supergroup_migration(
+    let migrated_detected = detect_supergroup_migration(
+        pool,
+        batch_id,
         client,
         alias,
         takeout_id,
@@ -485,8 +661,17 @@ async fn run_started_takeout_source_import_inner(
         resolved_peer.peer,
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await?;
+    if migrated_detected {
+        mark_takeout_migrated_history_deferred(
+            pool,
+            batch_id,
+            "Supergroup migrated history detected; current foundation import defers migrated history.",
+        )
+        .await?;
+    }
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_LOADING_SPLITS.to_string();
@@ -494,7 +679,9 @@ async fn run_started_takeout_source_import_inner(
         job.warnings = warnings.to_vec();
     })
     .await;
-    let split_ranges = export_dc_invoke(
+    let split_ranges = export_dc_invoke_with_provenance(
+        pool,
+        batch_id,
         &client,
         &alias,
         &tl::functions::InvokeWithTakeout {
@@ -503,9 +690,12 @@ async fn run_started_takeout_source_import_inner(
         },
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await?;
+    let split_count = split_ranges.len() as i64;
     let selected_ranges = select_history_splits(telegram_source_subtype, split_ranges)?;
+    let selected_split_count = selected_ranges.len() as i64;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_COUNTING.to_string();
@@ -515,8 +705,11 @@ async fn run_started_takeout_source_import_inner(
     .await;
     let mut counted_ranges = Vec::new();
     let mut total = 0_i64;
+    let mut only_my_messages_recorded = false;
     for range in selected_ranges {
         let probe = takeout_history_count_probe(
+            pool,
+            batch_id,
             &client,
             &alias,
             takeout_id,
@@ -525,8 +718,18 @@ async fn run_started_takeout_source_import_inner(
             telegram_source_subtype,
             warnings,
             fallback_used,
+            export_attempts,
         )
         .await?;
+        if probe.only_my_messages && !only_my_messages_recorded {
+            mark_takeout_only_my_messages_fallback(
+                pool,
+                batch_id,
+                "Channel history is private; importing only messages visible through from_id=self fallback.",
+            )
+            .await?;
+            only_my_messages_recorded = true;
+        }
         total += probe.count;
         counted_ranges.push(CountedMessageRange {
             range,
@@ -534,6 +737,14 @@ async fn run_started_takeout_source_import_inner(
             only_my_messages: probe.only_my_messages,
         });
     }
+    update_takeout_split_metadata(
+        pool,
+        batch_id,
+        split_count,
+        selected_split_count,
+        Some(total),
+    )
+    .await?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_IMPORTING_HISTORY.to_string();
@@ -546,6 +757,7 @@ async fn run_started_takeout_source_import_inner(
     let import = import_takeout_history_ranges(
         handle,
         job_id,
+        batch_id,
         &client,
         &alias,
         takeout_id,
@@ -556,6 +768,8 @@ async fn run_started_takeout_source_import_inner(
         telegram_source_subtype,
         warnings,
         fallback_used,
+        export_attempts,
+        &mut only_my_messages_recorded,
     )
     .await?;
 
@@ -569,7 +783,18 @@ async fn run_started_takeout_source_import_inner(
         job.warnings = warnings.to_vec();
     })
     .await;
+    let fallback_before = *fallback_used;
+    record_export_dc_attempt_if_needed(pool, batch_id, alias, export_attempts).await?;
     finish_takeout_session(client, alias, takeout_id, true, warnings, fallback_used).await?;
+    record_export_dc_fallback_if_needed(
+        pool,
+        batch_id,
+        warnings,
+        fallback_before,
+        *fallback_used,
+        export_attempts,
+    )
+    .await?;
     finalize_sync(
         &pool,
         &source,
@@ -578,6 +803,7 @@ async fn run_started_takeout_source_import_inner(
         resolved_peer.refreshed_avatar_cache_key,
     )
     .await?;
+    finalize_ingest_batch(pool, batch_id, TerminalBatchStatus::Completed, None).await?;
 
     Ok(TakeoutImportOutcome {
         inserted: import.inserted,
@@ -619,6 +845,8 @@ async fn load_takeout_source_subtype(
 }
 
 async fn validate_takeout_peer(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -626,11 +854,14 @@ async fn validate_takeout_peer(
     peer: grammers_session::types::PeerRef,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
 ) -> AppResult<()> {
     match telegram_source_subtype {
         TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
             let input_channel: tl::enums::InputChannel = peer.into();
-            export_dc_invoke(
+            export_dc_invoke_with_provenance(
+                pool,
+                batch_id,
                 client,
                 alias,
                 &tl::functions::InvokeWithTakeout {
@@ -641,11 +872,14 @@ async fn validate_takeout_peer(
                 },
                 warnings,
                 fallback_used,
+                export_attempts,
             )
             .await?;
         }
         TELEGRAM_KIND_GROUP => {
-            export_dc_invoke(
+            export_dc_invoke_with_provenance(
+                pool,
+                batch_id,
                 client,
                 alias,
                 &tl::functions::InvokeWithTakeout {
@@ -656,6 +890,7 @@ async fn validate_takeout_peer(
                 },
                 warnings,
                 fallback_used,
+                export_attempts,
             )
             .await?;
         }
@@ -670,6 +905,8 @@ async fn validate_takeout_peer(
 }
 
 async fn detect_supergroup_migration(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -677,13 +914,16 @@ async fn detect_supergroup_migration(
     peer: grammers_session::types::PeerRef,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
-) -> AppResult<()> {
+    export_attempts: &mut ExportDcAttemptState,
+) -> AppResult<bool> {
     if telegram_source_subtype != TELEGRAM_KIND_SUPERGROUP {
-        return Ok(());
+        return Ok(false);
     }
 
     let input_channel: tl::enums::InputChannel = peer.into();
-    let chat_full = export_dc_invoke(
+    let chat_full = export_dc_invoke_with_provenance(
+        pool,
+        batch_id,
         client,
         alias,
         &tl::functions::InvokeWithTakeout {
@@ -694,6 +934,7 @@ async fn detect_supergroup_migration(
         },
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await?;
 
@@ -703,13 +944,16 @@ async fn detect_supergroup_migration(
             warnings.push(format!(
                 "Supergroup migrated_from_chat_id {migrated_from_chat_id} detected; migrated history import is deferred to avoid source item id collisions."
             ));
+            return Ok(true);
         }
     }
 
-    Ok(())
+    Ok(false)
 }
 
 async fn takeout_history_count_probe(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -718,8 +962,11 @@ async fn takeout_history_count_probe(
     telegram_source_subtype: &str,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
 ) -> AppResult<TakeoutHistoryProbe> {
     let response = takeout_get_history(
+        pool,
+        batch_id,
         client,
         alias,
         takeout_id,
@@ -730,6 +977,7 @@ async fn takeout_history_count_probe(
         1,
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await;
 
@@ -744,6 +992,8 @@ async fn takeout_history_count_probe(
                 "Channel history is private; falling back to messages.search(from_id=self).",
             );
             let search_response = takeout_search_my_messages(
+                pool,
+                batch_id,
                 client,
                 alias,
                 takeout_id,
@@ -754,6 +1004,7 @@ async fn takeout_history_count_probe(
                 1,
                 warnings,
                 fallback_used,
+                export_attempts,
             )
             .await?;
             return Ok(TakeoutHistoryProbe {
@@ -773,6 +1024,7 @@ async fn takeout_history_count_probe(
 async fn import_takeout_history_ranges(
     handle: &AppHandle,
     job_id: &str,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -783,6 +1035,8 @@ async fn import_takeout_history_ranges(
     telegram_source_subtype: &str,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
+    only_my_messages_recorded: &mut bool,
 ) -> AppResult<TakeoutHistoryImport> {
     let mut imported = TakeoutHistoryImport {
         inserted: 0,
@@ -794,6 +1048,7 @@ async fn import_takeout_history_ranges(
         imported = import_takeout_history_pages(
             handle,
             job_id,
+            batch_id,
             client,
             alias,
             takeout_id,
@@ -805,6 +1060,8 @@ async fn import_takeout_history_ranges(
             imported,
             warnings,
             fallback_used,
+            export_attempts,
+            only_my_messages_recorded,
         )
         .await?;
     }
@@ -815,6 +1072,7 @@ async fn import_takeout_history_ranges(
 async fn import_takeout_history_pages(
     handle: &AppHandle,
     job_id: &str,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -826,6 +1084,8 @@ async fn import_takeout_history_pages(
     mut imported: TakeoutHistoryImport,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
+    only_my_messages_recorded: &mut bool,
 ) -> AppResult<TakeoutHistoryImport> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let pool = get_pool(handle).await?;
@@ -843,6 +1103,8 @@ async fn import_takeout_history_pages(
 
         let request = takeout_page_request(cursor);
         let response = takeout_history_page_response(
+            &pool,
+            batch_id,
             client,
             alias,
             takeout_id,
@@ -853,6 +1115,8 @@ async fn import_takeout_history_pages(
             &mut only_my_messages,
             warnings,
             fallback_used,
+            export_attempts,
+            only_my_messages_recorded,
         )
         .await?;
         let page = parse_takeout_page(response, profile)?;
@@ -888,7 +1152,11 @@ async fn import_takeout_history_pages(
             if message_id <= message_range_min_id(&range) {
                 continue;
             }
-            imported.max_message_id = imported.max_message_id.max(i64::from(message_id));
+            let next_max_message_id = imported.max_message_id.max(i64::from(message_id));
+            if next_max_message_id != imported.max_message_id {
+                imported.max_message_id = next_max_message_id;
+                update_takeout_max_message_id(&pool, batch_id, imported.max_message_id).await?;
+            }
             match raw_parse::parse_raw_message(&source.title, message) {
                 Ok(Some(item)) => {
                     let identity = item.telegram_identity.clone().ok_or_else(|| {
@@ -896,10 +1164,18 @@ async fn import_takeout_history_pages(
                             "Parsed Takeout Telegram item is missing native message identity",
                         )
                     })?;
-                    if insert_telegram_source_item(&pool, source.id, identity, item).await? {
-                        imported.inserted += 1;
-                    } else {
-                        imported.skipped += 1;
+                    match crate::sources::insert_telegram_source_item_with_observation(
+                        &pool, batch_id, source.id, identity, item,
+                    )
+                    .await?
+                    {
+                        crate::sources::TelegramItemInsertOutcome::Inserted { .. } => {
+                            imported.inserted += 1;
+                        }
+                        crate::sources::TelegramItemInsertOutcome::DuplicateObserved { .. }
+                        | crate::sources::TelegramItemInsertOutcome::Skipped { .. } => {
+                            imported.skipped += 1;
+                        }
                     }
                 }
                 Ok(None) => imported.skipped += 1,
@@ -931,6 +1207,8 @@ async fn import_takeout_history_pages(
 }
 
 async fn takeout_history_page_response(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -941,9 +1219,13 @@ async fn takeout_history_page_response(
     only_my_messages: &mut bool,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
+    only_my_messages_recorded: &mut bool,
 ) -> AppResult<tl::enums::messages::Messages> {
     if *only_my_messages {
         return takeout_search_my_messages(
+            pool,
+            batch_id,
             client,
             alias,
             takeout_id,
@@ -954,11 +1236,14 @@ async fn takeout_history_page_response(
             request.limit,
             warnings,
             fallback_used,
+            export_attempts,
         )
         .await;
     }
 
     match takeout_get_history(
+        pool,
+        batch_id,
         client,
         alias,
         takeout_id,
@@ -969,6 +1254,7 @@ async fn takeout_history_page_response(
         request.limit,
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await
     {
@@ -982,7 +1268,18 @@ async fn takeout_history_page_response(
                 "Channel history is private; falling back to messages.search(from_id=self).",
             );
             *only_my_messages = true;
+            if !*only_my_messages_recorded {
+                mark_takeout_only_my_messages_fallback(
+                    pool,
+                    batch_id,
+                    "Channel history is private; importing only messages visible through from_id=self fallback.",
+                )
+                .await?;
+                *only_my_messages_recorded = true;
+            }
             takeout_search_my_messages(
+                pool,
+                batch_id,
                 client,
                 alias,
                 takeout_id,
@@ -993,6 +1290,7 @@ async fn takeout_history_page_response(
                 request.limit,
                 warnings,
                 fallback_used,
+                export_attempts,
             )
             .await
         }
@@ -1008,6 +1306,8 @@ fn push_warning_once(warnings: &mut Vec<String>, warning: impl Into<String>) {
 }
 
 async fn takeout_get_history(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -1018,8 +1318,11 @@ async fn takeout_get_history(
     limit: i32,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
 ) -> AppResult<tl::enums::messages::Messages> {
-    export_dc_invoke(
+    export_dc_invoke_with_provenance(
+        pool,
+        batch_id,
         client,
         alias,
         &tl::functions::InvokeWithTakeout {
@@ -1040,11 +1343,14 @@ async fn takeout_get_history(
         },
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await
 }
 
 async fn takeout_search_my_messages(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
     client: &Client,
     alias: &ExportDcAlias,
     takeout_id: i64,
@@ -1055,8 +1361,11 @@ async fn takeout_search_my_messages(
     limit: i32,
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
 ) -> AppResult<tl::enums::messages::Messages> {
-    export_dc_invoke(
+    export_dc_invoke_with_provenance(
+        pool,
+        batch_id,
         client,
         alias,
         &tl::functions::InvokeWithTakeout {
@@ -1084,6 +1393,7 @@ async fn takeout_search_my_messages(
         },
         warnings,
         fallback_used,
+        export_attempts,
     )
     .await
 }
