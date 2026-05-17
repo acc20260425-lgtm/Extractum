@@ -489,8 +489,7 @@ Runtime tests:
 - normal sync resolves newly inserted Telegram forum items when catalog is
   ready;
 - successful scoped resolution keeps ready state ready;
-- scoped unresolved items update unresolved accounting, not pending accounting,
-  when incremental accounting is maintained;
+- scoped unresolved items update unresolved accounting, not pending accounting;
 - scoped failure preserves existing memberships and marks state dirty/failed;
 - topic refresh performs full delete-plus-bulk-insert rebuild for the source;
 - Takeout can batch-resolve inserted items when catalog is available.
