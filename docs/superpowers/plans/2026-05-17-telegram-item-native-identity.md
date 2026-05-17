@@ -2278,7 +2278,7 @@ git commit -m "feat: resolve telegram topics by typed message identity"
 - Modify: `src-tauri/src/analysis/trace.rs`
 - Modify: `src-tauri/src/analysis/mod.rs`
 
-- [ ] **Step 1: Add RED trace tests for unique and ambiguous legacy message refs**
+- [x] **Step 1: Add RED trace tests for unique and ambiguous legacy message refs**
 
 In `src-tauri/src/analysis/trace.rs`, add:
 
@@ -2337,7 +2337,7 @@ fn build_trace_refs_returns_conflict_for_ambiguous_legacy_message_ref() {
 }
 ```
 
-- [ ] **Step 2: Run trace tests and verify RED**
+- [x] **Step 2: Run trace tests and verify RED**
 
 Run:
 
@@ -2347,7 +2347,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::trace::build_trace_ref
 
 Expected: fail because `try_build_trace_refs` does not exist and old fallback treats `-m42` as local item id `42`.
 
-- [ ] **Step 3: Implement fallible trace ref resolution**
+- [x] **Step 3: Implement fallible trace ref resolution**
 
 In `src-tauri/src/analysis/trace.rs`, import:
 
@@ -2455,7 +2455,7 @@ fn find_trace_message_checked<'a>(
 
 Keep the old non-fallible `find_trace_message` only if tests still require it, but route it through `find_trace_message_checked(reference, corpus).ok().flatten()`.
 
-- [ ] **Step 4: Use fallible resolver in explicit API**
+- [x] **Step 4: Use fallible resolver in explicit API**
 
 In `src-tauri/src/analysis/mod.rs`, replace:
 
@@ -2471,7 +2471,7 @@ self::trace::try_build_trace_refs(&normalized_refs, &corpus)
 
 Keep report generation using `build_trace_data` best-effort so an ambiguous LLM citation does not fail report persistence after generation.
 
-- [ ] **Step 5: Run trace and analysis tests**
+- [x] **Step 5: Run trace and analysis tests**
 
 Run:
 
@@ -2485,7 +2485,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/analysis/trace.rs src-tauri/src/analysis/mod.rs

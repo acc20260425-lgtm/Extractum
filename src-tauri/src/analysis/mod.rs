@@ -22,7 +22,7 @@ use self::models::{
     AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
 use self::store::{delete_saved_run, fetch_run_row, map_run_detail, map_run_summary};
-use self::trace::{build_trace_refs, decode_trace_data, normalize_ref};
+use self::trace::{decode_trace_data, normalize_ref, try_build_trace_refs};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
@@ -461,7 +461,7 @@ pub async fn resolve_analysis_trace_refs(
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
     let corpus = load_trace_resolution_messages(&pool, &run).await?;
-    Ok(build_trace_refs(&normalized_refs, &corpus))
+    try_build_trace_refs(&normalized_refs, &corpus)
 }
 
 #[cfg(test)]
