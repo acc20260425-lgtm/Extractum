@@ -184,6 +184,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/22.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 23,
+            description: "add ingest provenance foundation",
+            sql: include_str!("../migrations/23.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -205,12 +211,26 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
     youtube_typed_source_metadata::apply_youtube_typed_source_metadata_on_connection(conn).await?;
     telegram_item_native_identity::apply_telegram_item_native_identity_on_connection(conn).await?;
     topic_membership_materialization::apply_topic_membership_materialization_on_connection(conn)
-        .await
+        .await?;
+
+    for migration in build_migrations()
+        .into_iter()
+        .filter(|migration| migration.version > 22)
+    {
+        sqlx::raw_sql(migration.sql)
+            .execute(&mut *conn)
+            .await
+            .map_err(crate::error::AppError::database)?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{build_migrations, checksum_matches_line_ending_variant};
+    use super::{
+        apply_all_migrations_for_test_pool, build_migrations, checksum_matches_line_ending_variant,
+    };
     use sha2::{Digest, Sha384};
 
     #[tokio::test]
@@ -507,13 +527,164 @@ mod tests {
     }
 
     #[test]
+    fn includes_regular_ingest_provenance_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 23)
+            .expect("version 23 migration is registered");
+
+        assert_eq!(migration.description, "add ingest provenance foundation");
+        assert!(migration.sql.contains("CREATE TABLE ingest_batches"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE telegram_takeout_batches"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE ingest_item_observations"));
+        assert!(migration.sql.contains("CREATE TABLE ingest_batch_warnings"));
+        assert!(!migration.sql.contains("runner_managed"));
+    }
+
+    #[test]
     fn build_migrations_contains_all_versions_for_sqlx_validation() {
         let versions = build_migrations()
             .into_iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, (1_i64..=22_i64).collect::<Vec<_>>());
+        assert_eq!(versions, (1_i64..=23_i64).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn fresh_schema_includes_ingest_provenance_tables_indexes_and_constraints() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        for table in [
+            "ingest_batches",
+            "telegram_takeout_batches",
+            "ingest_item_observations",
+            "ingest_batch_warnings",
+        ] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&pool)
+            .await
+            .expect("check table");
+            assert_eq!(exists, 1, "missing table {table}");
+        }
+
+        for index in [
+            "idx_ingest_batches_source_started",
+            "idx_ingest_batches_status",
+            "idx_telegram_takeout_batches_account",
+            "idx_ingest_item_observations_batch",
+            "idx_ingest_item_observations_item",
+            "idx_ingest_item_observations_identity",
+            "idx_ingest_item_observations_batch_outcome",
+            "idx_ingest_batch_warnings_batch",
+        ] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
+            )
+            .bind(index)
+            .fetch_one(&pool)
+            .await
+            .expect("check index");
+            assert_eq!(exists, 1, "missing index {index}");
+        }
+
+        sqlx::query(
+            "INSERT INTO accounts (id, label, api_id, api_hash, phone, created_at)
+             VALUES (10, 'Test', 1, 'hash', '+10000000000', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed account");
+
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id, title,
+                metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
+             ) VALUES (1, 'telegram', 'supergroup', 10, '12345', 'Forum',
+                NULL, NULL, NULL, 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
+
+        let batch_id: i64 = sqlx::query_scalar(
+            "INSERT INTO ingest_batches (source_id, provider, ingest_kind, status)
+             VALUES (1, 'telegram', 'takeout', 'running')
+             RETURNING id",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("insert running batch");
+
+        sqlx::query(
+            "INSERT INTO telegram_takeout_batches (batch_id, account_id, source_subtype)
+             VALUES (?, 10, 'supergroup')",
+        )
+        .bind(batch_id)
+        .execute(&pool)
+        .await
+        .expect("insert takeout detail");
+
+        let terminal_without_finished_at =
+            sqlx::query("UPDATE ingest_batches SET status = 'completed' WHERE id = ?")
+                .bind(batch_id)
+                .execute(&pool)
+                .await;
+        assert!(terminal_without_finished_at.is_err());
+
+        sqlx::query(
+            "INSERT INTO ingest_item_observations (
+                batch_id, source_id, provider_item_kind, provider_identity_kind,
+                provider_identity, outcome
+             ) VALUES (?, 1, 'telegram_message', 'telegram_message',
+                'telegram:history_peer:channel:12345:message:42', 'duplicate_observed')",
+        )
+        .bind(batch_id)
+        .execute(&pool)
+        .await
+        .expect("insert first observation");
+
+        sqlx::query(
+            "INSERT INTO ingest_item_observations (
+                batch_id, source_id, provider_item_kind, provider_identity_kind,
+                provider_identity, outcome
+             ) VALUES (?, 1, 'telegram_message', 'telegram_message',
+                'telegram:history_peer:channel:12345:message:42', 'duplicate_observed')",
+        )
+        .bind(batch_id)
+        .execute(&pool)
+        .await
+        .expect("duplicate observation rows are allowed");
+
+        sqlx::query(
+            "INSERT INTO ingest_batch_warnings (batch_id, code, message)
+             VALUES (?, 'export_dc_fallback', 'first')",
+        )
+        .bind(batch_id)
+        .execute(&pool)
+        .await
+        .expect("insert first warning");
+        sqlx::query(
+            "INSERT INTO ingest_batch_warnings (batch_id, code, message)
+             VALUES (?, 'export_dc_fallback', 'second')",
+        )
+        .bind(batch_id)
+        .execute(&pool)
+        .await
+        .expect("duplicate warning codes are allowed");
     }
 
     #[test]
