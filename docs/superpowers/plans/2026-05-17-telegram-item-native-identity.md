@@ -435,7 +435,7 @@ git commit -m "feat: add telegram item identity migration sentinel"
 **Files:**
 - Modify: `src-tauri/src/migrations/telegram_item_native_identity.rs`
 
-- [ ] **Step 1: Add RED tests for schema, backfill, skip counts, duplicate domains, and integrity**
+- [x] **Step 1: Add RED tests for schema, backfill, skip counts, duplicate domains, and integrity**
 
 Inside `#[cfg(test)] mod tests` in `src-tauri/src/migrations/telegram_item_native_identity.rs`, add:
 
@@ -712,7 +712,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run migration tests and verify RED**
+- [x] **Step 2: Run migration tests and verify RED**
 
 Run:
 
@@ -722,7 +722,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::telegram_item_native
 
 Expected: fail because backfill, preflight, index replacement, and integrity checks are still stubs.
 
-- [ ] **Step 3: Implement migration preflight, backfill, index replacement, and integrity**
+- [x] **Step 3: Implement migration preflight, backfill, index replacement, and integrity**
 
 In `src-tauri/src/migrations/telegram_item_native_identity.rs`, replace the stub functions with:
 
@@ -989,7 +989,7 @@ let stats = backfill_telegram_messages(conn).await?;
 let _ = stats;
 ```
 
-- [ ] **Step 4: Run migration tests and verify GREEN**
+- [x] **Step 4: Run migration tests and verify GREEN**
 
 Run:
 
@@ -1003,7 +1003,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 5: Run full migration module tests**
+- [x] **Step 5: Run full migration module tests**
 
 Run:
 
@@ -1017,7 +1017,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/migrations/telegram_item_native_identity.rs src-tauri/src/migrations.rs
