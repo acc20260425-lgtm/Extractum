@@ -88,6 +88,13 @@ pub(crate) async fn create_source_identity_tables(pool: &sqlx::SqlitePool) {
     .expect("create source identity bridge schema");
 }
 
+#[allow(dead_code)]
+pub(crate) async fn create_youtube_typed_source_tables(pool: &sqlx::SqlitePool) {
+    crate::youtube::source_metadata::create_youtube_typed_source_tables(pool)
+        .await
+        .expect("create youtube typed source metadata tables");
+}
+
 pub(crate) async fn create_canonical_telegram_identity_index(pool: &sqlx::SqlitePool) {
     sqlx::query(
         r#"

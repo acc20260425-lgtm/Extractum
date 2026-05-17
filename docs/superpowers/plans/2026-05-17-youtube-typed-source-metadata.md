@@ -120,7 +120,7 @@ Expected: only the branch header, with no modified files.
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Add RED tests for migration 20 registration**
+- [x] **Step 1: Add RED tests for migration 20 registration**
 
 In `src-tauri/src/migrations.rs`, inside `#[cfg(test)] mod tests`, add:
 
@@ -161,7 +161,7 @@ Update the existing version-list assertion:
 assert_eq!(versions, (1_i64..=20_i64).collect::<Vec<_>>());
 ```
 
-- [ ] **Step 2: Run migration registration tests and verify RED**
+- [x] **Step 2: Run migration registration tests and verify RED**
 
 Run:
 
@@ -171,7 +171,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runn
 
 Expected: fail because migration 20 is not registered yet.
 
-- [ ] **Step 3: Add the sentinel SQL file**
+- [x] **Step 3: Add the sentinel SQL file**
 
 Create `src-tauri/migrations/20.sql`:
 
@@ -183,7 +183,7 @@ Create `src-tauri/migrations/20.sql`:
 SELECT extractum_runner_managed_migration_20();
 ```
 
-- [ ] **Step 4: Register migration 20**
+- [x] **Step 4: Register migration 20**
 
 In `src-tauri/src/migrations.rs`, append this entry to `build_migrations()` after version 19:
 
@@ -196,7 +196,7 @@ Migration {
 },
 ```
 
-- [ ] **Step 5: Add the typed metadata module skeleton**
+- [x] **Step 5: Add the typed metadata module skeleton**
 
 In `src-tauri/src/youtube/mod.rs`, add:
 
@@ -309,7 +309,7 @@ where
 }
 ```
 
-- [ ] **Step 6: Add test support table creation**
+- [x] **Step 6: Add test support table creation**
 
 In `src-tauri/src/sources/test_support.rs`, add:
 
@@ -321,7 +321,7 @@ pub(crate) async fn create_youtube_typed_source_tables(pool: &sqlx::SqlitePool) 
 }
 ```
 
-- [ ] **Step 7: Run migration registration tests and verify GREEN**
+- [x] **Step 7: Run migration registration tests and verify GREEN**
 
 Run:
 
@@ -335,7 +335,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/migrations/20.sql src-tauri/src/youtube/mod.rs src-tauri/src/youtube/source_metadata.rs src-tauri/src/migrations.rs src-tauri/src/sources/test_support.rs

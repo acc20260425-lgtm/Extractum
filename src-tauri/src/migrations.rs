@@ -160,6 +160,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/19.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 20,
+            description: "add youtube typed source metadata",
+            sql: include_str!("../migrations/20.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -383,13 +389,45 @@ mod tests {
     }
 
     #[test]
+    fn includes_runner_managed_youtube_typed_source_metadata_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 20)
+            .expect("version 20 migration is registered");
+
+        assert_eq!(
+            migration.description,
+            "add youtube typed source metadata"
+        );
+        assert!(
+            migration
+                .sql
+                .contains("extractum_runner_managed_migration_20"),
+            "v20 must fail if plugin-managed SQL applies it directly"
+        );
+    }
+
+    #[test]
+    fn plugin_migration_list_keeps_v20_as_sentinel_only() {
+        let migration = build_migrations()
+            .into_iter()
+            .find(|migration| migration.version == 20)
+            .expect("version 20 migration is registered");
+
+        assert!(!migration.sql.contains("CREATE TABLE youtube_video_sources"));
+        assert!(!migration.sql.contains("CREATE TABLE youtube_playlist_sources"));
+        assert!(!migration.sql.contains("INSERT INTO youtube_video_sources"));
+    }
+
+    #[test]
     fn build_migrations_contains_all_versions_for_sqlx_validation() {
         let versions = build_migrations()
             .into_iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, (1_i64..=19_i64).collect::<Vec<_>>());
+        assert_eq!(versions, (1_i64..=20_i64).collect::<Vec<_>>());
     }
 
     #[test]
