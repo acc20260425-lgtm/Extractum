@@ -2,6 +2,7 @@ mod compression;
 mod db;
 mod error;
 mod forum_topics;
+mod ingest_provenance;
 mod media;
 mod migrations;
 mod topic_memberships;
