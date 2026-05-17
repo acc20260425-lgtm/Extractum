@@ -100,11 +100,14 @@ CREATE TABLE telegram_messages (
     CHECK (history_peer_kind IN ('channel', 'chat', 'user')),
     CHECK (telegram_message_id > 0),
     CHECK (is_migrated_history IN (0, 1)),
+    CHECK (reply_to_msg_id IS NULL OR reply_to_msg_id > 0),
     CHECK (
         reply_to_peer_kind IS NULL
         OR reply_to_peer_kind IN ('channel', 'chat', 'user')
     ),
-    CHECK (reply_to_peer_id IS NULL OR reply_to_peer_id > 0)
+    CHECK (reply_to_peer_id IS NULL OR reply_to_peer_id > 0),
+    CHECK (reply_to_top_id IS NULL OR reply_to_top_id > 0),
+    CHECK (reaction_count IS NULL OR reaction_count >= 0)
 );
 
 CREATE UNIQUE INDEX ux_telegram_messages_native_identity
@@ -151,10 +154,17 @@ signed values before migration 21 ships.
 the authoritative Telegram duplicate key after this slice.
 
 `telegram_messages.item_id` must always reference an `items` row whose
-`item_kind = 'telegram_message'`. This is an application invariant for the
-first slice rather than a database trigger. Migration and runtime tests must
-enforce the invariant. If later code creates a need for database-level
-enforcement, add a trigger in a separate hardening slice.
+`item_kind = 'telegram_message'`, and `telegram_messages.source_id` must equal
+the referenced `items.source_id`. These are application invariants for the first
+slice rather than database triggers. Migration and runtime tests must enforce
+the invariants. If later code creates a need for database-level enforcement,
+add triggers in a separate hardening slice.
+
+`created_at` and `updated_at` use integer Unix epoch seconds to match the
+existing migration/runtime convention for provider child tables such as
+`telegram_sources`, `youtube_playlist_items`, and typed YouTube source tables.
+In this slice, `updated_at` is set when the child row is created. Duplicate
+native-identity skips do not update `telegram_messages.updated_at`.
 
 ## Migration Contract
 
@@ -251,9 +261,19 @@ Post-migration integrity checks:
 - No `telegram_messages` row points to a non-Telegram source item.
 - Every `telegram_messages.item_id` has a matching `items` row with
   `items.item_kind = 'telegram_message'`.
+- Every `telegram_messages.source_id` equals the referenced `items.source_id`.
 - No duplicate native Telegram identities exist.
 - Non-Telegram duplicate rows by `(source_id, external_id)` are detected before
   creating `ux_items_non_telegram_external`.
+
+The source-id invariant check should use this shape:
+
+```sql
+SELECT tm.item_id
+FROM telegram_messages tm
+JOIN items i ON i.id = tm.item_id
+WHERE tm.source_id <> i.source_id;
+```
 
 ## Runtime Contract
 
@@ -390,6 +410,8 @@ Migration tests:
 - `PRAGMA foreign_key_check` returns no rows after migration 21;
 - a fixture with `telegram_messages.item_id` pointing to a non-telegram item
   violates the application invariant in migration/runtime validation tests;
+- a fixture with `telegram_messages.source_id <> items.source_id` violates the
+  application invariant in migration/runtime validation tests;
 - non-Telegram duplicate `(source_id, external_id)` rows are detected before
   `ux_items_non_telegram_external` is created;
 - valid legacy Telegram message rows are backfilled;
