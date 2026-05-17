@@ -12,8 +12,12 @@ Both paths write to the same local tables:
 
 - `sources`
 - `items`
+- `telegram_messages`
+- `item_topic_memberships` when topic resolution state is ready/current
 
-There is no Takeout-specific archive table. Duplicate rows are still protected by the existing `(source_id, external_id)` uniqueness rule.
+There is no Takeout-specific archive table or durable provenance table yet.
+Telegram duplicate rows are protected by typed native identity in
+`telegram_messages`, not by `(source_id, external_id)` alone.
 
 ## 2. User-Facing Behavior
 
@@ -98,7 +102,11 @@ Split selection follows the current single-source export model:
 - `group`: import all returned splits;
 - empty `messages.getSplitRanges` response: use fallback range `1..i32::MAX`.
 
-For supergroups, `channels.getFullChannel` is used to detect `migrated_from_chat_id`. Migrated small-group history is currently not imported. The job records a warning instead, because inserting migrated rows into the current `(source_id, external_id)` key can collide with current supergroup message ids.
+For supergroups, `channels.getFullChannel` is used to detect
+`migrated_from_chat_id`. Migrated small-group history is currently not
+imported. The storage layer can represent overlapping Telegram message ids
+through `telegram_messages`, but product enablement is deferred until durable
+Takeout provenance and real-data validation are designed.
 
 ## 7. Pagination Contract
 
@@ -137,7 +145,7 @@ This can import only the current user's visible/outgoing subset. That warning sh
 
 ## 9. Persistence Semantics
 
-Takeout import writes through the shared item insert helper.
+Takeout import writes through the Telegram item insert helper.
 
 Inserted rows preserve the same storage dimensions as normal sync where raw TL data exposes them:
 
@@ -151,7 +159,31 @@ Takeout import does not download media bytes, thumbnails, previews, custom emoji
 
 Successful Takeout import updates `sources.last_sync_state` and `sources.last_synced_at` only after `finishTakeoutSession(success=true)` succeeds. Failed and cancelled jobs leave partial inserted rows in `items`, but they do not advance the source watermark.
 
-The current Takeout path finalizes source state and refreshed source metadata. The regular sync path still owns the forum-topic refresh helper. If Takeout later gains a distinct forum-topic refresh step, add its emitted Rust phase and frontend `TakeoutImportPhase` value in the same change.
+Inserted Telegram rows also receive typed native identity in
+`telegram_messages`. If a source's forum topic resolver state is ready/current,
+the insert helper resolves scoped `item_topic_memberships` in the same
+transaction; otherwise topic membership waits for the next full source rebuild.
+
+Current provenance gap:
+
+- active job state is in memory only;
+- failed or cancelled jobs can leave partial rows without a durable batch row;
+- existing rows do not record the Takeout job that first inserted or later
+  observed them;
+- warnings such as export-DC fallback and only-my-messages fallback are visible
+  in the runtime job record, but are not preserved as structured database
+  provenance.
+
+The recommended next storage slice is a generic ingest-batch model with a
+Telegram Takeout detail table and item origin/observation rows. That design
+should distinguish completed, failed, and cancelled imports; complete history
+from partial history; normal inserted rows from duplicates seen by a repeat
+run; and migrated-history detection from migrated-history import enablement.
+
+The current Takeout path finalizes source state after a successful import. The
+regular sync path still owns the forum-topic refresh helper. If Takeout later
+gains a distinct forum-topic refresh step, add its emitted Rust phase and
+frontend `TakeoutImportPhase` value in the same change.
 
 ## 10. Current Validation Baseline
 
@@ -162,4 +194,6 @@ Recorded baseline from the Takeout pagination work:
 - the tested live public channel imported without a descending fallback warning and had 1009 local `items` rows, 1008 of them text records.
 - a later NotebookLM export with only 14 messages was traced to the selected 30-day analysis period, not to Takeout pagination.
 
-Open validation still belongs in the backlog: broader real-account coverage for supergroups, groups, private/left sources, shifted export DC behavior, and migrated-history collision handling.
+Open validation still belongs in the backlog: broader real-account coverage for
+supergroups, groups, private/left sources, shifted export DC behavior,
+incomplete-import provenance, and migrated-history import policy.

@@ -1,6 +1,6 @@
 # Database Schema Legacy Analysis
 
-> Updated: 2026-05-15
+> Updated: 2026-05-17
 > Scope: SQLite schema, migrations, Rust backend usage, and product docs.
 > Method: local code/doc review plus three read-only subagent passes focused on schema, backend cost, and product direction.
 
@@ -13,7 +13,12 @@ The clearest schema debt is not one bad table. It is that the storage model is c
 - many durable product decisions are stored in compressed JSON blobs, so backend code has to decode Rust structs for data that is now queried by ordinary features.
 - analysis snapshots are the right product direction, but their nullable compatibility shape keeps old fallback paths alive.
 
-The highest-return simplification is to make provider identity explicit and typed. Start with `sources`, then item/document identity, then snapshots/topic membership/playlist linking.
+The highest-return simplification was to make provider identity explicit and
+typed. Source identity, typed Telegram message identity, typed YouTube source
+metadata, and Telegram topic membership materialization have now shipped in
+separate slices. The remaining high-return work is Takeout provenance, the
+provider-neutral document layer, snapshot hardening, playlist simplification,
+and migration baseline cleanup.
 
 ## Inputs Reviewed
 
@@ -39,9 +44,11 @@ Subagent checks:
 
 ## Findings
 
-### 1. `telegram_source_kind` Is Compatibility Debt
+### 1. `telegram_source_kind` Compatibility Debt Has Been Contained
 
-`source_subtype` is now the provider-local subtype column, and migration `15.sql` backfills Telegram rows from `telegram_source_kind`. However:
+`source_subtype` is now the provider-local subtype column, and migration
+`15.sql` backfills Telegram rows from `telegram_source_kind`. This was the
+original debt:
 
 - Telegram source uniqueness still uses `(account_id, source_type, telegram_source_kind, external_id)`;
 - source DTOs and sync targets still carry both fields;
@@ -57,34 +64,39 @@ Relevant files:
 - `src-tauri/src/sources/store.rs`
 - `src-tauri/src/sources/peer_resolution.rs`
 
-Recommendation:
+Current state:
 
-- make `source_subtype` canonical;
-- use a single account-scoped identity key for Telegram: `(account_id, source_type, source_subtype, external_id)`;
-- remove `telegram_source_kind` from new code paths, or move Telegram-specific fields to a `telegram_sources` table;
-- keep a temporary compatibility adapter only for old databases.
+- `source_subtype` is canonical;
+- current Telegram source identity uses
+  `(account_id, source_type, source_subtype, external_id)`;
+- operational Telegram peer identity lives in `telegram_sources`;
+- old Telegram metadata blobs may still exist as repair input until an
+  explicit cleanup slice clears them.
 
-### 2. Telegram Peer Identity Is Buried In `metadata_zstd`
+### 2. Telegram Peer Identity Was Buried In `metadata_zstd`
 
-The current backend normalizes legacy source metadata fields such as `username`, `added_from`, and `access_hash` into `peer_identity`, then still carries fallback dialog scanning. This makes runtime source resolution more complex than it needs to be.
+The backend used to normalize legacy source metadata fields such as `username`,
+`added_from`, and `access_hash` from compressed source blobs into runtime peer
+identity. That made source resolution more complex than it needed to be.
+
+Current state:
+
+- normal Telegram runtime paths use typed `telegram_sources`;
+- legacy metadata decode remains a repair/compatibility path;
+- dialog scanning can still be used when typed identity lacks enough stable
+  peer data, especially for private sources.
 
 Relevant files:
 
 - `src-tauri/src/sources/peer_resolution.rs`
 - `src-tauri/src/sources/store.rs`
 
-Recommendation:
+Remaining follow-up:
 
-- add typed Telegram identity storage, for example:
-  - `source_id`
-  - `peer_kind`
-  - `peer_id`
-  - `resolution_strategy`
-  - `username`
-  - `access_hash`
-  - `avatar_cache_key`
-- keep compressed source metadata only as an archival/debug payload;
-- make fallback dialog scanning a legacy repair path, not the normal path for well-formed rows.
+- optionally clear old Telegram `sources.metadata_zstd` blobs after successful
+  typed repair;
+- validate private/dialog-backed source behavior on real accounts before
+  tightening fallback behavior further.
 
 ### 3. `items` Is Too Polymorphic
 
@@ -111,32 +123,48 @@ Relevant files:
 - `src-tauri/src/analysis/corpus.rs`
 - `src-tauri/src/notebooklm_export/query.rs`
 
-Recommendation:
+Current state:
 
-- at minimum, change uniqueness from `(source_id, external_id)` to `(source_id, item_kind, external_id)`;
-- preferably introduce a provider-neutral document layer for analysis/export text units;
-- move provider-specific fields into child tables such as `telegram_messages`, `youtube_transcripts`, `youtube_comments`, and `item_media`;
+- Telegram message identity moved to `telegram_messages`;
+- Telegram duplicate detection no longer uses only `(source_id, external_id)`;
+- non-Telegram duplicate detection uses provider item kind with external id;
+- high-value source metadata moved into typed Telegram and YouTube source
+  tables;
+- provider-neutral analysis/export documents remain open work.
+
+Remaining follow-up:
+
+- introduce a provider-neutral document layer for analysis/export text units;
+- continue moving provider-specific hot-path fields out of generic `items`
+  when a workflow needs indexed or validated state;
 - keep raw compressed provider payloads outside the hot query path.
 
-### 4. Item Identity Blocks Migrated Telegram History
+### 4. Takeout Provenance Still Blocks Migrated Telegram History
 
-The docs already call out that Takeout cannot safely import migrated supergroup history because old small-group ids may collide under `(source_id, external_id)`. Topic resolution also has to cast `external_id` as an integer, which makes a generic text id do provider-specific work.
+The typed Telegram message identity boundary can represent overlapping message
+ids from different Telegram history domains. Migrated Takeout history is still
+deferred because the app cannot yet explain, persist, and recover partial
+Takeout imports as durable provenance.
 
 Relevant files:
 
 - `docs/database-schema.md`
 - `src-tauri/src/sources/items.rs`
-- `src-tauri/src/forum_topics.rs`
+- `src-tauri/src/takeout_import/mod.rs`
+- `src-tauri/src/topic_memberships.rs`
 
 Recommendation:
 
-- add provider-native identity fields for Telegram rows, such as `telegram_peer_kind`, `telegram_peer_id`, `telegram_message_id`, and possibly `telegram_migration_domain`;
-- use those fields for duplicate detection and topic joins;
-- keep `external_id` as a display/import compatibility value rather than the only durable identity.
+- add durable ingest batches for Takeout runs;
+- add Telegram Takeout batch details for split/fallback/migration detection;
+- add item origin and observation rows so repeat runs can distinguish inserted
+  rows from duplicates seen by a later import;
+- enable migrated-history import only after real-data validation proves the
+  provenance and typed identity model is safe.
 
-### 5. Topic Membership Is Recomputed In Readers
+### 5. Topic Membership Materialization Has Shipped
 
-Forum topic membership is inferred with a multi-branch join:
+Forum topic membership used to be inferred with a multi-branch join:
 
 - `reply_to_top_id = topic_id`;
 - fallback from numeric `external_id` to `top_message_id`;
@@ -144,7 +172,10 @@ Forum topic membership is inferred with a multi-branch join:
 - fallback to General topic;
 - otherwise synthetic Unrecognized topic.
 
-That logic is shared by source readers and NotebookLM export.
+That logic has been moved into the shared topic membership resolver.
+Source readers and NotebookLM export now read materialized
+`item_topic_memberships` plus source-level `telegram_topic_resolution_state`.
+`Unrecognized topic` remains a derived bucket rather than a stored topic row.
 
 Relevant files:
 
@@ -152,11 +183,13 @@ Relevant files:
 - `src-tauri/src/sources/items/query.rs`
 - `src-tauri/src/notebooklm_export/query.rs`
 
-Recommendation:
+Remaining follow-up:
 
-- materialize `item_topic_memberships(item_id, topic_id, match_kind, updated_at)`;
-- update it during Telegram sync, Takeout import, and topic refresh;
-- make readers/export use a simple indexed join.
+- keep the resolver as the only place that uses the legacy
+  `items.external_id` integer fallback;
+- decide whether Takeout should refresh the forum-topic catalog after a
+  successful import;
+- add richer topic/export UI only if product workflows need it.
 
 ### 6. Analysis Snapshots Are Correct, But Still Compatibility-Shaped
 
@@ -187,9 +220,12 @@ Recommendation:
 
 ### 7. Compressed Metadata Blobs Are Overloaded
 
-Compressed blobs are useful for archival payloads, but too many current features depend on decoding them:
+Compressed blobs are useful for archival payloads, but too many historical
+features depended on decoding them. Source runtime metadata has been moved out
+of the normal hot path for Telegram and YouTube, but several compressed payloads
+remain intentionally archival or diagnostic:
 
-- `sources.metadata_zstd` for Telegram and YouTube identity/display;
+- legacy `sources.metadata_zstd` rows that may remain as repair input;
 - `items.raw_data_zstd` for provider payloads;
 - `items.media_metadata_zstd` for media display/export;
 - playlist item metadata;
@@ -281,30 +317,39 @@ These pieces should not be treated as removable debt right now:
 
 ## Recommended Refactor Sequence
 
-1. Source identity cleanup.
+1. Source identity cleanup. Shipped.
    - Canonicalize `source_subtype`.
    - Move Telegram/YouTube identity into typed provider tables.
    - Remove normal-path dependence on `telegram_source_kind`.
 
-2. Item/document identity cleanup.
-   - Add provider-native item identity.
-   - Change duplicate detection away from only `(source_id, external_id)`.
-   - Introduce a provider-neutral document layer for analysis/export.
+2. Item/document identity cleanup. Partially shipped.
+   - Provider-native Telegram item identity shipped.
+   - Telegram duplicate detection moved away from only `(source_id, external_id)`.
+   - Remaining work: durable Takeout provenance and a provider-neutral document
+     layer for analysis/export.
 
-3. Snapshot hardening.
+3. Takeout provenance and migrated-history enablement.
+   - Add durable ingest batches, Telegram Takeout batch details, and item
+     origin/observation rows.
+   - Distinguish complete, partial, failed, and cancelled imports in durable
+     state.
+   - Enable migrated-history import only after real-data validation.
+
+4. Snapshot hardening.
    - Make new snapshot fields non-null.
    - Persist corpus snapshots before provider execution.
    - Backfill or explicitly mark old snapshotless runs.
 
-4. Topic membership materialization.
-   - Replace repeated inference joins with `item_topic_memberships`.
-   - Update memberships during sync, Takeout import, and topic refresh.
+5. Topic membership materialization. Shipped.
+   - Repeated inference joins were replaced with `item_topic_memberships`.
+   - Memberships are updated during migration, topic refresh, and scoped
+     Telegram item insert when state is usable.
 
-5. YouTube playlist simplification.
+6. YouTube playlist simplification.
    - Make playlist entries point to stable video entities.
    - Collapse duplicated removal state.
 
-6. Migration baseline cleanup.
+7. Migration baseline cleanup.
    - Add a fresh current-schema baseline.
    - Move legacy upgrades and checksum repair into an isolated module.
 

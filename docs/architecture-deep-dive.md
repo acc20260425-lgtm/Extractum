@@ -104,8 +104,12 @@ Sync operates per source:
 
 - first sync uses a configurable policy window;
 - later sync resumes incrementally;
-- duplicate items are ignored by `(source_id, external_id)` uniqueness.
-- newly inserted rows persist minimal Telegram context when available: reply target, reply target peer, thread/topic root id, and aggregate reaction count.
+- Telegram duplicate items are ignored by typed native identity in
+  `telegram_messages`;
+- non-Telegram item upserts keep provider-specific external-id uniqueness;
+- newly inserted Telegram rows persist minimal Telegram context when available:
+  reply target, reply target peer, thread/topic root id, and aggregate
+  reaction count.
 
 ### 2.4 Takeout source import
 
@@ -133,6 +137,12 @@ Current source-kind behavior:
 - `CHANNEL_PRIVATE` on channel/supergroup history switches to `messages.search(from_id=self)` and records an only-my-messages warning.
 
 Takeout import writes to the same `items` table and does not download media bytes, thumbnails, custom emoji documents, or Telegram Desktop export assets. Failed and cancelled jobs may leave partial rows, but they do not update `last_sync_state`.
+
+There is no durable Takeout provenance table yet. In-memory job records explain
+the active import, while completed database rows remain ordinary source items.
+The next storage slice should add durable ingest batches, Telegram Takeout
+batch details, and item origin/observation rows before migrated-history import
+is enabled.
 
 ## 3. YouTube ingest flow
 
@@ -163,7 +173,9 @@ Cancellation is cooperative around provider calls. If a cancel request races wit
 
 ### 3.3 Playlist expansion
 
-Playlist source rows store playlist metadata in `sources.metadata_zstd`; membership rows live in `youtube_playlist_items`.
+Playlist source rows store typed runtime metadata in
+`youtube_playlist_sources`; membership rows live in `youtube_playlist_items`.
+Direct video source runtime metadata lives in `youtube_video_sources`.
 
 Available playlist entries can link to materialized video sources through `video_source_id`. Unlinked, removed, private, auth-gated, age-restricted, geo-blocked, deleted, or unknown-unavailable rows remain visible in playlist detail but are excluded from the analysis corpus unless they become linked video sources later.
 
@@ -221,6 +233,11 @@ Exported message metadata can include:
 - reply peer kind/id;
 - thread id;
 - aggregate reaction count.
+
+For Telegram forum sources, export and source browsing read real topic
+membership from `item_topic_memberships`. The source-level
+`telegram_topic_resolution_state` row decides whether missing membership rows
+can be surfaced as the derived `Unrecognized topic` bucket.
 
 ## 6. Analysis architecture
 
@@ -302,13 +319,15 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - Takeout import still needs broader live validation across supergroups, groups, private/left sources, and shifted export DC behavior;
-- migrated supergroup history is detected but not imported until the `(source_id, external_id)` collision policy is decided;
+- migrated supergroup history is detected but not imported until durable
+  Takeout provenance and real-data validation are designed;
 - RSS and forum ingestion are not implemented yet despite the provider-ready source model;
 - YouTube needs broader live validation for active livestreams, upcoming videos, auto-caption-only videos, no-caption videos, private/member/age/geo-gated content, and large playlists;
 - YouTube jobs are not persistent or resumable across app restart;
 - YouTube-specific NotebookLM export enrichment is not implemented yet;
 - the analysis layer has not yet become media-aware;
-- full Telegram Forum Topics and forward metadata are not modeled yet;
+- richer Telegram Forum Topics browsing/export and forward metadata are not
+  modeled yet;
 - Telegram session storage may still deserve a more robust long-term format.
 
 ## 10. Practical entry points

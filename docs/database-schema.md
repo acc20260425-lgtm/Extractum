@@ -303,7 +303,8 @@ Notes:
 - rows may have text, media metadata, or both;
 - rows without both text and useful media metadata are skipped during ingest.
 - rows can be inserted by normal `sync_source` or by Takeout import;
-- Takeout import does not add a separate provenance column and does not create a separate archive table;
+- Takeout import does not add a separate provenance column, ingest-batch table,
+  or archive table yet;
 - Telegram duplicate detection now uses `telegram_messages`, not
   `(source_id, external_id)`.
 - `items.external_id` remains a compatibility/display/debug value for Telegram
@@ -329,12 +330,16 @@ Takeout implication:
 - migrated supergroup history has a typed identity boundary, but enabling full
   migrated-history import still requires the separate Takeout provenance and
   validation slice.
+- the recommended provenance direction is a generic ingest-batch table plus
+  Telegram Takeout batch details and item origin/observation rows, not raw
+  Telegram payload storage.
 
 YouTube implication:
 
 - one synced transcript is stored as a `youtube_transcript` item, while its timestamped cues live in `youtube_transcript_segments`;
 - comments are stored as `youtube_comment` items;
-- YouTube description text used by analysis is synthesized from source metadata and is not stored as an `items` row.
+- YouTube description text used by analysis is synthesized from typed source
+  metadata and is not stored as an `items` row.
 
 ### 1.8 `app_settings`
 
@@ -692,6 +697,9 @@ Purpose:
 - YouTube auth cookies are stored in OS secure storage, not SQLite;
 - NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
+- Takeout import does not yet persist durable ingest-batch provenance; failed
+  or cancelled imports can leave partial item rows without advancing
+  `sources.last_sync_state`;
 - Telegram duplicate detection and legacy message-ref resolution use typed
   `telegram_messages` identity where available, keeping `items.external_id` as
   a compatibility value rather than the owner of Telegram message identity;

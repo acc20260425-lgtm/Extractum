@@ -73,17 +73,21 @@ Each source is stored in `sources` with:
 - `source_subtype`
 - `external_id`
 - `title`
-- optional `telegram_source_kind` compatibility data (`channel`,
-  `supergroup`, or `group`)
-- optional compressed metadata
+- shared sync state
 - account linkage
-- sync state
 
 Source identity is scoped by account, provider, kind, and external id. This
 matters because the same Telegram channel or group can exist in more than one
 local account, and Telegram bare ids can overlap across source kinds.
 YouTube identity is scoped by provider subtype and external id, so videos and
 playlists dedupe separately.
+
+Provider-specific operational identity is typed. Telegram peer identity,
+resolution hints, and display cache fields live in `telegram_sources`.
+Telegram message identity and reply/topic/reaction context live in
+`telegram_messages`. YouTube video and playlist runtime metadata live in
+`youtube_video_sources` and `youtube_playlist_sources`; `sources.metadata_zstd`
+is not the owner for normal YouTube runtime reads.
 
 Source UI actions are capability-driven. Sync, Takeout import, membership
 state, and topic controls are shown only for source families that support them.
@@ -115,6 +119,8 @@ Important design choices:
 - It does not download media files or Telegram Desktop export assets.
 - It updates `last_sync_state` only after a successful Takeout finish.
 - Failed and cancelled imports can leave partial rows, and repeat runs rely on duplicate skipping.
+- It does not yet persist durable incomplete-import provenance, ingest batches,
+  or item-to-batch origin rows.
 
 The history pagination is TDesktop-first. The app models the full state machine with `largest_id_plus_one`, page-order normalization, and cursor advancement, then falls back per split to the older descending cursor profile only when the TDesktop profile is visibly unsafe for that split.
 
@@ -128,7 +134,7 @@ YouTube videos and playlists are registered as `sources` rows:
 
 - videos use `source_type = youtube`, `source_subtype = video`;
 - playlists use `source_type = youtube`, `source_subtype = playlist`;
-- provider metadata is compressed into `sources.metadata_zstd`;
+- typed runtime metadata is stored in provider-specific source tables;
 - playlist membership lives in `youtube_playlist_items`;
 - transcript timing lives in `youtube_transcript_segments`.
 
@@ -165,6 +171,11 @@ The backend stores:
 This keeps the storage model useful for browsing and future expansion without committing to binary media ingestion yet.
 
 Older rows are not backfilled. A `NULL` Telegram context value means the metadata is unavailable, predates the migration, or was not exposed by Telegram.
+
+Telegram duplicate detection uses typed native identity in
+`telegram_messages`, not the generic `(source_id, external_id)` key. The
+generic `items.external_id` value remains populated for compatibility, display,
+and old ref handling.
 
 YouTube transcript text is stored as a `youtube_transcript` item. Timestamped
 segments are stored separately in `youtube_transcript_segments` so trace refs
@@ -273,6 +284,11 @@ The current export uses stored nullable metadata for:
 - thread id;
 - aggregate reaction count.
 
+Telegram forum topic names and filters use materialized
+`item_topic_memberships` plus source-level `telegram_topic_resolution_state`.
+`Unrecognized topic` remains a derived bucket for ready/current resolution
+state and is not stored as a topic row.
+
 ## 5. Error design
 
 The backend now uses a minimal typed error model:
@@ -326,11 +342,13 @@ The most meaningful remaining design questions are:
 
 - whether RSS or forum ingestion should be implemented next;
 - whether private Telegram peer resolution should gain stronger cached identity data;
-- how to handle migrated supergroup history without corrupting `(source_id, external_id)` uniqueness;
+- how to persist Takeout incomplete-import provenance and item/batch origins
+  before enabling migrated supergroup history;
 - whether Takeout import should run the forum-topic auxiliary refresh after successful Takeout finish;
 - whether YouTube jobs should become persistent/resumable across app restart;
 - whether YouTube-specific NotebookLM export enrichment should be shipped;
 - how to expand analysis beyond text-bearing corpus items;
-- whether a full Telegram Forum Topics model is needed beyond stored `reply_to_top_id`;
+- whether Telegram Forum Topics needs richer browsing/export controls beyond
+  materialized topic memberships and the current source item filters;
 - how and when to persist forward metadata;
 - whether Telegram session storage should remain JSON-based long term.

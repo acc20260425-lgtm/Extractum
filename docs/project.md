@@ -26,10 +26,13 @@ Implemented:
 - source management for YouTube videos and playlists
 - provider-ready source records with `source_type` and `source_subtype`
 - capability-driven source UI for Telegram sync, Takeout, membership, topics, and YouTube sync actions
+- typed Telegram source identity and typed Telegram message identity for duplicate detection and legacy ref resolution
+- typed YouTube video/playlist source metadata outside the generic source metadata blob
 - Telegram history sync into local SQLite
 - YouTube metadata, transcript, comment, and playlist membership sync into local SQLite
 - provider-dispatched source sync for Telegram and YouTube
 - Takeout source import for existing Telegram sources with TDesktop-first pagination
+- materialized Telegram forum topic memberships with source-level resolver state
 - media-aware sync metadata for text-bearing and media-only items
 - Telegram reply/thread/reaction context metadata for newly synced items
 - configurable initial sync window
@@ -57,7 +60,7 @@ Not implemented yet:
 - media-aware analysis beyond the current text-first corpus
 - YouTube-specific NotebookLM export enrichment
 - persistent/resumable YouTube sync jobs across app restart
-- full Telegram Forum Topics browsing/export model
+- richer Telegram Forum Topics browsing/export beyond the current materialized membership filters
 - Telegram forward metadata enrichment
 
 ## Main routes
@@ -153,14 +156,24 @@ Not implemented yet:
 
 - `accounts`: local Telegram account metadata; saved Telegram `api_hash` secrets live in OS secure storage
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`.
-- `sources`: registered provider sources; Telegram rows currently carry
-  Telegram compatibility fields, while YouTube rows use `video` or `playlist`
-  source subtypes and compressed provider metadata
+- `sources`: registered provider sources with provider-local `source_subtype`
+  values and shared sync state
+- `telegram_sources`: typed Telegram peer identity, resolution hints, and
+  display cache fields
+- `telegram_messages`: typed Telegram message identity and message context for
+  Telegram item rows
+- `youtube_video_sources` and `youtube_playlist_sources`: typed YouTube
+  runtime metadata for registered YouTube sources
 - `items`: ingested source items; currently Telegram messages, YouTube
   transcripts, and YouTube comments with provider item kinds
+- `item_topic_memberships`: materialized real Telegram forum topic memberships
+  for items
+- `telegram_topic_resolution_state`: source-level state for forum topic
+  membership freshness and unresolved counts
 - `youtube_playlist_items`: YouTube playlist membership and availability rows
 - `youtube_transcript_segments`: timestamped caption/transcript cues
-- no persistent table exists for Takeout import jobs; job records are in-memory runtime state
+- no persistent table exists for Takeout import jobs or incomplete-import
+  provenance; job records are in-memory runtime state
 - no persistent table exists for YouTube source jobs; job records are in-memory runtime state
 - `app_settings`: app-level key/value storage, including active LLM profile, per-profile non-secret provider metadata, and sync policy
 - `analysis_runs`: saved report runs
@@ -184,7 +197,9 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 - YouTube cookies, when enabled, use OS secure storage and are written only to temporary backend cookie files for `yt-dlp`;
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
-- Takeout import does not download media bytes and currently defers migrated supergroup history to avoid `(source_id, external_id)` collisions.
+- Takeout import does not download media bytes and currently defers migrated
+  supergroup history until durable incomplete-import provenance and real-data
+  validation are designed.
 
 ## Reading order for implementation work
 

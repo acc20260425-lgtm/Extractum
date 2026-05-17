@@ -1,21 +1,21 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-16
+> **Updated:** 2026-05-17
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Open Gaps
 
 - Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
 - Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
-- Takeout source import needs broader live validation, incomplete-batch provenance, and a migrated-history identity decision.
-- Database schema simplification needs a source/item identity cleanup plan before more provider expansion.
+- Takeout source import needs broader live validation, incomplete-batch provenance, and a migrated-history enablement policy.
+- Database schema simplification needs durable Takeout provenance, a provider-neutral document layer, and a current-schema baseline.
 - YouTube live-provider coverage needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Large saved-run archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
 - Analysis workspace parity still needs run-open access to NotebookLM export, prompt template management, and source group management.
-- NotebookLM export follow-ups remain open for optional link enrichment, source-group export, forward metadata, and richer forum-topic grouping.
+- NotebookLM export follow-ups remain open for optional link enrichment, source-group export, forward metadata, and richer topic grouping.
 - YouTube-specific NotebookLM export enrichment remains open.
-- Full Telegram Forum Topics browsing/export and forward metadata are not modeled yet.
+- Richer Telegram Forum Topics browsing/export and forward metadata are not modeled yet.
 - Stabilization needs repeatable full-project verification, CI, and a dependency pinning policy for `grammers`.
 - Logs and user-facing error surfaces need a focused secret-leak audit.
 
@@ -34,7 +34,7 @@
 | Telegram runtime validation | predictable behavior across real supported dialogs and accounts |
 | Account deletion coordination | deletion cannot race active ingest or analysis work |
 | Takeout source import | validated across source kinds with explicit incomplete-import provenance |
-| Database schema simplification | canonical source identity, provider-native item identity, and current-schema baseline |
+| Database schema simplification | Takeout provenance, provider-neutral document layer, and current-schema baseline |
 | YouTube source ingest | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | fast narrowing for large saved-run histories |
 | Analysis workspace parity | run-open NotebookLM export plus template and source-group management access |
@@ -87,8 +87,10 @@ Priority: high.
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
-- [ ] decide and implement incomplete-import provenance, such as `ingest_batches`, item batch ids, or staging/promotion
-- [ ] decide how to handle migrated small-group history without corrupting `(source_id, external_id)` uniqueness
+- [ ] design and implement durable incomplete-import provenance using ingest
+  batches, Telegram Takeout batch details, and item origin/observation rows
+- [ ] enable migrated small-group history only after provenance and real-data
+  validation prove the typed Telegram identity boundary is safe
 - [ ] decide whether Takeout import should refresh the forum-topic catalog after successful finish
 
 Acceptance:
@@ -96,7 +98,8 @@ Acceptance:
 - Successful Takeout import updates `last_sync_state` and `last_synced_at`.
 - Failed or cancelled Takeout imports are distinguishable from complete history.
 - Export DC fallback and only-my-messages fallback warnings remain visible in job state.
-- Migrated supergroup history has a safe identity policy before import is enabled.
+- Migrated supergroup history has a safe provenance and validation policy
+  before import is enabled.
 
 ### 4.4 Database Schema Simplification
 
@@ -111,14 +114,13 @@ Analysis:
   `sources.metadata_zstd` into typed video/playlist source tables; keep raw
   provider payload optional and out of normal listing/detail/jobs/analysis
   paths.
-- [ ] continue item/document identity cleanup after topic membership
-  materialization, including Takeout provenance and a later provider-neutral
-  document layer
+- [ ] continue item/document identity cleanup with durable Takeout provenance
+  and a later provider-neutral document layer
 
 Acceptance:
 
 - New provider work does not need to touch legacy Telegram subtype compatibility.
-- Migrated Telegram history has a safe duplicate-detection model.
+- Migrated Telegram history has durable provenance and validation policy before import is enabled.
 - Analysis and NotebookLM export read stable document rows without provider-specific item-table branching for normal cases.
 - Fresh installs start from a clean current schema while existing databases still upgrade safely.
 
@@ -153,7 +155,7 @@ Priority: medium.
 - [ ] add optional link enrichment with explicit user opt-in and cache
 - [ ] add source-group export if the analysis group workflow needs it
 - [ ] render forward context after sync persists forward metadata
-- [ ] decide whether export needs full Forum Topics names/grouping beyond stored `reply_to_top_id`
+- [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
 ### 4.8 YouTube Source Follow-Ups
@@ -215,8 +217,8 @@ Priority: medium.
 
 1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
 2. Close account-deletion coordination before more long-running ingest expansion.
-3. Validate Takeout import across representative source kinds and decide incomplete-import provenance.
-4. Design the database schema simplification path before adding more provider surface.
+3. Validate Takeout import across representative source kinds and design incomplete-import provenance.
+4. Continue schema simplification through durable provenance, a provider-neutral document layer, and a current-schema baseline.
 5. Decide whether saved-run history needs richer filters before media expansion.
 6. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
 7. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
