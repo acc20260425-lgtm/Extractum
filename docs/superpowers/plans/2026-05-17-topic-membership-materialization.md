@@ -2586,7 +2586,7 @@ git commit -m "feat: resolve topic membership for inserted telegram items"
 - Modify: `docs/backlog.md`
 - Verify: containment scans and focused tests
 
-- [ ] **Step 1: Update database schema docs**
+- [x] **Step 1: Update database schema docs**
 
 In `docs/database-schema.md`, add sections for `item_topic_memberships` and `telegram_topic_resolution_state` near `telegram_forum_topics`.
 
@@ -2605,7 +2605,7 @@ version for ready sources.
 sources. Missing state is treated defensively as `never_run`.
 ```
 
-- [ ] **Step 2: Update backlog open work**
+- [x] **Step 2: Update backlog open work**
 
 In `docs/backlog.md`, keep the Database Schema Simplification item open for the provider-neutral document layer and Takeout provenance. Do not add completed-work notes.
 
@@ -2617,7 +2617,7 @@ If the current line says topic membership materialization is still open, replace
   document layer
 ```
 
-- [ ] **Step 3: Run containment scans**
+- [x] **Step 3: Run containment scans**
 
 Run:
 
@@ -2633,13 +2633,19 @@ Expected:
 - `top_message_id` and topic resolver fields appear in resolver, migration, tests, and docs, but not as embedded inference logic in `sources/items/query.rs`, `sources/topics.rs`, or `notebooklm_export/query.rs`.
 - new membership/state tables appear in migration, resolver/runtime code, docs, and tests.
 
-- [ ] **Step 4: Run focused backend and frontend verification**
+- [x] **Step 4: Run focused backend and frontend verification**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations:: topic_memberships:: sources::topics:: sources::items:: sources::items::query:: takeout_import:: notebooklm_export::query::
-npm test -- --run src/lib/api/sources.test.ts src/lib/analysis-state.test.ts
+cargo test --manifest-path src-tauri/Cargo.toml migrations::
+cargo test --manifest-path src-tauri/Cargo.toml topic_memberships::
+cargo test --manifest-path src-tauri/Cargo.toml sources::topics::
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::query::
+cargo test --manifest-path src-tauri/Cargo.toml takeout_import::
+cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::query::
+npm.cmd test -- --run src/lib/api/sources.test.ts src/lib/analysis-state.test.ts
 ```
 
 Expected:
@@ -2650,7 +2656,7 @@ test result: ok
 
 and Vitest passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add docs/database-schema.md docs/backlog.md

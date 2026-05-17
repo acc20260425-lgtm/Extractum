@@ -400,7 +400,76 @@ Notes:
 - this distinction matters in production data: many Telegram forum messages carry `reply_to_top_id = topic_id`, not `reply_to_top_id = top_message_id`, and some omit `reply_to_top_id` while keeping `reply_to_msg_id = topic_id`, so treating `top_message_id` as the normal join key or skipping the fallbacks misclassifies topic traffic;
 - topic records are retained locally even if a later catalog refresh omits them, so historical message-to-topic matches can survive.
 
-### 1.10 `youtube_playlist_items`
+### 1.10 `item_topic_memberships`
+
+Stores materialized Telegram forum topic memberships for items.
+
+Important fields:
+
+- `item_id`
+- `source_id`
+- `topic_id`
+- `match_kind`
+- `resolver_version`
+- `created_at`
+- `updated_at`
+
+Important constraints / indexes:
+
+- one membership row per `item_id`
+- `source_id` foreign key to `sources(id)` with `ON DELETE CASCADE`
+- composite foreign key `(source_id, topic_id)` to
+  `telegram_forum_topics(source_id, topic_id)` with `ON DELETE CASCADE`
+- lookup indexes on `(source_id, topic_id)` and `(source_id, item_id)`
+- `match_kind` is constrained to the supported resolver paths
+- `resolver_version` must be positive
+
+Notes:
+
+- `item_topic_memberships` stores only real Telegram forum topic memberships.
+- `Unrecognized topic` is a derived bucket for ready/current resolution state
+  and is not persisted as a topic or membership row.
+- Reader truth is source-level `telegram_topic_resolution_state`. Row-level
+  `item_topic_memberships.resolver_version` is diagnostic and must match state
+  version for ready sources.
+- Full rebuilds delete and reinsert source memberships, so stale row-level
+  resolver versions are cleared at the correctness boundary.
+
+### 1.11 `telegram_topic_resolution_state`
+
+Stores source-level state for Telegram forum topic membership materialization.
+
+Important fields:
+
+- `source_id`
+- `resolver_version`
+- `catalog_refreshed_at`
+- `memberships_refreshed_at`
+- `status`
+- `unresolved_count`
+- `pending_item_count`
+- `last_error`
+- `updated_at`
+
+Important constraints / indexes:
+
+- one state row per `source_id`
+- `source_id` foreign key to `sources(id)` with `ON DELETE CASCADE`
+- `resolver_version` must be positive
+- `status` is constrained to `never_run`, `ready`, `dirty`, `rebuilding`, or
+  `failed`
+- unresolved and pending counts must be non-negative
+
+Notes:
+
+- `telegram_topic_resolution_state` rows are valid only for Telegram
+  supergroup sources.
+- Missing state is treated defensively as `never_run`.
+- Missing membership means derived `Unrecognized topic` only when state is
+  `ready` and current for the backend resolver version.
+- `last_error` is bounded and is not a raw payload log.
+
+### 1.12 `youtube_playlist_items`
 
 Stores playlist membership rows and per-entry availability state.
 
@@ -434,7 +503,7 @@ Notes:
 - `availability_status` distinguishes available, upcoming, live, no-captions, auth-gated, deleted, removed, and unknown-unavailable rows.
 - `is_removed_from_playlist` marks rows that disappeared from a later playlist metadata sync without deleting historical local state.
 
-### 1.11 `youtube_transcript_segments`
+### 1.13 `youtube_transcript_segments`
 
 Stores timestamped transcript segments for `youtube_transcript` items.
 
@@ -465,7 +534,7 @@ Notes:
 - `is_auto_generated` preserves whether the selected track came from auto captions.
 - Analysis trace refs can resolve segment timestamps into YouTube links.
 
-### 1.12 `accounts`
+### 1.14 `accounts`
 
 Stores configured Telegram accounts.
 
@@ -609,6 +678,7 @@ Purpose:
 | 19 | `19.sql` | Runner-managed rebuild of `sources` without `telegram_source_kind`; records the sentinel checksum for SQLx history |
 | 20 | `20.sql` | Runner-managed creation and backfill of typed YouTube video/playlist source metadata tables |
 | 21 | `21.sql` | Runner-managed creation/backfill of typed Telegram message identity rows and replacement item uniqueness |
+| 22 | `22.sql` | Runner-managed creation and rebuild of Telegram forum topic membership materialization tables |
 
 ## 4. Current behavior implications
 
@@ -625,6 +695,10 @@ Purpose:
 - Telegram duplicate detection and legacy message-ref resolution use typed
   `telegram_messages` identity where available, keeping `items.external_id` as
   a compatibility value rather than the owner of Telegram message identity;
+- Telegram forum topic readers and NotebookLM export use materialized
+  `item_topic_memberships` plus source-level
+  `telegram_topic_resolution_state`; `Unrecognized topic` remains derived UI
+  and export state, not a stored topic row;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - `analysis_runs.youtube_corpus_mode` preserves the selected YouTube corpus scope used by the run, rather than reconstructing it from current source defaults.
 - saved analysis runs now prefer `analysis_run_messages` over live `items`;

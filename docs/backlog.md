@@ -111,9 +111,9 @@ Analysis:
   `sources.metadata_zstd` into typed video/playlist source tables; keep raw
   provider payload optional and out of normal listing/detail/jobs/analysis
   paths.
-- [ ] continue item/document identity cleanup after the Telegram native item
-  identity slice, including topic membership materialization and a later
-  provider-neutral document layer
+- [ ] continue item/document identity cleanup after topic membership
+  materialization, including Takeout provenance and a later provider-neutral
+  document layer
 
 Acceptance:
 
