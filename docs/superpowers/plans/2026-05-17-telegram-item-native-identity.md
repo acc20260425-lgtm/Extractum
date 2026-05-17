@@ -2619,7 +2619,7 @@ git commit -m "docs: document telegram item native identity"
 - Modify: this plan if task checkboxes were updated during execution
 - Verify: full project status
 
-- [ ] **Step 1: Run full Rust verification**
+- [x] **Step 1: Run full Rust verification**
 
 Use `superpowers:verification-before-completion`, then run:
 
@@ -2637,7 +2637,7 @@ test result: ok
 
 `cargo fmt --check` and `git diff --check` exit 0.
 
-- [ ] **Step 2: Run frontend verification only if frontend files changed**
+- [x] **Step 2: Run frontend verification only if frontend files changed**
 
 If any file under `src/`, `static/`, `package.json`, or Svelte/Vite config changed, run:
 
@@ -2654,7 +2654,7 @@ Expected:
 
 If no frontend files changed, record that frontend verification was not required.
 
-- [ ] **Step 3: Final git status**
+- [x] **Step 3: Final git status**
 
 Run:
 
@@ -2665,7 +2665,7 @@ git --no-pager log -12 --oneline --decorate
 
 Expected: only expected committed branch state.
 
-- [ ] **Step 4: Commit plan checkbox updates if they were changed**
+- [x] **Step 4: Commit plan checkbox updates if they were changed**
 
 If this plan was updated during execution:
 
@@ -2674,7 +2674,7 @@ git add docs/superpowers/plans/2026-05-17-telegram-item-native-identity.md
 git commit -m "docs: update telegram item identity plan progress"
 ```
 
-- [ ] **Step 5: Finish the branch**
+- [x] **Step 5: Finish the branch**
 
 Use `superpowers:finishing-a-development-branch`. Present merge/push/keep/discard options after verification passes.
 
