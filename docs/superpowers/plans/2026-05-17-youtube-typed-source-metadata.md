@@ -348,7 +348,7 @@ git commit -m "feat: add youtube typed metadata migration sentinel"
 - Modify: `src-tauri/src/youtube/source_metadata.rs`
 - Test: `src-tauri/src/youtube/source_metadata.rs`
 
-- [ ] **Step 1: Add RED tests for typed conversion and validation**
+- [x] **Step 1: Add RED tests for typed conversion and validation**
 
 At the bottom of `src-tauri/src/youtube/source_metadata.rs`, add:
 
@@ -466,7 +466,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the new tests and verify RED**
+- [x] **Step 2: Run the new tests and verify RED**
 
 Run:
 
@@ -476,7 +476,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::source_metadata::
 
 Expected: fail because the conversion structs and helpers do not exist.
 
-- [ ] **Step 3: Implement wire helpers, validation, and raw payload sanitation**
+- [x] **Step 3: Implement wire helpers, validation, and raw payload sanitation**
 
 In `src-tauri/src/youtube/source_metadata.rs`, replace the imports with:
 
@@ -724,7 +724,7 @@ fn caption_language_override_from_raw(raw: &Value) -> Option<String> {
 }
 ```
 
-- [ ] **Step 4: Run typed helper tests and verify GREEN**
+- [x] **Step 4: Run typed helper tests and verify GREEN**
 
 Run:
 
@@ -738,7 +738,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/youtube/source_metadata.rs
