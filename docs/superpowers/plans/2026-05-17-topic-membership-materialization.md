@@ -128,7 +128,7 @@ Expected: only the branch header.
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add RED migration registration tests**
+- [x] **Step 1: Add RED migration registration tests**
 
 In `src-tauri/src/migrations.rs`, add module declaration near other migration modules:
 
@@ -175,17 +175,19 @@ Update version-list assertion:
 assert_eq!(versions, (1_i64..=22_i64).collect::<Vec<_>>());
 ```
 
-- [ ] **Step 2: Run registration tests and verify RED**
+- [x] **Step 2: Run registration tests and verify RED**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runner_managed_topic_membership_materialization_migration migrations::tests::plugin_migration_list_keeps_v22_as_sentinel_only migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runner_managed_topic_membership_materialization_migration
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::plugin_migration_list_keeps_v22_as_sentinel_only
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation
 ```
 
 Expected: fail because migration 22 is not registered yet.
 
-- [ ] **Step 3: Add migration 22 sentinel SQL**
+- [x] **Step 3: Add migration 22 sentinel SQL**
 
 Create `src-tauri/migrations/22.sql`:
 
@@ -196,7 +198,7 @@ Create `src-tauri/migrations/22.sql`:
 SELECT extractum_runner_managed_migration_22();
 ```
 
-- [ ] **Step 4: Add shared topic membership module skeleton**
+- [x] **Step 4: Add shared topic membership module skeleton**
 
 Create `src-tauri/src/topic_memberships.rs`:
 
@@ -356,7 +358,7 @@ In `src-tauri/src/lib.rs`, add:
 mod topic_memberships;
 ```
 
-- [ ] **Step 5: Add runner-managed migration skeleton**
+- [x] **Step 5: Add runner-managed migration skeleton**
 
 Create `src-tauri/src/migrations/topic_membership_materialization.rs`:
 
@@ -484,7 +486,7 @@ fn expected_migration_22_checksum() -> Vec<u8> {
 }
 ```
 
-- [ ] **Step 6: Register migration 22**
+- [x] **Step 6: Register migration 22**
 
 In `build_migrations`, append after v21:
 
@@ -511,12 +513,14 @@ telegram_item_native_identity::apply_telegram_item_native_identity_on_connection
 topic_membership_materialization::apply_topic_membership_materialization_on_connection(conn).await
 ```
 
-- [ ] **Step 7: Run registration tests and verify GREEN**
+- [x] **Step 7: Run registration tests and verify GREEN**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runner_managed_topic_membership_materialization_migration migrations::tests::plugin_migration_list_keeps_v22_as_sentinel_only migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_runner_managed_topic_membership_materialization_migration
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::plugin_migration_list_keeps_v22_as_sentinel_only
+cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::build_migrations_contains_all_versions_for_sqlx_validation
 ```
 
 Expected:
@@ -525,7 +529,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/migrations/22.sql src-tauri/src/lib.rs src-tauri/src/migrations.rs src-tauri/src/migrations/topic_membership_materialization.rs src-tauri/src/topic_memberships.rs

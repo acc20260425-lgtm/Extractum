@@ -4,6 +4,7 @@ mod error;
 mod forum_topics;
 mod media;
 mod migrations;
+mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
 
 mod secret_store;

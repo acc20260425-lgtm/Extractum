@@ -2,6 +2,7 @@
 
 pub(crate) mod source_identity_cleanup;
 pub(crate) mod telegram_item_native_identity;
+pub(crate) mod topic_membership_materialization;
 pub(crate) mod youtube_typed_source_metadata;
 
 use sha2::{Digest, Sha384};
@@ -34,7 +35,8 @@ async fn patch_migrations(db_path: &Path) -> crate::error::AppResult<()> {
 
     source_identity_cleanup::apply_source_identity_cleanup_if_needed(&url).await?;
     youtube_typed_source_metadata::apply_youtube_typed_source_metadata_if_needed(&url).await?;
-    telegram_item_native_identity::apply_telegram_item_native_identity_if_needed(&url).await
+    telegram_item_native_identity::apply_telegram_item_native_identity_if_needed(&url).await?;
+    topic_membership_materialization::apply_topic_membership_materialization_if_needed(&url).await
 }
 
 fn app_config_db_path() -> Option<PathBuf> {
@@ -176,6 +178,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/21.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 22,
+            description: "materialize telegram topic memberships",
+            sql: include_str!("../migrations/22.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -195,7 +203,9 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
     .await?;
     source_identity_cleanup::apply_source_identity_cleanup_on_connection(conn).await?;
     youtube_typed_source_metadata::apply_youtube_typed_source_metadata_on_connection(conn).await?;
-    telegram_item_native_identity::apply_telegram_item_native_identity_on_connection(conn).await
+    telegram_item_native_identity::apply_telegram_item_native_identity_on_connection(conn).await?;
+    topic_membership_materialization::apply_topic_membership_materialization_on_connection(conn)
+        .await
 }
 
 #[cfg(test)]
@@ -461,13 +471,49 @@ mod tests {
     }
 
     #[test]
+    fn includes_runner_managed_topic_membership_materialization_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 22)
+            .expect("version 22 migration is registered");
+
+        assert_eq!(
+            migration.description,
+            "materialize telegram topic memberships"
+        );
+        assert!(
+            migration
+                .sql
+                .contains("extractum_runner_managed_migration_22"),
+            "v22 must fail if plugin-managed SQL applies it directly"
+        );
+    }
+
+    #[test]
+    fn plugin_migration_list_keeps_v22_as_sentinel_only() {
+        let migration = build_migrations()
+            .into_iter()
+            .find(|migration| migration.version == 22)
+            .expect("version 22 migration is registered");
+
+        assert!(!migration
+            .sql
+            .contains("CREATE TABLE item_topic_memberships"));
+        assert!(!migration
+            .sql
+            .contains("CREATE TABLE telegram_topic_resolution_state"));
+        assert!(!migration.sql.contains("INSERT INTO item_topic_memberships"));
+    }
+
+    #[test]
     fn build_migrations_contains_all_versions_for_sqlx_validation() {
         let versions = build_migrations()
             .into_iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, (1_i64..=21_i64).collect::<Vec<_>>());
+        assert_eq!(versions, (1_i64..=22_i64).collect::<Vec<_>>());
     }
 
     #[test]
