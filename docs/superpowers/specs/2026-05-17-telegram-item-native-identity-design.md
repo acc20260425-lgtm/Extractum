@@ -182,8 +182,15 @@ readable through compatibility paths, but they are not valid typed Telegram
 message rows until a future repair or re-ingest writes the child row.
 
 The replacement non-Telegram uniqueness should protect current YouTube item
-upserts without blocking duplicate Telegram message ids. One acceptable shape
-is:
+upserts without blocking duplicate Telegram message ids. This design uses
+Option A for legacy `item_kind` handling: migration 16 already adds
+`items.item_kind TEXT NOT NULL DEFAULT 'telegram_message'`, so migration 21
+must assert that no current `items.item_kind` values are `NULL` before replacing
+`idx_items_ext`. If unexpected `NULL` values exist, migration 21 must fail with
+a data-integrity error instead of creating a partial index that silently omits
+rows that still need uniqueness.
+
+The replacement index shape is:
 
 ```sql
 CREATE UNIQUE INDEX ux_items_non_telegram_external
@@ -193,6 +200,10 @@ CREATE UNIQUE INDEX ux_items_non_telegram_external
 CREATE INDEX idx_items_source_external
     ON items(source_id, external_id);
 ```
+
+Do not use a predicate that includes `item_kind IS NULL` unless the design is
+explicitly changed to Option B and every matching UPSERT uses that exact
+predicate. Under this spec, current rows must have non-`NULL` `item_kind`.
 
 The implementation must update YouTube item UPSERT statements to target the
 partial unique index explicitly, for example:
@@ -234,13 +245,30 @@ The insert path must:
 
 1. Receive or derive a `TelegramMessageIdentity` containing
    `history_peer_kind`, `history_peer_id`, and `telegram_message_id`.
-2. Run in a transaction.
-3. Check or insert by `telegram_messages` native unique identity.
-4. Insert a new `items` row when the native identity does not already exist.
-5. Insert the matching `telegram_messages` child row in the same transaction.
-6. Return `inserted = false` for duplicates without updating the existing
+2. Own a write transaction before checking native identity. Use
+   `BEGIN IMMEDIATE` or an equivalent SQLx/SQLite pattern that acquires the
+   writer before the identity check.
+3. Run:
+   ```sql
+   SELECT item_id
+   FROM telegram_messages
+   WHERE source_id = ?
+     AND history_peer_kind = ?
+     AND history_peer_id = ?
+     AND telegram_message_id = ?
+   ```
+4. If a row exists, roll back or end the local transaction without changes and
+   return `inserted = false`.
+5. Insert the `items` row only after the write transaction is held and the
+   native identity is absent.
+6. Insert the matching `telegram_messages` child row in the same transaction.
+7. If the child insert still hits the native unique constraint, load the
+   existing `item_id`, roll back the just-inserted `items` row by rolling back
+   the transaction, and return `inserted = false`.
+8. Commit only after both `items` and `telegram_messages` writes succeed.
+9. Return `inserted = false` for duplicates without updating the existing
    item payload.
-7. Keep `items.external_id = telegram_message_id.to_string()`.
+10. Keep `items.external_id = telegram_message_id.to_string()`.
 
 Normal Telegram sync should derive native identity from the message's Telegram
 peer and message id. If the message peer is unavailable or invalid, sync should
@@ -280,8 +308,9 @@ Existing stable local refs based on `items.id`, such as
 Legacy Telegram refs based on source id plus message id remain supported when
 they resolve to exactly one item. If multiple Telegram history domains now have
 the same message id under one source, a legacy message-id ref is ambiguous and
-must return a controlled ambiguity/not-found style error rather than silently
-choosing the wrong item.
+must return `AppError::conflict` rather than silently choosing the wrong item.
+If a legacy message-id ref resolves to zero candidates, return
+`AppError::not_found`.
 
 Analysis and NotebookLM export continue to read `items` rows. They may join
 `telegram_messages` only when they need typed Telegram identity. They must not
@@ -303,6 +332,8 @@ Runtime errors:
   `items` row and returns `inserted = false`.
 - Missing typed child rows in old data should degrade to compatibility behavior
   in browsing/export, not crash normal reads.
+- Ambiguous legacy message-id refs return `AppError::conflict`; missing legacy
+  message-id refs return `AppError::not_found`.
 
 No error message should include compressed raw payload contents.
 
@@ -313,6 +344,8 @@ Migration tests:
 - migration 21 is registered;
 - fresh schema includes `telegram_messages`;
 - `idx_items_ext` is gone after all migrations;
+- migration 21 fails or blocks if any `items.item_kind` is unexpectedly `NULL`
+  before replacing `idx_items_ext`;
 - `ux_telegram_messages_native_identity` exists with the expected columns;
 - non-Telegram partial uniqueness exists;
 - valid legacy Telegram message rows are backfilled;
@@ -343,7 +376,7 @@ Compatibility tests:
 - existing NotebookLM export tests still pass;
 - `s{source_id}-i{item_id}` refs still resolve;
 - legacy `s{source_id}-m{message_id}` refs resolve when unique and report a
-  controlled ambiguity when not unique.
+  conflict error when not unique.
 
 Containment scans:
 
