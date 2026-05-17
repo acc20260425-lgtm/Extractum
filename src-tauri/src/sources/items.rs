@@ -187,7 +187,9 @@ pub(crate) async fn upsert_youtube_transcript_item(
             media_metadata_zstd
         )
         VALUES (?, ?, ?, ?, ?, strftime('%s','now'), ?, ?, 'text_only', 0, NULL, NULL)
-        ON CONFLICT(source_id, external_id) DO UPDATE SET
+        ON CONFLICT(source_id, external_id)
+        WHERE item_kind <> 'telegram_message'
+        DO UPDATE SET
             item_kind = excluded.item_kind,
             author = excluded.author,
             published_at = excluded.published_at,
@@ -246,7 +248,9 @@ pub(crate) async fn upsert_youtube_comment_item(
             reaction_count
         )
         VALUES (?, ?, ?, ?, ?, strftime('%s','now'), ?, ?, 'text_only', 0, NULL, NULL, NULL, NULL, NULL, NULL, ?)
-        ON CONFLICT(source_id, external_id) DO UPDATE SET
+        ON CONFLICT(source_id, external_id)
+        WHERE item_kind <> 'telegram_message'
+        DO UPDATE SET
             item_kind = excluded.item_kind,
             author = excluded.author,
             published_at = excluded.published_at,
@@ -408,7 +412,9 @@ mod tests {
         ExtractedItemPayload, ExtractedMediaPayload, ItemMediaMetadata, CONTENT_KIND_TEXT_ONLY,
         CONTENT_KIND_TEXT_WITH_MEDIA,
     };
-    use crate::sources::test_support::memory_pool_with_source_items_and_topics;
+    use crate::sources::test_support::{
+        create_item_identity_indexes, memory_pool_with_source_items_and_topics,
+    };
     use crate::sources::types::ITEM_KIND_TELEGRAM_MESSAGE;
 
     #[test]
@@ -446,6 +452,7 @@ mod tests {
     #[tokio::test]
     async fn insert_source_item_writes_payload_and_skips_duplicates() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_legacy_item_external_unique_index(&pool).await;
         let media_metadata = ItemMediaMetadata {
             summary: Some("Photo".to_string()),
             file_name: Some("photo.jpg".to_string()),
@@ -551,6 +558,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn youtube_transcript_upsert_targets_non_telegram_partial_unique_index() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query("DROP INDEX IF EXISTS idx_items_ext")
+            .execute(&pool)
+            .await
+            .expect("drop legacy index fixture");
+        create_item_identity_indexes(&pool).await;
+
+        let mut tx = pool.begin().await.expect("begin transaction");
+        let first_id = upsert_youtube_transcript_item(
+            &mut tx,
+            1,
+            "transcript:video01:en:manual",
+            Some("Demo Channel"),
+            1_700_000_000,
+            "old transcript",
+            &serde_json::json!({ "version": 1 }),
+        )
+        .await
+        .expect("insert transcript");
+        let second_id = upsert_youtube_transcript_item(
+            &mut tx,
+            1,
+            "transcript:video01:en:manual",
+            Some("Demo Channel"),
+            1_700_000_001,
+            "new transcript",
+            &serde_json::json!({ "version": 2 }),
+        )
+        .await
+        .expect("update transcript");
+        tx.commit().await.expect("commit");
+
+        assert_eq!(first_id, second_id);
+    }
+
+    #[tokio::test]
     async fn upsert_youtube_transcript_item_updates_existing_text_and_returns_id() {
         let pool = memory_pool_with_source_items_and_topics().await;
         let mut tx = pool.begin().await.expect("begin transaction");
@@ -612,6 +656,43 @@ mod tests {
             decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
             serde_json::to_vec(&serde_json::json!({ "version": 2 })).expect("json")
         );
+    }
+
+    #[tokio::test]
+    async fn youtube_comment_upsert_targets_non_telegram_partial_unique_index() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        sqlx::query("DROP INDEX IF EXISTS idx_items_ext")
+            .execute(&pool)
+            .await
+            .expect("drop legacy index fixture");
+        create_item_identity_indexes(&pool).await;
+
+        let mut tx = pool.begin().await.expect("begin transaction");
+        let mut comment = crate::youtube::dto::YoutubeComment {
+            comment_id: "UgPartial".to_string(),
+            parent_comment_id: None,
+            is_reply: false,
+            author: Some("Alice".to_string()),
+            author_channel_id: None,
+            author_channel_url: None,
+            published_at: 1_700_000_000,
+            text: "old comment".to_string(),
+            like_count: Some(1),
+            is_pinned: None,
+            is_hearted: None,
+            raw_payload: serde_json::json!({ "id": "UgPartial" }),
+        };
+        let first_id = upsert_youtube_comment_item(&mut tx, 1, &comment)
+            .await
+            .expect("insert comment");
+        comment.text = "new comment".to_string();
+        comment.like_count = Some(5);
+        let second_id = upsert_youtube_comment_item(&mut tx, 1, &comment)
+            .await
+            .expect("update comment");
+        tx.commit().await.expect("commit");
+
+        assert_eq!(first_id, second_id);
     }
 
     #[tokio::test]
@@ -712,5 +793,14 @@ mod tests {
             Some(("channel", "33".to_string()))
         );
         assert_eq!(reply_peer_context(None), None);
+    }
+
+    async fn create_legacy_item_external_unique_index(pool: &sqlx::SqlitePool) {
+        sqlx::query(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_items_ext ON items(source_id, external_id)",
+        )
+        .execute(pool)
+        .await
+        .expect("create legacy items unique index");
     }
 }

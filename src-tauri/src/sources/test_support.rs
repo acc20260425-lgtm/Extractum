@@ -136,15 +136,7 @@ pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePo
     .execute(&pool)
     .await
     .expect("create items");
-    sqlx::query(
-        r#"
-        CREATE UNIQUE INDEX idx_items_source_external
-        ON items(source_id, external_id)
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create items unique index");
+    create_item_identity_indexes(&pool).await;
     sqlx::query(
         r#"
         CREATE TABLE telegram_forum_topics (
@@ -178,6 +170,22 @@ pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePo
     .await
     .expect("create telegram_forum_topics unique index");
     pool
+}
+
+pub(crate) async fn create_item_identity_indexes(pool: &sqlx::SqlitePool) {
+    sqlx::raw_sql(
+        r#"
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_items_non_telegram_external
+            ON items(source_id, external_id)
+            WHERE item_kind <> 'telegram_message';
+
+        CREATE INDEX IF NOT EXISTS idx_items_source_external
+            ON items(source_id, external_id);
+        "#,
+    )
+    .execute(pool)
+    .await
+    .expect("create item identity indexes");
 }
 
 #[cfg(test)]

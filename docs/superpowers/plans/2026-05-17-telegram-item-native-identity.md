@@ -1030,7 +1030,7 @@ git commit -m "feat: backfill telegram item native identities"
 - Modify: `src-tauri/src/sources/test_support.rs`
 - Modify: `src-tauri/src/sources/items.rs`
 
-- [ ] **Step 1: Add test-support helpers for the replacement indexes**
+- [x] **Step 1: Add test-support helpers for the replacement indexes**
 
 In `src-tauri/src/sources/test_support.rs`, replace `create items unique index` in `memory_pool_with_source_items_and_topics` with a call to a new helper:
 
@@ -1058,7 +1058,7 @@ pub(crate) async fn create_item_identity_indexes(pool: &sqlx::SqlitePool) {
 }
 ```
 
-- [ ] **Step 2: Add RED tests proving YouTube upserts use the partial unique index**
+- [x] **Step 2: Add RED tests proving YouTube upserts use the partial unique index**
 
 In `src-tauri/src/sources/items.rs`, inside tests, add:
 
@@ -1138,7 +1138,7 @@ async fn youtube_comment_upsert_targets_non_telegram_partial_unique_index() {
 }
 ```
 
-- [ ] **Step 3: Run YouTube upsert tests and verify RED**
+- [x] **Step 3: Run YouTube upsert tests and verify RED**
 
 Run:
 
@@ -1148,7 +1148,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::items::youtube_transcri
 
 Expected: fail with a SQL conflict-target error until the `WHERE item_kind <> 'telegram_message'` conflict target is added.
 
-- [ ] **Step 4: Update YouTube upserts to target the partial unique index**
+- [x] **Step 4: Update YouTube upserts to target the partial unique index**
 
 In both `upsert_youtube_transcript_item` and `upsert_youtube_comment_item`, replace:
 
@@ -1166,7 +1166,7 @@ DO UPDATE SET
 
 Keep the existing `DO UPDATE SET` column lists unchanged.
 
-- [ ] **Step 5: Run YouTube upsert tests and verify GREEN**
+- [x] **Step 5: Run YouTube upsert tests and verify GREEN**
 
 Run:
 
@@ -1180,7 +1180,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 6: Run all item tests**
+- [x] **Step 6: Run all item tests**
 
 Run:
 
@@ -1194,7 +1194,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/src/sources/test_support.rs src-tauri/src/sources/items.rs
