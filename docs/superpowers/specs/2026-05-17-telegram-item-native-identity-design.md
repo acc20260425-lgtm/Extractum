@@ -241,6 +241,10 @@ If SQLite or SQLx rejects that conflict-target shape in local tests, the plan
 must choose an equivalent deterministic YouTube upsert strategy before dropping
 `idx_items_ext`.
 
+Do not drop `idx_items_ext` until local SQLx tests prove the replacement
+YouTube transcript and comment upserts work deterministically against the
+replacement uniqueness strategy.
+
 Post-migration integrity checks:
 
 - `PRAGMA foreign_key_check` returns no rows.
@@ -304,6 +308,12 @@ does not expose enough peer data, it may use the resolved source peer as a
 compatibility fallback and keep migrated-history import disabled until the
 later validation slice.
 
+The implementation plan must identify the production boundary where
+`history_peer_kind` and `history_peer_id` are extracted from raw Takeout TL
+messages and carried into the insert request. Migrated-history tests must
+exercise that same boundary; they must not rely on a synthetic-only shortcut
+that bypasses production parsing or insert construction.
+
 The generic `insert_source_item` helper must not remain the normal Telegram
 duplicate-detection path. It may either become non-Telegram-only or be split
 into provider-specific helpers.
@@ -319,6 +329,11 @@ a typed child row exists.
 The existing `items.external_id` cast may remain only as a legacy fallback for
 Telegram items without a typed child row. New tests must prove that typed rows
 do not need `CAST(items.external_id AS INTEGER)` to match topic top messages.
+The typed join must be the preferred path. Any legacy external-id cast fallback
+must be visibly isolated in code, for example behind a helper named
+`legacy_external_id_message_id_expr` or an equivalently explicit SQL branch, so
+new topic logic does not accidentally spread raw `items.external_id` integer
+casts through query code.
 
 This slice does not introduce `item_topic_memberships`. That remains a later
 schema simplification step.
@@ -425,6 +440,25 @@ Expected:
   logic or tests.
 - `telegram_messages` appears in migration, test support, Telegram insert
   paths, and topic/query code that needs typed Telegram identity.
+
+## Implementation Phases
+
+1. Draft migration 21, backfill typed Telegram message identities, add
+   migration tests, and keep the final `idx_items_ext` replacement step gated
+   until the replacement upsert strategy is proven.
+2. Adjust YouTube transcript/comment upserts to target the replacement
+   uniqueness strategy and prove them with SQLx tests.
+3. Finalize migration 21 so it drops `idx_items_ext`, adds the replacement
+   indexes, and verifies migration integrity checks.
+4. Add the Telegram item insert helper and wire normal Telegram sync through
+   native identity.
+5. Propagate Takeout raw history identity through the production raw parser and
+   insert request boundary.
+6. Prefer typed Telegram message identity in topic resolution and isolate the
+   legacy `items.external_id` cast fallback.
+7. Handle legacy message-id ref ambiguity with `AppError::conflict` and
+   missing refs with `AppError::not_found`.
+8. Update docs and run containment scans.
 
 ## Documentation
 
