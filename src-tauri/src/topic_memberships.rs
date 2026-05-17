@@ -5,6 +5,7 @@ use crate::error::{AppError, AppResult};
 pub(crate) const CURRENT_TOPIC_RESOLVER_VERSION: i64 = 1;
 pub(crate) const TOPIC_STATE_NEVER_RUN: &str = "never_run";
 pub(crate) const TOPIC_STATE_READY: &str = "ready";
+#[allow(dead_code)]
 pub(crate) const TOPIC_STATE_DIRTY: &str = "dirty";
 pub(crate) const TOPIC_STATE_REBUILDING: &str = "rebuilding";
 pub(crate) const TOPIC_STATE_FAILED: &str = "failed";
@@ -90,13 +91,16 @@ WHERE rn = 1
 
 #[derive(Clone, Debug, sqlx::FromRow)]
 pub(crate) struct TopicResolutionStateRow {
+    #[allow(dead_code)]
     pub(crate) source_id: i64,
     pub(crate) resolver_version: i64,
+    #[allow(dead_code)]
     pub(crate) catalog_refreshed_at: Option<i64>,
     pub(crate) memberships_refreshed_at: Option<i64>,
     pub(crate) status: String,
     pub(crate) unresolved_count: i64,
     pub(crate) pending_item_count: i64,
+    #[allow(dead_code)]
     pub(crate) last_error: Option<String>,
 }
 
@@ -271,7 +275,88 @@ pub(crate) async fn resolve_scoped_topic_memberships_on_connection(
     inserted_item_ids: &[i64],
     resolved_at: i64,
 ) -> AppResult<()> {
-    let _ = (conn, source_id, inserted_item_ids, resolved_at);
+    if inserted_item_ids.is_empty() {
+        return Ok(());
+    }
+
+    let state: Option<TopicResolutionStateRow> = sqlx::query_as(
+        "SELECT source_id, resolver_version, catalog_refreshed_at, memberships_refreshed_at,
+                status, unresolved_count, pending_item_count, last_error
+         FROM telegram_topic_resolution_state
+         WHERE source_id = ?",
+    )
+    .bind(source_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+    if !is_ready_current_state(state.as_ref()) {
+        return Ok(());
+    }
+
+    let placeholders = std::iter::repeat("?")
+        .take(inserted_item_ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let scoped_select = RESOLVED_MEMBERSHIP_SELECT_SQL.replace(
+        "WHERE items.source_id = ?",
+        &format!("WHERE items.source_id = ? AND items.id IN ({placeholders})"),
+    );
+    let insert_sql = format!(
+        "INSERT OR REPLACE INTO item_topic_memberships (
+            item_id, source_id, topic_id, match_kind, resolver_version, created_at, updated_at
+         )
+         SELECT item_id, source_id, topic_id, match_kind, ?, ?, ?
+         FROM ({scoped_select})"
+    );
+    let mut insert = sqlx::query(&insert_sql)
+        .bind(CURRENT_TOPIC_RESOLVER_VERSION)
+        .bind(resolved_at)
+        .bind(resolved_at)
+        .bind(source_id);
+    for item_id in inserted_item_ids {
+        insert = insert.bind(item_id);
+    }
+    let inserted_memberships = insert
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::database)?
+        .rows_affected() as i64;
+
+    let eligible_sql = format!(
+        "SELECT COUNT(*)
+         FROM items
+         JOIN sources ON sources.id = items.source_id
+         WHERE items.source_id = ?
+           AND items.id IN ({placeholders})
+           AND sources.source_type = 'telegram'
+           AND sources.source_subtype = 'supergroup'
+           AND items.item_kind = 'telegram_message'"
+    );
+    let mut eligible_query = sqlx::query_scalar::<_, i64>(&eligible_sql).bind(source_id);
+    for item_id in inserted_item_ids {
+        eligible_query = eligible_query.bind(item_id);
+    }
+    let inserted_eligible_count = eligible_query
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+    let unresolved_delta = (inserted_eligible_count - inserted_memberships).max(0);
+
+    sqlx::query(
+        "UPDATE telegram_topic_resolution_state
+         SET unresolved_count = unresolved_count + ?,
+             pending_item_count = 0,
+             last_error = NULL,
+             updated_at = ?
+         WHERE source_id = ?",
+    )
+    .bind(unresolved_delta)
+    .bind(resolved_at)
+    .bind(source_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
     Ok(())
 }
 

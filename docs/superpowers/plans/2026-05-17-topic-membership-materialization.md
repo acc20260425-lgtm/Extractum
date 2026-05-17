@@ -2289,7 +2289,7 @@ git commit -m "feat: rebuild topic memberships after topic refresh"
 - Modify: `src-tauri/src/sources/items.rs`
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Add RED scoped resolution tests**
+- [x] **Step 1: Add RED scoped resolution tests**
 
 In `src-tauri/src/sources/items.rs`, add:
 
@@ -2390,17 +2390,18 @@ async fn scoped_resolution_increments_unresolved_count_for_inserted_unmatched_it
 }
 ```
 
-- [ ] **Step 2: Run scoped tests and verify RED**
+- [x] **Step 2: Run scoped tests and verify RED**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml sources::items::tests::insert_telegram_source_item_resolves_topic_membership_only_for_new_item sources::items::tests::scoped_resolution_increments_unresolved_count_for_inserted_unmatched_item
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::tests::insert_telegram_source_item_resolves_topic_membership_only_for_new_item
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::tests::scoped_resolution_increments_unresolved_count_for_inserted_unmatched_item
 ```
 
 Expected: fail because `insert_telegram_source_item` does not call scoped resolution.
 
-- [ ] **Step 3: Implement scoped resolver with transactional delta**
+- [x] **Step 3: Implement scoped resolver with transactional delta**
 
 In `src-tauri/src/topic_memberships.rs`, replace `resolve_scoped_topic_memberships_on_connection` with logic that:
 
@@ -2512,7 +2513,7 @@ unresolved_delta = inserted_eligible_count - inserted_membership_count
 
 It runs in the same SQLite transaction as the membership insert/state update. Duplicate inserts with `inserted = false` must not call this helper and must not increment `unresolved_count`.
 
-- [ ] **Step 4: Call scoped resolver from Telegram insert transaction**
+- [x] **Step 4: Call scoped resolver from Telegram insert transaction**
 
 In `src-tauri/src/sources/items.rs`, after inserting `telegram_messages` and before `Ok(true)`, call:
 
@@ -2528,12 +2529,13 @@ crate::topic_memberships::resolve_scoped_topic_memberships_on_connection(
 
 This keeps membership insert and state delta in the same transaction as the new item. Existing duplicate path returns `Ok(false)` before `item_id` exists and therefore does not update scoped counts.
 
-- [ ] **Step 5: Run scoped tests**
+- [x] **Step 5: Run scoped tests**
 
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml sources::items:: topic_memberships::
+cargo test --manifest-path src-tauri/Cargo.toml sources::items::
+cargo test --manifest-path src-tauri/Cargo.toml topic_memberships::
 ```
 
 Expected:
@@ -2542,7 +2544,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 6: Verify Takeout duplicate behavior**
+- [x] **Step 6: Verify Takeout duplicate behavior**
 
 Add to `src-tauri/src/takeout_import/mod.rs` test `takeout_parsed_items_with_same_message_id_insert_under_different_history_peers` or a new nearby test:
 
@@ -2570,7 +2572,7 @@ Expected:
 test result: ok
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/src/topic_memberships.rs src-tauri/src/sources/items.rs src-tauri/src/takeout_import/mod.rs

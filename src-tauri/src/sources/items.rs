@@ -313,6 +313,14 @@ pub(crate) async fn insert_telegram_source_item(
         .await
         .map_err(AppError::database)?;
 
+        crate::topic_memberships::resolve_scoped_topic_memberships_on_connection(
+            &mut conn,
+            source_id,
+            &[item_id],
+            now_secs(),
+        )
+        .await?;
+
         Ok(true)
     }
     .await;
@@ -790,6 +798,106 @@ mod tests {
             .await
             .expect("count child rows");
         assert_eq!(child_count, 1);
+    }
+
+    #[tokio::test]
+    async fn insert_telegram_source_item_resolves_topic_membership_only_for_new_item() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_item_source(&pool, 1).await;
+        sqlx::query(
+            "INSERT INTO telegram_forum_topics (
+                source_id, topic_id, top_message_id, title, last_seen_at, updated_at
+             ) VALUES (1, 200, 700, 'Roadmap', 100, 100)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed topic");
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed ready state");
+
+        let identity = TelegramMessageIdentity {
+            history_peer_kind: "channel".to_string(),
+            history_peer_id: 12345,
+            telegram_message_id: 701,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+        let mut item = telegram_insert("701", "topic reply");
+        item.telegram_context.reply_to_top_id = Some(200);
+
+        assert!(
+            insert_telegram_source_item(&pool, 1, identity.clone(), item)
+                .await
+                .expect("insert")
+        );
+        assert!(!insert_telegram_source_item(
+            &pool,
+            1,
+            identity,
+            telegram_insert("701", "duplicate")
+        )
+        .await
+        .expect("duplicate"));
+
+        let membership_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM item_topic_memberships WHERE source_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("count memberships");
+        assert_eq!(membership_count, 1);
+
+        let state: (String, i64, i64) = sqlx::query_as(
+            "SELECT status, unresolved_count, pending_item_count FROM telegram_topic_resolution_state WHERE source_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load state");
+        assert_eq!(state, ("ready".to_string(), 0, 0));
+    }
+
+    #[tokio::test]
+    async fn scoped_resolution_increments_unresolved_count_for_inserted_unmatched_item() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_item_source(&pool, 1).await;
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 2, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed ready state");
+
+        let identity = TelegramMessageIdentity {
+            history_peer_kind: "channel".to_string(),
+            history_peer_id: 12345,
+            telegram_message_id: 900,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+
+        assert!(insert_telegram_source_item(
+            &pool,
+            1,
+            identity,
+            telegram_insert("900", "unmatched")
+        )
+        .await
+        .expect("insert unmatched"));
+
+        let state: (String, i64, i64) = sqlx::query_as(
+            "SELECT status, unresolved_count, pending_item_count FROM telegram_topic_resolution_state WHERE source_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load state");
+        assert_eq!(state, ("ready".to_string(), 3, 0));
     }
 
     #[tokio::test]

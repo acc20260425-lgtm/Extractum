@@ -1275,6 +1275,65 @@ mod tests {
         assert_eq!(item_count, 2);
     }
 
+    #[tokio::test]
+    async fn takeout_duplicate_parsed_item_updates_topic_unresolved_count_once() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_item_source(&pool, 1).await;
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed ready topic state");
+
+        let first = takeout_raw_message_for_identity_test(
+            42,
+            tl::types::PeerChannel { channel_id: 12345 }.into(),
+            "first",
+        );
+        let duplicate = takeout_raw_message_for_identity_test(
+            42,
+            tl::types::PeerChannel { channel_id: 12345 }.into(),
+            "duplicate",
+        );
+
+        let first_item = raw_parse::parse_raw_message(&None, first)
+            .expect("parse first")
+            .expect("first item");
+        let first_identity = first_item
+            .telegram_identity
+            .clone()
+            .expect("first identity");
+        let duplicate_item = raw_parse::parse_raw_message(&None, duplicate)
+            .expect("parse duplicate")
+            .expect("duplicate item");
+        let duplicate_identity = duplicate_item
+            .telegram_identity
+            .clone()
+            .expect("duplicate identity");
+
+        assert!(
+            insert_telegram_source_item(&pool, 1, first_identity, first_item)
+                .await
+                .expect("insert first")
+        );
+        assert!(
+            !insert_telegram_source_item(&pool, 1, duplicate_identity, duplicate_item)
+                .await
+                .expect("skip duplicate")
+        );
+
+        let state: (String, i64) = sqlx::query_as(
+            "SELECT status, unresolved_count FROM telegram_topic_resolution_state WHERE source_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load topic state");
+        assert_eq!(state, ("ready".to_string(), 1));
+    }
+
     async fn seed_item_source(pool: &sqlx::SqlitePool, source_id: i64) {
         sqlx::query(
             "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
