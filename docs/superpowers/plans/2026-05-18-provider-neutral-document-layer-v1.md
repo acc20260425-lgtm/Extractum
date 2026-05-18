@@ -2499,7 +2499,7 @@ Expected: commit succeeds.
 - Modify: `docs/backlog.md`
 - Test: full Rust suite and containment scans
 
-- [ ] **Step 1: Update database schema docs**
+- [x] **Step 1: Update database schema docs**
 
 In `docs/database-schema.md`, add an `analysis_documents` section near the analysis storage/source sections. Include these facts:
 
@@ -2534,7 +2534,7 @@ Update the migration history table with:
 | 24 | `24.sql` runner-managed | Add provider-neutral analysis document layer and backfill live analysis corpus documents |
 ```
 
-- [ ] **Step 2: Update legacy analysis and backlog docs**
+- [x] **Step 2: Update legacy analysis and backlog docs**
 
 In `docs/database-schema-legacy-analysis.md`, mark provider-neutral analysis document layer v1 as shipped and keep NotebookLM export/source browsing migration as follow-up.
 
@@ -2544,7 +2544,7 @@ In `docs/backlog.md`, update any item that says the provider-neutral analysis do
 - [ ] consider moving NotebookLM export and source browsing onto provider-neutral document/read models after v1 analysis corpus migration has settled
 ```
 
-- [ ] **Step 3: Run containment scans**
+- [x] **Step 3: Run containment scans**
 
 Run:
 
@@ -2561,7 +2561,7 @@ Expected:
 - no new `ref ASC` ordering remains for live corpus documents;
 - no new placeholder markers are introduced.
 
-- [ ] **Step 4: Run targeted test suites**
+- [x] **Step 4: Run targeted test suites**
 
 Run:
 
@@ -2577,7 +2577,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: all targeted tests pass.
 
-- [ ] **Step 5: Run full Rust verification**
+- [x] **Step 5: Run full Rust verification**
 
 Run:
 
@@ -2590,7 +2590,7 @@ git status --short
 
 Expected: full Rust suite passes, formatting passes, diff check has no whitespace errors, and status shows only intended docs/plan changes before commit.
 
-- [ ] **Step 6: Commit docs and final verification**
+- [x] **Step 6: Commit docs and final verification**
 
 Run:
 

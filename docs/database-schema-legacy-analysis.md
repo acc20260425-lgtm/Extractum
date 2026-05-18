@@ -1,6 +1,6 @@
 # Database Schema Legacy Analysis
 
-> Updated: 2026-05-17
+> Updated: 2026-05-18
 > Scope: SQLite schema, migrations, Rust backend usage, and product docs.
 > Method: local code/doc review plus three read-only subagent passes focused on schema, backend cost, and product direction.
 
@@ -16,9 +16,10 @@ The clearest schema debt is not one bad table. It is that the storage model is c
 The highest-return simplification was to make provider identity explicit and
 typed. Source identity, typed Telegram message identity, typed YouTube source
 metadata, and Telegram topic membership materialization have now shipped in
-separate slices. The remaining high-return work is Takeout provenance, the
-provider-neutral document layer, snapshot hardening, playlist simplification,
-and migration baseline cleanup.
+separate slices. Provider-neutral analysis documents v1 has also shipped for
+live corpus loading. The remaining high-return work is expanding stable
+document/read models to NotebookLM export and source browsing where useful,
+snapshot hardening, playlist simplification, and migration baseline cleanup.
 
 ## Inputs Reviewed
 
@@ -130,11 +131,17 @@ Current state:
 - non-Telegram duplicate detection uses provider item kind with external id;
 - high-value source metadata moved into typed Telegram and YouTube source
   tables;
-- provider-neutral analysis/export documents remain open work.
+- `analysis_documents` now materializes provider-neutral live analysis corpus
+  documents for Telegram messages, YouTube transcript segments, YouTube
+  comments, and synthetic YouTube descriptions;
+- source browsing and NotebookLM export intentionally remain on their current
+  provider/archive item paths in v1.
 
 Remaining follow-up:
 
-- introduce a provider-neutral document layer for analysis/export text units;
+- consider moving NotebookLM export and source browsing onto
+  provider-neutral document/read models after v1 analysis corpus migration has
+  settled;
 - continue moving provider-specific hot-path fields out of generic `items`
   when a workflow needs indexed or validated state;
 - keep raw compressed provider payloads outside the hot query path.
@@ -325,8 +332,10 @@ These pieces should not be treated as removable debt right now:
 2. Item/document identity cleanup. Partially shipped.
    - Provider-native Telegram item identity shipped.
    - Telegram duplicate detection moved away from only `(source_id, external_id)`.
-   - Remaining work: durable Takeout provenance and a provider-neutral document
-     layer for analysis/export.
+   - Provider-neutral analysis documents v1 shipped for live corpus loading.
+   - Remaining work: move NotebookLM export and source browsing onto
+     provider-neutral document/read models only if the settled v1 model proves
+     it is the right boundary.
 
 3. Takeout provenance and migrated-history enablement.
    - Add durable ingest batches, Telegram Takeout batch details, and item
@@ -359,6 +368,7 @@ These pieces should not be treated as removable debt right now:
 - simpler source uniqueness and upsert logic;
 - safer Takeout import for migrated Telegram history;
 - less repeated metadata decoding;
-- simpler analysis corpus loading;
-- simpler NotebookLM export queries;
+- simpler live analysis corpus loading;
+- simpler NotebookLM export queries if export later moves to the settled
+  document/read model;
 - clearer future provider integration boundaries.

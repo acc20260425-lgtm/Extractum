@@ -665,7 +665,71 @@ Important fields:
 - `content`
 - `created_at`
 
-### 2.6 `analysis_run_messages`
+### 2.6 `analysis_documents`
+
+`analysis_documents` is a provider-neutral materialized read model for live
+analysis corpus loading. Provider/archive truth remains in `items` plus typed
+provider tables such as `telegram_messages`, `youtube_video_sources`,
+`youtube_playlist_sources`, and `youtube_transcript_segments`.
+
+Important fields:
+
+- `id`
+- `source_id`
+- `item_id`
+- `document_key`
+- `document_kind`
+- `source_type`
+- `source_subtype`
+- `external_id`
+- `author`
+- `published_at`
+- `document_order`
+- `ref`
+- `content_zstd`
+- `metadata_zstd`
+- `created_at`
+- `updated_at`
+
+Document kinds:
+
+- `telegram_message`
+- `youtube_transcript`
+- `youtube_comment`
+- `youtube_description`
+
+Important constraints / indexes:
+
+- unique document identity by `(source_id, document_key)`
+- source/date lookup by `(source_id, published_at, document_order, id)`
+- kind/source/date lookup by
+  `(document_kind, source_id, published_at, document_order, id)`
+- ref lookup by `ref`
+
+Notes:
+
+- the table is rebuildable from provider/archive truth;
+- runtime writers maintain it synchronously for Telegram messages, YouTube
+  comments, YouTube transcript segment rows, and YouTube video descriptions;
+- source browsing, source item APIs, and NotebookLM export continue to read
+  their current provider/archive paths;
+- `document_order` is the numeric order key inside one
+  `(published_at, source_id)` bucket;
+- the live corpus reader orders by
+  `published_at ASC, source_id ASC, document_order ASC, id ASC` and does not
+  use `ref` as an ordering tie-breaker;
+- item-backed documents use `item:<item_id>` keys and public refs shaped like
+  `s<source_id>-i<item_id>`;
+- YouTube transcript segment documents use
+  `item:<item_id>:segment:<segment_index>` keys and refs shaped like
+  `s<source_id>-i<item_id>@<start_ms>ms`;
+- synthetic YouTube descriptions use the source-scoped key
+  `youtube:description` and ref `s<source_id>-i0`;
+- `analysis_documents.id` is internal and is not a public evidence ref;
+- `ref` is not unique, so scoped callers must pair it with source, kind, run,
+  or another owned boundary.
+
+### 2.7 `analysis_run_messages`
 
 Stores the frozen corpus snapshot for a saved run.
 
@@ -718,18 +782,20 @@ Purpose:
 | 21 | `21.sql` | Runner-managed creation/backfill of typed Telegram message identity rows and replacement item uniqueness |
 | 22 | `22.sql` | Runner-managed creation and rebuild of Telegram forum topic membership materialization tables |
 | 23 | `23.sql` | Add generic ingest provenance tables and Telegram Takeout batch detail |
+| 24 | `24.sql` runner-managed | Add provider-neutral analysis document layer and backfill live analysis corpus documents |
 
 ## 4. Current behavior implications
 
 - the analysis workspace can render media-bearing and media-only items from `items`;
 - Telegram and YouTube source creation/sync are implemented; unsupported provider sync attempts return typed validation errors;
-- `/analysis` loads text-bearing Telegram rows and YouTube transcript/comment/description corpus rows according to the selected YouTube corpus mode;
+- `/analysis` loads live corpus text from provider-neutral
+  `analysis_documents` rows according to the selected YouTube corpus mode;
 - playlist analysis expands linked `youtube_playlist_items.video_source_id` rows and skips unavailable/unlinked playlist rows;
 - YouTube source jobs are in-memory and are not resumed after app restart;
 - YouTube source runtime metadata is read from typed YouTube source tables;
   `sources.metadata_zstd` is not the owner of YouTube runtime metadata;
 - YouTube auth cookies are stored in OS secure storage, not SQLite;
-- NotebookLM export can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
+- NotebookLM export still reads provider/archive item paths and can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
 - Telegram Takeout import persists durable ingest-batch provenance after the
   same-source ingest lock is acquired; failed or cancelled imports can leave

@@ -1434,8 +1434,8 @@ mod tests {
     use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
     use crate::sources::insert_telegram_source_item;
     use crate::sources::test_support::{
-        create_ingest_provenance_tables, memory_pool_with_source_items_and_topics,
-        memory_pool_with_sources,
+        create_analysis_documents_table, create_ingest_provenance_tables,
+        memory_pool_with_source_items_and_topics, memory_pool_with_sources,
     };
     use crate::takeout_import::state::TakeoutImportState;
     use grammers_client::tl;
@@ -1558,6 +1558,7 @@ mod tests {
     #[tokio::test]
     async fn takeout_parsed_items_with_same_message_id_insert_under_different_history_peers() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
 
         let current = takeout_raw_message_for_identity_test(
@@ -1609,6 +1610,7 @@ mod tests {
     #[tokio::test]
     async fn takeout_duplicate_parsed_item_updates_topic_unresolved_count_once() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
         sqlx::query(
             "INSERT INTO telegram_topic_resolution_state (

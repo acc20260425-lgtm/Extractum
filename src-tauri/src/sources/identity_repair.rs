@@ -1123,6 +1123,7 @@ mod tests {
     async fn youtube_sources_are_unaffected_by_source_identity_repair() {
         let pool = memory_pool_with_migrations_through(18).await;
         crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
 
         let mut tx = pool.begin().await.expect("begin tx");
         let video_id = upsert_youtube_video_source(&mut tx, &youtube_video_metadata())

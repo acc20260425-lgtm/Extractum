@@ -210,8 +210,9 @@ mod tests {
     };
 
     async fn youtube_pool() -> sqlx::SqlitePool {
-        let pool = crate::sources::test_support::memory_pool_with_sources().await;
+        let pool = crate::sources::test_support::memory_pool_with_source_items_and_topics().await;
         crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
         sqlx::query(
             r#"
             CREATE UNIQUE INDEX idx_sources_unique_youtube_video
