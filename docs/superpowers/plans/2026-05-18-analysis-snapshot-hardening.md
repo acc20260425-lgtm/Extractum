@@ -1166,7 +1166,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/analysis/report.rs`
 - Test: `src-tauri/src/analysis/store.rs`
 
-- [ ] **Step 1: Add failing failure semantics tests**
+- [x] **Step 1: Add failing failure semantics tests**
 
 In `src-tauri/src/analysis/store.rs`, add:
 
@@ -1244,7 +1244,7 @@ async fn interrupted_cleanup_preserves_captured_snapshot_state_marker() {
 }
 ```
 
-- [ ] **Step 2: Run failure semantics tests and confirm failure**
+- [x] **Step 2: Run failure semantics tests and confirm failure**
 
 Run:
 
@@ -1262,7 +1262,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::interru
 
 Expected: compile failure until `mark_interrupted_analysis_runs` exists.
 
-- [ ] **Step 3: Implement interrupted cleanup helper**
+- [x] **Step 3: Implement interrupted cleanup helper**
 
 In `src-tauri/src/analysis/report.rs`, add:
 
@@ -1295,7 +1295,7 @@ let _ = mark_interrupted_analysis_runs(&pool).await;
 
 Do not set `snapshot_error` in this helper.
 
-- [ ] **Step 4: Assert provider/cancel errors do not write snapshot_error**
+- [x] **Step 4: Assert provider/cancel errors do not write snapshot_error**
 
 Add store-level tests:
 
@@ -1361,7 +1361,7 @@ async fn cancellation_after_capture_does_not_write_snapshot_error() {
 }
 ```
 
-- [ ] **Step 5: Run Task 4 verification**
+- [x] **Step 5: Run Task 4 verification**
 
 Run:
 
@@ -1376,7 +1376,7 @@ git diff --check
 
 Expected: selected tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 6: Commit failure semantics**
+- [x] **Step 6: Commit failure semantics**
 
 Run:
 

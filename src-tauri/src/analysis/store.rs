@@ -804,7 +804,7 @@ pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> Result
 mod tests {
     use super::{
         capture_run_snapshot, delete_saved_run, map_run_detail, map_run_summary,
-        resolve_run_scope_label, sanitize_snapshot_error,
+        mark_run_capture_failed, resolve_run_scope_label, sanitize_snapshot_error, set_run_status,
     };
     use crate::analysis::models::{
         AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, CorpusMessage,
@@ -858,6 +858,8 @@ mod tests {
                 snapshot_captured_at TEXT,
                 snapshot_error TEXT,
                 status TEXT,
+                result_markdown TEXT,
+                trace_data_zstd BLOB,
                 error TEXT,
                 completed_at INTEGER
             )
@@ -998,6 +1000,92 @@ mod tests {
                 .await
                 .expect("count messages");
         assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn mark_run_capture_failed_sets_snapshot_error() {
+        let pool = snapshot_store_pool().await;
+
+        mark_run_capture_failed(
+            &pool,
+            1,
+            "failed at C:\\Users\\Dima\\secret.sqlite?token=abc",
+            1_710_000_500,
+        )
+        .await
+        .expect("mark capture failed");
+
+        let row: (String, Option<String>, Option<String>, Option<i64>) = sqlx::query_as(
+            "SELECT status, error, snapshot_error, completed_at FROM analysis_runs WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load run");
+
+        assert_eq!(row.0, crate::analysis::ANALYSIS_STATUS_FAILED);
+        assert_eq!(row.1, row.2);
+        assert_eq!(row.3, Some(1_710_000_500));
+        assert!(!row.2.unwrap().contains("C:\\"));
+    }
+
+    #[tokio::test]
+    async fn provider_failure_status_update_does_not_write_snapshot_error() {
+        let pool = snapshot_store_pool().await;
+        sqlx::query(
+            "UPDATE analysis_runs SET snapshot_captured_at = '2026-05-18T10:00:00Z' WHERE id = 1",
+        )
+        .execute(&pool)
+        .await
+        .expect("mark captured");
+
+        set_run_status(
+            &pool,
+            1,
+            crate::analysis::ANALYSIS_STATUS_FAILED,
+            None,
+            None,
+            Some("Provider network failed"),
+            Some(1_710_000_500),
+        )
+        .await
+        .expect("mark provider failed");
+
+        let snapshot_error: Option<String> =
+            sqlx::query_scalar("SELECT snapshot_error FROM analysis_runs WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("load snapshot_error");
+        assert_eq!(snapshot_error, None);
+    }
+
+    #[tokio::test]
+    async fn cancellation_after_capture_does_not_write_snapshot_error() {
+        let pool = snapshot_store_pool().await;
+        sqlx::query(
+            "UPDATE analysis_runs SET snapshot_captured_at = '2026-05-18T10:00:00Z' WHERE id = 1",
+        )
+        .execute(&pool)
+        .await
+        .expect("mark captured");
+
+        set_run_status(
+            &pool,
+            1,
+            crate::analysis::ANALYSIS_STATUS_CANCELLED,
+            None,
+            None,
+            Some("Analysis run cancelled."),
+            Some(1_710_000_500),
+        )
+        .await
+        .expect("mark cancelled");
+
+        let snapshot_error: Option<String> =
+            sqlx::query_scalar("SELECT snapshot_error FROM analysis_runs WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("load snapshot_error");
+        assert_eq!(snapshot_error, None);
     }
 
     #[test]

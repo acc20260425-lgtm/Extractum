@@ -880,22 +880,28 @@ async fn cancel_run(handle: &AppHandle, run_id: i64, message: String) {
         .emit(handle);
 }
 
+pub(crate) async fn mark_interrupted_analysis_runs(pool: &Pool<Sqlite>) -> Result<(), String> {
+    sqlx::query(
+        r#"
+        UPDATE analysis_runs
+        SET status = ?, error = ?, completed_at = ?
+        WHERE status IN (?, ?)
+        "#,
+    )
+    .bind(ANALYSIS_STATUS_CANCELLED)
+    .bind(INTERRUPTED_RUN_MESSAGE)
+    .bind(now_secs())
+    .bind(ANALYSIS_STATUS_QUEUED)
+    .bind(ANALYSIS_STATUS_RUNNING)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub async fn cleanup_interrupted_analysis_runs(handle: AppHandle) {
     if let Ok(pool) = get_pool(&handle).await {
-        let _ = sqlx::query(
-            r#"
-            UPDATE analysis_runs
-            SET status = ?, error = ?, completed_at = ?
-            WHERE status IN (?, ?)
-            "#,
-        )
-        .bind(ANALYSIS_STATUS_CANCELLED)
-        .bind(INTERRUPTED_RUN_MESSAGE)
-        .bind(now_secs())
-        .bind(ANALYSIS_STATUS_QUEUED)
-        .bind(ANALYSIS_STATUS_RUNNING)
-        .execute(&pool)
-        .await;
+        let _ = mark_interrupted_analysis_runs(&pool).await;
     }
 }
 
@@ -1146,8 +1152,8 @@ pub async fn start_analysis_report(
 mod tests {
     use super::{
         build_map_request, build_reduce_request, capture_report_corpus, extract_json_payload,
-        finish_map_phase, parse_chunk_summary, validate_report_preflight, ReduceRequestParams,
-        ReportRunError,
+        finish_map_phase, mark_interrupted_analysis_runs, parse_chunk_summary,
+        validate_report_preflight, ReduceRequestParams, ReportRunError,
     };
     use crate::analysis::corpus::{
         AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
@@ -1292,6 +1298,48 @@ mod tests {
 
         assert_eq!(captured.len(), 1);
         assert_eq!(captured[0].content, "captured text");
+    }
+
+    #[tokio::test]
+    async fn interrupted_cleanup_preserves_captured_snapshot_state_marker() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            "CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY,
+                status TEXT NOT NULL,
+                error TEXT,
+                completed_at INTEGER,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
+        sqlx::query(
+            "INSERT INTO analysis_runs (id, status, snapshot_captured_at, snapshot_error)
+             VALUES (1, 'running', '2026-05-18T10:00:00Z', NULL)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert running captured run");
+
+        mark_interrupted_analysis_runs(&pool)
+            .await
+            .expect("mark interrupted");
+
+        let row: (String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT status, snapshot_captured_at, snapshot_error FROM analysis_runs WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load run");
+
+        assert_eq!(row.0, crate::analysis::ANALYSIS_STATUS_CANCELLED);
+        assert_eq!(row.1.as_deref(), Some("2026-05-18T10:00:00Z"));
+        assert_eq!(row.2, None);
     }
 
     #[test]
