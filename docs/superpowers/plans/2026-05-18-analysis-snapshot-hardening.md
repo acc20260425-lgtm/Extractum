@@ -413,7 +413,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/analysis/store.rs`
 - Test: `src-tauri/src/analysis/corpus.rs`
 
-- [ ] **Step 1: Add failing sanitizer tests**
+- [x] **Step 1: Add failing sanitizer tests**
 
 In `src-tauri/src/analysis/store.rs`, add:
 
@@ -443,7 +443,7 @@ fn sanitize_snapshot_error_bounds_lines_paths_urls_and_tokens() {
 }
 ```
 
-- [ ] **Step 2: Add failing capture transaction tests**
+- [x] **Step 2: Add failing capture transaction tests**
 
 In `src-tauri/src/analysis/store.rs`, add a test memory-pool helper with the new marker columns:
 
@@ -581,7 +581,7 @@ async fn capture_run_snapshot_rejects_missing_required_fields_without_marker() {
 }
 ```
 
-- [ ] **Step 3: Run store tests and confirm failure**
+- [x] **Step 3: Run store tests and confirm failure**
 
 Run:
 
@@ -599,7 +599,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::capture_
 
 Expected: compile failure because `capture_run_snapshot` does not exist.
 
-- [ ] **Step 4: Implement shared snapshot error sanitizer**
+- [x] **Step 4: Implement shared snapshot error sanitizer**
 
 In `src-tauri/src/analysis/store.rs`, add:
 
@@ -656,7 +656,7 @@ pub(crate) fn sanitize_snapshot_error(category: &str, raw: &str) -> String {
 }
 ```
 
-- [ ] **Step 5: Implement transactional snapshot capture**
+- [x] **Step 5: Implement transactional snapshot capture**
 
 In `src-tauri/src/analysis/store.rs`, add imports:
 
@@ -845,7 +845,7 @@ pub(crate) async fn persist_run_snapshot(
 
 If the compiler rejects `load_run_snapshot_messages_on_connection(&mut tx, run_id)`, change the helper argument to `&mut sqlx::Transaction<'_, Sqlite>` and use `fetch_all(&mut **tx)` inside the helper.
 
-- [ ] **Step 6: Update snapshot fixtures for strict source subtype**
+- [x] **Step 6: Update snapshot fixtures for strict source subtype**
 
 In `src-tauri/src/analysis/corpus.rs::sample_corpus`, change the Telegram message from:
 
@@ -861,7 +861,7 @@ source_subtype: Some("channel".to_string()),
 
 Do the same for `sample_corpus_message()` in `src-tauri/src/analysis/report.rs` and any other new snapshot-capture test fixture that uses `source_type: Some("telegram".to_string())`.
 
-- [ ] **Step 7: Run Task 2 verification**
+- [x] **Step 7: Run Task 2 verification**
 
 Run:
 
@@ -875,7 +875,7 @@ git diff --check
 
 Expected: selected tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 8: Commit snapshot capture helpers**
+- [x] **Step 8: Commit snapshot capture helpers**
 
 Run:
 

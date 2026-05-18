@@ -829,7 +829,7 @@ mod tests {
                 r#ref: "s4-m101".to_string(),
                 item_kind: Some("telegram_message".to_string()),
                 source_type: Some("telegram".to_string()),
-                source_subtype: None,
+                source_subtype: Some("channel".to_string()),
                 metadata_zstd: None,
             },
         ]
@@ -1330,7 +1330,7 @@ mod tests {
             r#ref: "s2-i11".to_string(),
             item_kind: Some("telegram_message".to_string()),
             source_type: Some("telegram".to_string()),
-            source_subtype: None,
+            source_subtype: Some("channel".to_string()),
             metadata_zstd: None,
         };
 

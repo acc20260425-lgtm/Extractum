@@ -4,7 +4,7 @@ use super::corpus::YoutubeCorpusMode;
 use super::models::{
     AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, AnalysisRunSummary,
     AnalysisSnapshotState, AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceGroupRow,
-    CorpusMessage,
+    CorpusMessage, StoredRunSnapshotRow,
 };
 use super::{
     default_report_template_body, now_secs, ANALYSIS_RUN_TYPE_REPORT,
@@ -12,7 +12,7 @@ use super::{
     ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING,
     DEFAULT_REPORT_TEMPLATE_NAME, TEMPLATE_KIND_REPORT,
 };
-use crate::compression::compress_text;
+use crate::compression::{compress_text, decompress_text};
 
 async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> Result<bool, String> {
     sqlx::query_scalar::<_, i64>(
@@ -467,18 +467,166 @@ pub(crate) async fn insert_analysis_run(
     .map_err(|e| e.to_string())
 }
 
-pub(crate) async fn persist_run_snapshot(
+#[allow(dead_code)]
+pub(crate) fn sanitize_snapshot_error(category: &str, raw: &str) -> String {
+    let mut text = raw
+        .chars()
+        .map(|ch| if ch.is_control() { ' ' } else { ch })
+        .collect::<String>();
+
+    for marker in ["file://", "C:\\", "c:\\", "/home/", "/Users/", "/tmp/"] {
+        while let Some(start) = text.find(marker) {
+            let end = text[start..]
+                .find(char::is_whitespace)
+                .map(|offset| start + offset)
+                .unwrap_or_else(|| text.len());
+            text.replace_range(start..end, "[redacted]");
+        }
+    }
+
+    for marker in ["http://", "https://"] {
+        let mut search_from = 0usize;
+        while let Some(relative_start) = text[search_from..].find(marker) {
+            let start = search_from + relative_start;
+            let end = text[start..]
+                .find(char::is_whitespace)
+                .map(|offset| start + offset)
+                .unwrap_or_else(|| text.len());
+            let url = &text[start..end];
+            let clean_end = url.find(['?', '#']).unwrap_or(url.len());
+            let replacement = format!("{}[redacted]", &url[..clean_end]);
+            text.replace_range(start..end, &replacement);
+            search_from = start + replacement.len();
+        }
+    }
+
+    let lower = text.to_lowercase();
+    if lower.contains("bearer ")
+        || lower.contains("api_key")
+        || lower.contains("apikey")
+        || lower.contains("sk-")
+        || lower.contains("cookie")
+    {
+        text = category.to_string();
+    }
+
+    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let bounded = compact.chars().take(512).collect::<String>();
+    if bounded.trim().is_empty() {
+        category.to_string()
+    } else {
+        bounded
+    }
+}
+
+fn validate_snapshot_message(message: &CorpusMessage) -> Result<(), String> {
+    if message.r#ref.trim().is_empty() {
+        return Err("Snapshot message ref is required".to_string());
+    }
+    if message.content.trim().is_empty() {
+        return Err(format!(
+            "Snapshot message {} content is required",
+            message.r#ref
+        ));
+    }
+    if message.item_kind.as_deref().unwrap_or("").trim().is_empty() {
+        return Err(format!(
+            "Snapshot message {} item_kind is required",
+            message.r#ref
+        ));
+    }
+    let source_type = message.source_type.as_deref().unwrap_or("").trim();
+    if source_type.is_empty() {
+        return Err(format!(
+            "Snapshot message {} source_type is required",
+            message.r#ref
+        ));
+    }
+    if matches!(source_type, "telegram" | "youtube")
+        && message
+            .source_subtype
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .is_empty()
+    {
+        return Err(format!(
+            "Snapshot message {} source_subtype is required for {source_type}",
+            message.r#ref
+        ));
+    }
+    Ok(())
+}
+
+async fn load_run_snapshot_messages_on_transaction(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    run_id: i64,
+) -> Result<Vec<CorpusMessage>, String> {
+    let rows: Vec<StoredRunSnapshotRow> = sqlx::query_as(
+        r#"
+        SELECT
+            item_id,
+            source_id,
+            external_id,
+            author,
+            published_at,
+            ref,
+            content_zstd,
+            item_kind,
+            source_type,
+            source_subtype,
+            metadata_zstd
+        FROM analysis_run_messages
+        WHERE run_id = ?
+        ORDER BY published_at ASC, ref ASC
+        "#,
+    )
+    .bind(run_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(CorpusMessage {
+                item_id: row.item_id,
+                source_id: row.source_id,
+                external_id: row.external_id,
+                published_at: row.published_at,
+                author: row.author,
+                content: decompress_text(&row.content_zstd)?,
+                r#ref: row.r#ref,
+                item_kind: row.item_kind,
+                source_type: row.source_type,
+                source_subtype: row.source_subtype,
+                metadata_zstd: row.metadata_zstd,
+            })
+        })
+        .collect()
+}
+
+pub(crate) async fn capture_run_snapshot(
     pool: &Pool<Sqlite>,
     run_id: i64,
     scope_label: &str,
     corpus: &[CorpusMessage],
-) -> Result<(), String> {
+) -> Result<Vec<CorpusMessage>, String> {
+    if corpus.is_empty() {
+        return Err("Snapshot capture failed: empty corpus".to_string());
+    }
+
+    for message in corpus {
+        validate_snapshot_message(message)?;
+    }
+
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     sqlx::query(
         r#"
         UPDATE analysis_runs
-        SET scope_label_snapshot = ?
+        SET scope_label_snapshot = ?,
+            snapshot_captured_at = NULL,
+            snapshot_error = NULL
         WHERE id = ?
         "#,
     )
@@ -532,8 +680,32 @@ pub(crate) async fn persist_run_snapshot(
         .map_err(|e| e.to_string())?;
     }
 
+    let captured = load_run_snapshot_messages_on_transaction(&mut tx, run_id).await?;
+    if captured.is_empty() {
+        return Err("Snapshot capture failed: reloaded snapshot is empty".to_string());
+    }
+
+    sqlx::query(
+        "UPDATE analysis_runs SET snapshot_captured_at = datetime('now'), snapshot_error = NULL WHERE id = ?",
+    )
+    .bind(run_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
     tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(captured)
+}
+
+pub(crate) async fn persist_run_snapshot(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+    scope_label: &str,
+    corpus: &[CorpusMessage],
+) -> Result<(), String> {
+    capture_run_snapshot(pool, run_id, scope_label, corpus)
+        .await
+        .map(|_| ())
 }
 
 pub(crate) async fn set_run_status(
@@ -601,8 +773,13 @@ pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{delete_saved_run, map_run_detail, map_run_summary, resolve_run_scope_label};
-    use crate::analysis::models::{AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow};
+    use super::{
+        capture_run_snapshot, delete_saved_run, map_run_detail, map_run_summary,
+        resolve_run_scope_label, sanitize_snapshot_error,
+    };
+    use crate::analysis::models::{
+        AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, CorpusMessage,
+    };
 
     fn sample_run_row() -> AnalysisRunRow {
         AnalysisRunRow {
@@ -638,6 +815,160 @@ mod tests {
 
     fn sample_run() -> AnalysisRunDetail {
         map_run_detail(sample_run_row())
+    }
+
+    async fn snapshot_store_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
+                status TEXT,
+                error TEXT,
+                completed_at INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_run_messages (
+                run_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                external_id TEXT NOT NULL,
+                author TEXT,
+                published_at INTEGER NOT NULL,
+                ref TEXT NOT NULL,
+                content_zstd BLOB NOT NULL,
+                item_kind TEXT,
+                source_type TEXT,
+                source_subtype TEXT,
+                metadata_zstd BLOB,
+                PRIMARY KEY (run_id, ref)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create messages");
+        sqlx::query("INSERT INTO analysis_runs (id, status) VALUES (1, 'running')")
+            .execute(&pool)
+            .await
+            .expect("insert run");
+        pool
+    }
+
+    fn strict_snapshot_message(label: &str) -> CorpusMessage {
+        CorpusMessage {
+            item_id: 10,
+            source_id: 2,
+            external_id: label.to_string(),
+            published_at: 1_710_000_000,
+            author: Some("Alice".to_string()),
+            content: format!("content {label}"),
+            r#ref: format!("s2-i10-{label}"),
+            item_kind: Some("telegram_message".to_string()),
+            source_type: Some("telegram".to_string()),
+            source_subtype: Some("channel".to_string()),
+            metadata_zstd: None,
+        }
+    }
+
+    #[test]
+    fn sanitize_snapshot_error_bounds_lines_paths_urls_and_tokens() {
+        let long = "x".repeat(600);
+        let raw = format!(
+            "failed at C:\\Users\\Dima\\AppData\\Local\\Extractum\\db.sqlite\n\
+             see /home/dima/.config/extractum/db.sqlite and file:///tmp/secret.txt \
+             https://example.test/path?token=abc#frag \
+             bearer sk-live-secret api_key=secret {long}"
+        );
+
+        let sanitized = sanitize_snapshot_error("Snapshot capture failed", &raw);
+
+        assert!(sanitized.chars().count() <= 512);
+        assert!(!sanitized.contains('\n'));
+        assert!(!sanitized.contains("C:\\"));
+        assert!(!sanitized.contains("/home/dima"));
+        assert!(!sanitized.contains("file://"));
+        assert!(!sanitized.contains("?token="));
+        assert!(!sanitized.contains("#frag"));
+        assert!(!sanitized.to_lowercase().contains("bearer"));
+        assert!(!sanitized.contains("sk-live-secret"));
+        assert!(!sanitized.contains("api_key=secret"));
+    }
+
+    #[tokio::test]
+    async fn capture_run_snapshot_marks_captured_after_reload_and_replaces_rows() {
+        let pool = snapshot_store_pool().await;
+
+        let first = capture_run_snapshot(&pool, 1, "Frozen scope", &[strict_snapshot_message("a")])
+            .await
+            .expect("capture first");
+        let second =
+            capture_run_snapshot(&pool, 1, "Frozen scope", &[strict_snapshot_message("b")])
+                .await
+                .expect("capture second");
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].external_id, "b");
+
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM analysis_run_messages WHERE run_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("count messages");
+        assert_eq!(count, 1);
+
+        let marker: Option<String> =
+            sqlx::query_scalar("SELECT snapshot_captured_at FROM analysis_runs WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("load marker");
+        assert!(marker.is_some());
+
+        let snapshot_error: Option<String> =
+            sqlx::query_scalar("SELECT snapshot_error FROM analysis_runs WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("load snapshot error");
+        assert_eq!(snapshot_error, None);
+    }
+
+    #[tokio::test]
+    async fn capture_run_snapshot_rejects_missing_required_fields_without_marker() {
+        let pool = snapshot_store_pool().await;
+        let mut message = strict_snapshot_message("bad");
+        message.item_kind = None;
+
+        let error = match capture_run_snapshot(&pool, 1, "Frozen scope", &[message]).await {
+            Ok(_) => panic!("missing item_kind should fail"),
+            Err(error) => error,
+        };
+        assert!(error.contains("item_kind"));
+
+        let marker: Option<String> =
+            sqlx::query_scalar("SELECT snapshot_captured_at FROM analysis_runs WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("load marker");
+        assert_eq!(marker, None);
+
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM analysis_run_messages WHERE run_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("count messages");
+        assert_eq!(count, 0);
     }
 
     #[test]
