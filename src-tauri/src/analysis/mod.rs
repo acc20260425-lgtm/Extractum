@@ -523,6 +523,28 @@ mod tests {
         .expect("create templates");
         sqlx::query(
             r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY,
+                title TEXT
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create sources");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_source_groups (
+                id INTEGER PRIMARY KEY,
+                name TEXT
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create source groups");
+        sqlx::query(
+            r#"
             CREATE TABLE analysis_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_type TEXT NOT NULL,
@@ -595,6 +617,33 @@ mod tests {
         assert_eq!(count, 1);
         assert!(body.contains("source documents"));
         assert!(!body.contains("Telegram messages"));
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_messages_returns_empty_page_for_missing_legacy_run() {
+        let pool = memory_pool().await;
+        sqlx::query(
+            "INSERT INTO analysis_runs (
+                id, run_type, scope_type, source_id, period_from, period_to, output_language,
+                prompt_template_version, provider_profile, provider, model, status,
+                result_markdown, created_at, completed_at
+             )
+             VALUES (1, 'report', 'single_source', 2, 1, 2, 'English', 1, 'default', 'gemini', 'model', 'completed', 'Saved report', 1, 2)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert run");
+
+        let detail = super::store::fetch_run_row(&pool, 1)
+            .await
+            .expect("fetch run")
+            .map(super::store::map_run_detail)
+            .expect("run exists");
+
+        assert_eq!(
+            detail.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+        );
     }
 
     #[test]

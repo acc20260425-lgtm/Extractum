@@ -744,26 +744,14 @@ pub(crate) async fn list_run_snapshot_messages_page(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) async fn load_run_corpus_messages(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,
 ) -> Result<Vec<CorpusMessage>, String> {
     let snapshot = load_run_snapshot_messages(pool, run.id).await?;
-    if !snapshot.is_empty() {
-        return Ok(snapshot);
-    }
-
-    let resolved = resolve_analysis_sources(pool, run.source_id, run.source_group_id)
-        .await
-        .map_err(|e| e.message)?;
-    let request = CorpusLoadRequest {
-        source_type: resolved.source_type,
-        source_ids: resolved.source_ids,
-        period_from: run.period_from,
-        period_to: run.period_to,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-    };
-    load_corpus_messages(pool, &request).await
+    ensure_captured_snapshot_rows(run, &snapshot)?;
+    Ok(snapshot)
 }
 
 pub(crate) async fn load_trace_resolution_messages(
@@ -771,15 +759,25 @@ pub(crate) async fn load_trace_resolution_messages(
     run: &AnalysisRunDetail,
 ) -> Result<Vec<CorpusMessage>, String> {
     let snapshot = load_run_snapshot_messages(pool, run.id).await?;
-    if !snapshot.is_empty() {
-        return Ok(snapshot);
-    }
+    ensure_captured_snapshot_rows(run, &snapshot)?;
+    Ok(snapshot)
+}
 
-    if run.status == "completed" {
-        return Ok(Vec::new());
-    }
+fn captured_snapshot_missing_error(run_id: i64) -> String {
+    format!("Analysis run {run_id} captured snapshot is unavailable")
+}
 
-    load_run_corpus_messages(pool, run).await
+fn ensure_captured_snapshot_rows(
+    run: &AnalysisRunDetail,
+    snapshot: &[CorpusMessage],
+) -> Result<(), String> {
+    if run.snapshot_state == Some(crate::analysis::models::AnalysisSnapshotState::Captured)
+        && run.snapshot_message_count == 0
+        && snapshot.is_empty()
+    {
+        return Err(captured_snapshot_missing_error(run.id));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1761,6 +1759,126 @@ mod tests {
         assert_eq!(corpus[0].source_subtype.as_deref(), Some("video"));
         assert!(corpus[0].metadata_zstd.is_some());
         assert_eq!(corpus[1].r#ref, "s4-m101");
+    }
+
+    #[tokio::test]
+    async fn load_run_corpus_messages_does_not_reconstruct_completed_missing_legacy_from_live_rows()
+    {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            "INSERT INTO analysis_runs (
+                id, run_type, scope_type, source_id, period_from, period_to, output_language,
+                prompt_template_version, provider_profile, provider, model, status, created_at
+             )
+             VALUES (1, 'report', 'single_source', 2, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)",
+        )
+        .bind(1_700_000_000_i64)
+        .bind(1_800_000_000_i64)
+        .bind(1_710_000_500_i64)
+        .execute(&pool)
+        .await
+        .expect("insert run");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, content_zstd)
+             VALUES (11, 2, '100', 'telegram_message', 'Alice', ?, ?)",
+        )
+        .bind(1_710_000_000_i64)
+        .bind(compress_text("live drift").expect("compress"))
+        .execute(&pool)
+        .await
+        .expect("insert live item");
+        rebuild_documents_for_sources(&pool, &[2]).await;
+
+        let mut run = sample_run();
+        run.id = 1;
+        run.scope_type = crate::analysis::ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE.to_string();
+        run.source_id = Some(2);
+        run.source_group_id = None;
+        run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy);
+        run.snapshot_captured_at = None;
+        run.snapshot_error = None;
+        run.snapshot_message_count = 0;
+
+        let corpus = load_run_corpus_messages(&pool, &run)
+            .await
+            .expect("load snapshot-only corpus");
+
+        assert!(corpus.is_empty());
+    }
+
+    #[tokio::test]
+    async fn captured_marker_with_missing_rows_returns_corrupt_snapshot_error() {
+        let pool = snapshot_pool().await;
+        let mut run = sample_run();
+        run.scope_type = crate::analysis::ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE.to_string();
+        run.source_id = Some(2);
+        run.source_group_id = None;
+        run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::Captured);
+        run.snapshot_captured_at = Some("2026-05-18T10:00:00Z".to_string());
+        run.snapshot_error = None;
+        run.snapshot_message_count = 0;
+
+        let error = match load_run_corpus_messages(&pool, &run).await {
+            Ok(_) => panic!("captured marker without rows should fail defensively"),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("snapshot is unavailable"));
+    }
+
+    #[tokio::test]
+    async fn source_group_membership_drift_after_capture_does_not_change_saved_run_corpus() {
+        let pool = snapshot_pool().await;
+        sqlx::query("INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at) VALUES (9, 'Group', 'telegram', 1, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert group");
+        sqlx::query("INSERT INTO analysis_source_group_members (group_id, source_id, created_at) VALUES (9, 2, 1), (9, 4, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert original members");
+        sqlx::query(
+            "INSERT INTO analysis_runs (
+                id, run_type, scope_type, source_group_id, period_from, period_to, output_language,
+                prompt_template_version, provider_profile, provider, model, status, snapshot_captured_at, created_at
+             )
+             VALUES (1, 'report', 'source_group', 9, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', '2026-05-18T10:00:00Z', ?)",
+        )
+        .bind(1_700_000_000_i64)
+        .bind(1_800_000_000_i64)
+        .bind(1_710_000_500_i64)
+        .execute(&pool)
+        .await
+        .expect("insert run");
+        persist_run_snapshot(&pool, 1, "Frozen group", &sample_corpus())
+            .await
+            .expect("persist snapshot");
+        sqlx::query(
+            "DELETE FROM analysis_source_group_members WHERE group_id = 9 AND source_id = 4",
+        )
+        .execute(&pool)
+        .await
+        .expect("remove member after capture");
+
+        let mut run = sample_run();
+        run.id = 1;
+        run.source_group_id = Some(9);
+        run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::Captured);
+        run.snapshot_captured_at = Some("2026-05-18T10:00:00Z".to_string());
+        run.snapshot_message_count = 2;
+
+        let corpus = load_run_corpus_messages(&pool, &run)
+            .await
+            .expect("load saved corpus");
+
+        assert_eq!(corpus.len(), 2);
+        assert_eq!(
+            corpus
+                .iter()
+                .map(|message| message.source_id)
+                .collect::<Vec<_>>(),
+            vec![2, 4]
+        );
     }
 
     #[tokio::test]

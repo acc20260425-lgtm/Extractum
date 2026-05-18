@@ -1400,7 +1400,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/analysis/chat.rs`
 - Test: `src-tauri/src/analysis/mod.rs`
 
-- [ ] **Step 1: Add failing no-live-fallback and corrupt snapshot tests**
+- [x] **Step 1: Add failing no-live-fallback and corrupt snapshot tests**
 
 In `src-tauri/src/analysis/corpus.rs`, add:
 
@@ -1466,7 +1466,7 @@ async fn captured_marker_with_missing_rows_returns_corrupt_snapshot_error() {
 }
 ```
 
-- [ ] **Step 2: Add source group drift test**
+- [x] **Step 2: Add source group drift test**
 
 In `src-tauri/src/analysis/corpus.rs`, add:
 
@@ -1524,7 +1524,7 @@ async fn source_group_membership_drift_after_capture_does_not_change_saved_run_c
 
 This test uses `sample_corpus()` source ids as the frozen snapshot. It proves the saved corpus is whatever was captured, not the current group membership resolver output after a member is removed.
 
-- [ ] **Step 3: Run read-path tests and confirm failure**
+- [x] **Step 3: Run read-path tests and confirm failure**
 
 Run:
 
@@ -1542,7 +1542,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::capture
 
 Expected: fails because captured missing rows currently fall through to live fallback or empty handling.
 
-- [ ] **Step 4: Implement snapshot-only saved-run corpus loading**
+- [x] **Step 4: Implement snapshot-only saved-run corpus loading**
 
 In `src-tauri/src/analysis/corpus.rs`, add:
 
@@ -1593,7 +1593,7 @@ pub(crate) async fn load_trace_resolution_messages(
 
 Remove the old live reconstruction block from `load_run_corpus_messages`. Do not call `resolve_analysis_sources` from saved-run corpus loading.
 
-- [ ] **Step 5: Add missing-legacy command behavior tests**
+- [x] **Step 5: Add missing-legacy command behavior tests**
 
 In `src-tauri/src/analysis/mod.rs`, extend the tests with a memory table that includes the marker columns and `analysis_run_messages`. Add:
 
@@ -1628,7 +1628,7 @@ async fn list_analysis_run_messages_returns_empty_page_for_missing_legacy_run() 
 
 Keep `list_analysis_run_messages` snapshot-only. It already returns an empty page when no rows exist; the run-level DTO carries `missing_legacy`.
 
-- [ ] **Step 6: Keep follow-up chat snapshot-bound**
+- [x] **Step 6: Keep follow-up chat snapshot-bound**
 
 In `src-tauri/src/analysis/chat.rs`, update existing `completed_chat_context_requires_saved_snapshot_messages` to assert the conflict message:
 
@@ -1641,7 +1641,7 @@ assert_eq!(
 
 No live corpus loader should be called from `ask_analysis_run_question`.
 
-- [ ] **Step 7: Run Task 5 verification**
+- [x] **Step 7: Run Task 5 verification**
 
 Run:
 
@@ -1657,7 +1657,7 @@ git diff --check
 
 Expected: selected tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 8: Commit saved-run read path hardening**
+- [x] **Step 8: Commit saved-run read path hardening**
 
 Run:
 
