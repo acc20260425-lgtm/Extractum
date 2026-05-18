@@ -50,6 +50,10 @@ follow-up chat should treat the captured snapshot as authoritative for saved
 runs. Live corpus reconstruction must not be a normal fallback for completed
 snapshotless runs.
 
+Empty live corpora remain a launch/preflight rejection. A report run should not
+be created, captured, or marked as legacy merely because the selected scope has
+zero eligible documents.
+
 ## Schema
 
 Migration `25.sql` adds:
@@ -60,7 +64,7 @@ ALTER TABLE analysis_runs ADD COLUMN snapshot_error TEXT;
 ```
 
 `snapshot_captured_at` records the boundary time when a run's frozen corpus was
-successfully persisted.
+successfully persisted, reloaded, and verified as usable.
 
 `snapshot_error` records only capture-preventing failures:
 
@@ -69,6 +73,19 @@ successfully persisted.
 
 Provider failures after successful capture must not write `snapshot_error`.
 Those failures belong in the existing run `error` field.
+
+`snapshot_error` must be sanitized before storage:
+
+- maximum 512 Unicode scalar values;
+- single line, with control characters and CR/LF replaced by spaces;
+- no stack traces or debug backtraces;
+- no local file paths, app-data paths, or `file://` URLs;
+- no URL query strings or fragments, because those can contain tokens;
+- no API keys, cookies, bearer tokens, secure-storage keys, or raw provider
+  request/response bodies;
+- if sanitization cannot confidently preserve a useful safe message, store a
+  short generic category such as `Corpus preload failed` or
+  `Snapshot capture failed`.
 
 `analysis_run_messages` is not rebuilt in this slice. The Rust writer contract
 for new rows becomes strict:
@@ -90,25 +107,29 @@ Expose a computed snapshot state on saved-run DTOs:
 type AnalysisSnapshotState =
   | "captured"
   | "missing_legacy"
-  | "not_captured_due_to_preload_failure";
+  | "capture_failed";
 ```
 
 `AnalysisRunSummary` and `AnalysisRunDetail` should include:
 
 ```ts
-snapshot_state: AnalysisSnapshotState;
+snapshot_state: AnalysisSnapshotState | null;
 snapshot_captured_at: string | null;
 snapshot_error: string | null;
 ```
 
 State rules:
 
-- `captured`: `snapshot_captured_at IS NOT NULL` and at least one
-  `analysis_run_messages` row exists for the run.
+- `captured`: `snapshot_captured_at IS NOT NULL` and `snapshot_error IS NULL`.
+  Snapshot row count is not part of this state rule. The non-empty corpus
+  invariant is enforced before run creation and by capture verification.
 - `missing_legacy`: `snapshot_captured_at IS NULL`, `snapshot_error IS NULL`,
-  the run is terminal/readable historical data, and no snapshot rows exist.
-- `not_captured_due_to_preload_failure`: `snapshot_error IS NOT NULL`, or a new
-  failed run has no snapshot rows.
+  the run is a completed historical report, and no snapshot rows exist.
+- `capture_failed`: `snapshot_error IS NOT NULL`, or a failed/cancelled
+  terminal run has no captured marker.
+- `null`: active or queued runs that have been created but have not yet reached
+  a terminal/captured snapshot classification. In the expected steady state,
+  this is only a short backend-only window before capture succeeds or fails.
 
 The DTO state is computed, not stored as an enum. This keeps historical rows
 readable while making the current invariant observable and testable.
@@ -124,8 +145,9 @@ preflight
 create run
 load live corpus from analysis_documents
 persist analysis_run_messages
-set snapshot_captured_at
 reload captured snapshot from analysis_run_messages
+verify captured snapshot is usable
+set snapshot_captured_at
 build provider input from captured snapshot
 run map/reduce provider phases
 build trace from captured snapshot
@@ -136,6 +158,11 @@ The important boundary is reload-after-write. Once snapshot persistence
 succeeds, later provider and trace phases should use the reloaded frozen corpus
 instead of the live `corpus` variable produced by the loader.
 
+`snapshot_captured_at` should be written only after rows have been persisted,
+reloaded, and verified. If possible, perform insert, reload verification, marker
+update, and commit as one capture transaction. A failed reload or verification
+must not leave `snapshot_captured_at` populated.
+
 ## Failure Semantics
 
 If live corpus loading fails before snapshot capture:
@@ -143,16 +170,14 @@ If live corpus loading fails before snapshot capture:
 - mark the run `failed`;
 - set `snapshot_error` to a bounded, sanitized explanation;
 - do not call the provider;
-- return `snapshot_state =
-  "not_captured_due_to_preload_failure"`.
+- return `snapshot_state = "capture_failed"`.
 
-If snapshot insert, timestamp update, or reload-after-write verification fails:
+If snapshot insert, marker update, or reload-after-write verification fails:
 
 - mark the run `failed`;
 - set `snapshot_error`;
 - do not call the provider;
-- return `snapshot_state =
-  "not_captured_due_to_preload_failure"`.
+- return `snapshot_state = "capture_failed"`.
 
 If provider execution fails after snapshot capture:
 
@@ -169,6 +194,11 @@ If cancellation happens after snapshot capture:
 Historical completed snapshotless runs remain readable as report artifacts, but
 evidence, follow-up chat, and source browsing should not silently resolve
 against current live source data.
+
+Failures before `insert_analysis_run` continue to return from
+`start_analysis_report` without creating a saved run. Any failure after
+`insert_analysis_run` but before successful capture must set `snapshot_error` so
+new failed runs are classified as `capture_failed`, not `missing_legacy`.
 
 ## Read Path Rules
 
@@ -206,12 +236,19 @@ Implementation should add focused tests before changing behavior:
 
 - migration registration and fresh schema contain `snapshot_captured_at` and
   `snapshot_error`;
-- DTO mapping returns `captured` when marker and snapshot rows exist;
-- DTO mapping returns `missing_legacy` for terminal historical rows without
+- DTO mapping returns `captured` when the captured marker exists without
+  `snapshot_error`;
+- DTO mapping returns `missing_legacy` only for completed historical rows without
   marker, error, or snapshot rows;
-- DTO mapping returns `not_captured_due_to_preload_failure` when
-  `snapshot_error` exists;
+- DTO mapping returns `capture_failed` when `snapshot_error` exists;
+- DTO mapping returns `capture_failed` for failed/cancelled terminal rows
+  without a captured marker;
+- DTO mapping returns `null` for active created runs before capture completes;
+- empty corpus preflight rejects before creating a saved run;
+- stored snapshot errors are bounded and sanitized;
 - report pipeline persists snapshot before provider execution;
+- `snapshot_captured_at` is set only after reload-after-write verification
+  succeeds;
 - provider is not called when corpus preload or snapshot persistence fails;
 - provider failure after capture leaves `snapshot_state = "captured"` and
   `snapshot_error = NULL`;
@@ -230,8 +267,11 @@ frontend types change, and `git diff --check`.
 
 - New report runs capture `analysis_run_messages` before any provider request.
 - Provider and trace phases use the captured snapshot after reload-after-write.
+- `snapshot_captured_at` means the frozen snapshot was persisted, reloaded, and
+  verified as usable.
+- Empty corpus selections are rejected before saved run creation.
 - Snapshot capture failures stop before provider execution and expose
-  `not_captured_due_to_preload_failure`.
+  `capture_failed`.
 - Provider failures after successful capture still expose `captured`.
 - Saved-run DTOs expose explicit snapshot state and marker fields.
 - Historical snapshotless runs are classified as `missing_legacy`.
