@@ -25,6 +25,7 @@ const FAILED_RUN_LABEL: &str = "__analysis_redesign_fixture__ Failed Run";
 const CANCELLED_RUN_LABEL: &str = "__analysis_redesign_fixture__ Cancelled Run";
 const GROUP_SNAPSHOT_RUN_LABEL: &str = "__analysis_redesign_fixture__ Group Snapshot Run";
 const LLM_PROFILE_LABEL: &str = "__analysis_redesign_fixture__ LLM Profile";
+const FIXTURE_SNAPSHOT_CAPTURED_AT: &str = "2026-05-18T10:00:00Z";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -669,6 +670,23 @@ async fn insert_snapshot_message(
     Ok(())
 }
 
+async fn mark_fixture_snapshot_captured(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    run_id: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE analysis_runs
+         SET snapshot_captured_at = ?, snapshot_error = NULL
+         WHERE id = ?",
+    )
+    .bind(FIXTURE_SNAPSHOT_CAPTURED_AT)
+    .bind(run_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 fn trace_zstd(refs: serde_json::Value) -> AppResult<Vec<u8>> {
     json_zstd(serde_json::json!({ "refs": refs }))
 }
@@ -742,6 +760,7 @@ async fn insert_analysis_runs(
         })),
     )
     .await?;
+    mark_fixture_snapshot_captured(tx, completed_youtube_run_id).await?;
 
     let missing_ref = format!("s{}-i999999", ids.telegram_channel_id);
     insert_run(
@@ -882,6 +901,7 @@ async fn insert_analysis_runs(
         Some(serde_json::json!({ "analysis_redesign_fixture": true })),
     )
     .await?;
+    mark_fixture_snapshot_captured(tx, group_run_id).await?;
 
     for (role, content, created_at) in [
         ("user", "Summarize the strongest fixture evidence.", FIXTURE_NOW + 70),
@@ -1749,6 +1769,39 @@ mod tests {
             .await,
             1
         );
+    }
+
+    #[tokio::test]
+    async fn seeded_snapshot_runs_expose_captured_snapshot_state() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        for label in [COMPLETED_SNAPSHOT_RUN_LABEL, GROUP_SNAPSHOT_RUN_LABEL] {
+            let run_id: i64 =
+                sqlx::query_scalar("SELECT id FROM analysis_runs WHERE scope_label_snapshot = ?")
+                    .bind(label)
+                    .fetch_one(&pool)
+                    .await
+                    .expect("load fixture run id");
+            let detail = crate::analysis::store::fetch_run_row(&pool, run_id)
+                .await
+                .expect("fetch fixture run")
+                .map(crate::analysis::store::map_run_detail)
+                .expect("fixture run exists");
+
+            assert_eq!(
+                detail.snapshot_state,
+                Some(crate::analysis::models::AnalysisSnapshotState::Captured),
+                "{label} should expose captured snapshot state"
+            );
+            assert!(
+                detail.snapshot_captured_at.is_some(),
+                "{label} should expose snapshot capture marker"
+            );
+            assert_eq!(detail.snapshot_error, None);
+        }
     }
 
     #[tokio::test]
