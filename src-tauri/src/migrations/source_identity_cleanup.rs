@@ -101,6 +101,12 @@ async fn ensure_sqlx_migrations_table(conn: &mut SqliteConnection) -> AppResult<
     Ok(())
 }
 
+pub(super) async fn ensure_sqlx_migrations_table_for_runner(
+    conn: &mut SqliteConnection,
+) -> AppResult<()> {
+    ensure_sqlx_migrations_table(conn).await
+}
+
 async fn record_migration_success(
     conn: &mut SqliteConnection,
     version: i64,

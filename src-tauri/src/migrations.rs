@@ -1,5 +1,6 @@
 #![allow(clippy::items_after_test_module)]
 
+pub(crate) mod analysis_documents;
 pub(crate) mod source_identity_cleanup;
 pub(crate) mod telegram_item_native_identity;
 pub(crate) mod topic_membership_materialization;
@@ -36,7 +37,72 @@ async fn patch_migrations(db_path: &Path) -> crate::error::AppResult<()> {
     source_identity_cleanup::apply_source_identity_cleanup_if_needed(&url).await?;
     youtube_typed_source_metadata::apply_youtube_typed_source_metadata_if_needed(&url).await?;
     telegram_item_native_identity::apply_telegram_item_native_identity_if_needed(&url).await?;
-    topic_membership_materialization::apply_topic_membership_materialization_if_needed(&url).await
+    topic_membership_materialization::apply_topic_membership_materialization_if_needed(&url)
+        .await?;
+    apply_regular_sql_migrations_before_runner(&url, 22, 24).await?;
+    analysis_documents::apply_analysis_documents_if_needed(&url).await
+}
+
+async fn apply_regular_sql_migrations_before_runner(
+    db_url: &str,
+    after_version: i64,
+    before_version: i64,
+) -> crate::error::AppResult<()> {
+    use sqlx::Connection;
+
+    let mut conn = sqlx::SqliteConnection::connect(db_url)
+        .await
+        .map_err(crate::error::AppError::database)?;
+    apply_regular_sql_migrations_before_runner_on_connection(
+        &mut conn,
+        after_version,
+        before_version,
+    )
+    .await
+}
+
+async fn apply_regular_sql_migrations_before_runner_on_connection(
+    conn: &mut sqlx::SqliteConnection,
+    after_version: i64,
+    before_version: i64,
+) -> crate::error::AppResult<()> {
+    source_identity_cleanup::ensure_sqlx_migrations_table_for_runner(conn).await?;
+
+    for migration in build_migrations()
+        .into_iter()
+        .filter(|migration| migration.version > after_version && migration.version < before_version)
+    {
+        let exists: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM _sqlx_migrations WHERE version = ? AND success = 1",
+        )
+        .bind(migration.version)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(crate::error::AppError::database)?;
+        if exists != 0 {
+            continue;
+        }
+
+        let started_at = std::time::Instant::now();
+        sqlx::raw_sql(migration.sql)
+            .execute(&mut *conn)
+            .await
+            .map_err(crate::error::AppError::database)?;
+        sqlx::query(
+            "INSERT INTO _sqlx_migrations (
+                version, description, success, checksum, execution_time
+             ) VALUES (?, ?, 1, ?, ?)",
+        )
+        .bind(migration.version)
+        .bind(migration.description)
+        .bind(Sha384::digest(migration.sql.as_bytes()).to_vec())
+        .bind(started_at.elapsed().as_nanos().min(i64::MAX as u128) as i64)
+        .execute(&mut *conn)
+        .await
+        .map_err(crate::error::AppError::database)?;
+    }
+
+    Ok(())
 }
 
 fn app_config_db_path() -> Option<PathBuf> {
@@ -190,6 +256,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/23.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 24,
+            description: "add provider neutral analysis documents",
+            sql: include_str!("../migrations/24.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -213,15 +285,9 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
     topic_membership_materialization::apply_topic_membership_materialization_on_connection(conn)
         .await?;
 
-    for migration in build_migrations()
-        .into_iter()
-        .filter(|migration| migration.version > 22)
-    {
-        sqlx::raw_sql(migration.sql)
-            .execute(&mut *conn)
-            .await
-            .map_err(crate::error::AppError::database)?;
-    }
+    apply_regular_sql_migrations_before_runner_on_connection(conn, 22, 24).await?;
+    analysis_documents::apply_analysis_documents_on_connection(conn).await?;
+    apply_regular_sql_migrations_before_runner_on_connection(conn, 24, i64::MAX).await?;
 
     Ok(())
 }
@@ -547,13 +613,30 @@ mod tests {
     }
 
     #[test]
+    fn includes_runner_managed_analysis_documents_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 24)
+            .expect("version 24 migration is registered");
+
+        assert_eq!(
+            migration.description,
+            "add provider neutral analysis documents"
+        );
+        assert!(migration.sql.contains("runner-managed"));
+        assert!(migration.sql.contains("analysis_documents"));
+        assert!(!migration.sql.contains("CREATE TABLE analysis_documents"));
+    }
+
+    #[test]
     fn build_migrations_contains_all_versions_for_sqlx_validation() {
         let versions = build_migrations()
             .into_iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, (1_i64..=23_i64).collect::<Vec<_>>());
+        assert_eq!(versions, (1_i64..=24_i64).collect::<Vec<_>>());
     }
 
     #[tokio::test]
@@ -685,6 +768,40 @@ mod tests {
         .execute(&pool)
         .await
         .expect("duplicate warning codes are allowed");
+    }
+
+    #[tokio::test]
+    async fn fresh_schema_includes_analysis_documents_table_indexes_and_constraints() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        let table_exists: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'analysis_documents'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("check table");
+        assert_eq!(table_exists, 1);
+
+        for index in [
+            "idx_analysis_documents_source_key",
+            "idx_analysis_documents_source_published",
+            "idx_analysis_documents_kind_source_published",
+            "idx_analysis_documents_ref",
+        ] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
+            )
+            .bind(index)
+            .fetch_one(&pool)
+            .await
+            .expect("check index");
+            assert_eq!(exists, 1, "missing index {index}");
+        }
     }
 
     #[test]

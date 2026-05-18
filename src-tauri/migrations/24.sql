@@ -1,0 +1,3 @@
+-- Version 24 is runner-managed by src-tauri/src/migrations/analysis_documents.rs.
+-- The runner creates analysis_documents and backfills it from provider/archive truth
+-- before recording this sentinel migration as successful.

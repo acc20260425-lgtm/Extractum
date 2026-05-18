@@ -1083,7 +1083,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/migrations/analysis_documents.rs`
 
-- [ ] **Step 1: Write failing migration registration tests**
+- [x] **Step 1: Write failing migration registration tests**
 
 In `src-tauri/src/migrations.rs`, add this test near the other migration registration tests:
 
@@ -1109,7 +1109,7 @@ Update `build_migrations_contains_all_versions_for_sqlx_validation`:
 assert_eq!(versions, (1_i64..=24_i64).collect::<Vec<_>>());
 ```
 
-- [ ] **Step 2: Write failing runner/backfill tests**
+- [x] **Step 2: Write failing runner/backfill tests**
 
 Create `src-tauri/src/migrations/analysis_documents.rs` with this initial test module:
 
@@ -1285,7 +1285,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run migration tests and confirm failure**
+- [x] **Step 3: Run migration tests and confirm failure**
 
 Run:
 
@@ -1301,7 +1301,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::analysis_documents::
 
 Expected: compile failure because the migration module and v24 registration do not exist.
 
-- [ ] **Step 4: Add v24 sentinel SQL**
+- [x] **Step 4: Add v24 sentinel SQL**
 
 Create `src-tauri/migrations/24.sql`:
 
@@ -1311,7 +1311,7 @@ Create `src-tauri/migrations/24.sql`:
 -- before recording this sentinel migration as successful.
 ```
 
-- [ ] **Step 5: Implement runner-managed migration module**
+- [x] **Step 5: Implement runner-managed migration module**
 
 At the top of `src-tauri/src/migrations/analysis_documents.rs`, add:
 
@@ -1437,7 +1437,7 @@ fn expected_analysis_documents_checksum() -> Vec<u8> {
 }
 ```
 
-- [ ] **Step 6: Register migration 24 in migrations.rs**
+- [x] **Step 6: Register migration 24 in migrations.rs**
 
 In `src-tauri/src/migrations.rs`, add the module:
 
@@ -1559,7 +1559,7 @@ for migration in build_migrations()
 }
 ```
 
-- [ ] **Step 7: Update fresh-schema test**
+- [x] **Step 7: Update fresh-schema test**
 
 In `fresh_schema_includes_ingest_provenance_tables_indexes_and_constraints`, either rename the test to mention both v23/v24 or add a new async test:
 
@@ -1599,7 +1599,7 @@ async fn fresh_schema_includes_analysis_documents_table_indexes_and_constraints(
 }
 ```
 
-- [ ] **Step 8: Run migration tests**
+- [x] **Step 8: Run migration tests**
 
 Run:
 
@@ -1615,7 +1615,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::analysis_documents::
 
 Expected: all migration tests pass.
 
-- [ ] **Step 9: Commit migration 24**
+- [x] **Step 9: Commit migration 24**
 
 Run:
 
