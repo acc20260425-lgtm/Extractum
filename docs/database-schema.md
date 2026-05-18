@@ -632,9 +632,20 @@ Important fields:
 - `result_markdown`
 - `trace_data_zstd`
 - `scope_label_snapshot`
+- `snapshot_captured_at`
+- `snapshot_error`
 - `error`
 - `created_at`
 - `completed_at`
+
+Notes:
+
+- `snapshot_captured_at` is set after a report run's frozen corpus has been
+  persisted to `analysis_run_messages`, reloaded, and verified as usable before
+  provider execution.
+- `snapshot_error` is a bounded sanitized error category for
+  capture-preventing failures only. Provider/model/auth/network failures after
+  successful capture remain in `error` and do not populate `snapshot_error`.
 
 ### 2.3 `analysis_source_groups`
 
@@ -755,6 +766,12 @@ Purpose:
 - preserve effective source-group membership for the run.
 - preserve YouTube corpus metadata needed for timestamp evidence refs and synthetic description refs.
 
+For new report runs, `analysis_run_messages` is captured before provider
+execution and is the authoritative saved-run corpus for provider prompts, trace
+building, evidence resolution, saved-run source context, and follow-up chat.
+Completed historical runs without rows are treated as missing legacy snapshots;
+saved-run read paths must not reconstruct them from current live sources.
+
 ## 3. Migration history
 
 | Version | File | Purpose |
@@ -783,6 +800,7 @@ Purpose:
 | 22 | `22.sql` | Runner-managed creation and rebuild of Telegram forum topic membership materialization tables |
 | 23 | `23.sql` | Add generic ingest provenance tables and Telegram Takeout batch detail |
 | 24 | `24.sql` runner-managed | Add provider-neutral analysis document layer and backfill live analysis corpus documents |
+| 25 | `25.sql` | Add analysis snapshot capture marker and error columns |
 
 ## 4. Current behavior implications
 
@@ -809,7 +827,11 @@ Purpose:
   and export state, not a stored topic row;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - `analysis_runs.youtube_corpus_mode` preserves the selected YouTube corpus scope used by the run, rather than reconstructing it from current source defaults.
-- saved analysis runs now prefer `analysis_run_messages` over live `items`;
+- new saved analysis runs capture `analysis_run_messages` before provider
+  execution and expose explicit snapshot state on run DTOs;
+- saved analysis runs now use `analysis_run_messages` rather than live `items`
+  for saved-run corpus, evidence resolution, saved-run source context, and
+  follow-up chat;
 - completed snapshotless saved runs keep report output readable but do not silently resolve source/evidence/chat against live `items`;
 - new live analysis refs use local item identity (`s{source_id}-i{item_id}`);
 - YouTube transcript refs can include timestamp suffixes and resolve to canonical YouTube URLs with `t=` parameters;

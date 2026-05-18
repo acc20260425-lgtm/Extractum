@@ -17,9 +17,10 @@ The highest-return simplification was to make provider identity explicit and
 typed. Source identity, typed Telegram message identity, typed YouTube source
 metadata, and Telegram topic membership materialization have now shipped in
 separate slices. Provider-neutral analysis documents v1 has also shipped for
-live corpus loading. The remaining high-return work is expanding stable
-document/read models to NotebookLM export and source browsing where useful,
-snapshot hardening, playlist simplification, and migration baseline cleanup.
+live corpus loading. Analysis snapshot hardening has also shipped. The
+remaining high-return work is expanding stable document/read models to
+NotebookLM export and source browsing where useful, playlist simplification,
+and migration baseline cleanup.
 
 ## Inputs Reviewed
 
@@ -198,7 +199,7 @@ Remaining follow-up:
   successful import;
 - add richer topic/export UI only if product workflows need it.
 
-### 6. Analysis Snapshots Are Correct, But Still Compatibility-Shaped
+### 6. Analysis Snapshot Hardening Has Shipped
 
 `analysis_run_messages` is not obsolete. It is core to stable saved runs. The issue is that it was introduced before YouTube metadata and provider fields, then extended later with nullable fields:
 
@@ -207,7 +208,11 @@ Remaining follow-up:
 - `source_subtype`
 - `metadata_zstd`
 
-That keeps `Option` fields in Rust models and preserves snapshotless/legacy fallback logic. One fallback path reconstructs corpus from live data and currently defaults to `TranscriptDescription` instead of using the run's stored YouTube corpus mode.
+Analysis snapshot hardening is shipped: new report runs capture
+`analysis_run_messages` before provider execution and expose explicit snapshot
+state on saved-run DTOs. Historical completed rows without saved messages remain
+readable as missing legacy snapshots, but evidence, chat, and saved-run source
+context do not reconstruct them from live provider/archive state.
 
 Relevant files:
 
@@ -218,12 +223,11 @@ Relevant files:
 - `src-tauri/src/analysis/store.rs`
 - `src-tauri/src/analysis/corpus.rs`
 
-Recommendation:
+Remaining follow-up:
 
 - make snapshot document fields non-null for new runs;
-- persist the corpus snapshot before provider execution, so failed or cancelled runs can still expose the exact attempted corpus where appropriate;
 - backfill old completed runs when possible;
-- keep historical snapshotless runs readable as report artifacts, but avoid live-source reconstruction as a normal behavior path.
+- add UI affordances for missing legacy and capture-failed saved-run states.
 
 ### 7. Compressed Metadata Blobs Are Overloaded
 

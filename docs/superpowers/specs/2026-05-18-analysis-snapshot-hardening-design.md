@@ -2,6 +2,8 @@
 
 Date: 2026-05-18
 
+Implementation status: shipped in branch `analysis-snapshot-hardening`.
+
 ## Goal
 
 Make saved analysis runs snapshot-first in practice, not only in intent.

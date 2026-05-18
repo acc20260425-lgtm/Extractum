@@ -40,8 +40,9 @@ describe("analysis redesign final safety contract", () => {
     expect(corpusBackendSource).toContain("list_run_snapshot_messages_page");
     expect(corpusBackendSource).toContain("analysis_run_messages");
     expect(corpusBackendSource).toContain("load_trace_resolution_messages");
-    expect(corpusBackendSource).toContain('run.status == "completed"');
-    expect(corpusBackendSource).toContain("return Ok(Vec::new())");
+    expect(corpusBackendSource).toContain("ensure_captured_snapshot_rows");
+    expect(corpusBackendSource).toContain("AnalysisSnapshotState::Captured");
+    expect(corpusBackendSource).toContain("captured snapshot is unavailable");
     expect(corpusBackendSource).not.toContain("completed_run_live_source_fallback");
   });
 

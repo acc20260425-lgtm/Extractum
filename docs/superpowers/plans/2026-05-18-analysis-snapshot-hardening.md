@@ -1753,7 +1753,7 @@ Expected: commit succeeds.
 - Test: full Rust suite
 - Test: frontend checks/tests
 
-- [ ] **Step 1: Update schema docs**
+- [x] **Step 1: Update schema docs**
 
 In `docs/database-schema.md`, update the `analysis_runs` section to include:
 
@@ -1783,7 +1783,7 @@ Update the migration history table with:
 | 25 | `25.sql` | Add analysis snapshot capture marker and error columns |
 ```
 
-- [ ] **Step 2: Update legacy analysis and backlog docs**
+- [x] **Step 2: Update legacy analysis and backlog docs**
 
 In `docs/database-schema-legacy-analysis.md`, mark snapshot hardening as shipped:
 
@@ -1802,12 +1802,12 @@ In `docs/backlog.md`, keep future work limited to UI presentation or export foll
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 ```
 
-- [ ] **Step 3: Mark plan steps complete as each task lands**
+- [x] **Step 3: Mark plan steps complete as each task lands**
 
 Before the Task 7 commit, ensure every completed step in this plan uses `[x]`.
 Do not mark a step complete before running its verification command.
 
-- [ ] **Step 4: Run containment scans**
+- [x] **Step 4: Run containment scans**
 
 Run:
 
@@ -1825,7 +1825,7 @@ Expected:
 - YouTube `TranscriptDescription` is used for live/default request construction only, not as a saved-run fallback;
 - no new unfinished-work markers are introduced.
 
-- [ ] **Step 5: Run targeted Rust tests**
+- [x] **Step 5: Run targeted Rust tests**
 
 Run:
 
@@ -1841,7 +1841,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::tests::
 
 Expected: all targeted Rust tests pass.
 
-- [ ] **Step 6: Run full verification**
+- [x] **Step 6: Run full verification**
 
 Run:
 
@@ -1856,7 +1856,7 @@ git status --short
 
 Expected: Rust suite, Rust formatting, Vitest suite, Svelte check, and diff check pass. `git status --short` shows only intended Task 7 docs/plan changes before commit.
 
-- [ ] **Step 7: Commit docs and final verification notes**
+- [x] **Step 7: Commit docs and final verification notes**
 
 Run:
 
