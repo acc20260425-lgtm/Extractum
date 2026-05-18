@@ -79,7 +79,9 @@ reaction counts, and export-specific rendering. It remains out of scope for v1.
 
 ## Data Model
 
-Migration 24 adds:
+Migration 24 adds the following table. All integer timestamps in
+`analysis_documents` use Unix epoch seconds in UTC, matching `items.published_at`
+and `analysis_run_messages.published_at`.
 
 ```sql
 CREATE TABLE analysis_documents (
@@ -120,6 +122,13 @@ CREATE TABLE analysis_documents (
       'youtube_comment',
       'youtube_description'
     ) AND source_type = 'youtube')
+  ),
+  CHECK (
+    (source_type = 'telegram'
+      AND COALESCE(source_subtype, '')
+        IN ('channel', 'supergroup', 'group'))
+    OR
+    (source_type = 'youtube' AND COALESCE(source_subtype, '') = 'video')
   ),
   CHECK (
     (document_kind IN (
@@ -168,6 +177,9 @@ Document keys are deterministic:
 
 The unique identity for rebuild/upsert is `(source_id, document_key)`.
 `analysis_documents.id` is internal and must not become a public evidence ref.
+The constant `youtube:description` key is intentionally source-scoped by that
+unique index: many video sources can each have one description document with
+the same per-source key.
 
 ## Document Kinds
 
@@ -297,7 +309,9 @@ Version 1 preserves current live ref semantics:
 
 `idx_analysis_documents_ref` exists for lookup support, but `ref` is not unique
 in v1. Future document kinds may share base refs or generate suffix refs from
-metadata.
+metadata. Any database lookup by `ref` must additionally constrain
+`source_id`, `document_kind`, or another caller-owned scope when uniqueness
+matters. The index is an access path, not an identity contract.
 
 ## Upgrade And Backfill
 
@@ -343,6 +357,13 @@ After a source rebuild, analysis_documents rows for that source exactly equal
 the text-bearing analysis units derivable from archive/provider state.
 ```
 
+`rebuild_analysis_documents_for_source(source_id)` must run under the same
+same-source ingest coordination used by sync and Takeout, or an equivalent
+per-source write guard, so it cannot race an ingest task that is inserting or
+updating documents for the same source. The rebuild itself should use one
+SQLite transaction for delete/reinsert or deterministic upsert work for that
+source.
+
 Rows that are no longer derivable are removed:
 
 - if an item-backed row loses `content_zstd`, the document is deleted;
@@ -356,8 +377,9 @@ Rows that are no longer derivable are removed:
   updated.
 
 Any code path that changes text-bearing content must update or delete the
-matching document in the same storage boundary. Any code path that deletes a
-source or item relies on FK cascade and/or source rebuild.
+matching document in the same SQLite transaction or explicitly guarded storage
+boundary. Any code path that deletes a source or item relies on FK cascade
+and/or source rebuild.
 
 ## Runtime Maintenance
 
@@ -368,6 +390,19 @@ The implementation must synchronously maintain documents for these write paths:
 - YouTube transcript item and transcript segment writes;
 - YouTube comment item write;
 - YouTube video metadata upsert for description documents.
+
+For item-backed writes, the item insert/update and matching document
+upsert/delete must be part of one SQLite transaction wherever the current
+writer already owns a transaction. Telegram message edits are not a normal
+runtime update path in v1, but the shared Telegram insert helper must still
+write the document in the same transaction as the item and `telegram_messages`
+row. YouTube transcript refreshes may replace transcript item content and
+segment rows; those refreshes must rebuild the transcript segment documents for
+the item in the same SQLite transaction or guarded transaction boundary as the
+replacement. YouTube comment refreshes must upsert or delete comment documents
+alongside comment item writes. YouTube video metadata upsert must insert,
+update, or delete the `youtube:description` document alongside the typed
+metadata row when the description changes or becomes empty.
 
 Normal source browsing and source item APIs remain on `items`, because `items`
 still stores archive rows, media-bearing rows, and media-only rows that are not
@@ -409,6 +444,12 @@ The effective corpus must remain equivalent to the current reader:
 - Playlist analysis still expands linked `video_source_id` rows and excludes
   unavailable or unlinked playlist entries.
 
+For playlist scopes, source resolution remains the current two-step behavior:
+the selected playlist source expands through `youtube_playlist_items` to linked
+non-removed `video_source_id` rows, then `load_corpus_messages` reads
+`analysis_documents` for those video source ids. `analysis_documents` rows are
+not stored under the playlist source id in v1.
+
 Saved run snapshot flow remains:
 
 ```text
@@ -431,7 +472,8 @@ and evidence behavior:
 
 - YouTube transcript evidence metadata and segment lookup hints;
 - YouTube description source context and canonical URL metadata;
-- optional envelope version fields for future migration.
+- an explicit metadata envelope version field, starting at `1`, for every
+  non-empty v1 metadata envelope.
 
 Telegram message documents do not need heavy metadata in v1 unless the existing
 analysis corpus path requires a value that is not already represented by the
@@ -459,6 +501,7 @@ Reader tests must cover:
 - playlist linked-video expansion and unavailable/unlinked exclusion;
 - chronological ordering by `published_at ASC, source_id ASC, ref ASC`;
 - period filtering by `analysis_documents.published_at`;
+- ref lookup tests must not assume `ref` is globally unique;
 - YouTube transcript timestamp evidence still resolves through
   `youtube_transcript_segments`;
 - saved run snapshot persistence still writes `analysis_run_messages`.
@@ -471,6 +514,7 @@ Runtime tests must cover document maintenance for:
 - YouTube comment item writes;
 - YouTube video metadata upsert when description is inserted, changed, or
   cleared.
+- source rebuild does not race same-source ingest and is idempotent.
 
 Containment scans must verify:
 
@@ -502,7 +546,8 @@ Update `docs/database-schema-legacy-analysis.md` and `docs/backlog.md`:
 - Ref regressions: mitigated by preserving item-backed refs and keeping
   document ids internal.
 - YouTube period drift: mitigated by explicit `published_at` inheritance and
-  deterministic description fallback.
+  by matching the current description loader behavior: skip descriptions whose
+  typed video publish date is missing or unparseable.
 - Snapshot regressions: mitigated by keeping `analysis_run_messages` as the
   frozen corpus snapshot.
 - Scope creep: mitigated by leaving source browsing and NotebookLM export on
