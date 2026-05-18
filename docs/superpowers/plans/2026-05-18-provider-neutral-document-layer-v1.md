@@ -2075,7 +2075,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/youtube/source_metadata.rs`
 - Test: `src-tauri/src/sources/store.rs`
 
-- [ ] **Step 1: Add failing description maintenance tests**
+- [x] **Step 1: Add failing description maintenance tests**
 
 In `src-tauri/src/youtube/source_metadata.rs`, add tests near existing typed metadata tests:
 
@@ -2146,7 +2146,7 @@ async fn seed_video_source_for_metadata_test(
 }
 ```
 
-- [ ] **Step 2: Run description maintenance test and confirm failure**
+- [x] **Step 2: Run description maintenance test and confirm failure**
 
 Run:
 
@@ -2156,7 +2156,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::source_metadata::tests:
 
 Expected: test fails because typed video metadata upsert does not maintain the synthetic document.
 
-- [ ] **Step 3: Wire typed video metadata upsert**
+- [x] **Step 3: Wire typed video metadata upsert**
 
 In `src-tauri/src/youtube/source_metadata.rs`, update `upsert_video_source_metadata`:
 
@@ -2178,7 +2178,7 @@ pub(crate) async fn upsert_video_source_metadata(
 
 Do not change `insert_video_source_metadata_on_connection`; migration 20 uses it before `analysis_documents` exists.
 
-- [ ] **Step 4: Update source store tests that call YouTube video upsert**
+- [x] **Step 4: Update source store tests that call YouTube video upsert**
 
 In `src-tauri/src/sources/store.rs`, update memory DB setup for tests that call `upsert_youtube_video_source` so they create analysis documents schema before invoking the upsert:
 
@@ -2194,7 +2194,7 @@ Apply this to existing tests around:
 
 Do not add the helper to the invalid canonical URL test if it asserts no source row is created before typed metadata insertion; keep that test focused on validation.
 
-- [ ] **Step 5: Run YouTube source metadata/store tests**
+- [x] **Step 5: Run YouTube source metadata/store tests**
 
 Run:
 
@@ -2210,7 +2210,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::upsert_yo
 
 Expected: selected tests pass.
 
-- [ ] **Step 6: Commit description maintenance**
+- [x] **Step 6: Commit description maintenance**
 
 Run:
 

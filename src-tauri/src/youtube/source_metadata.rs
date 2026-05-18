@@ -779,7 +779,11 @@ pub(crate) async fn upsert_video_source_metadata(
     metadata: &YoutubeVideoMetadata,
 ) -> AppResult<()> {
     let columns = YoutubeVideoSourceColumns::try_from_metadata(metadata)?;
-    insert_video_source_columns(&mut **tx, source_id, &columns).await
+    insert_video_source_columns(&mut **tx, source_id, &columns).await?;
+    crate::analysis_documents::upsert_youtube_description_document_on_connection(
+        &mut **tx, source_id,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -1033,6 +1037,69 @@ mod tests {
         );
         let raw = decode_raw_payload_for_test(columns.raw_metadata_zstd.as_deref().unwrap());
         assert!(raw.get("headers").is_none());
+    }
+
+    #[tokio::test]
+    async fn upsert_video_metadata_maintains_description_document() {
+        let pool = crate::sources::test_support::memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
+        seed_video_source_for_metadata_test(&pool, 2, "video2").await;
+
+        let mut metadata = video_metadata(json!({ "id": "video2" }));
+        metadata.video_id = "video2".to_string();
+        metadata.canonical_url = "https://www.youtube.com/watch?v=video2".to_string();
+        metadata.description = Some("First description".to_string());
+        metadata.published_at = Some("2026-05-01".to_string());
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        upsert_video_source_metadata(&mut tx, 2, &metadata)
+            .await
+            .expect("upsert metadata");
+        tx.commit().await.expect("commit");
+
+        let content: Vec<u8> = sqlx::query_scalar(
+            "SELECT content_zstd FROM analysis_documents
+             WHERE source_id = 2 AND document_key = 'youtube:description'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load description doc");
+        let text = crate::compression::decompress_text(&content).expect("decompress");
+        assert!(text.contains("First description"));
+
+        metadata.description = Some("   ".to_string());
+        let mut tx = pool.begin().await.expect("begin tx");
+        upsert_video_source_metadata(&mut tx, 2, &metadata)
+            .await
+            .expect("clear metadata");
+        tx.commit().await.expect("commit clear");
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM analysis_documents
+             WHERE source_id = 2 AND document_key = 'youtube:description'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count docs");
+        assert_eq!(count, 0);
+    }
+
+    async fn seed_video_source_for_metadata_test(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        video_id: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, external_id, title, is_active, is_member, created_at
+             ) VALUES (?, 'youtube', 'video', ?, 'Video', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .bind(video_id)
+        .execute(pool)
+        .await
+        .expect("seed source");
     }
 
     fn video_metadata(raw_metadata_json: serde_json::Value) -> YoutubeVideoMetadata {

@@ -498,7 +498,8 @@ mod tests {
     use super::*;
     use crate::error::AppErrorKind;
     use crate::sources::test_support::{
-        create_canonical_telegram_identity_index, create_youtube_typed_source_tables,
+        create_analysis_documents_table, create_canonical_telegram_identity_index,
+        create_youtube_typed_source_tables, memory_pool_with_source_items_and_topics,
         memory_pool_with_sources,
     };
     use crate::sources::types::TELEGRAM_KIND_CHANNEL;
@@ -831,8 +832,9 @@ mod tests {
 
     #[tokio::test]
     async fn upsert_youtube_video_source_writes_typed_row_and_null_source_metadata() {
-        let pool = memory_pool_with_sources().await;
+        let pool = memory_pool_with_source_items_and_topics().await;
         create_youtube_typed_source_tables(&pool).await;
+        create_analysis_documents_table(&pool).await;
         create_youtube_unique_indexes(&pool).await;
         let mut tx = pool.begin().await.expect("begin tx");
 
@@ -898,8 +900,9 @@ mod tests {
 
     #[tokio::test]
     async fn upsert_youtube_video_source_conflict_clears_existing_legacy_blob() {
-        let pool = memory_pool_with_sources().await;
+        let pool = memory_pool_with_source_items_and_topics().await;
         create_youtube_typed_source_tables(&pool).await;
+        create_analysis_documents_table(&pool).await;
         create_youtube_unique_indexes(&pool).await;
         let legacy_blob = crate::compression::compress_json_bytes(br#"{"legacy":true}"#)
             .expect("compress legacy");
@@ -1010,7 +1013,20 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create playlist index");
+        sqlx::query(
+            r#"
+            CREATE TABLE items (
+                id INTEGER PRIMARY KEY,
+                source_id INTEGER NOT NULL,
+                external_id TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create items table");
         create_youtube_typed_source_tables(&pool).await;
+        create_analysis_documents_table(&pool).await;
         pool
     }
 
