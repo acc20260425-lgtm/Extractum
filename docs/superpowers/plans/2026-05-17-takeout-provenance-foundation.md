@@ -34,7 +34,7 @@
 - Modify: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Write failing migration registration tests**
+- [x] **Step 1: Write failing migration registration tests**
 
 Add these tests inside `#[cfg(test)] mod tests` in `src-tauri/src/migrations.rs`:
 
@@ -68,7 +68,7 @@ fn build_migrations_contains_all_versions_for_sqlx_validation() {
 
 Replace the existing `build_migrations_contains_all_versions_for_sqlx_validation` test instead of leaving two copies.
 
-- [ ] **Step 2: Run registration tests and confirm failure**
+- [x] **Step 2: Run registration tests and confirm failure**
 
 Run:
 
@@ -78,7 +78,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::includes_regu
 
 Expected: the first test fails because migration 23 is not registered; the second fails because the version list still ends at 22.
 
-- [ ] **Step 3: Add SQL migration 23**
+- [x] **Step 3: Add SQL migration 23**
 
 Create `src-tauri/migrations/23.sql` with:
 
@@ -243,7 +243,7 @@ CREATE INDEX idx_ingest_batch_warnings_batch
 ON ingest_batch_warnings(batch_id);
 ```
 
-- [ ] **Step 4: Register migration 23**
+- [x] **Step 4: Register migration 23**
 
 In `src-tauri/src/migrations.rs`, append this entry after version 22:
 
@@ -256,7 +256,7 @@ Migration {
 },
 ```
 
-- [ ] **Step 5: Update the test migration helper for post-runner SQL migrations**
+- [x] **Step 5: Update the test migration helper for post-runner SQL migrations**
 
 In `apply_all_migrations_for_test_pool`, after `topic_membership_materialization::apply_topic_membership_materialization_on_connection(conn).await?;`, execute regular SQL migrations above v22:
 
@@ -279,7 +279,7 @@ Ok(())
 
 The function currently returns the v22 result directly, so convert that tail expression into the block above.
 
-- [ ] **Step 6: Add schema behavior tests**
+- [x] **Step 6: Add schema behavior tests**
 
 Add this async test in `src-tauri/src/migrations.rs`:
 
@@ -408,7 +408,7 @@ async fn fresh_schema_includes_ingest_provenance_tables_indexes_and_constraints(
 }
 ```
 
-- [ ] **Step 7: Run migration tests**
+- [x] **Step 7: Run migration tests**
 
 Run:
 
@@ -418,7 +418,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::
 
 Expected: all migration tests pass.
 
-- [ ] **Step 8: Commit migration work**
+- [x] **Step 8: Commit migration work**
 
 Run:
 
@@ -439,7 +439,7 @@ Expected: commit succeeds with migration schema and tests.
 - Modify: `src-tauri/src/sources/test_support.rs`
 - Test: `src-tauri/src/ingest_provenance.rs`
 
-- [ ] **Step 1: Register the new module**
+- [x] **Step 1: Register the new module**
 
 In `src-tauri/src/lib.rs`, add this near the other backend modules:
 
@@ -447,7 +447,7 @@ In `src-tauri/src/lib.rs`, add this near the other backend modules:
 mod ingest_provenance;
 ```
 
-- [ ] **Step 2: Add a test fixture helper for provenance tables**
+- [x] **Step 2: Add a test fixture helper for provenance tables**
 
 In `src-tauri/src/sources/test_support.rs`, add:
 
@@ -469,7 +469,7 @@ Update `source_fixture_creates_expected_tables` to call `create_ingest_provenanc
 "ingest_batch_warnings",
 ```
 
-- [ ] **Step 3: Write failing storage helper tests**
+- [x] **Step 3: Write failing storage helper tests**
 
 Create `src-tauri/src/ingest_provenance.rs` with only the test module first:
 
@@ -650,7 +650,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 4: Run storage helper tests and confirm failure**
+- [x] **Step 4: Run storage helper tests and confirm failure**
 
 Run:
 
@@ -660,7 +660,7 @@ cargo test --manifest-path src-tauri/Cargo.toml ingest_provenance::tests::
 
 Expected: compile fails because the helper types/functions do not exist.
 
-- [ ] **Step 5: Implement storage helpers**
+- [x] **Step 5: Implement storage helpers**
 
 Above the test module in `src-tauri/src/ingest_provenance.rs`, add:
 
@@ -1107,7 +1107,7 @@ async fn finish_manual_transaction<T>(
 }
 ```
 
-- [ ] **Step 6: Run storage helper tests**
+- [x] **Step 6: Run storage helper tests**
 
 Run:
 
@@ -1117,7 +1117,7 @@ cargo test --manifest-path src-tauri/Cargo.toml ingest_provenance::tests:: sourc
 
 Expected: tests pass after small compiler fixes for lifetimes or imports.
 
-- [ ] **Step 7: Commit storage helpers**
+- [x] **Step 7: Commit storage helpers**
 
 Run:
 
