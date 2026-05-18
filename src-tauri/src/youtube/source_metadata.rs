@@ -89,6 +89,7 @@ pub(crate) struct YoutubePlaylistSourceMetadata {
     pub(crate) availability_status: String,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(crate) struct YoutubeVideoDescriptionMetadata {
     pub(crate) source_id: i64,
@@ -351,6 +352,7 @@ pub(crate) async fn load_playlist_source_metadata_map(
     playlist_metadata_rows_to_map(rows)
 }
 
+#[allow(dead_code)]
 pub(crate) async fn load_video_description_metadata(
     pool: &sqlx::SqlitePool,
     source_ids: &[i64],
@@ -456,6 +458,7 @@ fn video_metadata_rows_to_map(
     Ok(metadata)
 }
 
+#[allow(dead_code)]
 fn valid_description_metadata_from_row(
     row: sqlx::sqlite::SqliteRow,
 ) -> AppResult<Option<YoutubeVideoDescriptionMetadata>> {
@@ -595,6 +598,7 @@ fn availability_status_from_wire(value: &str) -> YoutubeAvailabilityStatus {
     }
 }
 
+#[allow(dead_code)]
 fn json_text_is_array(value: &str) -> bool {
     serde_json::from_str::<Value>(value).is_ok_and(|value| value.is_array())
 }

@@ -219,20 +219,6 @@ pub struct AnalysisChatEvent {
 }
 
 #[derive(FromRow)]
-pub(crate) struct StoredAnalysisItemRow {
-    pub(crate) id: i64,
-    pub(crate) source_id: i64,
-    pub(crate) external_id: String,
-    pub(crate) author: Option<String>,
-    pub(crate) published_at: i64,
-    pub(crate) content_zstd: Option<Vec<u8>>,
-    pub(crate) item_kind: Option<String>,
-    pub(crate) source_type: Option<String>,
-    pub(crate) source_subtype: Option<String>,
-    pub(crate) metadata_zstd: Option<Vec<u8>>,
-}
-
-#[derive(FromRow)]
 pub(crate) struct StoredRunSnapshotRow {
     pub(crate) item_id: i64,
     pub(crate) source_id: i64,

@@ -2229,7 +2229,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/analysis/corpus.rs`
 - Test: `src-tauri/src/analysis/corpus.rs`
 
-- [ ] **Step 1: Add failing reader ordering and containment tests**
+- [x] **Step 1: Add failing reader ordering and containment tests**
 
 In `src-tauri/src/analysis/corpus.rs`, add or update tests in the existing test module:
 
@@ -2287,7 +2287,7 @@ async fn load_corpus_messages_orders_transcript_segments_by_document_order_not_r
 
 Update existing reader tests that seed `items` or YouTube typed metadata directly to call `rebuild_documents_for_sources` before `load_corpus_messages` or `preflight_analysis_run`. Keep tests for `load_youtube_transcript_segment_messages` and `load_youtube_description_messages` only until those helper functions are removed in the implementation step.
 
-- [ ] **Step 2: Run reader tests and confirm failure**
+- [x] **Step 2: Run reader tests and confirm failure**
 
 Run:
 
@@ -2297,7 +2297,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::load_co
 
 Expected: test fails or compile fails because `load_corpus_messages` still reads provider tables and the test expects document rebuild behavior.
 
-- [ ] **Step 3: Add document row and loader**
+- [x] **Step 3: Add document row and loader**
 
 In `src-tauri/src/analysis/corpus.rs`, add:
 
@@ -2395,7 +2395,7 @@ async fn load_analysis_document_messages(
 }
 ```
 
-- [ ] **Step 4: Switch `load_corpus_messages` to the document loader**
+- [x] **Step 4: Switch `load_corpus_messages` to the document loader**
 
 Replace the body of `load_corpus_messages` with:
 
@@ -2431,7 +2431,7 @@ pub(crate) fn live_corpus_ref(source_id: i64, item_id: i64) -> String {
 }
 ```
 
-- [ ] **Step 5: Update reader tests for rebuild-backed setup**
+- [x] **Step 5: Update reader tests for rebuild-backed setup**
 
 For each existing test that seeds provider/archive rows then calls `load_corpus_messages` or `preflight_analysis_run`, call:
 
@@ -2453,7 +2453,7 @@ Do this for at least these tests:
 
 For source-group and playlist tests, rebuild the linked source ids, not the selected playlist source id, matching the spec.
 
-- [ ] **Step 6: Add containment scans to the plan execution notes**
+- [x] **Step 6: Add containment scans to the plan execution notes**
 
 Before committing Task 6, run:
 
@@ -2468,7 +2468,7 @@ Expected:
 - `list_source_items` and NotebookLM export still read `items`;
 - saved run snapshot readers still read `analysis_run_messages`.
 
-- [ ] **Step 7: Run analysis corpus tests**
+- [x] **Step 7: Run analysis corpus tests**
 
 Run:
 
@@ -2478,7 +2478,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: all analysis corpus tests pass.
 
-- [ ] **Step 8: Commit reader switch**
+- [x] **Step 8: Commit reader switch**
 
 Run:
 
