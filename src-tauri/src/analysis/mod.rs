@@ -222,6 +222,9 @@ pub async fn list_analysis_runs(
                 runs.result_markdown,
                 runs.trace_data_zstd,
                 runs.scope_label_snapshot,
+                runs.snapshot_captured_at,
+                runs.snapshot_error,
+                COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
                 runs.error,
                 runs.created_at,
                 runs.completed_at
@@ -229,6 +232,11 @@ pub async fn list_analysis_runs(
             LEFT JOIN sources ON sources.id = runs.source_id
             LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
             LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
+            LEFT JOIN (
+                SELECT run_id, COUNT(*) AS snapshot_message_count
+                FROM analysis_run_messages
+                GROUP BY run_id
+            ) snapshot_counts ON snapshot_counts.run_id = runs.id
             WHERE runs.source_id = ?
             ORDER BY runs.created_at DESC
             LIMIT ?
@@ -264,6 +272,9 @@ pub async fn list_analysis_runs(
                 runs.result_markdown,
                 runs.trace_data_zstd,
                 runs.scope_label_snapshot,
+                runs.snapshot_captured_at,
+                runs.snapshot_error,
+                COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
                 runs.error,
                 runs.created_at,
                 runs.completed_at
@@ -271,6 +282,11 @@ pub async fn list_analysis_runs(
             LEFT JOIN sources ON sources.id = runs.source_id
             LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
             LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
+            LEFT JOIN (
+                SELECT run_id, COUNT(*) AS snapshot_message_count
+                FROM analysis_run_messages
+                GROUP BY run_id
+            ) snapshot_counts ON snapshot_counts.run_id = runs.id
             WHERE runs.source_group_id = ?
             ORDER BY runs.created_at DESC
             LIMIT ?
@@ -306,6 +322,9 @@ pub async fn list_analysis_runs(
                 runs.result_markdown,
                 runs.trace_data_zstd,
                 runs.scope_label_snapshot,
+                runs.snapshot_captured_at,
+                runs.snapshot_error,
+                COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
                 runs.error,
                 runs.created_at,
                 runs.completed_at
@@ -313,6 +332,11 @@ pub async fn list_analysis_runs(
             LEFT JOIN sources ON sources.id = runs.source_id
             LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
             LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
+            LEFT JOIN (
+                SELECT run_id, COUNT(*) AS snapshot_message_count
+                FROM analysis_run_messages
+                GROUP BY run_id
+            ) snapshot_counts ON snapshot_counts.run_id = runs.id
             ORDER BY runs.created_at DESC
             LIMIT ?
             "#,
@@ -518,6 +542,8 @@ mod tests {
                 result_markdown TEXT,
                 trace_data_zstd BLOB,
                 scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
                 error TEXT,
                 created_at INTEGER NOT NULL,
                 completed_at INTEGER
@@ -527,6 +553,17 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create runs");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_run_messages (
+                run_id INTEGER NOT NULL,
+                ref TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create run messages");
         pool
     }
 

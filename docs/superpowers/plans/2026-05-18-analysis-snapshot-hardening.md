@@ -38,7 +38,7 @@
 - Test: `src-tauri/src/analysis/store.rs`
 - Test: `src-tauri/src/analysis/mod.rs`
 
-- [ ] **Step 1: Add failing migration registration and schema tests**
+- [x] **Step 1: Add failing migration registration and schema tests**
 
 In `src-tauri/src/migrations.rs`, add this test near the existing migration registration tests:
 
@@ -85,7 +85,7 @@ async fn fresh_schema_includes_analysis_snapshot_markers() {
 }
 ```
 
-- [ ] **Step 2: Run migration tests and confirm failure**
+- [x] **Step 2: Run migration tests and confirm failure**
 
 Run:
 
@@ -103,7 +103,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::fresh_schema_
 
 Expected: fails because the columns are missing.
 
-- [ ] **Step 3: Add and register migration 25**
+- [x] **Step 3: Add and register migration 25**
 
 Create `src-tauri/migrations/25.sql`:
 
@@ -123,7 +123,7 @@ Migration {
 },
 ```
 
-- [ ] **Step 4: Add failing DTO mapping tests**
+- [x] **Step 4: Add failing DTO mapping tests**
 
 In `src-tauri/src/analysis/store.rs`, extend `sample_run_row()` with these fields after `scope_label_snapshot`:
 
@@ -219,7 +219,7 @@ fn failed_terminal_run_without_capture_marker_is_capture_failed() {
 }
 ```
 
-- [ ] **Step 5: Run DTO tests and confirm failure**
+- [x] **Step 5: Run DTO tests and confirm failure**
 
 Run:
 
@@ -229,7 +229,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::map_run_
 
 Expected: compile failure because `AnalysisSnapshotState` and DTO fields do not exist.
 
-- [ ] **Step 6: Implement snapshot state models**
+- [x] **Step 6: Implement snapshot state models**
 
 In `src-tauri/src/analysis/models.rs`, add this enum before `AnalysisRunSummary`:
 
@@ -266,7 +266,7 @@ pub(crate) snapshot_error: Option<String>,
 pub(crate) snapshot_message_count: i64,
 ```
 
-- [ ] **Step 7: Compute snapshot state in store mapping**
+- [x] **Step 7: Compute snapshot state in store mapping**
 
 In `src-tauri/src/analysis/store.rs`, import `AnalysisSnapshotState` and status constants:
 
@@ -328,7 +328,7 @@ For `AnalysisRunDetail`, also set:
 snapshot_message_count: row.snapshot_message_count,
 ```
 
-- [ ] **Step 8: Include snapshot fields and row counts in run queries**
+- [x] **Step 8: Include snapshot fields and row counts in run queries**
 
 Update every `AnalysisRunRow` SELECT in `src-tauri/src/analysis/store.rs::fetch_run_row` and `src-tauri/src/analysis/mod.rs::list_analysis_runs` to select:
 
@@ -351,7 +351,7 @@ LEFT JOIN (
 Keep the existing joins to `sources`, `analysis_source_groups`, and
 `analysis_prompt_templates`.
 
-- [ ] **Step 9: Update in-memory analysis run tables in Rust tests**
+- [x] **Step 9: Update in-memory analysis run tables in Rust tests**
 
 For each test-only `CREATE TABLE analysis_runs` in these files, add:
 
@@ -378,7 +378,7 @@ snapshot_message_count: 1,
 
 Use `snapshot_state: None`, `snapshot_captured_at: None`, `snapshot_error: None`, and `snapshot_message_count: 0` for active runs created before capture.
 
-- [ ] **Step 10: Run Task 1 verification**
+- [x] **Step 10: Run Task 1 verification**
 
 Run:
 
@@ -392,7 +392,7 @@ git diff --check
 
 Expected: selected tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 11: Commit migration and DTO state**
+- [x] **Step 11: Commit migration and DTO state**
 
 Run:
 

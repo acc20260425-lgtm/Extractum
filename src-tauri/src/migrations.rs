@@ -262,6 +262,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/24.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 25,
+            description: "harden analysis run snapshots",
+            sql: include_str!("../migrations/25.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -630,13 +636,54 @@ mod tests {
     }
 
     #[test]
+    fn includes_analysis_snapshot_hardening_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 25)
+            .expect("version 25 migration is registered");
+
+        for fragment in [
+            "ALTER TABLE analysis_runs ADD COLUMN snapshot_captured_at TEXT",
+            "ALTER TABLE analysis_runs ADD COLUMN snapshot_error TEXT",
+        ] {
+            assert!(
+                migration.sql.contains(fragment),
+                "missing migration fragment {fragment}"
+            );
+        }
+    }
+
+    #[test]
     fn build_migrations_contains_all_versions_for_sqlx_validation() {
         let versions = build_migrations()
             .into_iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, (1_i64..=24_i64).collect::<Vec<_>>());
+        assert_eq!(versions, (1_i64..=25_i64).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn fresh_schema_includes_analysis_snapshot_markers() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        for column in ["snapshot_captured_at", "snapshot_error"] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM pragma_table_info('analysis_runs') WHERE name = ?",
+            )
+            .bind(column)
+            .fetch_one(&pool)
+            .await
+            .expect("check analysis_runs column");
+            assert_eq!(exists, 1, "missing analysis_runs.{column}");
+        }
     }
 
     #[tokio::test]

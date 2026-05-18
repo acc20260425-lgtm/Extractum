@@ -3,11 +3,13 @@ use sqlx::{Pool, Sqlite};
 use super::corpus::YoutubeCorpusMode;
 use super::models::{
     AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, AnalysisRunSummary,
-    AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceGroupRow, CorpusMessage,
+    AnalysisSnapshotState, AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceGroupRow,
+    CorpusMessage,
 };
 use super::{
     default_report_template_body, now_secs, ANALYSIS_RUN_TYPE_REPORT,
-    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING,
+    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED,
+    ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING,
     DEFAULT_REPORT_TEMPLATE_NAME, TEMPLATE_KIND_REPORT,
 };
 use crate::compression::compress_text;
@@ -118,8 +120,29 @@ fn resolve_run_row_scope_label(row: &AnalysisRunRow) -> String {
     )
 }
 
+fn compute_snapshot_state(row: &AnalysisRunRow) -> Option<AnalysisSnapshotState> {
+    if row.snapshot_captured_at.is_some() && row.snapshot_error.is_none() {
+        return Some(AnalysisSnapshotState::Captured);
+    }
+
+    if row.snapshot_error.is_some() {
+        return Some(AnalysisSnapshotState::CaptureFailed);
+    }
+
+    match row.status.as_str() {
+        ANALYSIS_STATUS_COMPLETED if row.snapshot_message_count == 0 => {
+            Some(AnalysisSnapshotState::MissingLegacy)
+        }
+        ANALYSIS_STATUS_FAILED | ANALYSIS_STATUS_CANCELLED => {
+            Some(AnalysisSnapshotState::CaptureFailed)
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
     let scope_label = resolve_run_row_scope_label(&row);
+    let snapshot_state = compute_snapshot_state(&row);
 
     AnalysisRunSummary {
         id: row.id,
@@ -143,6 +166,9 @@ pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
         status: row.status,
         error: row.error,
         has_trace_data: row.trace_data_zstd.is_some(),
+        snapshot_state,
+        snapshot_captured_at: row.snapshot_captured_at,
+        snapshot_error: row.snapshot_error,
         created_at: row.created_at,
         completed_at: row.completed_at,
     }
@@ -150,6 +176,7 @@ pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
 
 pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
     let scope_label = resolve_run_row_scope_label(&row);
+    let snapshot_state = compute_snapshot_state(&row);
 
     AnalysisRunDetail {
         id: row.id,
@@ -174,9 +201,13 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         result_markdown: row.result_markdown,
         error: row.error,
         has_trace_data: row.trace_data_zstd.is_some(),
+        snapshot_state,
+        snapshot_captured_at: row.snapshot_captured_at,
+        snapshot_error: row.snapshot_error,
         created_at: row.created_at,
         completed_at: row.completed_at,
         scope_label_snapshot: row.scope_label_snapshot,
+        snapshot_message_count: row.snapshot_message_count,
     }
 }
 
@@ -208,6 +239,9 @@ pub(crate) async fn fetch_run_row(
             runs.result_markdown,
             runs.trace_data_zstd,
             runs.scope_label_snapshot,
+            runs.snapshot_captured_at,
+            runs.snapshot_error,
+            COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
             runs.error,
             runs.created_at,
             runs.completed_at
@@ -215,6 +249,11 @@ pub(crate) async fn fetch_run_row(
         LEFT JOIN sources ON sources.id = runs.source_id
         LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
         LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
+        LEFT JOIN (
+            SELECT run_id, COUNT(*) AS snapshot_message_count
+            FROM analysis_run_messages
+            GROUP BY run_id
+        ) snapshot_counts ON snapshot_counts.run_id = runs.id
         WHERE runs.id = ?
         "#,
     )
@@ -588,6 +627,9 @@ mod tests {
             result_markdown: Some("Saved report".to_string()),
             trace_data_zstd: Some(vec![1, 2, 3]),
             scope_label_snapshot: Some("Frozen group".to_string()),
+            snapshot_captured_at: Some("2026-05-18T10:00:00Z".to_string()),
+            snapshot_error: None,
+            snapshot_message_count: 2,
             error: None,
             created_at: 1_710_000_500,
             completed_at: Some(1_710_000_600),
@@ -608,6 +650,88 @@ mod tests {
     fn map_run_summary_exposes_frozen_scope_label() {
         let summary = map_run_summary(sample_run_row());
         assert_eq!(summary.scope_label, "Frozen group");
+    }
+
+    #[test]
+    fn map_run_summary_exposes_captured_snapshot_state() {
+        let summary = map_run_summary(sample_run_row());
+
+        assert_eq!(
+            summary.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::Captured)
+        );
+        assert_eq!(
+            summary.snapshot_captured_at.as_deref(),
+            Some("2026-05-18T10:00:00Z")
+        );
+        assert_eq!(summary.snapshot_error, None);
+    }
+
+    #[test]
+    fn map_run_detail_exposes_missing_legacy_snapshot_state() {
+        let mut row = sample_run_row();
+        row.snapshot_captured_at = None;
+        row.snapshot_error = None;
+        row.snapshot_message_count = 0;
+        row.status = crate::analysis::ANALYSIS_STATUS_COMPLETED.to_string();
+
+        let detail = map_run_detail(row);
+
+        assert_eq!(
+            detail.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+        );
+        assert_eq!(detail.snapshot_captured_at, None);
+        assert_eq!(detail.snapshot_error, None);
+    }
+
+    #[test]
+    fn map_run_summary_exposes_capture_failed_snapshot_state() {
+        let mut row = sample_run_row();
+        row.snapshot_captured_at = None;
+        row.snapshot_error = Some("Snapshot capture failed".to_string());
+        row.snapshot_message_count = 0;
+        row.status = crate::analysis::ANALYSIS_STATUS_FAILED.to_string();
+
+        let summary = map_run_summary(row);
+
+        assert_eq!(
+            summary.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        );
+        assert_eq!(
+            summary.snapshot_error.as_deref(),
+            Some("Snapshot capture failed")
+        );
+    }
+
+    #[test]
+    fn map_run_summary_exposes_null_snapshot_state_for_active_runs_before_capture() {
+        let mut row = sample_run_row();
+        row.snapshot_captured_at = None;
+        row.snapshot_error = None;
+        row.snapshot_message_count = 0;
+        row.status = crate::analysis::ANALYSIS_STATUS_RUNNING.to_string();
+
+        let summary = map_run_summary(row);
+
+        assert_eq!(summary.snapshot_state, None);
+    }
+
+    #[test]
+    fn failed_terminal_run_without_capture_marker_is_capture_failed() {
+        let mut row = sample_run_row();
+        row.snapshot_captured_at = None;
+        row.snapshot_error = None;
+        row.snapshot_message_count = 0;
+        row.status = crate::analysis::ANALYSIS_STATUS_CANCELLED.to_string();
+
+        let summary = map_run_summary(row);
+
+        assert_eq!(
+            summary.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        );
     }
 
     #[test]
@@ -657,6 +781,8 @@ mod tests {
                 result_markdown TEXT,
                 trace_data_zstd BLOB,
                 scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
                 error TEXT,
                 created_at INTEGER NOT NULL,
                 completed_at INTEGER
@@ -713,10 +839,16 @@ mod tests {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("connect memory sqlite");
-        sqlx::query("CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY)")
-            .execute(&pool)
-            .await
-            .expect("create runs");
+        sqlx::query(
+            "CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
         sqlx::query(
             "CREATE TABLE analysis_chat_messages (id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL)",
         )

@@ -59,6 +59,14 @@ pub struct AnalysisTraceData {
     pub refs: Vec<AnalysisTraceRef>,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalysisSnapshotState {
+    Captured,
+    MissingLegacy,
+    CaptureFailed,
+}
+
 #[derive(Serialize)]
 pub struct AnalysisRunSummary {
     pub id: i64,
@@ -82,6 +90,9 @@ pub struct AnalysisRunSummary {
     pub status: String,
     pub error: Option<String>,
     pub has_trace_data: bool,
+    pub snapshot_state: Option<AnalysisSnapshotState>,
+    pub snapshot_captured_at: Option<String>,
+    pub snapshot_error: Option<String>,
     pub created_at: i64,
     pub completed_at: Option<i64>,
 }
@@ -110,10 +121,16 @@ pub struct AnalysisRunDetail {
     pub result_markdown: Option<String>,
     pub error: Option<String>,
     pub has_trace_data: bool,
+    pub snapshot_state: Option<AnalysisSnapshotState>,
+    pub snapshot_captured_at: Option<String>,
+    pub snapshot_error: Option<String>,
     pub created_at: i64,
     pub completed_at: Option<i64>,
     #[serde(skip_serializing)]
     pub(crate) scope_label_snapshot: Option<String>,
+    #[serde(skip_serializing)]
+    #[allow(dead_code)]
+    pub(crate) snapshot_message_count: i64,
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -167,6 +184,9 @@ pub(crate) struct AnalysisRunRow {
     pub(crate) result_markdown: Option<String>,
     pub(crate) trace_data_zstd: Option<Vec<u8>>,
     pub(crate) scope_label_snapshot: Option<String>,
+    pub(crate) snapshot_captured_at: Option<String>,
+    pub(crate) snapshot_error: Option<String>,
+    pub(crate) snapshot_message_count: i64,
     pub(crate) error: Option<String>,
     pub(crate) created_at: i64,
     pub(crate) completed_at: Option<i64>,

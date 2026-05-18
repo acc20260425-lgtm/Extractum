@@ -979,6 +979,8 @@ mod tests {
                 result_markdown TEXT,
                 trace_data_zstd BLOB,
                 scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
                 error TEXT,
                 created_at INTEGER NOT NULL,
                 completed_at INTEGER
@@ -1306,9 +1308,13 @@ mod tests {
             result_markdown: Some("Saved report".to_string()),
             error: None,
             has_trace_data: true,
+            snapshot_state: Some(crate::analysis::models::AnalysisSnapshotState::Captured),
+            snapshot_captured_at: Some("2026-05-18T10:00:00Z".to_string()),
+            snapshot_error: None,
             created_at: 1_710_000_500,
             completed_at: Some(1_710_000_600),
             scope_label_snapshot: Some("Frozen group".to_string()),
+            snapshot_message_count: 1,
         }
     }
 
