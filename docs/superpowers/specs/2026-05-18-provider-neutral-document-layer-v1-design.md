@@ -99,6 +99,7 @@ CREATE TABLE analysis_documents (
 
   author TEXT,
   published_at INTEGER NOT NULL,
+  document_order INTEGER NOT NULL DEFAULT 0,
 
   ref TEXT NOT NULL,
   content_zstd BLOB NOT NULL,
@@ -155,10 +156,10 @@ CREATE UNIQUE INDEX idx_analysis_documents_source_key
 ON analysis_documents(source_id, document_key);
 
 CREATE INDEX idx_analysis_documents_source_published
-ON analysis_documents(source_id, published_at, id);
+ON analysis_documents(source_id, published_at, document_order, id);
 
 CREATE INDEX idx_analysis_documents_kind_source_published
-ON analysis_documents(document_kind, source_id, published_at, id);
+ON analysis_documents(document_kind, source_id, published_at, document_order, id);
 
 CREATE INDEX idx_analysis_documents_ref
 ON analysis_documents(ref);
@@ -181,6 +182,29 @@ The constant `youtube:description` key is intentionally source-scoped by that
 unique index: many video sources can each have one description document with
 the same per-source key.
 
+`document_order` is the deterministic order key inside one
+`(published_at, source_id)` bucket. It must not be derived by string-sorting
+`ref`, because YouTube transcript timestamp suffixes such as `@10000ms` and
+`@900ms` do not sort chronologically as text. Version 1 uses:
+
+- `items.id` for Telegram message documents;
+- `youtube_transcript_segments.segment_index` for YouTube transcript segment
+  documents;
+- `items.id` for YouTube comment documents;
+- `-1` for YouTube description documents, preserving the current behavior
+  where the synthetic description precedes transcript/comment rows for the
+  same video publish timestamp.
+
+SQLite CHECK constraints cannot validate cross-table consistency. Runtime,
+backfill, and rebuild code must maintain these invariants:
+
+- item-backed documents must have `analysis_documents.source_id =
+  items.source_id`;
+- item-backed documents must mirror the backing source's `source_type` and
+  `source_subtype`;
+- synthetic YouTube description documents must mirror
+  `youtube_video_sources.source_id` and the matching `sources` row.
+
 ## Document Kinds
 
 ### `telegram_message`
@@ -202,6 +226,7 @@ The document inherits:
 - `external_id = items.external_id`;
 - `author`;
 - `published_at = items.published_at`;
+- `document_order = items.id`;
 - `ref = s{source_id}-i{item_id}`;
 - `content_zstd = items.content_zstd`.
 
@@ -222,6 +247,11 @@ items.item_kind = 'youtube_transcript'
 AND youtube_transcript_segments.text IS NOT NULL
 ```
 
+The current live corpus query does not apply an extra
+`TRIM(youtube_transcript_segments.text) <> ''` filter. Version 1 should keep
+that effective reader behavior for stored rows, while preserving the existing
+runtime caption-parser behavior that skips blank cues before segment insertion.
+
 Each transcript segment becomes one `youtube_transcript` document:
 
 - `source_id = items.source_id`;
@@ -232,6 +262,7 @@ Each transcript segment becomes one `youtube_transcript` document:
 - `external_id = items.external_id`;
 - `author = items.author`;
 - `published_at = items.published_at`;
+- `document_order = youtube_transcript_segments.segment_index`;
 - `ref = s{source_id}-i{item_id}@{start_ms}ms`;
 - `content_zstd` is the compressed segment text.
 
@@ -260,7 +291,7 @@ Comments are materialized independently of the selected run's
 
 Comment documents inherit `external_id`, `author`, `published_at`, `ref`, and
 `content_zstd` from the backing item in the same way as Telegram message
-documents.
+documents. `document_order = items.id`.
 
 ### `youtube_description`
 
@@ -280,6 +311,7 @@ The document uses:
 - `source_subtype = 'video'`;
 - `external_id = description:<video_id>`;
 - `published_at` is parsed from `youtube_video_sources.published_at`;
+- `document_order = -1`;
 - sources without a parseable video publish date are skipped in v1, matching
   the current synthetic description loader;
 - `ref = s{source_id}-i0`;
@@ -319,6 +351,10 @@ Migration 24 is runner-managed. The migration version is considered complete
 only after schema creation and initial document backfill have run
 successfully. The app must not reach a state where the schema exists, documents
 are empty, and the analysis reader is switched to `analysis_documents`.
+
+The runner-managed migration must be transactional where SQLite allows it, or
+explicitly restart-safe and idempotent if interrupted before recording
+migration 24.
 
 The runner-managed upgrade should:
 
@@ -427,8 +463,11 @@ ensure this matches the previous corpus filtering behavior:
 The reader returns documents ordered chronologically:
 
 ```sql
-ORDER BY published_at ASC, source_id ASC, ref ASC
+ORDER BY published_at ASC, source_id ASC, document_order ASC, id ASC
 ```
+
+The reader must not use `ref` as a tie-breaker for ordering. `ref` is evidence
+identity text, not a numeric order key.
 
 The effective corpus must remain equivalent to the current reader:
 
@@ -486,12 +525,18 @@ Migration tests must cover:
 - migration 24 registration and runner-managed behavior;
 - fresh schema includes table, constraints, and indexes;
 - item-backed vs synthetic CHECK constraints reject mixed semantics;
+- `document_order` exists, participates in the published-order indexes, and is
+  populated deterministically during backfill;
 - migration 24 backfills Telegram text messages;
 - migration 24 backfills YouTube transcript segment and comment documents;
 - migration 24 creates YouTube description documents for non-empty video
   descriptions;
+- item-backed backfill verifies `analysis_documents.source_id` equals
+  `items.source_id` and that document source type/subtype mirror `sources`;
 - media-only rows do not become documents;
-- re-running source rebuild is idempotent.
+- re-running source rebuild is idempotent;
+- runner-managed migration 24 is restart-safe or idempotent if interrupted
+  before recording the migration version.
 
 Reader tests must cover:
 
@@ -499,7 +544,10 @@ Reader tests must cover:
 - Telegram source-group corpus equivalence;
 - YouTube corpus mode inclusion/exclusion;
 - playlist linked-video expansion and unavailable/unlinked exclusion;
-- chronological ordering by `published_at ASC, source_id ASC, ref ASC`;
+- chronological ordering by
+  `published_at ASC, source_id ASC, document_order ASC, id ASC`;
+- YouTube transcript segments with start timestamps such as `900ms` and
+  `10000ms` retain segment order and are not ordered by lexicographic `ref`;
 - period filtering by `analysis_documents.published_at`;
 - ref lookup tests must not assume `ref` is globally unique;
 - YouTube transcript timestamp evidence still resolves through
@@ -513,8 +561,10 @@ Runtime tests must cover document maintenance for:
 - YouTube transcript item and segment writes;
 - YouTube comment item writes;
 - YouTube video metadata upsert when description is inserted, changed, or
-  cleared.
+  cleared;
 - source rebuild does not race same-source ingest and is idempotent.
+- item-backed runtime writes verify document `source_id`, `source_type`, and
+  `source_subtype` consistency with backing `items` and `sources` rows.
 
 Containment scans must verify:
 
