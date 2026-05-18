@@ -315,7 +315,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/analysis_documents.rs`
 - Test: `src-tauri/src/analysis_documents.rs`
 
-- [ ] **Step 1: Add failing rebuild/backfill tests**
+- [x] **Step 1: Add failing rebuild/backfill tests**
 
 Add these tests inside `#[cfg(test)] mod tests` in `src-tauri/src/analysis_documents.rs`:
 
@@ -571,7 +571,7 @@ async fn document_metadata_envelopes_match_current_evidence_shape() {
 }
 ```
 
-- [ ] **Step 2: Run rebuild tests and confirm failure**
+- [x] **Step 2: Run rebuild tests and confirm failure**
 
 Run:
 
@@ -587,7 +587,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis_documents::tests::docum
 
 Expected: compile failure for missing rebuild/backfill functions.
 
-- [ ] **Step 3: Implement document constants and metadata helpers**
+- [x] **Step 3: Implement document constants and metadata helpers**
 
 Add these constants and helper functions in `src-tauri/src/analysis_documents.rs`:
 
@@ -691,7 +691,7 @@ fn youtube_description_metadata_zstd(row: &YoutubeDescriptionDocumentRow) -> App
 }
 ```
 
-- [ ] **Step 4: Implement row structs and source rebuild**
+- [x] **Step 4: Implement row structs and source rebuild**
 
 Add the row structs and public rebuild APIs:
 
@@ -784,7 +784,7 @@ pub(crate) async fn backfill_all_analysis_documents_on_connection(
 }
 ```
 
-- [ ] **Step 5: Implement item-backed document insertion**
+- [x] **Step 5: Implement item-backed document insertion**
 
 Add this helper:
 
@@ -869,7 +869,7 @@ async fn insert_item_backed_documents_for_source(
 }
 ```
 
-- [ ] **Step 6: Implement transcript and description document insertion**
+- [x] **Step 6: Implement transcript and description document insertion**
 
 Add transcript insertion:
 
@@ -1051,7 +1051,7 @@ pub(crate) async fn delete_youtube_description_document_on_connection(
 }
 ```
 
-- [ ] **Step 7: Run rebuild/backfill tests**
+- [x] **Step 7: Run rebuild/backfill tests**
 
 Run:
 
@@ -1061,7 +1061,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis_documents::tests::
 
 Expected: all `analysis_documents` tests pass.
 
-- [ ] **Step 8: Commit rebuild helpers**
+- [x] **Step 8: Commit rebuild helpers**
 
 Run:
 
