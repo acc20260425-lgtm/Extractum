@@ -38,6 +38,8 @@ export interface AnalysisSourceGroup {
   updated_at: number;
 }
 
+export type AnalysisSnapshotState = "captured" | "missing_legacy" | "capture_failed";
+
 export interface AnalysisRunSummary {
   id: number;
   run_type: string;
@@ -60,6 +62,9 @@ export interface AnalysisRunSummary {
   status: string;
   error: string | null;
   has_trace_data: boolean;
+  snapshot_state: AnalysisSnapshotState | null;
+  snapshot_captured_at: string | null;
+  snapshot_error: string | null;
   created_at: number;
   completed_at: number | null;
 }

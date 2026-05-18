@@ -1681,7 +1681,7 @@ Expected: commit succeeds.
 - Test: `src/lib/analysis-run-companion-state.test.ts`
 - Test: `src/lib/analysis-trace-workflow.test.ts`
 
-- [ ] **Step 1: Add TypeScript snapshot state type**
+- [x] **Step 1: Add TypeScript snapshot state type**
 
 In `src/lib/types/analysis.ts`, add before `AnalysisRunSummary`:
 
@@ -1699,7 +1699,7 @@ snapshot_error: string | null;
 
 `AnalysisRunDetail extends AnalysisRunSummary`, so do not duplicate the fields there.
 
-- [ ] **Step 2: Update frontend test builders**
+- [x] **Step 2: Update frontend test builders**
 
 For every test builder returning `AnalysisRunSummary` or `AnalysisRunDetail`, add:
 
@@ -1717,7 +1717,7 @@ Files to scan and update:
 rg -n "function run|function runSummary|function runDetail|AnalysisRunSummary|AnalysisRunDetail" src\\lib src\\routes\\analysis
 ```
 
-- [ ] **Step 3: Run frontend type/tests**
+- [x] **Step 3: Run frontend type/tests**
 
 Run:
 
@@ -1729,7 +1729,7 @@ git diff --check
 
 Expected: selected Vitest suites pass, Svelte check passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 4: Commit frontend compatibility**
+- [x] **Step 4: Commit frontend compatibility**
 
 Run:
 
