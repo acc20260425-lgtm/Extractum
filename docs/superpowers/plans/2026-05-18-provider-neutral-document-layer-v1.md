@@ -1638,7 +1638,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/sources/items.rs`
 - Test: `src-tauri/src/youtube/captions.rs`
 
-- [ ] **Step 1: Add failing Telegram and YouTube item-backed tests**
+- [x] **Step 1: Add failing Telegram and YouTube item-backed tests**
 
 In `src-tauri/src/sources/items.rs`, update the test imports to include:
 
@@ -1748,7 +1748,7 @@ async fn seed_youtube_video_source(pool: &sqlx::SqlitePool, source_id: i64) {
 }
 ```
 
-- [ ] **Step 2: Add failing transcript document maintenance test**
+- [x] **Step 2: Add failing transcript document maintenance test**
 
 In `src-tauri/src/youtube/captions.rs`, extend the test fixture table setup to include `analysis_documents`, `sources`, and `items` when needed. Add:
 
@@ -1847,7 +1847,7 @@ async fn seed_video_source_and_transcript_item(
 }
 ```
 
-- [ ] **Step 3: Run runtime writer tests and confirm failure**
+- [x] **Step 3: Run runtime writer tests and confirm failure**
 
 Run:
 
@@ -1864,7 +1864,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::captions::tests::replac
 
 Expected: tests fail because runtime write paths do not maintain `analysis_documents`.
 
-- [ ] **Step 4: Add item-specific upsert helper**
+- [x] **Step 4: Add item-specific upsert helper**
 
 In `src-tauri/src/analysis_documents.rs`, add:
 
@@ -1962,7 +1962,7 @@ async fn upsert_item_document_row_on_connection(
 }
 ```
 
-- [ ] **Step 5: Wire Telegram and comment item writes**
+- [x] **Step 5: Wire Telegram and comment item writes**
 
 In `insert_telegram_source_item_on_connection`, after topic membership resolution and before returning inserted:
 
@@ -1985,7 +1985,7 @@ Ok(item_id)
 
 Do not write documents for duplicate Telegram observations or skipped empty payloads unless the insert path actually created a new `items` row.
 
-- [ ] **Step 6: Wire transcript segment replacement**
+- [x] **Step 6: Wire transcript segment replacement**
 
 In `src-tauri/src/analysis_documents.rs`, add:
 
@@ -2038,7 +2038,7 @@ crate::analysis_documents::rebuild_youtube_transcript_documents_for_item_on_conn
 .await?;
 ```
 
-- [ ] **Step 7: Run writer tests**
+- [x] **Step 7: Run writer tests**
 
 Run:
 
@@ -2054,7 +2054,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::captions::tests::
 
 Expected: all selected item and captions tests pass.
 
-- [ ] **Step 8: Commit item-backed runtime maintenance**
+- [x] **Step 8: Commit item-backed runtime maintenance**
 
 Run:
 

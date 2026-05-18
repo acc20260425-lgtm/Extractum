@@ -438,6 +438,8 @@ async fn insert_telegram_source_item_on_connection(
     )
     .await?;
 
+    crate::analysis_documents::upsert_item_backed_document_on_connection(conn, item_id).await?;
+
     Ok(TelegramItemInsertOutcome::Inserted { item_id })
 }
 
@@ -511,7 +513,7 @@ pub(crate) async fn upsert_youtube_comment_item(
     let raw_data_zstd = compress_json_bytes(&raw_data_json).map_err(AppError::internal)?;
     let external_id = format!("comment:{}", comment.comment_id);
 
-    sqlx::query_scalar(
+    let item_id: i64 = sqlx::query_scalar(
         r#"
         INSERT INTO items (
             source_id,
@@ -560,7 +562,11 @@ pub(crate) async fn upsert_youtube_comment_item(
     .bind(comment.like_count)
     .fetch_one(&mut **tx)
     .await
-    .map_err(AppError::database)
+    .map_err(AppError::database)?;
+
+    crate::analysis_documents::upsert_item_backed_document_on_connection(&mut **tx, item_id)
+        .await?;
+    Ok(item_id)
 }
 
 #[tauri::command]
@@ -700,8 +706,8 @@ mod tests {
         CONTENT_KIND_TEXT_WITH_MEDIA,
     };
     use crate::sources::test_support::{
-        create_ingest_provenance_tables, create_item_identity_indexes,
-        memory_pool_with_source_items_and_topics,
+        create_analysis_documents_table, create_ingest_provenance_tables,
+        create_item_identity_indexes, memory_pool_with_source_items_and_topics,
     };
     use crate::sources::types::{TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE};
 
@@ -851,6 +857,7 @@ mod tests {
     async fn insert_telegram_source_item_skips_duplicate_native_identity_without_updating_payload()
     {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
         let identity = TelegramMessageIdentity {
             history_peer_kind: "channel".to_string(),
@@ -901,6 +908,7 @@ mod tests {
     #[tokio::test]
     async fn telegram_insert_outcome_returns_item_ids_for_insert_and_duplicate() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
         let identity = TelegramMessageIdentity {
             history_peer_kind: "channel".to_string(),
@@ -938,9 +946,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn telegram_insert_writes_analysis_document_in_same_writer_transaction() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        seed_item_source(&pool, 1).await;
+
+        let outcome = insert_telegram_source_item_outcome(
+            &pool,
+            1,
+            telegram_identity(42),
+            telegram_insert("42", "Document text"),
+        )
+        .await
+        .expect("insert telegram item");
+
+        let TelegramItemInsertOutcome::Inserted { item_id } = outcome else {
+            panic!("expected insert");
+        };
+
+        let row: (String, String, i64, String, String) = sqlx::query_as(
+            "SELECT document_kind, ref, document_order, source_type, source_subtype
+             FROM analysis_documents WHERE item_id = ?",
+        )
+        .bind(item_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load document");
+        assert_eq!(
+            row,
+            (
+                "telegram_message".to_string(),
+                format!("s1-i{item_id}"),
+                item_id,
+                "telegram".to_string(),
+                "supergroup".to_string(),
+            )
+        );
+    }
+
+    #[tokio::test]
     async fn telegram_insert_with_observation_records_insert_duplicate_and_skipped_rows() {
         let pool = memory_pool_with_source_items_and_topics().await;
         create_ingest_provenance_tables(&pool).await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
         let batch_id = crate::ingest_provenance::create_telegram_takeout_batch(
             &pool,
@@ -1041,6 +1089,7 @@ mod tests {
     #[tokio::test]
     async fn insert_telegram_source_item_resolves_topic_membership_only_for_new_item() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
         sqlx::query(
             "INSERT INTO telegram_forum_topics (
@@ -1102,6 +1151,7 @@ mod tests {
     #[tokio::test]
     async fn scoped_resolution_increments_unresolved_count_for_inserted_unmatched_item() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
         sqlx::query(
             "INSERT INTO telegram_topic_resolution_state (
@@ -1141,6 +1191,7 @@ mod tests {
     #[tokio::test]
     async fn insert_telegram_source_item_allows_same_message_id_in_different_history_domains() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
 
         let first = TelegramMessageIdentity {
@@ -1282,6 +1333,7 @@ mod tests {
     #[tokio::test]
     async fn youtube_comment_upsert_targets_non_telegram_partial_unique_index() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         sqlx::query("DROP INDEX IF EXISTS idx_items_ext")
             .execute(&pool)
             .await
@@ -1317,8 +1369,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn youtube_comment_upsert_writes_analysis_document_and_updates_content() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        seed_youtube_video_source(&pool, 2).await;
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        let first = upsert_youtube_comment_item(&mut tx, 2, &youtube_comment("c1", "First"))
+            .await
+            .expect("first comment");
+        tx.commit().await.expect("commit first");
+
+        let content: Vec<u8> =
+            sqlx::query_scalar("SELECT content_zstd FROM analysis_documents WHERE item_id = ?")
+                .bind(first)
+                .fetch_one(&pool)
+                .await
+                .expect("load first document");
+        assert_eq!(
+            decompress_text(&content).expect("decompress first"),
+            "First"
+        );
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        let second = upsert_youtube_comment_item(&mut tx, 2, &youtube_comment("c1", "Second"))
+            .await
+            .expect("second comment");
+        tx.commit().await.expect("commit second");
+        assert_eq!(first, second);
+
+        let content: Vec<u8> =
+            sqlx::query_scalar("SELECT content_zstd FROM analysis_documents WHERE item_id = ?")
+                .bind(first)
+                .fetch_one(&pool)
+                .await
+                .expect("load updated document");
+        assert_eq!(
+            decompress_text(&content).expect("decompress second"),
+            "Second"
+        );
+    }
+
+    #[tokio::test]
     async fn upsert_youtube_comment_item_updates_existing_text_and_reaction_count() {
         let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
         let mut tx = pool.begin().await.expect("begin transaction");
 
         let mut comment = crate::youtube::dto::YoutubeComment {
@@ -1436,6 +1531,29 @@ mod tests {
         .expect("seed source");
     }
 
+    async fn seed_youtube_video_source(pool: &sqlx::SqlitePool, source_id: i64) {
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, external_id, title, is_active, is_member, created_at
+             ) VALUES (?, 'youtube', 'video', ?, 'Video', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .bind(format!("video{source_id}"))
+        .execute(pool)
+        .await
+        .expect("seed youtube source");
+    }
+
+    fn telegram_identity(message_id: i64) -> TelegramMessageIdentity {
+        TelegramMessageIdentity {
+            history_peer_kind: "channel".to_string(),
+            history_peer_id: 12345,
+            telegram_message_id: message_id,
+            migration_domain: None,
+            is_migrated_history: false,
+        }
+    }
+
     fn telegram_insert(external_id: &str, content: &str) -> SourceItemInsert {
         SourceItemInsert {
             external_id: external_id.to_string(),
@@ -1451,6 +1569,23 @@ mod tests {
                 .expect("raw json"),
             telegram_context: TelegramItemContext::default(),
             telegram_identity: None,
+        }
+    }
+
+    fn youtube_comment(comment_id: &str, text: &str) -> crate::youtube::dto::YoutubeComment {
+        crate::youtube::dto::YoutubeComment {
+            comment_id: comment_id.to_string(),
+            parent_comment_id: None,
+            is_reply: false,
+            author: Some("Alice".to_string()),
+            author_channel_id: None,
+            author_channel_url: None,
+            published_at: 1_700_000_000,
+            text: text.to_string(),
+            like_count: Some(1),
+            is_pinned: None,
+            is_hearted: None,
+            raw_payload: serde_json::json!({ "id": comment_id, "text": text }),
         }
     }
 }

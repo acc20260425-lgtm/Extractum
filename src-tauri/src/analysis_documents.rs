@@ -255,51 +255,100 @@ async fn insert_item_backed_documents_for_source(
     .map_err(AppError::database)?;
 
     for row in rows {
-        let document_kind = match row.item_kind.as_str() {
-            "telegram_message" => DOCUMENT_KIND_TELEGRAM_MESSAGE,
-            "youtube_comment" => DOCUMENT_KIND_YOUTUBE_COMMENT,
-            _ => continue,
-        };
-        sqlx::query(
-            r#"
-            INSERT INTO analysis_documents (
-                source_id, item_id, document_key, document_kind,
-                source_type, source_subtype, external_id, author,
-                published_at, document_order, ref, content_zstd,
-                metadata_zstd, created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, strftime('%s','now'), strftime('%s','now'))
-            ON CONFLICT(source_id, document_key) DO UPDATE SET
-                item_id = excluded.item_id,
-                document_kind = excluded.document_kind,
-                source_type = excluded.source_type,
-                source_subtype = excluded.source_subtype,
-                external_id = excluded.external_id,
-                author = excluded.author,
-                published_at = excluded.published_at,
-                document_order = excluded.document_order,
-                ref = excluded.ref,
-                content_zstd = excluded.content_zstd,
-                metadata_zstd = excluded.metadata_zstd,
-                updated_at = excluded.updated_at
-            "#,
-        )
-        .bind(row.source_id)
-        .bind(row.id)
-        .bind(format!("item:{}", row.id))
-        .bind(document_kind)
-        .bind(&row.source_type)
-        .bind(&row.source_subtype)
-        .bind(&row.external_id)
-        .bind(&row.author)
-        .bind(row.published_at)
-        .bind(row.id)
-        .bind(live_item_ref(row.source_id, row.id))
-        .bind(row.content_zstd)
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+        upsert_item_document_row_on_connection(conn, row).await?;
     }
+    Ok(())
+}
+
+pub(crate) async fn upsert_item_backed_document_on_connection(
+    conn: &mut sqlx::SqliteConnection,
+    item_id: i64,
+) -> AppResult<()> {
+    let row: Option<ItemDocumentRow> = sqlx::query_as(
+        r#"
+        SELECT
+            items.id,
+            items.source_id,
+            items.external_id,
+            items.item_kind,
+            items.author,
+            items.published_at,
+            items.content_zstd,
+            sources.source_type,
+            sources.source_subtype
+        FROM items
+        JOIN sources ON sources.id = items.source_id
+        WHERE items.id = ?
+          AND items.content_zstd IS NOT NULL
+          AND items.content_kind IN ('text_only', 'text_with_media')
+          AND items.item_kind IN ('telegram_message', 'youtube_comment')
+        "#,
+    )
+    .bind(item_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
+    let Some(row) = row else {
+        sqlx::query("DELETE FROM analysis_documents WHERE item_id = ?")
+            .bind(item_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(AppError::database)?;
+        return Ok(());
+    };
+
+    upsert_item_document_row_on_connection(conn, row).await
+}
+
+async fn upsert_item_document_row_on_connection(
+    conn: &mut sqlx::SqliteConnection,
+    row: ItemDocumentRow,
+) -> AppResult<()> {
+    let document_kind = match row.item_kind.as_str() {
+        "telegram_message" => DOCUMENT_KIND_TELEGRAM_MESSAGE,
+        "youtube_comment" => DOCUMENT_KIND_YOUTUBE_COMMENT,
+        _ => return Ok(()),
+    };
+    sqlx::query(
+        r#"
+        INSERT INTO analysis_documents (
+            source_id, item_id, document_key, document_kind,
+            source_type, source_subtype, external_id, author,
+            published_at, document_order, ref, content_zstd,
+            metadata_zstd, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, strftime('%s','now'), strftime('%s','now'))
+        ON CONFLICT(source_id, document_key) DO UPDATE SET
+            item_id = excluded.item_id,
+            document_kind = excluded.document_kind,
+            source_type = excluded.source_type,
+            source_subtype = excluded.source_subtype,
+            external_id = excluded.external_id,
+            author = excluded.author,
+            published_at = excluded.published_at,
+            document_order = excluded.document_order,
+            ref = excluded.ref,
+            content_zstd = excluded.content_zstd,
+            metadata_zstd = excluded.metadata_zstd,
+            updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(row.source_id)
+    .bind(row.id)
+    .bind(format!("item:{}", row.id))
+    .bind(document_kind)
+    .bind(&row.source_type)
+    .bind(&row.source_subtype)
+    .bind(&row.external_id)
+    .bind(&row.author)
+    .bind(row.published_at)
+    .bind(row.id)
+    .bind(live_item_ref(row.source_id, row.id))
+    .bind(row.content_zstd)
+    .execute(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
     Ok(())
 }
 
@@ -343,6 +392,95 @@ async fn insert_youtube_transcript_documents_for_source(
     .await
     .map_err(AppError::database)?;
 
+    insert_youtube_transcript_document_rows(conn, rows).await
+}
+
+pub(crate) async fn rebuild_youtube_transcript_documents_for_item_on_connection(
+    conn: &mut sqlx::SqliteConnection,
+    item_id: i64,
+) -> AppResult<()> {
+    let source_id: Option<i64> = sqlx::query_scalar(
+        "SELECT source_id FROM items WHERE id = ? AND item_kind = 'youtube_transcript'",
+    )
+    .bind(item_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+    let Some(source_id) = source_id else {
+        sqlx::query(
+            "DELETE FROM analysis_documents
+             WHERE item_id = ? AND document_kind = 'youtube_transcript'",
+        )
+        .bind(item_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+        return Ok(());
+    };
+
+    sqlx::query(
+        "DELETE FROM analysis_documents
+         WHERE source_id = ? AND item_id = ? AND document_kind = 'youtube_transcript'",
+    )
+    .bind(source_id)
+    .bind(item_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_youtube_transcript_documents_for_source_and_item(conn, source_id, item_id).await
+}
+
+async fn insert_youtube_transcript_documents_for_source_and_item(
+    conn: &mut sqlx::SqliteConnection,
+    source_id: i64,
+    item_id: i64,
+) -> AppResult<()> {
+    let rows: Vec<YoutubeTranscriptDocumentRow> = sqlx::query_as(
+        r#"
+        SELECT
+            items.id AS item_id,
+            items.source_id,
+            items.external_id,
+            items.author,
+            items.published_at,
+            sources.external_id AS source_external_id,
+            sources.title AS source_title,
+            yvs.video_id AS typed_video_id,
+            yvs.canonical_url AS typed_canonical_url,
+            yvs.title AS typed_title,
+            yvs.channel_title AS typed_channel_title,
+            yvs.channel_handle AS typed_channel_handle,
+            segments.segment_index,
+            segments.start_ms,
+            segments.end_ms,
+            segments.text,
+            segments.caption_language,
+            segments.caption_track_kind
+        FROM items
+        JOIN sources ON sources.id = items.source_id
+        JOIN youtube_transcript_segments segments ON segments.item_id = items.id
+        LEFT JOIN youtube_video_sources yvs ON yvs.source_id = sources.id
+        WHERE items.source_id = ?
+          AND items.id = ?
+          AND items.item_kind = 'youtube_transcript'
+          AND segments.text IS NOT NULL
+        ORDER BY items.id ASC, segments.segment_index ASC
+        "#,
+    )
+    .bind(source_id)
+    .bind(item_id)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_youtube_transcript_document_rows(conn, rows).await
+}
+
+async fn insert_youtube_transcript_document_rows(
+    conn: &mut sqlx::SqliteConnection,
+    rows: Vec<YoutubeTranscriptDocumentRow>,
+) -> AppResult<()> {
     for row in rows {
         let content_zstd = compress_text(&row.text).map_err(AppError::internal)?;
         let metadata_zstd = youtube_segment_metadata_zstd(&row)?;

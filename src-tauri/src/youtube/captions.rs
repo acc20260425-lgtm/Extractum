@@ -320,6 +320,11 @@ pub(crate) async fn replace_transcript_segments(
         .map_err(AppError::database)?;
     }
 
+    crate::analysis_documents::rebuild_youtube_transcript_documents_for_item_on_connection(
+        &mut **tx, item_id,
+    )
+    .await?;
+
     Ok(())
 }
 
@@ -653,6 +658,7 @@ mod tests {
     #[tokio::test]
     async fn replace_transcript_segments_deletes_previous_rows_and_inserts_current_segments() {
         let pool = crate::sources::test_support::memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
         sqlx::query(
             r#"
             CREATE TABLE youtube_transcript_segments (
@@ -767,6 +773,122 @@ mod tests {
             )
         );
         assert_eq!(rows[1].3, "second");
+    }
+
+    #[tokio::test]
+    async fn replace_transcript_segments_rebuilds_analysis_documents_by_segment_order() {
+        let pool = transcript_pool().await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
+        seed_video_source_and_transcript_item(&pool, 2, 20).await;
+
+        let transcript = YoutubeTranscript {
+            video_id: "video2".to_string(),
+            language: Some("en".to_string()),
+            is_auto_generated: false,
+            track_kind: YoutubeCaptionTrackKind::Manual,
+            raw_payload: serde_json::json!({ "events": [] }),
+            segments: vec![
+                YoutubeTranscriptSegment {
+                    index: 0,
+                    start_ms: 900,
+                    end_ms: Some(1_500),
+                    text: "early".to_string(),
+                    chapter_index: None,
+                },
+                YoutubeTranscriptSegment {
+                    index: 1,
+                    start_ms: 10_000,
+                    end_ms: Some(11_000),
+                    text: "late".to_string(),
+                    chapter_index: None,
+                },
+            ],
+        };
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        replace_transcript_segments(&mut tx, 20, 2, &transcript)
+            .await
+            .expect("replace segments");
+        tx.commit().await.expect("commit");
+
+        let refs: Vec<String> = sqlx::query_scalar(
+            "SELECT ref FROM analysis_documents
+             WHERE source_id = 2 AND document_kind = 'youtube_transcript'
+             ORDER BY document_order ASC, id ASC",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("load refs");
+        assert_eq!(refs, vec!["s2-i20@900ms", "s2-i20@10000ms"]);
+    }
+
+    async fn transcript_pool() -> sqlx::SqlitePool {
+        let pool = crate::sources::test_support::memory_pool_with_source_items_and_topics().await;
+        sqlx::query(
+            r#"
+            CREATE TABLE youtube_transcript_segments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                segment_index INTEGER NOT NULL,
+                start_ms INTEGER NOT NULL,
+                end_ms INTEGER,
+                text TEXT NOT NULL,
+                chapter_index INTEGER,
+                caption_language TEXT,
+                caption_track_kind TEXT,
+                is_auto_generated INTEGER NOT NULL DEFAULT 0,
+                metadata_zstd BLOB,
+                UNIQUE(item_id, segment_index)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create segments table");
+        pool
+    }
+
+    async fn seed_video_source_and_transcript_item(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        item_id: i64,
+    ) {
+        crate::sources::test_support::create_youtube_typed_source_tables(pool).await;
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, external_id, title, is_active, is_member, created_at
+             ) VALUES (?, 'youtube', 'video', ?, 'Video', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .bind(format!("video{source_id}"))
+        .execute(pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO youtube_video_sources (
+                source_id, video_id, canonical_url, title, channel_title,
+                published_at, video_form, availability_status
+             ) VALUES (?, ?, ?, 'Video', 'Channel', '2026-05-01', 'regular', 'available')",
+        )
+        .bind(source_id)
+        .bind(format!("video{source_id}"))
+        .bind(format!("https://www.youtube.com/watch?v=video{source_id}"))
+        .execute(pool)
+        .await
+        .expect("seed typed video");
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at,
+                ingested_at, content_kind, has_media, content_zstd
+             ) VALUES (?, ?, 'transcript:video:en:manual', 'youtube_transcript',
+                'Channel', 1704067200, 1704067200, 'text_only', 0, x'01')",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .execute(pool)
+        .await
+        .expect("seed transcript item");
     }
 
     fn track(language: &str, track_kind: YoutubeCaptionTrackKind) -> YoutubeCaptionTrack {
