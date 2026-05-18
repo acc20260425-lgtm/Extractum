@@ -895,7 +895,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/analysis/store.rs`
 - Test: `src-tauri/src/analysis/report.rs`
 
-- [ ] **Step 1: Add failing early-capture helper tests**
+- [x] **Step 1: Add failing early-capture helper tests**
 
 In `src-tauri/src/analysis/report.rs`, add a small helper test around an extracted function named `capture_report_corpus`:
 
@@ -980,7 +980,7 @@ async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases(
 }
 ```
 
-- [ ] **Step 2: Run early-capture test and confirm failure**
+- [x] **Step 2: Run early-capture test and confirm failure**
 
 Run:
 
@@ -990,7 +990,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::capture
 
 Expected: compile failure because `capture_report_corpus` does not exist.
 
-- [ ] **Step 3: Implement report capture helper**
+- [x] **Step 3: Implement report capture helper**
 
 In `src-tauri/src/analysis/report.rs`, update imports:
 
@@ -1049,7 +1049,7 @@ enum ReportRunError {
 }
 ```
 
-- [ ] **Step 4: Move snapshot capture before chunking/provider work**
+- [x] **Step 4: Move snapshot capture before chunking/provider work**
 
 In `run_report_pipeline`, replace:
 
@@ -1074,7 +1074,7 @@ let corpus = capture_report_corpus(&pool, run_id, &input.scope_label, &input.cor
 
 Remove the late call to `persist_run_snapshot` before `set_run_status`. Keep `build_trace_data(&reduce_result.completion.text, &corpus)` exactly on the reloaded captured corpus.
 
-- [ ] **Step 5: Add capture failure persistence helper**
+- [x] **Step 5: Add capture failure persistence helper**
 
 In `src-tauri/src/analysis/store.rs`, add:
 
@@ -1132,7 +1132,7 @@ Err(ReportRunError::CaptureFailed(error)) => {
 }
 ```
 
-- [ ] **Step 6: Run Task 3 verification**
+- [x] **Step 6: Run Task 3 verification**
 
 Run:
 
@@ -1145,7 +1145,7 @@ git diff --check
 
 Expected: selected tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 7: Commit early capture pipeline**
+- [x] **Step 7: Commit early capture pipeline**
 
 Run:
 

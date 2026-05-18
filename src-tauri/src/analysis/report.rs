@@ -22,9 +22,9 @@ use super::models::{
     CorpusMessage,
 };
 use super::store::{
-    fetch_prompt_template, fetch_run_row, fetch_source_group, find_active_duplicate_run,
-    insert_analysis_run, persist_run_snapshot, set_run_status, AnalysisRunInsert,
-    DuplicateRunLookup,
+    capture_run_snapshot, fetch_prompt_template, fetch_run_row, fetch_source_group,
+    find_active_duplicate_run, insert_analysis_run, mark_run_capture_failed,
+    sanitize_snapshot_error, set_run_status, AnalysisRunInsert, DuplicateRunLookup,
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
@@ -36,11 +36,39 @@ use super::{
 
 const INTERRUPTED_RUN_MESSAGE: &str = "Analysis run was interrupted when the app was restarted.";
 const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
+const SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ReportRunError {
     Failed(String),
+    CaptureFailed(String),
     Cancelled(String),
+}
+
+async fn capture_report_corpus(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+    scope_label: &str,
+    request: &CorpusLoadRequest,
+) -> Result<Vec<CorpusMessage>, ReportRunError> {
+    let corpus = load_corpus_messages(pool, request).await.map_err(|error| {
+        ReportRunError::CaptureFailed(sanitize_snapshot_error("Corpus preload failed", &error))
+    })?;
+
+    if corpus.is_empty() {
+        return Err(ReportRunError::CaptureFailed(
+            SNAPSHOT_CAPTURE_FAILED_MESSAGE.to_string(),
+        ));
+    }
+
+    capture_run_snapshot(pool, run_id, scope_label, &corpus)
+        .await
+        .map_err(|error| {
+            ReportRunError::CaptureFailed(sanitize_snapshot_error(
+                SNAPSHOT_CAPTURE_FAILED_MESSAGE,
+                &error,
+            ))
+        })
 }
 
 fn chunk_messages(messages: &[CorpusMessage], max_chars: usize) -> Vec<Vec<CorpusMessage>> {
@@ -735,15 +763,8 @@ async fn run_report_pipeline(
         ))
         .emit(&handle);
 
-    let corpus = load_corpus_messages(&pool, &input.corpus_request)
-        .await
-        .map_err(ReportRunError::Failed)?;
-    if corpus.is_empty() {
-        return Err(ReportRunError::Failed(
-            "No synced source documents were found for the selected analysis scope and period"
-                .to_string(),
-        ));
-    }
+    let corpus =
+        capture_report_corpus(&pool, run_id, &input.scope_label, &input.corpus_request).await?;
     if handle
         .state::<AnalysisState>()
         .is_report_run_cancelled(run_id)
@@ -785,10 +806,6 @@ async fn run_report_pipeline(
             .message("Saving report...".to_string()),
     );
 
-    persist_run_snapshot(&ctx.pool, run_id, &input.scope_label, &corpus)
-        .await
-        .map_err(ReportRunError::Failed)?;
-
     set_run_status(
         &ctx.pool,
         run_id,
@@ -829,6 +846,17 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
 
     RunEvent::new(run_id, "failed", "persist")
         .message("Report run failed.".to_string())
+        .error(error)
+        .emit(handle);
+}
+
+async fn fail_capture_run(handle: &AppHandle, run_id: i64, error: String) {
+    if let Ok(pool) = get_pool(handle).await {
+        let _ = mark_run_capture_failed(&pool, run_id, &error, now_secs()).await;
+    }
+
+    RunEvent::new(run_id, "failed", "persist")
+        .message("Report run failed before snapshot capture completed.".to_string())
         .error(error)
         .emit(handle);
 }
@@ -1098,6 +1126,9 @@ pub async fn start_analysis_report(
         {
             Ok(()) => {}
             Err(ReportRunError::Failed(error)) => fail_run(&app_handle, run_id, error).await,
+            Err(ReportRunError::CaptureFailed(error)) => {
+                fail_capture_run(&app_handle, run_id, error).await
+            }
             Err(ReportRunError::Cancelled(message)) => {
                 cancel_run(&app_handle, run_id, message).await
             }
@@ -1114,10 +1145,13 @@ pub async fn start_analysis_report(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_map_request, build_reduce_request, extract_json_payload, finish_map_phase,
-        parse_chunk_summary, validate_report_preflight, ReduceRequestParams, ReportRunError,
+        build_map_request, build_reduce_request, capture_report_corpus, extract_json_payload,
+        finish_map_phase, parse_chunk_summary, validate_report_preflight, ReduceRequestParams,
+        ReportRunError,
     };
-    use crate::analysis::corpus::{AnalysisRunPreflight, AnalysisRunPreflightLimits};
+    use crate::analysis::corpus::{
+        AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
+    };
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
     use crate::error::AppErrorKind;
 
@@ -1159,6 +1193,105 @@ mod tests {
             source_subtype: Some("channel".to_string()),
             metadata_zstd: None,
         }
+    }
+
+    #[tokio::test]
+    async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases() {
+        let pool = crate::sources::test_support::memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
+        crate::sources::test_support::create_youtube_typed_source_tables(&pool).await;
+        sqlx::query(
+            "CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY,
+                scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
+        sqlx::query(
+            "CREATE TABLE analysis_run_messages (
+                run_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                external_id TEXT NOT NULL,
+                author TEXT,
+                published_at INTEGER NOT NULL,
+                ref TEXT NOT NULL,
+                content_zstd BLOB NOT NULL,
+                item_kind TEXT,
+                source_type TEXT,
+                source_subtype TEXT,
+                metadata_zstd BLOB,
+                PRIMARY KEY (run_id, ref)
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create run messages");
+        sqlx::query("INSERT INTO analysis_runs (id) VALUES (1)")
+            .execute(&pool)
+            .await
+            .expect("insert run");
+        sqlx::query(
+            "CREATE TABLE youtube_transcript_segments (
+                item_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                segment_index INTEGER NOT NULL,
+                start_ms INTEGER NOT NULL,
+                end_ms INTEGER,
+                text TEXT NOT NULL,
+                chapter_index INTEGER,
+                caption_language TEXT,
+                caption_track_kind TEXT,
+                is_auto_generated INTEGER NOT NULL DEFAULT 0,
+                metadata_zstd BLOB,
+                UNIQUE(item_id, segment_index)
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create youtube transcript segments");
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
+             VALUES (2, 'telegram', 'channel', 'tg2', 'Telegram 2', 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, ingested_at, content_kind, has_media, content_zstd)
+             VALUES (10, 2, '10', 'telegram_message', 'Alice', 100, 100, 'text_only', 0, ?)",
+        )
+        .bind(crate::compression::compress_text("captured text").expect("compress"))
+        .execute(&pool)
+        .await
+        .expect("insert item");
+        crate::analysis_documents::rebuild_analysis_documents_for_source(&pool, 2)
+            .await
+            .expect("rebuild docs");
+
+        let request = CorpusLoadRequest {
+            source_type: "telegram".to_string(),
+            source_ids: vec![2],
+            period_from: 1,
+            period_to: 1_000,
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+        };
+
+        let captured = capture_report_corpus(&pool, 1, "Frozen source", &request)
+            .await
+            .expect("capture report corpus");
+
+        sqlx::query("DELETE FROM analysis_documents WHERE source_id = 2")
+            .execute(&pool)
+            .await
+            .expect("delete live docs after capture");
+
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].content, "captured text");
     }
 
     #[test]

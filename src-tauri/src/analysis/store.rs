@@ -467,7 +467,6 @@ pub(crate) async fn insert_analysis_run(
     .map_err(|e| e.to_string())
 }
 
-#[allow(dead_code)]
 pub(crate) fn sanitize_snapshot_error(category: &str, raw: &str) -> String {
     let mut text = raw
         .chars()
@@ -697,6 +696,7 @@ pub(crate) async fn capture_run_snapshot(
     Ok(captured)
 }
 
+#[allow(dead_code)]
 pub(crate) async fn persist_run_snapshot(
     pool: &Pool<Sqlite>,
     run_id: i64,
@@ -706,6 +706,35 @@ pub(crate) async fn persist_run_snapshot(
     capture_run_snapshot(pool, run_id, scope_label, corpus)
         .await
         .map(|_| ())
+}
+
+pub(crate) async fn mark_run_capture_failed(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+    snapshot_error: &str,
+    completed_at: i64,
+) -> Result<(), String> {
+    let sanitized = sanitize_snapshot_error("Snapshot capture failed", snapshot_error);
+    sqlx::query(
+        r#"
+        UPDATE analysis_runs
+        SET
+            status = ?,
+            error = ?,
+            snapshot_error = ?,
+            completed_at = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(crate::analysis::ANALYSIS_STATUS_FAILED)
+    .bind(&sanitized)
+    .bind(&sanitized)
+    .bind(completed_at)
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub(crate) async fn set_run_status(
