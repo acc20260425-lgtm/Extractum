@@ -36,7 +36,7 @@
 - Test: `src-tauri/src/analysis_documents.rs`
 - Test: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Register the module shell**
+- [x] **Step 1: Register the module shell**
 
 In `src-tauri/src/lib.rs`, add this near the other backend modules:
 
@@ -44,7 +44,7 @@ In `src-tauri/src/lib.rs`, add this near the other backend modules:
 mod analysis_documents;
 ```
 
-- [ ] **Step 2: Add failing schema tests**
+- [x] **Step 2: Add failing schema tests**
 
 Create `src-tauri/src/analysis_documents.rs` with this initial test module:
 
@@ -138,7 +138,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run schema tests and confirm failure**
+- [x] **Step 3: Run schema tests and confirm failure**
 
 Run:
 
@@ -148,7 +148,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis_documents::tests::schem
 
 Expected: compile failure because `create_analysis_documents_schema` does not exist.
 
-- [ ] **Step 4: Implement schema DDL helpers**
+- [x] **Step 4: Implement schema DDL helpers**
 
 Add this production code to `src-tauri/src/analysis_documents.rs` above the tests:
 
@@ -251,7 +251,7 @@ where
 }
 ```
 
-- [ ] **Step 5: Add test fixture helper**
+- [x] **Step 5: Add test fixture helper**
 
 In `src-tauri/src/sources/test_support.rs`, add:
 
@@ -280,7 +280,7 @@ create_analysis_documents_table(&pool).await;
 
 And include `"analysis_documents"` in the table assertion list.
 
-- [ ] **Step 6: Run schema and fixture tests**
+- [x] **Step 6: Run schema and fixture tests**
 
 Run:
 
@@ -296,7 +296,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::test_support::tests::so
 
 Expected: all selected tests pass.
 
-- [ ] **Step 7: Commit schema module**
+- [x] **Step 7: Commit schema module**
 
 Run:
 

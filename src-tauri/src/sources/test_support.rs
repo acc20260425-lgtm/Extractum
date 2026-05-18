@@ -128,6 +128,12 @@ pub(crate) async fn create_ingest_provenance_tables(pool: &sqlx::SqlitePool) {
         .expect("create ingest provenance schema");
 }
 
+pub(crate) async fn create_analysis_documents_table(pool: &sqlx::SqlitePool) {
+    crate::analysis_documents::create_analysis_documents_schema(pool)
+        .await
+        .expect("create analysis documents schema");
+}
+
 pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePool {
     let pool = memory_pool_with_sources().await;
     sqlx::query(
@@ -214,8 +220,8 @@ pub(crate) async fn create_item_identity_indexes(pool: &sqlx::SqlitePool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_canonical_telegram_identity_index, create_ingest_provenance_tables,
-        memory_pool_with_source_items_and_topics,
+        create_analysis_documents_table, create_canonical_telegram_identity_index,
+        create_ingest_provenance_tables, memory_pool_with_source_items_and_topics,
     };
 
     #[tokio::test]
@@ -223,6 +229,7 @@ mod tests {
         let pool = memory_pool_with_source_items_and_topics().await;
         create_canonical_telegram_identity_index(&pool).await;
         create_ingest_provenance_tables(&pool).await;
+        create_analysis_documents_table(&pool).await;
 
         for table in [
             "app_settings",
@@ -237,6 +244,7 @@ mod tests {
             "telegram_takeout_batches",
             "ingest_item_observations",
             "ingest_batch_warnings",
+            "analysis_documents",
         ] {
             sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
                 .bind(table)

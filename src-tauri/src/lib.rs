@@ -1,3 +1,4 @@
+mod analysis_documents;
 mod compression;
 mod db;
 mod error;
