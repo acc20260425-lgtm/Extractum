@@ -562,7 +562,7 @@ Runtime tests must cover document maintenance for:
 - YouTube comment item writes;
 - YouTube video metadata upsert when description is inserted, changed, or
   cleared;
-- source rebuild does not race same-source ingest and is idempotent.
+- source rebuild does not race same-source ingest and is idempotent;
 - item-backed runtime writes verify document `source_id`, `source_type`, and
   `source_subtype` consistency with backing `items` and `sources` rows.
 
