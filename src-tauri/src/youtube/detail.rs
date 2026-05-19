@@ -7,6 +7,8 @@ use tauri::AppHandle;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
+use crate::sql_helpers::push_i64_bind_list;
+use crate::time::ymd_to_unix_midnight;
 use crate::youtube::source_metadata::{
     load_playlist_source_metadata_map, load_video_source_metadata_map,
     YoutubePlaylistSourceMetadata, YoutubeVideoSourceMetadata,
@@ -399,7 +401,7 @@ async fn load_source_rows(
         WHERE source_type = 'youtube' AND id IN (
         "#,
     );
-    push_i64_list(&mut query, source_ids);
+    push_i64_bind_list(&mut query, source_ids);
     query.push(")");
 
     query
@@ -433,7 +435,7 @@ async fn load_direct_content_counts(
     );
     query.push_bind(item_kind);
     query.push(" AND items.source_id IN (");
-    push_i64_list(&mut query, source_ids);
+    push_i64_bind_list(&mut query, source_ids);
     query.push(") GROUP BY items.source_id");
 
     let rows = query
@@ -476,7 +478,7 @@ async fn load_playlist_content_counts(
           AND youtube_playlist_items.playlist_source_id IN (
         "#,
     );
-    push_i64_list(&mut query, source_ids);
+    push_i64_bind_list(&mut query, source_ids);
     query.push(") GROUP BY youtube_playlist_items.playlist_source_id");
 
     let rows = query
@@ -517,7 +519,7 @@ async fn load_playlist_counts(
         WHERE playlist_source_id IN (
         "#,
     );
-    push_i64_list(&mut query, source_ids);
+    push_i64_bind_list(&mut query, source_ids);
     query.push(") GROUP BY playlist_source_id");
 
     let rows = query
@@ -715,35 +717,6 @@ fn captions_unavailable_for_status(status: &str) -> bool {
             | "removed_from_playlist"
             | "unavailable_unknown"
     )
-}
-
-fn push_i64_list(query: &mut QueryBuilder<'_, sqlx::Sqlite>, values: &[i64]) {
-    let mut separated = query.separated(", ");
-    for value in values {
-        separated.push_bind(*value);
-    }
-    separated.push_unseparated(" ");
-}
-
-fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
-    let mut parts = value.split('-');
-    let year = parts.next()?.parse::<i64>().ok()?;
-    let month = parts.next()?.parse::<i64>().ok()?;
-    let day = parts.next()?.parse::<i64>().ok()?;
-    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-    Some(days_from_civil(year, month, day) * 86_400)
-}
-
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = year - i64::from(month <= 2);
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let yoe = year - era * 400;
-    let month_prime = month + if month > 2 { -3 } else { 9 };
-    let doy = (153 * month_prime + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
 use crate::error::{AppError, AppResult};
+use crate::time::now_secs;
 
 const TAKEOUT_IMPORT_EVENT: &str = "sources://takeout-import";
 const STATUS_QUEUED: &str = "queued";
@@ -195,13 +196,6 @@ pub(crate) fn emit_takeout_import_event(handle: &AppHandle, record: &TakeoutImpo
 
 fn is_terminal_status(status: &str) -> bool {
     matches!(status, STATUS_FAILED | STATUS_CANCELLED | STATUS_COMPLETED)
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
 }
 
 #[cfg(test)]

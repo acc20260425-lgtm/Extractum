@@ -12,6 +12,7 @@ use crate::sources::{
     upsert_youtube_playlist_source, upsert_youtube_transcript_item, upsert_youtube_video_source,
     SourceIdentityRepairState, SourceSyncTarget,
 };
+use crate::time::{now_secs, ymd_to_unix_midnight};
 
 use super::captions::{
     fetch_transcript_for_video, replace_transcript_segments, transcript_external_id,
@@ -854,27 +855,6 @@ async fn load_preferred_caption_language(pool: &sqlx::SqlitePool) -> AppResult<S
     Ok(value.unwrap_or_else(|| "original".to_string()))
 }
 
-fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
-    let mut parts = value.split('-');
-    let year = parts.next()?.parse::<i64>().ok()?;
-    let month = parts.next()?.parse::<i64>().ok()?;
-    let day = parts.next()?.parse::<i64>().ok()?;
-    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-    Some(days_from_civil(year, month, day) * 86_400)
-}
-
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = year - i64::from(month <= 2);
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let yoe = year - era * 400;
-    let month_prime = month + if month > 2 { -3 } else { 9 };
-    let doy = (153 * month_prime + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
-}
-
 fn emit_source_job_event(handle: &AppHandle, record: &SourceJobRecord) {
     let _ = handle.emit(SOURCE_JOB_EVENT, record);
 }
@@ -884,13 +864,6 @@ fn is_terminal_status(status: &SourceJobStatus) -> bool {
         status,
         SourceJobStatus::Succeeded | SourceJobStatus::Failed | SourceJobStatus::Cancelled
     )
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
 }
 
 #[cfg(test)]

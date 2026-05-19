@@ -3,6 +3,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
+use crate::time::ymd_to_unix_midnight;
 
 use super::dto::{YoutubeComment, YoutubeVideoMetadata};
 use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
@@ -220,33 +221,6 @@ fn bool_value(value: &Value) -> Option<bool> {
             _ => None,
         }
     })
-}
-
-fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
-    let compact = value.trim();
-    let normalized = if compact.len() == 8 && compact.chars().all(|ch| ch.is_ascii_digit()) {
-        format!("{}-{}-{}", &compact[0..4], &compact[4..6], &compact[6..8])
-    } else {
-        compact.to_string()
-    };
-    let mut parts = normalized.split('-');
-    let year = parts.next()?.parse::<i64>().ok()?;
-    let month = parts.next()?.parse::<i64>().ok()?;
-    let day = parts.next()?.parse::<i64>().ok()?;
-    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-    Some(days_from_civil(year, month, day) * 86_400)
-}
-
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = year - i64::from(month <= 2);
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let yoe = year - era * 400;
-    let month_prime = month + if month > 2 { -3 } else { 9 };
-    let doy = (153 * month_prime + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
 }
 
 #[cfg(test)]

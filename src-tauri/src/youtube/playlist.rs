@@ -3,6 +3,7 @@ use serde_json::to_vec;
 use crate::compression::compress_json_bytes;
 use crate::error::{AppError, AppResult};
 use crate::sources::upsert_youtube_video_source;
+use crate::time::now_secs;
 
 use super::dto::{
     YoutubeAvailabilityStatus, YoutubePlaylistItemMetadata, YoutubePlaylistMetadata,
@@ -189,13 +190,6 @@ fn availability_status_wire(status: &YoutubeAvailabilityStatus) -> &'static str 
         YoutubeAvailabilityStatus::RemovedFromPlaylist => "removed_from_playlist",
         YoutubeAvailabilityStatus::UnavailableUnknown => "unavailable_unknown",
     }
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
 }
 
 #[cfg(test)]

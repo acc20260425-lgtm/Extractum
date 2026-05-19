@@ -5,6 +5,7 @@ use sqlx::{Executor, QueryBuilder, Row, Sqlite, SqliteConnection};
 
 use crate::compression::compress_json_bytes;
 use crate::error::{AppError, AppResult};
+use crate::sql_helpers::push_i64_bind_list;
 
 use super::dto::{
     YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
@@ -304,7 +305,7 @@ pub(crate) async fn load_video_source_metadata_map(
           AND s.id IN (
         "#,
     );
-    push_i64_list_for_source_metadata(&mut query, source_ids);
+    push_i64_bind_list(&mut query, source_ids);
     query.push(")");
     let rows = query
         .build()
@@ -342,7 +343,7 @@ pub(crate) async fn load_playlist_source_metadata_map(
           AND s.id IN (
         "#,
     );
-    push_i64_list_for_source_metadata(&mut query, source_ids);
+    push_i64_bind_list(&mut query, source_ids);
     query.push(")");
     let rows = query
         .build()
@@ -382,7 +383,7 @@ pub(crate) async fn load_video_description_metadata(
           AND s.id IN (
         "#,
     );
-    push_i64_list_for_source_metadata(&mut query, source_ids);
+    push_i64_bind_list(&mut query, source_ids);
     query.push(") ORDER BY s.id ASC");
     let rows = query
         .build()
@@ -549,14 +550,6 @@ fn playlist_metadata_rows_to_map(
         );
     }
     Ok(metadata)
-}
-
-fn push_i64_list_for_source_metadata(query: &mut QueryBuilder<'_, sqlx::Sqlite>, values: &[i64]) {
-    let mut separated = query.separated(", ");
-    for value in values {
-        separated.push_bind(*value);
-    }
-    separated.push_unseparated(" ");
 }
 
 fn is_video_form_wire(value: &str) -> bool {

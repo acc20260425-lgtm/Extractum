@@ -2,6 +2,7 @@
 
 use crate::compression::{compress_json_bytes, compress_text};
 use crate::error::{AppError, AppResult};
+use crate::time::ymd_to_unix_midnight;
 use sqlx::{Executor, Sqlite};
 
 pub(crate) const ANALYSIS_DOCUMENTS_SCHEMA_SQL: &str = r#"
@@ -114,27 +115,6 @@ pub(crate) fn transcript_segment_ref(source_id: i64, item_id: i64, start_ms: i64
 
 pub(crate) fn youtube_description_ref(source_id: i64) -> String {
     format!("s{source_id}-i0")
-}
-
-pub(crate) fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
-    let mut parts = value.split('-');
-    let year = parts.next()?.parse::<i64>().ok()?;
-    let month = parts.next()?.parse::<i64>().ok()?;
-    let day = parts.next()?.parse::<i64>().ok()?;
-    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-    Some(days_from_civil(year, month, day) * 86_400)
-}
-
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = year - i64::from(month <= 2);
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let yoe = year - era * 400;
-    let month_prime = month + if month > 2 { -3 } else { 9 };
-    let doy = (153 * month_prime + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
 }
 
 #[derive(sqlx::FromRow)]

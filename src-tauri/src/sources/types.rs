@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+pub(super) use crate::time::now_secs;
+
 pub(crate) const TELEGRAM_SOURCE_TYPE: &str = "telegram";
 pub(crate) const YOUTUBE_SOURCE_TYPE: &str = "youtube";
 pub(crate) const RSS_SOURCE_TYPE: &str = "rss";
@@ -203,13 +205,6 @@ pub(super) struct SourceForumTopicRow {
     pub(super) is_deleted: bool,
     pub(super) sort_order: Option<i64>,
     pub(super) message_count: i64,
-}
-
-pub(super) fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
 }
 
 #[cfg(test)]

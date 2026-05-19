@@ -7,6 +7,7 @@ use crate::compression::{compress_json_bytes, compress_text, decompress_text};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::{decode_media_metadata, encode_media_metadata, ExtractedItemPayload};
+use crate::tx::{begin_immediate, finish_manual_transaction};
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::types::{
@@ -229,11 +230,7 @@ pub(crate) async fn insert_telegram_source_item_outcome(
     identity: TelegramMessageIdentity,
     item: SourceItemInsert,
 ) -> AppResult<TelegramItemInsertOutcome> {
-    let mut conn = pool.acquire().await.map_err(AppError::database)?;
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    let mut conn = begin_immediate(pool).await?;
 
     let result = insert_telegram_source_item_on_connection(
         &mut conn,
@@ -245,23 +242,17 @@ pub(crate) async fn insert_telegram_source_item_outcome(
     .await;
 
     match result {
-        Ok(outcome) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-            Ok(outcome)
-        }
+        Ok(outcome) => finish_manual_transaction(&mut conn, Ok(outcome)).await,
         Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            if error.kind == crate::error::AppErrorKind::Conflict
-                || error.message.contains("telegram_messages")
-            {
+            let is_skippable_conflict = error.kind == crate::error::AppErrorKind::Conflict
+                || error.message.contains("telegram_messages");
+            let result = finish_manual_transaction(&mut conn, Err(error)).await;
+            if is_skippable_conflict {
                 return Ok(TelegramItemInsertOutcome::Skipped {
                     reason_code: "conflict_without_item_id",
                 });
             }
-            Err(error)
+            result
         }
     }
 }
@@ -274,11 +265,7 @@ pub(crate) async fn insert_telegram_source_item_with_observation(
     item: SourceItemInsert,
 ) -> AppResult<TelegramItemInsertOutcome> {
     let provider_identity = crate::ingest_provenance::telegram_provider_identity(&identity);
-    let mut conn = pool.acquire().await.map_err(AppError::database)?;
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    let mut conn = begin_immediate(pool).await?;
 
     let result: AppResult<TelegramItemInsertOutcome> = async {
         let outcome = insert_telegram_source_item_on_connection(
@@ -308,19 +295,7 @@ pub(crate) async fn insert_telegram_source_item_with_observation(
     }
     .await;
 
-    match result {
-        Ok(outcome) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-            Ok(outcome)
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(error)
-        }
-    }
+    finish_manual_transaction(&mut conn, result).await
 }
 
 async fn insert_telegram_source_item_on_connection(

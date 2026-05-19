@@ -4,6 +4,7 @@ use sqlx::{Sqlite, SqliteConnection};
 
 use crate::error::{AppError, AppResult};
 use crate::sources::TelegramMessageIdentity;
+use crate::tx::{begin_immediate, finish_manual_transaction};
 
 pub(crate) const PROVENANCE_TEXT_MAX_LEN: usize = 512;
 
@@ -77,11 +78,7 @@ pub(crate) async fn create_telegram_takeout_batch(
     pool: &sqlx::Pool<Sqlite>,
     input: CreateTelegramTakeoutBatch,
 ) -> AppResult<i64> {
-    let mut conn = pool.acquire().await.map_err(AppError::database)?;
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    let mut conn = begin_immediate(pool).await?;
 
     let result: AppResult<i64> = async {
         let batch_id: i64 = sqlx::query_scalar(
@@ -335,11 +332,7 @@ pub(crate) async fn finalize_ingest_batch(
     status: TerminalBatchStatus,
     terminal_error: Option<&str>,
 ) -> AppResult<()> {
-    let mut conn = pool.acquire().await.map_err(AppError::database)?;
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    let mut conn = begin_immediate(pool).await?;
 
     let result: AppResult<()> = async {
         let counts: (i64, i64, i64, i64) = sqlx::query_as(
@@ -421,25 +414,6 @@ fn classify_completeness(
             "partial"
         }
         TerminalBatchStatus::Failed | TerminalBatchStatus::Cancelled => "unknown",
-    }
-}
-
-async fn finish_manual_transaction<T>(
-    conn: &mut sqlx::pool::PoolConnection<Sqlite>,
-    result: AppResult<T>,
-) -> AppResult<T> {
-    match result {
-        Ok(value) => {
-            sqlx::query("COMMIT")
-                .execute(&mut **conn)
-                .await
-                .map_err(AppError::database)?;
-            Ok(value)
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut **conn).await;
-            Err(error)
-        }
     }
 }
 

@@ -4,6 +4,7 @@ use sha2::{Digest, Sha384};
 use sqlx::{Connection, SqliteConnection};
 
 use crate::error::{AppError, AppResult};
+use crate::tx::{begin_immediate_on_connection, finish_connection_transaction};
 
 pub(super) const SOURCE_IDENTITY_CLEANUP_VERSION: i64 = 19;
 pub(super) const SOURCE_IDENTITY_CLEANUP_DESCRIPTION: &str = "remove legacy telegram source kind";
@@ -196,10 +197,7 @@ async fn run_source_identity_cleanup_rebuild(conn: &mut SqliteConnection) -> App
         ));
     }
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    begin_immediate_on_connection(conn).await?;
 
     let rebuild_result = async {
         preflight_sources_for_v19(conn).await?;
@@ -209,20 +207,11 @@ async fn run_source_identity_cleanup_rebuild(conn: &mut SqliteConnection) -> App
     }
     .await;
 
-    match rebuild_result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            let _ = sqlx::query("PRAGMA foreign_keys = ON")
-                .execute(&mut *conn)
-                .await;
-            return Err(error);
-        }
+    if let Err(error) = finish_connection_transaction(conn, rebuild_result).await {
+        let _ = sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(&mut *conn)
+            .await;
+        return Err(error);
     }
 
     sqlx::query("PRAGMA foreign_keys = ON")

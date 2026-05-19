@@ -19,6 +19,14 @@ pub struct AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 
+pub(crate) fn database_error(error: impl std::fmt::Display) -> AppError {
+    AppError::database(error)
+}
+
+pub(crate) fn internal_error(error: impl std::fmt::Display) -> AppError {
+    AppError::internal(error.to_string())
+}
+
 impl AppError {
     pub fn new(kind: AppErrorKind, message: impl Into<String>) -> Self {
         Self {
@@ -198,6 +206,21 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Internal);
         assert_eq!(error.message, "Database error: connection closed");
+    }
+
+    #[test]
+    fn database_error_mapper_matches_database_helper() {
+        let error = super::database_error("connection closed");
+
+        assert_eq!(error, AppError::database("connection closed"));
+    }
+
+    #[test]
+    fn internal_error_mapper_stringifies_errors() {
+        let error = super::internal_error("invalid json");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert_eq!(error.message, "invalid json");
     }
 
     #[test]

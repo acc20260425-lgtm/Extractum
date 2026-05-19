@@ -26,6 +26,7 @@ use self::trace::{decode_trace_data, normalize_ref, try_build_trace_refs};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
+use crate::time::now_secs;
 
 pub use self::chat::{
     ask_analysis_run_question, clear_analysis_chat_messages, list_analysis_chat_messages,
@@ -99,13 +100,6 @@ impl AnalysisState {
     async fn is_report_run_cancelled(&self, run_id: i64) -> bool {
         self.cancelled_report_runs.lock().await.contains(&run_id)
     }
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
 }
 
 fn emit_analysis_event(handle: &AppHandle, event: &AnalysisRunEvent) {

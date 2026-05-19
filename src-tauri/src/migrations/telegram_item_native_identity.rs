@@ -4,6 +4,7 @@ use sha2::{Digest, Sha384};
 use sqlx::{Connection, SqliteConnection};
 
 use crate::error::{AppError, AppResult};
+use crate::tx::{begin_immediate_on_connection, finish_connection_transaction};
 
 pub(super) const TELEGRAM_ITEM_NATIVE_IDENTITY_VERSION: i64 = 21;
 pub(super) const TELEGRAM_ITEM_NATIVE_IDENTITY_DESCRIPTION: &str =
@@ -27,10 +28,7 @@ pub(super) async fn apply_telegram_item_native_identity_on_connection(
     }
 
     let started_at = Instant::now();
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    begin_immediate_on_connection(conn).await?;
 
     let result = async {
         create_telegram_messages_schema(conn).await?;
@@ -42,18 +40,7 @@ pub(super) async fn apply_telegram_item_native_identity_on_connection(
     }
     .await;
 
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            return Err(error);
-        }
-    }
+    finish_connection_transaction(conn, result).await?;
 
     record_migration_success(
         conn,

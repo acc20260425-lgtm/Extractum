@@ -29,6 +29,10 @@ use telegram::{
 mod source_ingest;
 use source_ingest::SourceIngestLocks;
 
+mod sql_helpers;
+mod time;
+mod tx;
+
 mod takeout_import;
 use takeout_import::{
     cancel_takeout_source_import, list_takeout_source_import_jobs, run_takeout_export_dc_spike,

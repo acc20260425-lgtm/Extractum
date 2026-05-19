@@ -4,6 +4,7 @@ use sha2::{Digest, Sha384};
 use sqlx::{Connection, SqliteConnection};
 
 use crate::error::{AppError, AppErrorKind, AppResult};
+use crate::tx::{begin_immediate_on_connection, finish_connection_transaction};
 
 pub(super) const YOUTUBE_TYPED_SOURCE_METADATA_VERSION: i64 = 20;
 pub(super) const YOUTUBE_TYPED_SOURCE_METADATA_DESCRIPTION: &str =
@@ -27,10 +28,7 @@ pub(super) async fn apply_youtube_typed_source_metadata_on_connection(
     }
 
     let started_at = Instant::now();
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    begin_immediate_on_connection(conn).await?;
 
     let result = async {
         crate::youtube::source_metadata::create_youtube_typed_source_tables(&mut *conn).await?;
@@ -38,18 +36,7 @@ pub(super) async fn apply_youtube_typed_source_metadata_on_connection(
     }
     .await;
 
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            return Err(error);
-        }
-    }
+    finish_connection_transaction(conn, result).await?;
 
     record_migration_success(
         conn,

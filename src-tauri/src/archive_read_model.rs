@@ -2,6 +2,7 @@
 
 use crate::error::{AppError, AppResult};
 use crate::sources::{ForumTopicFilter, StoredItemRow};
+use crate::time::now_secs;
 use sqlx::{FromRow, SqlitePool};
 
 pub(crate) const ARCHIVE_READ_MODEL_VERSION: i64 = 1;
@@ -553,13 +554,6 @@ pub(crate) async fn load_item_rows_from_archive(
         .fetch_all(pool)
         .await
         .map_err(AppError::database)
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
 }
 
 #[cfg(test)]

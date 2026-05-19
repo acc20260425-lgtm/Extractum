@@ -17,6 +17,7 @@ use time::{format_description, OffsetDateTime, UtcOffset};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
+use crate::time::now_secs;
 
 use chunker::{build_chunks, should_export_message};
 use filename::{ensure_child_path, sanitize_path_component};
@@ -615,10 +616,6 @@ fn timestamp_for_folder(unix: i64) -> String {
         .to_offset(UtcOffset::UTC)
         .format(&format)
         .unwrap_or_else(|_| "19700101-000000".to_string())
-}
-
-fn now_secs() -> i64 {
-    OffsetDateTime::now_utc().unix_timestamp()
 }
 
 fn path_to_string(path: PathBuf) -> String {

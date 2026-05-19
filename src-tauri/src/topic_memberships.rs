@@ -1,6 +1,7 @@
 use sqlx::{Sqlite, SqliteConnection};
 
 use crate::error::{AppError, AppResult};
+use crate::tx::{begin_immediate, finish_manual_transaction};
 
 pub(crate) const CURRENT_TOPIC_RESOLVER_VERSION: i64 = 1;
 pub(crate) const TOPIC_STATE_NEVER_RUN: &str = "never_run";
@@ -210,11 +211,7 @@ pub(crate) async fn rebuild_topic_memberships_for_source(
     source_id: i64,
     refreshed_at: i64,
 ) -> AppResult<TopicRebuildStats> {
-    let mut conn = pool.acquire().await.map_err(AppError::database)?;
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    let mut conn = begin_immediate(pool).await?;
 
     let result = rebuild_topic_memberships_for_source_on_connection(
         &mut conn,
@@ -225,17 +222,12 @@ pub(crate) async fn rebuild_topic_memberships_for_source(
     .await;
 
     match result {
-        Ok(stats) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-            Ok(stats)
-        }
+        Ok(stats) => finish_manual_transaction(&mut conn, Ok(stats)).await,
         Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            mark_topic_resolution_failed(pool, source_id, &error.to_string(), refreshed_at).await?;
-            Err(error)
+            let error_message = error.to_string();
+            let result = finish_manual_transaction(&mut conn, Err(error)).await;
+            mark_topic_resolution_failed(pool, source_id, &error_message, refreshed_at).await?;
+            result
         }
     }
 }

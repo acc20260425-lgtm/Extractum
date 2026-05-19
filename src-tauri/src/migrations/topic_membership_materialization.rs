@@ -4,11 +4,13 @@ use sha2::{Digest, Sha384};
 use sqlx::{Connection, SqliteConnection};
 
 use crate::error::{AppError, AppResult};
+use crate::time::now_secs;
 use crate::topic_memberships::{
     assert_all_topic_membership_invariants, catalog_backed_supergroup_source_ids,
     create_topic_membership_schema, ensure_never_run_state_for_supergroups_without_catalog,
     rebuild_topic_memberships_for_source_on_connection,
 };
+use crate::tx::{begin_immediate_on_connection, finish_connection_transaction};
 
 pub(super) const TOPIC_MEMBERSHIP_MATERIALIZATION_VERSION: i64 = 22;
 pub(super) const TOPIC_MEMBERSHIP_MATERIALIZATION_DESCRIPTION: &str =
@@ -34,10 +36,7 @@ pub(super) async fn apply_topic_membership_materialization_on_connection(
     }
 
     let started_at = Instant::now();
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(AppError::database)?;
+    begin_immediate_on_connection(conn).await?;
 
     let result = async {
         create_topic_membership_schema(conn).await?;
@@ -51,18 +50,7 @@ pub(super) async fn apply_topic_membership_materialization_on_connection(
     }
     .await;
 
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(AppError::database)?;
-        }
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            return Err(error);
-        }
-    }
+    finish_connection_transaction(conn, result).await?;
 
     record_migration_success(
         conn,
@@ -128,13 +116,6 @@ async fn record_migration_success(
 
 fn expected_migration_22_checksum() -> Vec<u8> {
     Sha384::digest(TOPIC_MEMBERSHIP_MATERIALIZATION_SENTINEL_SQL.as_bytes()).to_vec()
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
 }
 
 #[cfg(test)]
