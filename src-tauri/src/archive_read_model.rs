@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use crate::error::{AppError, AppResult};
+use crate::sources::{ForumTopicFilter, StoredItemRow};
 use sqlx::{FromRow, SqlitePool};
 
 pub(crate) const ARCHIVE_READ_MODEL_VERSION: i64 = 1;
@@ -326,6 +327,103 @@ pub(crate) async fn mark_source_failed(
     .await
     .map_err(AppError::database)?;
     Ok(())
+}
+
+pub(crate) async fn load_item_rows_from_archive(
+    pool: &SqlitePool,
+    source_id: i64,
+    limit: i64,
+    before_published_at: Option<i64>,
+    topic_filter: Option<ForumTopicFilter>,
+    around_item_id: Option<i64>,
+) -> AppResult<Vec<StoredItemRow>> {
+    let around_published_at = if let Some(item_id) = around_item_id {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT published_at
+             FROM archive_read_items
+             WHERE source_id = ? AND item_id = ? AND model_version = ?
+             LIMIT 1",
+        )
+        .bind(source_id)
+        .bind(item_id)
+        .bind(ARCHIVE_READ_MODEL_VERSION)
+        .fetch_optional(pool)
+        .await
+        .map_err(AppError::database)?
+    } else {
+        None
+    };
+
+    let state = crate::topic_memberships::load_topic_resolution_state(pool, source_id).await?;
+    let is_ready = crate::topic_memberships::is_ready_current_state(state.as_ref());
+    if matches!(topic_filter.as_ref(), Some(ForumTopicFilter::Uncategorized)) && !is_ready {
+        return Ok(Vec::new());
+    }
+
+    let mut sql = String::from(
+        r#"
+        SELECT
+            item_id AS id,
+            source_id,
+            external_id,
+            item_kind,
+            author,
+            published_at,
+            content_kind,
+            has_media,
+            media_kind,
+            content_zstd,
+            media_metadata_zstd,
+            has_raw_data,
+            reply_to_msg_id,
+            reply_to_peer_kind,
+            reply_to_peer_id,
+            reply_to_top_id,
+            reaction_count,
+            forum_topic_id,
+            forum_topic_title,
+            forum_topic_top_message_id
+        FROM archive_read_items
+        WHERE source_id = ?
+          AND model_version = ?
+        "#,
+    );
+
+    if before_published_at.is_some() {
+        sql.push_str(" AND published_at < ?");
+    } else if around_published_at.is_some() {
+        sql.push_str(" AND published_at <= ?");
+    }
+
+    match topic_filter.as_ref() {
+        Some(ForumTopicFilter::Topic { .. }) => {
+            sql.push_str(" AND forum_topic_id = ?");
+        }
+        Some(ForumTopicFilter::Uncategorized) => {
+            sql.push_str(" AND forum_topic_id IS NULL");
+        }
+        None => {}
+    }
+
+    sql.push_str(" ORDER BY published_at DESC LIMIT ?");
+
+    let mut query = sqlx::query_as::<_, StoredItemRow>(&sql)
+        .bind(source_id)
+        .bind(ARCHIVE_READ_MODEL_VERSION);
+    if let Some(before) = before_published_at {
+        query = query.bind(before);
+    } else if let Some(around) = around_published_at {
+        query = query.bind(around);
+    }
+    if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter.as_ref() {
+        query = query.bind(*topic_id);
+    }
+
+    query
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)
 }
 
 fn now_secs() -> i64 {

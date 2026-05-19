@@ -43,6 +43,6 @@ pub(crate) use store::{
 };
 pub(crate) use sync::finalize_sync;
 pub(crate) use types::{
-    SourceSyncTarget, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE, TELEGRAM_KIND_CHANNEL,
-    TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    SourceSyncTarget, StoredItemRow, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+    TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };

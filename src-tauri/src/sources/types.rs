@@ -166,28 +166,28 @@ pub(super) struct SourceRecordRow {
     pub(super) telegram_avatar_cache_key: Option<String>,
 }
 
-#[derive(sqlx::FromRow)]
-pub(super) struct StoredItemRow {
-    pub(super) id: i64,
-    pub(super) source_id: i64,
-    pub(super) external_id: String,
-    pub(super) item_kind: String,
-    pub(super) author: Option<String>,
-    pub(super) published_at: i64,
-    pub(super) content_kind: String,
-    pub(super) has_media: bool,
-    pub(super) media_kind: Option<String>,
-    pub(super) content_zstd: Option<Vec<u8>>,
-    pub(super) media_metadata_zstd: Option<Vec<u8>>,
-    pub(super) raw_data_zstd: Option<Vec<u8>>,
-    pub(super) forum_topic_id: Option<i64>,
-    pub(super) forum_topic_title: Option<String>,
-    pub(super) forum_topic_top_message_id: Option<i64>,
-    pub(super) reply_to_msg_id: Option<i64>,
-    pub(super) reply_to_peer_kind: Option<String>,
-    pub(super) reply_to_peer_id: Option<String>,
-    pub(super) reply_to_top_id: Option<i64>,
-    pub(super) reaction_count: Option<i64>,
+#[derive(Clone, Debug, PartialEq, Eq, sqlx::FromRow)]
+pub(crate) struct StoredItemRow {
+    pub(crate) id: i64,
+    pub(crate) source_id: i64,
+    pub(crate) external_id: String,
+    pub(crate) item_kind: String,
+    pub(crate) author: Option<String>,
+    pub(crate) published_at: i64,
+    pub(crate) content_kind: String,
+    pub(crate) has_media: bool,
+    pub(crate) media_kind: Option<String>,
+    pub(crate) content_zstd: Option<Vec<u8>>,
+    pub(crate) media_metadata_zstd: Option<Vec<u8>>,
+    pub(crate) has_raw_data: bool,
+    pub(crate) forum_topic_id: Option<i64>,
+    pub(crate) forum_topic_title: Option<String>,
+    pub(crate) forum_topic_top_message_id: Option<i64>,
+    pub(crate) reply_to_msg_id: Option<i64>,
+    pub(crate) reply_to_peer_kind: Option<String>,
+    pub(crate) reply_to_peer_id: Option<String>,
+    pub(crate) reply_to_top_id: Option<i64>,
+    pub(crate) reaction_count: Option<i64>,
 }
 
 #[derive(sqlx::FromRow)]

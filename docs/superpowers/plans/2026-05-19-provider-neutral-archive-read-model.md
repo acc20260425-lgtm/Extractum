@@ -627,7 +627,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/sources/items/query.rs`
 - Test: `src-tauri/src/archive_read_model.rs`
 
-- [ ] **Step 1: Change `StoredItemRow` to carry `has_raw_data`**
+- [x] **Step 1: Change `StoredItemRow` to carry `has_raw_data`**
 
 In `src-tauri/src/sources/types.rs`, make `StoredItemRow` usable by the crate-local archive reader and comparable in parity tests:
 
@@ -677,7 +677,7 @@ In `src-tauri/src/sources/mod.rs`, re-export the row type for crate-local read-m
 pub(crate) use types::StoredItemRow;
 ```
 
-- [ ] **Step 2: Add old-path versus archive-path parity tests**
+- [x] **Step 2: Add old-path versus archive-path parity tests**
 
 In `src-tauri/src/sources/items/query.rs`, add tests that seed the existing source browsing fixture, rebuild archive rows, and compare old/new query results:
 
@@ -729,7 +729,7 @@ async fn archive_reader_matches_topic_filter_and_around_item_semantics() {
 
 Keep comparison at the row model level first; `ItemRecord` mapping is covered by existing command tests.
 
-- [ ] **Step 3: Run parity tests and confirm failure**
+- [x] **Step 3: Run parity tests and confirm failure**
 
 Run:
 
@@ -740,7 +740,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::items::query::tests::ar
 
 Expected: fails because the archive reader does not exist.
 
-- [ ] **Step 4: Preserve current query as explicit old path**
+- [x] **Step 4: Preserve current query as explicit old path**
 
 In `src-tauri/src/sources/items/query.rs`, rename the current function to:
 
@@ -759,7 +759,7 @@ pub(crate) async fn load_item_rows_from_items_path(
 
 Keep test names and assertions, but call `load_item_rows_from_items_path` until the gated wrapper is introduced in Task 5.
 
-- [ ] **Step 5: Implement archive reader with identical paging/filter semantics**
+- [x] **Step 5: Implement archive reader with identical paging/filter semantics**
 
 In `src-tauri/src/archive_read_model.rs`, add:
 
@@ -865,7 +865,7 @@ pub(crate) async fn load_item_rows_from_archive(
 }
 ```
 
-- [ ] **Step 6: Run Task 3 verification**
+- [x] **Step 6: Run Task 3 verification**
 
 Run:
 
@@ -878,7 +878,7 @@ git diff --check
 
 Expected: old query tests pass, archive parity tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 7: Commit parity reader**
+- [x] **Step 7: Commit parity reader**
 
 Run:
 

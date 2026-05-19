@@ -13,7 +13,7 @@ use super::types::{
     now_secs, StoredItemRow, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
     ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
 };
-use query::load_item_rows_from_pool;
+use query::load_item_rows_from_items_path;
 
 mod query;
 
@@ -578,7 +578,7 @@ pub async fn list_source_items(
     require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let limit = request.limit.clamp(1, 200);
-    let rows = load_item_rows_from_pool(
+    let rows = load_item_rows_from_items_path(
         &pool,
         request.source_id,
         limit,
@@ -611,7 +611,7 @@ fn item_record_from_row(row: StoredItemRow) -> AppResult<ItemRecord> {
         media_summary: media_metadata.summary,
         media_file_name: media_metadata.file_name,
         media_mime_type: media_metadata.mime_type,
-        has_raw_data: row.raw_data_zstd.is_some(),
+        has_raw_data: row.has_raw_data,
         forum_topic_id: row.forum_topic_id,
         forum_topic_title: row.forum_topic_title,
         forum_topic_top_message_id: row.forum_topic_top_message_id,
@@ -813,7 +813,8 @@ mod tests {
             r#"
             SELECT
                 id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
-                media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                media_kind, content_zstd, media_metadata_zstd,
+                raw_data_zstd IS NOT NULL AS has_raw_data,
                 reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
                 reaction_count,
                 NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
@@ -847,8 +848,16 @@ mod tests {
             decode_media_metadata(row.media_metadata_zstd.as_deref()).expect("decode media"),
             media_metadata
         );
+        let raw_data_zstd: Vec<u8> = sqlx::query_scalar(
+            "SELECT raw_data_zstd FROM items WHERE source_id = ? AND external_id = ?",
+        )
+        .bind(1_i64)
+        .bind("42")
+        .fetch_one(&pool)
+        .await
+        .expect("load raw payload");
         assert_eq!(
-            decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
+            decompress_bytes(&raw_data_zstd).expect("decode raw"),
             br#"{"id":42}"#.to_vec()
         );
     }
@@ -1301,7 +1310,8 @@ mod tests {
             r#"
             SELECT
                 id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
-                media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                media_kind, content_zstd, media_metadata_zstd,
+                raw_data_zstd IS NOT NULL AS has_raw_data,
                 reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
                 reaction_count,
                 NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
@@ -1324,8 +1334,14 @@ mod tests {
             decompress_text(&row.content_zstd.expect("content")).expect("decode content"),
             "new transcript"
         );
+        let raw_data_zstd: Vec<u8> =
+            sqlx::query_scalar("SELECT raw_data_zstd FROM items WHERE id = ?")
+                .bind(first_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load raw transcript payload");
         assert_eq!(
-            decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
+            decompress_bytes(&raw_data_zstd).expect("decode raw"),
             serde_json::to_vec(&serde_json::json!({ "version": 2 })).expect("json")
         );
     }
@@ -1448,7 +1464,8 @@ mod tests {
             r#"
             SELECT
                 id, source_id, external_id, item_kind, author, published_at, content_kind, has_media,
-                media_kind, content_zstd, media_metadata_zstd, raw_data_zstd,
+                media_kind, content_zstd, media_metadata_zstd,
+                raw_data_zstd IS NOT NULL AS has_raw_data,
                 reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
                 reaction_count,
                 NULL AS forum_topic_id, NULL AS forum_topic_title, NULL AS forum_topic_top_message_id
@@ -1480,10 +1497,15 @@ mod tests {
             "new comment"
         );
 
-        let raw: serde_json::Value = serde_json::from_slice(
-            &decompress_bytes(&row.raw_data_zstd.expect("raw")).expect("decode raw"),
-        )
-        .expect("decode raw json");
+        let raw_data_zstd: Vec<u8> =
+            sqlx::query_scalar("SELECT raw_data_zstd FROM items WHERE id = ?")
+                .bind(first_id)
+                .fetch_one(&pool)
+                .await
+                .expect("load raw comment payload");
+        let raw: serde_json::Value =
+            serde_json::from_slice(&decompress_bytes(&raw_data_zstd).expect("decode raw"))
+                .expect("decode raw json");
         assert_eq!(raw["comment_id"], "Ugabc");
         assert_eq!(raw["raw_payload"]["text"], "new comment");
     }

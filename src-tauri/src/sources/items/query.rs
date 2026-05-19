@@ -1,9 +1,9 @@
 use crate::error::{AppError, AppResult};
-use crate::sources::types::StoredItemRow;
+use crate::sources::StoredItemRow;
 
 use super::ForumTopicFilter;
 
-pub(super) async fn load_item_rows_from_pool(
+pub(crate) async fn load_item_rows_from_items_path(
     pool: &sqlx::SqlitePool,
     source_id: i64,
     limit: i64,
@@ -44,7 +44,7 @@ pub(super) async fn load_item_rows_from_pool(
             items.media_kind,
             items.content_zstd,
             items.media_metadata_zstd,
-            items.raw_data_zstd,
+            items.raw_data_zstd IS NOT NULL AS has_raw_data,
             items.reply_to_msg_id,
             items.reply_to_peer_kind,
             items.reply_to_peer_id,
@@ -101,6 +101,7 @@ pub(super) async fn load_item_rows_from_pool(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compression::compress_text;
     use crate::sources::items::ForumTopicFilter;
     use crate::sources::test_support::memory_pool_with_source_items_and_topics;
 
@@ -223,7 +224,7 @@ mod tests {
         .await
         .expect("insert ready topic state");
 
-        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
+        let rows = load_item_rows_from_items_path(&pool, 1, 20, None, None, None)
             .await
             .expect("load all rows");
         assert_eq!(rows.len(), 5);
@@ -239,7 +240,7 @@ mod tests {
         assert_eq!(rows[4].reply_to_top_id, Some(404));
         assert_eq!(rows[4].reaction_count, Some(5));
 
-        let topic_rows = load_item_rows_from_pool(
+        let topic_rows = load_item_rows_from_items_path(
             &pool,
             1,
             20,
@@ -252,7 +253,7 @@ mod tests {
         assert_eq!(topic_rows.len(), 3);
         assert!(topic_rows.iter().all(|row| row.forum_topic_id == Some(200)));
 
-        let general_rows = load_item_rows_from_pool(
+        let general_rows = load_item_rows_from_items_path(
             &pool,
             1,
             20,
@@ -265,7 +266,7 @@ mod tests {
         assert_eq!(general_rows.len(), 1);
         assert_eq!(general_rows[0].external_id, "999");
 
-        let uncategorized_rows = load_item_rows_from_pool(
+        let uncategorized_rows = load_item_rows_from_items_path(
             &pool,
             1,
             20,
@@ -307,7 +308,7 @@ mod tests {
         .await
         .expect("seed item");
 
-        let rows = load_item_rows_from_pool(
+        let rows = load_item_rows_from_items_path(
             &pool,
             1,
             20,
@@ -348,7 +349,7 @@ mod tests {
             .expect("insert item");
         }
 
-        let rows = load_item_rows_from_pool(&pool, 1, 2, None, None, Some(11))
+        let rows = load_item_rows_from_items_path(&pool, 1, 2, None, None, Some(11))
             .await
             .expect("load around selected item");
 
@@ -358,5 +359,125 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["101", "102"]
         );
+    }
+
+    #[tokio::test]
+    async fn archive_reader_matches_items_path_for_source_browsing_rows() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_browsing_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive rows");
+
+        let old_rows = load_item_rows_from_items_path(&pool, 1, 20, None, None, None)
+            .await
+            .expect("load old path");
+        let new_rows =
+            crate::archive_read_model::load_item_rows_from_archive(&pool, 1, 20, None, None, None)
+                .await
+                .expect("load archive path");
+
+        assert_eq!(new_rows, old_rows);
+    }
+
+    #[tokio::test]
+    async fn archive_reader_matches_topic_filter_and_around_item_semantics() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_browsing_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive rows");
+
+        for filter in [
+            Some(ForumTopicFilter::Topic { topic_id: 200 }),
+            Some(ForumTopicFilter::Uncategorized),
+            None,
+        ] {
+            let old_rows =
+                load_item_rows_from_items_path(&pool, 1, 2, None, filter.clone(), Some(11))
+                    .await
+                    .expect("load old path");
+            let new_rows = crate::archive_read_model::load_item_rows_from_archive(
+                &pool,
+                1,
+                2,
+                None,
+                filter,
+                Some(11),
+            )
+            .await
+            .expect("load archive path");
+
+            assert_eq!(new_rows, old_rows);
+        }
+    }
+
+    async fn seed_browsing_parity_fixture(pool: &sqlx::SqlitePool) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (
+                id, source_type, source_subtype, external_id, title, is_active, is_member, created_at
+             ) VALUES (1, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed source");
+
+        sqlx::query(
+            "INSERT INTO telegram_forum_topics (
+                source_id, topic_id, top_message_id, title, last_seen_at, updated_at
+             ) VALUES (1, 200, 700, 'Roadmap', 100, 100)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed topic");
+
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 0, 0)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed topic state");
+
+        sqlx::query(
+            r#"
+            INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                content_zstd, raw_data_zstd, content_kind, has_media, media_kind,
+                media_metadata_zstd, reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id,
+                reply_to_top_id, reaction_count
+            ) VALUES
+                (10, 1, '700', 'telegram_message', 'Ada', 500, 500, ?, ?, 'text_only', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                (11, 1, '701', 'telegram_message', 'Bob', 400, 400, ?, ?, 'text_with_media', 1, 'photo', ?, 700, 'channel', '12345', 200, 4),
+                (12, 1, '702', 'telegram_message', NULL, 300, 300, NULL, NULL, 'media_only', 1, 'video', ?, NULL, NULL, NULL, NULL, NULL),
+                (13, 1, '703', 'telegram_message', 'Cyd', 250, 250, ?, ?, 'text_only', 0, NULL, NULL, NULL, NULL, NULL, NULL, 1)
+            "#,
+        )
+        .bind(compress_text("Topic root").expect("compress root"))
+        .bind(vec![10_u8])
+        .bind(compress_text("Topic reply with media").expect("compress reply"))
+        .bind(vec![11_u8])
+        .bind(vec![91_u8])
+        .bind(vec![92_u8])
+        .bind(compress_text("Later topic item").expect("compress later"))
+        .bind(vec![13_u8])
+        .execute(pool)
+        .await
+        .expect("seed items");
+
+        for item_id in [10_i64, 11_i64, 13_i64] {
+            sqlx::query(
+                "INSERT INTO item_topic_memberships (
+                    item_id, source_id, topic_id, match_kind, resolver_version
+                 ) VALUES (?, 1, 200, 'reply_to_top_id', 1)",
+            )
+            .bind(item_id)
+            .execute(pool)
+            .await
+            .expect("seed membership");
+        }
     }
 }
