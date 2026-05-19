@@ -204,6 +204,7 @@ pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePo
     .await
     .expect("create telegram_forum_topics unique index");
     create_topic_membership_tables(&pool).await;
+    create_archive_read_model_tables(&pool).await;
     pool
 }
 

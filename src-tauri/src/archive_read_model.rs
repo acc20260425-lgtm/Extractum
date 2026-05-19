@@ -205,7 +205,7 @@ async fn rebuild_source_in_transaction(
     .map_err(AppError::database)?;
 
     for row in &rows {
-        insert_archive_item_row(conn, row, started_at).await?;
+        upsert_archive_row_on_connection(conn, row, started_at).await?;
     }
 
     let row_count = i64::try_from(rows.len()).unwrap_or(i64::MAX);
@@ -233,7 +233,75 @@ async fn rebuild_source_in_transaction(
     Ok(())
 }
 
-async fn insert_archive_item_row(
+pub(crate) async fn upsert_item_on_connection(
+    conn: &mut sqlx::SqliteConnection,
+    item_id: i64,
+) -> AppResult<()> {
+    let row = load_builder_row_for_item(conn, item_id).await?;
+    let source_id = row.source_id;
+    let state: Option<ArchiveReadModelState> = sqlx::query_as(
+        "SELECT source_id, model_version, status, built_at, item_count, row_count, last_error, updated_at
+         FROM archive_read_model_state
+         WHERE source_id = ?",
+    )
+    .bind(source_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
+    if !is_current_ready_state(state.as_ref()) {
+        return mark_source_stale_on_connection(conn, source_id).await;
+    }
+
+    let built_at = now_secs();
+    upsert_archive_row_on_connection(conn, &row, built_at).await?;
+    refresh_ready_counts_on_connection(conn, source_id, built_at).await
+}
+
+async fn load_builder_row_for_item(
+    conn: &mut sqlx::SqliteConnection,
+    item_id: i64,
+) -> AppResult<SourceArchiveItemRow> {
+    sqlx::query_as(
+        r#"
+        SELECT
+            items.id,
+            items.source_id,
+            items.external_id,
+            items.item_kind,
+            items.author,
+            items.published_at,
+            items.content_kind,
+            items.has_media,
+            items.media_kind,
+            items.content_zstd,
+            items.media_metadata_zstd,
+            items.raw_data_zstd IS NOT NULL AS has_raw_data,
+            items.reply_to_msg_id,
+            items.reply_to_peer_kind,
+            items.reply_to_peer_id,
+            items.reply_to_top_id,
+            items.reaction_count,
+            forum_topics.topic_id AS forum_topic_id,
+            forum_topics.title AS forum_topic_title,
+            forum_topics.top_message_id AS forum_topic_top_message_id
+        FROM items
+        LEFT JOIN item_topic_memberships AS memberships
+          ON memberships.item_id = items.id
+        LEFT JOIN telegram_forum_topics AS forum_topics
+          ON forum_topics.source_id = memberships.source_id
+         AND forum_topics.topic_id = memberships.topic_id
+        WHERE items.id = ?
+        LIMIT 1
+        "#,
+    )
+    .bind(item_id)
+    .fetch_one(conn)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn upsert_archive_row_on_connection(
     conn: &mut sqlx::SqliteConnection,
     row: &SourceArchiveItemRow,
     built_at: i64,
@@ -245,7 +313,29 @@ async fn insert_archive_item_row(
             has_raw_data, forum_topic_id, forum_topic_title, forum_topic_top_message_id,
             reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
             reaction_count, model_version, built_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(source_id, item_id) DO UPDATE SET
+            ref = excluded.ref,
+            external_id = excluded.external_id,
+            item_kind = excluded.item_kind,
+            author = excluded.author,
+            published_at = excluded.published_at,
+            content_kind = excluded.content_kind,
+            has_media = excluded.has_media,
+            media_kind = excluded.media_kind,
+            content_zstd = excluded.content_zstd,
+            media_metadata_zstd = excluded.media_metadata_zstd,
+            has_raw_data = excluded.has_raw_data,
+            forum_topic_id = excluded.forum_topic_id,
+            forum_topic_title = excluded.forum_topic_title,
+            forum_topic_top_message_id = excluded.forum_topic_top_message_id,
+            reply_to_msg_id = excluded.reply_to_msg_id,
+            reply_to_peer_kind = excluded.reply_to_peer_kind,
+            reply_to_peer_id = excluded.reply_to_peer_id,
+            reply_to_top_id = excluded.reply_to_top_id,
+            reaction_count = excluded.reaction_count,
+            model_version = excluded.model_version,
+            built_at = excluded.built_at",
     )
     .bind(row.source_id)
     .bind(row.id)
@@ -270,6 +360,45 @@ async fn insert_archive_item_row(
     .bind(row.reaction_count)
     .bind(ARCHIVE_READ_MODEL_VERSION)
     .bind(built_at)
+    .execute(conn)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn refresh_ready_counts_on_connection(
+    conn: &mut sqlx::SqliteConnection,
+    source_id: i64,
+    built_at: i64,
+) -> AppResult<()> {
+    let row_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)
+         FROM archive_read_items
+         WHERE source_id = ? AND model_version = ?",
+    )
+    .bind(source_id)
+    .bind(ARCHIVE_READ_MODEL_VERSION)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
+    sqlx::query(
+        "UPDATE archive_read_model_state
+         SET status = 'ready',
+             model_version = ?,
+             built_at = ?,
+             item_count = ?,
+             row_count = ?,
+             last_error = NULL,
+             updated_at = ?
+         WHERE source_id = ?",
+    )
+    .bind(ARCHIVE_READ_MODEL_VERSION)
+    .bind(built_at)
+    .bind(row_count)
+    .bind(row_count)
+    .bind(built_at)
+    .bind(source_id)
     .execute(conn)
     .await
     .map_err(AppError::database)?;

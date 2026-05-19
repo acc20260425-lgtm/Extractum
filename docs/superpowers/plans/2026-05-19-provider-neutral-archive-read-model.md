@@ -900,7 +900,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/archive_read_model.rs`
 - Test: `src-tauri/src/sources/items.rs`
 
-- [ ] **Step 1: Add failing single-write maintenance tests**
+- [x] **Step 1: Add failing single-write maintenance tests**
 
 In `src-tauri/src/sources/items.rs`, add:
 
@@ -944,7 +944,7 @@ async fn single_telegram_insert_maintains_ready_archive_model() {
 
 If item ids are not deterministic in the fixture, load the inserted `item_id` from the insert outcome and assert `ref = format!("s1-i{item_id}")`.
 
-- [ ] **Step 2: Add failing bulk-ingest stale test**
+- [x] **Step 2: Add failing bulk-ingest stale test**
 
 In `src-tauri/src/sources/items.rs`, add:
 
@@ -991,7 +991,7 @@ async fn takeout_observation_insert_marks_ready_archive_model_stale_without_per_
 
 This locks the important decision: Takeout/bulk ingest does not let archive builder defects roll back large canonical import batches.
 
-- [ ] **Step 3: Run maintenance tests and confirm failure**
+- [x] **Step 3: Run maintenance tests and confirm failure**
 
 Run:
 
@@ -1002,7 +1002,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::items::tests::takeout_o
 
 Expected: fail because write maintenance is not wired.
 
-- [ ] **Step 4: Implement item-level archive upsert**
+- [x] **Step 4: Implement item-level archive upsert**
 
 In `src-tauri/src/archive_read_model.rs`, add:
 
@@ -1040,7 +1040,7 @@ pub(crate) async fn upsert_item_on_connection(
 
 The helper must run inside the caller transaction. For a single write, failure rolls back the whole canonical item insert. For non-ready sources, it only marks stale/no-ready state and does not force a rebuild.
 
-- [ ] **Step 5: Distinguish single write from bulk observation insert**
+- [x] **Step 5: Distinguish single write from bulk observation insert**
 
 In `src-tauri/src/sources/items.rs`, add:
 
@@ -1091,7 +1091,7 @@ ArchiveReadMaintenanceMode::MarkSourceStaleOnly
 
 from `insert_telegram_source_item_with_observation`.
 
-- [ ] **Step 6: Mark YouTube bulk refreshes stale**
+- [x] **Step 6: Mark YouTube bulk refreshes stale**
 
 In `src-tauri/src/youtube/jobs.rs`, mark affected source scopes stale after successful transcript/comment/metadata refreshes that can alter item or display rows:
 
@@ -1101,7 +1101,7 @@ crate::archive_read_model::mark_source_stale(&pool, sync_source_id).await?;
 
 Do this at job/scope boundaries, not inside every transcript/comment row upsert. Keep canonical YouTube item writes governed by their existing transaction policy.
 
-- [ ] **Step 7: Run Task 4 verification**
+- [x] **Step 7: Run Task 4 verification**
 
 Run:
 
@@ -1116,7 +1116,7 @@ git diff --check
 
 Expected: maintenance tests pass, existing item tests pass, archive tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 8: Commit maintenance semantics**
+- [x] **Step 8: Commit maintenance semantics**
 
 Run:
 

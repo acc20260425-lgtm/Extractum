@@ -114,6 +114,12 @@ impl TelegramItemInsertOutcome {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArchiveReadMaintenanceMode {
+    MaintainSingleWrite,
+    MarkSourceStaleOnly,
+}
+
 fn prepare_source_item(item: &SourceItemInsert) -> AppResult<Option<PreparedSourceItem>> {
     let content_zstd = item
         .payload
@@ -229,8 +235,14 @@ pub(crate) async fn insert_telegram_source_item_outcome(
         .await
         .map_err(AppError::database)?;
 
-    let result =
-        insert_telegram_source_item_on_connection(&mut conn, source_id, identity, item).await;
+    let result = insert_telegram_source_item_on_connection(
+        &mut conn,
+        source_id,
+        identity,
+        item,
+        ArchiveReadMaintenanceMode::MaintainSingleWrite,
+    )
+    .await;
 
     match result {
         Ok(outcome) => {
@@ -269,8 +281,14 @@ pub(crate) async fn insert_telegram_source_item_with_observation(
         .map_err(AppError::database)?;
 
     let result: AppResult<TelegramItemInsertOutcome> = async {
-        let outcome =
-            insert_telegram_source_item_on_connection(&mut conn, source_id, identity, item).await?;
+        let outcome = insert_telegram_source_item_on_connection(
+            &mut conn,
+            source_id,
+            identity,
+            item,
+            ArchiveReadMaintenanceMode::MarkSourceStaleOnly,
+        )
+        .await?;
         let (outcome_name, item_id, reason_code) = outcome.observation_parts();
         crate::ingest_provenance::record_ingest_observation_on_connection(
             &mut conn,
@@ -310,6 +328,7 @@ async fn insert_telegram_source_item_on_connection(
     source_id: i64,
     identity: TelegramMessageIdentity,
     item: SourceItemInsert,
+    archive_maintenance: ArchiveReadMaintenanceMode,
 ) -> AppResult<TelegramItemInsertOutcome> {
     identity.validate()?;
     if item.item_kind != ITEM_KIND_TELEGRAM_MESSAGE {
@@ -439,6 +458,14 @@ async fn insert_telegram_source_item_on_connection(
     .await?;
 
     crate::analysis_documents::upsert_item_backed_document_on_connection(conn, item_id).await?;
+    match archive_maintenance {
+        ArchiveReadMaintenanceMode::MaintainSingleWrite => {
+            crate::archive_read_model::upsert_item_on_connection(conn, item_id).await?;
+        }
+        ArchiveReadMaintenanceMode::MarkSourceStaleOnly => {
+            crate::archive_read_model::mark_source_stale_on_connection(conn, source_id).await?;
+        }
+    }
 
     Ok(TelegramItemInsertOutcome::Inserted { item_id })
 }
@@ -994,6 +1021,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn single_telegram_insert_maintains_ready_archive_model() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("initial rebuild");
+
+        assert!(insert_telegram_source_item(
+            &pool,
+            1,
+            telegram_identity(42),
+            telegram_insert("42", "new ready archive row"),
+        )
+        .await
+        .expect("insert item"));
+
+        let exists: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM archive_read_items WHERE source_id = 1 AND ref = 's1-i1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count archive row");
+        assert_eq!(exists, 1);
+
+        assert!(
+            crate::archive_read_model::source_archive_model_is_ready(&pool, 1)
+                .await
+                .expect("ready check")
+        );
+    }
+
+    #[tokio::test]
     async fn telegram_insert_with_observation_records_insert_duplicate_and_skipped_rows() {
         let pool = memory_pool_with_source_items_and_topics().await;
         create_ingest_provenance_tables(&pool).await;
@@ -1093,6 +1154,45 @@ mod tests {
         assert_eq!(rows[2].0, "skipped");
         assert_eq!(rows[2].1, None);
         assert_eq!(rows[2].3.as_deref(), Some("empty_payload"));
+    }
+
+    #[tokio::test]
+    async fn takeout_observation_insert_marks_ready_archive_model_stale_without_per_item_build() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        create_ingest_provenance_tables(&pool).await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("initial rebuild");
+        let batch_id = crate::ingest_provenance::create_telegram_takeout_batch(
+            &pool,
+            crate::ingest_provenance::CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+
+        let outcome = insert_telegram_source_item_with_observation(
+            &pool,
+            batch_id,
+            1,
+            telegram_identity(77),
+            telegram_insert("77", "bulk row"),
+        )
+        .await
+        .expect("bulk insert");
+
+        assert!(outcome.is_inserted());
+        let state = crate::archive_read_model::load_source_state(&pool, 1)
+            .await
+            .expect("load state")
+            .expect("state exists");
+        assert_eq!(state.status, crate::archive_read_model::STATUS_STALE);
     }
 
     #[tokio::test]

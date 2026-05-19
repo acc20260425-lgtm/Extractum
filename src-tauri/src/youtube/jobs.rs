@@ -571,18 +571,21 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
     };
 
     let mut tx = pool.begin().await.map_err(AppError::database)?;
-    match payload {
+    let refreshed_source_id = match payload {
         MetadataSyncPayload::Playlist(metadata) => {
             let refreshed_source_id = upsert_youtube_playlist_source(&mut tx, &metadata).await?;
             upsert_playlist_items(&mut tx, refreshed_source_id, &metadata).await?;
             mark_source_synced(&mut tx, refreshed_source_id).await?;
+            refreshed_source_id
         }
         MetadataSyncPayload::Video(metadata) => {
             let refreshed_source_id = upsert_youtube_video_source(&mut tx, &metadata).await?;
             mark_source_synced(&mut tx, refreshed_source_id).await?;
+            refreshed_source_id
         }
-    }
-    tx.commit().await.map_err(AppError::database)
+    };
+    tx.commit().await.map_err(AppError::database)?;
+    crate::archive_read_model::mark_source_stale(&pool, refreshed_source_id).await
 }
 
 async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResult<()> {
@@ -650,7 +653,8 @@ async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResul
     .await?;
     replace_transcript_segments(&mut tx, item_id, source_id, &transcript).await?;
     mark_source_synced(&mut tx, source_id).await?;
-    tx.commit().await.map_err(AppError::database)
+    tx.commit().await.map_err(AppError::database)?;
+    crate::archive_read_model::mark_source_stale(&pool, source_id).await
 }
 
 async fn sync_youtube_comments(handle: &AppHandle, source_id: i64) -> AppResult<Vec<String>> {
@@ -684,6 +688,7 @@ async fn sync_youtube_comments(handle: &AppHandle, source_id: i64) -> AppResult<
     }
     mark_source_synced(&mut tx, source_id).await?;
     tx.commit().await.map_err(AppError::database)?;
+    crate::archive_read_model::mark_source_stale(&pool, source_id).await?;
     Ok(comments.warnings)
 }
 
