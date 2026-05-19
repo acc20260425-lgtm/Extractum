@@ -19,7 +19,7 @@ struct SourceRow {
 }
 
 #[derive(FromRow)]
-struct ItemRow {
+struct ExportMessageRow {
     id: i64,
     source_id: i64,
     external_id: String,
@@ -158,7 +158,7 @@ pub(crate) async fn load_export_messages_from_items_path(
     period_from: Option<i64>,
     period_to: Option<i64>,
 ) -> AppResult<Vec<NotebookLmExportMessage>> {
-    let rows: Vec<ItemRow> = match (period_from, period_to) {
+    let rows: Vec<ExportMessageRow> = match (period_from, period_to) {
         (Some(from), Some(to)) => {
             let sql = base_query(
                 "items.source_id = ? AND items.published_at >= ? AND items.published_at <= ?",
@@ -194,7 +194,75 @@ pub(crate) async fn load_export_messages_from_items_path(
     .map_err(|e| e.to_string())?;
 
     let reply_contexts = load_reply_contexts_from_items_path(pool, source_id, &rows).await?;
+    map_export_rows(rows, reply_contexts)
+}
 
+#[allow(dead_code)]
+pub(crate) async fn load_export_messages_from_archive(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    period_from: Option<i64>,
+    period_to: Option<i64>,
+) -> AppResult<Vec<NotebookLmExportMessage>> {
+    let rows: Vec<ExportMessageRow> = match (period_from, period_to) {
+        (Some(from), Some(to)) => {
+            let sql = archive_base_query(
+                "source_id = ? AND model_version = ? AND item_kind = 'telegram_message'
+                 AND published_at >= ? AND published_at <= ?",
+            );
+            sqlx::query_as(&sql)
+                .bind(source_id)
+                .bind(crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION)
+                .bind(from)
+                .bind(to)
+                .fetch_all(pool)
+                .await
+        }
+        (Some(from), None) => {
+            let sql = archive_base_query(
+                "source_id = ? AND model_version = ? AND item_kind = 'telegram_message'
+                 AND published_at >= ?",
+            );
+            sqlx::query_as(&sql)
+                .bind(source_id)
+                .bind(crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION)
+                .bind(from)
+                .fetch_all(pool)
+                .await
+        }
+        (None, Some(to)) => {
+            let sql = archive_base_query(
+                "source_id = ? AND model_version = ? AND item_kind = 'telegram_message'
+                 AND published_at <= ?",
+            );
+            sqlx::query_as(&sql)
+                .bind(source_id)
+                .bind(crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION)
+                .bind(to)
+                .fetch_all(pool)
+                .await
+        }
+        (None, None) => {
+            let sql = archive_base_query(
+                "source_id = ? AND model_version = ? AND item_kind = 'telegram_message'",
+            );
+            sqlx::query_as(&sql)
+                .bind(source_id)
+                .bind(crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION)
+                .fetch_all(pool)
+                .await
+        }
+    }
+    .map_err(AppError::database)?;
+
+    let reply_contexts = load_reply_contexts_from_archive(pool, source_id, &rows).await?;
+    map_export_rows(rows, reply_contexts)
+}
+
+fn map_export_rows(
+    rows: Vec<ExportMessageRow>,
+    reply_contexts: HashMap<i64, ReplyContext>,
+) -> AppResult<Vec<NotebookLmExportMessage>> {
     rows.into_iter()
         .map(|row| {
             let text = row
@@ -255,7 +323,7 @@ pub(crate) async fn load_export_messages(
 async fn load_reply_contexts_from_items_path(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
-    rows: &[ItemRow],
+    rows: &[ExportMessageRow],
 ) -> AppResult<HashMap<i64, ReplyContext>> {
     let mut reply_ids = rows
         .iter()
@@ -288,6 +356,65 @@ async fn load_reply_contexts_from_items_path(
         }
 
         let lookup_rows = query.fetch_all(pool).await.map_err(|e| e.to_string())?;
+        for row in lookup_rows {
+            let Ok(reply_id) = row.external_id.parse::<i64>() else {
+                continue;
+            };
+            let snippet = reply_snippet(&row)?;
+            contexts.insert(
+                reply_id,
+                ReplyContext {
+                    author: row.author,
+                    snippet,
+                },
+            );
+        }
+    }
+
+    Ok(contexts)
+}
+
+async fn load_reply_contexts_from_archive(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    rows: &[ExportMessageRow],
+) -> AppResult<HashMap<i64, ReplyContext>> {
+    let mut reply_ids = rows
+        .iter()
+        .filter_map(|row| row.reply_to_msg_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    reply_ids.sort_unstable();
+
+    let mut contexts = HashMap::new();
+    for chunk in reply_ids.chunks(500) {
+        if chunk.is_empty() {
+            continue;
+        }
+
+        let placeholders = std::iter::repeat_n("?", chunk.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            r#"
+            SELECT external_id, author, content_zstd, has_media, media_kind
+            FROM archive_read_items
+            WHERE source_id = ?
+              AND model_version = ?
+              AND item_kind = 'telegram_message'
+              AND external_id IN ({placeholders})
+            "#
+        );
+
+        let mut query = sqlx::query_as::<_, ReplyLookupRow>(&sql)
+            .bind(source_id)
+            .bind(crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION);
+        for reply_id in chunk {
+            query = query.bind(reply_id.to_string());
+        }
+
+        let lookup_rows = query.fetch_all(pool).await.map_err(AppError::database)?;
         for row in lookup_rows {
             let Ok(reply_id) = row.external_id.parse::<i64>() else {
                 continue;
@@ -379,13 +506,44 @@ fn base_query(where_clause: &str) -> String {
     )
 }
 
+fn archive_base_query(where_clause: &str) -> String {
+    format!(
+        r#"
+    SELECT
+        item_id AS id,
+        source_id,
+        external_id,
+        author,
+        published_at,
+        content_zstd,
+        content_kind,
+        has_media,
+        media_kind,
+        media_metadata_zstd,
+        reply_to_msg_id,
+        reply_to_peer_kind,
+        reply_to_peer_id,
+        reply_to_top_id,
+        reaction_count,
+        forum_topic_id,
+        forum_topic_title,
+        forum_topic_top_message_id
+    FROM archive_read_items
+    WHERE {where_clause}
+    ORDER BY published_at ASC, item_id ASC
+"#
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        load_export_messages, load_export_source, select_notebooklm_export_loader,
+        load_export_messages, load_export_messages_from_archive,
+        load_export_messages_from_items_path, load_export_source, select_notebooklm_export_loader,
         ArchiveReadinessFallbackReason, ExportLoaderSelection,
     };
     use crate::compression::compress_text;
+    use crate::media::{encode_media_metadata, ItemMediaMetadata};
 
     async fn export_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -492,6 +650,98 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed archive state");
+    }
+
+    async fn seed_notebooklm_export_parity_fixture(pool: &sqlx::SqlitePool) {
+        seed_export_source(pool).await;
+
+        sqlx::query(
+            "INSERT INTO telegram_forum_topics (
+                source_id, topic_id, top_message_id, title, is_deleted
+             ) VALUES (1, 200, 700, 'Roadmap', 0)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed forum topic");
+
+        let photo_metadata = encode_media_metadata(&ItemMediaMetadata {
+            summary: Some("Photo".to_string()),
+            file_name: Some("roadmap.png".to_string()),
+            mime_type: Some("image/png".to_string()),
+            size_bytes: Some(42),
+            width: Some(640),
+            height: Some(480),
+            duration_seconds: None,
+        })
+        .expect("encode photo metadata");
+        let document_metadata = encode_media_metadata(&ItemMediaMetadata {
+            summary: Some("Document".to_string()),
+            file_name: Some("notes.pdf".to_string()),
+            mime_type: Some("application/pdf".to_string()),
+            size_bytes: Some(128),
+            width: None,
+            height: None,
+            duration_seconds: None,
+        })
+        .expect("encode document metadata");
+
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                content_zstd, content_kind, has_media, media_kind, media_metadata_zstd
+             ) VALUES
+                (1, 1, '10', 'telegram_message', 'Bob', 10, 10, ?, 'text_only', 0, NULL, NULL),
+                (2, 1, '20', 'telegram_message', 'Ada', 100, 100, ?, 'text_with_media', 1, 'photo', ?),
+                (3, 1, '30', 'telegram_message', 'Cy', 110, 110, NULL, 'media_only', 1, 'document', ?),
+                (4, 1, '40', 'telegram_message', 'Dana', 120, 120, ?, 'text_only', 0, NULL, NULL),
+                (5, 1, '700a', 'telegram_message', 'Eve', 130, 130, ?, 'text_only', 0, NULL, NULL)",
+        )
+        .bind(compress_text("Original reply target").expect("compress original"))
+        .bind(compress_text("Reply with link https://example.test").expect("compress reply"))
+        .bind(photo_metadata)
+        .bind(document_metadata)
+        .bind(compress_text("Missing reply target").expect("compress missing reply"))
+        .bind(compress_text("Looks numeric but is not").expect("compress nonnumeric"))
+        .execute(pool)
+        .await
+        .expect("seed parity items");
+
+        sqlx::query(
+            "UPDATE items
+             SET reply_to_msg_id = 10,
+                 reply_to_peer_kind = 'channel',
+                 reply_to_peer_id = '42',
+                 reply_to_top_id = 200,
+                 reaction_count = 3
+             WHERE id = 2",
+        )
+        .execute(pool)
+        .await
+        .expect("update reply metadata");
+
+        sqlx::query(
+            "UPDATE items
+             SET reply_to_msg_id = 999,
+                 reply_to_peer_kind = 'channel',
+                 reply_to_peer_id = '42',
+                 reaction_count = 1
+             WHERE id = 4",
+        )
+        .execute(pool)
+        .await
+        .expect("update missing reply metadata");
+
+        for item_id in [2_i64, 3_i64] {
+            sqlx::query(
+                "INSERT INTO item_topic_memberships (
+                    item_id, source_id, topic_id, match_kind, resolver_version
+                 ) VALUES (?, 1, 200, 'reply_to_top_id', 1)",
+            )
+            .bind(item_id)
+            .execute(pool)
+            .await
+            .expect("seed topic membership");
+        }
     }
 
     #[tokio::test]
@@ -618,6 +868,89 @@ mod tests {
             .expect_err("youtube source is rejected before message loading");
 
         assert!(error.to_string().contains("is not a Telegram source"));
+    }
+
+    #[tokio::test]
+    async fn archive_export_loader_matches_items_path_for_notebooklm_messages() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive model");
+
+        let old_rows = load_export_messages_from_items_path(&pool, 1, None, None)
+            .await
+            .expect("load old path");
+        let archive_rows = load_export_messages_from_archive(&pool, 1, None, None)
+            .await
+            .expect("load archive path");
+
+        assert_eq!(archive_rows, old_rows);
+        assert_eq!(archive_rows.len(), 5);
+        assert_eq!(
+            archive_rows[1].reply_to_snippet.as_deref(),
+            Some("Original reply target")
+        );
+        assert_eq!(
+            archive_rows[1].reply_to_peer_kind.as_deref(),
+            Some("channel")
+        );
+        assert_eq!(archive_rows[1].reply_to_peer_id.as_deref(), Some("42"));
+        assert_eq!(archive_rows[1].reply_to_top_id, Some(200));
+        assert_eq!(archive_rows[1].reaction_count, Some(3));
+        assert_eq!(
+            archive_rows[1].forum_topic_title.as_deref(),
+            Some("Roadmap")
+        );
+        assert!(!archive_rows[1].media_placeholders.is_empty());
+        assert!(!archive_rows[2].media_placeholders.is_empty());
+        assert_eq!(archive_rows[4].forum_topic_id, None);
+    }
+
+    #[tokio::test]
+    async fn archive_export_loader_matches_items_path_for_bounded_periods() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive model");
+
+        let old_rows = load_export_messages_from_items_path(&pool, 1, Some(50), Some(115))
+            .await
+            .expect("load old bounded path");
+        let archive_rows = load_export_messages_from_archive(&pool, 1, Some(50), Some(115))
+            .await
+            .expect("load archive bounded path");
+
+        assert_eq!(archive_rows, old_rows);
+        assert_eq!(
+            archive_rows
+                .iter()
+                .map(|row| row.external_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["20", "30"]
+        );
+        assert_eq!(
+            archive_rows[0].reply_to_snippet.as_deref(),
+            Some("Original reply target")
+        );
+    }
+
+    #[tokio::test]
+    async fn export_fixture_rejects_null_published_at_before_loader_parity() {
+        let pool = export_pool().await;
+        seed_export_source(&pool).await;
+
+        let result = sqlx::query(
+            "INSERT INTO items (
+                source_id, external_id, author, published_at, content_zstd, content_kind, has_media
+             ) VALUES (1, 'null-date', 'Ada', NULL, ?, 'text_only', 0)",
+        )
+        .bind(compress_text("Null date").expect("compress null date"))
+        .execute(&pool)
+        .await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]

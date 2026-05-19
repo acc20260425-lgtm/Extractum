@@ -370,7 +370,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
 - Test: `src-tauri/src/notebooklm_export/query.rs`
 
-- [ ] **Step 1: Add the parity fixture helpers**
+- [x] **Step 1: Add the parity fixture helpers**
 
 In the test module imports, add:
 
@@ -474,7 +474,7 @@ async fn seed_notebooklm_export_parity_fixture(pool: &sqlx::SqlitePool) {
 }
 ```
 
-- [ ] **Step 2: Add failing archive parity tests**
+- [x] **Step 2: Add failing archive parity tests**
 
 Add:
 
@@ -548,7 +548,7 @@ async fn export_fixture_rejects_null_published_at_before_loader_parity() {
 }
 ```
 
-- [ ] **Step 3: Run archive parity tests and confirm failure**
+- [x] **Step 3: Run archive parity tests and confirm failure**
 
 Run:
 
@@ -562,7 +562,7 @@ Expected: the first two tests fail to compile because
 `load_export_messages_from_archive` does not exist. The null published-at test
 should pass after fixture setup compiles.
 
-- [ ] **Step 4: Implement shared export row mapping**
+- [x] **Step 4: Implement shared export row mapping**
 
 Rename `ItemRow` to `ExportMessageRow` so both paths can map the same shape:
 
@@ -653,7 +653,7 @@ let reply_contexts = load_reply_contexts_from_items_path(pool, source_id, &rows)
 map_export_rows(rows, reply_contexts)
 ```
 
-- [ ] **Step 5: Implement archive path SQL and archive reply lookup**
+- [x] **Step 5: Implement archive path SQL and archive reply lookup**
 
 Add:
 
@@ -821,7 +821,7 @@ This SQL intentionally matches `external_id IN (?)` with bound
 `reply_to_msg_id.to_string()` values. It must not cast `archive_read_items.external_id`
 to integer.
 
-- [ ] **Step 6: Run Task 2 verification**
+- [x] **Step 6: Run Task 2 verification**
 
 Run:
 
@@ -838,7 +838,7 @@ Expected: archive parity tests pass, existing NotebookLM query tests pass,
 formatting passes, and diff check has no whitespace errors except Git
 line-ending warnings.
 
-- [ ] **Step 7: Commit archive export loader**
+- [x] **Step 7: Commit archive export loader**
 
 Run:
 
