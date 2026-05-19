@@ -1052,7 +1052,7 @@ Expected: commit succeeds.
 - Modify: `docs/superpowers/plans/2026-05-19-notebooklm-export-archive-loader.md`
 - Test: full Rust and frontend verification
 
-- [ ] **Step 1: Update schema docs**
+- [x] **Step 1: Update schema docs**
 
 In `docs/database-schema.md`, update the archive/read model notes so they say:
 
@@ -1065,7 +1065,7 @@ In `docs/database-schema.md`, update the archive/read model notes so they say:
   invariant failures are surfaced as errors rather than silently falling back.
 ```
 
-- [ ] **Step 2: Update decision note and backlog**
+- [x] **Step 2: Update decision note and backlog**
 
 In `docs/database-schema-read-model-decision.md`, update the follow-up section:
 
@@ -1090,12 +1090,12 @@ Do not remove separate NotebookLM export follow-ups for optional enrichment,
 source-group export, or YouTube-specific export enrichment outside the Database
 schema simplification slice.
 
-- [ ] **Step 3: Mark plan checkboxes complete as work lands**
+- [x] **Step 3: Mark plan checkboxes complete as work lands**
 
 Before the docs commit, update this plan so completed steps use `[x]`. Do not
 mark a step complete before its verification command has passed.
 
-- [ ] **Step 4: Run containment scans**
+- [x] **Step 4: Run containment scans**
 
 Run:
 
@@ -1115,7 +1115,7 @@ Expected:
   this slice;
 - no unfinished-work markers or Rust incomplete macro calls are introduced.
 
-- [ ] **Step 5: Run targeted Rust tests**
+- [x] **Step 5: Run targeted Rust tests**
 
 Run:
 
@@ -1127,7 +1127,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::
 
 Expected: all targeted tests pass.
 
-- [ ] **Step 6: Run full verification**
+- [x] **Step 6: Run full verification**
 
 Run commands serially, not in parallel, because `npm.cmd run check` runs
 `svelte-kit sync` and can interfere with concurrent Vitest module loading:
@@ -1151,7 +1151,7 @@ Expected:
 - `git status --short` shows only intended docs/plan changes before the docs
   commit.
 
-- [ ] **Step 7: Commit docs and final plan state**
+- [x] **Step 7: Commit docs and final plan state**
 
 Run:
 

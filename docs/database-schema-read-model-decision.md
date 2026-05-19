@@ -15,7 +15,9 @@ NotebookLM export and source browsing should reuse/extend `analysis_documents`,
 or whether they need a neighboring provider-neutral archive/read UI model. The
 decision slice chose the neighboring archive/read UI model. The first
 implementation slice has now shipped source browsing as the first gated
-consumer; NotebookLM export migration remains pending.
+consumer. Telegram NotebookLM export has now shipped as the second gated
+consumer after export parity tests, while YouTube export enrichment remains
+future-facing.
 
 The decision also recognizes the cost of a new materialized boundary. Any
 follow-up implementation must define update semantics before adding schema:
@@ -42,7 +44,12 @@ visible, distinguishes provider item kinds, and exposes stable local item refs.
 
 ## Current Data Sources
 
-NotebookLM export currently reads:
+NotebookLM export is now readiness-gated. For Telegram sources with a current
+ready archive model, export message loading reads `archive_read_items`. For
+missing, building, stale, failed, never-built, or old-version archive states,
+it preserves the existing local provider/archive items path.
+
+The fallback items path reads:
 
 - `sources` for source identity and display title;
 - `items` for message text, item identity, author/date, content kind, media
@@ -196,8 +203,14 @@ Implemented first slice:
   stale instead of rebuilding every row inline.
 - YouTube transcript segment navigation remains on the paired typed segment
   reader for this slice; transcript segments are not `archive_read_items` rows.
-- NotebookLM export still reads the provider/archive path and requires a later
-  export parity slice before migration.
+- Telegram NotebookLM export is the second gated consumer. It selects the
+  archive loader only when source state is `ready` and current; otherwise it
+  preserves the existing local provider/archive items path.
+- Once Telegram NotebookLM export selects the archive loader, corrupt/decode or
+  archive-row invariant failures are returned as errors rather than silently
+  falling back to the items path.
+- Telegram NotebookLM export reply snippets, including reply targets outside
+  the selected export period, are loaded from `archive_read_items`.
 
 ## Parity Test Inventory
 
@@ -339,7 +352,7 @@ table:
 | Work area | Relationship to archive read model |
 | --- | --- |
 | Source browsing migration | First consumer. It can validate paging, filtering, media visibility, and provider item semantics. |
-| NotebookLM export migration | Blocked until the archive model includes export-required reply/topic/reaction/media fields and browsing parity has passed. |
+| NotebookLM export migration | Implemented for Telegram as a readiness-gated archive consumer after export parity tests. YouTube-specific export enrichment remains a later slice. |
 | Takeout provenance | Can proceed in parallel while it writes provenance tables only. If it adds new archive-display fields or origin semantics that consumers need, the archive builder contract and readiness/backfill rules must be updated before consumer migration. |
 | YouTube playlist simplification | Related but separate. The archive read model may expose one derived playlist display state, but canonical cleanup of `availability_status` versus `is_removed_from_playlist` belongs to a later YouTube slice. |
 | Current-schema baseline | Blocked until the archive read-model boundary and migration/backfill rules are stable. |
@@ -353,7 +366,7 @@ table:
    schema.
 2. [x] Build the archive/read UI model for source browsing first.
 3. [x] Migrate source browsing behind old-path versus new-path parity tests.
-4. [ ] Migrate NotebookLM export after export parity tests pass.
+4. [x] Migrate Telegram NotebookLM export after export parity tests pass.
 5. [ ] Decide whether future YouTube playlist-entry browsing needs archive rows
    or typed detail only.
 6. [ ] Consider a current-schema baseline after the read-model boundary

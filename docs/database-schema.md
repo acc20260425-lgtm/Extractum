@@ -663,7 +663,12 @@ Notes:
   transaction;
 - bulk ingest and YouTube refresh paths mark source archive rows stale at the
   source scope instead of rebuilding every row inline;
-- NotebookLM export has not migrated to this model yet.
+- source browsing and Telegram NotebookLM export use the gated archive/read UI
+  model when `archive_read_model_state` is ready and current;
+- for missing, building, stale, failed, or old-version archive states,
+  NotebookLM export preserves the existing local provider/archive items path;
+- once NotebookLM export selects the archive loader, archive row decode and
+  invariant failures are surfaced as errors rather than silently falling back.
 
 ### 1.17 `accounts`
 
@@ -815,9 +820,10 @@ Notes:
 - the table is rebuildable from provider/archive truth;
 - runtime writers maintain it synchronously for Telegram messages, YouTube
   comments, YouTube transcript segment rows, and YouTube video descriptions;
-- source browsing uses the gated archive/read UI model when
-  `archive_read_model_state` is ready and current, while NotebookLM export
-  continues to read its current provider/archive path;
+- source browsing and Telegram NotebookLM export use the gated archive/read UI
+  model when `archive_read_model_state` is ready and current; NotebookLM export
+  preserves the existing local provider/archive items path for non-ready
+  archive states and surfaces archive-loader failures after selection;
 - `document_order` is the numeric order key inside one
   `(published_at, source_id)` bucket;
 - the live corpus reader orders by
@@ -908,10 +914,14 @@ saved-run read paths must not reconstruct them from current live sources.
 - YouTube source runtime metadata is read from typed YouTube source tables;
   `sources.metadata_zstd` is not the owner of YouTube runtime metadata;
 - YouTube auth cookies are stored in OS secure storage, not SQLite;
-- NotebookLM export still reads provider/archive item paths and can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
 - source browsing now uses `archive_read_items` only when
   `archive_read_model_state` is `ready` for the current builder version; all
   other states fall back to the canonical `items` plus topic joins path;
+- Telegram NotebookLM export now uses `archive_read_items` only when
+  `archive_read_model_state` is `ready` for the current builder version; all
+  non-ready states preserve the existing local provider/archive items path, and
+  archive-loader failures after selection are surfaced as errors rather than
+  silently falling back;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
 - Telegram Takeout import persists durable ingest-batch provenance after the
   same-source ingest lock is acquired; failed or cancelled imports can leave
