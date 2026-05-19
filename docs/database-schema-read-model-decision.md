@@ -72,6 +72,12 @@ state.
 
 ## Fidelity Matrix
 
+Current required fidelity covers Telegram NotebookLM export and source
+browsing. YouTube NotebookLM export rows below are future-facing constraints:
+they must inform the archive-model boundary, but must not force schema fields
+unless the next implementation slice explicitly includes YouTube export
+enrichment.
+
 ### Telegram
 
 | Consumer | Required field / semantic | Current source | `analysis_documents` coverage | Gap | Recommended owner |
@@ -211,26 +217,40 @@ Source browsing parity:
 - YouTube transcript segment navigation remains backed by timestamped segment
   data.
 
-The source browsing implementation only proves the archive model when the
-model already contains every field required by the NotebookLM export fidelity
-matrix, even if NotebookLM export continues to read the old path. Otherwise the
-model would be proven only for browsing and would likely need a second schema
-expansion before export migration.
+The source browsing implementation should not choose a schema that is known to
+exclude required Telegram NotebookLM export fields. It may leave export-specific
+rendering migration for a later slice, but the data-model boundary must already
+account for reply, topic, reaction, and media fidelity.
 
-## Update Semantics For The Follow-up Model
+## Preliminary Constraints For The Follow-up Implementation Spec
 
-The next implementation spec must settle these rules before creating a table:
+These are constraints for the next task, not runtime work in this decision
+slice. The next implementation spec must settle these rules before creating a
+table:
 
 - Canonical truth remains in `items` plus typed provider tables. The archive
   read model is rebuildable derived state, not the owner of provider data.
 - Normal item/provider writes should update archive read rows synchronously in
   the same transaction that writes `items`, `telegram_messages`,
   `youtube_transcript_segments`, or YouTube typed source/playlist state.
-- If synchronous builder maintenance fails during a normal write, the whole
-  write transaction rolls back. The app must not commit canonical rows while
-  leaving their archive read rows missing or stale.
+- For a single item/provider write, if synchronous builder maintenance fails,
+  the whole write transaction rolls back. The app must not commit canonical
+  rows while leaving their archive read rows missing or stale.
+- For bulk rebuild/backfill, failure marks the source/model scope stale or
+  failed and does not mutate canonical provider/archive data.
+- For large provider metadata refreshes that touch many derived rows, the next
+  spec must choose either one transaction with rollback or staged rebuild plus
+  readiness switch before consumers observe the new rows.
 - A scoped rebuild helper must exist for one source and for all sources. It is
   used by migrations, repair paths, fixtures, and manual recovery.
+- The implementation spec should define archive read-model readiness metadata,
+  likely source-scoped:
+  - `source_id`
+  - `model_version`
+  - `status`: `never_built`, `building`, `ready`, `stale`, or `failed`
+  - `built_at`
+  - `item_count` / `row_count`
+  - `last_error`
 - Existing database backfill should prefer a gated lazy per-source rebuild:
   migration creates the schema and readiness metadata, consumers remain on old
   paths until a source has a successful archive-model rebuild, and the first
@@ -271,8 +291,9 @@ The next implementation spec must settle these rules before creating a table:
   item-list parity is easier to validate than full NotebookLM export output.
 - NotebookLM export should migrate only after source browsing proves the
   archive/read UI model preserves fidelity.
-- "Proves fidelity" means the model contains the NotebookLM export fields
-  listed above, not only the smaller set needed by source browsing.
+- "Proves fidelity" means the model does not exclude the required Telegram
+  NotebookLM export fields listed above, even if export rendering remains on
+  the old path until a later slice.
 - Current-schema baseline work should wait until the archive read-model
   boundary is stable.
 - Legacy Telegram blob cleanup remains blocked on real Telegram
@@ -301,6 +322,18 @@ The next implementation spec must settle these rules before creating a table:
 5. Consider a current-schema baseline after the read-model boundary settles.
 6. Consider legacy Telegram metadata blob cleanup only after typed repair and
    real private/dialog-backed source validation are proven safe.
+
+## Open Questions For Next Implementation Spec
+
+- What is the table name and row granularity?
+- Is the primary archive row item-level, segment-level, playlist-entry-level,
+  or mixed?
+- What readiness/state table gates consumer migration?
+- Which fields are required for Telegram export on day one?
+- Which YouTube export fields are future-facing only?
+- How are media metadata and raw-data presence represented without copying
+  large blobs unnecessarily?
+- How does the model version/backfill version evolve?
 
 ## Non-goals For This Slice
 
