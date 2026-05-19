@@ -268,6 +268,12 @@ pub fn build_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/25.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 26,
+            description: "add provider neutral archive read model",
+            sql: include_str!("../migrations/26.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -655,13 +661,40 @@ mod tests {
     }
 
     #[test]
+    fn includes_archive_read_model_migration() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 26)
+            .expect("version 26 migration is registered");
+
+        assert_eq!(
+            migration.description,
+            "add provider neutral archive read model"
+        );
+        for fragment in [
+            "CREATE TABLE IF NOT EXISTS archive_read_model_state",
+            "CREATE TABLE IF NOT EXISTS archive_read_items",
+            "CHECK (status IN ('never_built', 'building', 'ready', 'stale', 'failed'))",
+            "idx_archive_read_items_source_published",
+            "idx_archive_read_items_source_topic_published",
+            "idx_archive_read_items_ref",
+        ] {
+            assert!(
+                migration.sql.contains(fragment),
+                "missing migration fragment {fragment}"
+            );
+        }
+    }
+
+    #[test]
     fn build_migrations_contains_all_versions_for_sqlx_validation() {
         let versions = build_migrations()
             .into_iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, (1_i64..=25_i64).collect::<Vec<_>>());
+        assert_eq!(versions, (1_i64..=26_i64).collect::<Vec<_>>());
     }
 
     #[tokio::test]
@@ -683,6 +716,43 @@ mod tests {
             .await
             .expect("check analysis_runs column");
             assert_eq!(exists, 1, "missing analysis_runs.{column}");
+        }
+    }
+
+    #[tokio::test]
+    async fn fresh_schema_includes_archive_read_model_tables_indexes_and_constraints() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        for table in ["archive_read_model_state", "archive_read_items"] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&pool)
+            .await
+            .expect("check table");
+            assert_eq!(exists, 1, "missing table {table}");
+        }
+
+        for index in [
+            "idx_archive_read_items_source_published",
+            "idx_archive_read_items_source_topic_published",
+            "idx_archive_read_items_ref",
+        ] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
+            )
+            .bind(index)
+            .fetch_one(&pool)
+            .await
+            .expect("check index");
+            assert_eq!(exists, 1, "missing index {index}");
         }
     }
 

@@ -33,7 +33,7 @@
 - Modify: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Add failing migration registration tests**
+- [x] **Step 1: Add failing migration registration tests**
 
 In `src-tauri/src/migrations.rs`, add:
 
@@ -109,7 +109,7 @@ Update the version-list assertion:
 assert_eq!(versions, (1_i64..=26_i64).collect::<Vec<_>>());
 ```
 
-- [ ] **Step 2: Run migration tests and confirm failure**
+- [x] **Step 2: Run migration tests and confirm failure**
 
 Run:
 
@@ -120,7 +120,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::fresh_schema_
 
 Expected: both fail because migration 26 is not registered and the tables do not exist.
 
-- [ ] **Step 3: Add migration 26**
+- [x] **Step 3: Add migration 26**
 
 Create `src-tauri/migrations/26.sql`:
 
@@ -194,7 +194,7 @@ Migration {
 },
 ```
 
-- [ ] **Step 4: Run Task 1 verification**
+- [x] **Step 4: Run Task 1 verification**
 
 Run:
 
@@ -207,7 +207,7 @@ git diff --check
 
 Expected: migration tests pass, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 5: Commit migration schema**
+- [x] **Step 5: Commit migration schema**
 
 Run:
 
