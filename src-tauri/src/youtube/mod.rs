@@ -4,6 +4,7 @@ pub(crate) mod cookies;
 pub(crate) mod detail;
 pub(crate) mod dto;
 pub(crate) mod errors;
+pub(crate) mod job_commands;
 pub(crate) mod jobs;
 pub(crate) mod metadata;
 pub(crate) mod playlist;

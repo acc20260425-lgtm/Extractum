@@ -247,15 +247,14 @@ impl SourceJobState {
     }
 }
 
-#[tauri::command]
-pub(crate) async fn sync_youtube_source(
+pub(crate) async fn start_youtube_source_job(
     handle: AppHandle,
-    repair_state: tauri::State<'_, SourceIdentityRepairState>,
-    state: tauri::State<'_, SourceJobState>,
+    repair_state: &SourceIdentityRepairState,
+    state: &SourceJobState,
     source_id: i64,
     options: YoutubeSyncOptions,
 ) -> AppResult<SourceJobRecord> {
-    require_source_identity_ready(repair_state.inner()).await?;
+    require_source_identity_ready(repair_state).await?;
     let pool = get_pool(&handle).await?;
     let source = load_source(&pool, source_id).await?;
     ensure_youtube_source(&source)?;
@@ -272,16 +271,15 @@ pub(crate) async fn sync_youtube_source(
     Ok(record)
 }
 
-#[tauri::command]
-pub(crate) async fn sync_youtube_playlist_video(
+pub(crate) async fn start_youtube_playlist_video_job(
     handle: AppHandle,
-    repair_state: tauri::State<'_, SourceIdentityRepairState>,
-    state: tauri::State<'_, SourceJobState>,
+    repair_state: &SourceIdentityRepairState,
+    state: &SourceJobState,
     playlist_source_id: i64,
     video_source_id: i64,
     options: YoutubeSyncOptions,
 ) -> AppResult<SourceJobRecord> {
-    require_source_identity_ready(repair_state.inner()).await?;
+    require_source_identity_ready(repair_state).await?;
     let record = state
         .create_job(
             playlist_source_id,
@@ -301,15 +299,13 @@ pub(crate) async fn sync_youtube_playlist_video(
     Ok(record)
 }
 
-#[tauri::command]
-pub(crate) async fn retry_failed_youtube_playlist_videos(
+pub(crate) async fn start_failed_youtube_playlist_video_retry_job(
     handle: AppHandle,
-    repair_state: tauri::State<'_, SourceIdentityRepairState>,
-    state: tauri::State<'_, SourceJobState>,
+    repair_state: &SourceIdentityRepairState,
+    state: &SourceJobState,
     source_id: i64,
-    _options: YoutubeSyncOptions,
 ) -> AppResult<SourceJobRecord> {
-    require_source_identity_ready(repair_state.inner()).await?;
+    require_source_identity_ready(repair_state).await?;
     let retry_options = YoutubeSyncOptions {
         metadata: false,
         transcripts: true,
@@ -334,21 +330,19 @@ pub(crate) async fn retry_failed_youtube_playlist_videos(
     Ok(record)
 }
 
-#[tauri::command]
-pub(crate) async fn cancel_source_job(
-    handle: AppHandle,
-    state: tauri::State<'_, SourceJobState>,
-    job_id: String,
+pub(crate) async fn request_source_job_cancel(
+    handle: &AppHandle,
+    state: &SourceJobState,
+    job_id: &str,
 ) -> AppResult<()> {
-    if let Some(record) = state.request_cancel(&job_id).await {
-        emit_source_job_event(&handle, &record);
+    if let Some(record) = state.request_cancel(job_id).await {
+        emit_source_job_event(handle, &record);
     }
     Ok(())
 }
 
-#[tauri::command]
-pub(crate) async fn list_source_jobs(
-    state: tauri::State<'_, SourceJobState>,
+pub(crate) async fn list_source_job_records(
+    state: &SourceJobState,
     filter: SourceJobListFilter,
 ) -> AppResult<Vec<SourceJobRecord>> {
     Ok(state.list_jobs(filter).await)
@@ -933,6 +927,17 @@ mod tests {
         let decompress_symbol = ["decompress", "bytes"].join("_");
         assert!(!source.contains(&decode_symbol));
         assert!(!source.contains(&decompress_symbol));
+    }
+
+    #[test]
+    fn source_job_workflow_file_has_no_tauri_command_adapters() {
+        let source = std::fs::read_to_string("src/youtube/jobs.rs").expect("read jobs.rs");
+        let command_attribute = ["#[tauri", "::command]"].join("");
+
+        assert!(
+            !source.contains(&command_attribute),
+            "YouTube job command adapters should live outside src/youtube/jobs.rs"
+        );
     }
 
     #[tokio::test]

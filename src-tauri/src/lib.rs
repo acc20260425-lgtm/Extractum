@@ -54,10 +54,11 @@ mod youtube;
 use youtube::detail::{
     get_youtube_playlist_detail, get_youtube_video_detail, list_youtube_source_summaries,
 };
-use youtube::jobs::{
+use youtube::job_commands::{
     cancel_source_job, list_source_jobs, retry_failed_youtube_playlist_videos,
-    sync_youtube_playlist_video, sync_youtube_source, SourceJobState,
+    sync_youtube_playlist_video, sync_youtube_source,
 };
+use youtube::jobs::SourceJobState;
 use youtube::preview::{add_youtube_source, preview_youtube_source};
 use youtube::runtime::get_youtube_runtime_status;
 use youtube::settings::{
