@@ -168,10 +168,13 @@ This is the safest first step: lock down current behavior and decide the
 boundary before changing runtime. It does not itself reduce schema/query
 complexity, but it gives the next implementation slice a clear safety net.
 
-## Decision
+## Original Decision
 
 Decision: create a separate provider-neutral archive/read UI model, after
 locking current behavior with parity tests.
+
+This section records the original decision-slice direction. Current
+implementation status is tracked below.
 
 `analysis_documents` remains the provider-neutral LLM corpus read model.
 NotebookLM export and source browsing need archive-fidelity data with media,
@@ -379,8 +382,8 @@ table:
 - Table names: `archive_read_model_state` and `archive_read_items`.
 - First row granularity: item-level archive rows.
 - Readiness gate: source-scoped state with current `model_version`.
-- Telegram export-required day-one data is represented in the archive row
-  boundary, but export migration remains pending.
+- Telegram export-required data is represented in the archive row boundary and
+  is now used by the gated Telegram NotebookLM export archive loader.
 - YouTube export fields remain future-facing and are not required by the first
   source-browsing slice.
 - Media metadata is copied as compressed display metadata; raw payload bytes are
@@ -388,7 +391,10 @@ table:
 - Builder contract changes that affect row shape, derived metadata, filtering
   semantics, or backfill correctness require a `model_version` bump.
 
-## Historical Non-goals For The Decision Slice
+## Historical Non-goals For The Original Decision Slice
+
+These non-goals applied to the original decision-only slice and do not describe
+the later implemented source browsing or Telegram NotebookLM export slices.
 
 - no NotebookLM export migration;
 - no source browsing migration;

@@ -612,10 +612,11 @@ Notes:
 
 ### 1.16 `archive_read_items`
 
-Provider-neutral item-level archive rows for source browsing. The table
-duplicates compressed text and compressed media metadata needed for display,
-but does not duplicate `items.raw_data_zstd`; raw payload availability is
-represented by `has_raw_data`.
+Provider-neutral item-level archive rows for archive UI consumers such as source
+browsing and Telegram NotebookLM export. The table duplicates compressed text
+and compressed media metadata needed for display, but does not duplicate
+`items.raw_data_zstd`; raw payload availability is represented by
+`has_raw_data`.
 
 Important fields:
 
@@ -929,10 +930,12 @@ saved-run read paths must not reconstruct them from current live sources.
 - Telegram duplicate detection and legacy message-ref resolution use typed
   `telegram_messages` identity where available, keeping `items.external_id` as
   a compatibility value rather than the owner of Telegram message identity;
-- Telegram forum topic readers and NotebookLM export use materialized
-  `item_topic_memberships` plus source-level
-  `telegram_topic_resolution_state`; `Unrecognized topic` remains derived UI
-  and export state, not a stored topic row;
+- Telegram forum topic readers use materialized `item_topic_memberships` plus
+  source-level `telegram_topic_resolution_state`; Telegram NotebookLM export
+  preserves that behavior through the fallback items path and, for
+  ready/current archive sources, reads the materialized topic fields copied into
+  `archive_read_items`. `Unrecognized topic` remains derived UI and export
+  state, not a stored topic row;
 - `analysis_runs.provider_profile` preserves the user-facing LLM profile id used for a run;
 - `analysis_runs.youtube_corpus_mode` preserves the selected YouTube corpus scope used by the run, rather than reconstructing it from current source defaults.
 - new saved analysis runs capture `analysis_run_messages` before provider
