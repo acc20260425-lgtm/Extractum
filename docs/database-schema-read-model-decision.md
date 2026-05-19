@@ -10,11 +10,12 @@ Provider/archive truth remains in `items` plus typed provider tables such as
 `youtube_transcript_segments`, `item_topic_memberships`, and
 `telegram_forum_topics`.
 
-Database schema simplification still has one open read-model question:
-whether NotebookLM export and source browsing should reuse/extend
-`analysis_documents`, or whether they need a neighboring provider-neutral
-archive/read UI model. This slice decides the boundary only. It does not move
-NotebookLM export, source browsing, or any runtime query path.
+Database schema simplification had one open read-model question: whether
+NotebookLM export and source browsing should reuse/extend `analysis_documents`,
+or whether they need a neighboring provider-neutral archive/read UI model. The
+decision slice chose the neighboring archive/read UI model. The first
+implementation slice has now shipped source browsing as the first gated
+consumer; NotebookLM export migration remains pending.
 
 The decision also recognizes the cost of a new materialized boundary. Any
 follow-up implementation must define update semantics before adding schema:
@@ -178,6 +179,26 @@ The immediate slice is C -> B:
 3. make no runtime behavior change in this slice;
 4. implement the selected archive/read UI model in follow-up slices.
 
+## Implementation Status
+
+Implemented first slice:
+
+- `analysis_documents` remains the provider-neutral LLM corpus read model.
+- `archive_read_model_state` is the source-scoped readiness gate.
+- `archive_read_items` stores item-level provider-neutral archive rows.
+- Current builder contract is `model_version = 1`.
+- Source browsing is the first consumer and is gated: it reads archive rows only
+  when source state is `ready` and current, otherwise it falls back to the
+  existing `items` plus topic joins path.
+- Normal single Telegram item writes maintain ready archive rows in the same
+  transaction.
+- Bulk ingest/Takeout and YouTube refresh paths mark the source archive model
+  stale instead of rebuilding every row inline.
+- YouTube transcript segment navigation remains on the paired typed segment
+  reader for this slice; transcript segments are not `archive_read_items` rows.
+- NotebookLM export still reads the provider/archive path and requires a later
+  export parity slice before migration.
+
 ## Parity Test Inventory
 
 Future migrations must keep these behaviors green before switching consumers
@@ -301,10 +322,10 @@ table:
 - Existing databases should avoid blocking startup on a full archive-model
   backfill; lazy per-source rebuild plus consumer gating is the preferred
   rollout shape.
-- The first implementation consumer should be source browsing, because its
-  item-list parity is easier to validate than full NotebookLM export output.
-- NotebookLM export should migrate only after source browsing proves the
-  archive/read UI model preserves fidelity.
+- The first implementation consumer is source browsing, because its item-list
+  parity is easier to validate than full NotebookLM export output.
+- NotebookLM export should migrate only after export-specific parity tests prove
+  the archive/read UI model preserves reply/topic/reaction/media fidelity.
 - "Proves fidelity" means the model does not exclude the required Telegram
   NotebookLM export fields listed above, even if export rendering remains on
   the old path until a later slice.
@@ -326,31 +347,35 @@ table:
 
 ## Follow-up Implementation Slices
 
-1. Define update semantics, builder-failure rollback rules, lazy per-source
-   backfill/gating, YouTube transcript segment ownership, stale-row handling,
-   and the full export-ready field set before adding schema.
-2. Build the archive/read UI model for source browsing first.
-3. Migrate source browsing behind old-path versus new-path parity tests.
-4. Migrate NotebookLM export after browsing proves the model and export parity
-   passes.
-5. Consider a current-schema baseline after the read-model boundary settles.
-6. Consider legacy Telegram metadata blob cleanup only after typed repair and
-   real private/dialog-backed source validation are proven safe.
+1. [x] Define update semantics, builder-failure rollback rules, lazy
+   per-source backfill/gating, YouTube transcript segment ownership,
+   stale-row handling, and the full export-ready field set before adding
+   schema.
+2. [x] Build the archive/read UI model for source browsing first.
+3. [x] Migrate source browsing behind old-path versus new-path parity tests.
+4. [ ] Migrate NotebookLM export after export parity tests pass.
+5. [ ] Decide whether future YouTube playlist-entry browsing needs archive rows
+   or typed detail only.
+6. [ ] Consider a current-schema baseline after the read-model boundary
+   settles.
+7. [ ] Consider legacy Telegram metadata blob cleanup only after typed repair
+   and real private/dialog-backed source validation are proven safe.
 
-## Open Questions For Next Implementation Spec
+## Resolved Implementation Questions
 
-- What is the table name and row granularity?
-- Is the primary archive row item-level, segment-level, playlist-entry-level,
-  or mixed?
-- What readiness/state table gates consumer migration?
-- Which fields are required for Telegram export on day one?
-- Which YouTube export fields are future-facing only?
-- How are media metadata and raw-data presence represented without copying
-  large blobs unnecessarily?
-- Which builder contract changes require `model_version` bumps, and how are
-  older ready sources invalidated for rebuild?
+- Table names: `archive_read_model_state` and `archive_read_items`.
+- First row granularity: item-level archive rows.
+- Readiness gate: source-scoped state with current `model_version`.
+- Telegram export-required day-one data is represented in the archive row
+  boundary, but export migration remains pending.
+- YouTube export fields remain future-facing and are not required by the first
+  source-browsing slice.
+- Media metadata is copied as compressed display metadata; raw payload bytes are
+  not copied and are represented by `has_raw_data`.
+- Builder contract changes that affect row shape, derived metadata, filtering
+  semantics, or backfill correctness require a `model_version` bump.
 
-## Non-goals For This Slice
+## Historical Non-goals For The Decision Slice
 
 - no NotebookLM export migration;
 - no source browsing migration;

@@ -1291,7 +1291,7 @@ Expected: commit succeeds.
 - Modify: `docs/superpowers/plans/2026-05-19-provider-neutral-archive-read-model.md`
 - Test: full Rust suite
 
-- [ ] **Step 1: Update schema docs**
+- [x] **Step 1: Update schema docs**
 
 In `docs/database-schema.md`, add sections for:
 
@@ -1324,7 +1324,7 @@ Update migration history:
 | 26 | `26.sql` | Add provider-neutral archive read model tables |
 ```
 
-- [ ] **Step 2: Update the decision note and backlog**
+- [x] **Step 2: Update the decision note and backlog**
 
 In `docs/database-schema-read-model-decision.md`, update follow-up status to show that the first implementation slice chose:
 
@@ -1343,11 +1343,11 @@ In `docs/backlog.md`, move the next Database schema simplification work to:
 - [ ] consider current-schema baseline after archive read model boundary stabilizes
 ```
 
-- [ ] **Step 3: Mark plan checkboxes complete as work lands**
+- [x] **Step 3: Mark plan checkboxes complete as work lands**
 
 Before the docs commit, update this plan so completed steps use `[x]`. Do not mark a step complete before its verification command has passed.
 
-- [ ] **Step 4: Run containment scans**
+- [x] **Step 4: Run containment scans**
 
 Run:
 
@@ -1365,7 +1365,7 @@ Expected:
 - NotebookLM export code remains on the old path in this slice;
 - no unfinished-work markers or Rust incomplete macro calls are introduced.
 
-- [ ] **Step 5: Run targeted Rust tests**
+- [x] **Step 5: Run targeted Rust tests**
 
 Run:
 
@@ -1380,7 +1380,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::jobs::tests::
 
 Expected: all targeted tests pass.
 
-- [ ] **Step 6: Run full verification**
+- [x] **Step 6: Run full verification**
 
 Run:
 
@@ -1393,7 +1393,7 @@ git status --short
 
 Expected: Rust suite and formatting pass. `git diff --check` has no whitespace errors except Git line-ending warnings. `git status --short` shows only intended docs/plan changes before the docs commit.
 
-- [ ] **Step 7: Commit docs and final plan state**
+- [x] **Step 7: Commit docs and final plan state**
 
 Run:
 

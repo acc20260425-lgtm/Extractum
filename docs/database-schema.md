@@ -572,7 +572,100 @@ Notes:
 - `is_auto_generated` preserves whether the selected track came from auto captions.
 - Analysis trace refs can resolve segment timestamps into YouTube links.
 
-### 1.15 `accounts`
+### 1.15 `archive_read_model_state`
+
+Source-scoped readiness gate for the provider-neutral archive/read UI model.
+`items` and typed provider tables remain canonical; this table only decides
+whether consumers may use derived archive rows for a source.
+
+Important fields:
+
+- `source_id`
+- `model_version`
+- `status`
+- `built_at`
+- `item_count`
+- `row_count`
+- `last_error`
+- `updated_at`
+
+Status values:
+
+- `never_built`
+- `building`
+- `ready`
+- `stale`
+- `failed`
+
+Notes:
+
+- `source_id` is both the source scope and primary key.
+- `model_version` stores the archive builder contract version used for this
+  source. Consumers may use derived archive rows only when the source state is
+  `ready` and `model_version` matches the current builder.
+- `built_at` records the successful ready build timestamp.
+- `item_count` and `row_count` are rebuild accounting fields for diagnostics.
+- `last_error` stores bounded rebuild/backfill failure text, not canonical
+  provider data.
+- Missing, stale, failed, building, or old-version state keeps gated consumers
+  on the canonical provider/archive path.
+
+### 1.16 `archive_read_items`
+
+Provider-neutral item-level archive rows for source browsing. The table
+duplicates compressed text and compressed media metadata needed for display,
+but does not duplicate `items.raw_data_zstd`; raw payload availability is
+represented by `has_raw_data`.
+
+Important fields:
+
+- `source_id`
+- `item_id`
+- `ref`
+- `external_id`
+- `item_kind`
+- `author`
+- `published_at`
+- `content_kind`
+- `has_media`
+- `media_kind`
+- `content_zstd`
+- `media_metadata_zstd`
+- `has_raw_data`
+- `forum_topic_id`
+- `forum_topic_title`
+- `forum_topic_top_message_id`
+- `reply_to_msg_id`
+- `reply_to_peer_kind`
+- `reply_to_peer_id`
+- `reply_to_top_id`
+- `reaction_count`
+- `model_version`
+- `built_at`
+
+Important constraints / indexes:
+
+- primary key by `(source_id, item_id)`
+- unique local item ref by `ref`
+- source chronological lookup by `(source_id, published_at DESC, item_id DESC)`
+- source/topic chronological lookup by
+  `(source_id, forum_topic_id, published_at DESC, item_id DESC)`
+- `source_id` and `item_id` reference canonical rows with `ON DELETE CASCADE`
+
+Notes:
+
+- canonical truth remains in `items`, `telegram_messages`,
+  `item_topic_memberships`, `telegram_forum_topics`, and typed YouTube tables;
+- this table is rebuildable derived state;
+- source browsing reads these rows only through the readiness gate in
+  `archive_read_model_state`;
+- normal single Telegram item writes maintain ready archive rows in the same
+  transaction;
+- bulk ingest and YouTube refresh paths mark source archive rows stale at the
+  source scope instead of rebuilding every row inline;
+- NotebookLM export has not migrated to this model yet.
+
+### 1.17 `accounts`
 
 Stores configured Telegram accounts.
 
@@ -722,8 +815,9 @@ Notes:
 - the table is rebuildable from provider/archive truth;
 - runtime writers maintain it synchronously for Telegram messages, YouTube
   comments, YouTube transcript segment rows, and YouTube video descriptions;
-- source browsing, source item APIs, and NotebookLM export continue to read
-  their current provider/archive paths;
+- source browsing uses the gated archive/read UI model when
+  `archive_read_model_state` is ready and current, while NotebookLM export
+  continues to read its current provider/archive path;
 - `document_order` is the numeric order key inside one
   `(published_at, source_id)` bucket;
 - the live corpus reader orders by
@@ -801,6 +895,7 @@ saved-run read paths must not reconstruct them from current live sources.
 | 23 | `23.sql` | Add generic ingest provenance tables and Telegram Takeout batch detail |
 | 24 | `24.sql` runner-managed | Add provider-neutral analysis document layer and backfill live analysis corpus documents |
 | 25 | `25.sql` | Add analysis snapshot capture marker and error columns |
+| 26 | `26.sql` | Add provider-neutral archive read model tables |
 
 ## 4. Current behavior implications
 
@@ -814,6 +909,9 @@ saved-run read paths must not reconstruct them from current live sources.
   `sources.metadata_zstd` is not the owner of YouTube runtime metadata;
 - YouTube auth cookies are stored in OS secure storage, not SQLite;
 - NotebookLM export still reads provider/archive item paths and can render local reply snippets, thread ids, reply peer ids, and reaction counts when those nullable `items` fields are present;
+- source browsing now uses `archive_read_items` only when
+  `archive_read_model_state` is `ready` for the current builder version; all
+  other states fall back to the canonical `items` plus topic joins path;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
 - Telegram Takeout import persists durable ingest-batch provenance after the
   same-source ingest lock is acquired; failed or cancelled imports can leave
