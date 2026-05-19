@@ -55,6 +55,28 @@ struct ReplyContext {
     snippet: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum ExportLoaderSelection {
+    ArchiveReadModel {
+        model_version: i64,
+    },
+    ItemsPath {
+        reason: ArchiveReadinessFallbackReason,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum ArchiveReadinessFallbackReason {
+    MissingState,
+    NeverBuilt,
+    Building,
+    Stale,
+    Failed,
+    OldModelVersion { found: i64, current: i64 },
+}
+
 pub(crate) async fn load_export_source(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
@@ -91,7 +113,46 @@ pub(crate) async fn load_export_source(
     })
 }
 
-pub(crate) async fn load_export_messages(
+#[allow(dead_code)]
+pub(crate) async fn select_notebooklm_export_loader(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<ExportLoaderSelection> {
+    let Some(state) = crate::archive_read_model::load_source_state(pool, source_id).await? else {
+        return Ok(ExportLoaderSelection::ItemsPath {
+            reason: ArchiveReadinessFallbackReason::MissingState,
+        });
+    };
+
+    if state.status == crate::archive_read_model::STATUS_READY
+        && state.model_version == crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION
+    {
+        return Ok(ExportLoaderSelection::ArchiveReadModel {
+            model_version: state.model_version,
+        });
+    }
+
+    let reason = if state.status == crate::archive_read_model::STATUS_READY {
+        ArchiveReadinessFallbackReason::OldModelVersion {
+            found: state.model_version,
+            current: crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+        }
+    } else {
+        match state.status.as_str() {
+            crate::archive_read_model::STATUS_NEVER_BUILT => {
+                ArchiveReadinessFallbackReason::NeverBuilt
+            }
+            crate::archive_read_model::STATUS_BUILDING => ArchiveReadinessFallbackReason::Building,
+            crate::archive_read_model::STATUS_STALE => ArchiveReadinessFallbackReason::Stale,
+            crate::archive_read_model::STATUS_FAILED => ArchiveReadinessFallbackReason::Failed,
+            _ => ArchiveReadinessFallbackReason::Failed,
+        }
+    };
+
+    Ok(ExportLoaderSelection::ItemsPath { reason })
+}
+
+pub(crate) async fn load_export_messages_from_items_path(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
     period_from: Option<i64>,
@@ -132,7 +193,7 @@ pub(crate) async fn load_export_messages(
     }
     .map_err(|e| e.to_string())?;
 
-    let reply_contexts = load_reply_contexts(pool, source_id, &rows).await?;
+    let reply_contexts = load_reply_contexts_from_items_path(pool, source_id, &rows).await?;
 
     rows.into_iter()
         .map(|row| {
@@ -182,7 +243,16 @@ pub(crate) async fn load_export_messages(
         .map_err(AppError::from)
 }
 
-async fn load_reply_contexts(
+pub(crate) async fn load_export_messages(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    period_from: Option<i64>,
+    period_to: Option<i64>,
+) -> AppResult<Vec<NotebookLmExportMessage>> {
+    load_export_messages_from_items_path(pool, source_id, period_from, period_to).await
+}
+
+async fn load_reply_contexts_from_items_path(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
     rows: &[ItemRow],
@@ -311,7 +381,10 @@ fn base_query(where_clause: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{load_export_messages, load_export_source};
+    use super::{
+        load_export_messages, load_export_source, select_notebooklm_export_loader,
+        ArchiveReadinessFallbackReason, ExportLoaderSelection,
+    };
     use crate::compression::compress_text;
 
     async fn export_pool() -> sqlx::SqlitePool {
@@ -338,9 +411,12 @@ mod tests {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_id INTEGER NOT NULL,
                 external_id TEXT NOT NULL,
+                item_kind TEXT NOT NULL DEFAULT 'telegram_message',
                 author TEXT,
                 published_at INTEGER NOT NULL,
+                ingested_at INTEGER NOT NULL DEFAULT 0,
                 content_zstd BLOB,
+                raw_data_zstd BLOB,
                 content_kind TEXT NOT NULL,
                 has_media INTEGER NOT NULL,
                 media_kind TEXT,
@@ -387,11 +463,161 @@ mod tests {
         .await
         .expect("create telegram_messages");
         seed_materialized_topic_schema(&pool).await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
         pool
     }
 
     async fn seed_materialized_topic_schema(pool: &sqlx::SqlitePool) {
         crate::sources::test_support::create_topic_membership_tables(pool).await;
+    }
+
+    async fn seed_export_source(pool: &sqlx::SqlitePool) {
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum')",
+        )
+        .execute(pool)
+        .await
+        .expect("seed export source");
+    }
+
+    async fn seed_archive_state(pool: &sqlx::SqlitePool, status: &str, model_version: i64) {
+        sqlx::query(
+            "INSERT INTO archive_read_model_state (
+                source_id, model_version, status, built_at, item_count, row_count
+             ) VALUES (1, ?, ?, 100, 0, 0)",
+        )
+        .bind(model_version)
+        .bind(status)
+        .execute(pool)
+        .await
+        .expect("seed archive state");
+    }
+
+    #[tokio::test]
+    async fn notebooklm_export_loader_selection_reports_all_fallback_reasons() {
+        let cases = [
+            (
+                "never_built",
+                crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+                ArchiveReadinessFallbackReason::NeverBuilt,
+            ),
+            (
+                "building",
+                crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+                ArchiveReadinessFallbackReason::Building,
+            ),
+            (
+                "stale",
+                crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+                ArchiveReadinessFallbackReason::Stale,
+            ),
+            (
+                "failed",
+                crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+                ArchiveReadinessFallbackReason::Failed,
+            ),
+        ];
+
+        for (status, version, expected_reason) in cases {
+            let pool = export_pool().await;
+            seed_export_source(&pool).await;
+            seed_archive_state(&pool, status, version).await;
+
+            let selection = select_notebooklm_export_loader(&pool, 1)
+                .await
+                .expect("select loader");
+
+            assert_eq!(
+                selection,
+                ExportLoaderSelection::ItemsPath {
+                    reason: expected_reason
+                },
+                "unexpected selection for {status}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn notebooklm_export_loader_selection_reports_missing_and_old_version() {
+        let pool = export_pool().await;
+        seed_export_source(&pool).await;
+
+        assert_eq!(
+            select_notebooklm_export_loader(&pool, 1)
+                .await
+                .expect("select missing state"),
+            ExportLoaderSelection::ItemsPath {
+                reason: ArchiveReadinessFallbackReason::MissingState
+            }
+        );
+
+        seed_archive_state(
+            &pool,
+            crate::archive_read_model::STATUS_READY,
+            crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION - 1,
+        )
+        .await;
+
+        assert_eq!(
+            select_notebooklm_export_loader(&pool, 1)
+                .await
+                .expect("select old state"),
+            ExportLoaderSelection::ItemsPath {
+                reason: ArchiveReadinessFallbackReason::OldModelVersion {
+                    found: crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION - 1,
+                    current: crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+                }
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn notebooklm_export_loader_selection_uses_archive_for_ready_current_state() {
+        let pool = export_pool().await;
+        seed_export_source(&pool).await;
+        seed_archive_state(
+            &pool,
+            crate::archive_read_model::STATUS_READY,
+            crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+        )
+        .await;
+
+        assert_eq!(
+            select_notebooklm_export_loader(&pool, 1)
+                .await
+                .expect("select ready state"),
+            ExportLoaderSelection::ArchiveReadModel {
+                model_version: crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn load_export_source_rejects_non_telegram_before_message_loader_selection() {
+        let pool = export_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (2, 'youtube', 'video', 'video-id', 'Video')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed youtube source");
+        sqlx::query(
+            "INSERT INTO archive_read_model_state (
+                source_id, model_version, status, built_at, item_count, row_count
+             ) VALUES (2, ?, 'ready', 100, 0, 0)",
+        )
+        .bind(crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION)
+        .execute(&pool)
+        .await
+        .expect("seed ready youtube archive state");
+
+        let error = load_export_source(&pool, 2)
+            .await
+            .expect_err("youtube source is rejected before message loading");
+
+        assert!(error.to_string().contains("is not a Telegram source"));
     }
 
     #[tokio::test]

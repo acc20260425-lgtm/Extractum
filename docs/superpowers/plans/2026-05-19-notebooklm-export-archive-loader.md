@@ -25,7 +25,7 @@
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
 - Test: `src-tauri/src/notebooklm_export/query.rs`
 
-- [ ] **Step 1: Extend the export query test fixture for archive state**
+- [x] **Step 1: Extend the export query test fixture for archive state**
 
 In `src-tauri/src/notebooklm_export/query.rs`, update the test module import:
 
@@ -96,7 +96,7 @@ async fn seed_archive_state(pool: &sqlx::SqlitePool, status: &str, model_version
 }
 ```
 
-- [ ] **Step 2: Add failing loader selection tests**
+- [x] **Step 2: Add failing loader selection tests**
 
 Add these tests in the same test module:
 
@@ -228,7 +228,7 @@ async fn load_export_source_rejects_non_telegram_before_message_loader_selection
 }
 ```
 
-- [ ] **Step 3: Run loader selection tests and confirm failure**
+- [x] **Step 3: Run loader selection tests and confirm failure**
 
 Run:
 
@@ -241,7 +241,7 @@ Expected: compile failures because `ExportLoaderSelection`,
 `ArchiveReadinessFallbackReason`, `select_notebooklm_export_loader`, and
 `load_export_messages_from_items_path` do not exist yet.
 
-- [ ] **Step 4: Implement selection enums and helper**
+- [x] **Step 4: Implement selection enums and helper**
 
 Near the row structs in `src-tauri/src/notebooklm_export/query.rs`, add:
 
@@ -335,7 +335,7 @@ pub(crate) async fn load_export_messages(
 }
 ```
 
-- [ ] **Step 5: Run Task 1 verification**
+- [x] **Step 5: Run Task 1 verification**
 
 Run:
 
@@ -351,7 +351,7 @@ Expected: selection tests pass, existing NotebookLM query tests still pass,
 formatting passes, and diff check has no whitespace errors except Git
 line-ending warnings.
 
-- [ ] **Step 6: Commit loader selection**
+- [x] **Step 6: Commit loader selection**
 
 Run:
 
