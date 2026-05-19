@@ -1,4 +1,5 @@
 mod analysis_documents;
+mod archive_read_model;
 mod compression;
 mod db;
 mod error;

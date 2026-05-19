@@ -229,7 +229,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/archive_read_model.rs`
 - Test: `src-tauri/src/sources/test_support.rs`
 
-- [ ] **Step 1: Register the module and add failing schema tests**
+- [x] **Step 1: Register the module and add failing schema tests**
 
 In `src-tauri/src/lib.rs`, add near `mod analysis_documents;`:
 
@@ -381,7 +381,7 @@ async fn seed_archive_source_fixture(pool: &sqlx::SqlitePool) {
 }
 ```
 
-- [ ] **Step 2: Run builder tests and confirm failure**
+- [x] **Step 2: Run builder tests and confirm failure**
 
 Run:
 
@@ -393,7 +393,7 @@ cargo test --manifest-path src-tauri/Cargo.toml archive_read_model::tests::curre
 
 Expected: compile failure because the module API does not exist.
 
-- [ ] **Step 3: Implement constants, row types, and schema helper**
+- [x] **Step 3: Implement constants, row types, and schema helper**
 
 In `src-tauri/src/archive_read_model.rs`, add:
 
@@ -461,7 +461,7 @@ pub(crate) async fn create_archive_read_model_schema(pool: &SqlitePool) -> AppRe
 }
 ```
 
-- [ ] **Step 4: Add the test fixture helper**
+- [x] **Step 4: Add the test fixture helper**
 
 In `src-tauri/src/sources/test_support.rs`, add:
 
@@ -482,7 +482,7 @@ create_archive_read_model_tables(&pool).await;
 "archive_read_items",
 ```
 
-- [ ] **Step 5: Implement readiness helpers**
+- [x] **Step 5: Implement readiness helpers**
 
 Add:
 
@@ -520,7 +520,7 @@ pub(crate) async fn source_archive_model_is_ready(
 }
 ```
 
-- [ ] **Step 6: Implement source rebuild**
+- [x] **Step 6: Implement source rebuild**
 
 Implement `rebuild_source(pool, source_id)` with this transaction shape:
 
@@ -554,7 +554,7 @@ pub(crate) async fn rebuild_source(pool: &SqlitePool, source_id: i64) -> AppResu
 
 The select should include `items.raw_data_zstd IS NOT NULL AS has_raw_data`; it must not read or copy the raw payload bytes.
 
-- [ ] **Step 7: Implement stale/failed helpers**
+- [x] **Step 7: Implement stale/failed helpers**
 
 Add source-scoped helpers for bulk paths and recovery:
 
@@ -590,7 +590,7 @@ pub(crate) async fn mark_source_stale_on_connection(
 
 `mark_source_failed` is used only after rebuild/backfill failure and must run outside the failed rebuild transaction.
 
-- [ ] **Step 8: Run Task 2 verification**
+- [x] **Step 8: Run Task 2 verification**
 
 Run:
 
@@ -603,7 +603,7 @@ git diff --check
 
 Expected: archive builder tests pass, source fixture tests pass after helper registration, formatting passes, and diff check has no whitespace errors except Git line-ending warnings.
 
-- [ ] **Step 9: Commit builder and readiness contract**
+- [x] **Step 9: Commit builder and readiness contract**
 
 Run:
 

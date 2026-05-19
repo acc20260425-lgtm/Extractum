@@ -134,6 +134,12 @@ pub(crate) async fn create_analysis_documents_table(pool: &sqlx::SqlitePool) {
         .expect("create analysis documents schema");
 }
 
+pub(crate) async fn create_archive_read_model_tables(pool: &sqlx::SqlitePool) {
+    crate::archive_read_model::create_archive_read_model_schema(pool)
+        .await
+        .expect("create archive read model schema");
+}
+
 pub(crate) async fn memory_pool_with_source_items_and_topics() -> sqlx::SqlitePool {
     let pool = memory_pool_with_sources().await;
     sqlx::query(
@@ -220,8 +226,9 @@ pub(crate) async fn create_item_identity_indexes(pool: &sqlx::SqlitePool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_analysis_documents_table, create_canonical_telegram_identity_index,
-        create_ingest_provenance_tables, memory_pool_with_source_items_and_topics,
+        create_analysis_documents_table, create_archive_read_model_tables,
+        create_canonical_telegram_identity_index, create_ingest_provenance_tables,
+        memory_pool_with_source_items_and_topics,
     };
 
     #[tokio::test]
@@ -230,6 +237,7 @@ mod tests {
         create_canonical_telegram_identity_index(&pool).await;
         create_ingest_provenance_tables(&pool).await;
         create_analysis_documents_table(&pool).await;
+        create_archive_read_model_tables(&pool).await;
 
         for table in [
             "app_settings",
@@ -245,6 +253,8 @@ mod tests {
             "ingest_item_observations",
             "ingest_batch_warnings",
             "analysis_documents",
+            "archive_read_model_state",
+            "archive_read_items",
         ] {
             sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
                 .bind(table)
