@@ -220,7 +220,10 @@ Source browsing parity:
 The source browsing implementation should not choose a schema that is known to
 exclude required Telegram NotebookLM export fields. It may leave export-specific
 rendering migration for a later slice, but the data-model boundary must already
-account for reply, topic, reaction, and media fidelity.
+account for reply, topic, reaction, and media fidelity. This is intentionally
+softer than requiring browsing to complete the export migration: before
+NotebookLM export switches, those fields must be populated and verified by
+export parity tests.
 
 ## Preliminary Constraints For The Follow-up Implementation Spec
 
@@ -236,6 +239,11 @@ table:
 - For a single item/provider write, if synchronous builder maintenance fails,
   the whole write transaction rolls back. The app must not commit canonical
   rows while leaving their archive read rows missing or stale.
+- Bulk ingest paths such as normal source sync and Telegram Takeout import
+  should not make every item insertion depend on per-item archive builder
+  success. They should commit canonical item/provenance rows according to the
+  ingest transaction policy, mark the source archive model `stale` or
+  `building`, and rebuild/switch readiness at source scope after the batch.
 - For bulk rebuild/backfill, failure marks the source/model scope stale or
   failed and does not mutate canonical provider/archive data.
 - For large provider metadata refreshes that touch many derived rows, the next
@@ -251,6 +259,12 @@ table:
   - `built_at`
   - `item_count` / `row_count`
   - `last_error`
+- `model_version` is a monotonic builder contract version, not only a schema
+  migration number. Any change that affects row shape, derived metadata,
+  filtering semantics, or backfill correctness must bump the current archive
+  model version. Consumers may use archive rows only when readiness is `ready`
+  and `model_version` matches the current builder version; older readiness
+  records are stale and require rebuild before migration or use.
 - Existing database backfill should prefer a gated lazy per-source rebuild:
   migration creates the schema and readiness metadata, consumers remain on old
   paths until a source has a successful archive-model rebuild, and the first
@@ -281,9 +295,9 @@ table:
   export without forcing LLM corpus semantics onto archive UI state.
 - Provider-specific joins do not disappear; they move into a builder/backfill
   layer with focused tests.
-- Normal builder failures are write failures, not warnings. Rebuild/backfill
-  failures become source/model readiness failures and do not mutate canonical
-  provider data.
+- Single-write builder failures are write failures, not warnings. Bulk ingest,
+  rebuild, and backfill failures become source/model readiness failures and do
+  not mutate canonical provider data.
 - Existing databases should avoid blocking startup on a full archive-model
   backfill; lazy per-source rebuild plus consumer gating is the preferred
   rollout shape.
@@ -333,7 +347,8 @@ table:
 - Which YouTube export fields are future-facing only?
 - How are media metadata and raw-data presence represented without copying
   large blobs unnecessarily?
-- How does the model version/backfill version evolve?
+- Which builder contract changes require `model_version` bumps, and how are
+  older ready sources invalidated for rebuild?
 
 ## Non-goals For This Slice
 
