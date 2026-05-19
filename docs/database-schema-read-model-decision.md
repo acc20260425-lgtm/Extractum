@@ -16,6 +16,11 @@ whether NotebookLM export and source browsing should reuse/extend
 archive/read UI model. This slice decides the boundary only. It does not move
 NotebookLM export, source browsing, or any runtime query path.
 
+The decision also recognizes the cost of a new materialized boundary. Any
+follow-up implementation must define update semantics before adding schema:
+when rows are built, how existing databases are backfilled, what stays
+canonical, and how stale rows are detected or repaired.
+
 ## Consumers
 
 ### NotebookLM export
@@ -87,12 +92,15 @@ state.
 | Consumer | Required field / semantic | Current source | `analysis_documents` coverage | Gap | Recommended owner |
 | --- | --- | --- | --- | --- | --- |
 | Source browsing | Transcript item vs comment distinction | `items.item_kind` and source reader model | Partial | `analysis_documents` splits transcript into segment documents, while browsing also needs item-level distinction | Archive read model |
-| Source browsing | Timestamped transcript segment navigation | `youtube_transcript_segments` | Yes for analysis evidence documents | Browse UI needs reader-specific paging/search context | Archive read model with typed segment support |
-| Source browsing | YouTube comments | `items.item_kind = 'youtube_comment'` | Yes for text corpus | Browse display still needs archive item semantics | Archive read model |
-| Source browsing | Video description display context | `youtube_video_sources` and `analysis_documents` synthetic description | Partial | Description is useful for analysis, but browse/export semantics may need source-level display context | Archive read model or typed source detail |
-| Source browsing | Playlist context | `youtube_playlist_items`, typed YouTube source tables | No | Playlist availability/removal/link state is archive UI context, not LLM corpus text | Archive read model |
+| Source browsing | Transcript segment navigation, search, and selected-time paging | `youtube_transcript_segments` | Yes for analysis evidence documents | Browse UI needs reader-specific segment paging/search semantics, not just prompt/evidence refs | Archive read model with typed segment support or a paired segment reader |
+| Source browsing | YouTube comments | `items.item_kind = 'youtube_comment'` plus comment raw/detail fields | Yes for text corpus | Browse display still needs archive item semantics and comment metadata | Archive read model |
+| Source browsing | Video description display context | `youtube_video_sources` and `analysis_documents` synthetic description | Partial | Description text is useful for analysis, but browse/export semantics need source-level display context and should not force description into item paging | Archive read model for display summary; typed source detail remains canonical |
+| Source browsing | Playlist membership | `youtube_playlist_items`, typed YouTube source tables | No | Playlist position, linked video, availability, and removal state are archive UI context, not LLM corpus text | Archive read model |
+| Source browsing | Playlist removal state | `youtube_playlist_items.availability_status`, `youtube_playlist_items.is_removed_from_playlist` | No | Existing schema has two representations; read model should expose one derived display state while canonical cleanup remains a separate YouTube simplification slice | Archive read model derived field |
+| Source browsing | Linked/unlinked playlist entries | `youtube_playlist_items.video_source_id`, `video_id`, `availability_status` | No | Browse UI needs unavailable/unlinked entries without pretending they are corpus documents | Archive read model |
 | Future NotebookLM export | Transcript timestamps and canonical links | `youtube_transcript_segments`, `youtube_video_sources` | Partial | Export formatting needs explicit source/display semantics, not just corpus refs | Archive read model |
 | Future NotebookLM export | Comment metadata and reactions/likes | `items`, YouTube comment raw/detail fields | Partial | Needs export-specific rendering contract | Archive read model |
+| Future NotebookLM export | Playlist context | `youtube_playlist_items`, typed YouTube source tables | No | Export enrichment must preserve playlist position and availability without expanding `analysis_documents` | Archive read model |
 
 ## Options Considered
 
@@ -119,6 +127,15 @@ model rather than reimplementing provider joins.
 The downside is another materialized boundary to build, backfill, and verify.
 That cost is justified only if parity tests prove the model preserves archive
 fidelity.
+
+The implementation spec must choose explicit maintenance semantics. The
+preferred default is synchronous builder maintenance in the same transaction as
+normal `items` and typed-provider writes, plus scoped rebuild/backfill helpers
+for migrations, repairs, and debug fixtures. SQLite triggers should be avoided
+unless Rust-side maintenance proves insufficient, because the builder contract
+needs ordinary Rust tests and provider-specific validation. Large existing
+databases may require chunked or resumable backfill before any consumer switches
+to the new model.
 
 ### Option C: Add parity tests first and defer the model
 
@@ -149,6 +166,14 @@ The immediate slice is C -> B:
 Future migrations must keep these behaviors green before switching consumers
 to any new read model.
 
+The first migration tests should compare old and new query paths on the same
+seeded data. For source browsing, compare normalized item DTOs and paging/filter
+results. For NotebookLM export, compare the loaded export message model and
+focused rendered blocks; broad markdown snapshots should be used sparingly
+because renderer-only wording changes should not invalidate storage parity.
+Behavioral invariant tests remain useful, but the initial gate should be
+old-path versus new-path output comparison.
+
 NotebookLM export parity:
 
 - preserves reply snippets, including reply targets outside the export period;
@@ -175,6 +200,36 @@ Source browsing parity:
 - YouTube transcript segment navigation remains backed by timestamped segment
   data.
 
+The source browsing implementation only proves the archive model when the
+model already contains every field required by the NotebookLM export fidelity
+matrix, even if NotebookLM export continues to read the old path. Otherwise the
+model would be proven only for browsing and would likely need a second schema
+expansion before export migration.
+
+## Update Semantics For The Follow-up Model
+
+The next implementation spec must settle these rules before creating a table:
+
+- Canonical truth remains in `items` plus typed provider tables. The archive
+  read model is rebuildable derived state, not the owner of provider data.
+- Normal item/provider writes should update archive read rows synchronously in
+  the same transaction that writes `items`, `telegram_messages`,
+  `youtube_transcript_segments`, or YouTube typed source/playlist state.
+- A scoped rebuild helper must exist for one source and for all sources. It is
+  used by migrations, repair paths, fixtures, and manual recovery.
+- Existing database backfill must be planned as a bounded operation. If the
+  backfill can be large, the implementation plan must choose chunking,
+  progress state, or a safe startup gating strategy before consumers switch.
+- YouTube transcript granularity must be chosen before schema work. The next
+  spec should either keep one archive item row per transcript with a paired
+  typed segment reader, or materialize segment rows in the archive model; it
+  must not leave segment ownership ambiguous.
+- Staleness handling must be explicit. Either consumers only switch after a
+  successful backfill/rebuild marker, or the read path must detect and reject
+  stale/missing derived rows instead of silently falling back to provider joins.
+- Provider-specific branching belongs in the builder/backfill layer. Consumer
+  query paths should read provider-neutral rows plus typed nested metadata.
+
 ## Consequences
 
 - `analysis_documents` stays small enough to explain as the live analysis
@@ -187,18 +242,34 @@ Source browsing parity:
   item-list parity is easier to validate than full NotebookLM export output.
 - NotebookLM export should migrate only after source browsing proves the
   archive/read UI model preserves fidelity.
+- "Proves fidelity" means the model contains the NotebookLM export fields
+  listed above, not only the smaller set needed by source browsing.
 - Current-schema baseline work should wait until the archive read-model
   boundary is stable.
 - Legacy Telegram blob cleanup remains blocked on real Telegram
   runtime/private-source validation.
 
+## Dependency Map
+
+| Work area | Relationship to archive read model |
+| --- | --- |
+| Source browsing migration | First consumer. It can validate paging, filtering, media visibility, and provider item semantics. |
+| NotebookLM export migration | Blocked until the archive model includes export-required reply/topic/reaction/media fields and browsing parity has passed. |
+| Takeout provenance | Can proceed in parallel while it writes provenance tables only. If it adds new archive-display fields or origin semantics that consumers need, the archive builder contract must be updated before consumer migration. |
+| YouTube playlist simplification | Related but separate. The archive read model may expose one derived playlist display state, but canonical cleanup of `availability_status` versus `is_removed_from_playlist` belongs to a later YouTube slice. |
+| Current-schema baseline | Blocked until the archive read-model boundary and migration/backfill rules are stable. |
+| Legacy Telegram metadata blob cleanup | Blocked on typed repair plus real private/dialog-backed source validation, not on the archive read model. |
+
 ## Follow-up Implementation Slices
 
-1. Build the archive/read UI model for source browsing first.
-2. Migrate source browsing behind parity tests.
-3. Migrate NotebookLM export after browsing proves the model.
-4. Consider a current-schema baseline after the read-model boundary settles.
-5. Consider legacy Telegram metadata blob cleanup only after typed repair and
+1. Define update semantics, backfill strategy, stale-row handling, and the full
+   export-ready field set before adding schema.
+2. Build the archive/read UI model for source browsing first.
+3. Migrate source browsing behind old-path versus new-path parity tests.
+4. Migrate NotebookLM export after browsing proves the model and export parity
+   passes.
+5. Consider a current-schema baseline after the read-model boundary settles.
+6. Consider legacy Telegram metadata blob cleanup only after typed repair and
    real private/dialog-backed source validation are proven safe.
 
 ## Non-goals For This Slice
