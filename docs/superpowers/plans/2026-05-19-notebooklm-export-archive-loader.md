@@ -857,7 +857,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
 - Test: `src-tauri/src/notebooklm_export/query.rs`
 
-- [ ] **Step 1: Add failing wrapper gate tests**
+- [x] **Step 1: Add failing wrapper gate tests**
 
 Add:
 
@@ -973,7 +973,7 @@ async fn corrupt_archive_reply_target_outside_period_fails_archive_loader() {
 }
 ```
 
-- [ ] **Step 2: Run wrapper tests and confirm failure**
+- [x] **Step 2: Run wrapper tests and confirm failure**
 
 Run:
 
@@ -987,7 +987,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::query::tests:
 Expected: at least the archive-selection tests fail because
 `load_export_messages` still delegates directly to the items path from Task 1.
 
-- [ ] **Step 3: Wire the gated wrapper**
+- [x] **Step 3: Wire the gated wrapper**
 
 Replace the temporary `load_export_messages` wrapper with:
 
@@ -1011,7 +1011,7 @@ pub(crate) async fn load_export_messages(
 
 Do not catch errors from `load_export_messages_from_archive` in this wrapper.
 
-- [ ] **Step 4: Run Task 3 verification**
+- [x] **Step 4: Run Task 3 verification**
 
 Run:
 
@@ -1030,7 +1030,7 @@ Expected: wrapper tests pass, NotebookLM query tests pass, archive model tests
 pass, formatting passes, and diff check has no whitespace errors except Git
 line-ending warnings.
 
-- [ ] **Step 5: Commit gated wrapper**
+- [x] **Step 5: Commit gated wrapper**
 
 Run:
 

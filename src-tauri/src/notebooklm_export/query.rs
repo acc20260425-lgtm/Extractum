@@ -56,7 +56,6 @@ struct ReplyContext {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum ExportLoaderSelection {
     ArchiveReadModel {
         model_version: i64,
@@ -67,7 +66,6 @@ pub(crate) enum ExportLoaderSelection {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum ArchiveReadinessFallbackReason {
     MissingState,
     NeverBuilt,
@@ -113,7 +111,6 @@ pub(crate) async fn load_export_source(
     })
 }
 
-#[allow(dead_code)]
 pub(crate) async fn select_notebooklm_export_loader(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
@@ -197,7 +194,6 @@ pub(crate) async fn load_export_messages_from_items_path(
     map_export_rows(rows, reply_contexts)
 }
 
-#[allow(dead_code)]
 pub(crate) async fn load_export_messages_from_archive(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
@@ -317,7 +313,14 @@ pub(crate) async fn load_export_messages(
     period_from: Option<i64>,
     period_to: Option<i64>,
 ) -> AppResult<Vec<NotebookLmExportMessage>> {
-    load_export_messages_from_items_path(pool, source_id, period_from, period_to).await
+    match select_notebooklm_export_loader(pool, source_id).await? {
+        ExportLoaderSelection::ArchiveReadModel { .. } => {
+            load_export_messages_from_archive(pool, source_id, period_from, period_to).await
+        }
+        ExportLoaderSelection::ItemsPath { .. } => {
+            load_export_messages_from_items_path(pool, source_id, period_from, period_to).await
+        }
+    }
 }
 
 async fn load_reply_contexts_from_items_path(
@@ -543,6 +546,7 @@ mod tests {
         ArchiveReadinessFallbackReason, ExportLoaderSelection,
     };
     use crate::compression::compress_text;
+    use crate::error::AppErrorKind;
     use crate::media::{encode_media_metadata, ItemMediaMetadata};
 
     async fn export_pool() -> sqlx::SqlitePool {
@@ -951,6 +955,117 @@ mod tests {
         .await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn notebooklm_export_wrapper_matches_items_path_for_missing_stale_and_failed_states() {
+        for status in [None, Some("stale"), Some("failed")] {
+            let pool = export_pool().await;
+            seed_notebooklm_export_parity_fixture(&pool).await;
+            if let Some(status) = status {
+                seed_archive_state(
+                    &pool,
+                    status,
+                    crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+                )
+                .await;
+            }
+
+            let direct = load_export_messages_from_items_path(&pool, 1, Some(50), Some(125))
+                .await
+                .expect("load direct items path");
+            let wrapped = load_export_messages(&pool, 1, Some(50), Some(125))
+                .await
+                .expect("load wrapped fallback");
+
+            assert_eq!(wrapped, direct, "unexpected fallback result for {status:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn notebooklm_export_wrapper_uses_archive_reply_context_after_ready_selection() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive model");
+
+        sqlx::query("UPDATE items SET content_zstd = ? WHERE id = 1")
+            .bind(compress_text("Canonical reply target should not be used").expect("compress old"))
+            .execute(&pool)
+            .await
+            .expect("mutate canonical reply target");
+        sqlx::query(
+            "UPDATE archive_read_items SET content_zstd = ? WHERE source_id = 1 AND item_id = 1",
+        )
+        .bind(compress_text("Archive reply target wins").expect("compress archive"))
+        .execute(&pool)
+        .await
+        .expect("mutate archive reply target");
+
+        let messages = load_export_messages(&pool, 1, Some(50), Some(115))
+            .await
+            .expect("load wrapped archive path");
+
+        assert_eq!(
+            messages[0].reply_to_snippet.as_deref(),
+            Some("Archive reply target wins")
+        );
+    }
+
+    #[tokio::test]
+    async fn notebooklm_export_wrapper_does_not_fallback_after_archive_selection_fails() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive model");
+
+        let direct = load_export_messages_from_items_path(&pool, 1, Some(50), Some(115))
+            .await
+            .expect("items path remains valid");
+        assert!(!direct.is_empty());
+
+        sqlx::query(
+            "UPDATE archive_read_items
+             SET content_zstd = X'00'
+             WHERE source_id = 1 AND item_id = 2",
+        )
+        .execute(&pool)
+        .await
+        .expect("corrupt archive row");
+
+        let error = load_export_messages(&pool, 1, Some(50), Some(115))
+            .await
+            .expect_err("archive decode failure is returned");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert!(!error.message.is_empty());
+    }
+
+    #[tokio::test]
+    async fn corrupt_archive_reply_target_outside_period_fails_archive_loader() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive model");
+
+        sqlx::query(
+            "UPDATE archive_read_items
+             SET content_zstd = X'00'
+             WHERE source_id = 1 AND item_id = 1",
+        )
+        .execute(&pool)
+        .await
+        .expect("corrupt archive reply target");
+
+        let error = load_export_messages(&pool, 1, Some(50), Some(115))
+            .await
+            .expect_err("corrupt reply target fails archive loader");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert!(!error.message.is_empty());
     }
 
     #[tokio::test]
