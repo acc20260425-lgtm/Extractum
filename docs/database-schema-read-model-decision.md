@@ -17,7 +17,9 @@ decision slice chose the neighboring archive/read UI model. The first
 implementation slice has now shipped source browsing as the first gated
 consumer. Telegram NotebookLM export has now shipped as the second gated
 consumer after export parity tests, while YouTube export enrichment remains
-future-facing.
+future-facing. A later decision-only slice resolved YouTube playlist-entry
+browsing as typed YouTube detail/list state rather than `archive_read_items`
+rows.
 
 The decision also recognizes the cost of a new materialized boundary. Any
 follow-up implementation must define update semantics before adding schema:
@@ -110,12 +112,12 @@ enrichment.
 | Source browsing | Transcript segment navigation, search, and selected-time paging | `youtube_transcript_segments` | Yes for analysis evidence documents | Browse UI needs reader-specific segment paging/search semantics, not just prompt/evidence refs | Archive read model with typed segment support or a paired segment reader |
 | Source browsing | YouTube comments | `items.item_kind = 'youtube_comment'` plus comment raw/detail fields | Yes for text corpus | Browse display still needs archive item semantics and comment metadata | Archive read model |
 | Source browsing | Video description display context | `youtube_video_sources` and `analysis_documents` synthetic description | Partial | Description text is useful for analysis, but browse/export semantics need source-level display context and should not force description into item paging | Archive read model for display summary; typed source detail remains canonical |
-| Source browsing | Playlist membership | `youtube_playlist_items`, typed YouTube source tables | No | Playlist position, linked video, availability, and removal state are archive UI context, not LLM corpus text | Archive read model |
-| Source browsing | Playlist removal state | `youtube_playlist_items.availability_status`, `youtube_playlist_items.is_removed_from_playlist` | No | Existing schema has two representations; read model should expose one derived display state while canonical cleanup remains a separate YouTube simplification slice | Archive read model derived field |
-| Source browsing | Linked/unlinked playlist entries | `youtube_playlist_items.video_source_id`, `video_id`, `availability_status` | No | Browse UI needs unavailable/unlinked entries without pretending they are corpus documents | Archive read model |
+| Source browsing | Playlist membership | `youtube_playlist_items`, typed YouTube source tables | No | Playlist position, linked video, availability, and removal state are typed membership/list state, not archive documents | Typed YouTube detail/readers |
+| Source browsing | Playlist removal state | `youtube_playlist_items.availability_status`, `youtube_playlist_items.is_removed_from_playlist` | No | Existing schema has two representations; canonical cleanup remains a separate YouTube simplification slice | Typed YouTube detail/readers |
+| Source browsing | Linked/unlinked playlist entries | `youtube_playlist_items.video_source_id`, `video_id`, `availability_status` | No | Browse UI needs unavailable/unlinked entries without pretending they are archive item rows | Typed YouTube detail/readers |
 | Future NotebookLM export | Transcript timestamps and canonical links | `youtube_transcript_segments`, `youtube_video_sources` | Partial | Export formatting needs explicit source/display semantics, not just corpus refs | Archive read model |
 | Future NotebookLM export | Comment metadata and reactions/likes | `items`, YouTube comment raw/detail fields | Partial | Needs export-specific rendering contract | Archive read model |
-| Future NotebookLM export | Playlist context | `youtube_playlist_items`, typed YouTube source tables | No | Export enrichment must preserve playlist position and availability without expanding `analysis_documents` | Archive read model |
+| Future NotebookLM export | Playlist context | `youtube_playlist_items`, typed YouTube source tables | No | Export enrichment must preserve playlist position and availability without expanding `analysis_documents` or materializing membership as archive item rows | Typed YouTube detail/readers |
 
 ## Options Considered
 
@@ -357,7 +359,7 @@ table:
 | Source browsing migration | First consumer. It can validate paging, filtering, media visibility, and provider item semantics. |
 | NotebookLM export migration | Implemented for Telegram as a readiness-gated archive consumer after export parity tests. YouTube-specific export enrichment remains a later slice. |
 | Takeout provenance | Can proceed in parallel while it writes provenance tables only. If it adds new archive-display fields or origin semantics that consumers need, the archive builder contract and readiness/backfill rules must be updated before consumer migration. |
-| YouTube playlist simplification | Related but separate. The archive read model may expose one derived playlist display state, but canonical cleanup of `availability_status` versus `is_removed_from_playlist` belongs to a later YouTube slice. |
+| YouTube playlist simplification | Related but separate. Playlist entries remain typed YouTube membership/detail state, not `archive_read_items` rows. Canonical cleanup of `availability_status` versus `is_removed_from_playlist` belongs to a later YouTube slice. |
 | Current-schema baseline | Blocked until the archive read-model boundary and migration/backfill rules are stable. |
 | Legacy Telegram metadata blob cleanup | Blocked on typed repair plus real private/dialog-backed source validation, not on the archive read model. |
 
@@ -370,7 +372,7 @@ table:
 2. [x] Build the archive/read UI model for source browsing first.
 3. [x] Migrate source browsing behind old-path versus new-path parity tests.
 4. [x] Migrate Telegram NotebookLM export after export parity tests pass.
-5. [ ] Decide whether future YouTube playlist-entry browsing needs archive rows
+5. [x] Decide whether future YouTube playlist-entry browsing needs archive rows
    or typed detail only.
 6. [ ] Consider a current-schema baseline after the read-model boundary
    settles.
@@ -384,6 +386,10 @@ table:
 - Readiness gate: source-scoped state with current `model_version`.
 - Telegram export-required data is represented in the archive row boundary and
   is now used by the gated Telegram NotebookLM export archive loader.
+- YouTube playlist membership, linked/unlinked entries, availability, and
+  removal state are typed YouTube detail/list state owned by
+  `youtube_playlist_items` and typed YouTube source tables. They are not
+  materialized as `archive_read_items` rows.
 - YouTube export fields remain future-facing and are not required by the first
   source-browsing slice.
 - Media metadata is copied as compressed display metadata; raw payload bytes are

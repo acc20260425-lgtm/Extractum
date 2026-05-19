@@ -8,9 +8,8 @@
 - Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
 - Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
 - Takeout source import needs broader live validation, incomplete-batch provenance, and a migrated-history enablement policy.
-- Database schema simplification needs the future YouTube playlist-entry
-  read-model decision plus a current-schema baseline after that boundary
-  stabilizes.
+- Database schema simplification needs a current-schema baseline after the
+  archive read-model boundary stabilizes.
 - YouTube live-provider coverage needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Large saved-run archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
@@ -36,7 +35,7 @@
 | Telegram runtime validation | predictable behavior across real supported dialogs and accounts |
 | Account deletion coordination | deletion cannot race active ingest or analysis work |
 | Takeout source import | validated across source kinds with explicit incomplete-import provenance |
-| Database schema simplification | YouTube playlist-entry read-model decision and current-schema baseline |
+| Database schema simplification | current-schema baseline |
 | YouTube source ingest | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | fast narrowing for large saved-run histories |
 | Analysis workspace parity | run-open NotebookLM export plus template and source-group management access |
@@ -118,7 +117,6 @@ Analysis:
   paths.
 - [x] add a separate provider-neutral archive/read UI model for source
   browsing, gated by source-scoped readiness and model version
-- [ ] decide whether future YouTube playlist-entry browsing needs archive rows or typed detail only
 - [ ] consider current-schema baseline after archive read model boundary stabilizes
 
 Acceptance:
@@ -133,6 +131,8 @@ Acceptance:
 - Telegram NotebookLM export uses the provider-neutral archive read model only
   when the source has current ready archive rows; all other states preserve the
   existing local provider/archive items path.
+- YouTube playlist-entry browsing stays on typed YouTube detail/readers rather
+  than materializing playlist membership rows into `archive_read_items`.
 - Fresh installs start from a clean current schema while existing databases still upgrade safely.
 
 ### 4.5 Saved Runs Discoverability And Cleanup
@@ -175,6 +175,8 @@ Priority: medium.
 Priority: medium.
 
 - [ ] add YouTube-specific NotebookLM export enrichment with transcript segment timestamps, canonical video links, and playlist membership metadata in export output
+- [ ] improve typed YouTube playlist detail/browsing for linked, unavailable,
+  removed, upcoming, live, auth-gated, deleted, and unknown-unavailable entries
 - [ ] add speech-to-text fallback for videos without captions
 - [ ] add live chat ingest
 - [ ] support media-aware analysis over thumbnails or downloaded media if a future setting explicitly allows media downloads
@@ -230,8 +232,7 @@ Priority: medium.
 1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
 2. Close account-deletion coordination before more long-running ingest expansion.
 3. Validate Takeout import across representative source kinds and design incomplete-import provenance.
-4. Continue schema simplification through the YouTube playlist-entry read-model
-   decision and a current-schema baseline.
+4. Continue schema simplification through a current-schema baseline.
 5. Decide whether saved-run history needs richer filters before media expansion.
 6. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
 7. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.

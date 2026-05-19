@@ -540,6 +540,9 @@ Notes:
 - `video_source_id` points to a linked YouTube video source when the entry is available and has been materialized locally; unavailable/unlinked entries keep `NULL`.
 - `availability_status` distinguishes available, upcoming, live, no-captions, auth-gated, deleted, removed, and unknown-unavailable rows.
 - `is_removed_from_playlist` marks rows that disappeared from a later playlist metadata sync without deleting historical local state.
+- Playlist entry rows intentionally remain typed YouTube membership/detail
+  state. They are not materialized into `archive_read_items` because they are
+  list state, not archived content items.
 
 ### 1.14 `youtube_transcript_segments`
 
