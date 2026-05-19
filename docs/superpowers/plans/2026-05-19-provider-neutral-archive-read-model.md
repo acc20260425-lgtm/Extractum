@@ -1137,7 +1137,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/archive_read_model.rs`
 - Test: `src-tauri/src/sources/items/query.rs`
 
-- [ ] **Step 1: Add failing gated read-path tests**
+- [x] **Step 1: Add failing gated read-path tests**
 
 In `src-tauri/src/sources/items/query.rs`, add:
 
@@ -1204,7 +1204,7 @@ async fn load_item_rows_uses_items_path_when_archive_model_is_stale() {
 
 Extract the fixture body from `load_item_rows_attaches_topic_metadata_and_root_matches` into `seed_source_browsing_fixture(&pool)` so old query tests and gated tests share exactly the same data.
 
-- [ ] **Step 2: Run gated tests and confirm failure**
+- [x] **Step 2: Run gated tests and confirm failure**
 
 Run:
 
@@ -1216,7 +1216,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::items::query::tests::lo
 
 Expected: compile or behavior failure because the wrapper does not exist yet.
 
-- [ ] **Step 3: Implement the readiness gate**
+- [x] **Step 3: Implement the readiness gate**
 
 In `src-tauri/src/sources/items/query.rs`, reintroduce `load_item_rows_from_pool` as a wrapper:
 
@@ -1255,7 +1255,7 @@ pub(super) async fn load_item_rows_from_pool(
 
 This is the runtime switch for the first consumer, but it is gated. Missing, stale, failed, building, or old-version source states keep the old provider/archive path.
 
-- [ ] **Step 4: Run Task 5 verification**
+- [x] **Step 4: Run Task 5 verification**
 
 Run:
 
@@ -1269,7 +1269,7 @@ git diff --check
 
 Expected: source browsing query tests, item tests, and archive tests pass; formatting and diff check pass.
 
-- [ ] **Step 5: Commit gated source browsing switch**
+- [x] **Step 5: Commit gated source browsing switch**
 
 Run:
 

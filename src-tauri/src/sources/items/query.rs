@@ -3,6 +3,37 @@ use crate::sources::StoredItemRow;
 
 use super::ForumTopicFilter;
 
+pub(super) async fn load_item_rows_from_pool(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+    limit: i64,
+    before_published_at: Option<i64>,
+    topic_filter: Option<ForumTopicFilter>,
+    around_item_id: Option<i64>,
+) -> AppResult<Vec<StoredItemRow>> {
+    if crate::archive_read_model::source_archive_model_is_ready(pool, source_id).await? {
+        return crate::archive_read_model::load_item_rows_from_archive(
+            pool,
+            source_id,
+            limit,
+            before_published_at,
+            topic_filter,
+            around_item_id,
+        )
+        .await;
+    }
+
+    load_item_rows_from_items_path(
+        pool,
+        source_id,
+        limit,
+        before_published_at,
+        topic_filter,
+        around_item_id,
+    )
+    .await
+}
+
 pub(crate) async fn load_item_rows_from_items_path(
     pool: &sqlx::SqlitePool,
     source_id: i64,
@@ -412,6 +443,187 @@ mod tests {
 
             assert_eq!(new_rows, old_rows);
         }
+    }
+
+    #[tokio::test]
+    async fn load_item_rows_uses_items_path_when_archive_model_is_not_ready() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_source_browsing_fixture(&pool).await;
+
+        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
+            .await
+            .expect("load fallback rows");
+
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[0].external_id, "not-numeric-root");
+    }
+
+    #[tokio::test]
+    async fn load_item_rows_uses_archive_path_when_ready_and_current() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_source_browsing_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive rows");
+
+        sqlx::query(
+            "UPDATE items
+             SET external_id = 'canonical-mutated-after-archive-build'
+             WHERE source_id = 1 AND external_id = 'not-numeric-root'",
+        )
+        .execute(&pool)
+        .await
+        .expect("mutate canonical row after archive build");
+
+        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
+            .await
+            .expect("load archive rows");
+
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[0].external_id, "not-numeric-root");
+    }
+
+    #[tokio::test]
+    async fn load_item_rows_uses_items_path_when_archive_model_is_stale() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_source_browsing_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive rows");
+        crate::archive_read_model::mark_source_stale(&pool, 1)
+            .await
+            .expect("mark stale");
+
+        sqlx::query("DELETE FROM archive_read_items WHERE source_id = 1")
+            .execute(&pool)
+            .await
+            .expect("delete archive rows");
+
+        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
+            .await
+            .expect("load fallback rows");
+
+        assert_eq!(rows.len(), 5);
+    }
+
+    async fn seed_source_browsing_fixture(pool: &sqlx::SqlitePool) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .execute(pool)
+        .await
+        .expect("seed source");
+        for (id, topic_id, top_message_id, title, sort_order) in [
+            (1_i64, 200_i64, 700_i64, "Announcements", 1_i64),
+            (2_i64, 1_i64, 1_i64, "General", 2_i64),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO telegram_forum_topics (
+                    id, source_id, topic_id, top_message_id, title, is_closed, is_pinned, is_hidden,
+                    is_deleted, sort_order, last_seen_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(id)
+            .bind(1_i64)
+            .bind(topic_id)
+            .bind(top_message_id)
+            .bind(title)
+            .bind(0_i64)
+            .bind(1_i64)
+            .bind(0_i64)
+            .bind(0_i64)
+            .bind(sort_order)
+            .bind(100_i64)
+            .bind(100_i64)
+            .execute(pool)
+            .await
+            .expect("insert forum topic");
+        }
+
+        for (id, external_id, published_at, reply_to_msg_id, reply_to_top_id, reaction_count) in [
+            (1_i64, "not-numeric-root", 500_i64, None, None, None),
+            (2_i64, "701", 400_i64, None, Some(200_i64), Some(2_i64)),
+            (3_i64, "702", 300_i64, Some(200_i64), None, Some(3_i64)),
+            (4_i64, "999", 200_i64, None, None, None),
+            (
+                5_i64,
+                "1000",
+                100_i64,
+                Some(123_i64),
+                Some(404_i64),
+                Some(5_i64),
+            ),
+        ] {
+            sqlx::query(
+                r#"
+                INSERT INTO items (
+                    id, source_id, external_id, item_kind, author, published_at, ingested_at, content_zstd,
+                    raw_data_zstd, content_kind, has_media, media_kind, media_metadata_zstd,
+                    reply_to_msg_id, reply_to_peer_kind, reply_to_peer_id, reply_to_top_id,
+                    reaction_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(id)
+            .bind(1_i64)
+            .bind(external_id)
+            .bind("telegram_message")
+            .bind("alice")
+            .bind(published_at)
+            .bind(published_at)
+            .bind(None::<Vec<u8>>)
+            .bind(None::<Vec<u8>>)
+            .bind("text_only")
+            .bind(0_i64)
+            .bind(None::<String>)
+            .bind(None::<Vec<u8>>)
+            .bind(reply_to_msg_id)
+            .bind(None::<String>)
+            .bind(None::<String>)
+            .bind(reply_to_top_id)
+            .bind(reaction_count)
+            .execute(pool)
+            .await
+            .expect("insert item");
+        }
+        sqlx::query(
+            "INSERT INTO telegram_messages (item_id, source_id, history_peer_kind, history_peer_id, telegram_message_id)
+             VALUES (1, 1, 'channel', 12345, 700)",
+        )
+        .execute(pool)
+        .await
+        .expect("insert typed message identity");
+        for (item_id, topic_id, match_kind) in [
+            (1_i64, 200_i64, "typed_root_top_message_id"),
+            (2_i64, 200_i64, "reply_to_top_id"),
+            (3_i64, 200_i64, "reply_to_msg_id"),
+            (4_i64, 1_i64, "general_fallback"),
+        ] {
+            sqlx::query(
+                "INSERT INTO item_topic_memberships (
+                    item_id, source_id, topic_id, match_kind, resolver_version
+                 ) VALUES (?, 1, ?, ?, 1)",
+            )
+            .bind(item_id)
+            .bind(topic_id)
+            .bind(match_kind)
+            .execute(pool)
+            .await
+            .expect("insert topic membership");
+        }
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 1, 0)",
+        )
+        .execute(pool)
+        .await
+        .expect("insert ready topic state");
     }
 
     async fn seed_browsing_parity_fixture(pool: &sqlx::SqlitePool) {

@@ -13,7 +13,7 @@ use super::types::{
     now_secs, StoredItemRow, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
     ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
 };
-use query::load_item_rows_from_items_path;
+use query::load_item_rows_from_pool;
 
 mod query;
 
@@ -605,7 +605,7 @@ pub async fn list_source_items(
     require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let limit = request.limit.clamp(1, 200);
-    let rows = load_item_rows_from_items_path(
+    let rows = load_item_rows_from_pool(
         &pool,
         request.source_id,
         limit,
