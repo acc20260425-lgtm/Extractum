@@ -1167,7 +1167,10 @@ mod tests {
             .await
             .expect("load state")
             .expect("state exists");
-        assert_eq!(state.status, crate::archive_read_model::STATUS_STALE);
+        assert_eq!(
+            state.status,
+            crate::readiness::ReadinessStatus::Stale.as_str()
+        );
     }
 
     #[tokio::test]

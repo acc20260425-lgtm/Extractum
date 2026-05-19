@@ -8,6 +8,7 @@ use crate::media::decode_media_metadata;
 use crate::notebooklm_export::links::detect_urls;
 use crate::notebooklm_export::media::render_media_placeholders;
 use crate::notebooklm_export::model::{NotebookLmExportMessage, NotebookLmExportSource};
+use crate::readiness::{is_ready_current, ReadinessStatus};
 
 #[derive(FromRow)]
 struct SourceRow {
@@ -121,28 +122,31 @@ pub(crate) async fn select_notebooklm_export_loader(
         });
     };
 
-    if state.status == crate::archive_read_model::STATUS_READY
-        && state.model_version == crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION
-    {
+    let status = state.readiness_status();
+    if status.is_some_and(|status| {
+        is_ready_current(
+            status,
+            state.model_version,
+            crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
+        )
+    }) {
         return Ok(ExportLoaderSelection::ArchiveReadModel {
             model_version: state.model_version,
         });
     }
 
-    let reason = if state.status == crate::archive_read_model::STATUS_READY {
+    let reason = if status == Some(ReadinessStatus::Ready) {
         ArchiveReadinessFallbackReason::OldModelVersion {
             found: state.model_version,
             current: crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
         }
     } else {
-        match state.status.as_str() {
-            crate::archive_read_model::STATUS_NEVER_BUILT => {
-                ArchiveReadinessFallbackReason::NeverBuilt
-            }
-            crate::archive_read_model::STATUS_BUILDING => ArchiveReadinessFallbackReason::Building,
-            crate::archive_read_model::STATUS_STALE => ArchiveReadinessFallbackReason::Stale,
-            crate::archive_read_model::STATUS_FAILED => ArchiveReadinessFallbackReason::Failed,
-            _ => ArchiveReadinessFallbackReason::Failed,
+        match status {
+            Some(ReadinessStatus::NeverBuilt) => ArchiveReadinessFallbackReason::NeverBuilt,
+            Some(ReadinessStatus::Building) => ArchiveReadinessFallbackReason::Building,
+            Some(ReadinessStatus::Stale) => ArchiveReadinessFallbackReason::Stale,
+            Some(ReadinessStatus::Failed) | None => ArchiveReadinessFallbackReason::Failed,
+            Some(ReadinessStatus::Ready) => unreachable!("ready status handled above"),
         }
     };
 
@@ -548,6 +552,7 @@ mod tests {
     use crate::compression::compress_text;
     use crate::error::AppErrorKind;
     use crate::media::{encode_media_metadata, ItemMediaMetadata};
+    use crate::readiness::ReadinessStatus;
 
     async fn export_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -808,7 +813,7 @@ mod tests {
 
         seed_archive_state(
             &pool,
-            crate::archive_read_model::STATUS_READY,
+            ReadinessStatus::Ready.as_str(),
             crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION - 1,
         )
         .await;
@@ -832,7 +837,7 @@ mod tests {
         seed_export_source(&pool).await;
         seed_archive_state(
             &pool,
-            crate::archive_read_model::STATUS_READY,
+            ReadinessStatus::Ready.as_str(),
             crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION,
         )
         .await;

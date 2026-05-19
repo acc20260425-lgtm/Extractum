@@ -7,6 +7,7 @@ mod forum_topics;
 mod ingest_provenance;
 mod media;
 mod migrations;
+mod readiness;
 mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
 

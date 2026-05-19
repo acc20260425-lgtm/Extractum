@@ -1,16 +1,12 @@
 #![allow(dead_code)]
 
 use crate::error::{AppError, AppResult};
+use crate::readiness::{is_ready_current, mark_failed, mark_stale, ModelVersion, ReadinessStatus};
 use crate::sources::{ForumTopicFilter, StoredItemRow};
 use crate::time::now_secs;
 use sqlx::{FromRow, SqlitePool};
 
-pub(crate) const ARCHIVE_READ_MODEL_VERSION: i64 = 1;
-pub(crate) const STATUS_NEVER_BUILT: &str = "never_built";
-pub(crate) const STATUS_BUILDING: &str = "building";
-pub(crate) const STATUS_READY: &str = "ready";
-pub(crate) const STATUS_STALE: &str = "stale";
-pub(crate) const STATUS_FAILED: &str = "failed";
+pub(crate) const ARCHIVE_READ_MODEL_VERSION: ModelVersion = 1;
 
 pub(crate) const ARCHIVE_READ_MODEL_SCHEMA_SQL: &str = include_str!("../migrations/26.sql");
 
@@ -24,6 +20,12 @@ pub(crate) struct ArchiveReadModelState {
     pub(crate) row_count: i64,
     pub(crate) last_error: Option<String>,
     pub(crate) updated_at: i64,
+}
+
+impl ArchiveReadModelState {
+    pub(crate) fn readiness_status(&self) -> Option<ReadinessStatus> {
+        ReadinessStatus::parse(&self.status)
+    }
 }
 
 #[derive(Debug, FromRow)]
@@ -102,12 +104,11 @@ pub(crate) async fn load_source_state(
 }
 
 pub(crate) fn is_current_ready_state(state: Option<&ArchiveReadModelState>) -> bool {
-    matches!(
-        state,
-        Some(state)
-            if state.status == STATUS_READY
-                && state.model_version == ARCHIVE_READ_MODEL_VERSION
-    )
+    state.is_some_and(|state| {
+        state.readiness_status().is_some_and(|status| {
+            is_ready_current(status, state.model_version, ARCHIVE_READ_MODEL_VERSION)
+        })
+    })
 }
 
 pub(crate) async fn source_archive_model_is_ready(
@@ -144,7 +145,7 @@ async fn rebuild_source_in_transaction(
     sqlx::query(
         "INSERT INTO archive_read_model_state (
             source_id, model_version, status, built_at, item_count, row_count, last_error, updated_at
-         ) VALUES (?, ?, 'building', NULL, 0, 0, NULL, ?)
+         ) VALUES (?, ?, ?, NULL, 0, 0, NULL, ?)
          ON CONFLICT(source_id) DO UPDATE SET
             model_version = excluded.model_version,
             status = excluded.status,
@@ -156,6 +157,7 @@ async fn rebuild_source_in_transaction(
     )
     .bind(source_id)
     .bind(ARCHIVE_READ_MODEL_VERSION)
+    .bind(ReadinessStatus::Building.as_str())
     .bind(started_at)
     .execute(&mut *conn)
     .await
@@ -212,7 +214,7 @@ async fn rebuild_source_in_transaction(
     let row_count = i64::try_from(rows.len()).unwrap_or(i64::MAX);
     sqlx::query(
         "UPDATE archive_read_model_state
-         SET status = 'ready',
+         SET status = ?,
              model_version = ?,
              built_at = ?,
              item_count = ?,
@@ -221,6 +223,7 @@ async fn rebuild_source_in_transaction(
              updated_at = ?
          WHERE source_id = ?",
     )
+    .bind(ReadinessStatus::Ready.as_str())
     .bind(ARCHIVE_READ_MODEL_VERSION)
     .bind(started_at)
     .bind(row_count)
@@ -385,7 +388,7 @@ async fn refresh_ready_counts_on_connection(
 
     sqlx::query(
         "UPDATE archive_read_model_state
-         SET status = 'ready',
+         SET status = ?,
              model_version = ?,
              built_at = ?,
              item_count = ?,
@@ -394,6 +397,7 @@ async fn refresh_ready_counts_on_connection(
              updated_at = ?
          WHERE source_id = ?",
     )
+    .bind(ReadinessStatus::Ready.as_str())
     .bind(ARCHIVE_READ_MODEL_VERSION)
     .bind(built_at)
     .bind(row_count)
@@ -418,10 +422,10 @@ pub(crate) async fn mark_source_stale_on_connection(
     sqlx::query(
         "INSERT INTO archive_read_model_state (
             source_id, model_version, status, updated_at
-         ) VALUES (?, ?, 'stale', strftime('%s','now'))
+         ) VALUES (?, ?, ?, strftime('%s','now'))
          ON CONFLICT(source_id) DO UPDATE SET
             status = CASE
-                WHEN archive_read_model_state.status = 'ready' THEN 'stale'
+                WHEN archive_read_model_state.status = ? THEN ?
                 ELSE archive_read_model_state.status
             END,
             model_version = excluded.model_version,
@@ -429,6 +433,9 @@ pub(crate) async fn mark_source_stale_on_connection(
     )
     .bind(source_id)
     .bind(ARCHIVE_READ_MODEL_VERSION)
+    .bind(ReadinessStatus::Stale.as_str())
+    .bind(ReadinessStatus::Ready.as_str())
+    .bind(mark_stale(ReadinessStatus::Ready).as_str())
     .execute(conn)
     .await
     .map_err(AppError::database)?;
@@ -443,7 +450,7 @@ pub(crate) async fn mark_source_failed(
     sqlx::query(
         "INSERT INTO archive_read_model_state (
             source_id, model_version, status, last_error, updated_at
-         ) VALUES (?, ?, 'failed', ?, strftime('%s','now'))
+         ) VALUES (?, ?, ?, ?, strftime('%s','now'))
          ON CONFLICT(source_id) DO UPDATE SET
             model_version = excluded.model_version,
             status = excluded.status,
@@ -452,6 +459,7 @@ pub(crate) async fn mark_source_failed(
     )
     .bind(source_id)
     .bind(ARCHIVE_READ_MODEL_VERSION)
+    .bind(mark_failed().as_str())
     .bind(last_error)
     .execute(pool)
     .await
@@ -612,7 +620,7 @@ mod tests {
             .await
             .expect("load state")
             .expect("state exists");
-        assert_eq!(state.status, STATUS_READY);
+        assert_eq!(state.status, ReadinessStatus::Ready.as_str());
         assert_eq!(state.model_version, ARCHIVE_READ_MODEL_VERSION);
         assert_eq!(state.item_count, 2);
         assert_eq!(state.row_count, 2);
