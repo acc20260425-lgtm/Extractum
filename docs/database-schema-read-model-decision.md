@@ -19,7 +19,8 @@ NotebookLM export, source browsing, or any runtime query path.
 The decision also recognizes the cost of a new materialized boundary. Any
 follow-up implementation must define update semantics before adding schema:
 when rows are built, how existing databases are backfilled, what stays
-canonical, and how stale rows are detected or repaired.
+canonical, how builder failures are handled, and how stale rows are detected or
+repaired.
 
 ## Consumers
 
@@ -137,6 +138,16 @@ needs ordinary Rust tests and provider-specific validation. Large existing
 databases may require chunked or resumable backfill before any consumer switches
 to the new model.
 
+For normal runtime writes, archive builder failure rolls back the whole
+transaction. Committing an `items` row while silently skipping the derived
+archive row would make the consumer boundary stale at the moment it is created.
+The builder must therefore be deterministic, local-only, and narrowly tested so
+rollback-on-failure is reserved for real storage/validation defects rather than
+ordinary provider variance. For migration backfill, repair, or manual rebuild,
+failure must not delete canonical provider/archive data; it should mark the
+source/model scope stale or failed and keep consumers gated until a successful
+rebuild.
+
 ### Option C: Add parity tests first and defer the model
 
 This is the safest first step: lock down current behavior and decide the
@@ -215,11 +226,19 @@ The next implementation spec must settle these rules before creating a table:
 - Normal item/provider writes should update archive read rows synchronously in
   the same transaction that writes `items`, `telegram_messages`,
   `youtube_transcript_segments`, or YouTube typed source/playlist state.
+- If synchronous builder maintenance fails during a normal write, the whole
+  write transaction rolls back. The app must not commit canonical rows while
+  leaving their archive read rows missing or stale.
 - A scoped rebuild helper must exist for one source and for all sources. It is
   used by migrations, repair paths, fixtures, and manual recovery.
-- Existing database backfill must be planned as a bounded operation. If the
-  backfill can be large, the implementation plan must choose chunking,
-  progress state, or a safe startup gating strategy before consumers switch.
+- Existing database backfill should prefer a gated lazy per-source rebuild:
+  migration creates the schema and readiness metadata, consumers remain on old
+  paths until a source has a successful archive-model rebuild, and the first
+  source access can trigger or request that scoped rebuild. Full eager startup
+  backfill should be reserved for small/fixture databases or explicit repair
+  commands.
+- If the backfill can be large, the implementation plan must include chunking
+  or progress state before any consumer switches by default.
 - YouTube transcript granularity must be chosen before schema work. The next
   spec should either keep one archive item row per transcript with a paired
   typed segment reader, or materialize segment rows in the archive model; it
@@ -229,6 +248,10 @@ The next implementation spec must settle these rules before creating a table:
   stale/missing derived rows instead of silently falling back to provider joins.
 - Provider-specific branching belongs in the builder/backfill layer. Consumer
   query paths should read provider-neutral rows plus typed nested metadata.
+  A paired YouTube transcript segment reader is the allowed exception if the
+  next spec chooses item-level archive rows plus typed segment navigation; in
+  that case, segment reads remain a typed provider-neutral reader owned beside
+  the archive model, not ad hoc joins in UI/export code.
 
 ## Consequences
 
@@ -238,6 +261,12 @@ The next implementation spec must settle these rules before creating a table:
   export without forcing LLM corpus semantics onto archive UI state.
 - Provider-specific joins do not disappear; they move into a builder/backfill
   layer with focused tests.
+- Normal builder failures are write failures, not warnings. Rebuild/backfill
+  failures become source/model readiness failures and do not mutate canonical
+  provider data.
+- Existing databases should avoid blocking startup on a full archive-model
+  backfill; lazy per-source rebuild plus consumer gating is the preferred
+  rollout shape.
 - The first implementation consumer should be source browsing, because its
   item-list parity is easier to validate than full NotebookLM export output.
 - NotebookLM export should migrate only after source browsing proves the
@@ -255,15 +284,16 @@ The next implementation spec must settle these rules before creating a table:
 | --- | --- |
 | Source browsing migration | First consumer. It can validate paging, filtering, media visibility, and provider item semantics. |
 | NotebookLM export migration | Blocked until the archive model includes export-required reply/topic/reaction/media fields and browsing parity has passed. |
-| Takeout provenance | Can proceed in parallel while it writes provenance tables only. If it adds new archive-display fields or origin semantics that consumers need, the archive builder contract must be updated before consumer migration. |
+| Takeout provenance | Can proceed in parallel while it writes provenance tables only. If it adds new archive-display fields or origin semantics that consumers need, the archive builder contract and readiness/backfill rules must be updated before consumer migration. |
 | YouTube playlist simplification | Related but separate. The archive read model may expose one derived playlist display state, but canonical cleanup of `availability_status` versus `is_removed_from_playlist` belongs to a later YouTube slice. |
 | Current-schema baseline | Blocked until the archive read-model boundary and migration/backfill rules are stable. |
 | Legacy Telegram metadata blob cleanup | Blocked on typed repair plus real private/dialog-backed source validation, not on the archive read model. |
 
 ## Follow-up Implementation Slices
 
-1. Define update semantics, backfill strategy, stale-row handling, and the full
-   export-ready field set before adding schema.
+1. Define update semantics, builder-failure rollback rules, lazy per-source
+   backfill/gating, YouTube transcript segment ownership, stale-row handling,
+   and the full export-ready field set before adding schema.
 2. Build the archive/read UI model for source browsing first.
 3. Migrate source browsing behind old-path versus new-path parity tests.
 4. Migrate NotebookLM export after browsing proves the model and export parity
