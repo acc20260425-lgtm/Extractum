@@ -3,6 +3,7 @@ mod filename;
 mod glossary;
 mod links;
 mod media;
+mod message_mapping;
 mod model;
 mod query;
 mod renderer;

@@ -2,11 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use sqlx::FromRow;
 
-use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
-use crate::media::decode_media_metadata;
-use crate::notebooklm_export::links::detect_urls;
-use crate::notebooklm_export::media::render_media_placeholders;
+use crate::notebooklm_export::message_mapping::{
+    map_export_rows, reply_snippet, ExportMessageRow, ReplyContext, ReplyLookupRow,
+};
 use crate::notebooklm_export::model::{NotebookLmExportMessage, NotebookLmExportSource};
 use crate::readiness::{is_ready_current, ReadinessStatus};
 
@@ -17,43 +16,6 @@ struct SourceRow {
     source_subtype: Option<String>,
     external_id: String,
     title: Option<String>,
-}
-
-#[derive(FromRow)]
-struct ExportMessageRow {
-    id: i64,
-    source_id: i64,
-    external_id: String,
-    author: Option<String>,
-    published_at: i64,
-    content_zstd: Option<Vec<u8>>,
-    content_kind: String,
-    has_media: bool,
-    media_kind: Option<String>,
-    media_metadata_zstd: Option<Vec<u8>>,
-    reply_to_msg_id: Option<i64>,
-    reply_to_peer_kind: Option<String>,
-    reply_to_peer_id: Option<String>,
-    reply_to_top_id: Option<i64>,
-    reaction_count: Option<i64>,
-    forum_topic_id: Option<i64>,
-    forum_topic_title: Option<String>,
-    forum_topic_top_message_id: Option<i64>,
-}
-
-#[derive(FromRow)]
-struct ReplyLookupRow {
-    external_id: String,
-    author: Option<String>,
-    content_zstd: Option<Vec<u8>>,
-    has_media: bool,
-    media_kind: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct ReplyContext {
-    author: Option<String>,
-    snippet: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -259,58 +221,6 @@ pub(crate) async fn load_export_messages_from_archive(
     map_export_rows(rows, reply_contexts)
 }
 
-fn map_export_rows(
-    rows: Vec<ExportMessageRow>,
-    reply_contexts: HashMap<i64, ReplyContext>,
-) -> AppResult<Vec<NotebookLmExportMessage>> {
-    rows.into_iter()
-        .map(|row| {
-            let text = row
-                .content_zstd
-                .as_deref()
-                .map(decompress_text)
-                .transpose()?;
-            let urls = text.as_deref().map(detect_urls).unwrap_or_default();
-            let media_metadata = decode_media_metadata(row.media_metadata_zstd.as_deref())?;
-            let media_placeholders =
-                render_media_placeholders(row.media_kind.as_deref(), &media_metadata);
-            let reply_context = row
-                .reply_to_msg_id
-                .and_then(|reply_to_msg_id| reply_contexts.get(&reply_to_msg_id));
-
-            Ok(NotebookLmExportMessage {
-                item_id: row.id,
-                source_id: row.source_id,
-                external_id: row.external_id,
-                author: row.author,
-                published_at: row.published_at,
-                text,
-                content_kind: row.content_kind,
-                has_media: row.has_media,
-                media_kind: row.media_kind,
-                media_metadata,
-                media_placeholders,
-                urls,
-                reply_to_msg_id: row.reply_to_msg_id,
-                reply_to_author: reply_context.and_then(|context| context.author.clone()),
-                reply_to_snippet: row.reply_to_msg_id.map(|_| {
-                    reply_context
-                        .map(|context| context.snippet.clone())
-                        .unwrap_or_else(|| "Original message unavailable".to_string())
-                }),
-                reply_to_peer_kind: row.reply_to_peer_kind,
-                reply_to_peer_id: row.reply_to_peer_id,
-                reply_to_top_id: row.reply_to_top_id,
-                reaction_count: row.reaction_count,
-                forum_topic_id: row.forum_topic_id,
-                forum_topic_title: row.forum_topic_title,
-                forum_topic_top_message_id: row.forum_topic_top_message_id,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()
-        .map_err(AppError::from)
-}
-
 pub(crate) async fn load_export_messages(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
@@ -440,45 +350,6 @@ async fn load_reply_contexts_from_archive(
     Ok(contexts)
 }
 
-fn reply_snippet(row: &ReplyLookupRow) -> Result<String, String> {
-    let text = row
-        .content_zstd
-        .as_deref()
-        .map(decompress_text)
-        .transpose()?;
-
-    if let Some(text) = text
-        .as_deref()
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-    {
-        return Ok(truncate_snippet(&collapse_whitespace(text), 280));
-    }
-
-    if row.has_media {
-        return Ok(format!(
-            "[Media message: {}]",
-            row.media_kind.as_deref().unwrap_or("media")
-        ));
-    }
-
-    Ok("[Message has no text]".to_string())
-}
-
-fn collapse_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn truncate_snippet(value: &str, max_chars: usize) -> String {
-    let mut chars = value.chars();
-    let snippet = chars.by_ref().take(max_chars).collect::<String>();
-    if chars.next().is_some() {
-        format!("{snippet}...")
-    } else {
-        snippet
-    }
-}
-
 fn base_query(where_clause: &str) -> String {
     format!(
         r#"
@@ -553,6 +424,18 @@ mod tests {
     use crate::error::AppErrorKind;
     use crate::media::{encode_media_metadata, ItemMediaMetadata};
     use crate::readiness::ReadinessStatus;
+
+    #[test]
+    fn notebooklm_export_query_file_has_no_export_row_mapping() {
+        let source =
+            std::fs::read_to_string("src/notebooklm_export/query.rs").expect("read query.rs");
+        let mapper_function = ["fn ", "map_export_rows"].join("");
+
+        assert!(
+            !source.contains(&mapper_function),
+            "NotebookLM export row mapping should live outside src/notebooklm_export/query.rs"
+        );
+    }
 
     async fn export_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
