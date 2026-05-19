@@ -38,6 +38,18 @@ const INTERRUPTED_RUN_MESSAGE: &str = "Analysis run was interrupted when the app
 const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
 const SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed";
 
+pub(crate) struct StartAnalysisReportRequest {
+    pub(crate) source_id: Option<i64>,
+    pub(crate) source_group_id: Option<i64>,
+    pub(crate) period_from: i64,
+    pub(crate) period_to: i64,
+    pub(crate) output_language: String,
+    pub(crate) prompt_template_id: i64,
+    pub(crate) model_override: Option<String>,
+    pub(crate) profile_id: Option<String>,
+    pub(crate) youtube_corpus_mode: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ReportRunError {
     Failed(String),
@@ -905,14 +917,13 @@ pub async fn cleanup_interrupted_analysis_runs(handle: AppHandle) {
     }
 }
 
-#[tauri::command]
-pub async fn cancel_analysis_run(
-    handle: AppHandle,
-    state: tauri::State<'_, AnalysisState>,
-    scheduler: tauri::State<'_, LlmSchedulerState>,
+pub(crate) async fn request_analysis_run_cancel(
+    handle: &AppHandle,
+    state: &AnalysisState,
+    scheduler: &LlmSchedulerState,
     run_id: i64,
 ) -> AppResult<()> {
-    let pool = get_pool(&handle).await?;
+    let pool = get_pool(handle).await?;
     let run = fetch_run_row(&pool, run_id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
@@ -933,29 +944,28 @@ pub async fn cancel_analysis_run(
 
     RunEvent::new(run_id, "progress", &run.status)
         .message("Cancelling analysis run...".to_string())
-        .emit(&handle);
+        .emit(handle);
 
     Ok(())
 }
 
-#[tauri::command]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Tauri command signature is the frontend IPC contract; inputs are normalized into internal structs immediately."
-)]
-pub async fn start_analysis_report(
+pub(crate) async fn start_analysis_report_run(
     handle: AppHandle,
-    state: tauri::State<'_, AnalysisState>,
-    source_id: Option<i64>,
-    source_group_id: Option<i64>,
-    period_from: i64,
-    period_to: i64,
-    output_language: String,
-    prompt_template_id: i64,
-    model_override: Option<String>,
-    profile_id: Option<String>,
-    youtube_corpus_mode: Option<String>,
+    state: &AnalysisState,
+    request: StartAnalysisReportRequest,
 ) -> AppResult<i64> {
+    let StartAnalysisReportRequest {
+        source_id,
+        source_group_id,
+        period_from,
+        period_to,
+        output_language,
+        prompt_template_id,
+        model_override,
+        profile_id,
+        youtube_corpus_mode,
+    } = request;
+
     if period_from > period_to {
         return Err(AppError::validation(
             "period_from must be less than or equal to period_to",
@@ -1505,5 +1515,16 @@ mod tests {
             limits: AnalysisRunPreflightLimits::default(),
         })
         .expect("preflight should pass");
+    }
+
+    #[test]
+    fn analysis_report_workflow_file_has_no_tauri_command_adapters() {
+        let source = std::fs::read_to_string("src/analysis/report.rs").expect("read report.rs");
+        let command_attribute = ["#[tauri", "::command]"].join("");
+
+        assert!(
+            !source.contains(&command_attribute),
+            "Analysis report command adapters should live outside src/analysis/report.rs"
+        );
     }
 }
