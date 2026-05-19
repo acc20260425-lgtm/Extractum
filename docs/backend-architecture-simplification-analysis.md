@@ -11,18 +11,15 @@ canonical provider data lives in `items` plus typed provider tables, while
 provider-neutral derived models serve specific consumers such as analysis and
 archive browsing/export.
 
-The largest maintainability wins are small infrastructure and boundary
-improvements:
+The remaining maintainability wins are boundary and lifecycle improvements:
 
-1. centralize repeated backend helpers for time, SQL lists, transactions, and
-   error mapping;
-2. standardize a small readiness vocabulary for the derived models that are
-   actually readiness-gated;
-3. keep Tauri command handlers thin and move workflow logic into services;
-4. extract small in-memory job helpers before considering any generic job
+1. keep remaining Tauri command handlers thin and move workflow logic into
+   services;
+2. extract small in-memory job helpers before considering any generic job
    runtime;
-5. introduce a current-schema baseline for fresh installs after the archive
-   read-model boundary settles.
+3. introduce a current-schema baseline for fresh installs after the archive
+   read-model boundary settles;
+4. continue migrating service and storage APIs toward typed errors.
 
 These changes should reduce review cost and future feature friction without
 changing product behavior.
@@ -56,52 +53,6 @@ rebuildable read models serve specific consumers.
 
 ## Main Maintainability Costs
 
-### Repeated Backend Infrastructure
-
-Several helpers and patterns are duplicated across modules:
-
-- `now_secs`;
-- `ymd_to_unix_midnight` and `days_from_civil`;
-- `push_i64_list` / `QueryBuilder` list binding helpers;
-- manual `BEGIN IMMEDIATE`, `COMMIT`, and `ROLLBACK` blocks;
-- mixed `Result<T, String>` and `AppResult<T>` error mapping.
-
-Examples appear in:
-
-- `src-tauri/src/youtube/jobs.rs`
-- `src-tauri/src/youtube/detail.rs`
-- `src-tauri/src/analysis_documents.rs`
-- `src-tauri/src/sources/items.rs`
-- `src-tauri/src/ingest_provenance.rs`
-
-This is not conceptually wrong, but it makes storage and workflow changes more
-expensive to review because every module carries its own small dialect.
-
-### Multiple Derived Model Lifecycles
-
-The backend now has several derived/materialized models:
-
-- `analysis_documents`;
-- `archive_read_model_state` plus `archive_read_items`;
-- `telegram_topic_resolution_state` plus `item_topic_memberships`.
-
-These models have related lifecycle ideas:
-
-- canonical data remains elsewhere;
-- derived rows can be rebuilt;
-- some consumers need to know whether derived state is usable;
-- failures should not corrupt canonical data.
-
-They are not identical. `archive_read_model_state` is a direct consumer
-readiness gate. `telegram_topic_resolution_state` is close, but its status is
-domain-specific topic resolver state. `analysis_documents` is a materialized
-corpus model, but it is not currently consumed through the same source-scoped
-readiness gate.
-
-The code currently implements these concepts per module. That is acceptable
-for the first versions, but future work will be easier if the shared terms are
-explicit without forcing one framework over all materialized models.
-
 ### Large Mixed-Responsibility Files
 
 Several backend files are large enough that local changes require too much
@@ -111,22 +62,20 @@ context:
 - `takeout_import/mod.rs`
 - `sources/items.rs`
 - `notebooklm_export/query.rs`
-- `analysis/report.rs`
 - `youtube/detail.rs`
 - `analysis/store.rs`
-- `youtube/jobs.rs`
 - `youtube/source_metadata.rs`
 
 The issue is not just line count. The expensive pattern is when one file owns
 IPC-adjacent DTOs, validation, SQL, workflow orchestration, mapping, and tests
 at the same time.
 
-### Thin Boundary Between Commands And Services
+### Remaining Thin Boundary Between Commands And Services
 
-Tauri commands mostly work, but command handlers often also own workflow and
+Tauri commands mostly work, but some command handlers still own workflow or
 storage orchestration. `lib.rs` manually imports and registers many commands,
-and domain modules expose command functions directly beside lower-level
-helpers.
+and some domain modules still expose command functions directly beside
+lower-level helpers.
 
 This makes feature work feel convenient at first, but it increases coupling
 between IPC contracts and backend internals.
@@ -162,70 +111,7 @@ right long-term simplification once the read-model boundary is stable.
 
 ## Recommended Architecture Changes
 
-### 1. Add Small Backend Infrastructure Modules
-
-Recommended modules:
-
-- `src-tauri/src/time.rs`
-- `src-tauri/src/sql_helpers.rs`
-- `src-tauri/src/tx.rs`
-
-Initial contents:
-
-- one `now_secs` helper;
-- one YYYY-MM-DD to Unix-midnight parser;
-- one `push_i64_bind_list` helper for `QueryBuilder`;
-- a helper for `BEGIN IMMEDIATE` transaction blocks;
-- consistent helpers for database and internal error mapping.
-
-This should be the first slice because it is low risk and makes later work
-cheaper.
-
-### 2. Standardize Readiness Vocabulary Carefully
-
-Do not create a large generic framework or a broad trait for every materialized
-model. Start with a small common vocabulary and helper functions, and apply
-them only where the model is actually readiness-gated:
-
-- `ReadinessStatus`;
-- `ModelVersion`;
-- `is_ready_current`;
-- `mark_stale`;
-- `mark_failed`.
-
-The target shape is closer to:
-
-```rust
-enum ReadinessStatus {
-    NeverBuilt,
-    Building,
-    Ready,
-    Stale,
-    Failed,
-}
-
-fn is_ready_current(
-    status: ReadinessStatus,
-    found_version: i64,
-    current_version: i64,
-) -> bool;
-```
-
-`archive_read_model_state` is the clearest fit. Topic resolution can reuse
-selected terms where they match, but should keep its domain-specific state
-rules. `analysis_documents` should not be forced into this lifecycle unless a
-future consumer actually needs readiness-gated corpus rows.
-
-The important architectural rule should stay explicit:
-
-> Canonical data lives in `items` plus typed provider tables. Derived read
-> models are rebuildable consumer-facing state and must be readiness-gated
-> when stale data would change behavior.
-
-This should cover future archive/read-model work without creating a monster
-trait or pretending that every materialized table has the same lifecycle.
-
-### 3. Keep Tauri Commands As Adapters
+### 1. Keep Tauri Commands As Adapters
 
 For new backend work, use this rule:
 
@@ -234,17 +120,14 @@ For new backend work, use this rule:
 - service function: workflow orchestration and domain decisions;
 - store/query function: SQL and row mapping.
 
-Good first candidates:
+Remaining candidate:
 
-- YouTube jobs: split command adapters from job workflow execution;
-- analysis report start/cancel: keep command contract separate from report
-  orchestration;
 - NotebookLM export query: separate loader selection/querying from export row
   mapping.
 
 This can be incremental. There is no need to rewrite every command.
 
-### 4. Extract In-Memory Job Helpers Before A Runtime
+### 2. Extract In-Memory Job Helpers Before A Runtime
 
 Start with small reusable helpers for process-local jobs instead of a generic
 `JobRuntime<TRecord, TKey>`. Useful first extractions:
@@ -260,7 +143,7 @@ duplication behind, then a small shared runtime can be considered. Durable or
 resumable jobs remain a separate product decision and should not be bundled
 into this cleanup.
 
-### 5. Introduce A Current-Schema Baseline
+### 3. Introduce A Current-Schema Baseline
 
 After the archive read-model boundary is considered stable, add a fresh-install
 current schema path:
@@ -275,7 +158,7 @@ This is likely the highest-impact Database Schema Simplification task still
 open, but it should be planned carefully because it touches install/upgrade
 semantics.
 
-### 6. Continue Migrating Toward Typed Errors
+### 4. Continue Migrating Toward Typed Errors
 
 The backend already exposes typed `AppError`. Some analysis and LLM internals
 still use `Result<T, String>`.
@@ -299,9 +182,7 @@ message substring classification.
 - Do not materialize YouTube playlist membership rows into
   `archive_read_items`; `youtube_playlist_items` is the right owner.
 - Do not introduce a broad ORM/repository abstraction over every SQL query.
-  Small SQL helpers and clearer service boundaries should be enough.
-- Do not introduce a monster trait for all materialized/read models. Share
-  readiness helpers only where the lifecycle really matches.
+  Clearer service boundaries should be enough.
 - Do not start in-memory job cleanup with a fully generic
   `JobRuntime<TRecord, TKey>`. Extract cancellation, active-guard, finish, and
   emit helpers first.
@@ -310,14 +191,11 @@ message substring classification.
 
 ## Suggested Order
 
-1. Add shared time, SQL list, transaction, and error helpers.
-2. Standardize derived read-model readiness vocabulary where it genuinely
-   applies.
-3. Split YouTube job command adapters from service/workflow logic.
-4. Extract common in-memory job helpers, then decide whether a shared runtime
+1. Finish the remaining adapter/service split for NotebookLM export query.
+2. Extract common in-memory job helpers, then decide whether a shared runtime
    is still useful.
-5. Plan and implement current-schema baseline.
-6. Gradually convert storage/service APIs from `Result<T, String>` to
+3. Plan and implement current-schema baseline.
+4. Gradually convert storage/service APIs from `Result<T, String>` to
    `AppResult<T>`.
 
 ## Expected Payoff
@@ -332,4 +210,4 @@ project is actively growing:
 - future current-schema baseline and migration cleanup.
 
 The guiding principle is to preserve the current domain boundaries while
-removing repeated backend plumbing around them.
+tightening the remaining service boundaries around them.
