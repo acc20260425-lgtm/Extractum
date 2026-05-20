@@ -28,7 +28,7 @@
 - Modify: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Write the failing baseline migration candidate test**
+- [x] **Step 1: Write the failing baseline migration candidate test**
 
 In `src-tauri/src/migrations.rs`, add constants near the top of the file:
 
@@ -65,7 +65,7 @@ fn current_schema_baseline_migration_is_version_one() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -75,7 +75,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::current_schem
 
 Expected: compile failure because `src-tauri/migrations/0001_current_schema_baseline.sql` does not exist.
 
-- [ ] **Step 3: Add a temporary minimal baseline file**
+- [x] **Step 3: Add a temporary minimal baseline file**
 
 Create `src-tauri/migrations/0001_current_schema_baseline.sql` with:
 
@@ -87,7 +87,7 @@ CREATE TABLE accounts (
 );
 ```
 
-- [ ] **Step 4: Run the baseline candidate test again**
+- [x] **Step 4: Run the baseline candidate test again**
 
 Run:
 
@@ -97,7 +97,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::current_schem
 
 Expected: FAIL because the baseline SQL does not contain `CREATE TABLE archive_read_items`.
 
-- [ ] **Step 5: Add the schema parity test harness**
+- [x] **Step 5: Add the schema parity test harness**
 
 Add these helpers inside the migration test module:
 
@@ -159,7 +159,7 @@ async fn current_schema_baseline_matches_legacy_migrated_schema() {
 }
 ```
 
-- [ ] **Step 6: Run the parity test to verify it fails**
+- [x] **Step 6: Run the parity test to verify it fails**
 
 Run:
 
@@ -169,7 +169,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::current_schem
 
 Expected: FAIL because the temporary baseline only creates `accounts`.
 
-- [ ] **Step 7: Populate the baseline SQL**
+- [x] **Step 7: Populate the baseline SQL**
 
 Create the baseline SQL from the current legacy-created schema. Use the parity
 test as the source of truth: the baseline is complete only when the schema
@@ -212,7 +212,7 @@ app_settings
 The baseline file must also include all current non-SQLite indexes and triggers
 that appear in the legacy schema signature.
 
-- [ ] **Step 8: Run the Task 1 tests to verify green**
+- [x] **Step 8: Run the Task 1 tests to verify green**
 
 Run:
 
@@ -223,7 +223,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::current_schem
 
 Expected: both tests pass.
 
-- [ ] **Step 9: Commit Task 1**
+- [x] **Step 9: Commit Task 1**
 
 Run:
 

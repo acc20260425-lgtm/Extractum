@@ -12,6 +12,12 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 const APP_IDENTIFIER: &str = "org.ai.extractum";
 const DB_FILENAME: &str = "extractum.db";
+#[allow(dead_code)]
+const BASELINE_VERSION: i64 = 1;
+#[allow(dead_code)]
+const BASELINE_DESCRIPTION: &str = "current schema baseline";
+#[allow(dead_code)]
+const BASELINE_SQL: &str = include_str!("../migrations/0001_current_schema_baseline.sql");
 
 /// Before the sql plugin runs, remove stale migration records whose SQL has changed.
 /// This allows us to update migration files without deleting the database.
@@ -114,6 +120,16 @@ pub fn prepare_database() -> crate::error::AppResult<()> {
         return Ok(());
     };
     tauri::async_runtime::block_on(patch_migrations(&db_path))
+}
+
+#[allow(dead_code)]
+fn current_schema_baseline_migration() -> Migration {
+    Migration {
+        version: BASELINE_VERSION,
+        description: BASELINE_DESCRIPTION,
+        sql: BASELINE_SQL,
+        kind: MigrationKind::Up,
+    }
 }
 
 pub fn build_migrations() -> Vec<Migration> {
@@ -308,8 +324,76 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
 mod tests {
     use super::{
         apply_all_migrations_for_test_pool, build_migrations, checksum_matches_line_ending_variant,
+        current_schema_baseline_migration,
     };
     use sha2::{Digest, Sha384};
+
+    #[test]
+    fn current_schema_baseline_migration_is_version_one() {
+        let migration = current_schema_baseline_migration();
+
+        assert_eq!(migration.version, 1);
+        assert_eq!(migration.description, "current schema baseline");
+        assert!(migration.sql.contains("CREATE TABLE accounts"));
+        assert!(migration.sql.contains("CREATE TABLE archive_read_items"));
+    }
+
+    async fn apply_baseline_for_test_pool(pool: &sqlx::SqlitePool) {
+        sqlx::raw_sql(current_schema_baseline_migration().sql)
+            .execute(pool)
+            .await
+            .expect("apply current schema baseline");
+    }
+
+    async fn schema_signature(pool: &sqlx::SqlitePool) -> Vec<(String, String, String)> {
+        let mut rows: Vec<(String, String, String)> = sqlx::query_as(
+            r#"
+            SELECT type, name, COALESCE(sql, '')
+            FROM sqlite_master
+            WHERE name NOT LIKE 'sqlite_%'
+              AND name != '_sqlx_migrations'
+            ORDER BY type ASC, name ASC
+            "#,
+        )
+        .fetch_all(pool)
+        .await
+        .expect("read schema signature");
+
+        for row in &mut rows {
+            row.2 = normalize_schema_sql(&row.2);
+        }
+
+        rows
+    }
+
+    fn normalize_schema_sql(sql: &str) -> String {
+        sql.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .replace(" ,", ",")
+            .replace("( ", "(")
+            .replace(" )", ")")
+    }
+
+    #[tokio::test]
+    async fn current_schema_baseline_matches_legacy_migrated_schema() {
+        let legacy_pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect legacy memory sqlite");
+        apply_all_migrations_for_test_pool(&legacy_pool)
+            .await
+            .expect("apply legacy migrations");
+
+        let baseline_pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect baseline memory sqlite");
+        apply_baseline_for_test_pool(&baseline_pool).await;
+
+        assert_eq!(
+            schema_signature(&baseline_pool).await,
+            schema_signature(&legacy_pool).await
+        );
+    }
 
     #[tokio::test]
     async fn fresh_schema_includes_source_identity_tables_after_sql_managed_migrations() {
