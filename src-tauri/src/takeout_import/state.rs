@@ -1,10 +1,11 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
 use crate::error::{AppError, AppResult};
+use crate::job_helpers::{ActiveJobGuards, CancellationState};
 use crate::time::now_secs;
 
 const TAKEOUT_IMPORT_EVENT: &str = "sources://takeout-import";
@@ -59,8 +60,8 @@ pub struct TakeoutImportJobRecord {
 struct TakeoutImportStateInner {
     next_job_id: u64,
     jobs: HashMap<String, TakeoutImportJobRecord>,
-    active_by_source: HashMap<i64, String>,
-    cancel_requested: HashSet<String>,
+    active_jobs: ActiveJobGuards<i64>,
+    cancel_requested: CancellationState,
 }
 
 pub struct TakeoutImportState {
@@ -81,7 +82,7 @@ impl TakeoutImportState {
         batch_id: i64,
     ) -> AppResult<TakeoutImportJobRecord> {
         let mut inner = self.inner.lock().await;
-        if let Some(job_id) = inner.active_by_source.get(&source_id) {
+        if let Some(job_id) = inner.active_jobs.active_job_id(&source_id) {
             return Err(AppError::conflict(format!(
                 "Source {source_id} already has active Takeout import job {job_id}"
             )));
@@ -107,7 +108,7 @@ impl TakeoutImportState {
             error: None,
         };
 
-        inner.active_by_source.insert(source_id, job_id.clone());
+        inner.active_jobs.track(source_id, job_id.clone());
         inner.jobs.insert(job_id, record.clone());
         Ok(record)
     }
@@ -131,7 +132,7 @@ impl TakeoutImportState {
             return None;
         }
 
-        inner.cancel_requested.insert(job_id.to_string());
+        inner.cancel_requested.request(job_id);
         let job = inner.jobs.get_mut(job_id)?;
         job.status = STATUS_CANCEL_REQUESTED.to_string();
         job.message = Some("Cancel requested.".to_string());
@@ -139,7 +140,11 @@ impl TakeoutImportState {
     }
 
     pub(crate) async fn is_cancel_requested(&self, job_id: &str) -> bool {
-        self.inner.lock().await.cancel_requested.contains(job_id)
+        self.inner
+            .lock()
+            .await
+            .cancel_requested
+            .is_requested(job_id)
     }
 
     pub(crate) async fn update_job<F>(
@@ -165,14 +170,13 @@ impl TakeoutImportState {
         F: FnOnce(&mut TakeoutImportJobRecord),
     {
         let mut inner = self.inner.lock().await;
-        let source_id = {
+        {
             let job = inner.jobs.get_mut(job_id)?;
             update(job);
             job.finished_at = Some(now_secs());
-            job.source_id
-        };
-        inner.active_by_source.remove(&source_id);
-        inner.cancel_requested.remove(job_id);
+        }
+        inner.active_jobs.release_by_job_id(job_id);
+        inner.cancel_requested.clear(job_id);
         inner.jobs.get(job_id).cloned()
     }
 }

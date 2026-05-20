@@ -11,15 +11,12 @@ canonical provider data lives in `items` plus typed provider tables, while
 provider-neutral derived models serve specific consumers such as analysis and
 archive browsing/export.
 
-The remaining maintainability wins are boundary and lifecycle improvements:
+The remaining maintainability wins are focused on database lifecycle and error
+boundaries:
 
-1. keep remaining Tauri command handlers thin and move workflow logic into
-   services;
-2. extract small in-memory job helpers before considering any generic job
-   runtime;
-3. introduce a current-schema baseline for fresh installs after the archive
+1. introduce a current-schema baseline for fresh installs after the archive
    read-model boundary settles;
-4. continue migrating service and storage APIs toward typed errors.
+2. continue migrating service and storage APIs toward typed errors.
 
 These changes should reduce review cost and future feature friction without
 changing product behavior.
@@ -70,32 +67,6 @@ The issue is not just line count. The expensive pattern is when one file owns
 IPC-adjacent DTOs, validation, SQL, workflow orchestration, mapping, and tests
 at the same time.
 
-### Remaining Thin Boundary Between Commands And Services
-
-Tauri commands mostly work, but some command handlers still own workflow or
-storage orchestration. `lib.rs` manually imports and registers many commands,
-and some domain modules still expose command functions directly beside
-lower-level helpers.
-
-This makes feature work feel convenient at first, but it increases coupling
-between IPC contracts and backend internals.
-
-### Duplicated In-Memory Job State
-
-YouTube source jobs and Telegram Takeout import jobs have similar runtime
-state mechanics:
-
-- active job uniqueness;
-- queued/running/terminal statuses;
-- cancellation;
-- update-and-emit;
-- finish-and-release.
-
-The records and domain phases differ. Takeout jobs involve ingest locks,
-durable provenance, and Telegram session flow; YouTube jobs involve `yt-dlp`
-and source-job events. The common mechanics are worth extracting carefully, but
-a full generic runtime would be premature.
-
 ### Migration History Complexity
 
 The migration layer carries necessary compatibility work:
@@ -111,39 +82,7 @@ right long-term simplification once the read-model boundary is stable.
 
 ## Recommended Architecture Changes
 
-### 1. Keep Tauri Commands As Adapters
-
-For new backend work, use this rule:
-
-- command function: IPC shape, state extraction, basic command-level
-  validation;
-- service function: workflow orchestration and domain decisions;
-- store/query function: SQL and row mapping.
-
-Remaining candidate:
-
-- NotebookLM export query: separate loader selection/querying from export row
-  mapping.
-
-This can be incremental. There is no need to rewrite every command.
-
-### 2. Extract In-Memory Job Helpers Before A Runtime
-
-Start with small reusable helpers for process-local jobs instead of a generic
-`JobRuntime<TRecord, TKey>`. Useful first extractions:
-
-- cancellation token / cancellation check helper;
-- finish-versus-cancel race helper;
-- emit latest record helper;
-- active-by-source or active-by-key guard helper;
-- terminal-state release helper.
-
-Keep YouTube and Takeout record types separate. If these helpers leave obvious
-duplication behind, then a small shared runtime can be considered. Durable or
-resumable jobs remain a separate product decision and should not be bundled
-into this cleanup.
-
-### 3. Introduce A Current-Schema Baseline
+### 1. Introduce A Current-Schema Baseline
 
 After the archive read-model boundary is considered stable, add a fresh-install
 current schema path:
@@ -158,7 +97,7 @@ This is likely the highest-impact Database Schema Simplification task still
 open, but it should be planned carefully because it touches install/upgrade
 semantics.
 
-### 4. Continue Migrating Toward Typed Errors
+### 2. Continue Migrating Toward Typed Errors
 
 The backend already exposes typed `AppError`. Some analysis and LLM internals
 still use `Result<T, String>`.
@@ -183,19 +122,11 @@ message substring classification.
   `archive_read_items`; `youtube_playlist_items` is the right owner.
 - Do not introduce a broad ORM/repository abstraction over every SQL query.
   Clearer service boundaries should be enough.
-- Do not start in-memory job cleanup with a fully generic
-  `JobRuntime<TRecord, TKey>`. Extract cancellation, active-guard, finish, and
-  emit helpers first.
-- Do not make YouTube jobs durable as part of the shared job-runtime cleanup.
-  Persistence/resume is a product slice, not a refactor prerequisite.
 
 ## Suggested Order
 
-1. Finish the remaining adapter/service split for NotebookLM export query.
-2. Extract common in-memory job helpers, then decide whether a shared runtime
-   is still useful.
-3. Plan and implement current-schema baseline.
-4. Gradually convert storage/service APIs from `Result<T, String>` to
+1. Plan and implement current-schema baseline.
+2. Gradually convert storage/service APIs from `Result<T, String>` to
    `AppResult<T>`.
 
 ## Expected Payoff

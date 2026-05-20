@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::job_helpers::{ActiveJobGuards, CancellationState};
 use crate::secret_store::SecretStoreState;
 use crate::sources::{
     load_source, require_source_identity_ready, upsert_youtube_comment_item,
@@ -95,10 +96,9 @@ struct SourceJobKey {
 struct SourceJobStateInner {
     next_job_id: u64,
     jobs: HashMap<String, SourceJobRecord>,
-    active_by_key: HashMap<SourceJobKey, String>,
-    key_by_job_id: HashMap<String, SourceJobKey>,
+    active_jobs: ActiveJobGuards<SourceJobKey>,
     options_by_job_id: HashMap<String, YoutubeSyncOptions>,
-    cancel_requested: HashSet<String>,
+    cancel_requested: CancellationState,
 }
 
 pub(crate) struct SourceJobState {
@@ -125,7 +125,7 @@ impl SourceJobState {
             related_source_id,
         };
         let mut inner = self.inner.lock().await;
-        if let Some(job_id) = inner.active_by_key.get(&key) {
+        if let Some(job_id) = inner.active_jobs.active_job_id(&key) {
             return Err(AppError::conflict(format!(
                 "Source job scope already has active job {job_id}"
             )));
@@ -148,8 +148,7 @@ impl SourceJobState {
             error: None,
         };
 
-        inner.active_by_key.insert(key.clone(), job_id.clone());
-        inner.key_by_job_id.insert(job_id.clone(), key);
+        inner.active_jobs.track(key, job_id.clone());
         inner.options_by_job_id.insert(job_id.clone(), options);
         inner.jobs.insert(job_id, record.clone());
         Ok(record)
@@ -201,7 +200,7 @@ impl SourceJobState {
             return None;
         }
 
-        inner.cancel_requested.insert(job_id.to_string());
+        inner.cancel_requested.request(job_id);
         let job = inner.jobs.get_mut(job_id)?;
         job.status = SourceJobStatus::CancelRequested;
         job.message = Some("Cancel requested.".to_string());
@@ -209,7 +208,11 @@ impl SourceJobState {
     }
 
     pub(crate) async fn is_cancel_requested(&self, job_id: &str) -> bool {
-        self.inner.lock().await.cancel_requested.contains(job_id)
+        self.inner
+            .lock()
+            .await
+            .cancel_requested
+            .is_requested(job_id)
     }
 
     pub(crate) async fn update_job<F>(&self, job_id: &str, update: F) -> Option<SourceJobRecord>
@@ -227,7 +230,7 @@ impl SourceJobState {
         F: FnOnce(&mut SourceJobRecord),
     {
         let mut inner = self.inner.lock().await;
-        let cancel_requested = inner.cancel_requested.contains(job_id);
+        let cancel_requested = inner.cancel_requested.is_requested(job_id);
         {
             let job = inner.jobs.get_mut(job_id)?;
             update(job);
@@ -238,11 +241,9 @@ impl SourceJobState {
             }
             job.finished_at = Some(now_secs());
         }
-        if let Some(key) = inner.key_by_job_id.remove(job_id) {
-            inner.active_by_key.remove(&key);
-        }
+        inner.active_jobs.release_by_job_id(job_id);
         inner.options_by_job_id.remove(job_id);
-        inner.cancel_requested.remove(job_id);
+        inner.cancel_requested.clear(job_id);
         inner.jobs.get(job_id).cloned()
     }
 }

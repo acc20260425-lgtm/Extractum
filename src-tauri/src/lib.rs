@@ -5,6 +5,7 @@ mod db;
 mod error;
 mod forum_topics;
 mod ingest_provenance;
+mod job_helpers;
 mod media;
 mod migrations;
 mod readiness;
