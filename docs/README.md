@@ -1,8 +1,9 @@
 # Extractum Docs
 
 Start here when you need project context. Current product and architecture
-state belongs in the root docs listed below. Historical plans, specs, and
-pre-baseline migrations live in archives.
+state belongs in the root docs listed below. Historical specs and pre-baseline
+migrations live in archives; completed plans remain available through Git
+history.
 
 ## Current State
 
