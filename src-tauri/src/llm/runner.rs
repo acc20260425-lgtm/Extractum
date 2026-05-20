@@ -48,18 +48,22 @@ async fn stream_with_provider<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,
-) -> Result<LlmCompletion, String>
+) -> AppResult<LlmCompletion>
 where
     F: FnMut(&str),
 {
     match profile.provider {
-        ProviderKind::Gemini => stream_gemini_response(request, profile, on_delta).await,
+        ProviderKind::Gemini => stream_gemini_response(request, profile, on_delta)
+            .await
+            .map_err(AppError::from),
         ProviderKind::OmniRoute => {
             let config = OpenAiCompatProviderConfig {
                 provider: ProviderKind::OmniRoute,
                 base_url: profile.base_url.clone(),
             };
-            stream_openai_compat_response(request, profile, on_delta, &config).await
+            stream_openai_compat_response(request, profile, on_delta, &config)
+                .await
+                .map_err(AppError::from)
         }
     }
 }
@@ -67,8 +71,8 @@ where
 pub(crate) async fn run_llm_collect_with_profile(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
-) -> Result<LlmCompletion, String> {
-    validate_request(request).map_err(String::from)?;
+) -> AppResult<LlmCompletion> {
+    validate_request(request)?;
 
     let result = timeout(
         Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
@@ -78,9 +82,9 @@ pub(crate) async fn run_llm_collect_with_profile(
 
     match result {
         Ok(result) => result,
-        Err(_) => Err(format!(
+        Err(_) => Err(AppError::network(format!(
             "LLM request timed out after {LLM_STREAM_TIMEOUT_SECS} seconds"
-        )),
+        ))),
     }
 }
 
@@ -88,11 +92,11 @@ pub(crate) async fn run_llm_stream_with_profile<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     mut on_delta: F,
-) -> Result<LlmCompletion, String>
+) -> AppResult<LlmCompletion>
 where
     F: FnMut(&str),
 {
-    validate_request(request).map_err(String::from)?;
+    validate_request(request)?;
 
     let result = timeout(
         Duration::from_secs(LLM_STREAM_TIMEOUT_SECS),
@@ -102,15 +106,15 @@ where
 
     match result {
         Ok(result) => result,
-        Err(_) => Err(format!(
+        Err(_) => Err(AppError::network(format!(
             "LLM request timed out after {LLM_STREAM_TIMEOUT_SECS} seconds"
-        )),
+        ))),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_effective_model, validate_request};
+    use super::{resolve_effective_model, run_llm_collect_with_profile, validate_request};
     use crate::error::AppErrorKind;
     use crate::llm::{LlmChatRequest, ProviderKind, ResolvedLlmProfile};
 
@@ -143,5 +147,30 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Model override cannot be empty");
+    }
+
+    #[tokio::test]
+    async fn run_llm_collect_returns_typed_validation_error() {
+        let request = LlmChatRequest {
+            request_id: "   ".to_string(),
+            profile_id: None,
+            messages: vec![],
+            model_override: None,
+        };
+        let profile = ResolvedLlmProfile {
+            profile_id: "default".to_string(),
+            provider: ProviderKind::Gemini,
+            default_model: "gemini-2.5-flash".to_string(),
+            api_key: String::new(),
+            base_url: String::new(),
+        };
+
+        let error = match run_llm_collect_with_profile(&request, &profile).await {
+            Ok(_) => panic!("invalid request should fail before provider call"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "request_id cannot be empty");
     }
 }
