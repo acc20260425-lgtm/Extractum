@@ -447,7 +447,7 @@ pub async fn ask_llm_stream(
                 emit_response_event(
                     &failed_handle,
                     &StreamEvent::new(failed_request_id, "failed", failed_provider, failed_model)
-                        .error(error)
+                        .error(error.to_string())
                         .build(),
                 );
             }

@@ -583,6 +583,7 @@ async fn run_map_phase(
                     Ok::<(usize, ChunkSummary), ReportRunError>((index, summary))
                 }
                 Err(LlmRequestError::Failed(error)) => {
+                    let error = error.to_string();
                     RunEvent::new(run_id, "failed", "map")
                         .request_id(failed_request_id)
                         .message(format!("Chunk {} of {} failed.", index + 1, total_chunks))
@@ -718,6 +719,7 @@ async fn run_reduce_phase(
     {
         Ok(completion) => completion,
         Err(LlmRequestError::Failed(error)) => {
+            let error = error.to_string();
             RunEvent::new(run_id, "failed", "reduce")
                 .request_id(failed_request_id)
                 .message("Final report generation failed.".to_string())

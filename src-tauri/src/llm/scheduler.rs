@@ -6,6 +6,8 @@ use std::sync::Arc;
 use serde::Serialize;
 use tokio::sync::{Mutex, Notify};
 
+use crate::error::{AppError, AppResult};
+
 const DEFAULT_CONCURRENCY_LIMIT: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -100,9 +102,10 @@ impl LlmRequestControl {
         self.cancelled.load(Ordering::SeqCst)
     }
 
-    pub async fn run_cancellable<Fut, T>(&self, future: Fut) -> Result<T, LlmRequestError>
+    pub async fn run_cancellable<Fut, T, E>(&self, future: Fut) -> Result<T, LlmRequestError>
     where
-        Fut: Future<Output = Result<T, String>>,
+        Fut: Future<Output = Result<T, E>>,
+        E: Into<AppError>,
     {
         let cancelled = self.cancel_notify.notified();
         if self.is_cancelled() {
@@ -110,7 +113,7 @@ impl LlmRequestControl {
         }
 
         tokio::select! {
-            result = future => result.map_err(LlmRequestError::Failed),
+            result = future => result.map_err(|error| LlmRequestError::Failed(error.into())),
             _ = cancelled => Err(LlmRequestError::Cancelled),
         }
     }
@@ -119,7 +122,7 @@ impl LlmRequestControl {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LlmRequestError {
     Cancelled,
-    Failed(String),
+    Failed(AppError),
 }
 
 type QueueCallback = Arc<dyn Fn(usize) + Send + Sync>;
@@ -319,7 +322,7 @@ impl LlmSchedulerState {
         &self,
         meta: LlmRequestMetadata,
         on_queue: Q,
-    ) -> Result<LlmRequestControl, String>
+    ) -> AppResult<LlmRequestControl>
     where
         Q: Fn(usize) + Send + Sync + 'static,
     {
@@ -331,10 +334,10 @@ impl LlmSchedulerState {
         let updates = {
             let mut inner = self.inner.lock().await;
             if inner.requests.contains_key(&request_id) {
-                return Err(format!(
+                return Err(AppError::conflict(format!(
                     "LLM request '{}' ({request_kind:?}) is already registered",
                     request_id,
-                ));
+                )));
             }
 
             inner.requests.insert(
@@ -504,6 +507,7 @@ mod tests {
         LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority,
         LlmRequestSnapshotState, LlmSchedulerState,
     };
+    use crate::error::{AppError, AppErrorKind};
 
     fn metadata(
         request_id: &str,
@@ -1170,10 +1174,42 @@ mod tests {
         assert_eq!(first.await.expect("join first"), Ok("done"));
         assert_eq!(
             second.await.expect("join second"),
-            Err(LlmRequestError::Failed("boom".to_string()))
+            Err(LlmRequestError::Failed(AppError::from("boom")))
         );
         assert_eq!(third.await.expect("join third"), Ok("done"));
 
         assert_scheduler_empty(&scheduler).await;
+    }
+
+    #[tokio::test]
+    async fn failed_requests_preserve_typed_error_kind() {
+        let scheduler = LlmSchedulerState::new();
+
+        let result = scheduler
+            .run_request(
+                metadata(
+                    "typed-failure",
+                    "default",
+                    LlmRequestPriority::Background,
+                    LlmRequestKind::ProviderTest,
+                ),
+                |_| {},
+                |control| async move {
+                    control
+                        .run_cancellable(async move {
+                            Err::<(), _>(AppError::validation("bad request"))
+                        })
+                        .await
+                },
+            )
+            .await;
+
+        let error = match result {
+            Err(LlmRequestError::Failed(error)) => error,
+            other => panic!("expected typed failed request, got {other:?}"),
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "bad request");
     }
 }

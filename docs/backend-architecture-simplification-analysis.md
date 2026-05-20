@@ -110,8 +110,9 @@ Current status:
 - remaining analysis string errors are limited to test-only snapshot source
   resolution and pure parser helpers; shared compression helpers still return
   `String` at the low-level utility boundary;
-- LLM provider and scheduler internals still use string errors across provider
-  calls and streaming boundaries.
+- LLM scheduler request failures now carry `AppError`; remaining LLM string
+  errors are concentrated in runner/provider calls and streaming parser
+  boundaries.
 
 Recommended path:
 

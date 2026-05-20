@@ -499,7 +499,7 @@ pub async fn ask_analysis_run_question(
             }
             Err(LlmRequestError::Failed(error)) => {
                 ChatEvent::new(failed_request_id, run_id, "failed")
-                    .error(error)
+                    .error(error.to_string())
                     .emit(&failed_handle);
             }
             Err(LlmRequestError::Cancelled) => {
