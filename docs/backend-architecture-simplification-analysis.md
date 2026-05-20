@@ -102,6 +102,15 @@ semantics.
 The backend already exposes typed `AppError`. Some analysis and LLM internals
 still use `Result<T, String>`.
 
+Current status:
+
+- analysis report store helpers now return `AppResult` for database, not-found,
+  and internal snapshot errors;
+- remaining analysis string errors are concentrated in corpus loading,
+  trace/compression helpers, and pure JSON parsing helpers;
+- LLM provider and scheduler internals still use string errors across provider
+  calls and streaming boundaries.
+
 Recommended path:
 
 - keep pure parser/formatting helpers free to return `String` where useful;

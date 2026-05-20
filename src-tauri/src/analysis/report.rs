@@ -78,7 +78,7 @@ async fn capture_report_corpus(
         .map_err(|error| {
             ReportRunError::CaptureFailed(sanitize_snapshot_error(
                 SNAPSHOT_CAPTURE_FAILED_MESSAGE,
-                &error,
+                &error.to_string(),
             ))
         })
 }
@@ -764,7 +764,7 @@ async fn run_report_pipeline(
         None,
     )
     .await
-    .map_err(ReportRunError::Failed)?;
+    .map_err(|error| ReportRunError::Failed(error.to_string()))?;
 
     RunEvent::new(run_id, "started", "load_items")
         .message(format!(
@@ -828,7 +828,7 @@ async fn run_report_pipeline(
         Some(now_secs()),
     )
     .await
-    .map_err(ReportRunError::Failed)?;
+    .map_err(|error| ReportRunError::Failed(error.to_string()))?;
 
     ctx.emit(
         RunEvent::new(run_id, "completed", "persist")
@@ -892,7 +892,7 @@ async fn cancel_run(handle: &AppHandle, run_id: i64, message: String) {
         .emit(handle);
 }
 
-pub(crate) async fn mark_interrupted_analysis_runs(pool: &Pool<Sqlite>) -> Result<(), String> {
+pub(crate) async fn mark_interrupted_analysis_runs(pool: &Pool<Sqlite>) -> AppResult<()> {
     sqlx::query(
         r#"
         UPDATE analysis_runs
@@ -907,7 +907,7 @@ pub(crate) async fn mark_interrupted_analysis_runs(pool: &Pool<Sqlite>) -> Resul
     .bind(ANALYSIS_STATUS_RUNNING)
     .execute(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
     Ok(())
 }
 
@@ -1003,7 +1003,7 @@ pub(crate) async fn start_analysis_report_run(
                     .bind(source_id)
                     .fetch_one(&pool)
                     .await
-                    .map_err(|e| e.to_string())?;
+                    .map_err(AppError::database)?;
             if source_exists == 0 {
                 return Err(AppError::not_found(format!("Source {source_id} not found")));
             }
@@ -1013,7 +1013,7 @@ pub(crate) async fn start_analysis_report_run(
                     .bind(source_id)
                     .fetch_optional(&pool)
                     .await
-                    .map_err(|e| e.to_string())?
+                    .map_err(AppError::database)?
                     .flatten()
                     .filter(|title| !title.trim().is_empty())
                     .unwrap_or_else(|| format!("Source {source_id}"));

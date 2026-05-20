@@ -13,8 +13,9 @@ use super::{
     DEFAULT_REPORT_TEMPLATE_NAME, TEMPLATE_KIND_REPORT,
 };
 use crate::compression::{compress_text, decompress_text};
+use crate::error::{internal_error, AppError, AppResult};
 
-async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> Result<bool, String> {
+async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> AppResult<bool> {
     sqlx::query_scalar::<_, i64>(
         r#"
         SELECT EXISTS(
@@ -28,10 +29,10 @@ async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> Result<bool, Str
     .fetch_one(pool)
     .await
     .map(|exists| exists != 0)
-    .map_err(|e| e.to_string())
+    .map_err(AppError::database)
 }
 
-pub(crate) async fn ensure_builtin_report_template(pool: &Pool<Sqlite>) -> Result<(), String> {
+pub(crate) async fn ensure_builtin_report_template(pool: &Pool<Sqlite>) -> AppResult<()> {
     if builtin_report_template_exists(pool).await? {
         return Ok(());
     }
@@ -58,25 +59,22 @@ pub(crate) async fn ensure_builtin_report_template(pool: &Pool<Sqlite>) -> Resul
     .bind(now)
     .execute(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     Ok(())
 }
 
-pub(crate) async fn ensure_sources_exist(
-    pool: &Pool<Sqlite>,
-    source_ids: &[i64],
-) -> Result<(), String> {
+pub(crate) async fn ensure_sources_exist(pool: &Pool<Sqlite>, source_ids: &[i64]) -> AppResult<()> {
     for source_id in source_ids {
         let exists =
             sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)")
                 .bind(source_id)
                 .fetch_one(pool)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(AppError::database)?;
 
         if exists == 0 {
-            return Err(format!("Source {source_id} not found"));
+            return Err(AppError::not_found(format!("Source {source_id} not found")));
         }
     }
 
@@ -214,7 +212,7 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
 pub(crate) async fn fetch_run_row(
     pool: &Pool<Sqlite>,
     run_id: i64,
-) -> Result<Option<AnalysisRunRow>, String> {
+) -> AppResult<Option<AnalysisRunRow>> {
     sqlx::query_as(
         r#"
         SELECT
@@ -260,13 +258,13 @@ pub(crate) async fn fetch_run_row(
     .bind(run_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(AppError::database)
 }
 
 pub(crate) async fn fetch_prompt_template(
     pool: &Pool<Sqlite>,
     template_id: i64,
-) -> Result<AnalysisPromptTemplate, String> {
+) -> AppResult<AnalysisPromptTemplate> {
     ensure_builtin_report_template(pool).await?;
 
     sqlx::query_as(
@@ -279,14 +277,14 @@ pub(crate) async fn fetch_prompt_template(
     .bind(template_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("Analysis prompt template {template_id} not found"))
+    .map_err(AppError::database)?
+    .ok_or_else(|| AppError::not_found(format!("Analysis prompt template {template_id} not found")))
 }
 
 pub(crate) async fn fetch_source_group(
     pool: &Pool<Sqlite>,
     group_id: i64,
-) -> Result<Option<AnalysisSourceGroup>, String> {
+) -> AppResult<Option<AnalysisSourceGroup>> {
     let group = sqlx::query_as::<_, AnalysisSourceGroupRow>(
         r#"
         SELECT id, name, source_type, created_at, updated_at
@@ -297,7 +295,7 @@ pub(crate) async fn fetch_source_group(
     .bind(group_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     let Some(group) = group else {
         return Ok(None);
@@ -320,7 +318,7 @@ pub(crate) async fn fetch_source_group(
     .bind(group_id)
     .fetch_all(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     Ok(Some(AnalysisSourceGroup {
         id: group.id,
@@ -363,7 +361,7 @@ pub(crate) struct DuplicateRunLookup<'a> {
 pub(crate) async fn find_active_duplicate_run(
     pool: &Pool<Sqlite>,
     lookup: &DuplicateRunLookup<'_>,
-) -> Result<Option<i64>, String> {
+) -> AppResult<Option<i64>> {
     sqlx::query_scalar::<_, i64>(
         r#"
         SELECT id
@@ -401,7 +399,7 @@ pub(crate) async fn find_active_duplicate_run(
     .bind(ANALYSIS_STATUS_RUNNING)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(AppError::database)
 }
 
 pub(crate) struct AnalysisRunInsert<'a> {
@@ -421,7 +419,7 @@ pub(crate) struct AnalysisRunInsert<'a> {
 pub(crate) async fn insert_analysis_run(
     pool: &Pool<Sqlite>,
     insert: &AnalysisRunInsert<'_>,
-) -> Result<i64, String> {
+) -> AppResult<i64> {
     let created_at = now_secs();
     sqlx::query_scalar(
         r#"
@@ -464,7 +462,7 @@ pub(crate) async fn insert_analysis_run(
     .bind(created_at)
     .fetch_one(pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(AppError::database)
 }
 
 pub(crate) fn sanitize_snapshot_error(category: &str, raw: &str) -> String {
@@ -518,28 +516,28 @@ pub(crate) fn sanitize_snapshot_error(category: &str, raw: &str) -> String {
     }
 }
 
-fn validate_snapshot_message(message: &CorpusMessage) -> Result<(), String> {
+fn validate_snapshot_message(message: &CorpusMessage) -> AppResult<()> {
     if message.r#ref.trim().is_empty() {
-        return Err("Snapshot message ref is required".to_string());
+        return Err(internal_error("Snapshot message ref is required"));
     }
     if message.content.trim().is_empty() {
-        return Err(format!(
+        return Err(internal_error(format!(
             "Snapshot message {} content is required",
             message.r#ref
-        ));
+        )));
     }
     if message.item_kind.as_deref().unwrap_or("").trim().is_empty() {
-        return Err(format!(
+        return Err(internal_error(format!(
             "Snapshot message {} item_kind is required",
             message.r#ref
-        ));
+        )));
     }
     let source_type = message.source_type.as_deref().unwrap_or("").trim();
     if source_type.is_empty() {
-        return Err(format!(
+        return Err(internal_error(format!(
             "Snapshot message {} source_type is required",
             message.r#ref
-        ));
+        )));
     }
     if matches!(source_type, "telegram" | "youtube")
         && message
@@ -549,10 +547,10 @@ fn validate_snapshot_message(message: &CorpusMessage) -> Result<(), String> {
             .trim()
             .is_empty()
     {
-        return Err(format!(
+        return Err(internal_error(format!(
             "Snapshot message {} source_subtype is required for {source_type}",
             message.r#ref
-        ));
+        )));
     }
     Ok(())
 }
@@ -560,7 +558,7 @@ fn validate_snapshot_message(message: &CorpusMessage) -> Result<(), String> {
 async fn load_run_snapshot_messages_on_transaction(
     tx: &mut sqlx::Transaction<'_, Sqlite>,
     run_id: i64,
-) -> Result<Vec<CorpusMessage>, String> {
+) -> AppResult<Vec<CorpusMessage>> {
     let rows: Vec<StoredRunSnapshotRow> = sqlx::query_as(
         r#"
         SELECT
@@ -583,7 +581,7 @@ async fn load_run_snapshot_messages_on_transaction(
     .bind(run_id)
     .fetch_all(&mut **tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     rows.into_iter()
         .map(|row| {
@@ -593,7 +591,7 @@ async fn load_run_snapshot_messages_on_transaction(
                 external_id: row.external_id,
                 published_at: row.published_at,
                 author: row.author,
-                content: decompress_text(&row.content_zstd)?,
+                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
                 r#ref: row.r#ref,
                 item_kind: row.item_kind,
                 source_type: row.source_type,
@@ -609,16 +607,16 @@ pub(crate) async fn capture_run_snapshot(
     run_id: i64,
     scope_label: &str,
     corpus: &[CorpusMessage],
-) -> Result<Vec<CorpusMessage>, String> {
+) -> AppResult<Vec<CorpusMessage>> {
     if corpus.is_empty() {
-        return Err("Snapshot capture failed: empty corpus".to_string());
+        return Err(internal_error("Snapshot capture failed: empty corpus"));
     }
 
     for message in corpus {
         validate_snapshot_message(message)?;
     }
 
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
 
     sqlx::query(
         r#"
@@ -633,16 +631,16 @@ pub(crate) async fn capture_run_snapshot(
     .bind(run_id)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     sqlx::query("DELETE FROM analysis_run_messages WHERE run_id = ?")
         .bind(run_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
 
     for message in corpus {
-        let content_zstd = compress_text(&message.content)?;
+        let content_zstd = compress_text(&message.content).map_err(internal_error)?;
         sqlx::query(
             r#"
             INSERT INTO analysis_run_messages (
@@ -676,12 +674,14 @@ pub(crate) async fn capture_run_snapshot(
         .bind(message.metadata_zstd.as_deref())
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
     }
 
     let captured = load_run_snapshot_messages_on_transaction(&mut tx, run_id).await?;
     if captured.is_empty() {
-        return Err("Snapshot capture failed: reloaded snapshot is empty".to_string());
+        return Err(internal_error(
+            "Snapshot capture failed: reloaded snapshot is empty",
+        ));
     }
 
     sqlx::query(
@@ -690,9 +690,9 @@ pub(crate) async fn capture_run_snapshot(
     .bind(run_id)
     .execute(&mut *tx)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(AppError::database)?;
     Ok(captured)
 }
 
@@ -702,7 +702,7 @@ pub(crate) async fn persist_run_snapshot(
     run_id: i64,
     scope_label: &str,
     corpus: &[CorpusMessage],
-) -> Result<(), String> {
+) -> AppResult<()> {
     capture_run_snapshot(pool, run_id, scope_label, corpus)
         .await
         .map(|_| ())
@@ -713,7 +713,7 @@ pub(crate) async fn mark_run_capture_failed(
     run_id: i64,
     snapshot_error: &str,
     completed_at: i64,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let sanitized = sanitize_snapshot_error("Snapshot capture failed", snapshot_error);
     sqlx::query(
         r#"
@@ -733,7 +733,7 @@ pub(crate) async fn mark_run_capture_failed(
     .bind(run_id)
     .execute(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
     Ok(())
 }
 
@@ -745,7 +745,7 @@ pub(crate) async fn set_run_status(
     trace_data_zstd: Option<&[u8]>,
     error: Option<&str>,
     completed_at: Option<i64>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     sqlx::query(
         r#"
         UPDATE analysis_runs
@@ -766,49 +766,53 @@ pub(crate) async fn set_run_status(
     .bind(run_id)
     .execute(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
     Ok(())
 }
 
-pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> Result<(), String> {
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> AppResult<()> {
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
 
     sqlx::query("DELETE FROM analysis_chat_messages WHERE run_id = ?")
         .bind(run_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
 
     sqlx::query("DELETE FROM analysis_run_messages WHERE run_id = ?")
         .bind(run_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::database)?;
 
     let deleted = sqlx::query("DELETE FROM analysis_runs WHERE id = ?")
         .bind(run_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::database)?
         .rows_affected();
 
     if deleted == 0 {
-        return Err(format!("Analysis run {run_id} not found"));
+        return Err(AppError::not_found(format!(
+            "Analysis run {run_id} not found"
+        )));
     }
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(AppError::database)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        capture_run_snapshot, delete_saved_run, map_run_detail, map_run_summary,
-        mark_run_capture_failed, resolve_run_scope_label, sanitize_snapshot_error, set_run_status,
+        capture_run_snapshot, delete_saved_run, ensure_sources_exist, fetch_prompt_template,
+        map_run_detail, map_run_summary, mark_run_capture_failed, resolve_run_scope_label,
+        sanitize_snapshot_error, set_run_status,
     };
     use crate::analysis::models::{
         AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, CorpusMessage,
     };
+    use crate::error::AppErrorKind;
 
     fn sample_run_row() -> AnalysisRunRow {
         AnalysisRunRow {
@@ -894,6 +898,41 @@ mod tests {
             .execute(&pool)
             .await
             .expect("insert run");
+        pool
+    }
+
+    async fn template_store_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_prompt_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                template_kind TEXT NOT NULL,
+                body TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                is_builtin BOOLEAN NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create templates");
+        pool
+    }
+
+    async fn source_store_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query("CREATE TABLE sources (id INTEGER PRIMARY KEY)")
+            .execute(&pool)
+            .await
+            .expect("create sources");
         pool
     }
 
@@ -985,7 +1024,7 @@ mod tests {
             Ok(_) => panic!("missing item_kind should fail"),
             Err(error) => error,
         };
-        assert!(error.contains("item_kind"));
+        assert!(error.message.contains("item_kind"));
 
         let marker: Option<String> =
             sqlx::query_scalar("SELECT snapshot_captured_at FROM analysis_runs WHERE id = 1")
@@ -1000,6 +1039,61 @@ mod tests {
                 .await
                 .expect("count messages");
         assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn ensure_sources_exist_returns_typed_not_found_error() {
+        let pool = source_store_pool().await;
+
+        let error = ensure_sources_exist(&pool, &[7])
+            .await
+            .expect_err("missing source should fail");
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert_eq!(error.message, "Source 7 not found");
+    }
+
+    #[tokio::test]
+    async fn fetch_prompt_template_returns_typed_not_found_error() {
+        let pool = template_store_pool().await;
+
+        let error = match fetch_prompt_template(&pool, 99).await {
+            Ok(_) => panic!("missing prompt template should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert_eq!(error.message, "Analysis prompt template 99 not found");
+    }
+
+    #[tokio::test]
+    async fn delete_saved_run_returns_typed_not_found_error() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query("CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY)")
+            .execute(&pool)
+            .await
+            .expect("create runs");
+        sqlx::query(
+            "CREATE TABLE analysis_chat_messages (id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL)",
+        )
+        .execute(&pool)
+        .await
+        .expect("create chat messages");
+        sqlx::query(
+            "CREATE TABLE analysis_run_messages (run_id INTEGER NOT NULL, ref TEXT NOT NULL)",
+        )
+        .execute(&pool)
+        .await
+        .expect("create run messages");
+
+        let error = delete_saved_run(&pool, 42)
+            .await
+            .expect_err("missing run should fail");
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert_eq!(error.message, "Analysis run 42 not found");
     }
 
     #[tokio::test]
