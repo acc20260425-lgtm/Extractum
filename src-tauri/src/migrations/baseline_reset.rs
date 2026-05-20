@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::error::{AppError, AppResult};
 use sha2::{Digest, Sha384};
 
@@ -94,6 +92,37 @@ pub(super) async fn classify_migration_history(
 
 pub(super) trait BaselineResetBackup {
     fn create_backup(&self, db_path: &std::path::Path) -> AppResult<std::path::PathBuf>;
+}
+
+pub(super) struct FileSystemBaselineResetBackup;
+
+impl BaselineResetBackup for FileSystemBaselineResetBackup {
+    fn create_backup(&self, db_path: &std::path::Path) -> AppResult<std::path::PathBuf> {
+        let timestamp = backup_timestamp();
+        let file_name = db_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| AppError::internal("Database path has no valid file name"))?;
+        let backup_path =
+            db_path.with_file_name(format!("{file_name}.pre-baseline-reset-{timestamp}.bak"));
+        std::fs::copy(db_path, &backup_path).map_err(|error| {
+            AppError::internal(format!("Could not create baseline reset backup: {error}"))
+        })?;
+        Ok(backup_path)
+    }
+}
+
+fn backup_timestamp() -> String {
+    let now = time::OffsetDateTime::now_utc();
+    format!(
+        "{:04}{:02}{:02}-{:02}{:02}{:02}",
+        now.year(),
+        u8::from(now.month()),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second()
+    )
 }
 
 pub(super) async fn apply_baseline_reset_if_needed<B: BaselineResetBackup>(

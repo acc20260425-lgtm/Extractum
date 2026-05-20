@@ -13,15 +13,13 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 const APP_IDENTIFIER: &str = "org.ai.extractum";
 const DB_FILENAME: &str = "extractum.db";
-#[allow(dead_code)]
 const BASELINE_VERSION: i64 = 1;
-#[allow(dead_code)]
 const BASELINE_DESCRIPTION: &str = "current schema baseline";
-#[allow(dead_code)]
 const BASELINE_SQL: &str = include_str!("../migrations/0001_current_schema_baseline.sql");
 
 /// Before the sql plugin runs, remove stale migration records whose SQL has changed.
 /// This allows us to update migration files without deleting the database.
+#[allow(dead_code)]
 async fn patch_migrations(db_path: &Path) -> crate::error::AppResult<()> {
     use sqlx::SqlitePool;
 
@@ -50,6 +48,7 @@ async fn patch_migrations(db_path: &Path) -> crate::error::AppResult<()> {
     analysis_documents::apply_analysis_documents_if_needed(&url).await
 }
 
+#[allow(dead_code)]
 async fn apply_regular_sql_migrations_before_runner(
     db_url: &str,
     after_version: i64,
@@ -68,6 +67,7 @@ async fn apply_regular_sql_migrations_before_runner(
     .await
 }
 
+#[allow(dead_code)]
 async fn apply_regular_sql_migrations_before_runner_on_connection(
     conn: &mut sqlx::SqliteConnection,
     after_version: i64,
@@ -120,10 +120,26 @@ pub fn prepare_database() -> crate::error::AppResult<()> {
     let Some(db_path) = app_config_db_path() else {
         return Ok(());
     };
-    tauri::async_runtime::block_on(patch_migrations(&db_path))
+    prepare_database_at_path(&db_path)
 }
 
-#[allow(dead_code)]
+fn prepare_database_at_path(db_path: &Path) -> crate::error::AppResult<()> {
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
+    }
+
+    if !db_path.exists() {
+        return Ok(());
+    }
+
+    tauri::async_runtime::block_on(baseline_reset::apply_baseline_reset_if_needed(
+        db_path,
+        BASELINE_SQL,
+        &baseline_reset::FileSystemBaselineResetBackup,
+    ))
+}
+
 fn current_schema_baseline_migration() -> Migration {
     Migration {
         version: BASELINE_VERSION,
@@ -134,190 +150,17 @@ fn current_schema_baseline_migration() -> Migration {
 }
 
 pub fn build_migrations() -> Vec<Migration> {
-    vec![
-        Migration {
-            version: 1,
-            description: "initialize storage",
-            sql: include_str!("../migrations/1.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "add is_member to sources",
-            sql: include_str!("../migrations/2.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 3,
-            description: "add accounts table",
-            sql: include_str!("../migrations/3.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 4,
-            description: "add last synced at to sources",
-            sql: include_str!("../migrations/4.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 5,
-            description: "add analysis storage",
-            sql: include_str!("../migrations/5.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 6,
-            description: "add analysis source groups",
-            sql: include_str!("../migrations/6.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 7,
-            description: "add source group id to analysis runs",
-            sql: include_str!("../migrations/7.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 8,
-            description: "add analysis chat history",
-            sql: include_str!("../migrations/8.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 9,
-            description: "add media aware item metadata",
-            sql: include_str!("../migrations/9.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 10,
-            description: "add analysis run snapshots",
-            sql: include_str!("../migrations/10.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 11,
-            description: "add telegram source kind",
-            sql: include_str!("../migrations/11.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 12,
-            description: "scope source uniqueness by account",
-            sql: include_str!("../migrations/12.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 13,
-            description: "add telegram item context metadata",
-            sql: include_str!("../migrations/13.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 14,
-            description: "add telegram forum topics",
-            sql: include_str!("../migrations/14.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 15,
-            description: "add provider source subtype",
-            sql: include_str!("../migrations/15.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 16,
-            description: "add youtube source foundation",
-            sql: include_str!("../migrations/16.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 17,
-            description: "add youtube corpus mode to analysis runs",
-            sql: include_str!("../migrations/17.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 18,
-            description: "add source identity bridge schema",
-            sql: include_str!("../migrations/18.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 19,
-            description: "remove legacy telegram source kind",
-            sql: include_str!("../migrations/19.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 20,
-            description: "add youtube typed source metadata",
-            sql: include_str!("../migrations/20.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 21,
-            description: "add telegram item native identity",
-            sql: include_str!("../migrations/21.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 22,
-            description: "materialize telegram topic memberships",
-            sql: include_str!("../migrations/22.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 23,
-            description: "add ingest provenance foundation",
-            sql: include_str!("../migrations/23.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 24,
-            description: "add provider neutral analysis documents",
-            sql: include_str!("../migrations/24.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 25,
-            description: "harden analysis run snapshots",
-            sql: include_str!("../migrations/25.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 26,
-            description: "add provider neutral archive read model",
-            sql: include_str!("../migrations/26.sql"),
-            kind: MigrationKind::Up,
-        },
-    ]
+    vec![current_schema_baseline_migration()]
 }
 
 #[cfg(test)]
 pub(crate) async fn apply_all_migrations_for_test_pool(
     pool: &sqlx::SqlitePool,
 ) -> crate::error::AppResult<()> {
-    let mut conn = pool
-        .acquire()
+    sqlx::raw_sql(BASELINE_SQL)
+        .execute(pool)
         .await
         .map_err(crate::error::AppError::database)?;
-    let conn = &mut *conn;
-    source_identity_cleanup::apply_standard_migrations_before_plugin_on_connection(
-        conn,
-        build_migrations(),
-    )
-    .await?;
-    source_identity_cleanup::apply_source_identity_cleanup_on_connection(conn).await?;
-    youtube_typed_source_metadata::apply_youtube_typed_source_metadata_on_connection(conn).await?;
-    telegram_item_native_identity::apply_telegram_item_native_identity_on_connection(conn).await?;
-    topic_membership_materialization::apply_topic_membership_materialization_on_connection(conn)
-        .await?;
-
-    apply_regular_sql_migrations_before_runner_on_connection(conn, 22, 24).await?;
-    analysis_documents::apply_analysis_documents_on_connection(conn).await?;
-    apply_regular_sql_migrations_before_runner_on_connection(conn, 24, i64::MAX).await?;
-
     Ok(())
 }
 
@@ -325,7 +168,7 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
 mod tests {
     use super::{
         apply_all_migrations_for_test_pool, build_migrations, checksum_matches_line_ending_variant,
-        current_schema_baseline_migration,
+        current_schema_baseline_migration, prepare_database_at_path,
     };
     use sha2::{Digest, Sha384};
 
@@ -337,63 +180,6 @@ mod tests {
         assert_eq!(migration.description, "current schema baseline");
         assert!(migration.sql.contains("CREATE TABLE accounts"));
         assert!(migration.sql.contains("CREATE TABLE archive_read_items"));
-    }
-
-    async fn apply_baseline_for_test_pool(pool: &sqlx::SqlitePool) {
-        sqlx::raw_sql(current_schema_baseline_migration().sql)
-            .execute(pool)
-            .await
-            .expect("apply current schema baseline");
-    }
-
-    async fn schema_signature(pool: &sqlx::SqlitePool) -> Vec<(String, String, String)> {
-        let mut rows: Vec<(String, String, String)> = sqlx::query_as(
-            r#"
-            SELECT type, name, COALESCE(sql, '')
-            FROM sqlite_master
-            WHERE name NOT LIKE 'sqlite_%'
-              AND name != '_sqlx_migrations'
-            ORDER BY type ASC, name ASC
-            "#,
-        )
-        .fetch_all(pool)
-        .await
-        .expect("read schema signature");
-
-        for row in &mut rows {
-            row.2 = normalize_schema_sql(&row.2);
-        }
-
-        rows
-    }
-
-    fn normalize_schema_sql(sql: &str) -> String {
-        sql.split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .replace(" ,", ",")
-            .replace("( ", "(")
-            .replace(" )", ")")
-    }
-
-    #[tokio::test]
-    async fn current_schema_baseline_matches_legacy_migrated_schema() {
-        let legacy_pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect legacy memory sqlite");
-        apply_all_migrations_for_test_pool(&legacy_pool)
-            .await
-            .expect("apply legacy migrations");
-
-        let baseline_pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect baseline memory sqlite");
-        apply_baseline_for_test_pool(&baseline_pool).await;
-
-        assert_eq!(
-            schema_signature(&baseline_pool).await,
-            schema_signature(&legacy_pool).await
-        );
     }
 
     #[tokio::test]
@@ -773,13 +559,31 @@ mod tests {
     }
 
     #[test]
-    fn build_migrations_contains_all_versions_for_sqlx_validation() {
-        let versions = build_migrations()
-            .into_iter()
+    fn build_migrations_starts_at_current_schema_baseline() {
+        let migrations = build_migrations();
+        let versions = migrations
+            .iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, (1_i64..=26_i64).collect::<Vec<_>>());
+        assert_eq!(versions, vec![1]);
+        assert_eq!(migrations[0].description, "current schema baseline");
+        assert!(migrations[0]
+            .sql
+            .contains("CREATE TABLE archive_read_items"));
+    }
+
+    #[test]
+    fn prepare_database_skips_cutover_when_database_file_is_missing() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let db_path = temp_dir.path().join("extractum.db");
+
+        prepare_database_at_path(&db_path).expect("prepare missing database path");
+
+        assert!(
+            !db_path.exists(),
+            "prepare_database must not create a DB before the SQL plugin"
+        );
     }
 
     #[tokio::test]

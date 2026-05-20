@@ -712,7 +712,7 @@ git commit -m "feat: add baseline migration cutover"
 - Modify: `src-tauri/src/migrations/baseline_reset.rs`
 - Test: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Write failing active migration list and no-file tests**
+- [x] **Step 1: Write failing active migration list and no-file tests**
 
 Replace `build_migrations_contains_all_versions_for_sqlx_validation` with:
 
@@ -745,7 +745,7 @@ fn prepare_database_skips_cutover_when_database_file_is_missing() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 
@@ -758,7 +758,7 @@ Expected: first test fails because `build_migrations()` still returns old
 versions 1 through 26; second test fails because `prepare_database_at_path`
 does not exist.
 
-- [ ] **Step 3: Add filesystem backup implementation**
+- [x] **Step 3: Add filesystem backup implementation**
 
 Add this to `baseline_reset.rs`:
 
@@ -795,7 +795,7 @@ fn backup_timestamp() -> String {
 }
 ```
 
-- [ ] **Step 4: Replace active migration list and prepare path**
+- [x] **Step 4: Replace active migration list and prepare path**
 
 In `migrations.rs`, change `build_migrations()` to:
 
@@ -837,7 +837,7 @@ Keep the old legacy migration helper functions in this task so the Task 1
 parity commit remains reviewable. They are removed after the archive move in
 Task 4.
 
-- [ ] **Step 5: Update test-only migration helper and remove parity-only test**
+- [x] **Step 5: Update test-only migration helper and remove parity-only test**
 
 Delete the Task 1-only test `current_schema_baseline_matches_legacy_migrated_schema`.
 The baseline parity was proven before the active path switched, and after this
@@ -858,7 +858,7 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
 }
 ```
 
-- [ ] **Step 6: Run targeted active-path tests**
+- [x] **Step 6: Run targeted active-path tests**
 
 Run:
 
@@ -870,7 +870,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::current_schem
 
 Expected: all pass.
 
-- [ ] **Step 7: Run source fixture smoke tests that rely on migrated schema**
+- [x] **Step 7: Run source fixture smoke tests that rely on migrated schema**
 
 Run:
 
@@ -883,7 +883,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::tests::fresh_schema_
 
 Expected: all pass with the baseline-backed test helper.
 
-- [ ] **Step 8: Commit Task 3**
+- [x] **Step 8: Commit Task 3**
 
 Run:
 
