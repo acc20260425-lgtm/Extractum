@@ -220,4 +220,4 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 
 Related deep dive: `docs/takeout-source-import.md`.
 
-Recent verification: `docs/superpowers/plans/2026-05-14-analysis-chunk-stream-placement.md`.
+Recent retained verification notes live under `docs/superpowers/verification/`.

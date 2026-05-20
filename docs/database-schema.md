@@ -51,13 +51,13 @@ Implemented ingest providers are `telegram` and `youtube`.
 
 Notes:
 
-- older rows that used `source_type = 'telegram_channel'` are migrated to `source_type = 'telegram'`;
-- migration `15.sql` adds `source_subtype` and backfills existing Telegram rows
-  from the legacy Telegram subtype mirror;
-- migration `18.sql` adds typed Telegram identity tables and a startup repair
-  creates the canonical Telegram unique index only after duplicate preflight;
-- migration `19.sql` is runner-managed by Rust and removes the old Telegram
-  subtype compatibility mirror from the current `sources` schema;
+- current supported databases use `source_type = 'telegram'` with
+  provider-local subtype in `source_subtype`;
+- the active baseline already contains typed Telegram identity tables and the
+  canonical Telegram uniqueness rules;
+- pre-baseline compatibility migrations that introduced `source_subtype`,
+  typed Telegram identity, and the final `sources` shape are archived under
+  `docs/archive/migrations-pre-baseline-reset/`;
 - Telegram source subtype is canonical in `sources.source_subtype`;
 - Telegram operational peer identity lives in `telegram_sources`.
 - new Telegram source rows keep `metadata_zstd` `NULL`; old Telegram blobs may
@@ -343,8 +343,10 @@ Notes:
   `(source_id, external_id)`.
 - `items.external_id` remains a compatibility/display/debug value for Telegram
   messages and is still populated with the Telegram message id string.
-- Telegram context fields are nullable and are populated only for rows inserted after migration `13.sql` and the updated ingest code;
-- `NULL` in Telegram context fields means metadata is unavailable, the row predates the migration, or Telegram did not expose that value;
+- Telegram context fields are nullable and are populated when Telegram exposes
+  that metadata;
+- `NULL` in Telegram context fields means metadata is unavailable, the row
+  predates the metadata capture path, or Telegram did not expose that value;
 - `reply_to_peer_kind` uses Telegram peer values (`user`, `chat`, `channel`), not Extractum source-kind values (`channel`, `supergroup`, `group`);
 - `reaction_count = 0` means Telegram explicitly exposed zero aggregate reactions; `NULL` means the app cannot distinguish zero from unavailable metadata.
 
@@ -881,7 +883,8 @@ saved-run read paths must not reconstruct them from current live sources.
 Baseline v1 (`0001_current_schema_baseline.sql`) is the active starting point
 for supported databases. Pre-reset migrations 1 through 26 are archived under
 `docs/archive/migrations-pre-baseline-reset/` and are not an automatic upgrade
-path. Future migrations start at `0002`.
+path. See `docs/archive/migrations-pre-baseline-reset/README.md` for the
+archive boundary. Future migrations start at `0002`.
 
 The application performs a one-time baseline-history cutover for the one
 controlled pre-reset database. The cutover validates old successful migration

@@ -197,11 +197,11 @@ Runtime smoke should inspect `/analysis` in the running Tauri app when available
 - run snapshot source mode stays read-only and does not show live source job
   controls.
 
-## Implementation Plan Boundary
+## Historical Implementation Plan Boundary
 
-The next implementation plan should be named
-`docs/superpowers/plans/2026-05-13-analysis-source-mode-parity.md` and should
-break the work into small TDD tasks:
+This shipped slice was implemented from a completed plan that has since been
+removed from the working tree. Git history retains the original plan. It broke
+the work into small TDD tasks:
 
 1. YouTube video comments/action parity.
 2. YouTube source job activity rendering and cancellation.

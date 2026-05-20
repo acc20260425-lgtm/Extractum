@@ -1,8 +1,11 @@
 # Database Schema Legacy Analysis
 
-> Updated: 2026-05-18
+> Updated: 2026-05-20
 > Scope: SQLite schema, migrations, Rust backend usage, and product docs.
 > Method: local code/doc review plus three read-only subagent passes focused on schema, backend cost, and product direction.
+> Status: historical analysis. Current schema state lives in
+> `docs/database-schema.md`; pre-reset migration files are archived under
+> `docs/archive/migrations-pre-baseline-reset/`.
 
 ## Executive Summary
 
@@ -18,9 +21,10 @@ typed. Source identity, typed Telegram message identity, typed YouTube source
 metadata, and Telegram topic membership materialization have now shipped in
 separate slices. Provider-neutral analysis documents v1 has also shipped for
 live corpus loading. Analysis snapshot hardening has also shipped. The
-remaining high-return work is expanding stable document/read models to
-NotebookLM export and source browsing where useful, playlist simplification,
-and migration baseline cleanup.
+archive read-model source browsing, Telegram NotebookLM export, and migration
+baseline cleanup have also shipped. The remaining high-return work is narrower:
+playlist simplification, legacy Telegram metadata blob cleanup after real-data
+validation, and durable migrated-history enablement.
 
 ## Inputs Reviewed
 
@@ -30,7 +34,8 @@ Primary files:
 - `docs/design-document.md`
 - `docs/architecture-deep-dive.md`
 - `docs/backlog.md`
-- `src-tauri/migrations/*.sql`
+- `src-tauri/migrations/0001_current_schema_baseline.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/*.sql`
 - `src-tauri/src/sources/`
 - `src-tauri/src/analysis/`
 - `src-tauri/src/youtube/`
@@ -48,9 +53,9 @@ Subagent checks:
 
 ### 1. `telegram_source_kind` Compatibility Debt Has Been Contained
 
-`source_subtype` is now the provider-local subtype column, and migration
-`15.sql` backfills Telegram rows from `telegram_source_kind`. This was the
-original debt:
+`source_subtype` is now the provider-local subtype column. A historical
+pre-baseline migration backfilled Telegram rows from `telegram_source_kind`;
+that compatibility layer is archived. This was the original debt:
 
 - Telegram source uniqueness still uses `(account_id, source_type, telegram_source_kind, external_id)`;
 - source DTOs and sync targets still carry both fields;
@@ -59,9 +64,9 @@ original debt:
 
 Relevant files:
 
-- `src-tauri/migrations/11.sql`
-- `src-tauri/migrations/12.sql`
-- `src-tauri/migrations/15.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/11.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/12.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/15.sql`
 - `src-tauri/src/sources/types.rs`
 - `src-tauri/src/sources/store.rs`
 - `src-tauri/src/sources/peer_resolution.rs`
@@ -116,10 +121,10 @@ This pushes provider branching into analysis, source browsing, and NotebookLM ex
 
 Relevant files:
 
-- `src-tauri/migrations/1.sql`
-- `src-tauri/migrations/9.sql`
-- `src-tauri/migrations/13.sql`
-- `src-tauri/migrations/16.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/1.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/9.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/13.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/16.sql`
 - `src-tauri/src/sources/items.rs`
 - `src-tauri/src/sources/items/query.rs`
 - `src-tauri/src/analysis/corpus.rs`
@@ -135,19 +140,20 @@ Current state:
 - `analysis_documents` now materializes provider-neutral live analysis corpus
   documents for Telegram messages, YouTube transcript segments, YouTube
   comments, and synthetic YouTube descriptions;
-- source browsing and NotebookLM export intentionally remain on their current
-  provider/archive item paths in v1.
+- source browsing and Telegram NotebookLM export are readiness-gated archive
+  read-model consumers, with fallback to canonical provider/archive paths when
+  source archive rows are not current;
+- YouTube NotebookLM export enrichment remains a later slice.
 
 Remaining follow-up:
 
-- consider moving NotebookLM export and source browsing onto
-  provider-neutral document/read models after v1 analysis corpus migration has
-  settled;
+- decide whether YouTube-specific NotebookLM export enrichment needs archive
+  rows, typed YouTube detail readers, or a small export-specific adapter;
 - continue moving provider-specific hot-path fields out of generic `items`
   when a workflow needs indexed or validated state;
 - keep raw compressed provider payloads outside the hot query path.
 
-### 4. Takeout Provenance Still Blocks Migrated Telegram History
+### 4. Takeout Provenance Still Blocks Migrated Telegram History Enablement
 
 The typed Telegram message identity boundary can represent overlapping message
 ids from different Telegram history domains. Migrated Takeout history is still
@@ -161,12 +167,21 @@ Relevant files:
 - `src-tauri/src/takeout_import/mod.rs`
 - `src-tauri/src/topic_memberships.rs`
 
-Recommendation:
+Current state:
 
-- add durable ingest batches for Takeout runs;
-- add Telegram Takeout batch details for split/fallback/migration detection;
-- add item origin and observation rows so repeat runs can distinguish inserted
-  rows from duplicates seen by a later import;
+- durable ingest batch, Telegram Takeout batch detail, warning, and item
+  observation tables have shipped;
+- normal Takeout import can persist partial item rows without advancing source
+  sync state on failed or cancelled jobs;
+- migrated-history import remains disabled until provenance behavior and typed
+  identity boundaries are validated on real data.
+
+Remaining follow-up:
+
+- broaden live Takeout validation across representative source kinds and export
+  edge cases;
+- finish the incomplete-import policy so partial, failed, and cancelled imports
+  are explainable and recoverable;
 - enable migrated-history import only after real-data validation proves the
   provenance and typed identity model is safe.
 
@@ -216,9 +231,9 @@ context do not reconstruct them from live provider/archive state.
 
 Relevant files:
 
-- `src-tauri/migrations/10.sql`
-- `src-tauri/migrations/16.sql`
-- `src-tauri/migrations/17.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/10.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/16.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/17.sql`
 - `src-tauri/src/analysis/models.rs`
 - `src-tauri/src/analysis/store.rs`
 - `src-tauri/src/analysis/corpus.rs`
@@ -263,7 +278,7 @@ Recommendation:
 
 Relevant files:
 
-- `src-tauri/migrations/16.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/16.sql`
 - `src-tauri/src/youtube/playlist.rs`
 - `src-tauri/src/youtube/detail.rs`
 - `src-tauri/src/analysis/corpus.rs`
@@ -297,7 +312,7 @@ Recommendation:
 - keep normal account/profile code assuming secure-store ownership;
 - once a minimum supported upgrade window is chosen, remove SQLite secret columns from the fresh schema baseline.
 
-### 10. Migration History Has Fresh-Install Scars
+### 10. Migration History Scars Were Reset
 
 Several migrations are historical patch layers rather than a clean current schema:
 
@@ -307,15 +322,19 @@ Several migrations are historical patch layers rather than a clean current schem
 
 Relevant files:
 
-- `src-tauri/migrations/1.sql`
-- `src-tauri/migrations/2.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/1.sql`
+- `docs/archive/migrations-pre-baseline-reset/sql/2.sql`
 - `src-tauri/src/migrations.rs`
 
-Recommendation:
+Current state:
 
-- introduce a current-schema baseline for fresh installs;
-- keep old migrations only for upgrade from existing databases;
-- quarantine checksum repair and old migration compatibility behind a legacy upgrade path.
+- active migration history starts at
+  `src-tauri/migrations/0001_current_schema_baseline.sql`;
+- historical SQL and runner-managed Rust migrations are archived under
+  `docs/archive/migrations-pre-baseline-reset/`;
+- the one controlled pre-reset database uses a backup-first bookkeeping cutover
+  that rewrites only `_sqlx_migrations`;
+- future migrations start at `0002`.
 
 ## Not Legacy
 
@@ -333,25 +352,25 @@ These pieces should not be treated as removable debt right now:
    - Move Telegram/YouTube identity into typed provider tables.
    - Remove normal-path dependence on `telegram_source_kind`.
 
-2. Item/document identity cleanup. Partially shipped.
+2. Item/document identity cleanup. Mostly shipped.
    - Provider-native Telegram item identity shipped.
    - Telegram duplicate detection moved away from only `(source_id, external_id)`.
    - Provider-neutral analysis documents v1 shipped for live corpus loading.
-   - Remaining work: move NotebookLM export and source browsing onto
-     provider-neutral document/read models only if the settled v1 model proves
-     it is the right boundary.
+   - Provider-neutral archive read model shipped for source browsing and
+     Telegram NotebookLM export behind readiness gates.
+   - Remaining work: decide whether YouTube-specific export enrichment needs
+     more archive rows or typed YouTube detail readers.
 
 3. Takeout provenance and migrated-history enablement.
-   - Add durable ingest batches, Telegram Takeout batch details, and item
-     origin/observation rows.
-   - Distinguish complete, partial, failed, and cancelled imports in durable
-     state.
+   - Durable ingest batches, Telegram Takeout batch details, warnings, and item
+     observations shipped.
+   - Remaining work: finish incomplete-import policy and real-data validation.
    - Enable migrated-history import only after real-data validation.
 
-4. Snapshot hardening.
-   - Make new snapshot fields non-null.
+4. Snapshot hardening. Shipped for new runs.
    - Persist corpus snapshots before provider execution.
-   - Backfill or explicitly mark old snapshotless runs.
+   - Expose explicit missing/capture-failed snapshot states.
+   - Remaining work: optional UI affordances for legacy snapshotless runs.
 
 5. Topic membership materialization. Shipped.
    - Repeated inference joins were replaced with `item_topic_memberships`.
@@ -362,9 +381,10 @@ These pieces should not be treated as removable debt right now:
    - Make playlist entries point to stable video entities.
    - Collapse duplicated removal state.
 
-7. Migration baseline cleanup.
-   - Add a fresh current-schema baseline.
-   - Move legacy upgrades and checksum repair into an isolated module.
+7. Migration baseline cleanup. Shipped.
+   - Active migrations start at current-schema baseline v1.
+   - Pre-reset SQL and Rust migration code is archived outside the active build.
+   - One controlled pre-reset database is handled by backup-first history cutover.
 
 ## Expected Backend Payoff
 
@@ -373,6 +393,6 @@ These pieces should not be treated as removable debt right now:
 - safer Takeout import for migrated Telegram history;
 - less repeated metadata decoding;
 - simpler live analysis corpus loading;
-- simpler NotebookLM export queries if export later moves to the settled
-  document/read model;
+- simpler Telegram NotebookLM export queries through the settled archive read
+  model;
 - clearer future provider integration boundaries.

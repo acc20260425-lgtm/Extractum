@@ -108,28 +108,19 @@ Analysis:
 
 - Full findings are recorded in `docs/database-schema-legacy-analysis.md`.
 
-- [ ] optionally clear old Telegram `sources.metadata_zstd` blobs after successful typed repair
-- [x] Move YouTube source runtime metadata from generic
-  `sources.metadata_zstd` into typed video/playlist source tables; keep raw
-  provider payload optional and out of normal listing/detail/jobs/analysis
-  paths.
-- [x] add a separate provider-neutral archive/read UI model for source
-  browsing, gated by source-scoped readiness and model version
+- [ ] decide whether and when to clear old Telegram `sources.metadata_zstd`
+  blobs after typed repair validation and real private/dialog-backed source
+  validation
 
 Acceptance:
 
 - New provider work does not need to touch legacy Telegram subtype compatibility.
 - Migrated Telegram history has durable provenance and validation policy before import is enabled.
-- Analysis reads stable provider-neutral document rows without provider-specific
-  item-table branching for normal live corpus loading.
-- Source browsing uses the provider-neutral archive read model only when the
-  source has current ready archive rows; all other states fall back to the
-  canonical provider/archive path.
-- Telegram NotebookLM export uses the provider-neutral archive read model only
-  when the source has current ready archive rows; all other states preserve the
-  existing local provider/archive items path.
-- YouTube playlist-entry browsing stays on typed YouTube detail/readers rather
-  than materializing playlist membership rows into `archive_read_items`.
+- Normal Telegram source, sync, Takeout, browsing, and export paths keep using
+  typed identity/display cache fields rather than legacy Telegram metadata
+  blobs.
+- Any blob cleanup is validation-aware and does not remove repair input before
+  the remaining real-data checks are done.
 
 ### 4.5 Saved Runs Discoverability And Cleanup
 

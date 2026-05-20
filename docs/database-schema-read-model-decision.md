@@ -347,8 +347,9 @@ table:
 - "Proves fidelity" means the model does not exclude the required Telegram
   NotebookLM export fields listed above, even if export rendering remains on
   the old path until a later slice.
-- Current-schema baseline work should wait until the archive read-model
-  boundary is stable.
+- Current-schema baseline reset has shipped after the archive read-model
+  boundary stabilized; future schema changes start at `0002` and must preserve
+  the archive readiness semantics.
 - Legacy Telegram blob cleanup remains blocked on real Telegram
   runtime/private-source validation.
 
@@ -360,7 +361,7 @@ table:
 | NotebookLM export migration | Implemented for Telegram as a readiness-gated archive consumer after export parity tests. YouTube-specific export enrichment remains a later slice. |
 | Takeout provenance | Can proceed in parallel while it writes provenance tables only. If it adds new archive-display fields or origin semantics that consumers need, the archive builder contract and readiness/backfill rules must be updated before consumer migration. |
 | YouTube playlist simplification | Related but separate. Playlist entries remain typed YouTube membership/detail state, not `archive_read_items` rows. Canonical cleanup of `availability_status` versus `is_removed_from_playlist` belongs to a later YouTube slice. |
-| Current-schema baseline | Blocked until the archive read-model boundary and migration/backfill rules are stable. |
+| Current-schema baseline | Implemented after the archive read-model boundary and migration/backfill rules stabilized. Future migrations start at `0002`. |
 | Legacy Telegram metadata blob cleanup | Blocked on typed repair plus real private/dialog-backed source validation, not on the archive read model. |
 
 ## Follow-up Implementation Slices
@@ -374,8 +375,7 @@ table:
 4. [x] Migrate Telegram NotebookLM export after export parity tests pass.
 5. [x] Decide whether future YouTube playlist-entry browsing needs archive rows
    or typed detail only.
-6. [ ] Consider a current-schema baseline after the read-model boundary
-   settles.
+6. [x] Ship a current-schema baseline after the read-model boundary settles.
 7. [ ] Consider legacy Telegram metadata blob cleanup only after typed repair
    and real private/dialog-backed source validation are proven safe.
 
@@ -400,7 +400,8 @@ table:
 ## Historical Non-goals For The Original Decision Slice
 
 These non-goals applied to the original decision-only slice and do not describe
-the later implemented source browsing or Telegram NotebookLM export slices.
+the later implemented source browsing, Telegram NotebookLM export, or
+current-schema baseline reset slices.
 
 - no NotebookLM export migration;
 - no source browsing migration;

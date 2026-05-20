@@ -370,11 +370,11 @@ frontend types change, and `git diff --check`.
 - The slice does not include UI redesign, NotebookLM migration, playlist
   simplification, or migration baseline cleanup.
 
-## Implementation Plan Boundary
+## Historical Implementation Plan Boundary
 
-The next implementation plan should be named
-`docs/superpowers/plans/2026-05-18-analysis-snapshot-hardening.md` and should
-break the work into small TDD tasks:
+This shipped slice was implemented from a completed plan that has since been
+removed from the working tree. Git history retains the original plan. It broke
+the work into small TDD tasks:
 
 1. Schema migration and DTO state mapping.
 2. Strict new snapshot writer contract.
