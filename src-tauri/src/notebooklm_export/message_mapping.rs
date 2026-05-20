@@ -51,12 +51,13 @@ pub(super) fn map_export_rows(
     reply_contexts: HashMap<i64, ReplyContext>,
 ) -> AppResult<Vec<NotebookLmExportMessage>> {
     rows.into_iter()
-        .map(|row| {
+        .map(|row| -> AppResult<NotebookLmExportMessage> {
             let text = row
                 .content_zstd
                 .as_deref()
                 .map(decompress_text)
-                .transpose()?;
+                .transpose()
+                .map_err(AppError::internal)?;
             let urls = text.as_deref().map(detect_urls).unwrap_or_default();
             let media_metadata = decode_media_metadata(row.media_metadata_zstd.as_deref())?;
             let media_placeholders =
@@ -94,16 +95,16 @@ pub(super) fn map_export_rows(
                 forum_topic_top_message_id: row.forum_topic_top_message_id,
             })
         })
-        .collect::<Result<Vec<_>, String>>()
-        .map_err(AppError::from)
+        .collect()
 }
 
-pub(super) fn reply_snippet(row: &ReplyLookupRow) -> Result<String, String> {
+pub(super) fn reply_snippet(row: &ReplyLookupRow) -> AppResult<String> {
     let text = row
         .content_zstd
         .as_deref()
         .map(decompress_text)
-        .transpose()?;
+        .transpose()
+        .map_err(AppError::internal)?;
 
     if let Some(text) = text
         .as_deref()
@@ -134,5 +135,26 @@ fn truncate_snippet(value: &str, max_chars: usize) -> String {
         format!("{snippet}...")
     } else {
         snippet
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{reply_snippet, ReplyLookupRow};
+    use crate::error::AppErrorKind;
+
+    #[test]
+    fn reply_snippet_decode_failures_are_typed_internal_errors() {
+        let row = ReplyLookupRow {
+            external_id: "1".to_string(),
+            author: None,
+            content_zstd: Some(vec![0x00]),
+            has_media: false,
+            media_kind: None,
+        };
+
+        let error = reply_snippet(&row).expect_err("reject corrupt reply content");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
     }
 }

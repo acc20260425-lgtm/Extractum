@@ -52,7 +52,7 @@ pub(crate) async fn load_export_source(
     .bind(source_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(AppError::database)?
     .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))?;
 
     if source.source_type != "telegram" {
@@ -154,7 +154,7 @@ pub(crate) async fn load_export_messages_from_items_path(
             sqlx::query_as(&sql).bind(source_id).fetch_all(pool).await
         }
     }
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     let reply_contexts = load_reply_contexts_from_items_path(pool, source_id, &rows).await?;
     map_export_rows(rows, reply_contexts)
@@ -272,7 +272,7 @@ async fn load_reply_contexts_from_items_path(
             query = query.bind(reply_id.to_string());
         }
 
-        let lookup_rows = query.fetch_all(pool).await.map_err(|e| e.to_string())?;
+        let lookup_rows = query.fetch_all(pool).await.map_err(AppError::database)?;
         for row in lookup_rows {
             let Ok(reply_id) = row.external_id.parse::<i64>() else {
                 continue;

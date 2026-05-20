@@ -107,6 +107,8 @@ Current status:
 - analysis report store helpers, live corpus/preflight loaders, trace helpers,
   and saved-run snapshot readers now return `AppResult` for database,
   not-found, validation, and internal snapshot/content/trace errors;
+- NotebookLM export query and row-mapping paths now preserve typed database and
+  archive decode errors through the export service boundary;
 - remaining analysis string errors are limited to test-only snapshot source
   resolution and pure parser helpers; shared compression helpers still return
   `String` at the low-level utility boundary;

@@ -2,6 +2,7 @@ use grammers_client::{media::Media, tl};
 use serde::{Deserialize, Serialize};
 
 use crate::compression::{compress_json_bytes, decompress_bytes};
+use crate::error::{AppError, AppResult};
 
 pub(crate) const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
 pub(crate) const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
@@ -29,17 +30,18 @@ pub(crate) struct ExtractedItemPayload {
     pub(crate) media: Option<ExtractedMediaPayload>,
 }
 
-pub(crate) fn encode_media_metadata(metadata: &ItemMediaMetadata) -> Result<Vec<u8>, String> {
-    let json = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
-    compress_json_bytes(&json)
+pub(crate) fn encode_media_metadata(metadata: &ItemMediaMetadata) -> AppResult<Vec<u8>> {
+    let json =
+        serde_json::to_vec(metadata).map_err(|error| AppError::internal(error.to_string()))?;
+    compress_json_bytes(&json).map_err(AppError::internal)
 }
 
-pub(crate) fn decode_media_metadata(bytes: Option<&[u8]>) -> Result<ItemMediaMetadata, String> {
+pub(crate) fn decode_media_metadata(bytes: Option<&[u8]>) -> AppResult<ItemMediaMetadata> {
     let Some(bytes) = bytes else {
         return Ok(ItemMediaMetadata::default());
     };
-    let decoded = decompress_bytes(bytes)?;
-    serde_json::from_slice(&decoded).map_err(|e| e.to_string())
+    let decoded = decompress_bytes(bytes).map_err(AppError::internal)?;
+    serde_json::from_slice(&decoded).map_err(|error| AppError::internal(error.to_string()))
 }
 
 #[derive(Default)]
@@ -340,5 +342,12 @@ mod tests {
         let decoded = decode_media_metadata(Some(&encoded)).expect("decode");
 
         assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn media_metadata_decode_failures_are_typed_internal_errors() {
+        let error = decode_media_metadata(Some(&[0x00])).expect_err("reject corrupt metadata");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
     }
 }

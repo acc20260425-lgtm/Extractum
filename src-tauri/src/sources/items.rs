@@ -135,8 +135,7 @@ fn prepare_source_item(item: &SourceItemInsert) -> AppResult<Option<PreparedSour
         .media
         .as_ref()
         .map(|media| encode_media_metadata(&media.metadata))
-        .transpose()
-        .map_err(AppError::internal)?;
+        .transpose()?;
 
     if content_zstd.is_none() && media_metadata_zstd.is_none() {
         return Ok(None);
