@@ -117,7 +117,11 @@ errors.
 
 ### 3.3 Takeout import model
 
-Takeout import is the full-history ingest path for an existing source. It intentionally writes into the same `items` table as sync, so browsing, NotebookLM export, and analysis can read one local archive model.
+Takeout import is the full-history ingest path for an existing source. It
+intentionally writes into the same canonical provider/archive tables as sync.
+Browsing and Telegram NotebookLM export can use the provider-neutral
+`archive_read_items` model when source readiness is current; analysis reads the
+separate `analysis_documents` corpus model.
 
 Important design choices:
 
@@ -280,7 +284,11 @@ That work is deliberately postponed.
 
 ### 4.5 NotebookLM export context
 
-NotebookLM export remains local-only. It does not make live Telegram requests, LLM calls, link fetches, or media downloads.
+NotebookLM export remains local-only. It does not make live Telegram requests,
+LLM calls, link fetches, or media downloads. For Telegram sources with a
+current ready archive model, export reads message rows from
+`archive_read_items`; non-ready states preserve the local provider/archive
+items fallback.
 
 When reply metadata is present, the export layer resolves original reply messages from local SQLite in the same source by `(source_id, external_id)`. Original messages may be outside the selected export period, but they are used only as snippet metadata and are not added to the exported corpus.
 

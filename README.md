@@ -105,7 +105,10 @@ This means saved runs are now intended to be stable artifacts rather than live v
 
 The `/analysis` source workspace can export one synced Telegram source to NotebookLM-friendly Markdown.
 
-- export reads from the local `sources` and `items` tables only;
+- export reads local SQLite state only;
+- sources with a current ready archive read model load export messages from
+  `archive_read_items`;
+- non-ready archive states preserve the local provider/archive items fallback;
 - no live Telegram requests, LLM calls, link fetching, or binary media downloads happen during export;
 - output is written under the selected folder as a generated `notebooklm_export_*` directory;
 - `glossary.md` summarizes participants by stored author string;
