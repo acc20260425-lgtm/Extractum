@@ -7,7 +7,9 @@
 
 - Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
 - Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
-- Takeout source import needs broader live validation, incomplete-batch provenance, and a migrated-history enablement policy.
+- Takeout source import needs broader live validation, incomplete-import policy
+  on top of persisted batch/observation provenance, and a migrated-history
+  enablement policy.
 - YouTube live-provider coverage needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Large saved-run archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
@@ -34,7 +36,7 @@
 | --- | --- |
 | Telegram runtime validation | predictable behavior across real supported dialogs and accounts |
 | Account deletion coordination | deletion cannot race active ingest or analysis work |
-| Takeout source import | validated across source kinds with explicit incomplete-import provenance |
+| Takeout source import | validated across source kinds with explicit incomplete-import policy |
 | Database schema simplification | optional Telegram metadata blob cleanup after typed repair validation |
 | YouTube source ingest | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | fast narrowing for large saved-run histories |
@@ -88,8 +90,9 @@ Priority: high.
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
-- [ ] design and implement durable incomplete-import provenance using ingest
-  batches, Telegram Takeout batch details, and item origin/observation rows
+- [ ] define the incomplete-import policy and user/recovery behavior on top of
+  existing ingest batches, Telegram Takeout batch details, warnings, and item
+  observations
 - [ ] enable migrated small-group history only after provenance and real-data
   validation prove the typed Telegram identity boundary is safe
 - [ ] decide whether Takeout import should refresh the forum-topic catalog after successful finish
@@ -97,7 +100,8 @@ Priority: high.
 Acceptance:
 
 - Successful Takeout import updates `last_sync_state` and `last_synced_at`.
-- Failed or cancelled Takeout imports are distinguishable from complete history.
+- Failed or cancelled Takeout imports are explainable and recoverable without
+  being mistaken for complete history.
 - Export DC fallback and only-my-messages fallback warnings remain visible in job state.
 - Migrated supergroup history has a safe provenance and validation policy
   before import is enabled.
@@ -221,7 +225,8 @@ Priority: medium.
 
 1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
 2. Close account-deletion coordination before more long-running ingest expansion.
-3. Validate Takeout import across representative source kinds and design incomplete-import provenance.
+3. Validate Takeout import across representative source kinds and define the
+   incomplete-import policy.
 4. Decide whether old Telegram metadata blobs should be cleared after real validation.
 5. Decide whether saved-run history needs richer filters before media expansion.
 6. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
