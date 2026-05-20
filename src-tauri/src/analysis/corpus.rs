@@ -227,12 +227,9 @@ pub(crate) async fn resolve_analysis_sources(
         }
     } else {
         let group_id = source_group_id.expect("validated source_group_id");
-        let group = fetch_source_group(pool, group_id)
-            .await
-            .map_err(AppError::database)?
-            .ok_or_else(|| {
-                AppError::not_found(format!("Analysis source group {group_id} not found"))
-            })?;
+        let group = fetch_source_group(pool, group_id).await?.ok_or_else(|| {
+            AppError::not_found(format!("Analysis source group {group_id} not found"))
+        })?;
         source_type = group.source_type.clone();
 
         for member in group.members {
@@ -315,7 +312,7 @@ pub(crate) async fn resolve_run_source_ids(
 pub(crate) async fn load_corpus_messages(
     pool: &Pool<Sqlite>,
     request: &CorpusLoadRequest,
-) -> Result<Vec<CorpusMessage>, String> {
+) -> AppResult<Vec<CorpusMessage>> {
     if request.source_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -341,7 +338,7 @@ struct AnalysisDocumentRow {
 async fn load_analysis_document_messages(
     pool: &Pool<Sqlite>,
     request: &CorpusLoadRequest,
-) -> Result<Vec<CorpusMessage>, String> {
+) -> AppResult<Vec<CorpusMessage>> {
     let mut query = QueryBuilder::<Sqlite>::new(
         r#"
         SELECT
@@ -386,7 +383,11 @@ async fn load_analysis_document_messages(
             }
             query.push(")");
         }
-        other => return Err(format!("Unsupported analysis corpus source_type '{other}'")),
+        other => {
+            return Err(AppError::validation(format!(
+                "Unsupported analysis corpus source_type '{other}'"
+            )));
+        }
     }
     query.push(" ORDER BY published_at ASC, source_id ASC, document_order ASC, id ASC");
 
@@ -394,7 +395,7 @@ async fn load_analysis_document_messages(
         .build_query_as()
         .fetch_all(pool)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(AppError::database)?;
 
     rows.into_iter()
         .map(|row| {
@@ -404,7 +405,7 @@ async fn load_analysis_document_messages(
                 external_id: row.external_id,
                 published_at: row.published_at,
                 author: row.author,
-                content: decompress_text(&row.content_zstd)?,
+                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
                 r#ref: row.ref_,
                 item_kind: Some(row.document_kind),
                 source_type: Some(row.source_type),
@@ -420,7 +421,7 @@ pub(crate) async fn preflight_analysis_run(
     request: &CorpusLoadRequest,
     chunk_target_chars: usize,
     limits: AnalysisRunPreflightLimits,
-) -> Result<AnalysisRunPreflight, String> {
+) -> AppResult<AnalysisRunPreflight> {
     if request.source_ids.is_empty() {
         return Ok(AnalysisRunPreflight {
             source_ids: Vec::new(),
@@ -2069,6 +2070,48 @@ mod tests {
             corpus[0].r#ref,
             live_corpus_ref(corpus[0].source_id, corpus[0].item_id)
         );
+    }
+
+    #[tokio::test]
+    async fn load_corpus_messages_returns_typed_internal_for_corrupt_live_document_content() {
+        let pool = snapshot_pool().await;
+        let content = compress_text("Corrupt me").expect("compress");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, content_zstd)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(11_i64)
+        .bind(2_i64)
+        .bind("100")
+        .bind(Option::<String>::None)
+        .bind(1_710_000_000_i64)
+        .bind(content)
+        .execute(&pool)
+        .await
+        .expect("insert item");
+        rebuild_documents_for_sources(&pool, &[2]).await;
+        sqlx::query("UPDATE analysis_documents SET content_zstd = x'00' WHERE source_id = 2")
+            .execute(&pool)
+            .await
+            .expect("corrupt live document content");
+
+        let error = match load_corpus_messages(
+            &pool,
+            &corpus_request(
+                "telegram",
+                vec![2],
+                YoutubeCorpusMode::TranscriptDescription,
+            ),
+        )
+        .await
+        {
+            Ok(_) => panic!("corrupt live document content should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert!(!error.message.starts_with("Database error:"));
+        assert!(!error.message.is_empty());
     }
 
     #[tokio::test]

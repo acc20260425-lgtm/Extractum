@@ -104,11 +104,11 @@ still use `Result<T, String>`.
 
 Current status:
 
-- analysis report store helpers and saved-run snapshot readers now return
-  `AppResult` for database, not-found, and internal snapshot errors;
-- remaining analysis string errors are concentrated in live corpus loading,
-  trace/compression helpers, test-only snapshot source resolution, and pure JSON
-  parsing helpers;
+- analysis report store helpers, live corpus/preflight loaders, and saved-run
+  snapshot readers now return `AppResult` for database, not-found, validation,
+  and internal snapshot/content errors;
+- remaining analysis string errors are concentrated in trace/compression
+  helpers, test-only snapshot source resolution, and pure JSON parsing helpers;
 - LLM provider and scheduler internals still use string errors across provider
   calls and streaming boundaries.
 

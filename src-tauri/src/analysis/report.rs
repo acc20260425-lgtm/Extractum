@@ -64,7 +64,10 @@ async fn capture_report_corpus(
     request: &CorpusLoadRequest,
 ) -> Result<Vec<CorpusMessage>, ReportRunError> {
     let corpus = load_corpus_messages(pool, request).await.map_err(|error| {
-        ReportRunError::CaptureFailed(sanitize_snapshot_error("Corpus preload failed", &error))
+        ReportRunError::CaptureFailed(sanitize_snapshot_error(
+            "Corpus preload failed",
+            &error.to_string(),
+        ))
     })?;
 
     if corpus.is_empty() {
@@ -1060,8 +1063,7 @@ pub(crate) async fn start_analysis_report_run(
         ANALYSIS_CHUNK_TARGET_CHARS,
         AnalysisRunPreflightLimits::default(),
     )
-    .await
-    .map_err(AppError::database)?;
+    .await?;
 
     validate_report_preflight(&preflight)?;
 
