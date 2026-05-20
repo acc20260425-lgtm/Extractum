@@ -1,6 +1,8 @@
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 
+use crate::error::{AppError, AppResult};
+
 use super::streaming::{find_event_boundary, parse_sse_data};
 use super::{
     resolve_effective_model, LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderModel, LlmUsage,
@@ -90,7 +92,7 @@ struct OpenAiCompatErrorBody {
 fn build_openai_compat_request(
     messages: &[LlmMessage],
     model: &str,
-) -> Result<OpenAiCompatChatRequest, String> {
+) -> AppResult<OpenAiCompatChatRequest> {
     let mut mapped_messages = Vec::new();
 
     for message in messages {
@@ -105,13 +107,15 @@ fn build_openai_compat_request(
                 content: content.to_string(),
             }),
             other => {
-                return Err(format!("Unsupported message role '{other}'"));
+                return Err(AppError::validation(format!(
+                    "Unsupported message role '{other}'"
+                )));
             }
         }
     }
 
     if mapped_messages.is_empty() {
-        return Err("At least one message is required".to_string());
+        return Err(AppError::validation("At least one message is required"));
     }
 
     Ok(OpenAiCompatChatRequest {
@@ -210,16 +214,16 @@ pub(in crate::llm) async fn stream_openai_compat_response<F>(
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,
     config: &OpenAiCompatProviderConfig,
-) -> Result<LlmCompletion, String>
+) -> AppResult<LlmCompletion>
 where
     F: FnMut(&str),
 {
     if profile.api_key.trim().is_empty() {
-        return Err(format!(
+        return Err(AppError::auth(format!(
             "Profile '{}' does not have an {} API key configured",
             profile.profile_id,
             config.provider.display_name()
-        ));
+        )));
     }
 
     let model = resolve_effective_model(profile, request.model_override.as_deref())?;
@@ -233,12 +237,14 @@ where
         .json(&request_body)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::llm_network)?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format_openai_compat_error(config, status, &body));
+        return Err(AppError::llm_network(format_openai_compat_error(
+            config, status, &body,
+        )));
     }
 
     let mut response = response;
@@ -246,7 +252,7 @@ where
     let mut full_text = String::new();
     let mut last_usage = None;
 
-    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+    while let Some(chunk) = response.chunk().await.map_err(AppError::llm_network)? {
         buffer.extend_from_slice(&chunk);
 
         while let Some((boundary, delimiter_len)) = find_event_boundary(&buffer) {
@@ -258,7 +264,7 @@ where
             };
 
             let parsed: OpenAiCompatChatChunk =
-                serde_json::from_str(&data).map_err(|e| e.to_string())?;
+                serde_json::from_str(&data).map_err(AppError::llm_network)?;
 
             if let Some(usage) = parsed.usage.as_ref() {
                 last_usage = Some(map_openai_compat_usage(usage));
@@ -275,7 +281,7 @@ where
     if !buffer.is_empty() {
         if let Some(data) = parse_sse_data(&buffer)? {
             let parsed: OpenAiCompatChatChunk =
-                serde_json::from_str(&data).map_err(|e| e.to_string())?;
+                serde_json::from_str(&data).map_err(AppError::llm_network)?;
             if let Some(usage) = parsed.usage.as_ref() {
                 last_usage = Some(map_openai_compat_usage(usage));
             }
@@ -298,12 +304,12 @@ where
 pub(super) async fn list_openai_compat_models(
     api_key: &str,
     config: &OpenAiCompatProviderConfig,
-) -> Result<Vec<LlmProviderModel>, String> {
+) -> AppResult<Vec<LlmProviderModel>> {
     if api_key.trim().is_empty() {
-        return Err(format!(
+        return Err(AppError::auth(format!(
             "{} API key is required to load available models",
             config.provider.display_name()
-        ));
+        )));
     }
 
     let client = HttpClient::new();
@@ -312,15 +318,18 @@ pub(super) async fn list_openai_compat_models(
         .bearer_auth(api_key)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::llm_network)?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format_openai_compat_error(config, status, &body));
+        return Err(AppError::llm_network(format_openai_compat_error(
+            config, status, &body,
+        )));
     }
 
-    let parsed: OpenAiCompatModelsResponse = response.json().await.map_err(|e| e.to_string())?;
+    let parsed: OpenAiCompatModelsResponse =
+        response.json().await.map_err(AppError::llm_network)?;
     let mut models: Vec<_> = parsed
         .data
         .into_iter()
@@ -340,10 +349,13 @@ pub(super) async fn list_openai_compat_models(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_openai_compat_request, extract_openai_compat_delta, map_openai_compat_model,
-        map_openai_compat_usage, OpenAiCompatChatChunk, OpenAiCompatModel,
+        build_openai_compat_request, extract_openai_compat_delta, list_openai_compat_models,
+        map_openai_compat_model, map_openai_compat_usage, OpenAiCompatChatChunk, OpenAiCompatModel,
+        OpenAiCompatProviderConfig,
     };
+    use crate::error::AppErrorKind;
     use crate::llm::LlmMessage;
+    use crate::llm::ProviderKind;
 
     #[test]
     fn openai_compat_request_keeps_standard_roles() {
@@ -392,5 +404,40 @@ mod tests {
         assert_eq!(model.name, "gg/gemini-2.5-pro");
         assert_eq!(model.display_name, "gg/gemini-2.5-pro");
         assert_eq!(model.description, "omniroute");
+    }
+
+    #[test]
+    fn openai_compat_request_rejects_unsupported_roles_with_typed_validation_error() {
+        let error = match build_openai_compat_request(
+            &[LlmMessage {
+                role: "tool".to_string(),
+                content: "lookup".to_string(),
+            }],
+            "if/kimi-k2-thinking",
+        ) {
+            Ok(_) => panic!("unsupported role should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Unsupported message role 'tool'");
+    }
+
+    #[tokio::test]
+    async fn openai_compat_model_listing_requires_typed_auth_error() {
+        let config = OpenAiCompatProviderConfig {
+            provider: ProviderKind::OmniRoute,
+            base_url: "http://localhost:20128/v1".to_string(),
+        };
+
+        let error = list_openai_compat_models("   ", &config)
+            .await
+            .expect_err("reject missing api key");
+
+        assert_eq!(error.kind, AppErrorKind::Auth);
+        assert_eq!(
+            error.message,
+            "OpenAI-compatible API key is required to load available models"
+        );
     }
 }

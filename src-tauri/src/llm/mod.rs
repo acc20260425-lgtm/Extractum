@@ -312,7 +312,7 @@ pub async fn list_llm_provider_models(
     .await;
 
     match result {
-        Ok(models) => models.map_err(AppError::llm_network),
+        Ok(models) => models,
         Err(_) => Err(AppError::llm_network(format!(
             "Loading {} models timed out after {timeout_secs} seconds",
             provider_kind.display_name()

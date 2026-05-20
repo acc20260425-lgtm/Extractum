@@ -53,17 +53,13 @@ where
     F: FnMut(&str),
 {
     match profile.provider {
-        ProviderKind::Gemini => stream_gemini_response(request, profile, on_delta)
-            .await
-            .map_err(AppError::from),
+        ProviderKind::Gemini => stream_gemini_response(request, profile, on_delta).await,
         ProviderKind::OmniRoute => {
             let config = OpenAiCompatProviderConfig {
                 provider: ProviderKind::OmniRoute,
                 base_url: profile.base_url.clone(),
             };
-            stream_openai_compat_response(request, profile, on_delta, &config)
-                .await
-                .map_err(AppError::from)
+            stream_openai_compat_response(request, profile, on_delta, &config).await
         }
     }
 }

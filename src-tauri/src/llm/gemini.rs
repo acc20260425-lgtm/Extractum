@@ -2,6 +2,8 @@ use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
 
+use crate::error::{AppError, AppResult};
+
 use super::streaming::{find_event_boundary, parse_sse_data};
 use super::{resolve_effective_model, LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderModel};
 use super::{LlmUsage, ResolvedLlmProfile};
@@ -88,7 +90,7 @@ struct GeminiModel {
     supported_generation_methods: Option<Vec<String>>,
 }
 
-fn build_gemini_request(messages: &[LlmMessage]) -> Result<GeminiGenerateContentRequest, String> {
+fn build_gemini_request(messages: &[LlmMessage]) -> AppResult<GeminiGenerateContentRequest> {
     let mut system_chunks = Vec::new();
     let mut contents = Vec::new();
 
@@ -115,13 +117,17 @@ fn build_gemini_request(messages: &[LlmMessage]) -> Result<GeminiGenerateContent
                 }],
             }),
             other => {
-                return Err(format!("Unsupported message role '{other}'"));
+                return Err(AppError::validation(format!(
+                    "Unsupported message role '{other}'"
+                )));
             }
         }
     }
 
     if contents.is_empty() {
-        return Err("At least one user or assistant message is required".to_string());
+        return Err(AppError::validation(
+            "At least one user or assistant message is required",
+        ));
     }
 
     let system_instruction = if system_chunks.is_empty() {
@@ -215,15 +221,15 @@ pub(in crate::llm) async fn stream_gemini_response<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,
-) -> Result<LlmCompletion, String>
+) -> AppResult<LlmCompletion>
 where
     F: FnMut(&str),
 {
     if profile.api_key.trim().is_empty() {
-        return Err(format!(
+        return Err(AppError::auth(format!(
             "Profile '{}' does not have a Gemini API key configured",
             profile.profile_id
-        ));
+        )));
     }
 
     let model = resolve_effective_model(profile, request.model_override.as_deref())?;
@@ -241,7 +247,7 @@ where
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::llm_network)?;
 
         if candidate.status().is_success() {
             response = Some(candidate);
@@ -261,11 +267,14 @@ where
             continue;
         }
 
-        return Err(error);
+        return Err(AppError::llm_network(error));
     }
 
     let response = response.ok_or_else(|| {
-        last_retryable_error.unwrap_or_else(|| "Gemini request failed before streaming".to_string())
+        AppError::llm_network(
+            last_retryable_error
+                .unwrap_or_else(|| "Gemini request failed before streaming".to_string()),
+        )
     })?;
 
     let mut response = response;
@@ -273,7 +282,7 @@ where
     let mut full_text = String::new();
     let mut last_usage = None;
 
-    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+    while let Some(chunk) = response.chunk().await.map_err(AppError::llm_network)? {
         buffer.extend_from_slice(&chunk);
 
         while let Some((boundary, delimiter_len)) = find_event_boundary(&buffer) {
@@ -285,14 +294,16 @@ where
             };
 
             let parsed: GeminiGenerateContentResponse =
-                serde_json::from_str(&data).map_err(|e| e.to_string())?;
+                serde_json::from_str(&data).map_err(AppError::llm_network)?;
 
             if let Some(block_reason) = parsed
                 .prompt_feedback
                 .as_ref()
                 .and_then(|feedback| feedback.block_reason.clone())
             {
-                return Err(format!("Prompt blocked by Gemini: {block_reason}"));
+                return Err(AppError::validation(format!(
+                    "Prompt blocked by Gemini: {block_reason}"
+                )));
             }
 
             if let Some(usage) = parsed.usage_metadata.as_ref() {
@@ -310,13 +321,15 @@ where
     if !buffer.is_empty() {
         if let Some(data) = parse_sse_data(&buffer)? {
             let parsed: GeminiGenerateContentResponse =
-                serde_json::from_str(&data).map_err(|e| e.to_string())?;
+                serde_json::from_str(&data).map_err(AppError::llm_network)?;
             if let Some(block_reason) = parsed
                 .prompt_feedback
                 .as_ref()
                 .and_then(|feedback| feedback.block_reason.clone())
             {
-                return Err(format!("Prompt blocked by Gemini: {block_reason}"));
+                return Err(AppError::validation(format!(
+                    "Prompt blocked by Gemini: {block_reason}"
+                )));
             }
             if let Some(usage) = parsed.usage_metadata.as_ref() {
                 last_usage = Some(map_usage(usage));
@@ -337,9 +350,11 @@ where
     })
 }
 
-pub(super) async fn list_gemini_models(api_key: &str) -> Result<Vec<LlmProviderModel>, String> {
+pub(super) async fn list_gemini_models(api_key: &str) -> AppResult<Vec<LlmProviderModel>> {
     if api_key.trim().is_empty() {
-        return Err("Gemini API key is required to load available models".to_string());
+        return Err(AppError::auth(
+            "Gemini API key is required to load available models",
+        ));
     }
 
     let client = HttpClient::new();
@@ -356,14 +371,15 @@ pub(super) async fn list_gemini_models(api_key: &str) -> Result<Vec<LlmProviderM
             request = request.query(&[("pageToken", token)]);
         }
 
-        let response = request.send().await.map_err(|e| e.to_string())?;
+        let response = request.send().await.map_err(AppError::llm_network)?;
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(format_google_error(status, &body));
+            return Err(AppError::llm_network(format_google_error(status, &body)));
         }
 
-        let parsed: GeminiListModelsResponse = response.json().await.map_err(|e| e.to_string())?;
+        let parsed: GeminiListModelsResponse =
+            response.json().await.map_err(AppError::llm_network)?;
         models.extend(
             parsed
                 .models
@@ -399,9 +415,11 @@ pub(super) async fn list_gemini_models(api_key: &str) -> Result<Vec<LlmProviderM
 #[cfg(test)]
 mod tests {
     use super::{
-        build_gemini_request, extract_text, format_google_error, map_gemini_model, map_usage,
-        GeminiContent, GeminiGenerateContentResponse, GeminiModel, GeminiPart,
+        build_gemini_request, extract_text, format_google_error, list_gemini_models,
+        map_gemini_model, map_usage, GeminiContent, GeminiGenerateContentResponse, GeminiModel,
+        GeminiPart,
     };
+    use crate::error::AppErrorKind;
     use crate::llm::LlmMessage;
     use reqwest::StatusCode;
 
@@ -469,6 +487,33 @@ mod tests {
         assert!(model
             .supported_generation_methods
             .contains(&"generateContent".to_string()));
+    }
+
+    #[test]
+    fn gemini_request_rejects_unsupported_roles_with_typed_validation_error() {
+        let error = match build_gemini_request(&[LlmMessage {
+            role: "tool".to_string(),
+            content: "lookup".to_string(),
+        }]) {
+            Ok(_) => panic!("unsupported role should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Unsupported message role 'tool'");
+    }
+
+    #[tokio::test]
+    async fn gemini_model_listing_requires_typed_auth_error() {
+        let error = list_gemini_models("   ")
+            .await
+            .expect_err("reject missing api key");
+
+        assert_eq!(error.kind, AppErrorKind::Auth);
+        assert_eq!(
+            error.message,
+            "Gemini API key is required to load available models"
+        );
     }
 
     #[test]

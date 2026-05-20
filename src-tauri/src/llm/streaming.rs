@@ -1,3 +1,5 @@
+use crate::error::{AppError, AppResult};
+
 pub(super) fn find_event_boundary(buffer: &[u8]) -> Option<(usize, usize)> {
     if buffer.len() < 2 {
         return None;
@@ -20,8 +22,9 @@ pub(super) fn find_event_boundary(buffer: &[u8]) -> Option<(usize, usize)> {
     None
 }
 
-pub(super) fn parse_sse_data(event_bytes: &[u8]) -> Result<Option<String>, String> {
-    let text = String::from_utf8(event_bytes.to_vec()).map_err(|e| e.to_string())?;
+pub(super) fn parse_sse_data(event_bytes: &[u8]) -> AppResult<Option<String>> {
+    let text = String::from_utf8(event_bytes.to_vec())
+        .map_err(|error| AppError::internal(error.to_string()))?;
     let mut data_lines = Vec::new();
 
     for raw_line in text.lines() {
@@ -57,5 +60,12 @@ mod tests {
             .expect("payload");
 
         assert_eq!(payload, "{\"hello\":\"world\"}");
+    }
+
+    #[test]
+    fn sse_data_decode_failures_are_typed_internal_errors() {
+        let error = parse_sse_data(&[0xff]).expect_err("reject invalid utf-8");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
     }
 }
