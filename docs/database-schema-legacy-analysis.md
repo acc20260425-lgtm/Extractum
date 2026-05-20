@@ -57,10 +57,10 @@ Subagent checks:
 pre-baseline migration backfilled Telegram rows from `telegram_source_kind`;
 that compatibility layer is archived. This was the original debt:
 
-- Telegram source uniqueness still uses `(account_id, source_type, telegram_source_kind, external_id)`;
-- source DTOs and sync targets still carry both fields;
-- YouTube upserts insert `telegram_source_kind = ''` to satisfy the old `NOT NULL` shape;
-- tests explicitly cover the legacy `NOT NULL` Telegram kind path.
+- Telegram source uniqueness used `(account_id, source_type, telegram_source_kind, external_id)`;
+- source DTOs and sync targets carried both fields;
+- YouTube upserts inserted `telegram_source_kind = ''` to satisfy the old `NOT NULL` shape;
+- tests explicitly covered the legacy `NOT NULL` Telegram kind path.
 
 Relevant files:
 

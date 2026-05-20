@@ -264,11 +264,10 @@ softer than requiring browsing to complete the export migration: before
 NotebookLM export switches, those fields must be populated and verified by
 export parity tests.
 
-## Preliminary Constraints For The Follow-up Implementation Spec
+## Historical Constraints For The Follow-up Specs
 
-These are constraints for the next task, not runtime work in this decision
-slice. The next implementation spec must settle these rules before creating a
-table:
+These constraints guided the follow-up implementation specs. They are retained
+as design rationale for future archive/read model changes:
 
 - Canonical truth remains in `items` plus typed provider tables. The archive
   read model is rebuildable derived state, not the owner of provider data.
@@ -285,13 +284,12 @@ table:
   `building`, and rebuild/switch readiness at source scope after the batch.
 - For bulk rebuild/backfill, failure marks the source/model scope stale or
   failed and does not mutate canonical provider/archive data.
-- For large provider metadata refreshes that touch many derived rows, the next
-  spec must choose either one transaction with rollback or staged rebuild plus
+- For large provider metadata refreshes that touch many derived rows, a spec
+  must choose either one transaction with rollback or staged rebuild plus
   readiness switch before consumers observe the new rows.
 - A scoped rebuild helper must exist for one source and for all sources. It is
   used by migrations, repair paths, fixtures, and manual recovery.
-- The implementation spec should define archive read-model readiness metadata,
-  likely source-scoped:
+- Archive read-model readiness metadata is source-scoped:
   - `source_id`
   - `model_version`
   - `status`: `never_built`, `building`, `ready`, `stale`, or `failed`
@@ -312,17 +310,17 @@ table:
   commands.
 - If the backfill can be large, the implementation plan must include chunking
   or progress state before any consumer switches by default.
-- YouTube transcript granularity must be chosen before schema work. The next
-  spec should either keep one archive item row per transcript with a paired
-  typed segment reader, or materialize segment rows in the archive model; it
-  must not leave segment ownership ambiguous.
+- YouTube transcript granularity must stay explicit. A future spec should
+  either keep one archive item row per transcript with a paired typed segment
+  reader, or materialize segment rows in the archive model; it must not leave
+  segment ownership ambiguous.
 - Staleness handling must be explicit. Either consumers only switch after a
   successful backfill/rebuild marker, or the read path must detect and reject
   stale/missing derived rows instead of silently falling back to provider joins.
 - Provider-specific branching belongs in the builder/backfill layer. Consumer
   query paths should read provider-neutral rows plus typed nested metadata.
   A paired YouTube transcript segment reader is the allowed exception if the
-  next spec chooses item-level archive rows plus typed segment navigation; in
+  future spec chooses item-level archive rows plus typed segment navigation; in
   that case, segment reads remain a typed provider-neutral reader owned beside
   the archive model, not ad hoc joins in UI/export code.
 
