@@ -30,9 +30,9 @@ The current product slice is a local-first MVP for:
 ### Source ingest
 
 - sources are stored in `sources`;
-- Telegram sources carry a `telegram_source_kind` of `channel`, `supergroup`, or `group`;
-- YouTube sources carry a provider-local `source_subtype` of `video` or `playlist`;
-- Telegram source uniqueness is scoped by account, source type, kind, and external id;
+- Telegram and YouTube sources carry provider-local `source_subtype` values;
+- Telegram operational peer identity lives in `telegram_sources`;
+- Telegram source uniqueness is scoped by account, source type, subtype, and external id;
 - YouTube video and playlist uniqueness is scoped by source type, subtype, and external id;
 - synced Telegram messages are stored in `items`;
 - synced YouTube transcripts and comments are stored in `items` with provider item kinds;
@@ -117,7 +117,7 @@ The `/analysis` source workspace can export one synced Telegram source to Notebo
 Current limitations:
 
 - export works only for data already synced into Extractum;
-- existing rows synced before migration `13.sql` may not contain reply, reaction, or thread metadata;
+- older rows may not contain reply, reaction, or thread metadata;
 - forward metadata and rich Telegram formatting metadata are not exported yet;
 - media binaries are not downloaded, so media-only rows are represented only through lightweight stored metadata;
 - URL titles and descriptions are not enriched in the MVP.
@@ -156,7 +156,9 @@ Main tables:
 
 - `accounts`
 - `sources`
+- `telegram_sources`
 - `items`
+- `telegram_messages`
 - `app_settings`
 - `analysis_prompt_templates`
 - `analysis_runs`
@@ -164,19 +166,17 @@ Main tables:
 - `analysis_source_group_members`
 - `analysis_chat_messages`
 - `analysis_run_messages`
+- `analysis_documents`
+- `archive_read_model_state`
+- `archive_read_items`
+- `youtube_video_sources`
+- `youtube_playlist_sources`
 - `youtube_playlist_items`
 - `youtube_transcript_segments`
 
-Recent schema additions:
-
-- migration `9.sql`: media-aware item metadata
-- migration `10.sql`: immutable saved run snapshots
-- migration `11.sql`: Telegram source kind
-- migration `12.sql`: account-scoped source uniqueness
-- migration `13.sql`: Telegram reply/thread/reaction context metadata on `items`
-- migration `14.sql`: local Telegram Forum Topics catalog
-- migration `15.sql`: provider-local source subtype
-- migration `16.sql`: YouTube source foundation, provider item kinds, playlist rows, transcript segments, YouTube analysis snapshots, source-group provider type, and YouTube settings defaults
+Active migrations start at the current-schema baseline
+`src-tauri/migrations/0001_current_schema_baseline.sql`. Historical pre-reset
+migrations are archived under `docs/archive/migrations-pre-baseline-reset/`.
 
 ## Error model
 
@@ -193,8 +193,12 @@ The frontend normalizes these errors through `src/lib/app-error.ts` instead of r
 
 ## Recommended reading
 
+Start with `docs/README.md` for the documentation map.
+
+Fast path:
+
 1. `docs/project.md`
-2. `docs/architecture-deep-dive.md`
-3. `docs/database-schema.md`
+2. `docs/database-schema.md`
+3. `docs/architecture-deep-dive.md`
 4. `docs/design-document.md`
 5. `docs/backlog.md`
