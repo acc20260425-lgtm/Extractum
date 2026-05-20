@@ -418,7 +418,6 @@ pub async fn list_analysis_run_messages(
         },
     )
     .await
-    .map_err(AppError::database)
 }
 
 #[tauri::command]

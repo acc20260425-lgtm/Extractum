@@ -10,7 +10,7 @@ use super::store::fetch_source_group;
 #[cfg(test)]
 use super::{ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP};
 use crate::compression::{decompress_bytes, decompress_text};
-use crate::error::{AppError, AppResult};
+use crate::error::{internal_error, AppError, AppResult};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AnalysisRunPreflightLimits {
@@ -477,7 +477,7 @@ pub(crate) fn preflight_limit_error(preflight: &AnalysisRunPreflight) -> Option<
 pub(crate) async fn load_run_snapshot_messages(
     pool: &Pool<Sqlite>,
     run_id: i64,
-) -> Result<Vec<CorpusMessage>, String> {
+) -> AppResult<Vec<CorpusMessage>> {
     let rows: Vec<StoredRunSnapshotRow> = sqlx::query_as(
         r#"
         SELECT
@@ -500,7 +500,7 @@ pub(crate) async fn load_run_snapshot_messages(
     .bind(run_id)
     .fetch_all(pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::database)?;
 
     rows.into_iter()
         .map(|row| {
@@ -510,7 +510,7 @@ pub(crate) async fn load_run_snapshot_messages(
                 external_id: row.external_id,
                 published_at: row.published_at,
                 author: row.author,
-                content: decompress_text(&row.content_zstd)?,
+                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
                 r#ref: row.r#ref,
                 item_kind: row.item_kind,
                 source_type: row.source_type,
@@ -531,18 +531,18 @@ pub(crate) struct ListRunSnapshotMessagesRequest {
 
 fn decode_optional_metadata_json(
     metadata_zstd: Option<&[u8]>,
-) -> Result<Option<serde_json::Value>, String> {
+) -> AppResult<Option<serde_json::Value>> {
     let Some(bytes) = metadata_zstd else {
         return Ok(None);
     };
 
-    let decompressed = decompress_bytes(bytes)?;
+    let decompressed = decompress_bytes(bytes).map_err(internal_error)?;
     serde_json::from_slice(&decompressed)
         .map(Some)
-        .map_err(|e| format!("Failed to decode run message metadata JSON: {e}"))
+        .map_err(|e| internal_error(format!("Failed to decode run message metadata JSON: {e}")))
 }
 
-fn run_message_from_snapshot_row(row: StoredRunSnapshotRow) -> Result<AnalysisRunMessage, String> {
+fn run_message_from_snapshot_row(row: StoredRunSnapshotRow) -> AppResult<AnalysisRunMessage> {
     Ok(AnalysisRunMessage {
         item_id: row.item_id,
         source_id: row.source_id,
@@ -550,7 +550,7 @@ fn run_message_from_snapshot_row(row: StoredRunSnapshotRow) -> Result<AnalysisRu
         author: row.author,
         published_at: row.published_at,
         r#ref: row.r#ref,
-        content: decompress_text(&row.content_zstd)?,
+        content: decompress_text(&row.content_zstd).map_err(internal_error)?,
         item_kind: row.item_kind,
         source_type: row.source_type,
         source_subtype: row.source_subtype,
@@ -561,7 +561,7 @@ fn run_message_from_snapshot_row(row: StoredRunSnapshotRow) -> Result<AnalysisRu
 pub(crate) async fn list_run_snapshot_messages_page(
     pool: &Pool<Sqlite>,
     request: ListRunSnapshotMessagesRequest,
-) -> Result<AnalysisRunMessagesPage, String> {
+) -> AppResult<AnalysisRunMessagesPage> {
     let limit = request.limit.clamp(1, 500);
     let fetch_limit = (limit + 1) as i64;
 
@@ -600,7 +600,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
         .bind(fetch_limit)
         .fetch_all(pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::database)?
     } else if let Some(around_ref) = request.around_ref.as_deref() {
         let around_cursor = sqlx::query_as::<_, (i64, String)>(
             r#"
@@ -618,7 +618,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
         .bind(around_ref)
         .fetch_optional(pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::database)?
         .map(|(published_at, r#ref)| AnalysisRunMessageCursor {
             published_at,
             r#ref,
@@ -659,7 +659,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
             .bind(fetch_limit)
             .fetch_all(pool)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(AppError::database)?
         } else {
             sqlx::query_as(
                 r#"
@@ -688,7 +688,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
             .bind(fetch_limit)
             .fetch_all(pool)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(AppError::database)?
         }
     } else {
         sqlx::query_as(
@@ -718,7 +718,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
         .bind(fetch_limit)
         .fetch_all(pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::database)?
     };
 
     let has_more = rows.len() > limit;
@@ -748,7 +748,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
 pub(crate) async fn load_run_corpus_messages(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,
-) -> Result<Vec<CorpusMessage>, String> {
+) -> AppResult<Vec<CorpusMessage>> {
     let snapshot = load_run_snapshot_messages(pool, run.id).await?;
     ensure_captured_snapshot_rows(run, &snapshot)?;
     Ok(snapshot)
@@ -757,20 +757,22 @@ pub(crate) async fn load_run_corpus_messages(
 pub(crate) async fn load_trace_resolution_messages(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,
-) -> Result<Vec<CorpusMessage>, String> {
+) -> AppResult<Vec<CorpusMessage>> {
     let snapshot = load_run_snapshot_messages(pool, run.id).await?;
     ensure_captured_snapshot_rows(run, &snapshot)?;
     Ok(snapshot)
 }
 
-fn captured_snapshot_missing_error(run_id: i64) -> String {
-    format!("Analysis run {run_id} captured snapshot is unavailable")
+fn captured_snapshot_missing_error(run_id: i64) -> AppError {
+    internal_error(format!(
+        "Analysis run {run_id} captured snapshot is unavailable"
+    ))
 }
 
 fn ensure_captured_snapshot_rows(
     run: &AnalysisRunDetail,
     snapshot: &[CorpusMessage],
-) -> Result<(), String> {
+) -> AppResult<()> {
     if run.snapshot_state == Some(crate::analysis::models::AnalysisSnapshotState::Captured)
         && run.snapshot_message_count == 0
         && snapshot.is_empty()
@@ -795,6 +797,7 @@ mod tests {
     use crate::analysis::models::{AnalysisRunDetail, AnalysisRunMessageCursor, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
     use crate::compression::{compress_json_bytes, compress_text};
+    use crate::error::AppErrorKind;
     use crate::youtube::dto::{YoutubeAvailabilityStatus, YoutubeVideoForm, YoutubeVideoMetadata};
 
     fn sample_corpus() -> Vec<CorpusMessage> {
@@ -1522,6 +1525,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_run_snapshot_messages_page_returns_typed_internal_for_corrupt_snapshot_content() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_runs (
+                id, run_type, scope_type, source_group_id, period_from, period_to,
+                output_language, prompt_template_version, provider_profile, provider,
+                model, status, created_at
+            )
+            VALUES (1, 'report', 'source_group', 9, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)
+            "#,
+        )
+        .bind(1_700_000_000_i64)
+        .bind(1_800_000_000_i64)
+        .bind(1_710_000_500_i64)
+        .execute(&pool)
+        .await
+        .expect("insert run");
+        persist_run_snapshot(&pool, 1, "Frozen group", &sample_corpus())
+            .await
+            .expect("persist snapshot");
+        sqlx::query("UPDATE analysis_run_messages SET content_zstd = x'00' WHERE run_id = 1")
+            .execute(&pool)
+            .await
+            .expect("corrupt snapshot content");
+
+        let error = match list_run_snapshot_messages_page(
+            &pool,
+            ListRunSnapshotMessagesRequest {
+                run_id: 1,
+                after: None,
+                limit: 25,
+                source_id: None,
+                around_ref: None,
+            },
+        )
+        .await
+        {
+            Ok(_) => panic!("corrupt snapshot content should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert!(!error.message.starts_with("Database error:"));
+        assert!(!error.message.trim().is_empty());
+    }
+
+    #[tokio::test]
     async fn list_run_snapshot_messages_page_starts_at_around_ref() {
         let pool = snapshot_pool().await;
         sqlx::query(
@@ -1823,7 +1874,7 @@ mod tests {
             Err(error) => error,
         };
 
-        assert!(error.contains("snapshot is unavailable"));
+        assert!(error.message.contains("snapshot is unavailable"));
     }
 
     #[tokio::test]

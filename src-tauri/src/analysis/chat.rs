@@ -375,9 +375,7 @@ pub async fn ask_analysis_run_question(
             AppError::conflict("The selected analysis run does not have a saved report")
         })?;
 
-    let corpus = load_run_snapshot_messages(&pool, run.id)
-        .await
-        .map_err(AppError::database)?;
+    let corpus = load_run_snapshot_messages(&pool, run.id).await?;
     ensure_completed_chat_context(&run, &corpus)?;
     let context_messages = find_chat_context_messages(&question, &corpus);
     let effective_profile_id = profile_id.unwrap_or_else(|| run.provider_profile.clone());
