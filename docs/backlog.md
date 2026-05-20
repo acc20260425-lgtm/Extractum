@@ -3,22 +3,21 @@
 > **Updated:** 2026-05-20
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
-## 1. Open Gaps
+## 1. Priority Snapshot
 
-- Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
-- Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
-- Takeout source import needs broader live validation, incomplete-import policy
-  on top of persisted batch/observation provenance, and a migrated-history
-  enablement policy.
-- YouTube live-provider coverage needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
-- Large saved-run archives need richer narrowing by source, group, profile/model, template, and date.
-- Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
-- Analysis workspace parity still needs run-open access to NotebookLM export, prompt template management, and source group management.
-- NotebookLM export follow-ups remain open for optional link enrichment, source-group export, forward metadata, and richer topic grouping.
-- YouTube-specific NotebookLM export enrichment remains open.
-- Richer Telegram Forum Topics browsing/export and forward metadata are not modeled yet.
-- Stabilization needs repeatable full-project verification, CI, and a dependency pinning policy for `grammers`.
-- Logs and user-facing error surfaces need a focused secret-leak audit.
+| Priority | Area | Next outcome |
+| --- | --- | --- |
+| High | Telegram runtime/private-source validation | verify real account, dialog, private channel/supergroup, small group, migrated-dialog, and cross-account behavior |
+| High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
+| High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
+| High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
+| High | Analysis workspace parity | keep NotebookLM export, prompt templates, and source groups reachable when a run is open |
+| Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
+| Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
+| Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
+| Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
+| Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
+| Medium | Stabilization and secret safety | add repeatable verification, CI, dependency policy, and secret-leak audit coverage |
 
 ## 2. Planning Principles
 
@@ -30,25 +29,9 @@
    history. Move historical specs or verification notes into
    `docs/superpowers/archive/` only when they remain useful as context.
 
-## 3. Active Work Areas
+## 3. Open Roadmap
 
-| Area | Open target |
-| --- | --- |
-| Telegram runtime validation | predictable behavior across real supported dialogs and accounts |
-| Account deletion coordination | deletion cannot race active ingest or analysis work |
-| Takeout source import | validated across source kinds with explicit incomplete-import policy |
-| Database schema simplification | optional Telegram metadata blob cleanup after typed repair validation |
-| YouTube source ingest | broader live validation plus optional future enrichment/resumability |
-| Saved runs UX | fast narrowing for large saved-run histories |
-| Analysis workspace parity | run-open NotebookLM export plus template and source-group management access |
-| Media support | optional download/preview and controlled media-aware analysis |
-| NotebookLM export | optional enrichment and source-group export if needed |
-| Stabilization | repeatable baseline plus dependency upgrade policy |
-| Secret safety | no accidental secret exposure in logs, status text, or debug output |
-
-## 4. Open Roadmap
-
-### 4.1 Telegram Runtime And Private-Source Validation
+### 3.1 Telegram Runtime And Private-Source Validation
 
 Priority: high.
 
@@ -67,7 +50,7 @@ Acceptance:
 - Sync inserts messages for each supported kind without resolving to the wrong peer.
 - Private dialog-picked sources resolve predictably when Telegram provides sufficient peer data.
 
-### 4.2 Account Deletion Coordination
+### 3.2 Account Deletion Coordination
 
 Priority: high.
 
@@ -82,7 +65,7 @@ Acceptance:
 - Runtime and secure-storage cleanup still happens after a valid delete.
 - Missing account deletion reports a typed `not_found` error.
 
-### 4.3 Takeout Source Import Follow-Ups
+### 3.3 Takeout Source Import Follow-Ups
 
 Priority: high.
 
@@ -106,7 +89,7 @@ Acceptance:
 - Migrated supergroup history has a safe provenance and validation policy
   before import is enabled.
 
-### 4.4 Database Schema Simplification
+### 3.4 Database Schema Simplification
 
 Priority: high.
 
@@ -129,7 +112,7 @@ Acceptance:
 - Any blob cleanup is validation-aware and does not remove repair input before
   the remaining real-data checks are done.
 
-### 4.5 Saved Runs Discoverability And Cleanup
+### 3.5 Saved Runs Discoverability And Cleanup
 
 Priority: medium.
 
@@ -140,7 +123,7 @@ Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-### 4.6 Analysis Workspace Parity
+### 3.6 Analysis Workspace Parity
 
 Priority: high.
 
@@ -154,7 +137,7 @@ Acceptance:
 - Opening a current or saved analysis run does not hide prompt template or source group management.
 - The setup/no-run path keeps the same management actions it has today.
 
-### 4.7 NotebookLM Export Follow-Ups
+### 3.7 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -164,7 +147,7 @@ Priority: medium.
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 4.8 YouTube Source Follow-Ups
+### 3.8 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -183,7 +166,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 4.9 Media Download, Preview, And Analysis
+### 3.9 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -201,7 +184,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 4.10 Stabilization
+### 3.10 Stabilization
 
 Priority: medium.
 
@@ -211,7 +194,7 @@ Priority: medium.
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
 - [ ] audit backend errors, frontend status text, and debug output for accidental credential exposure
 
-## 5. Explicit Non-Goals
+## 4. Explicit Non-Goals
 
 | Idea | Decision | Why |
 | --- | --- | --- |
@@ -220,16 +203,3 @@ Priority: medium.
 | Service-heavy frontend architecture | do not do | poor fit for this Svelte app |
 | E2E-first expansion before core stabilization | do not do | lower ROI than targeted storage and logic tests right now |
 | Splitting every large file automatically | do not do | only split where it lowers risk or unlocks backlog work |
-
-## 6. Execution Priority
-
-1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
-2. Close account-deletion coordination before more long-running ingest expansion.
-3. Validate Takeout import across representative source kinds and define the
-   incomplete-import policy.
-4. Decide whether old Telegram metadata blobs should be cleared after real validation.
-5. Decide whether saved-run history needs richer filters before media expansion.
-6. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
-7. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.
-8. Continue media download/preview and media-aware analysis design.
-9. Tighten verification, CI, and dependency pinning.
