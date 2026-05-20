@@ -334,10 +334,10 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 
 If you are changing ingest:
 
-- `src-tauri/src/sources.rs`
+- `src-tauri/src/sources/mod.rs`
 - `src-tauri/src/source_ingest.rs`
 - `src-tauri/src/youtube/`
-- `src-tauri/src/takeout_import.rs`
+- `src-tauri/src/takeout_import/mod.rs`
 - `src-tauri/src/takeout_import/raw_parse.rs`
 - `src/routes/analysis/+page.svelte`
 - `src/lib/components/analysis/`

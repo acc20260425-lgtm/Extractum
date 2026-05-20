@@ -204,10 +204,10 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 
 ## Reading order for implementation work
 
-1. `src-tauri/src/sources.rs`
+1. `src-tauri/src/sources/mod.rs`
 2. `src-tauri/src/source_ingest.rs`
 3. `src-tauri/src/youtube/`
-4. `src-tauri/src/takeout_import.rs`
+4. `src-tauri/src/takeout_import/mod.rs`
 5. `src-tauri/src/takeout_import/raw_parse.rs`
 6. `src-tauri/src/analysis/`
 7. `src-tauri/src/llm/`
