@@ -5,7 +5,7 @@
 Status: implemented and merged into `main` on 2026-05-11.
 
 Canonical verification record:
-`docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
+`docs/superpowers/archive/verification/2026-05-10-analysis-redesign.md`.
 
 The staged implementation plans for Parts 1-7 were removed from active docs
 after merge because they were execution checklists, not current product

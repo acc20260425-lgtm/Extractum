@@ -220,4 +220,5 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 
 Related deep dive: `docs/takeout-source-import.md`.
 
-Recent retained verification notes live under `docs/superpowers/verification/`.
+Historical verification notes live under
+`docs/superpowers/archive/verification/`.

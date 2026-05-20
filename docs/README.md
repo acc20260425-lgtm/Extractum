@@ -32,13 +32,13 @@ pre-baseline migrations live in archives.
   `src-tauri/migrations/0001_current_schema_baseline.sql`.
 - `superpowers/archive/specs/`: historical Superpowers design specs for
   shipped or superseded work.
-- `superpowers/verification/`: retained manual verification notes that are
-  still useful as regression references.
+- `superpowers/archive/verification/`: historical manual verification records.
 
 ## Superpowers Working Docs
 
 - `superpowers/plans/`: active implementation plans only.
 - `superpowers/specs/`: active or still-relevant design specs only.
+- `superpowers/verification/`: active or reusable verification notes only.
 
 Completed Superpowers plans should be removed from the working tree after their
 outcome is captured in current-state docs, tests, backlog, or Git history.

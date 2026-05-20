@@ -77,5 +77,5 @@ Then verify `http://127.0.0.1:5173/analysis` in desktop, narrow desktop, and mob
 A later real Tauri app pass captured post-merge UX polish findings for `/analysis` with seeded fixtures:
 
 ```text
-docs/superpowers/verification/2026-05-11-analysis-redesign-ux-polish.md
+docs/superpowers/archive/verification/2026-05-11-analysis-redesign-ux-polish.md
 ```

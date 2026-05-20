@@ -7,7 +7,7 @@ Scope: fixture-backed browser verification for `/analysis` result-first redesign
 
 Status: implemented, exercised in browser verification, and merged into `main`
 on 2026-05-11. The fixture-backed scenarios in
-`docs/superpowers/verification/2026-05-10-analysis-redesign.md` are recorded as
+`docs/superpowers/archive/verification/2026-05-10-analysis-redesign.md` are recorded as
 `PASS`.
 
 ## Purpose
@@ -72,7 +72,7 @@ Visible fixture labels should be deterministic, human-recognizable, and scenario
 
 ## Fixture Dataset
 
-The fixture set targets the populated browser scenarios that were blocked by missing local data in `docs/superpowers/verification/2026-05-10-analysis-redesign.md`.
+The fixture set targets the populated browser scenarios that were blocked by missing local data in `docs/superpowers/archive/verification/2026-05-10-analysis-redesign.md`.
 
 This fixture dataset is for populated-state verification. No-source and no-context onboarding states are verified separately by clearing fixtures and using an empty or controlled development database.
 
@@ -189,7 +189,7 @@ The fixture-backed browser verification flow is:
 3. Invoke `seed_analysis_redesign_fixtures`.
 4. Open `/analysis`.
 5. Exercise the populated browser scenarios that previously lacked local data.
-6. Update `docs/superpowers/verification/2026-05-10-analysis-redesign.md` with real `PASS` or `FAIL` results.
+6. Update `docs/superpowers/archive/verification/2026-05-10-analysis-redesign.md` with real `PASS` or `FAIL` results.
 7. Invoke `clear_analysis_redesign_fixtures` again.
 8. Record any remaining fixture or standalone-browser limitations as residual risks.
 
