@@ -908,7 +908,7 @@ git commit -m "feat: activate current schema baseline"
 - Modify: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Move archived SQL files**
+- [x] **Step 1: Move archived SQL files**
 
 Run:
 
@@ -942,7 +942,7 @@ git mv src-tauri\migrations\25.sql docs\archive\migrations-pre-baseline-reset\sq
 git mv src-tauri\migrations\26.sql docs\archive\migrations-pre-baseline-reset\sql\26.sql
 ```
 
-- [ ] **Step 2: Move archived Rust migration modules**
+- [x] **Step 2: Move archived Rust migration modules**
 
 Run:
 
@@ -955,7 +955,7 @@ git mv src-tauri\src\migrations\topic_membership_materialization.rs docs\archive
 git mv src-tauri\src\migrations\youtube_typed_source_metadata.rs docs\archive\migrations-pre-baseline-reset\rust\youtube_typed_source_metadata.rs
 ```
 
-- [ ] **Step 3: Remove legacy module declarations and parity-only tests**
+- [x] **Step 3: Remove legacy module declarations and parity-only tests**
 
 In `src-tauri/src/migrations.rs`, remove these module declarations:
 
@@ -997,7 +997,7 @@ normalize_sql_crlf
 sha384_bytes
 ```
 
-- [ ] **Step 4: Run tests to find remaining stale references**
+- [x] **Step 4: Run tests to find remaining stale references**
 
 Run:
 
@@ -1009,7 +1009,7 @@ Expected: either pass or fail with concrete unresolved references to deleted
 legacy helpers. Remove only stale legacy references; keep baseline and fresh
 schema tests.
 
-- [ ] **Step 5: Run broader backend tests**
+- [x] **Step 5: Run broader backend tests**
 
 Run:
 
@@ -1019,7 +1019,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: all Rust tests pass.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 Run:
 

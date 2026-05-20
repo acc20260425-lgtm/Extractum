@@ -129,6 +129,7 @@ pub(crate) fn truncate_topic_resolution_error(error: impl AsRef<str>) -> String 
         .collect()
 }
 
+#[allow(dead_code)]
 pub(crate) async fn create_topic_membership_schema(conn: &mut SqliteConnection) -> AppResult<()> {
     sqlx::raw_sql(TOPIC_MEMBERSHIP_SCHEMA_SQL)
         .execute(&mut *conn)
@@ -377,6 +378,7 @@ pub(crate) async fn load_topic_resolution_state(
     .map_err(AppError::database)
 }
 
+#[allow(dead_code)]
 pub(crate) async fn catalog_backed_supergroup_source_ids(
     conn: &mut SqliteConnection,
 ) -> AppResult<Vec<i64>> {
@@ -393,6 +395,7 @@ pub(crate) async fn catalog_backed_supergroup_source_ids(
     .map_err(AppError::database)
 }
 
+#[allow(dead_code)]
 pub(crate) async fn ensure_never_run_state_for_supergroups_without_catalog(
     conn: &mut SqliteConnection,
     updated_at: i64,
@@ -428,6 +431,7 @@ pub(crate) async fn ensure_never_run_state_for_supergroups_without_catalog(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) async fn assert_all_topic_membership_invariants(
     conn: &mut SqliteConnection,
 ) -> AppResult<()> {
@@ -436,6 +440,7 @@ pub(crate) async fn assert_all_topic_membership_invariants(
     Ok(())
 }
 
+#[allow(dead_code)]
 #[derive(sqlx::FromRow)]
 struct ForeignKeyCheckRow {
     table: String,
@@ -444,6 +449,7 @@ struct ForeignKeyCheckRow {
     fkid: i64,
 }
 
+#[allow(dead_code)]
 async fn assert_foreign_key_check_clean(conn: &mut SqliteConnection) -> AppResult<()> {
     let rows: Vec<ForeignKeyCheckRow> = sqlx::query_as("PRAGMA foreign_key_check")
         .fetch_all(&mut *conn)
@@ -467,6 +473,7 @@ async fn assert_foreign_key_check_clean(conn: &mut SqliteConnection) -> AppResul
     )))
 }
 
+#[allow(dead_code)]
 async fn assert_state_rows_only_for_supergroups(conn: &mut SqliteConnection) -> AppResult<()> {
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)
@@ -615,6 +622,7 @@ async fn assert_ready_source_invariants(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) const TOPIC_MEMBERSHIP_SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS item_topic_memberships (
     item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,

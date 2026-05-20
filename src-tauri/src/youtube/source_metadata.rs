@@ -645,6 +645,7 @@ fn caption_language_override_from_raw(raw: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+#[allow(dead_code)]
 pub(crate) const YOUTUBE_TYPED_SOURCE_TABLES_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS youtube_video_sources (
     source_id INTEGER PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
@@ -729,6 +730,7 @@ CREATE INDEX IF NOT EXISTS idx_youtube_playlist_sources_playlist_id
     ON youtube_playlist_sources(playlist_id);
 "#;
 
+#[allow(dead_code)]
 pub(crate) async fn create_youtube_typed_source_tables<'e, E>(executor: E) -> AppResult<()>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -740,11 +742,13 @@ where
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) fn decode_legacy_video_source_metadata(bytes: &[u8]) -> Option<YoutubeVideoMetadata> {
     let json = crate::compression::decompress_bytes(bytes).ok()?;
     serde_json::from_slice(&json).ok()
 }
 
+#[allow(dead_code)]
 pub(crate) fn decode_legacy_playlist_source_metadata(
     bytes: &[u8],
 ) -> Option<YoutubePlaylistMetadata> {
@@ -752,6 +756,7 @@ pub(crate) fn decode_legacy_playlist_source_metadata(
     serde_json::from_slice(&json).ok()
 }
 
+#[allow(dead_code)]
 pub(crate) async fn insert_video_source_metadata_on_connection(
     conn: &mut SqliteConnection,
     source_id: i64,
@@ -761,6 +766,7 @@ pub(crate) async fn insert_video_source_metadata_on_connection(
     insert_video_source_columns(conn, source_id, &columns).await
 }
 
+#[allow(dead_code)]
 pub(crate) async fn insert_playlist_source_metadata_on_connection(
     conn: &mut SqliteConnection,
     source_id: i64,

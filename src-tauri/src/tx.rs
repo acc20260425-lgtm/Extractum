@@ -28,6 +28,7 @@ pub(crate) async fn rollback(conn: &mut SqlitePoolConnection) -> AppResult<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) async fn begin_immediate_on_connection(conn: &mut SqliteConnection) -> AppResult<()> {
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *conn)
@@ -36,6 +37,7 @@ pub(crate) async fn begin_immediate_on_connection(conn: &mut SqliteConnection) -
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) async fn commit_connection(conn: &mut SqliteConnection) -> AppResult<()> {
     sqlx::query("COMMIT")
         .execute(&mut *conn)
@@ -44,6 +46,7 @@ pub(crate) async fn commit_connection(conn: &mut SqliteConnection) -> AppResult<
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) async fn rollback_connection(conn: &mut SqliteConnection) -> AppResult<()> {
     sqlx::query("ROLLBACK")
         .execute(&mut *conn)
@@ -68,6 +71,7 @@ pub(crate) async fn finish_manual_transaction<T>(
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn finish_connection_transaction<T>(
     conn: &mut SqliteConnection,
     result: AppResult<T>,

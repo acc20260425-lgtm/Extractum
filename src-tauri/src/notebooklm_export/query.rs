@@ -506,12 +506,7 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create telegram_forum_topics source/topic index");
-        sqlx::raw_sql(
-            crate::migrations::telegram_item_native_identity::TELEGRAM_MESSAGES_SCHEMA_SQL,
-        )
-        .execute(&pool)
-        .await
-        .expect("create telegram_messages");
+        crate::sources::test_support::create_telegram_messages_table(&pool).await;
         seed_materialized_topic_schema(&pool).await;
         crate::sources::test_support::create_archive_read_model_tables(&pool).await;
         pool

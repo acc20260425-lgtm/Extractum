@@ -596,45 +596,6 @@ mod tests {
         .expect("insert source");
     }
 
-    async fn insert_legacy_telegram_source(
-        pool: &sqlx::SqlitePool,
-        id: i64,
-        subtype: Option<&str>,
-        legacy_kind: Option<&str>,
-        account_id: Option<i64>,
-        external_id: &str,
-        metadata_json: Option<&[u8]>,
-    ) {
-        let metadata_zstd = metadata_json
-            .map(compress_json_bytes)
-            .transpose()
-            .expect("compress metadata");
-        let legacy_kind_column = legacy_source_kind_column();
-        let insert_sql = format!(
-            r#"
-            INSERT INTO sources (
-                id, source_type, source_subtype, {legacy_kind_column}, account_id,
-                external_id, title, metadata_zstd, is_active, is_member, created_at
-            )
-            VALUES (?, 'telegram', ?, ?, ?, ?, 'source', ?, 1, 1, 100)
-            "#,
-        );
-        sqlx::query(&insert_sql)
-            .bind(id)
-            .bind(subtype)
-            .bind(legacy_kind)
-            .bind(account_id)
-            .bind(external_id)
-            .bind(metadata_zstd)
-            .execute(pool)
-            .await
-            .expect("insert legacy source");
-    }
-
-    fn legacy_source_kind_column() -> String {
-        ["telegram", "source", "kind"].join("_")
-    }
-
     async fn post_v19_repair_pool() -> sqlx::SqlitePool {
         let pool = crate::sources::test_support::memory_pool().await;
         sqlx::query(
@@ -1068,55 +1029,6 @@ mod tests {
             .await
             .expect("count typed rows");
         assert_eq!(count, 0);
-    }
-
-    #[tokio::test]
-    async fn v17_upgrade_repair_preserves_source_id_and_creates_canonical_index() {
-        let pool = memory_pool_with_migrations_through(17).await;
-        insert_test_account(&pool, 1).await;
-        insert_legacy_telegram_source(
-            &pool,
-            101,
-            Some("channel"),
-            Some("channel"),
-            Some(1),
-            "12345",
-            Some(br#"{"peer_identity":{"strategy":"username","username":"Example","access_hash":77}}"#),
-        )
-        .await;
-        let migration_18 = build_migrations()
-            .into_iter()
-            .find(|migration| migration.version == 18)
-            .expect("migration 18");
-        sqlx::raw_sql(migration_18.sql)
-            .execute(&pool)
-            .await
-            .expect("apply migration 18");
-
-        repair_source_identity(&pool, SourceIdentityRepairMode::Apply)
-            .await
-            .expect("repair succeeds");
-
-        let source_id_after_repair: i64 =
-            sqlx::query_scalar("SELECT id FROM sources WHERE external_id = '12345'")
-                .fetch_one(&pool)
-                .await
-                .expect("load source id");
-        let typed_source_id: i64 =
-            sqlx::query_scalar("SELECT source_id FROM telegram_sources WHERE source_id = 101")
-                .fetch_one(&pool)
-                .await
-                .expect("load typed source id");
-        let canonical_index_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_sources_unique_telegram_identity'",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("count canonical index");
-
-        assert_eq!(source_id_after_repair, 101);
-        assert_eq!(typed_source_id, 101);
-        assert_eq!(canonical_index_count, 1);
     }
 
     #[tokio::test]
