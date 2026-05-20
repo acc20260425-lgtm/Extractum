@@ -137,8 +137,16 @@ Backup naming:
 extractum.db.pre-baseline-reset-YYYYMMDD-HHMMSS.bak
 ```
 
+Backup files remain beside the database after a successful cutover. The
+application does not delete or rotate them automatically; retention is a user
+responsibility.
+
 The cutover does not insert, update, delete, alter, or drop product tables. It
 only reads migration state and rewrites `_sqlx_migrations`.
+
+The `_sqlx_migrations` rewrite is one transaction. Clearing the old migration
+rows and inserting the baseline v1 row must commit or roll back together so an
+interrupted rewrite cannot leave the database without migration history.
 
 ## Sqlx Bookkeeping
 
