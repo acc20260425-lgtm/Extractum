@@ -2,23 +2,23 @@ use std::io::Cursor;
 
 use super::models::{AnalysisTraceData, AnalysisTraceRef, CorpusMessage};
 use crate::compression::decompress_bytes;
-use crate::error::{AppError, AppResult};
+use crate::error::{internal_error, AppError, AppResult};
 
 const TRACE_EXCERPT_MAX_CHARS: usize = 480;
 
 #[allow(dead_code)]
-pub(crate) fn compress_trace_data(trace_data: &AnalysisTraceData) -> Result<Vec<u8>, String> {
-    let json = serde_json::to_vec(trace_data).map_err(|e| e.to_string())?;
-    zstd::encode_all(Cursor::new(json), 3).map_err(|e| e.to_string())
+pub(crate) fn compress_trace_data(trace_data: &AnalysisTraceData) -> AppResult<Vec<u8>> {
+    let json = serde_json::to_vec(trace_data).map_err(internal_error)?;
+    zstd::encode_all(Cursor::new(json), 3).map_err(internal_error)
 }
 
-pub(crate) fn decode_trace_data(bytes: Option<&[u8]>) -> Result<AnalysisTraceData, String> {
+pub(crate) fn decode_trace_data(bytes: Option<&[u8]>) -> AppResult<AnalysisTraceData> {
     let Some(bytes) = bytes else {
         return Ok(AnalysisTraceData::default());
     };
 
-    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(|e| e.to_string())?;
-    serde_json::from_slice(&decoded).map_err(|e| e.to_string())
+    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(internal_error)?;
+    serde_json::from_slice(&decoded).map_err(internal_error)
 }
 
 pub(crate) fn normalize_ref(candidate: &str) -> Option<String> {
@@ -317,9 +317,12 @@ pub(crate) fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> Anal
 
 #[cfg(test)]
 mod tests {
-    use super::{build_trace_refs, clip_excerpt, normalize_ref, try_build_trace_refs};
+    use super::{
+        build_trace_refs, clip_excerpt, decode_trace_data, normalize_ref, try_build_trace_refs,
+    };
     use crate::analysis::models::CorpusMessage;
     use crate::compression::compress_json_bytes;
+    use crate::error::AppErrorKind;
 
     fn metadata_zstd(value: serde_json::Value) -> Vec<u8> {
         let json = serde_json::to_vec(&value).expect("serialize metadata");
@@ -402,6 +405,17 @@ mod tests {
         assert_eq!(normalize_ref("s12-i400@790000-754000ms"), None);
         assert_eq!(normalize_ref("s12-iabc"), None);
         assert_eq!(normalize_ref("x12-i845"), None);
+    }
+
+    #[test]
+    fn decode_trace_data_returns_typed_internal_for_invalid_zstd() {
+        let error = match decode_trace_data(Some(&[0])) {
+            Ok(_) => panic!("invalid trace zstd should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert!(!error.message.is_empty());
     }
 
     #[test]

@@ -813,7 +813,8 @@ async fn run_report_pipeline(
     let reduce_result = run_reduce_phase(&ctx, &input, &chunk_summaries).await?;
     ctx.ensure_not_cancelled().await?;
     let trace_data = build_trace_data(&reduce_result.completion.text, &corpus);
-    let compressed_trace = compress_trace_data(&trace_data).map_err(ReportRunError::Failed)?;
+    let compressed_trace = compress_trace_data(&trace_data)
+        .map_err(|error| ReportRunError::Failed(error.to_string()))?;
 
     ctx.emit(
         RunEvent::new(run_id, "progress", "persist")
