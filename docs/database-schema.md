@@ -878,34 +878,20 @@ saved-run read paths must not reconstruct them from current live sources.
 
 ## 3. Migration history
 
+Baseline v1 (`0001_current_schema_baseline.sql`) is the active starting point
+for supported databases. Pre-reset migrations 1 through 26 are archived under
+`docs/archive/migrations-pre-baseline-reset/` and are not an automatic upgrade
+path. Future migrations start at `0002`.
+
+The application performs a one-time baseline-history cutover for the one
+controlled pre-reset database. The cutover validates old successful migration
+history through version 26, creates a mandatory backup beside the database,
+then rewrites only `_sqlx_migrations` to baseline v1 in one transaction.
+Product tables are not modified.
+
 | Version | File | Purpose |
 | --- | --- | --- |
-| 1 | `1.sql` | Initialize `sources`, `items`, `app_settings` |
-| 2 | `2.sql` | Add `is_member` to `sources` |
-| 3 | `3.sql` | Add `accounts` table |
-| 4 | `4.sql` | Add `last_synced_at` to `sources` |
-| 5 | `5.sql` | Add analysis templates and runs |
-| 6 | `6.sql` | Add analysis source groups |
-| 7 | `7.sql` | Add `source_group_id` to `analysis_runs` |
-| 8 | `8.sql` | Add analysis chat history |
-| 9 | `9.sql` | Add media-aware metadata to `items` |
-| 10 | `10.sql` | Add saved run snapshot storage |
-| 11 | `11.sql` | Add `telegram_source_kind` and migrate Telegram channels to generic Telegram sources |
-| 12 | `12.sql` | Scope source uniqueness by `account_id` |
-| 13 | `13.sql` | Add Telegram reply/thread/reaction context metadata to `items` |
-| 14 | `14.sql` | Add local `telegram_forum_topics` catalog and topic join indexes |
-| 15 | `15.sql` | Add provider-local `source_subtype` to `sources` and backfill Telegram rows |
-| 16 | `16.sql` | Add YouTube source foundation, item kinds, playlist rows, transcript segments, YouTube analysis snapshot metadata, source-group provider type, and YouTube settings defaults |
-| 17 | `17.sql` | Add durable YouTube corpus mode metadata to `analysis_runs` |
-| 18 | `18.sql` | Add source identity bridge tables, safe Telegram subtype backfills, and repair diagnostics storage |
-| 19 | `19.sql` | Runner-managed rebuild of `sources` without `telegram_source_kind`; records the sentinel checksum for SQLx history |
-| 20 | `20.sql` | Runner-managed creation and backfill of typed YouTube video/playlist source metadata tables |
-| 21 | `21.sql` | Runner-managed creation/backfill of typed Telegram message identity rows and replacement item uniqueness |
-| 22 | `22.sql` | Runner-managed creation and rebuild of Telegram forum topic membership materialization tables |
-| 23 | `23.sql` | Add generic ingest provenance tables and Telegram Takeout batch detail |
-| 24 | `24.sql` runner-managed | Add provider-neutral analysis document layer and backfill live analysis corpus documents |
-| 25 | `25.sql` | Add analysis snapshot capture marker and error columns |
-| 26 | `26.sql` | Add provider-neutral archive read model tables |
+| 1 | `0001_current_schema_baseline.sql` | Current supported schema baseline |
 
 ## 4. Current behavior implications
 

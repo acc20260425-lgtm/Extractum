@@ -1040,7 +1040,7 @@ git commit -m "refactor: archive pre-baseline migrations"
 - Modify: `docs/backlog.md`
 - Modify: `docs/superpowers/plans/2026-05-20-current-schema-baseline-reset.md`
 
-- [ ] **Step 1: Update schema documentation**
+- [x] **Step 1: Update schema documentation**
 
 In `docs/database-schema.md`, update the migration history section to describe:
 
@@ -1061,7 +1061,7 @@ then rewrites only `_sqlx_migrations` to baseline v1 in one transaction.
 Product tables are not modified.
 ```
 
-- [ ] **Step 2: Update architecture simplification analysis**
+- [x] **Step 2: Update architecture simplification analysis**
 
 In `docs/backend-architecture-simplification-analysis.md`, mark the current
 schema baseline item as implemented after this slice:
@@ -1077,13 +1077,13 @@ Current status:
 - future migrations start at `0002`.
 ```
 
-- [ ] **Step 3: Update backlog**
+- [x] **Step 3: Update backlog**
 
 In `docs/backlog.md`, remove or close the open Database Schema Simplification
 item for current-schema baseline. Keep unrelated cleanup items that are outside
 this reset slice.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run:
 
@@ -1105,7 +1105,7 @@ npm.cmd test: all frontend tests pass
 npm.cmd run check: svelte-check reports 0 errors and 0 warnings
 ```
 
-- [ ] **Step 5: Commit Task 5**
+- [x] **Step 5: Commit Task 5**
 
 Run:
 

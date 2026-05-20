@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-19
+> **Updated:** 2026-05-20
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Open Gaps
@@ -8,8 +8,6 @@
 - Telegram runtime behavior needs broader validation against real accounts, dialogs, private channels/supergroups, small groups, and migrated dialogs.
 - Account deletion still needs coordination with active source sync, Takeout import, source deletion, and analysis work.
 - Takeout source import needs broader live validation, incomplete-batch provenance, and a migrated-history enablement policy.
-- Database schema simplification needs a current-schema baseline after the
-  archive read-model boundary stabilizes.
 - YouTube live-provider coverage needs auto-caption-only, no-caption, active live, upcoming, auth-gated, private/member/age/geo, and large-playlist validation.
 - Large saved-run archives need richer narrowing by source, group, profile/model, template, and date.
 - Media support is metadata-first only; binary download, preview, and media-aware analysis remain open.
@@ -35,7 +33,7 @@
 | Telegram runtime validation | predictable behavior across real supported dialogs and accounts |
 | Account deletion coordination | deletion cannot race active ingest or analysis work |
 | Takeout source import | validated across source kinds with explicit incomplete-import provenance |
-| Database schema simplification | current-schema baseline |
+| Database schema simplification | optional Telegram metadata blob cleanup after typed repair validation |
 | YouTube source ingest | broader live validation plus optional future enrichment/resumability |
 | Saved runs UX | fast narrowing for large saved-run histories |
 | Analysis workspace parity | run-open NotebookLM export plus template and source-group management access |
@@ -117,7 +115,6 @@ Analysis:
   paths.
 - [x] add a separate provider-neutral archive/read UI model for source
   browsing, gated by source-scoped readiness and model version
-- [ ] consider current-schema baseline after archive read model boundary stabilizes
 
 Acceptance:
 
@@ -133,7 +130,6 @@ Acceptance:
   existing local provider/archive items path.
 - YouTube playlist-entry browsing stays on typed YouTube detail/readers rather
   than materializing playlist membership rows into `archive_read_items`.
-- Fresh installs start from a clean current schema while existing databases still upgrade safely.
 
 ### 4.5 Saved Runs Discoverability And Cleanup
 
@@ -232,7 +228,7 @@ Priority: medium.
 1. Validate remaining Telegram runtime/private-source cases on real accounts and dialogs.
 2. Close account-deletion coordination before more long-running ingest expansion.
 3. Validate Takeout import across representative source kinds and design incomplete-import provenance.
-4. Continue schema simplification through a current-schema baseline.
+4. Decide whether old Telegram metadata blobs should be cleared after real validation.
 5. Decide whether saved-run history needs richer filters before media expansion.
 6. Restore run-open `/analysis` access to NotebookLM export, prompt templates, and source groups.
 7. Broaden YouTube live-provider validation and decide which follow-ups matter after the MVP.

@@ -1,6 +1,6 @@
 # Backend Architecture Simplification Analysis
 
-> Date: 2026-05-19
+> Date: 2026-05-20
 > Scope: Rust/Tauri backend under `src-tauri/src`, local SQLite storage, and
 > current architecture docs.
 
@@ -11,12 +11,12 @@ canonical provider data lives in `items` plus typed provider tables, while
 provider-neutral derived models serve specific consumers such as analysis and
 archive browsing/export.
 
-The remaining maintainability wins are focused on database lifecycle and error
-boundaries:
+The current-schema baseline reset has landed. The remaining maintainability
+wins are focused on error boundaries and smaller service seams:
 
-1. introduce a current-schema baseline for fresh installs after the archive
-   read-model boundary settles;
-2. continue migrating service and storage APIs toward typed errors.
+1. continue migrating service and storage APIs toward typed errors;
+2. split large files only where it lowers review cost or isolates a real
+   workflow boundary.
 
 These changes should reduce review cost and future feature friction without
 changing product behavior.
@@ -69,33 +69,23 @@ at the same time.
 
 ### Migration History Complexity
 
-The migration layer carries necessary compatibility work:
-
-- runner-managed migrations;
-- sentinel SQL files;
-- checksum and line-ending repair;
-- historical schema cleanup.
-
-This is valid for existing databases, but it is too much history for fresh
-installs to conceptually inherit forever. A current-schema baseline is the
-right long-term simplification once the read-model boundary is stable.
+The migration layer no longer exposes the full pre-reset history as the active
+fresh-install path. The old runner-managed migrations, sentinel SQL files,
+checksum repair, and historical cleanup helpers are archived outside the active
+build.
 
 ## Recommended Architecture Changes
 
-### 1. Introduce A Current-Schema Baseline
+### 1. Current-Schema Baseline Reset
 
-After the archive read-model boundary is considered stable, add a fresh-install
-current schema path:
+Current status:
 
-- fresh installs create the current schema directly;
-- existing databases still run legacy migrations safely;
-- runner-managed migration compatibility remains in a legacy upgrade path;
-- checksum and line-ending repair are quarantined away from the normal
-  fresh-install story.
-
-This is likely the highest-impact Database Schema Simplification task still
-open, but it should be planned carefully because it touches install/upgrade
-semantics.
+- the active migration history starts at baseline v1;
+- pre-reset SQL and Rust migration history is archived outside the active
+  build;
+- one controlled pre-reset database is converted through a backup-first
+  bookkeeping cutover;
+- future migrations start at `0002`.
 
 ### 2. Continue Migrating Toward Typed Errors
 
@@ -139,9 +129,9 @@ message substring classification.
 
 ## Suggested Order
 
-1. Plan and implement current-schema baseline.
-2. Gradually convert storage/service APIs from `Result<T, String>` to
+1. Gradually convert storage/service APIs from `Result<T, String>` to
    `AppResult<T>`.
+2. Split large backend files only when an extracted boundary is already clear.
 
 ## Expected Payoff
 
@@ -152,7 +142,7 @@ project is actively growing:
 - additional archive/export consumers;
 - Takeout provenance and migrated-history enablement;
 - YouTube playlist detail improvements;
-- future current-schema baseline and migration cleanup.
+- future migrations starting from a compact current-schema baseline.
 
 The guiding principle is to preserve the current domain boundaries while
 tightening the remaining service boundaries around them.
