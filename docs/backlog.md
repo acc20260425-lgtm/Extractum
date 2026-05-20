@@ -24,7 +24,9 @@
 2. Prioritize correctness, data integrity, and operability risks before UI polish.
 3. Validate Telegram behavior against real data when static reading is insufficient.
 4. Prefer tests for pure logic, storage rules, request lifecycle boundaries, and route workflow regressions.
-5. Keep closed Superpowers plans/specs out of active docs; preserve them through Git history instead.
+5. Keep closed Superpowers plans out of active docs; preserve them through Git
+   history. Move historical specs or verification notes into
+   `docs/superpowers/archive/` only when they remain useful as context.
 
 ## 3. Active Work Areas
 

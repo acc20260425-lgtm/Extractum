@@ -30,6 +30,7 @@ pre-baseline migrations live in archives.
 - `archive/migrations-pre-baseline-reset/`: pre-baseline SQL and runner-managed
   Rust migration history. It is reference-only; active migrations start at
   `src-tauri/migrations/0001_current_schema_baseline.sql`.
+- `archive/`: documentation archive root.
 - `superpowers/archive/specs/`: historical Superpowers design specs for
   shipped or superseded work.
 - `superpowers/archive/verification/`: historical manual verification records.
@@ -42,6 +43,8 @@ pre-baseline migrations live in archives.
 
 Completed Superpowers plans should be removed from the working tree after their
 outcome is captured in current-state docs, tests, backlog, or Git history.
+Historical specs and verification notes can stay under `superpowers/archive/`
+when they remain useful as design or regression context.
 
 ## Maintenance Rules
 
