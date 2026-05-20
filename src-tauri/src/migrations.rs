@@ -1,6 +1,7 @@
 #![allow(clippy::items_after_test_module)]
 
 pub(crate) mod analysis_documents;
+mod baseline_reset;
 pub(crate) mod source_identity_cleanup;
 pub(crate) mod telegram_item_native_identity;
 pub(crate) mod topic_membership_materialization;

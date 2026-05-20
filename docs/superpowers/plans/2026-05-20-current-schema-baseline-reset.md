@@ -243,7 +243,7 @@ git commit -m "feat: add current schema baseline"
 - Modify: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/migrations/baseline_reset.rs`
 
-- [ ] **Step 1: Write failing classification and checksum tests**
+- [x] **Step 1: Write failing classification and checksum tests**
 
 Create `src-tauri/src/migrations/baseline_reset.rs` with the test module first:
 
@@ -377,7 +377,7 @@ Declare the module from `src-tauri/src/migrations.rs`:
 mod baseline_reset;
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 
@@ -388,7 +388,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::baseline_reset::test
 Expected: compile failure because `MigrationHistoryState` and
 `classify_migration_history` do not exist.
 
-- [ ] **Step 3: Implement minimal classification**
+- [x] **Step 3: Implement minimal classification**
 
 Add this production code above the test module in `baseline_reset.rs`:
 
@@ -486,7 +486,7 @@ pub(super) async fn classify_migration_history(
 }
 ```
 
-- [ ] **Step 4: Run the classification tests**
+- [x] **Step 4: Run the classification tests**
 
 Run:
 
@@ -500,7 +500,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::baseline_reset::test
 
 Expected: all pass.
 
-- [ ] **Step 5: Add failing backup-first and transaction tests**
+- [x] **Step 5: Add failing backup-first and transaction tests**
 
 Extend `baseline_reset.rs` tests with:
 
@@ -598,7 +598,7 @@ async fn old_history_cutover_backs_up_then_rewrites_only_migration_history() {
 }
 ```
 
-- [ ] **Step 6: Run the backup-first tests to verify they fail**
+- [x] **Step 6: Run the backup-first tests to verify they fail**
 
 Run:
 
@@ -610,7 +610,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::baseline_reset::test
 Expected: compile failure because `BaselineResetBackup` and
 `apply_baseline_reset_if_needed` do not exist.
 
-- [ ] **Step 7: Implement backup abstraction and transaction rewrite**
+- [x] **Step 7: Implement backup abstraction and transaction rewrite**
 
 Add this production code to `baseline_reset.rs`:
 
@@ -682,7 +682,7 @@ async fn rewrite_migration_history_to_baseline(
 }
 ```
 
-- [ ] **Step 8: Run all cutover module tests**
+- [x] **Step 8: Run all cutover module tests**
 
 Run:
 
@@ -692,7 +692,7 @@ cargo test --manifest-path src-tauri/Cargo.toml migrations::baseline_reset::test
 
 Expected: all cutover module tests pass.
 
-- [ ] **Step 9: Commit Task 2**
+- [x] **Step 9: Commit Task 2**
 
 Run:
 
