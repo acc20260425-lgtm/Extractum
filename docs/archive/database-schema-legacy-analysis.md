@@ -3,7 +3,7 @@
 > Updated: 2026-05-20
 > Scope: SQLite schema, migrations, Rust backend usage, and product docs.
 > Method: local code/doc review plus three read-only subagent passes focused on schema, backend cost, and product direction.
-> Status: historical analysis. Current schema state lives in
+> Status: archived historical analysis. Current schema state lives in
 > `docs/database-schema.md`; pre-reset migration files are archived under
 > `docs/archive/migrations-pre-baseline-reset/`.
 

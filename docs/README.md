@@ -20,8 +20,6 @@ pre-baseline migrations live in archives.
 
 - `database-schema-read-model-decision.md`: provider-neutral archive/read model
   decision, implementation status, and follow-up boundaries.
-- `database-schema-legacy-analysis.md`: historical schema debt analysis. Use it
-  for background, then confirm current state in `database-schema.md`.
 - `takeout-source-import.md`: Telegram Takeout import behavior and validation
   notes.
 
@@ -30,6 +28,9 @@ pre-baseline migrations live in archives.
 - `archive/migrations-pre-baseline-reset/`: pre-baseline SQL and runner-managed
   Rust migration history. It is reference-only; active migrations start at
   `src-tauri/migrations/0001_current_schema_baseline.sql`.
+- `archive/database-schema-legacy-analysis.md`: historical schema debt
+  analysis. Use it for background, then confirm current state in
+  `database-schema.md`.
 - `archive/`: documentation archive root.
 - `superpowers/archive/specs/`: historical Superpowers design specs for
   shipped or superseded work.

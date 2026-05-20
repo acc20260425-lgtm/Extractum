@@ -108,7 +108,8 @@ Priority: high.
 
 Analysis:
 
-- Full findings are recorded in `docs/database-schema-legacy-analysis.md`.
+- Full findings are recorded in
+  `docs/archive/database-schema-legacy-analysis.md`.
 
 - [ ] decide whether and when to clear old Telegram `sources.metadata_zstd`
   blobs after typed repair validation and real private/dialog-backed source
