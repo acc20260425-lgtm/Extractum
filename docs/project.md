@@ -33,6 +33,8 @@ Implemented:
 - YouTube metadata, transcript, comment, and playlist membership sync into local SQLite
 - provider-dispatched source sync for Telegram and YouTube
 - Takeout source import for existing Telegram sources with TDesktop-first pagination
+- durable ingest batch, warning, and item-observation provenance for Takeout
+  attempts
 - materialized Telegram forum topic memberships with source-level resolver state
 - media-aware sync metadata for text-bearing and media-only items
 - Telegram reply/thread/reaction context metadata for newly synced items
@@ -173,8 +175,14 @@ Not implemented yet:
   membership freshness and unresolved counts
 - `youtube_playlist_items`: YouTube playlist membership and availability rows
 - `youtube_transcript_segments`: timestamped caption/transcript cues
-- no persistent table exists for Takeout import jobs or incomplete-import
-  provenance; job records are in-memory runtime state
+- `ingest_batches`, `telegram_takeout_batches`, `ingest_item_observations`,
+  and `ingest_batch_warnings`: durable ingest/Takeout provenance for started
+  locked import attempts
+- `analysis_documents`: provider-neutral read model for live analysis corpus
+  loading
+- `archive_read_model_state` and `archive_read_items`: source-scoped readiness
+  and provider-neutral archive rows for browsing and Telegram NotebookLM export
+- Takeout import job progress records are in-memory runtime state
 - no persistent table exists for YouTube source jobs; job records are in-memory runtime state
 - `app_settings`: app-level key/value storage, including active LLM profile, per-profile non-secret provider metadata, and sync policy
 - `analysis_runs`: saved report runs
@@ -199,8 +207,8 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
 - Takeout import does not download media bytes and currently defers migrated
-  supergroup history until durable incomplete-import provenance and real-data
-  validation are designed.
+  supergroup history until incomplete-import policy and real-data validation
+  are complete.
 
 ## Reading order for implementation work
 
