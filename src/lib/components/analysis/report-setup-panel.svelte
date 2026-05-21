@@ -41,7 +41,6 @@
     loadingLlmProviderModels,
     llmModelStatus,
     startingReport,
-    selectedSourceId,
     selectedGroupId,
     currentScopeHasSavedRuns,
     selectedRunIsActive,
@@ -116,7 +115,6 @@
     loadingLlmProviderModels: boolean;
     llmModelStatus: string;
     startingReport: boolean;
-    selectedSourceId: string;
     selectedGroupId: string;
     currentScopeHasSavedRuns: boolean;
     selectedRunIsActive: boolean;

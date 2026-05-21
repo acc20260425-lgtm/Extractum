@@ -2539,7 +2539,6 @@
     {loadingLlmProviderModels}
     {llmModelStatus}
     {startingReport}
-    {selectedSourceId}
     selectedGroupId={selectedGroupEditorId}
     {currentScopeHasSavedRuns}
     {currentRun}

@@ -86,7 +86,6 @@
     loadingLlmProviderModels,
     llmModelStatus,
     startingReport,
-    selectedSourceId,
     selectedGroupId,
     currentScopeHasSavedRuns,
     currentRun,
@@ -227,7 +226,6 @@
     loadingLlmProviderModels: boolean;
     llmModelStatus: string;
     startingReport: boolean;
-    selectedSourceId: string;
     selectedGroupId: string;
     currentScopeHasSavedRuns: boolean;
     currentRun: AnalysisRunDetail | null;
@@ -435,7 +433,6 @@
         {loadingLlmProviderModels}
         {llmModelStatus}
         {startingReport}
-        {selectedSourceId}
         {selectedGroupId}
         {currentScopeHasSavedRuns}
         {selectedRunIsActive}
