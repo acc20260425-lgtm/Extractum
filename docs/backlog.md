@@ -34,10 +34,9 @@
 
 Priority: high.
 
+- [ ] validate cross-account isolation on two real Telegram accounts
 - [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
-- [ ] validate stored-peer resolution before username fallback on a live public source with `access_hash`
-- [ ] validate cross-account isolation on two real Telegram accounts
 
 Recent evidence:
 
@@ -45,7 +44,10 @@ Recent evidence:
   records 2026-05-21 live runs where account 1 listed channels, supergroups,
   and a regular group, synced representative `channel`, `supergroup`, and
   `group` sources, and validated dialog-backed private `channel` and
-  `supergroup` sources through stored identity.
+  `supergroup` sources through stored identity. It also records a 2026-05-21
+  DB-only username probe where source `18` synced successfully while its cached
+  username was temporarily replaced by a sentinel, proving a usable stored peer
+  identity is sufficient when the cached public username is unusable.
 
 Acceptance:
 

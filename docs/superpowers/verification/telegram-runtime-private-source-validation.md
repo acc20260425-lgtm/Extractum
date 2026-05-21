@@ -1,6 +1,6 @@
 # Telegram Runtime Private Source Validation
 
-> Status: planned manual validation matrix. This file is not evidence that live Telegram validation has already run.
+> Status: manual validation matrix with live evidence for rows marked `passed`.
 
 Updated: 2026-05-21
 
@@ -21,6 +21,7 @@ Privacy classification values: `public username`, `dialog-backed likely private`
 | Case | Validation status | Privacy classification | Add Source result | Stored identity to record | Sync result | Wrong-peer risk check | Warnings/errors |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Public channel | passed | public username | Live dialog scan returned channel dialogs; representative existing source `18` has `source_subtype = channel` and username present | `peer_kind = channel`, `access_hash` present, `username` present, `resolution_strategy = dialog` | `sync_source(18)` inserted 19, skipped 0, `last_message_id = 514` | Stored peer identity resolved and sync completed without redirecting to another peer | No warnings |
+| Stored peer before username fallback on public channel | passed | public username | Source `18` was probed with a local sentinel username only; original username value was not recorded | `peer_kind = channel`, `peer_id = 1686571520`, `access_hash` present, original username present, sentinel `extractum_validation_missing_username_20260521` survived the successful sync probe, `resolution_strategy = dialog` | `sync_source(18)` inserted 0, skipped 0, `last_message_id = 514` | Stored peer identity was sufficient while cached username was unusable; strict resolver order remains covered by backend tests | No warnings; no real Telegram username reassignment was performed |
 | Public supergroup | passed | public username | Live dialog scan returned supergroup dialogs; representative existing source `17` has `source_subtype = supergroup` and username present | `peer_kind = channel`, `access_hash` present, `username` present, `resolution_strategy = dialog` | `sync_source(17)` inserted 1261, skipped 5, `last_message_id = 101949` | Stored peer identity resolved as supergroup source and sync completed | No warnings |
 | Private channel from dialogs | passed | dialog-backed likely private | Representative existing dialog-backed source `27` has `source_subtype = channel` and no username | `peer_kind = channel`, `access_hash` present, `username` absent, `resolution_strategy = dialog` | `sync_source(27)` inserted 6, skipped 0, `last_message_id = 1165` | Stored peer identity resolved without public username fallback | No warnings |
 | Private supergroup from dialogs | passed | dialog-backed likely private | Dialog-picked source `Pure C` was added as source `110` with `source_subtype = supergroup` and no username | `peer_kind = channel`, `peer_id = 1335891301`, `access_hash` present, `username` absent, `resolution_strategy = dialog` | `sync_source(110)` inserted 384, skipped 0, `last_message_id = 92374` | Stored peer identity resolved without public username fallback | No warnings |
@@ -31,12 +32,15 @@ Privacy classification values: `public username`, `dialog-backed likely private`
 
 ## Slice Order
 
-Start `telegram-runtime-private-source-manual-validation` with the first five
-matrix rows: public channel, public supergroup, private channel from dialogs,
-private supergroup from dialogs, and regular small group.
+Started `telegram-runtime-private-source-manual-validation` with the first five
+source-kind rows: public channel, public supergroup, private channel from
+dialogs, private supergroup from dialogs, and regular small group.
 
-Keep migrated dialogs, lost access, and account A/B validation for a separate
-follow-up slice.
+The stored-peer username fallback probe then validated that a usable stored peer
+identity is sufficient when the cached public username is locally unusable.
+
+Keep migrated dialogs, lost access, and account A/B validation for follow-up
+slices.
 
 ## 2026-05-21 Live Run Notes
 
@@ -64,6 +68,30 @@ follow-up slice.
   `username` absent, `resolution_strategy = dialog`.
 - `sync_source(111)` inserted 2, skipped 0, `last_message_id = 233`, with no
   warnings.
+
+## 2026-05-21 Stored Peer Username Fallback Probe
+
+- Account label: account 1 only; no credentials, phone numbers, session data,
+  private message content, or original username value recorded.
+- App commit: `886460b docs: clean telegram fallback validation plan`.
+- Probe source: source `18`, public channel, original username present,
+  `peer_kind = channel`, `peer_id = 1686571520`, `access_hash` present,
+  `resolution_strategy = dialog`.
+- Before the probe, the SQLite DB file was copied to ignored `reference/`.
+- Local probe changed only `telegram_sources.username` to
+  `extractum_validation_missing_username_20260521`.
+- Account 1 runtime status was `ready`.
+- `sync_source(18)` returned inserted 0, skipped 0, `last_message_id = 514`,
+  and warnings `[]`.
+- Post-sync check before restore: the sentinel remained in
+  `telegram_sources.username`.
+- Post-restore check: original username restored; `peer_kind`, `peer_id`,
+  `access_hash`, and `resolution_strategy` were unchanged.
+- This run did not perform a real Telegram username reassignment. It
+  temporarily corrupted the local cached username only. The live evidence proves
+  that a usable stored peer identity is sufficient for sync when the cached
+  username is unusable. The strict resolver order is covered by backend
+  resolver tests.
 
 ## Evidence Template
 
