@@ -27,6 +27,17 @@ describe("analysis route workspace state", () => {
     expect(analysisPageSource).toContain("defaultAnalysisWorkspaceUiState()");
   });
 
+  it("derives legacy scope ids from the workspace selection instead of mirroring mutable state", () => {
+    expect(analysisPageSource).toContain("const legacyWorkspaceSelection = $derived(");
+    expect(analysisPageSource).toContain("const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);");
+    expect(analysisPageSource).toContain("const selectedSourceId = $derived(legacyWorkspaceSelection.selectedSourceId);");
+    expect(analysisPageSource).toContain("const selectedGroupId = $derived(legacyWorkspaceSelection.selectedGroupId);");
+    expect(analysisPageSource).toContain("let selectedGroupEditorId = $state");
+    expect(analysisPageSource).not.toContain("let selectedSourceId = $state");
+    expect(analysisPageSource).not.toContain("let selectedGroupId = $state");
+    expect(analysisPageSource).not.toContain("let analysisScope = $state");
+  });
+
   it("dispatches workspace events through a single route boundary", () => {
     const dispatcher = functionSlice(
       "function dispatchWorkspaceEvent",
@@ -94,7 +105,7 @@ describe("analysis route workspace state", () => {
     expect(groupFunction).toContain('type: "select_source_group"');
     expect(groupFunction).toContain("clearCurrentRunForWorkspaceSwitch();");
     expect(runFunction).toContain('type: "open_run"');
-    expect(runFunction).toContain("legacyScopeFromWorkspaceSelection");
+    expect(runFunction).not.toContain("legacyScopeFromWorkspaceSelection");
   });
 
   it("saves workspace state from a guarded effect after restore is complete", () => {

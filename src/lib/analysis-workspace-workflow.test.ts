@@ -4,6 +4,7 @@ import {
   type AnalysisWorkspaceWorkflowPatch,
   type AnalysisWorkspaceWorkflowState,
 } from "./analysis-workspace-workflow";
+import type { WorkspaceSelection } from "./analysis-workspace-state";
 import type { AccountRecord, AccountRuntimeStatus } from "./types/accounts";
 import type { AnalysisSourceOption } from "./types/analysis";
 import type { Source } from "./types/sources";
@@ -70,7 +71,7 @@ type HarnessState = AnalysisWorkspaceWorkflowState & {
 
 function createHarness(initial: Partial<HarnessState> = {}) {
   const state: HarnessState = {
-    selectedSourceId: "",
+    workspaceSelection: { kind: "none" },
     accounts: [],
     accountStatuses: {},
     sourceCatalog: [],
@@ -145,26 +146,41 @@ describe("analysis-workspace-workflow", () => {
     expect(deps.listSources).toHaveBeenCalledWith(null);
     expect(state.sourceCatalog.map((entry) => entry.id)).toEqual([7, 8]);
     expect(state.sourceMetrics[8]?.item_count).toBe(12);
-    expect(state.selectedSourceId).toBe("8");
+    expect(state.workspaceSelection).toEqual({ kind: "source", sourceId: 8 });
     expect(state.loadingSourceCatalog).toBe(false);
   });
 
   it("preserves a valid selected source and falls back when stale", async () => {
-    const preserved = createHarness({ selectedSourceId: "7" });
+    const preserved = createHarness({
+      workspaceSelection: { kind: "source", sourceId: 7 },
+    });
     preserved.deps.listSources.mockResolvedValueOnce([source({ id: 7 }), source({ id: 8 })]);
     preserved.deps.listAnalysisSources.mockResolvedValueOnce([metric({ id: 8 })]);
 
     await preserved.workflow.loadSourceCatalog();
 
-    expect(preserved.state.selectedSourceId).toBe("7");
+    expect(preserved.state.workspaceSelection).toEqual({ kind: "source", sourceId: 7 });
 
-    const stale = createHarness({ selectedSourceId: "99" });
+    const stale = createHarness({
+      workspaceSelection: { kind: "source", sourceId: 99 },
+    });
     stale.deps.listSources.mockResolvedValueOnce([source({ id: 7 })]);
     stale.deps.listAnalysisSources.mockResolvedValueOnce([]);
 
     await stale.workflow.loadSourceCatalog();
 
-    expect(stale.state.selectedSourceId).toBe("7");
+    expect(stale.state.workspaceSelection).toEqual({ kind: "source", sourceId: 7 });
+  });
+
+  it("preserves a selected source group when source catalog refreshes", async () => {
+    const workspaceSelection: WorkspaceSelection = { kind: "source_group", sourceGroupId: 12 };
+    const { state, deps, workflow } = createHarness({ workspaceSelection });
+    deps.listSources.mockResolvedValueOnce([source({ id: 7 })]);
+    deps.listAnalysisSources.mockResolvedValueOnce([metric({ id: 7 })]);
+
+    await workflow.loadSourceCatalog();
+
+    expect(state.workspaceSelection).toEqual(workspaceSelection);
   });
 
   it("reports source loading errors and clears the loading flag", async () => {

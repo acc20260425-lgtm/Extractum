@@ -1,9 +1,10 @@
 import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
 import type { AnalysisSourceOption } from "$lib/types/analysis";
 import type { Source } from "$lib/types/sources";
+import type { WorkspaceSelection } from "$lib/analysis-workspace-state";
 
 export interface AnalysisWorkspaceWorkflowState {
-  selectedSourceId: string;
+  workspaceSelection: WorkspaceSelection;
 }
 
 export type AnalysisWorkspaceWorkflowPatch = Partial<{
@@ -11,7 +12,7 @@ export type AnalysisWorkspaceWorkflowPatch = Partial<{
   accountStatuses: Record<number, AccountRuntimeStatus>;
   sourceCatalog: Source[];
   sourceMetrics: Record<number, AnalysisSourceOption>;
-  selectedSourceId: string;
+  workspaceSelection: WorkspaceSelection;
   loadingSourceCatalog: boolean;
   status: string;
 }>;
@@ -36,23 +37,34 @@ function sourceMetricsById(sources: AnalysisSourceOption[]) {
   return Object.fromEntries(sources.map((source) => [source.id, source]));
 }
 
-function nextSelectedSourceId(
-  selectedSourceId: string,
+function fallbackSourceSelection(
   allSources: Source[],
   analysisSources: AnalysisSourceOption[],
-) {
-  if (!selectedSourceId && allSources.length > 0) {
-    return String(analysisSources[0]?.id ?? allSources[0].id);
+): WorkspaceSelection {
+  const fallbackSourceId = analysisSources[0]?.id ?? allSources[0]?.id ?? null;
+  return fallbackSourceId === null
+    ? { kind: "none" }
+    : { kind: "source", sourceId: fallbackSourceId };
+}
+
+function nextWorkspaceSelection(
+  workspaceSelection: WorkspaceSelection,
+  allSources: Source[],
+  analysisSources: AnalysisSourceOption[],
+): WorkspaceSelection {
+  if (workspaceSelection.kind !== "source") {
+    return workspaceSelection.kind === "none"
+      ? fallbackSourceSelection(allSources, analysisSources)
+      : workspaceSelection;
   }
 
   if (
-    selectedSourceId &&
-    !allSources.some((source) => source.id === Number(selectedSourceId))
+    !allSources.some((source) => source.id === workspaceSelection.sourceId)
   ) {
-    return allSources[0] ? String(allSources[0].id) : "";
+    return fallbackSourceSelection(allSources, analysisSources);
   }
 
-  return selectedSourceId;
+  return workspaceSelection;
 }
 
 export function createAnalysisWorkspaceWorkflow(deps: AnalysisWorkspaceWorkflowDeps) {
@@ -82,8 +94,8 @@ export function createAnalysisWorkspaceWorkflow(deps: AnalysisWorkspaceWorkflowD
       deps.patch({
         sourceCatalog: allSources,
         sourceMetrics: sourceMetricsById(analysisSources),
-        selectedSourceId: nextSelectedSourceId(
-          deps.getState().selectedSourceId,
+        workspaceSelection: nextWorkspaceSelection(
+          deps.getState().workspaceSelection,
           allSources,
           analysisSources,
         ),

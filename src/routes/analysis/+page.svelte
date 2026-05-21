@@ -114,10 +114,9 @@
   } from "$lib/analysis-utils";
   import { openConfirmModal } from "$lib/modals";
   import {
+    ALL_TOPICS_KEY,
     applyAnalysisRunEvent,
     applyTakeoutImportJobs,
-    analysisGroupSelectionState,
-    analysisSourceSelectionState,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
     canCancelAnalysisRun,
@@ -320,12 +319,16 @@
   );
   let workspacePersistenceReady = $state(false);
   let restoredWorkspaceSelection = $state<WorkspaceSelection | null>(null);
+  const legacyWorkspaceSelection = $derived(
+    legacyScopeFromWorkspaceSelection(workspaceUiState.workspaceSelection),
+  );
+  const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);
+  const selectedSourceId = $derived(legacyWorkspaceSelection.selectedSourceId);
+  const selectedGroupId = $derived(legacyWorkspaceSelection.selectedGroupId);
 
-  let selectedSourceId = $state("");
-  let selectedTopicKey = $state("__all_topics__");
+  let selectedTopicKey = $state(ALL_TOPICS_KEY);
   let selectedTemplateId = $state("");
-  let selectedGroupId = $state("");
-  let analysisScope = $state<"single_source" | "source_group">("single_source");
+  let selectedGroupEditorId = $state("");
   let periodFrom = $state(defaultDateOffset(-30));
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
@@ -767,7 +770,7 @@
     templates,
   ));
 
-  const selectedGroup = $derived.by(() => selectedAnalysisGroup(selectedGroupId, groups));
+  const selectedGroup = $derived.by(() => selectedAnalysisGroup(selectedGroupEditorId, groups));
 
   const selectedTrace = $derived.by(() => selectedAnalysisTraceRef(
     selectedTraceRef,
@@ -969,10 +972,9 @@
     };
 
     const next = dispatchWorkspaceEvent(event);
-    const legacy = legacyScopeFromWorkspaceSelection(next.workspaceSelection);
-    analysisScope = legacy.analysisScope;
-    selectedSourceId = legacy.selectedSourceId;
-    selectedGroupId = legacy.selectedGroupId;
+    if (next.workspaceSelection.kind === "source_group") {
+      selectedGroupEditorId = String(next.workspaceSelection.sourceGroupId);
+    }
     resetGroupLiveReader();
     resetYoutubeTranscriptReader();
     selectedSnapshotSourceId = null;
@@ -1025,7 +1027,12 @@
     if ("accountStatuses" in patch) accountStatuses = patch.accountStatuses ?? {};
     if ("sourceCatalog" in patch) sourceCatalog = patch.sourceCatalog ?? [];
     if ("sourceMetrics" in patch) sourceMetrics = patch.sourceMetrics ?? {};
-    if ("selectedSourceId" in patch) selectedSourceId = patch.selectedSourceId ?? "";
+    if ("workspaceSelection" in patch) {
+      workspaceUiState = {
+        ...workspaceUiState,
+        workspaceSelection: patch.workspaceSelection ?? { kind: "none" },
+      };
+    }
     if ("loadingSourceCatalog" in patch) {
       loadingSourceCatalog = patch.loadingSourceCatalog ?? false;
     }
@@ -1036,7 +1043,7 @@
     if ("templates" in patch) templates = patch.templates ?? [];
     if ("groups" in patch) groups = patch.groups ?? [];
     if ("selectedTemplateId" in patch) selectedTemplateId = patch.selectedTemplateId ?? "";
-    if ("selectedGroupId" in patch) selectedGroupId = patch.selectedGroupId ?? "";
+    if ("selectedGroupId" in patch) selectedGroupEditorId = patch.selectedGroupId ?? "";
     if ("loadingTemplates" in patch) loadingTemplates = patch.loadingTemplates ?? false;
     if ("loadingGroups" in patch) loadingGroups = patch.loadingGroups ?? false;
     if ("savingTemplate" in patch) savingTemplate = patch.savingTemplate ?? false;
@@ -1131,7 +1138,7 @@
   });
 
   const workspaceWorkflow = createAnalysisWorkspaceWorkflow({
-    getState: () => ({ selectedSourceId }),
+    getState: () => ({ workspaceSelection: workspaceUiState.workspaceSelection }),
     patch: applyWorkspaceWorkflowPatch,
     listAccounts: listWorkspaceAccounts,
     getAccountStatuses: getWorkspaceAccountStatuses,
@@ -1611,11 +1618,8 @@
     }
     clearCurrentRunForWorkspaceSwitch();
 
-    const next = analysisSourceSelectionState(sourceId);
     const source = sourceCatalog.find((candidate) => candidate.id === sourceId) ?? null;
-    analysisScope = next.analysisScope;
-    selectedSourceId = next.selectedSourceId;
-    selectedTopicKey = next.selectedTopicKey;
+    selectedTopicKey = ALL_TOPICS_KEY;
     resetYoutubeDetailState();
     resetGroupLiveReader();
     resetSourceItemsReader();
@@ -1656,11 +1660,9 @@
     }
     clearCurrentRunForWorkspaceSwitch();
 
-    const next = analysisGroupSelectionState(groupId);
-    analysisScope = next.analysisScope;
-    selectedGroupId = next.selectedGroupId;
-    sourceTopics = next.sourceTopics;
-    selectedTopicKey = next.selectedTopicKey;
+    selectedGroupEditorId = String(groupId);
+    sourceTopics = [];
+    selectedTopicKey = ALL_TOPICS_KEY;
     resetYoutubeDetailState();
     resetGroupLiveReader();
     resetSourceItemsReader();
@@ -1736,7 +1738,7 @@
       selectedTemplate,
       selectedGroup,
       selectedTemplateId,
-      selectedGroupId,
+      selectedGroupId: selectedGroupEditorId,
       editorBoundTemplateId,
       editorBoundGroupId,
     }),
@@ -2219,7 +2221,7 @@
   }
 
   function startNewGroup() {
-    selectedGroupId = "";
+    selectedGroupEditorId = "";
     bindEditorToGroup(null);
   }
 
@@ -2538,7 +2540,7 @@
     {llmModelStatus}
     {startingReport}
     {selectedSourceId}
-    {selectedGroupId}
+    selectedGroupId={selectedGroupEditorId}
     {currentScopeHasSavedRuns}
     {currentRun}
     {chatAvailability}
@@ -2636,7 +2638,7 @@
     onSaveTemplateCopy={() => void saveTemplateCopy()}
     onSaveTemplateChanges={() => void saveTemplateChanges()}
     onDeleteTemplate={() => void deleteTemplate()}
-    onChangeSelectedGroupId={(value) => (selectedGroupId = value)}
+    onChangeSelectedGroupId={(value) => (selectedGroupEditorId = value)}
     onChangeGroupName={(value) => (groupName = value)}
     onChangeGroupSourceType={changeGroupSourceType}
     onToggleGroupSource={toggleGroupSource}
