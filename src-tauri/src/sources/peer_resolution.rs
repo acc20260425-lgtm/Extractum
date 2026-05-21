@@ -466,6 +466,10 @@ fn typed_peer_resolution_plan(
 ) -> AppResult<Vec<SourcePeerResolutionStep>> {
     let mut plan = Vec::new();
 
+    if identity.peer_ref()?.is_some() {
+        plan.push(SourcePeerResolutionStep::StoredPeerIdentity);
+    }
+
     match identity.resolution_strategy {
         TelegramResolutionStrategy::Username => {
             if identity
@@ -475,16 +479,10 @@ fn typed_peer_resolution_plan(
             {
                 plan.push(SourcePeerResolutionStep::Username);
             }
-            if identity.peer_ref()?.is_some() {
-                plan.push(SourcePeerResolutionStep::StoredPeerIdentity);
-            }
         }
         TelegramResolutionStrategy::Dialog
         | TelegramResolutionStrategy::LegacyMetadata
         | TelegramResolutionStrategy::Unknown => {
-            if identity.peer_ref()?.is_some() {
-                plan.push(SourcePeerResolutionStep::StoredPeerIdentity);
-            }
             if identity
                 .username
                 .as_deref()
@@ -734,6 +732,30 @@ mod tests {
         assert_eq!(
             typed_peer_resolution_plan(&identity).expect("typed plan"),
             vec![
+                SourcePeerResolutionStep::Username,
+                SourcePeerResolutionStep::DialogScan
+            ]
+        );
+    }
+
+    #[test]
+    fn typed_identity_plan_prefers_stored_peer_before_username_when_access_hash_exists() {
+        let identity = TelegramSourceIdentity {
+            source_id: 101,
+            account_id: 1,
+            source_subtype: TelegramSourceKind::Channel,
+            peer_kind: TelegramPeerKind::Channel,
+            peer_id: 12345,
+            resolution_strategy: TelegramResolutionStrategy::Username,
+            username: Some("example".to_string()),
+            access_hash: Some(77),
+            avatar_cache_key: None,
+        };
+
+        assert_eq!(
+            typed_peer_resolution_plan(&identity).expect("typed plan"),
+            vec![
+                SourcePeerResolutionStep::StoredPeerIdentity,
                 SourcePeerResolutionStep::Username,
                 SourcePeerResolutionStep::DialogScan
             ]
