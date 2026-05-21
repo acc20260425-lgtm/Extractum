@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   ALL_TOPICS_KEY,
-  analysisGroupSelectionState,
-  analysisSourceSelectionState,
   applyAnalysisRunEvent,
   applyTakeoutImportJobs,
   analysisTraceRefOrigin,
@@ -529,25 +527,6 @@ describe("analysis-state", () => {
     expect(selectedAnalysisTraceRef("ref-b", refs)).toBe(refs[1]);
     expect(selectedAnalysisTraceRef(null, refs)).toBeNull();
     expect(selectedAnalysisTraceRef("missing", refs)).toBeNull();
-  });
-
-  it("builds route state updates when selecting a source scope", () => {
-    expect(analysisSourceSelectionState(42)).toEqual({
-      analysisScope: "single_source",
-      selectedSourceId: "42",
-      selectedTopicKey: ALL_TOPICS_KEY,
-      inspectorMode: "history",
-    });
-  });
-
-  it("builds route state updates when selecting a source group scope", () => {
-    expect(analysisGroupSelectionState(7)).toEqual({
-      analysisScope: "source_group",
-      selectedGroupId: "7",
-      sourceTopics: [],
-      selectedTopicKey: ALL_TOPICS_KEY,
-      inspectorMode: "history",
-    });
   });
 
   it("returns report start validation status before building a command", () => {
