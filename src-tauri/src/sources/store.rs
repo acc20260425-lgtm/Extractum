@@ -502,7 +502,9 @@ mod tests {
         create_youtube_typed_source_tables, memory_pool_with_source_items_and_topics,
         memory_pool_with_sources,
     };
-    use crate::sources::types::TELEGRAM_KIND_CHANNEL;
+    use crate::sources::types::{
+        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    };
     use crate::youtube::dto::{
         YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
     };
@@ -743,6 +745,224 @@ mod tests {
         assert_eq!(row.5.as_deref(), Some("example"));
         assert_eq!(row.6, Some(77));
         assert_eq!(row.7.as_deref(), Some("1_channel_12345.jpg"));
+    }
+
+    #[tokio::test]
+    async fn dialog_picked_channel_writes_dialog_typed_identity_with_access_hash() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let resolved = resolved_telegram_source(
+            "12345",
+            "Private channel",
+            TELEGRAM_KIND_CHANNEL,
+            Some("PrivateChannel"),
+            Some(77),
+            None,
+        );
+
+        let source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@PrivateChannel",
+            Some(TELEGRAM_KIND_CHANNEL),
+            &resolved,
+            None,
+        )
+        .await
+        .expect("upsert dialog-picked channel");
+
+        let row = load_typed_identity_row(&pool, source_id).await;
+        assert_eq!(row.account_id, 1);
+        assert_eq!(row.source_subtype, TELEGRAM_KIND_CHANNEL);
+        assert_eq!(row.peer_kind, "channel");
+        assert_eq!(row.peer_id, 12345);
+        assert_eq!(row.resolution_strategy, "dialog");
+        assert_eq!(row.username.as_deref(), Some("privatechannel"));
+        assert_eq!(row.access_hash, Some(77));
+    }
+
+    #[tokio::test]
+    async fn dialog_picked_supergroup_writes_dialog_typed_identity_with_access_hash() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let resolved = resolved_telegram_source(
+            "23456",
+            "Private supergroup",
+            TELEGRAM_KIND_SUPERGROUP,
+            Some("PrivateSupergroup"),
+            Some(88),
+            None,
+        );
+
+        let source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@PrivateSupergroup",
+            Some(TELEGRAM_KIND_SUPERGROUP),
+            &resolved,
+            None,
+        )
+        .await
+        .expect("upsert dialog-picked supergroup");
+
+        let row = load_typed_identity_row(&pool, source_id).await;
+        assert_eq!(row.account_id, 1);
+        assert_eq!(row.source_subtype, TELEGRAM_KIND_SUPERGROUP);
+        assert_eq!(row.peer_kind, "channel");
+        assert_eq!(row.peer_id, 23456);
+        assert_eq!(row.resolution_strategy, "dialog");
+        assert_eq!(row.username.as_deref(), Some("privatesupergroup"));
+        assert_eq!(row.access_hash, Some(88));
+    }
+
+    #[tokio::test]
+    async fn dialog_picked_group_writes_dialog_dependent_typed_identity_without_access_hash() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let resolved = resolved_telegram_source(
+            "34567",
+            "Small group",
+            TELEGRAM_KIND_GROUP,
+            None,
+            None,
+            None,
+        );
+
+        let source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "34567",
+            Some(TELEGRAM_KIND_GROUP),
+            &resolved,
+            None,
+        )
+        .await
+        .expect("upsert dialog-picked group");
+
+        let row = load_typed_identity_row(&pool, source_id).await;
+        assert_eq!(row.account_id, 1);
+        assert_eq!(row.source_subtype, TELEGRAM_KIND_GROUP);
+        assert_eq!(row.peer_kind, "chat");
+        assert_eq!(row.peer_id, 34567);
+        assert_eq!(row.resolution_strategy, "dialog");
+        assert_eq!(row.username, None);
+        assert_eq!(row.access_hash, None);
+    }
+
+    #[tokio::test]
+    async fn telegram_identity_allows_same_peer_on_different_accounts() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let resolved = resolved_telegram_source(
+            "45678",
+            "Shared channel",
+            TELEGRAM_KIND_CHANNEL,
+            Some("SharedChannel"),
+            Some(99),
+            None,
+        );
+
+        let account_one_source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@SharedChannel",
+            Some(TELEGRAM_KIND_CHANNEL),
+            &resolved,
+            None,
+        )
+        .await
+        .expect("upsert account one source");
+        let account_two_source_id = upsert_telegram_source_with_identity(
+            &pool,
+            2,
+            "@SharedChannel",
+            Some(TELEGRAM_KIND_CHANNEL),
+            &resolved,
+            None,
+        )
+        .await
+        .expect("upsert account two source");
+
+        assert_ne!(account_one_source_id, account_two_source_id);
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM telegram_sources WHERE peer_kind = 'channel' AND peer_id = 45678",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count typed identities");
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn telegram_identity_rejects_same_account_peer_conflict_at_typed_boundary() {
+        let pool = memory_pool_with_sources().await;
+        create_canonical_telegram_identity_index(&pool).await;
+        let channel = resolved_telegram_source(
+            "56789",
+            "Channel",
+            TELEGRAM_KIND_CHANNEL,
+            Some("Channel"),
+            Some(101),
+            None,
+        );
+        let first_source_id = upsert_telegram_source_with_identity(
+            &pool,
+            1,
+            "@Channel",
+            Some(TELEGRAM_KIND_CHANNEL),
+            &channel,
+            None,
+        )
+        .await
+        .expect("upsert first typed identity");
+
+        let supergroup_same_peer = resolved_telegram_source(
+            "56789",
+            "Supergroup with same peer id",
+            TELEGRAM_KIND_SUPERGROUP,
+            Some("Supergroup"),
+            Some(202),
+            None,
+        );
+        let mut tx = pool.begin().await.expect("begin source row tx");
+        let conflicting_source_id = upsert_telegram_source_row(&mut tx, 1, &supergroup_same_peer)
+            .await
+            .expect("sources uniqueness permits same external id with a different subtype");
+        tx.commit().await.expect("commit source row");
+        assert_ne!(first_source_id, conflicting_source_id);
+
+        let mut tx = pool.begin().await.expect("begin typed identity tx");
+        let error = upsert_telegram_source_identity_from_resolved(
+            &mut tx,
+            conflicting_source_id,
+            1,
+            "@Supergroup",
+            Some(TELEGRAM_KIND_SUPERGROUP),
+            &supergroup_same_peer,
+            None,
+        )
+        .await
+        .expect_err("same account peer conflict should fail on typed identity");
+        tx.rollback().await.expect("rollback typed identity tx");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert!(error.message.contains("telegram_sources.account_id"));
+        assert!(error.message.contains("telegram_sources.peer_kind"));
+        assert!(error.message.contains("telegram_sources.peer_id"));
+        let source_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sources WHERE account_id = 1 AND source_type = 'telegram' AND external_id = '56789'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count source rows");
+        let typed_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM telegram_sources WHERE account_id = 1 AND peer_kind = 'channel' AND peer_id = 56789",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count typed identities");
+        assert_eq!(source_count, 2);
+        assert_eq!(typed_count, 1);
     }
 
     #[tokio::test]
@@ -1046,6 +1266,52 @@ mod tests {
             username: username.map(str::to_string),
             access_hash,
             avatar_bytes,
+        }
+    }
+
+    struct TypedIdentityRow {
+        account_id: i64,
+        source_subtype: String,
+        peer_kind: String,
+        peer_id: i64,
+        resolution_strategy: String,
+        username: Option<String>,
+        access_hash: Option<i64>,
+    }
+
+    async fn load_typed_identity_row(
+        pool: &sqlx::Pool<sqlx::Sqlite>,
+        source_id: i64,
+    ) -> TypedIdentityRow {
+        let row: (
+            i64,
+            String,
+            String,
+            i64,
+            String,
+            Option<String>,
+            Option<i64>,
+        ) = sqlx::query_as(
+            r#"
+                SELECT account_id, source_subtype, peer_kind, peer_id,
+                       resolution_strategy, username, access_hash
+                FROM telegram_sources
+                WHERE source_id = ?
+                "#,
+        )
+        .bind(source_id)
+        .fetch_one(pool)
+        .await
+        .expect("load typed identity");
+
+        TypedIdentityRow {
+            account_id: row.0,
+            source_subtype: row.1,
+            peer_kind: row.2,
+            peer_id: row.3,
+            resolution_strategy: row.4,
+            username: row.5,
+            access_hash: row.6,
         }
     }
 

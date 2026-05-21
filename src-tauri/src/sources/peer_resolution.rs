@@ -763,6 +763,97 @@ mod tests {
     }
 
     #[test]
+    fn typed_identity_plan_prefers_dialog_channel_stored_peer_when_access_hash_exists() {
+        let identity = TelegramSourceIdentity {
+            source_id: 101,
+            account_id: 1,
+            source_subtype: TelegramSourceKind::Channel,
+            peer_kind: TelegramPeerKind::Channel,
+            peer_id: 12345,
+            resolution_strategy: TelegramResolutionStrategy::Dialog,
+            username: Some("example".to_string()),
+            access_hash: Some(77),
+            avatar_cache_key: None,
+        };
+
+        assert_eq!(
+            typed_peer_resolution_plan(&identity).expect("typed plan"),
+            vec![
+                SourcePeerResolutionStep::StoredPeerIdentity,
+                SourcePeerResolutionStep::Username,
+                SourcePeerResolutionStep::DialogScan
+            ]
+        );
+    }
+
+    #[test]
+    fn typed_identity_plan_prefers_dialog_supergroup_stored_peer_when_access_hash_exists() {
+        let identity = TelegramSourceIdentity {
+            source_id: 101,
+            account_id: 1,
+            source_subtype: TelegramSourceKind::Supergroup,
+            peer_kind: TelegramPeerKind::Channel,
+            peer_id: 12345,
+            resolution_strategy: TelegramResolutionStrategy::Dialog,
+            username: Some("example".to_string()),
+            access_hash: Some(77),
+            avatar_cache_key: None,
+        };
+
+        assert_eq!(
+            typed_peer_resolution_plan(&identity).expect("typed plan"),
+            vec![
+                SourcePeerResolutionStep::StoredPeerIdentity,
+                SourcePeerResolutionStep::Username,
+                SourcePeerResolutionStep::DialogScan
+            ]
+        );
+    }
+
+    #[test]
+    fn typed_identity_plan_keeps_dialog_group_dependent_on_dialog_scan() {
+        let identity = TelegramSourceIdentity {
+            source_id: 101,
+            account_id: 1,
+            source_subtype: TelegramSourceKind::Group,
+            peer_kind: TelegramPeerKind::Chat,
+            peer_id: 12345,
+            resolution_strategy: TelegramResolutionStrategy::Dialog,
+            username: None,
+            access_hash: Some(77),
+            avatar_cache_key: None,
+        };
+
+        assert_eq!(
+            typed_peer_resolution_plan(&identity).expect("typed plan"),
+            vec![SourcePeerResolutionStep::DialogScan]
+        );
+    }
+
+    #[test]
+    fn typed_identity_plan_skips_unusable_stored_peer_when_access_hash_is_missing() {
+        let identity = TelegramSourceIdentity {
+            source_id: 101,
+            account_id: 1,
+            source_subtype: TelegramSourceKind::Channel,
+            peer_kind: TelegramPeerKind::Channel,
+            peer_id: 12345,
+            resolution_strategy: TelegramResolutionStrategy::Dialog,
+            username: Some("example".to_string()),
+            access_hash: None,
+            avatar_cache_key: None,
+        };
+
+        assert_eq!(
+            typed_peer_resolution_plan(&identity).expect("typed plan"),
+            vec![
+                SourcePeerResolutionStep::Username,
+                SourcePeerResolutionStep::DialogScan
+            ]
+        );
+    }
+
+    #[test]
     fn source_metadata_decodes_old_username_only_payloads() {
         let encoded = compress_json_bytes(br#"{"username":"example"}"#).expect("encode");
         let decoded = decode_source_metadata(Some(&encoded)).expect("decode");
