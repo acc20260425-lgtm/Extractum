@@ -403,8 +403,6 @@ Append a section:
   tests.
 ```
 
-Replace the angle-bracket text with observed values before saving.
-
 - [ ] **Step 3: Update backlog**
 
 If the probe passed, remove this row from section `3.1`:
