@@ -41,7 +41,7 @@
     loadingLlmProviderModels,
     llmModelStatus,
     startingReport,
-    selectedGroupId,
+    selectedGroupEditorId,
     currentScopeHasSavedRuns,
     selectedRunIsActive,
     activeProgress,
@@ -115,7 +115,7 @@
     loadingLlmProviderModels: boolean;
     llmModelStatus: string;
     startingReport: boolean;
-    selectedGroupId: string;
+    selectedGroupEditorId: string;
     currentScopeHasSavedRuns: boolean;
     selectedRunIsActive: boolean;
     activeProgress: string;
@@ -441,7 +441,7 @@
       <SourceGroupEditor
         compact={true}
         {groups}
-        selectedGroupId={selectedGroupId}
+        selectedGroupId={selectedGroupEditorId}
         {selectedGroup}
         {groupName}
         {groupSourceType}

@@ -86,7 +86,7 @@
     loadingLlmProviderModels,
     llmModelStatus,
     startingReport,
-    selectedGroupId,
+    selectedGroupEditorId,
     currentScopeHasSavedRuns,
     currentRun,
     chatAvailability,
@@ -226,7 +226,7 @@
     loadingLlmProviderModels: boolean;
     llmModelStatus: string;
     startingReport: boolean;
-    selectedGroupId: string;
+    selectedGroupEditorId: string;
     currentScopeHasSavedRuns: boolean;
     currentRun: AnalysisRunDetail | null;
     chatAvailability: ChatAvailability;
@@ -433,7 +433,7 @@
         {loadingLlmProviderModels}
         {llmModelStatus}
         {startingReport}
-        {selectedGroupId}
+        {selectedGroupEditorId}
         {currentScopeHasSavedRuns}
         {selectedRunIsActive}
         {activeProgress}

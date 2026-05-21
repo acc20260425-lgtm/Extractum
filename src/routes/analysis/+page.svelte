@@ -2539,7 +2539,7 @@
     {loadingLlmProviderModels}
     {llmModelStatus}
     {startingReport}
-    selectedGroupId={selectedGroupEditorId}
+    selectedGroupEditorId={selectedGroupEditorId}
     {currentScopeHasSavedRuns}
     {currentRun}
     {chatAvailability}
