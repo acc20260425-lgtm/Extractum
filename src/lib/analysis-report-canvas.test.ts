@@ -120,4 +120,21 @@ describe("report canvas component contract", () => {
     expect(reportViewerSource).toContain("chatAvailability");
     expect(reportViewerSource).not.toContain('currentRun?.status === "completed" ? "Chat ready"');
   });
+
+  it("keeps management actions reachable while a run is open", () => {
+    const managementStart = reportCanvasSource.indexOf('class="opened-run-management"');
+    const modeStart = reportCanvasSource.indexOf('{#if canvasMode === "report"}');
+
+    expect(managementStart).toBeGreaterThan(0);
+    expect(modeStart).toBeGreaterThan(0);
+    expect(managementStart).toBeLessThan(modeStart);
+    expect(reportCanvasSource).toContain("{#if currentRun}");
+    expect(reportCanvasSource).toContain("Export for NotebookLM");
+    expect(reportCanvasSource).toContain("Edit templates");
+    expect(reportCanvasSource).toContain("Edit groups");
+    expect(reportCanvasSource).toContain("opened-run-template-editor-drawer");
+    expect(reportCanvasSource).toContain("opened-run-group-editor-drawer");
+    expect(reportCanvasSource).toContain("<TemplateEditor");
+    expect(reportCanvasSource).toContain("<SourceGroupEditor");
+  });
 });
