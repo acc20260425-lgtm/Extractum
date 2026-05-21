@@ -31,26 +31,32 @@ private source titles/usernames, or account deletion coordination.
 
 ## Validation Approach
 
-Run a normal app-path probe against the live app:
+First run a manual session-dispatch code audit, then run a normal app-path
+probe against the live app:
 
-1. Start the Tauri app and confirm both account A and account B are `ready`.
-2. Select exactly one public channel or supergroup visible to both accounts.
-3. If account A already has the selected source, keep that row. If it does not,
+1. Inspect the sync dispatch path at the current commit and confirm:
+   `sync_source` loads `source.account_id`, passes that account id to
+   `get_authorized_runtime`, `get_authorized_runtime` reads
+   `TelegramState.accounts` by `account_id`, and account initialization loads
+   each `MemorySession` from `telegram_session_store::load_session(account_id)`.
+2. Start the Tauri app and confirm both account A and account B are `ready`.
+3. Select exactly one public channel or supergroup visible to both accounts.
+4. If account A already has the selected source, keep that row. If it does not,
    add it through `add_telegram_source`.
-4. Ensure the same public peer exists under account B through
+5. Ensure the same public peer exists under account B through
    `add_telegram_source`. If account B already has the source, reuse the
    existing row and record that no new row was created. If account B does not
    have it, add it through `add_telegram_source`.
-5. Read both typed identities from SQLite and record only safe fields:
+6. Read both typed identities from SQLite and record only safe fields:
    `account_id`, `source_id`, `source_type`, `source_subtype`, `peer_kind`,
    `peer_id`, access-hash presence, username presence, `resolution_strategy`,
    `last_sync_state`, and `last_synced_at`.
-6. Record pre-sync item counts for both `source_id` values.
-7. Run `sync_source(source_id A)` and then re-read source state and item counts
+7. Record pre-sync item counts for both `source_id` values.
+8. Run `sync_source(source_id A)` and then re-read source state and item counts
    for both sources.
-8. Run `sync_source(source_id B)` and then re-read source state and item counts
+9. Run `sync_source(source_id B)` and then re-read source state and item counts
    for both sources.
-9. Document the sync results, warnings/errors, isolation checks, and any
+10. Document the sync results, warnings/errors, isolation checks, and any
    limitations.
 
 If the MCP bridge shortcut for app commands does not map arbitrary Tauri
@@ -65,6 +71,8 @@ This is still the normal app IPC path.
 ## Required Pre-Flight Conditions
 
 - The tracked workspace is clean before runtime validation begins.
+- The manual session-dispatch audit confirms there is no global/default
+  Telegram client fallback on the `sync_source` path.
 - No stale Extractum/Tauri process is holding the live database before any
   direct SQLite reads.
 - Both account A and account B return runtime status `ready`.
@@ -83,6 +91,14 @@ Abort the probe and document it as `blocked` if any pre-flight condition fails.
 ## Pass Criteria
 
 The live validation passes only if all of these checks are true:
+
+```text
+sync_source loads the source row and dispatches through that row's account_id
+get_authorized_runtime reads TelegramState.accounts by account_id
+each active grammers Client is initialized from that account's session file
+```
+
+And:
 
 ```text
 source_id A != source_id B
@@ -115,6 +131,16 @@ inserted/skipped/last_message_id
 warnings/errors
 ```
 
+For the session-dispatch audit, record the checked code path and current
+conclusion in the live-run note. Use file/function names only, not session
+contents:
+
+```text
+src-tauri/src/sources/sync.rs: sync_source -> sync_telegram_source
+src-tauri/src/telegram.rs: get_authorized_runtime, init_account_client
+src-tauri/src/telegram_session_store.rs: load_session(account_id)
+```
+
 The item-count isolation check may observe no new messages if the source is
 already caught up. In that case, the source-state check still must show that
 syncing source A does not mutate source B's `last_sync_state` or item count, and
@@ -128,6 +154,8 @@ and item count do not change during the sync.
 
 Abort as `blocked` before documenting a result if:
 
+- the manual session-dispatch audit finds a global/default Telegram client
+  fallback, an account-id mismatch, or an unverifiable dispatch boundary;
 - account B is not `ready`;
 - the shared public source cannot be added under account B;
 - the selected peer is not accessible to both accounts;
