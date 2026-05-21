@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Telegram runtime/private-source validation | verify real account, dialog, private channel/supergroup, stored-peer resolution, migrated-dialog, and cross-account behavior |
+| High | Telegram runtime/private-source validation | verify stored-peer username fallback, lost-access, migrated-dialog, and cross-account behavior |
 | High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
@@ -34,14 +34,18 @@
 
 Priority: high.
 
-- [ ] verify that `list_telegram_sources` returns broadcast channels, supergroups, and regular small groups
-- [ ] verify that adding from the dialog list stores the expected `source_subtype` and peer identity metadata
-- [ ] verify that sync works for `channel`, `supergroup`, and `group`
 - [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
-- [ ] validate dialog-picked private `channel` and `supergroup` sources through the stored-identity path
-- [ ] validate that stored peer identity wins before username fallback when `access_hash` is available
+- [ ] validate stored-peer resolution before username fallback on a live public source with `access_hash`
 - [ ] validate cross-account isolation on two real Telegram accounts
+
+Recent evidence:
+
+- `docs/superpowers/verification/telegram-runtime-private-source-validation.md`
+  records 2026-05-21 live runs where account 1 listed channels, supergroups,
+  and a regular group, synced representative `channel`, `supergroup`, and
+  `group` sources, and validated dialog-backed private `channel` and
+  `supergroup` sources through stored identity.
 
 Acceptance:
 
