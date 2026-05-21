@@ -37,8 +37,10 @@ Run a normal app-path probe against the live app:
 2. Select exactly one public channel or supergroup visible to both accounts.
 3. If account A already has the selected source, keep that row. If it does not,
    add it through `add_telegram_source`.
-4. Add or refresh the same public peer under account B through
-   `add_telegram_source`.
+4. Ensure the same public peer exists under account B through
+   `add_telegram_source`. If account B already has the source, reuse the
+   existing row and record that no new row was created. If account B does not
+   have it, add it through `add_telegram_source`.
 5. Read both typed identities from SQLite and record only safe fields:
    `account_id`, `source_id`, `source_type`, `source_subtype`, `peer_kind`,
    `peer_id`, access-hash presence, username presence, `resolution_strategy`,
@@ -70,6 +72,9 @@ This is still the normal app IPC path.
 - Exactly one peer is selected for this slice.
 - Account A and account B resolve the selected peer to matching `peer_kind` and
   `peer_id`.
+- Access-hash values are not compared across accounts. Record only
+  access-hash presence because Telegram access hashes may be scoped to the
+  account or session context.
 - Pre-sync source fields and item counts are captured for both `source_id`
   values before either sync runs.
 
@@ -114,6 +119,10 @@ The item-count isolation check may observe no new messages if the source is
 already caught up. In that case, the source-state check still must show that
 syncing source A does not mutate source B's `last_sync_state` or item count, and
 syncing source B does not mutate source A's `last_sync_state` or item count.
+Similarly, `last_sync_state` for the synced source may remain unchanged when it
+was already at the returned `last_message_id`. Passing the slice does not
+require a source row to change; it requires that the other account's source row
+and item count do not change during the sync.
 
 ## Abort And Needs-Follow-Up Conditions
 
@@ -123,12 +132,13 @@ Abort as `blocked` before documenting a result if:
 - the shared public source cannot be added under account B;
 - the selected peer is not accessible to both accounts;
 - more than one peer is involved in the evidence;
+- the evidence shows the selected inputs were not actually the same peer;
 - a sync fails with an auth/runtime error unrelated to cross-account isolation.
 
 Document as `failed` or `needs follow-up`, rather than `passed`, if:
 
 - account A and account B resolve different `peer_kind` or `peer_id` values for
-  what was expected to be the same public peer;
+  a confirmed same public peer;
 - `source_id A` equals `source_id B`;
 - either sync mutates the other account's source row or item count;
 - warnings suggest that one account used the other account's runtime/session
