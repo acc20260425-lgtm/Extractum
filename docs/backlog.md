@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Telegram runtime/private-source validation | verify stored-peer username fallback, lost-access, migrated-dialog, and cross-account behavior |
+| High | Telegram runtime/private-source validation | verify lost-access, migrated-dialog, and cross-account behavior |
 | High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
