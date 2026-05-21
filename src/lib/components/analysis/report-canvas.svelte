@@ -8,9 +8,11 @@
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import { sourceCapabilities } from "$lib/source-capabilities";
-  import type {
-    CanvasMode,
-    SourceViewBasis,
+  import {
+    legacyScopeFromWorkspaceSelection,
+    type CanvasMode,
+    type SourceViewBasis,
+    type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
   import type { ChatAvailability } from "$lib/analysis-run-companion-state";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
@@ -49,7 +51,7 @@
   };
 
   let {
-    analysisScope,
+    workspaceSelection,
     currentSource,
     currentGroup,
     currentSourceMetric,
@@ -189,7 +191,7 @@
     onSaveGroupChanges,
     onDeleteGroup,
   }: {
-    analysisScope: "single_source" | "source_group";
+    workspaceSelection: WorkspaceSelection;
     currentSource: Source | null;
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
@@ -339,6 +341,10 @@
     [key: string]: unknown;
   } = $props();
 
+  const legacyWorkspaceSelection = $derived(
+    legacyScopeFromWorkspaceSelection(workspaceSelection),
+  );
+  const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);
   const currentSourceContentLabel = $derived(
     currentSource ? sourceCapabilities(currentSource).contentLabel : "items",
   );
@@ -411,7 +417,7 @@
       />
     {:else}
       <ReportSetupPanel
-        {analysisScope}
+        {workspaceSelection}
         {currentSource}
         {currentGroup}
         {currentSourceMetric}

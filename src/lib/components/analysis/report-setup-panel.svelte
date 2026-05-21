@@ -8,6 +8,10 @@
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import { sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
+  import {
+    legacyScopeFromWorkspaceSelection,
+    type WorkspaceSelection,
+  } from "$lib/analysis-workspace-state";
   import type {
     AnalysisGroupSourceType,
     AnalysisPromptTemplate,
@@ -19,7 +23,7 @@
   import type { Source } from "$lib/types/sources";
 
   let {
-    analysisScope,
+    workspaceSelection,
     currentSource,
     currentGroup,
     currentSourceMetric,
@@ -93,7 +97,7 @@
     onSaveGroupChanges,
     onDeleteGroup,
   }: {
-    analysisScope: "single_source" | "source_group";
+    workspaceSelection: WorkspaceSelection;
     currentSource: Source | null;
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
@@ -174,6 +178,10 @@
   let templateEditorOpen = $state(false);
   let groupEditorOpen = $state(false);
 
+  const legacyWorkspaceSelection = $derived(
+    legacyScopeFromWorkspaceSelection(workspaceSelection),
+  );
+  const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);
   const isYoutubeScope = $derived(
     (analysisScope === "single_source" && currentSource?.sourceType === "youtube") ||
       (analysisScope === "source_group" && currentGroup?.source_type === "youtube"),

@@ -2502,7 +2502,7 @@
   />
 
   <ReportCanvas
-    {analysisScope}
+    workspaceSelection={workspaceUiState.workspaceSelection}
     currentSource={currentSource()}
     currentGroup={currentGroup()}
     currentSourceMetric={currentSourceMetric()}
