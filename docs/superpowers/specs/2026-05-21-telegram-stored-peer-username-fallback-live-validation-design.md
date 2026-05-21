@@ -25,6 +25,8 @@ already has:
 
 The preferred candidates are source `17` or source `18`, already recorded in
 `docs/superpowers/verification/telegram-runtime-private-source-validation.md`.
+Run the probe on exactly one source. A second source adds little confidence and
+increases the chance of manual restore mistakes.
 
 This slice does not use a second Telegram account, lost-access fixtures,
 migrated group fixtures, or any real Telegram username reassignment.
@@ -60,6 +62,79 @@ The strict resolver order is covered by backend resolver tests, including
 `typed_identity_plan_prefers_stored_peer_before_username_when_access_hash_exists`
 and the dialog channel/supergroup stored-peer tests.
 
+## Pre-Flight And Restore SQL
+
+Use SQL as a checklist, not as a blind copy-paste target. Replace `:source_id`
+and `:original_username` with the selected source id and the exact username
+read before the probe.
+
+Pre-flight:
+
+```sql
+SELECT
+  ts.source_id,
+  ts.account_id,
+  ts.source_subtype,
+  ts.peer_kind,
+  ts.peer_id,
+  ts.resolution_strategy,
+  ts.username,
+  ts.access_hash,
+  s.last_sync_state,
+  s.last_synced_at
+FROM telegram_sources ts
+JOIN sources s ON s.id = ts.source_id
+WHERE ts.source_id = :source_id;
+```
+
+Required pre-flight conditions:
+
+- account 1 is `ready`;
+- selected source has no unresolved runtime warnings before the probe;
+- `username IS NOT NULL`;
+- `access_hash IS NOT NULL`;
+- `peer_kind = 'channel'`;
+- `source_subtype` is `channel` or `supergroup`;
+- only one source is selected.
+
+Abort the probe if any required pre-flight condition is false.
+
+Probe update:
+
+```sql
+UPDATE telegram_sources
+SET username = 'extractum_validation_missing_username_20260521'
+WHERE source_id = :source_id;
+```
+
+Restore:
+
+```sql
+UPDATE telegram_sources
+SET username = :original_username
+WHERE source_id = :source_id;
+```
+
+Post-restore comparison:
+
+```sql
+SELECT
+  source_id,
+  account_id,
+  source_subtype,
+  peer_kind,
+  peer_id,
+  resolution_strategy,
+  username,
+  access_hash
+FROM telegram_sources
+WHERE source_id = :source_id;
+```
+
+The post-restore row must match the pre-flight row for `peer_kind`, `peer_id`,
+`access_hash`, and `resolution_strategy`, and must contain the original
+username again.
+
 ## Safety
 
 The probe must not change Telegram server state. It only mutates a local cached
@@ -81,9 +156,9 @@ message content, or private usernames:
 - date and commit;
 - account label `account 1`;
 - source id and source subtype;
-- original username presence, not the private value if sensitive;
+- original username presence, not the username value;
 - `peer_kind`, `peer_id`, `access_hash` presence, and `resolution_strategy`;
-- sentinel username value used for the local probe;
+- full sentinel username value used for the local probe;
 - `sync_source` inserted/skipped/last-message result and warnings;
 - post-restore typed identity check;
 - wrong-peer check;
