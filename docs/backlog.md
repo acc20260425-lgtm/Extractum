@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-20
+> **Updated:** 2026-05-21
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -11,7 +11,6 @@
 | High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
-| High | Analysis workspace parity | keep NotebookLM export, prompt templates, and source groups reachable when a run is open |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
@@ -123,21 +122,7 @@ Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-### 3.6 Analysis Workspace Parity
-
-Priority: high.
-
-- [ ] keep `Export for NotebookLM` reachable when an analysis run is open
-- [ ] keep prompt template management reachable when an analysis run is open
-- [ ] keep source group management reachable when an analysis run is open
-
-Acceptance:
-
-- Opening a current or saved analysis run does not hide NotebookLM export.
-- Opening a current or saved analysis run does not hide prompt template or source group management.
-- The setup/no-run path keeps the same management actions it has today.
-
-### 3.7 NotebookLM Export Follow-Ups
+### 3.6 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -147,7 +132,7 @@ Priority: medium.
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 3.8 YouTube Source Follow-Ups
+### 3.7 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -166,7 +151,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 3.9 Media Download, Preview, And Analysis
+### 3.8 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -184,7 +169,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 3.10 Stabilization
+### 3.9 Stabilization
 
 Priority: medium.
 
