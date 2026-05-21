@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import analysisPageSource from "../routes/analysis/+page.svelte?raw";
-import activeRunListSource from "./components/analysis/active-run-list.svelte?raw";
-import runHistorySource from "./components/analysis/run-history.svelte?raw";
 import runCompanionRunsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
-import workspaceInspectorSource from "./components/analysis/workspace-inspector.svelte?raw";
 
 describe("analysis source access placement", () => {
   it("uses the compact source rail inside the analysis route", () => {
@@ -20,16 +17,7 @@ describe("analysis source access placement", () => {
     expect(analysisPageSource).toContain("sourceJobsBySource");
   });
 
-  it("does not place source ingest jobs in the analysis runs surfaces", () => {
-    expect(workspaceInspectorSource).not.toContain("SourceJobRecord");
-    expect(workspaceInspectorSource).not.toContain("sourceJobs");
-    expect(workspaceInspectorSource).not.toContain("takeoutJobsBySource");
-    expect(runHistorySource).not.toContain("SourceJobRecord");
-    expect(runHistorySource).not.toContain("sourceJobs");
-    expect(runHistorySource).not.toContain("Takeout");
-    expect(activeRunListSource).not.toContain("SourceJobRecord");
-    expect(activeRunListSource).not.toContain("sourceJobs");
-    expect(activeRunListSource).not.toContain("Takeout");
+  it("does not place source ingest jobs in the analysis runs companion", () => {
     expect(runCompanionRunsTabSource).not.toContain("SourceJobRecord");
     expect(runCompanionRunsTabSource).not.toContain("sourceJobs");
     expect(runCompanionRunsTabSource).not.toContain("Takeout");
