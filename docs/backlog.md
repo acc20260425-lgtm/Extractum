@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Telegram runtime/private-source validation | verify real account, dialog, private channel/supergroup, small group, migrated-dialog, and cross-account behavior |
+| High | Telegram runtime/private-source validation | verify real account, dialog, private channel/supergroup, stored-peer resolution, migrated-dialog, and cross-account behavior |
 | High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
@@ -40,6 +40,7 @@ Priority: high.
 - [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
 - [ ] validate dialog-picked private `channel` and `supergroup` sources through the stored-identity path
+- [ ] validate that stored peer identity wins before username fallback when `access_hash` is available
 - [ ] validate cross-account isolation on two real Telegram accounts
 
 Acceptance:
@@ -48,6 +49,8 @@ Acceptance:
 - A source added from account A does not affect the same source added from account B.
 - Sync inserts messages for each supported kind without resolving to the wrong peer.
 - Private dialog-picked sources resolve predictably when Telegram provides sufficient peer data.
+- Public username changes or reassignments do not override a stored peer identity
+  that can still resolve the source.
 
 ### 3.2 Account Deletion Coordination
 
