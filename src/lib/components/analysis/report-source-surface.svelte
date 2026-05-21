@@ -13,8 +13,11 @@
     sourceCanvasSurface,
     type RunSnapshotAvailability,
   } from "$lib/analysis-report-canvas-state";
-  import type { SourceViewBasis } from "$lib/analysis-workspace-state";
-  import type { AnalysisScope } from "$lib/analysis-scope-state";
+  import {
+    legacyScopeFromWorkspaceSelection,
+    type SourceViewBasis,
+    type WorkspaceSelection,
+  } from "$lib/analysis-workspace-state";
   import {
     analysisRunMessageToReaderItem,
     sourceFilterOptionsFromGroupMembers,
@@ -47,7 +50,7 @@
     loadingRunSnapshotMessages: boolean;
     runSnapshotError: string;
     hasMoreRunSnapshotMessages: boolean;
-    analysisScope: AnalysisScope;
+    workspaceSelection: WorkspaceSelection;
     currentSource: Source | null;
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
@@ -104,7 +107,7 @@
     loadingRunSnapshotMessages,
     runSnapshotError,
     hasMoreRunSnapshotMessages,
-    analysisScope,
+    workspaceSelection,
     currentSource,
     currentGroup,
     sourceItems,
@@ -157,6 +160,10 @@
     sourceViewBasis,
     snapshotAvailability,
   });
+  const legacyWorkspaceSelection = $derived(
+    legacyScopeFromWorkspaceSelection(workspaceSelection),
+  );
+  const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);
   const canvasSurface = $derived(sourceCanvasSurface(sourceBasis));
   const liveReaderItems = $derived.by(() =>
     sourceItems.map((item) =>

@@ -9,7 +9,6 @@
   import Button from "$lib/components/ui/Button.svelte";
   import { sourceCapabilities } from "$lib/source-capabilities";
   import {
-    legacyScopeFromWorkspaceSelection,
     type CanvasMode,
     type SourceViewBasis,
     type WorkspaceSelection,
@@ -341,10 +340,6 @@
     [key: string]: unknown;
   } = $props();
 
-  const legacyWorkspaceSelection = $derived(
-    legacyScopeFromWorkspaceSelection(workspaceSelection),
-  );
-  const analysisScope = $derived(legacyWorkspaceSelection.analysisScope);
   const currentSourceContentLabel = $derived(
     currentSource ? sourceCapabilities(currentSource).contentLabel : "items",
   );
@@ -494,7 +489,7 @@
     {/if}
   {:else}
     <ReportSourceSurface
-      {analysisScope}
+      {workspaceSelection}
       {currentRun}
       {sourceViewBasis}
       snapshotAvailability={runSnapshotAvailability}

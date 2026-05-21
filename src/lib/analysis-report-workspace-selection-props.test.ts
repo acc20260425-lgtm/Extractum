@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 import reportCanvasSource from "./components/analysis/report-canvas.svelte?raw";
 import reportSetupPanelSource from "./components/analysis/report-setup-panel.svelte?raw";
+import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 
 function componentTag(source: string, componentName: string) {
   const match = new RegExp(`(?:^|\\r?\\n)([ \\t]*)<${componentName}\\b`).exec(source);
@@ -27,20 +28,30 @@ describe("analysis report workspace selection props", () => {
     expect(routeReportCanvas).not.toContain("{analysisScope}");
   });
 
-  it("keeps setup branch compatibility projection inside report components", () => {
+  it("keeps setup and source compatibility projections inside leaf components", () => {
     const setupPanelTag = componentTag(reportCanvasSource, "ReportSetupPanel");
+    const sourceSurfaceTag = componentTag(reportCanvasSource, "ReportSourceSurface");
 
     expect(reportCanvasSource).toContain("workspaceSelection,");
     expect(reportCanvasSource).toContain("workspaceSelection: WorkspaceSelection;");
+    expect(reportCanvasSource).not.toContain("legacyScopeFromWorkspaceSelection");
     expect(reportCanvasSource).not.toContain("analysisScope,");
     expect(reportCanvasSource).not.toContain('analysisScope: "single_source" | "source_group";');
     expect(setupPanelTag).toContain("{workspaceSelection}");
     expect(setupPanelTag).not.toContain("{analysisScope}");
+    expect(sourceSurfaceTag).toContain("{workspaceSelection}");
+    expect(sourceSurfaceTag).not.toContain("{analysisScope}");
 
     expect(reportSetupPanelSource).toContain("workspaceSelection,");
     expect(reportSetupPanelSource).toContain("workspaceSelection: WorkspaceSelection;");
     expect(reportSetupPanelSource).not.toContain("analysisScope,");
     expect(reportSetupPanelSource).not.toContain('analysisScope: "single_source" | "source_group";');
     expect(reportSetupPanelSource).toContain("legacyScopeFromWorkspaceSelection(workspaceSelection)");
+
+    expect(reportSourceSurfaceSource).toContain("workspaceSelection,");
+    expect(reportSourceSurfaceSource).toContain("workspaceSelection: WorkspaceSelection;");
+    expect(reportSourceSurfaceSource).not.toContain("analysisScope: AnalysisScope;");
+    expect(reportSourceSurfaceSource).not.toContain('import type { AnalysisScope } from "$lib/analysis-scope-state";');
+    expect(reportSourceSurfaceSource).toContain("legacyScopeFromWorkspaceSelection(workspaceSelection)");
   });
 });
