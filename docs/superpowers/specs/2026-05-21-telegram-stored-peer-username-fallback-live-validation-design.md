@@ -56,6 +56,11 @@ Use a DB-only username probe:
 8. Record the sync result, warnings, wrong-peer check, and limitation in the
    verification document and backlog.
 
+Practical execution note: before the probe update, close the app and make a
+copy of the SQLite DB file. After the probe update, start the app only for the
+sync run. Restore the username immediately after sync completes, then re-open
+or re-read the row.
+
 The probe proves operational independence from the cached username: a source
 with a bad cached username still syncs when its stored peer identity is usable.
 The strict resolver order is covered by backend resolver tests, including
