@@ -54,6 +54,11 @@ sources that disappeared from dialogs. If Telegram accepts the stored peer but
 history access fails while iterating messages, the error is expected to surface
 as a typed `network` error from the grammers request.
 
+Other typed `AppError` kinds may be acceptable if the message is
+user-actionable, the source remains explainable, and identity/state/item
+invariants hold. Untyped, raw, or `internal` errors are not acceptable unless
+they expose a real bug to fix.
+
 `finalize_sync` runs only after peer resolution and message ingest complete.
 Therefore, a failed sync should not advance `sources.last_sync_state` or
 `sources.last_synced_at`.
@@ -66,22 +71,32 @@ Therefore, a failed sync should not advance `sources.last_sync_state` or
    A's Telegram dialogs.
 4. Add or reuse the source through the normal app path:
    `list_telegram_sources(account_id)` and `add_telegram_source`.
+   If reusing an existing source, first verify it is dialog-backed, private,
+   shaped as `channel` or `supergroup`, has access hash present, has no username
+   recorded, and baseline sync succeeds before access loss.
 5. Run baseline `sync_source(source_id)` while account A still has access.
 6. Capture the before-loss snapshot.
 7. Human gate: remove account A from the controlled private source or otherwise
    revoke access.
-8. Check whether the source still appears in `list_telegram_sources(account_id)`.
-9. Run `sync_source(source_id)` and capture either the `SyncResult` or typed
+8. Optionally post one post-removal canary message from an admin account. Tracked
+   docs must record only whether post-removal content was observed locally, not
+   the message text.
+9. Check whether the source still appears in `list_telegram_sources(account_id)`.
+10. Run `sync_source(source_id)` and capture either the `SyncResult` or typed
    `AppError`.
-10. Capture the after-loss snapshot.
-11. Evaluate identity, state, item-count, and wrong-peer invariants.
-12. Stop runtime processes and update tracked verification docs.
+11. Capture the after-loss snapshot.
+12. Evaluate identity, state, item-count, and wrong-peer invariants.
+13. Stop runtime processes and update tracked verification docs.
 
 ## Snapshot Evidence
 
 Runtime details are written only to ignored `reference/*` files. Tracked docs
 must not include private titles, usernames, message text, phone numbers, session
 data, API credentials, or auth material.
+
+If the probe reuses an existing source instead of creating a new one, record
+that it was a reused existing dialog-backed private source and capture only the
+sanitized identity fields below.
 
 Before and after the access-loss sync attempt, capture:
 
@@ -112,6 +127,10 @@ Also capture whether the source's typed peer appears in
 `list_telegram_sources(account_id)` after the human removal gate. Record this as
 presence/absence only, without private labels.
 
+Do not expand this probe to `analysis_documents`, archive read-model rows, or
+other derived tables. The validation target is runtime source resolution, source
+sync state, and item insertion boundaries.
+
 ## Pass Criteria
 
 The probe passes when all of these are true:
@@ -122,7 +141,9 @@ The probe passes when all of these are true:
 - `telegram_sources.source_subtype`, `peer_kind`, `peer_id`, access-hash
   presence, username presence, `resolution_strategy`, and
   `identity_refreshed_at` do not change unless a clearly successful safe refresh
-  occurred.
+  occurred. For this lost-access probe, any `identity_refreshed_at` change is
+  `needs follow-up` unless logs and snapshots prove a safe refresh of the same
+  peer.
 - `sources.last_sync_state` and `sources.last_synced_at` do not advance after a
   failed sync.
 - Item count for the source does not increase after a failed sync.
@@ -136,8 +157,9 @@ The probe passes when all of these are true:
 - `passed`: the failure path is typed/explainable and all identity/state/item
   invariants hold.
 - `blocked`: account A could not be removed, the private fixture could not be
-  created, account A was not ready, baseline sync failed before access loss, or
-  Telegram still showed account A as a member after the removal step.
+  created, account A was not ready, baseline sync failed before access loss,
+  access could not be confidently revoked, or membership/access state remained
+  ambiguous enough that the sync result cannot be interpreted.
 - `needs follow-up`: the sync unexpectedly succeeds after removal but snapshots
   show no wrong-peer mutation; this may reflect Telegram retaining history
   access for the tested state and needs a narrower fixture.
@@ -145,6 +167,11 @@ The probe passes when all of these are true:
   unsafely, advances sync state after a failed attempt, returns an unhelpful
   internal/raw error, or makes the source unexplained/unavailable in the app
   state.
+
+A successful post-removal sync is not automatically a pass. It is pass-like only
+if Telegram still permits legitimate history access to the same peer and no new
+post-removal or canary content is ingested. Otherwise classify as
+`needs follow-up` or `failed` according to the evidence.
 
 ## Documentation Updates
 
