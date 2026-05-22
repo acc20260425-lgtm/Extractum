@@ -200,6 +200,22 @@ fn build_chat_request(params: ChatRequestParams<'_>) -> LlmChatRequest {
     }
 }
 
+fn analysis_chat_request_metadata(
+    request: &LlmChatRequest,
+    profile_id: String,
+    provider: String,
+    run_id: i64,
+) -> LlmRequestMetadata {
+    LlmRequestMetadata {
+        request_id: request.request_id.clone(),
+        profile_id,
+        provider,
+        kind: LlmRequestKind::AnalysisChat,
+        priority: LlmRequestPriority::Interactive,
+        owner_run_id: Some(run_id),
+    }
+}
+
 struct ChatEvent {
     event: AnalysisChatEvent,
 }
@@ -414,17 +430,15 @@ pub async fn ask_analysis_run_question(
                         .emit(&app_handle);
                     return;
                 }
-            };
+        };
 
         let scheduler = app_handle.state::<LlmSchedulerState>();
-        let request_meta = LlmRequestMetadata {
-            request_id: request.request_id.clone(),
-            profile_id: resolved_profile.profile_id.clone(),
-            provider: resolved_profile.provider.as_str().to_string(),
-            kind: LlmRequestKind::AnalysisChat,
-            priority: LlmRequestPriority::Interactive,
-            owner_run_id: None,
-        };
+        let request_meta = analysis_chat_request_metadata(
+            &request,
+            resolved_profile.profile_id.clone(),
+            resolved_profile.provider.as_str().to_string(),
+            run_id,
+        );
         let queued_handle = app_handle.clone();
         let started_handle = app_handle.clone();
         let delta_handle = app_handle.clone();
@@ -516,10 +530,11 @@ pub async fn ask_analysis_run_question(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_chat_request, ensure_completed_chat_context, format_chat_context_messages,
-        ChatRequestParams,
+        analysis_chat_request_metadata, build_chat_request, ensure_completed_chat_context,
+        format_chat_context_messages, ChatRequestParams,
     };
     use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
+    use crate::llm::LlmRequestKind;
 
     fn sample_run() -> AnalysisRunDetail {
         AnalysisRunDetail {
@@ -613,6 +628,29 @@ mod tests {
         assert!(request.messages[1]
             .content
             .contains("Additional local source document matches"));
+    }
+
+    #[test]
+    fn analysis_chat_request_metadata_uses_run_owner() {
+        let request = build_chat_request(ChatRequestParams {
+            run: &sample_run(),
+            profile_id: "default".to_string(),
+            scope_label: "Source",
+            history: &[],
+            question: "What changed?",
+            report_markdown: "Saved report",
+            context_messages: &[],
+            model_override: None,
+        });
+        let metadata = analysis_chat_request_metadata(
+            &request,
+            "default".to_string(),
+            "gemini".to_string(),
+            42,
+        );
+
+        assert_eq!(metadata.kind, LlmRequestKind::AnalysisChat);
+        assert_eq!(metadata.owner_run_id, Some(42));
     }
 
     #[test]

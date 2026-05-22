@@ -1325,7 +1325,7 @@ git commit -m "feat: guard account deletion with active-work preflight"
 - Modify: `src-tauri/src/analysis/chat.rs`
 - Modify: `docs/superpowers/plans/2026-05-22-account-deletion-coordination.md`
 
-- [ ] **Step 1: Write failing unit test for analysis chat request ownership**
+- [x] **Step 1: Write failing unit test for analysis chat request ownership**
 
 In `src-tauri/src/analysis/chat.rs`, extract a helper in tests first by writing:
 
@@ -1354,7 +1354,7 @@ fn analysis_chat_request_metadata_uses_run_owner() {
 }
 ```
 
-- [ ] **Step 2: Run chat test and verify RED**
+- [x] **Step 2: Run chat test and verify RED**
 
 Run:
 
@@ -1364,7 +1364,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests::analysis_
 
 Expected: compile failure because `analysis_chat_request_metadata` does not exist.
 
-- [ ] **Step 3: Implement metadata helper and use it in follow-up chat**
+- [x] **Step 3: Implement metadata helper and use it in follow-up chat**
 
 Add near chat request code:
 
@@ -1397,7 +1397,7 @@ let request_meta = analysis_chat_request_metadata(
 );
 ```
 
-- [ ] **Step 4: Run chat tests and commit**
+- [x] **Step 4: Run chat tests and commit**
 
 Run:
 
