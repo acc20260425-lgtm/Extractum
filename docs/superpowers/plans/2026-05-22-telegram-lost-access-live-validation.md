@@ -706,7 +706,7 @@ Expected: snapshot includes the same source id and typed identity row.
 - Read: `reference/telegram-lost-access-sync-results.json`
 - Create: `reference/telegram-lost-access-validation-evaluation.json`
 
-- [ ] **Step 1: Create and run the evaluation script**
+- [x] **Step 1: Create and run the evaluation script**
 
 Run:
 
