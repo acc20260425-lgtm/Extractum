@@ -176,7 +176,7 @@ Expected: one status record with `account_id = 1` and `status = "ready"`. If acc
 - Create: `reference/telegram-lost-access-dialog-candidates.json`
 - Read: `C:\Users\Dima\AppData\Roaming\org.ai.extractum\extractum.db`
 
-- [ ] **Step 1: List candidate private channel/supergroup dialogs**
+- [x] **Step 1: List candidate private channel/supergroup dialogs**
 
 Tool call:
 
@@ -188,7 +188,7 @@ mcp__tauri__.webview_execute_js({
 
 Expected: a list of private channel/supergroup dialog candidates. Runtime output may include private titles for local operator selection only; do not copy private titles into tracked docs.
 
-- [ ] **Step 2: Save the candidate list to ignored reference context**
+- [x] **Step 2: Save the candidate list to ignored reference context**
 
 Copy the complete JSON array returned by Task 3 Step 1 to the clipboard, then run:
 
@@ -201,7 +201,7 @@ Get-Content -Raw -LiteralPath $candidatePath | ConvertFrom-Json | Select-Object 
 
 Expected: sanitized candidate rows are printed without titles. If no controlled private supergroup/channel is visible, ask the operator to create or join one, then rerun Step 1.
 
-- [ ] **Step 3: Choose the controlled fixture**
+- [x] **Step 3: Choose the controlled fixture**
 
 Human gate:
 
@@ -213,7 +213,7 @@ Do not proceed with a public username source or regular small group.
 
 Expected: operator identifies one candidate index. If the operator cannot identify a controlled fixture, stop and document `blocked`.
 
-- [ ] **Step 4: Build the runtime context from the selected candidate**
+- [x] **Step 4: Build the runtime context from the selected candidate**
 
 When the operator provides the chosen numeric candidate index, enter it at the prompt:
 
@@ -243,7 +243,7 @@ Get-Content -Raw -LiteralPath $contextPath | ConvertFrom-Json | Select-Object ac
 
 Expected: context has `account_id = 1`, numeric `source_ref`, and `expected_subtype` of `supergroup` or `channel`.
 
-- [ ] **Step 5: Add or reuse the selected source through app IPC**
+- [x] **Step 5: Add or reuse the selected source through app IPC**
 
 Generate the app script:
 
@@ -272,7 +272,7 @@ Use `mcp__tauri__.webview_execute_js` and set `script` to the complete JavaScrip
 
 Expected: a `SourceRecord` for account 1. It may create a new row or idempotently refresh/reuse an existing row. Abort as `blocked` if add fails before access loss.
 
-- [ ] **Step 6: Verify stored private typed identity**
+- [x] **Step 6: Verify stored private typed identity**
 
 Run:
 
