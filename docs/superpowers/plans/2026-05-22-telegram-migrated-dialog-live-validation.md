@@ -1362,7 +1362,7 @@ Expected: checkpoint commit succeeds.
 - Modify: `docs/backlog.md`
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-live-validation.md`
 
-- [ ] **Step 1: Read sanitized runtime evidence**
+- [x] **Step 1: Read sanitized runtime evidence**
 
 Run:
 
@@ -1376,7 +1376,7 @@ Get-Content -Raw reference\telegram-migrated-dialog-sync-results.json | ConvertF
 
 Expected: evidence is available for classification and docs. Do not copy private titles, usernames, access-hash values, or message text into tracked docs.
 
-- [ ] **Step 2: Update the verification matrix row**
+- [x] **Step 2: Update the verification matrix row**
 
 If primary `classification = passed`, update the row to this shape with observed values:
 
@@ -1386,7 +1386,7 @@ If primary `classification = passed`, update the row to this shape with observed
 
 If primary classification is `needs_follow_up`, `blocked`, or `failed`, set that status and describe the non-sensitive reason in the row. If the secondary Takeout smoke imported unsafe rows, do not present the slice as a clean pass; use status wording that records `primary passed, Takeout failed`.
 
-- [ ] **Step 3: Add the dated live-run note**
+- [x] **Step 3: Add the dated live-run note**
 
 Append a section to `docs/superpowers/verification/telegram-runtime-private-source-validation.md`:
 
@@ -1421,7 +1421,7 @@ Append a section to `docs/superpowers/verification/telegram-runtime-private-sour
 
 Use observed sanitized numeric values and conclusions from the ignored runtime evidence.
 
-- [ ] **Step 4: Update backlog according to primary and secondary results**
+- [x] **Step 4: Update backlog according to primary and secondary results**
 
 If primary runtime classification is `passed`, remove this row from `docs/backlog.md` section `3.1`:
 
@@ -1435,7 +1435,7 @@ If Takeout smoke is `blocked_start`, `blocked_timeout`, `needs_follow_up`, or `f
 
 If primary runtime classification is `blocked`, `needs_follow_up`, or `failed`, keep or replace the runtime backlog item with the concrete sanitized follow-up discovered by the probe.
 
-- [ ] **Step 5: Commit the Task 7 checkpoint**
+- [x] **Step 5: Commit the Task 7 checkpoint**
 
 Run:
 

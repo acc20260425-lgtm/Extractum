@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Telegram runtime/private-source validation | verify migrated-dialog behavior |
+| High | Telegram runtime/private-source validation | capture non-empty migrated-dialog history-peer proof |
 | High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
@@ -34,7 +34,7 @@
 
 Priority: high.
 
-- [ ] verify behavior for migrated small-group-to-supergroup dialogs
+- [ ] capture a migrated small-group-to-supergroup fixture with persisted item/history rows so the current `channel` history-peer proof can be validated
 
 Recent evidence:
 
@@ -52,7 +52,13 @@ Recent evidence:
   item rows. It also records a 2026-05-22 lost-access probe where a controlled
   private channel source for account `11` returned a typed `CHANNEL_PRIVATE`
   sync error after access was revoked while stored identity, sync state, and
-  item counts stayed unchanged.
+  item counts stayed unchanged. It also records a 2026-05-22 migrated-dialog
+  probe where account `11` listed the controlled dialog as `supergroup`,
+  `add_telegram_source` created source `115` with `peer_kind = channel`,
+  `resolution_strategy = dialog`, and access-hash present; `sync_source(115)`
+  succeeded with inserted 0, skipped 1, and no warnings, but no local
+  item/history rows were persisted, so the slice remains open for a non-empty
+  history-peer proof.
 
 Acceptance:
 

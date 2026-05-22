@@ -26,7 +26,7 @@ Privacy classification values: `public username`, `dialog-backed likely private`
 | Private channel from dialogs | passed | dialog-backed likely private | Representative existing dialog-backed source `27` has `source_subtype = channel` and no username | `peer_kind = channel`, `access_hash` present, `username` absent, `resolution_strategy = dialog` | `sync_source(27)` inserted 6, skipped 0, `last_message_id = 1165` | Stored peer identity resolved without public username fallback | No warnings |
 | Private supergroup from dialogs | passed | dialog-backed likely private | Dialog-picked source `Pure C` was added as source `110` with `source_subtype = supergroup` and no username | `peer_kind = channel`, `peer_id = 1335891301`, `access_hash` present, `username` absent, `resolution_strategy = dialog` | `sync_source(110)` inserted 384, skipped 0, `last_message_id = 92374` | Stored peer identity resolved without public username fallback | No warnings |
 | Regular small group | passed | dialog-dependent group | Dialog-picked source `Test group` was added as source `111` with `source_subtype = group` and no username | `peer_kind = chat`, `peer_id = 5241485550`, `access_hash` absent, `username` absent, `resolution_strategy = dialog` | `sync_source(111)` inserted 2, skipped 0, `last_message_id = 233` | Resolver remained dialog-dependent and did not create a stored channel/supergroup peer path | No warnings |
-| Migrated small group -> supergroup | not run | unknown | Migrated dialog is classified with the observed current subtype | `source_subtype`, `peer_kind`, `peer_id`, `access_hash` presence, provenance notes | Sync/import behavior matches the chosen migration policy | No history is imported across an unsafe identity boundary | Record migration identifiers and warnings |
+| Migrated small group -> supergroup | needs follow-up | dialog-backed likely private | Account `11` controlled migrated dialog was listed as `supergroup`; `add_telegram_source` created source `115` through the dialog path | `source_subtype = supergroup`, `peer_kind = channel`, `peer_id = 3688731168`, access-hash present, username absent, `resolution_strategy = dialog` | `sync_source(115)` succeeded with inserted 0, skipped 1, `last_message_id = 1`, warnings `[]` | Stored identity stayed on the current channel peer and no wrong-peer groups appeared, but `telegram_messages` had 0 history-peer groups because no local items/history rows were persisted | Secondary Takeout smoke was not run because the primary result was `needs_follow_up` with no history-peer proof |
 | No-longer-member, left, or private access lost | passed | access-limited | Controlled private channel was added from account `11` dialogs as source `114`; after access was revoked it disappeared from the dialog list but the stored source row remained explainable | `source_subtype = channel`, `peer_kind = channel`, `peer_id = 3914917549`, access-hash present, username absent, `resolution_strategy = dialog`; before/after snapshots kept identity unchanged | Baseline `sync_source(114)` succeeded with inserted 0, skipped 1, `last_message_id = 1`; post-loss `sync_source(114)` returned typed `network` error with `CHANNEL_PRIVATE` from `messages.getHistory` | Snapshots showed no identity mutation, no sync-state advancement, no item-count growth, and no wrong-peer evidence | Canary id not recorded; coarse count/max-id/max-timestamp growth checks stayed unchanged |
 | Same source on account A and account B | passed | public username | Selected one public channel; account A reused source `18` and account B created source `113` through `add_telegram_source` | Same `peer_kind = channel` and `peer_id = 1686571520` recorded under different `account_id` values; access-hash and username recorded by presence only | `sync_source(18)` inserted 0, skipped 0, `last_message_id = 514`; `sync_source(113)` inserted 28, skipped 0, `last_message_id = 514` | Manual dispatch audit confirmed `sync_source` selects the grammers client by source `account_id`; snapshots showed each sync mutated only its own source state/items | No warnings |
 
@@ -161,6 +161,33 @@ Keep migrated dialogs for a follow-up slice.
 - Result: `passed`; typed access-loss behavior was explainable, stored identity
   stayed unchanged, sync state did not advance, items did not grow, and no
   wrong-peer evidence appeared.
+
+## 2026-05-22 Migrated Dialog Follow-Up
+
+- Account label: account `11`; no credentials, phone numbers, session data,
+  private message content, private titles, private usernames, public username
+  values, or access-hash values recorded.
+- App commit at live-slice start:
+  `e990138 docs: plan telegram migrated-dialog validation`.
+- Fixture: controlled dialog-backed migrated small-group-to-supergroup source;
+  live dialog listing classified it as `supergroup`.
+- Add Source result: selected source ref `3688731168` created source `115`;
+  pre-add same-external-id row count was 0 and stale same-external-id row count
+  was 0.
+- Stored identity: `source_subtype = supergroup`, `peer_kind = channel`,
+  `peer_id = 3688731168`, access-hash present, username absent,
+  `resolution_strategy = dialog`.
+- Primary sync: `sync_source(115)` succeeded with initial policy
+  `last 30 days`, inserted 0, skipped 1, `last_message_id = 1`, warning count
+  0, warning codes `[]`.
+- Runtime wrong-peer check: before item count 0, after item count 0,
+  history peer count 0, no wrong-peer history groups, and account `11`
+  mutation guard showed no other Telegram source mutations.
+- Primary result: `needs_follow_up`; stored identity, mutation guard, and
+  wrong-peer absence passed, but zero persisted items/history groups left no
+  current-channel history-peer proof.
+- Secondary Takeout smoke: `not_run_primary_not_passed`; Takeout was not
+  started because the primary runtime result was `needs_follow_up`.
 
 ## Evidence Template
 
