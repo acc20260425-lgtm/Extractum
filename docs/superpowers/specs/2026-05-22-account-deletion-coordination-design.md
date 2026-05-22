@@ -21,6 +21,20 @@ owned by that account.
 The user must explicitly stop, cancel, or wait for active work before deleting
 the account.
 
+## Concurrency Boundary
+
+This slice blocks deletion when related work is already active at preflight
+time. It does not introduce a new account-deletion semaphore that prevents new
+work from starting in the narrow window between a clean preflight and the first
+delete mutation.
+
+That race is an accepted boundary for this desktop, single-user slice. The
+preflight still removes the current high-risk behavior: deleting an account
+while known active sync/import/source-job/analysis/LLM work is already running.
+Existing operation start paths still validate source existence and use their
+own source/job guards. A stronger start-after-preflight exclusion mechanism can
+be added later if the app needs multi-actor or cross-window hard serialization.
+
 ## Blocking Work
 
 The preflight loads owned source ids from `sources.account_id = account_id`.
@@ -43,6 +57,12 @@ Deletion is blocked when any of these are true:
 Provider smoke tests, model/settings checks, and other standalone LLM requests
 with `owner_run_id = None` do not block account deletion. Active analysis or
 source jobs for sources not owned by the account do not block deletion.
+
+An active source deletion guard is still a blocker even though it is also a
+delete-oriented operation. Account deletion must not compete with a source-level
+delete that may already be cascading rows, releasing locks, or reporting errors
+for that source. The user can retry account deletion after the source deletion
+finishes.
 
 ## LLM Ownership
 
@@ -80,9 +100,10 @@ pub(crate) async fn check_account_deletion(
 ```
 
 The helper may maintain an internal structured enum for tests and diagnostics,
-but the public error must stay sanitized. Do not include source titles,
-usernames, prompt text, message text, provider payloads, phone numbers,
-session data, or secrets.
+and it should collect all blocking categories it can observe before returning a
+conflict. The public error must stay sanitized and generic. Do not include
+source titles, usernames, prompt text, message text, provider payloads, phone
+numbers, session data, or secrets.
 
 Use this conflict message:
 
@@ -93,6 +114,20 @@ Cannot delete account while source sync, import, source job, or analysis work is
 `accounts::delete_account` calls the preflight before any mutation. If the
 preflight returns `conflict`, account rows, sources, runtime state, session
 data, and secrets remain unchanged.
+
+After a clean preflight, deletion keeps the current destructive ordering:
+
+1. delete the account row from SQLite, allowing database cascades to remove
+   owned sources and dependent rows;
+2. clear Telegram runtime/session data for that account;
+3. delete the API-hash secret.
+
+There is no atomic transaction spanning SQLite, runtime memory, session files,
+and the OS secret store. If post-row cleanup fails, `delete_account` returns the
+typed cleanup error after the database row has already been deleted. It must not
+silently report success, and it must not recreate the account row. This keeps
+the database as the source of truth while making the cleanup failure visible for
+manual retry or later orphan-cleanup tooling.
 
 ## State API Additions
 
@@ -136,6 +171,11 @@ Required cases:
   not block deletion;
 - preflight conflict does not delete the account row, sources, runtime state, or
   secrets;
+- preflight records multiple internal blocking categories when more than one
+  related active-work type is present, while the returned app error uses the
+  sanitized generic conflict message;
+- post-row cleanup failure returns an error without resurrecting the deleted
+  account row;
 - analysis follow-up chat requests register
   `LlmRequestKind::AnalysisChat` with `owner_run_id = Some(run_id)`.
 
@@ -151,4 +191,3 @@ show the UI needs to surface the typed conflict differently.
   state.
 - Do not add private titles, usernames, prompt text, message text, or provider
   payloads to errors or tracked docs.
-
