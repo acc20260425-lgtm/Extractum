@@ -103,7 +103,7 @@ Record this as expected behavior, not as a hard requirement that the live result
 - Create: `reference/tauri-dev-lost-access.stderr.log`
 - Create: `reference/tauri-dev-lost-access.pid`
 
-- [ ] **Step 1: Stop stale MCP sessions**
+- [x] **Step 1: Stop stale MCP sessions**
 
 Tool call:
 
@@ -113,7 +113,7 @@ mcp__tauri__.driver_session({ "action": "stop" })
 
 Expected: all previous bridge sessions are stopped or there were no active sessions.
 
-- [ ] **Step 2: Confirm the app is not already running**
+- [x] **Step 2: Confirm the app is not already running**
 
 Run:
 
@@ -126,7 +126,7 @@ Get-Process | Where-Object {
 
 Expected: no Extractum/Tauri app process is already running. If a process exists, stop it before continuing so direct SQLite reads are stable.
 
-- [ ] **Step 3: Start the Tauri dev app**
+- [x] **Step 3: Start the Tauri dev app**
 
 Run with escalated permission if the sandbox blocks GUI/runtime startup:
 
@@ -147,7 +147,7 @@ $process.Id
 
 Expected: a process id is printed and the app starts the MCP bridge on port `9223`.
 
-- [ ] **Step 4: Connect to the Tauri MCP bridge**
+- [x] **Step 4: Connect to the Tauri MCP bridge**
 
 Tool call:
 
@@ -157,7 +157,7 @@ mcp__tauri__.driver_session({ "action": "start", "port": 9223 })
 
 Expected: session connects to the running app. If the bridge is not ready yet, wait a few seconds and retry once.
 
-- [ ] **Step 5: Confirm account A is ready**
+- [x] **Step 5: Confirm account A is ready**
 
 Tool call:
 
