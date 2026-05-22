@@ -20,6 +20,7 @@ use accounts::{
     clear_account_phone, create_account, delete_account, get_account, list_accounts,
     set_account_phone,
 };
+mod account_deletion;
 
 mod telegram;
 mod telegram_session_store;

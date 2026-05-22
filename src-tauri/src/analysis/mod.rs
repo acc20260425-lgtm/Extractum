@@ -73,17 +73,17 @@ impl AnalysisState {
         }
     }
 
-    async fn insert_active_report_run(&self, run_id: i64) {
+    pub(crate) async fn insert_active_report_run(&self, run_id: i64) {
         self.active_report_runs.lock().await.insert(run_id);
         self.cancelled_report_runs.lock().await.remove(&run_id);
     }
 
-    async fn remove_active_report_run(&self, run_id: i64) {
+    pub(crate) async fn remove_active_report_run(&self, run_id: i64) {
         self.active_report_runs.lock().await.remove(&run_id);
         self.cancelled_report_runs.lock().await.remove(&run_id);
     }
 
-    async fn active_report_run_ids(&self) -> HashSet<i64> {
+    pub(crate) async fn active_report_run_ids(&self) -> HashSet<i64> {
         self.active_report_runs.lock().await.clone()
     }
 

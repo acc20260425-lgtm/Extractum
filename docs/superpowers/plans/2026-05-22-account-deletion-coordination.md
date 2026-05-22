@@ -437,7 +437,7 @@ git commit -m "feat: expose active work state for account deletion"
 - Modify: `src-tauri/src/analysis/mod.rs`
 - Modify: `docs/superpowers/plans/2026-05-22-account-deletion-coordination.md`
 
-- [ ] **Step 1: Create failing preflight tests and module skeleton**
+- [x] **Step 1: Create failing preflight tests and module skeleton**
 
 Create `src-tauri/src/account_deletion.rs` with tests first. Include this public surface and intentionally missing implementation body:
 
@@ -488,7 +488,7 @@ pub(crate) async fn check_account_deletion(
 
 Add `mod account_deletion;` to `src-tauri/src/lib.rs`.
 
-- [ ] **Step 2: Add account-deletion test schema and basic tests**
+- [x] **Step 2: Add account-deletion test schema and basic tests**
 
 In `account_deletion.rs`, add test helpers for in-memory schema:
 
@@ -650,7 +650,7 @@ async fn existing_account_with_zero_sources_passes() {
 }
 ```
 
-- [ ] **Step 3: Run basic preflight tests and verify RED**
+- [x] **Step 3: Run basic preflight tests and verify RED**
 
 Run:
 
@@ -660,7 +660,7 @@ cargo test --manifest-path src-tauri/Cargo.toml account_deletion::tests::missing
 
 Expected: failure from `unimplemented!("account deletion preflight")`.
 
-- [ ] **Step 4: Implement account existence and owned-source loading**
+- [x] **Step 4: Implement account existence and owned-source loading**
 
 Implement:
 
@@ -701,7 +701,7 @@ Ok(AccountDeletionPlan {
 })
 ```
 
-- [ ] **Step 5: Add failing tests for source locks, Takeout, and source jobs**
+- [x] **Step 5: Add failing tests for source locks, Takeout, and source jobs**
 
 Add tests:
 
@@ -785,7 +785,7 @@ async fn active_source_job_on_owned_source_blocks_but_unowned_job_does_not() {
 }
 ```
 
-- [ ] **Step 6: Implement source-lock, Takeout, and source-job blocker collection**
+- [x] **Step 6: Implement source-lock, Takeout, and source-job blocker collection**
 
 In `check_account_deletion`, collect:
 
@@ -858,7 +858,7 @@ async fn collect_account_deletion_blockers(
 
 Then `check_account_deletion` calls this helper and maps a non-empty vector to the generic conflict.
 
-- [ ] **Step 7: Add failing tests for direct and group analysis blockers**
+- [x] **Step 7: Add failing tests for direct and group analysis blockers**
 
 Add tests:
 
@@ -944,7 +944,7 @@ async fn active_group_analysis_run_blocks_when_any_member_source_is_owned() {
 
 Make `AnalysisState::insert_active_report_run`, `remove_active_report_run`, and `active_report_run_ids` `pub(crate)` in `src-tauri/src/analysis/mod.rs`.
 
-- [ ] **Step 8: Implement analysis blocker resolution**
+- [x] **Step 8: Implement analysis blocker resolution**
 
 Add helpers:
 
@@ -998,7 +998,7 @@ for run_id in run_ids_depending_on_sources(pool, &active_run_ids, &owned_source_
 }
 ```
 
-- [ ] **Step 9: Add failing tests for LLM owner-run blockers**
+- [x] **Step 9: Add failing tests for LLM owner-run blockers**
 
 Add these imports to the `account_deletion.rs` test module:
 
@@ -1095,7 +1095,7 @@ async fn active_llm_request_for_completed_owned_run_blocks_but_provider_test_doe
 }
 ```
 
-- [ ] **Step 10: Implement LLM owner-run blocker resolution and multiple-blocker internal test**
+- [x] **Step 10: Implement LLM owner-run blocker resolution and multiple-blocker internal test**
 
 Use `llm_scheduler.active_owner_run_ids().await` as candidate run ids, resolve through `run_ids_depending_on_sources`, and push:
 
@@ -1153,7 +1153,7 @@ async fn blocker_collection_keeps_multiple_categories_for_internal_diagnostics()
 }
 ```
 
-- [ ] **Step 11: Run preflight tests and commit**
+- [x] **Step 11: Run preflight tests and commit**
 
 Run:
 
