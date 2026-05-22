@@ -147,6 +147,8 @@ Keep migrated dialogs for a follow-up slice.
   `peer_kind = channel`, `peer_id = 3914917549`, title present by boolean only.
 - Baseline sync: `sync_source(114)` succeeded with initial policy
   `last 30 days`, inserted 0, skipped 1, `last_message_id = 1`, warnings `[]`.
+  The skipped row did not correspond to an existing local item row; item count
+  stayed 0 because the observed Telegram message produced no persisted item.
 - Access revocation: operator confirmed account `11` access was revoked;
   post-loss dialog visibility was absent.
 - Canary: no canary id was captured; local item checks used coarse count,
