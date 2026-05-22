@@ -63,6 +63,17 @@ they expose a real bug to fix.
 Therefore, a failed sync should not advance `sources.last_sync_state` or
 `sources.last_synced_at`.
 
+Current `sync_source` does not update `sources.is_member` on access-loss
+failure. This field is captured as an explainability diagnostic, not as a
+requirement that the app automatically marks the source as left. A change from
+member to non-member is acceptable only if the live evidence shows a deliberate,
+same-peer safe refresh or explicit source-state update.
+
+`identity_refreshed_at` is expected not to change when resolution or history
+access fails before a safe refresh. If it changes during this probe, the result
+needs follow-up unless snapshots and logs prove the same peer was safely
+refreshed.
+
 ## Probe Flow
 
 1. Confirm the tracked workspace is clean and record the current commit.
@@ -74,13 +85,18 @@ Therefore, a failed sync should not advance `sources.last_sync_state` or
    If reusing an existing source, first verify it is dialog-backed, private,
    shaped as `channel` or `supergroup`, has access hash present, has no username
    recorded, and baseline sync succeeds before access loss.
-5. Run baseline `sync_source(source_id)` while account A still has access.
+5. Run baseline `sync_source(source_id)` while account A still has access. A
+   reused source may be caught up and return `inserted = 0`; that is acceptable
+   if the sync succeeds and the source identity remains the intended private
+   peer.
 6. Capture the before-loss snapshot.
 7. Human gate: remove account A from the controlled private source or otherwise
    revoke access.
-8. Optionally post one post-removal canary message from an admin account. Tracked
-   docs must record only whether post-removal content was observed locally, not
-   the message text.
+8. Optionally post one post-removal canary message from an admin account after
+   the human removal gate and before the post-loss `sync_source` attempt. If a
+   canary message id is available, store the numeric id only in ignored
+   `reference/*` context. Tracked docs must record only whether post-removal
+   content was observed locally, not the message text.
 9. Check whether the source still appears in `list_telegram_sources(account_id)`.
 10. Run `sync_source(source_id)` and capture either the `SyncResult` or typed
    `AppError`.
@@ -112,15 +128,28 @@ SELECT source_id, account_id, source_subtype, peer_kind, peer_id,
        access_hash IS NOT NULL AS has_access_hash,
        username IS NOT NULL AND TRIM(username) <> '' AS has_username,
        resolution_strategy,
-       identity_refreshed_at
+       identity_refreshed_at,
+       created_at,
+       updated_at
 FROM telegram_sources
 WHERE source_id = ?;
 ```
 
 ```sql
-SELECT COUNT(*) AS item_count
+SELECT COUNT(*) AS item_count,
+       MAX(CAST(external_id AS INTEGER)) AS max_external_id,
+       MAX(created_at) AS max_created_at
 FROM items
 WHERE source_id = ?;
+```
+
+If a post-removal canary message id is available, also capture:
+
+```sql
+SELECT COUNT(*) AS canary_item_count
+FROM items
+WHERE source_id = ?
+  AND external_id = ?;
 ```
 
 Also capture whether the source's typed peer appears in
@@ -129,7 +158,9 @@ presence/absence only, without private labels.
 
 Do not expand this probe to `analysis_documents`, archive read-model rows, or
 other derived tables. The validation target is runtime source resolution, source
-sync state, and item insertion boundaries.
+sync state, and item insertion boundaries. `telegram_sources.updated_at` is
+captured only as supporting diagnostic context; `identity_refreshed_at` is the
+identity-refresh signal used for pass/follow-up interpretation.
 
 ## Pass Criteria
 
@@ -144,9 +175,16 @@ The probe passes when all of these are true:
   occurred. For this lost-access probe, any `identity_refreshed_at` change is
   `needs follow-up` unless logs and snapshots prove a safe refresh of the same
   peer.
+- `sources.is_member` either remains unchanged or changes only through an
+  explainable, same-peer source-state update. It is not required to become `0`
+  for this probe because current sync does not automatically write that field on
+  access-loss failure.
 - `sources.last_sync_state` and `sources.last_synced_at` do not advance after a
   failed sync.
 - Item count for the source does not increase after a failed sync.
+- If a canary id was captured, `canary_item_count` remains `0`; if no canary id
+  was captured, `max_external_id` and `max_created_at` provide the coarse
+  post-removal ingest check alongside item count.
 - No evidence shows resolver switching to another public username, another
   dialog, or another peer.
 - `list_sources` or direct source queries still show an explainable source row;
