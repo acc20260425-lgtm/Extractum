@@ -942,7 +942,7 @@ Expected: checkpoint commit succeeds.
 - Read: `C:\Users\Dima\AppData\Roaming\org.ai.extractum\extractum.db`
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-live-validation.md`
 
-- [ ] **Step 1: Check whether primary passed**
+- [x] **Step 1: Check whether primary passed**
 
 Run:
 
@@ -953,6 +953,8 @@ Get-Content -Raw reference\telegram-migrated-dialog-primary-evaluation.json |
 ```
 
 Expected: proceed with Takeout smoke only if `classification = passed`. If primary is `blocked`, `failed`, or `needs_follow_up`, skip Takeout smoke, set `takeout_classification = "not_run_primary_not_passed"` in context, and continue to Task 6.
+
+Task 5 checkpoint: primary was `needs_follow_up`, so Takeout smoke steps 2-10 were skipped and `takeout_classification = "not_run_primary_not_passed"` was recorded in ignored runtime context.
 
 - [ ] **Step 2: Confirm no active Takeout job for the source**
 
@@ -1277,7 +1279,7 @@ Expected:
 - `classification = "blocked_start"` or `blocked_timeout` for Telegram/runtime blockers before unsafe writes.
 - `classification = "failed"` if old small-group rows, `history_peer_kind = chat`, or another non-current history peer group appears after the smoke.
 
-- [ ] **Step 11: Commit the Task 5 checkpoint**
+- [x] **Step 11: Commit the Task 5 checkpoint**
 
 Update this plan file by marking Task 5 checkboxes complete, then run:
 
