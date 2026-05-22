@@ -639,7 +639,7 @@ Expected: context records the sanitized visibility signal.
 - Modify: `reference/telegram-lost-access-sync-results.json`
 - Modify: `reference/telegram-lost-access-validation-snapshots.json`
 
-- [ ] **Step 1: Run post-loss sync**
+- [x] **Step 1: Run post-loss sync**
 
 Generate the app script:
 
@@ -673,7 +673,7 @@ Use `mcp__tauri__.webview_execute_js` and set `script` to the complete JavaScrip
 
 Expected: usually `{ ok: false, error: { kind: ..., message: ... } }` with a typed, user-actionable error. `{ ok: true, ... }` is not automatically a pass; evaluate item/canary and identity invariants.
 
-- [ ] **Step 2: Save the post-loss sync result**
+- [x] **Step 2: Save the post-loss sync result**
 
 Copy the complete JSON object returned by Task 6 Step 1 to the clipboard, then run:
 
@@ -688,7 +688,7 @@ Get-Content -Raw -LiteralPath $syncResultsPath | ConvertFrom-Json | Select-Objec
 
 Expected: sync result is saved with either `ok = false` and typed error details or `ok = true` and a `SyncResult`.
 
-- [ ] **Step 3: Capture the `after_loss` snapshot**
+- [x] **Step 3: Capture the `after_loss` snapshot**
 
 Run:
 
