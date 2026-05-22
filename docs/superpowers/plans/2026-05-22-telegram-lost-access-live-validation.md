@@ -988,7 +988,7 @@ If classification is `blocked`, `needs_follow_up`, or `failed`, keep or replace 
 - Verify: `docs/superpowers/verification/telegram-runtime-private-source-validation.md`
 - Verify: `docs/backlog.md`
 
-- [ ] **Step 1: Check tracked diff scope**
+- [x] **Step 1: Check tracked diff scope**
 
 Run:
 
@@ -1006,7 +1006,7 @@ docs/superpowers/verification/telegram-runtime-private-source-validation.md
 
 Runtime files under `reference/` must not appear in tracked diff.
 
-- [ ] **Step 2: Check whitespace**
+- [x] **Step 2: Check whitespace**
 
 Run:
 
@@ -1016,7 +1016,7 @@ git diff --check
 
 Expected: exit code 0. Known LF/CRLF warnings are acceptable if no whitespace errors are reported.
 
-- [ ] **Step 3: Commit the live validation result**
+- [x] **Step 3: Commit the live validation result**
 
 If the probe passed:
 
@@ -1032,7 +1032,7 @@ git add docs\backlog.md docs\superpowers\verification\telegram-runtime-private-s
 git commit -m "docs: record telegram lost-access validation attempt"
 ```
 
-- [ ] **Step 4: Verify the commit**
+- [x] **Step 4: Verify the commit**
 
 Run:
 
