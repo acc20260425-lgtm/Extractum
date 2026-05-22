@@ -111,6 +111,15 @@ Sync operates per source:
   reply target, reply target peer, thread/topic root id, and aggregate
   reaction count.
 
+Private access loss has live validation coverage. In the 2026-05-22
+lost-access probe, a controlled dialog-backed private channel was synced while
+accessible, then removed from the account's visible dialogs. The post-loss
+`sync_source` call returned a typed `network` error with Telegram
+`CHANNEL_PRIVATE`, while stored peer identity, source sync state, and item
+counts stayed unchanged. The sanitized evidence is recorded in
+`docs/superpowers/verification/telegram-runtime-private-source-validation.md`
+under `2026-05-22 Lost Access Follow-Up`.
+
 ### 2.4 Takeout source import
 
 Takeout import is a second source ingest path for already registered Telegram sources. It is not a replacement for `sync_source`: normal sync remains the fast incremental path, while Takeout import is the full-history path that uses Telegram Takeout wrappers.
