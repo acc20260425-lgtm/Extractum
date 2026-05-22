@@ -78,7 +78,7 @@ Expected: commit succeeds on branch `telegram-migrated-dialog-history-proof`.
 - Runtime only: `reference/tauri-dev-history-proof.stderr.log`
 - Runtime only: `reference/tauri-dev-history-proof.pid`
 
-- [ ] **Step 1: Confirm no stale runtime processes**
+- [x] **Step 1: Confirm no stale runtime processes**
 
 Run:
 
@@ -88,7 +88,7 @@ Get-Process | Where-Object { $_.ProcessName -in @('extractum','cargo') } | Selec
 
 Expected: no rows. If rows exist, stop them before starting the new runtime.
 
-- [ ] **Step 2: Start the Tauri dev app**
+- [x] **Step 2: Start the Tauri dev app**
 
 Run:
 
@@ -103,19 +103,19 @@ $p.Id
 
 Expected: a process id is printed and the bridge logs eventually show `WebSocket server listening on: 0.0.0.0:9223`.
 
-- [ ] **Step 3: Connect the Tauri MCP bridge**
+- [x] **Step 3: Connect the Tauri MCP bridge**
 
 Run the Tauri MCP driver session start on port `9223`.
 
 Expected: MCP session connects to app `org.ai.extractum`.
 
-- [ ] **Step 4: Confirm account 11 is ready**
+- [x] **Step 4: Confirm account 11 is ready**
 
-Run app IPC command `get_telegram_accounts`.
+Run app IPC command `tg_get_account_statuses` with `accountIds = [11]`.
 
 Expected sanitized result includes `{"account_id":11,"status":"ready"}`.
 
-- [ ] **Step 5: Mark Task 2 complete and commit**
+- [x] **Step 5: Mark Task 2 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
