@@ -27,7 +27,7 @@ Privacy classification values: `public username`, `dialog-backed likely private`
 | Private supergroup from dialogs | passed | dialog-backed likely private | Dialog-picked source `Pure C` was added as source `110` with `source_subtype = supergroup` and no username | `peer_kind = channel`, `peer_id = 1335891301`, `access_hash` present, `username` absent, `resolution_strategy = dialog` | `sync_source(110)` inserted 384, skipped 0, `last_message_id = 92374` | Stored peer identity resolved without public username fallback | No warnings |
 | Regular small group | passed | dialog-dependent group | Dialog-picked source `Test group` was added as source `111` with `source_subtype = group` and no username | `peer_kind = chat`, `peer_id = 5241485550`, `access_hash` absent, `username` absent, `resolution_strategy = dialog` | `sync_source(111)` inserted 2, skipped 0, `last_message_id = 233` | Resolver remained dialog-dependent and did not create a stored channel/supergroup peer path | No warnings |
 | Migrated small group -> supergroup | not run | unknown | Migrated dialog is classified with the observed current subtype | `source_subtype`, `peer_kind`, `peer_id`, `access_hash` presence, provenance notes | Sync/import behavior matches the chosen migration policy | No history is imported across an unsafe identity boundary | Record migration identifiers and warnings |
-| No-longer-member, left, or private access lost | not run | access-limited | Existing source remains explainable in UI/state | Stored identity remains unchanged unless refresh succeeds safely | Sync fails or warns predictably | Failure does not silently resolve to a different public username owner | Record exact typed error/warning |
+| No-longer-member, left, or private access lost | passed | access-limited | Controlled private channel was added from account `11` dialogs as source `114`; after access was revoked it disappeared from the dialog list but the stored source row remained explainable | `source_subtype = channel`, `peer_kind = channel`, `peer_id = 3914917549`, access-hash present, username absent, `resolution_strategy = dialog`; before/after snapshots kept identity unchanged | Baseline `sync_source(114)` succeeded with inserted 0, skipped 1, `last_message_id = 1`; post-loss `sync_source(114)` returned typed `network` error with `CHANNEL_PRIVATE` from `messages.getHistory` | Snapshots showed no identity mutation, no sync-state advancement, no item-count growth, and no wrong-peer evidence | Canary id not recorded; coarse count/max-id/max-timestamp growth checks stayed unchanged |
 | Same source on account A and account B | passed | public username | Selected one public channel; account A reused source `18` and account B created source `113` through `add_telegram_source` | Same `peer_kind = channel` and `peer_id = 1686571520` recorded under different `account_id` values; access-hash and username recorded by presence only | `sync_source(18)` inserted 0, skipped 0, `last_message_id = 514`; `sync_source(113)` inserted 28, skipped 0, `last_message_id = 514` | Manual dispatch audit confirmed `sync_source` selects the grammers client by source `account_id`; snapshots showed each sync mutated only its own source state/items | No warnings |
 
 ## Slice Order
@@ -39,7 +39,7 @@ dialogs, private supergroup from dialogs, and regular small group.
 The stored-peer username fallback probe then validated that a usable stored peer
 identity is sufficient when the cached public username is locally unusable.
 
-Keep migrated dialogs and lost access for follow-up slices.
+Keep migrated dialogs for a follow-up slice.
 
 ## 2026-05-21 Live Run Notes
 
@@ -134,6 +134,31 @@ Keep migrated dialogs and lost access for follow-up slices.
 - Isolation result: `source_id A != source_id B`, `account_id A != account_id B`,
   `peer_kind A == peer_kind B`, `peer_id A == peer_id B`, sync A did not
   mutate source B state/items, and sync B did not mutate source A state/items.
+
+## 2026-05-22 Lost Access Follow-Up
+
+- Account label: account `11`; no credentials, phone numbers, session data,
+  private message content, private titles, private usernames, public username
+  values, or access-hash values recorded.
+- App commit: `7aad765 docs: plan telegram lost-access validation`.
+- Fixture: controlled private `channel` selected from dialogs; username absent,
+  access-hash present, `resolution_strategy = dialog`.
+- Source row: source `114`, `account_id = 11`, `source_subtype = channel`,
+  `peer_kind = channel`, `peer_id = 3914917549`, title present by boolean only.
+- Baseline sync: `sync_source(114)` succeeded with initial policy
+  `last 30 days`, inserted 0, skipped 1, `last_message_id = 1`, warnings `[]`.
+- Access revocation: operator confirmed account `11` access was revoked;
+  post-loss dialog visibility was absent.
+- Canary: no canary id was captured; local item checks used coarse count,
+  max-id, and max-timestamp invariants.
+- Post-loss sync: `ok = false`, typed error kind `network`, sanitized message
+  `request error: rpc error 400: CHANNEL_PRIVATE caused by messages.getHistory`.
+- Snapshots: before/after `last_sync_state = 1`,
+  `last_synced_at = 1779418693`, `identity_refreshed_at = 1779418372`,
+  `is_member = true`, item count 0, max item id `null`, max timestamp `null`.
+- Result: `passed`; typed access-loss behavior was explainable, stored identity
+  stayed unchanged, sync state did not advance, items did not grow, and no
+  wrong-peer evidence appeared.
 
 ## Evidence Template
 

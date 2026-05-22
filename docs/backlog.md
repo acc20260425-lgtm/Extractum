@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Telegram runtime/private-source validation | verify lost-access and migrated-dialog behavior |
+| High | Telegram runtime/private-source validation | verify migrated-dialog behavior |
 | High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
@@ -34,7 +34,6 @@
 
 Priority: high.
 
-- [ ] verify behavior when the user is no longer a member of a group or channel
 - [ ] verify behavior for migrated small-group-to-supergroup dialogs
 
 Recent evidence:
@@ -50,7 +49,10 @@ Recent evidence:
   records a 2026-05-22 cross-account isolation probe where the same public
   channel peer was stored as separate source rows for account `1` and account
   `11`, and both account-scoped syncs mutated only their own source state and
-  item rows.
+  item rows. It also records a 2026-05-22 lost-access probe where a controlled
+  private channel source for account `11` returned a typed `CHANNEL_PRIVATE`
+  sync error after access was revoked while stored identity, sync state, and
+  item counts stayed unchanged.
 
 Acceptance:
 

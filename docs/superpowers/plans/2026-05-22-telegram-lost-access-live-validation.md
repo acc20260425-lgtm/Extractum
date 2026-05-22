@@ -912,7 +912,7 @@ Expected: no leftover Extractum, Tauri, or Cargo process from this live run.
 - Modify: `docs/superpowers/verification/telegram-runtime-private-source-validation.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Read sanitized runtime evidence**
+- [x] **Step 1: Read sanitized runtime evidence**
 
 Run:
 
@@ -924,7 +924,7 @@ Get-Content -Raw reference\telegram-lost-access-sync-results.json | ConvertFrom-
 
 Expected: evidence is available for classification and docs. Do not copy private titles or message text into tracked docs.
 
-- [ ] **Step 2: Update the verification matrix row**
+- [x] **Step 2: Update the verification matrix row**
 
 If `classification = "passed"`, update the row to this shape with observed values:
 
@@ -934,7 +934,7 @@ If `classification = "passed"`, update the row to this shape with observed value
 
 If `classification = "needs_follow_up"` or `failed`, set that status and describe the non-sensitive reason in the row.
 
-- [ ] **Step 3: Add the dated live-run note**
+- [x] **Step 3: Add the dated live-run note**
 
 Append a section to `docs/superpowers/verification/telegram-runtime-private-source-validation.md`:
 
@@ -966,7 +966,7 @@ Append a section to `docs/superpowers/verification/telegram-runtime-private-sour
 
 Use exact observed values from ignored runtime JSON. Keep the note concise and sanitized.
 
-- [ ] **Step 4: Update backlog according to classification**
+- [x] **Step 4: Update backlog according to classification**
 
 If `classification = "passed"`, remove this checklist row from `docs/backlog.md` section `3.1`:
 
