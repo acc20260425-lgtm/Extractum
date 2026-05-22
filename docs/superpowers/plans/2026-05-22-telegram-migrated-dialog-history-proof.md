@@ -183,7 +183,7 @@ git commit -m "docs: checkpoint telegram migrated-dialog history sync"
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-history-proof.md`
 - Runtime only: `reference/telegram-migrated-dialog-history-proof-evaluation.json`
 
-- [ ] **Step 1: Evaluate persisted proof**
+- [x] **Step 1: Evaluate persisted proof**
 
 Create `reference/telegram-migrated-dialog-history-proof-evaluation.json` with:
 
@@ -191,13 +191,13 @@ Create `reference/telegram-migrated-dialog-history-proof-evaluation.json` with:
 - `classification = "needs_follow_up"` when sync succeeds but persisted history rows are still absent.
 - `classification = "failed"` when wrong-peer rows, stale chat rows, source mutation, or sync failure are observed.
 
-- [ ] **Step 2: Stop on non-pass**
+- [x] **Step 2: Stop on non-pass**
 
 If classification is not `passed`, skip Takeout, stop runtime in Task 6, and document the non-sensitive reason.
 
 Expected: no Takeout smoke runs unless primary classification is `passed`.
 
-- [ ] **Step 3: Mark Task 4 complete and commit**
+- [x] **Step 3: Mark Task 4 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
