@@ -173,7 +173,7 @@ Expected: checkpoint commit succeeds on `telegram-migrated-dialog-live-validatio
 - Create: `reference/tauri-dev-migrated-dialog.pid`
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-live-validation.md`
 
-- [ ] **Step 1: Stop stale MCP sessions**
+- [x] **Step 1: Stop stale MCP sessions**
 
 Tool call:
 
@@ -183,7 +183,7 @@ mcp__tauri__.driver_session({ "action": "stop" })
 
 Expected: all previous bridge sessions are stopped or there were no active sessions.
 
-- [ ] **Step 2: Confirm the app is not already running**
+- [x] **Step 2: Confirm the app is not already running**
 
 Run:
 
@@ -197,7 +197,7 @@ Get-Process | Where-Object {
 
 Expected: no Extractum/Tauri/Cargo process is already running for this workspace. If a stale process exists, stop it before continuing.
 
-- [ ] **Step 3: Start the Tauri dev app**
+- [x] **Step 3: Start the Tauri dev app**
 
 Run with escalated permission if sandboxing blocks GUI/runtime startup:
 
@@ -218,7 +218,7 @@ $process.Id
 
 Expected: a process id is printed and the app starts the MCP bridge on port `9223`.
 
-- [ ] **Step 4: Connect to the Tauri MCP bridge**
+- [x] **Step 4: Connect to the Tauri MCP bridge**
 
 Tool call:
 
@@ -228,7 +228,7 @@ mcp__tauri__.driver_session({ "action": "start", "port": 9223 })
 
 Expected: session connects to the running app. If the bridge is not ready yet, wait a few seconds and retry once.
 
-- [ ] **Step 5: Confirm account 11 is ready**
+- [x] **Step 5: Confirm account 11 is ready**
 
 Tool call:
 
@@ -240,7 +240,7 @@ mcp__tauri__.webview_execute_js({
 
 Expected: one status record with `account_id = 11` and `status = "ready"`. If account `11` is not ready, stop the app and document the slice as `blocked`.
 
-- [ ] **Step 6: Commit the Task 2 checkpoint**
+- [x] **Step 6: Commit the Task 2 checkpoint**
 
 Update this plan file by marking Task 2 checkboxes complete, then run:
 
