@@ -247,19 +247,21 @@ git commit -m "docs: checkpoint telegram migrated-dialog takeout smoke"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-history-proof.md`
 
-- [ ] **Step 1: Stop the Tauri MCP session**
+- [x] **Step 1: Stop the Tauri MCP session**
 
 Run Tauri MCP driver session stop.
 
 Expected: all Tauri MCP sessions are stopped.
 
-- [ ] **Step 2: Stop the Tauri dev process tree**
+- [x] **Step 2: Stop the Tauri dev process tree**
 
 Stop the process id recorded in `reference/tauri-dev-history-proof.pid` and any child `cargo` or `extractum` processes started by this run.
 
 Expected: no `extractum` or `cargo` processes remain for this workspace.
 
-- [ ] **Step 3: Mark Task 6 complete and commit**
+Task 6 checkpoint: MCP sessions were stopped. Non-escalated process-tree lookup hit Windows `Get-CimInstance` access denied, so cleanup was rerun with permission and the remaining `cargo`/`extractum` processes from the Tauri dev run were stopped.
+
+- [x] **Step 3: Mark Task 6 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
