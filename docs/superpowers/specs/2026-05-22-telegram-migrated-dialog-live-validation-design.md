@@ -77,6 +77,16 @@ When `add_telegram_source` returns or reuses an existing row, capture whether it
 was created or pre-existing in ignored runtime context and record only the
 sanitized conclusion in tracked docs.
 
+If the live dialog listing shows the controlled fixture as a `supergroup` but
+the reused stored row has `sources.source_subtype` or
+`telegram_sources.source_subtype` other than `supergroup`, or has
+`telegram_sources.peer_kind` other than `channel`, classify the primary runtime
+flow as `failed`. This is a typed identity/storage boundary bug, not a
+successful reuse. The only exception is if `add_telegram_source` creates a
+separate correct source row for the selected dialog and the stale/wrong row is
+not used by the probe; in that case, record the stale row as follow-up and
+evaluate the newly created row normally.
+
 ## Existing Runtime Contract
 
 Add Source lists Telegram dialogs and stores Telegram source subtype in
@@ -131,6 +141,11 @@ The runtime migrated-dialog validation passes when all of these are true:
   explainable no-new-items result for the current source.
 - Any inserted `telegram_messages` rows for the source use
   `history_peer_kind = channel` and the current supergroup `history_peer_id`.
+- A successful sync that leaves the source with zero local items and zero
+  `telegram_messages` history-peer groups is not enough for primary `passed`.
+  Classify it as `needs follow-up` unless pre-existing same-source
+  `telegram_messages` rows already prove the current supergroup
+  history-peer grouping and the mutation guard shows no cross-source changes.
 - The selected source has exactly one current-history peer group after normal
   runtime sync. More than one `history_peer_kind/history_peer_id` group is at
   least `needs follow-up`; it is `failed` if the extra group shows old
@@ -170,8 +185,17 @@ The Takeout smoke passes when all of these are true:
 The Takeout smoke cannot fail the runtime slice unless it exposes a wrong-peer
 or runtime typed-identity bug that also invalidates the primary acceptance.
 Flood wait, Takeout session limits, fixture mismatch, export DC oddities, or
-other Telegram-side blockers should be recorded as Takeout follow-up evidence
-without blocking closure of the runtime/private-source backlog row.
+other Telegram-side blockers that stop the smoke before unsafe writes should be
+recorded as Takeout follow-up evidence without blocking closure of the
+runtime/private-source backlog row.
+
+The non-blocking rule does not apply to observed unsafe Takeout writes. If the
+smoke imports old small-group rows, `history_peer_kind = chat` rows, or any
+non-current history peer group, classify the secondary smoke as `failed` and
+stop normal cleanup. The primary runtime evidence may still be documented
+separately if it passed, but the overall slice must not be presented as a clean
+pass; add or keep a concrete Takeout data-integrity follow-up before deciding
+which backlog rows can close.
 
 ## Evidence To Capture
 
@@ -290,6 +314,11 @@ ORDER BY code;
   identity is missing or legacy-only, sync resolves the old small-group peer,
   sync mutates another source/account, duplicate identity collapses unsafe peer
   boundaries, or errors are raw/internal and not user-actionable.
+- `primary passed, Takeout failed`: primary runtime flow passes, but the
+  secondary smoke performs unsafe Takeout writes or violates the
+  detect-and-defer contract. Do not report this as a clean passed slice; record
+  sanitized Takeout failure evidence and add or keep the relevant Takeout
+  follow-up.
 
 ## Documentation Updates
 
