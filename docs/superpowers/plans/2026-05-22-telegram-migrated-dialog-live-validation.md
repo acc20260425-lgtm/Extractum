@@ -260,7 +260,7 @@ Expected: checkpoint commit succeeds. Runtime files under `reference/` remain ig
 - Read: `C:\Users\Dima\AppData\Roaming\org.ai.extractum\extractum.db`
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-live-validation.md`
 
-- [ ] **Step 1: List account 11 supergroup dialog candidates**
+- [x] **Step 1: List account 11 supergroup dialog candidates**
 
 Tool call:
 
@@ -272,7 +272,7 @@ mcp__tauri__.webview_execute_js({
 
 Expected: a list of account `11` supergroup dialogs. The returned data may include private titles for local fixture selection only.
 
-- [ ] **Step 2: Save the complete candidate list locally**
+- [x] **Step 2: Save the complete candidate list locally**
 
 Save the complete JSON array returned by Step 1 to:
 
@@ -290,13 +290,13 @@ Get-Content -Raw -LiteralPath reference\telegram-migrated-dialog-candidates.json
 
 Expected: sanitized candidate rows print without titles. If the controlled migrated fixture is not listed as `supergroup`, stop and document `blocked`.
 
-- [ ] **Step 3: Human gate for controlled fixture selection**
+- [x] **Step 3: Human gate for controlled fixture selection**
 
 Ask the operator which `candidate_index` corresponds to the controlled migrated small-group-to-supergroup fixture for account `11`. Do not ask for or record the private title in tracked docs.
 
 Expected: operator provides one numeric `candidate_index`. Save the numeric chat answer to ignored local file `reference/telegram-migrated-dialog-selected-index.txt` before running Step 4.
 
-- [ ] **Step 4: Build runtime context from the selected candidate**
+- [x] **Step 4: Build runtime context from the selected candidate**
 
 After the operator provides the numeric value and it has been saved to `reference/telegram-migrated-dialog-selected-index.txt`, run:
 
@@ -330,7 +330,7 @@ Get-Content -Raw -LiteralPath $contextPath | ConvertFrom-Json |
 
 Expected: context records account `11`, expected subtype `supergroup`, and the selected numeric `source_ref`.
 
-- [ ] **Step 5: Capture pre-add source rows for this external id**
+- [x] **Step 5: Capture pre-add source rows for this external id**
 
 Run:
 
@@ -392,7 +392,7 @@ print(json.dumps({
 
 Expected: pre-add rows are captured in ignored context. A pre-existing correct `supergroup` row may be reused; a stale non-supergroup row is follow-up unless it is reused by the probe.
 
-- [ ] **Step 6: Add or reuse the selected fixture through app IPC**
+- [x] **Step 6: Add or reuse the selected fixture through app IPC**
 
 Generate the app script:
 
@@ -420,7 +420,7 @@ Use `mcp__tauri__.webview_execute_js` and set `script` to the complete JavaScrip
 
 Expected: a `SourceRecord` for account `11` and `source_subtype = "supergroup"`.
 
-- [ ] **Step 7: Save the Add Source result**
+- [x] **Step 7: Save the Add Source result**
 
 Save the JSON object returned by Step 6 to:
 
@@ -430,7 +430,7 @@ reference/telegram-migrated-dialog-add-result.json
 
 Expected: local result includes the selected source id and has no effect on tracked docs.
 
-- [ ] **Step 8: Verify stored migrated-dialog typed identity**
+- [x] **Step 8: Verify stored migrated-dialog typed identity**
 
 Run:
 
@@ -558,7 +558,7 @@ print(json.dumps({
 
 Expected: `source_subtype = supergroup`, `peer_kind = channel`, and `resolution_strategy = dialog`. Access-hash presence is recorded as a boolean. If this step fails, classify primary as `failed`.
 
-- [ ] **Step 9: Commit the Task 3 checkpoint**
+- [x] **Step 9: Commit the Task 3 checkpoint**
 
 Update this plan file by marking Task 3 checkboxes complete, then run:
 
