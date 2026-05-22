@@ -579,7 +579,7 @@ Expected: checkpoint commit succeeds. Runtime files under `reference/` remain ig
 - Read: `C:\Users\Dima\AppData\Roaming\org.ai.extractum\extractum.db`
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-live-validation.md`
 
-- [ ] **Step 1: Create the snapshot helper**
+- [x] **Step 1: Create the snapshot helper**
 
 Run:
 
@@ -717,7 +717,7 @@ print(json.dumps({label: snapshot}, indent=2))
 
 Expected: helper exists and accepts all four labels.
 
-- [ ] **Step 2: Capture the `before_primary_sync` snapshot**
+- [x] **Step 2: Capture the `before_primary_sync` snapshot**
 
 Run:
 
@@ -727,7 +727,7 @@ python reference\telegram-migrated-dialog-capture-snapshot.py before_primary_syn
 
 Expected: snapshot includes source, typed identity, item stats, history groups, and account-wide mutation guard.
 
-- [ ] **Step 3: Run normal `sync_source`**
+- [x] **Step 3: Run normal `sync_source`**
 
 Generate the app script:
 
@@ -761,7 +761,7 @@ Use `mcp__tauri__.webview_execute_js` and set `script` to the complete JavaScrip
 
 Expected: `{ ok: true, result: <SyncResult> }`. If sync returns `{ ok: false, error: <typed error> }`, capture it and classify primary according to the evaluation script.
 
-- [ ] **Step 4: Save the primary sync result**
+- [x] **Step 4: Save the primary sync result**
 
 Save the complete JSON object returned by Step 3 to:
 
@@ -782,7 +782,7 @@ Use this shape:
 
 Expected: local sync result is available for evaluation.
 
-- [ ] **Step 5: Capture the `after_primary_sync` snapshot**
+- [x] **Step 5: Capture the `after_primary_sync` snapshot**
 
 Run:
 
@@ -792,7 +792,7 @@ python reference\telegram-migrated-dialog-capture-snapshot.py after_primary_sync
 
 Expected: after snapshot has the same selected source id and account `11` mutation guard.
 
-- [ ] **Step 6: Evaluate primary runtime invariants**
+- [x] **Step 6: Evaluate primary runtime invariants**
 
 Run:
 
@@ -921,7 +921,7 @@ Expected:
 - `classification = "needs_follow_up"` for a successful but empty sync with no local history-peer proof.
 - `classification = "failed"` for wrong subtype, wrong peer, cross-source mutation, untyped sync failure, or unsafe duplicate boundary evidence.
 
-- [ ] **Step 7: Commit the Task 4 checkpoint**
+- [x] **Step 7: Commit the Task 4 checkpoint**
 
 Update this plan file by marking Task 4 checkboxes complete, then run:
 
