@@ -1420,7 +1420,7 @@ git commit -m "fix: attach analysis chat llm requests to runs"
 - Modify: `docs/backlog.md`
 - Modify: `docs/superpowers/plans/2026-05-22-account-deletion-coordination.md`
 
-- [ ] **Step 1: Update backlog**
+- [x] **Step 1: Update backlog**
 
 In `docs/backlog.md`, remove completed Account Deletion Coordination bullets:
 
@@ -1431,7 +1431,7 @@ In `docs/backlog.md`, remove completed Account Deletion Coordination bullets:
 
 No remaining account deletion coordination backlog item is expected. If verification reveals a new risk, add one concrete sanitized follow-up that names the remaining behavior.
 
-- [ ] **Step 2: Run targeted backend tests**
+- [x] **Step 2: Run targeted backend tests**
 
 Run:
 
@@ -1447,7 +1447,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests
 
 Expected: all targeted Rust tests pass.
 
-- [ ] **Step 3: Run full project verification**
+- [x] **Step 3: Run full project verification**
 
 Run:
 
@@ -1465,7 +1465,7 @@ Expected:
 - full Rust suite passes;
 - tracked changes are limited to the planned files.
 
-- [ ] **Step 4: Commit final implementation**
+- [x] **Step 4: Commit final implementation**
 
 Update this task's checkboxes to `[x]`, then run:
 

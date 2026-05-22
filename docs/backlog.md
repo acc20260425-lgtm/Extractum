@@ -7,7 +7,6 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
@@ -29,22 +28,7 @@
 
 ## 3. Open Roadmap
 
-### 3.1 Account Deletion Coordination
-
-Priority: high.
-
-- [ ] reject or cancel account deletion when any owned source has active sync, Takeout import, or delete work
-- [ ] decide whether account deletion should cancel owned analysis/LLM work or block until it finishes
-- [ ] return `not_found` when deleting a missing account
-- [ ] add backend tests for missing-account deletion and account deletion with active source work
-
-Acceptance:
-
-- Account deletion cannot cascade-delete source/item rows underneath active ingest tasks.
-- Runtime and secure-storage cleanup still happens after a valid delete.
-- Missing account deletion reports a typed `not_found` error.
-
-### 3.2 Takeout Source Import Follow-Ups
+### 3.1 Takeout Source Import Follow-Ups
 
 Priority: high.
 
@@ -69,7 +53,7 @@ Acceptance:
 - Migrated supergroup history has a safe provenance and validation policy
   before import is enabled.
 
-### 3.3 Database Schema Simplification
+### 3.2 Database Schema Simplification
 
 Priority: high.
 
@@ -92,7 +76,7 @@ Acceptance:
 - Any blob cleanup is validation-aware and does not remove repair input before
   the remaining real-data checks are done.
 
-### 3.4 Saved Runs Discoverability And Cleanup
+### 3.3 Saved Runs Discoverability And Cleanup
 
 Priority: medium.
 
@@ -103,7 +87,7 @@ Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-### 3.5 NotebookLM Export Follow-Ups
+### 3.4 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -113,7 +97,7 @@ Priority: medium.
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 3.6 YouTube Source Follow-Ups
+### 3.5 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -132,7 +116,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 3.7 Media Download, Preview, And Analysis
+### 3.6 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -150,7 +134,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 3.8 Stabilization
+### 3.7 Stabilization
 
 Priority: medium.
 
