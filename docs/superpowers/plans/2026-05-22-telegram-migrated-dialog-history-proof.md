@@ -213,25 +213,27 @@ git commit -m "docs: checkpoint telegram migrated-dialog history evaluation"
 - Runtime only: `reference/telegram-migrated-dialog-history-proof-takeout-result.json`
 - Runtime only: `reference/telegram-migrated-dialog-history-proof-takeout-evaluation.json`
 
-- [ ] **Step 1: Check the primary classification**
+- [x] **Step 1: Check the primary classification**
 
 Read `reference/telegram-migrated-dialog-history-proof-evaluation.json`.
 
 Expected: continue only when `classification = "passed"`.
 
-- [ ] **Step 2: Run the narrow Takeout smoke**
+- [x] **Step 2: Run the narrow Takeout smoke**
 
 Run the existing app Takeout import flow for the controlled migrated fixture only.
 
 Expected: Takeout either records migrated-history deferment safely or reports a controlled blocked status before unsafe writes.
 
-- [ ] **Step 3: Evaluate Takeout result**
+- [x] **Step 3: Evaluate Takeout result**
 
 Save `reference/telegram-migrated-dialog-history-proof-takeout-evaluation.json`.
 
 Expected clean result: no unsafe old `chat` history rows are imported as if they were current supergroup history; migrated history is deferred with sanitized warning/provenance when detected.
 
-- [ ] **Step 4: Mark Task 5 complete and commit**
+Task 5 checkpoint: primary classification was `passed`; narrow Takeout smoke started job `takeout-1` but Telegram returned `TAKEOUT_INIT_DELAY` before unsafe writes. Evaluation classified this as `blocked_start`, with no new history groups and no `chat` history group after the smoke.
+
+- [x] **Step 4: Mark Task 5 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
