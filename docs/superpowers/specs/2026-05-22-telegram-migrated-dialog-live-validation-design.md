@@ -28,7 +28,8 @@ Primary runtime scope:
 
 1. List account `11` Telegram dialogs through the normal app path.
 2. Select the controlled migrated small-group-to-supergroup fixture.
-3. Add or reuse the source through `add_telegram_source`.
+3. Add the source through `add_telegram_source`, or explicitly record that the
+   app returned an existing row for the same account/source identity.
 4. Verify the stored `sources` and `telegram_sources` rows use typed current
    supergroup identity.
 5. Run normal `sync_source(source_id)`.
@@ -46,8 +47,8 @@ Secondary Takeout smoke scope:
 4. Verify persisted provenance records the deferment:
    `migrated_history_detected = 1`,
    `migrated_history_imported = 0`, warning
-   `migrated_history_deferred`, and partial or mixed-partial completeness
-   according to the current provenance model.
+   `migrated_history_deferred`, `ingest_batches.completeness = partial`, and a
+   deferment-specific `telegram_takeout_batches.history_scope`.
 
 Out of scope:
 
@@ -58,6 +59,23 @@ Out of scope:
 - incomplete-import recovery UX or policy;
 - forum-topic refresh behavior after Takeout;
 - product or schema changes unless the live probe exposes a real bug.
+
+## Fixture And Source Setup
+
+Prefer a fresh source row when it is safe and does not destroy useful local
+validation fixtures. Do not delete existing sources or mutate Telegram server
+state only to force freshness unless the operator explicitly confirms that is
+safe for this fixture.
+
+If the source already exists, the probe may still proceed, but it must record
+the source as pre-existing and verify dialog classification independently from
+the stored database row. The live dialog listing must show the controlled
+fixture as a `supergroup`; the existing row alone is not enough evidence that
+Add Source classified the migrated dialog correctly.
+
+When `add_telegram_source` returns or reuses an existing row, capture whether it
+was created or pre-existing in ignored runtime context and record only the
+sanitized conclusion in tracked docs.
 
 ## Existing Runtime Contract
 
@@ -113,7 +131,13 @@ The runtime migrated-dialog validation passes when all of these are true:
   explainable no-new-items result for the current source.
 - Any inserted `telegram_messages` rows for the source use
   `history_peer_kind = channel` and the current supergroup `history_peer_id`.
-- Source sync state and item rows mutate only for the selected source.
+- The selected source has exactly one current-history peer group after normal
+  runtime sync. More than one `history_peer_kind/history_peer_id` group is at
+  least `needs follow-up`; it is `failed` if the extra group shows old
+  small-group history or another wrong peer was imported by normal sync.
+- Source sync state and item rows mutate only for the selected source, as shown
+  by before/after snapshots of account `11` Telegram source state and item
+  counts.
 - Duplicate handling remains source-scoped and history-peer-scoped; no evidence
   shows message id collisions between current supergroup history and old
   small-group history.
@@ -134,10 +158,12 @@ The Takeout smoke passes when all of these are true:
 - The job records migrated-history detection for the current supergroup.
 - Persisted provenance has `migrated_history_detected = 1` and
   `migrated_history_imported = 0`.
-- A warning with kind `migrated_history_deferred` is persisted or surfaced in
-  job evidence.
-- Completeness is `partial` or the current mixed-partial equivalent used by the
-  provenance layer.
+- A warning with code/kind `migrated_history_deferred` is persisted or surfaced
+  in job evidence.
+- `ingest_batches.completeness = partial`. The deferment reason must be
+  confirmed by `history_scope = current_history_with_migrated_deferred`, or by
+  `history_scope = mixed_partial` only if `only_my_messages = 1` is also
+  recorded. An unrelated partial result is not a passing Takeout smoke.
 - No old small-group migrated-history rows are imported for the source as part
   of this smoke.
 
@@ -151,6 +177,12 @@ without blocking closure of the runtime/private-source backlog row.
 
 Runtime-only evidence may be written under ignored `reference/*`. Tracked docs
 must stay sanitized.
+
+`external_id`, raw `peer_id`, and raw message id ranges may be captured in
+ignored local evidence. Tracked verification notes may include numeric
+account/source ids, subtype, peer kind/id, boolean username/access-hash
+presence, sync counts, warning codes/kinds, and sanitized wrong-peer
+conclusions, but must not include private labels or raw access-hash values.
 
 Capture before and after primary sync:
 
@@ -190,9 +222,57 @@ GROUP BY history_peer_kind, history_peer_id
 ORDER BY history_peer_kind, history_peer_id;
 ```
 
-For Takeout smoke, capture sanitized provenance rows and warning kinds only.
+```sql
+SELECT COUNT(DISTINCT history_peer_kind || ':' || history_peer_id)
+       AS history_peer_count
+FROM telegram_messages
+WHERE source_id = ?;
+```
+
+Capture a before/after mutation guard for all Telegram sources on account `11`.
+Use it locally to prove only the selected source changed; tracked docs should
+record only that conclusion.
+
+```sql
+SELECT id, last_sync_state, last_synced_at,
+       (SELECT COUNT(*) FROM items WHERE source_id = sources.id) AS item_count
+FROM sources
+WHERE account_id = 11
+  AND source_type = 'telegram'
+ORDER BY id;
+```
+
+For Takeout smoke, capture sanitized provenance rows and warning codes/kinds
+only.
 Record the existence of `migrated_from_chat_id` detection without writing the
 old small-group title or message content.
+
+Local-only negative proof must confirm that Takeout smoke did not import old
+small-group history rows. Store raw details only in ignored `reference/*`; in
+tracked docs record a boolean conclusion such as: no
+`telegram_messages.history_peer_kind = chat` rows and no non-current history
+peer group were inserted during the smoke.
+
+```sql
+SELECT b.id, b.status, b.completeness, b.item_inserted_count,
+       b.item_observed_count, b.warning_count,
+       t.history_scope, t.migrated_history_detected,
+       t.migrated_history_imported, t.only_my_messages
+FROM ingest_batches b
+JOIN telegram_takeout_batches t ON t.batch_id = b.id
+WHERE b.source_id = ?
+  AND b.provider = 'telegram'
+  AND b.ingest_kind = 'takeout'
+ORDER BY b.id DESC;
+```
+
+```sql
+SELECT code, COUNT(*) AS warning_count
+FROM ingest_batch_warnings
+WHERE batch_id = ?
+GROUP BY code
+ORDER BY code;
+```
 
 ## Outcome Classification
 
@@ -219,7 +299,8 @@ If the primary flow passes, update
 - Change `Migrated small group -> supergroup` from `not run` to `passed`.
 - Add a dated migrated-dialog live-run note.
 - Record only sanitized account/source ids, subtype, peer kind/id, access-hash
-  presence, username presence, sync counts, warning kinds, and wrong-peer check.
+  presence, username presence, sync counts, warning codes/kinds, and wrong-peer
+  check.
 - Include the secondary Takeout smoke result if it was attempted.
 
 Then update `docs/backlog.md` section `3.1` by removing
