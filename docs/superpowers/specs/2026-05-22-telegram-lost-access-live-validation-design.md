@@ -1,0 +1,166 @@
+# Telegram Lost Access Live Validation Design
+
+Date: 2026-05-22
+
+## Goal
+
+Validate the Telegram sync failure path for a source that already exists in
+SQLite but is no longer accessible to the owning Telegram account.
+
+The app must keep the source explainable, preserve typed Telegram identity, and
+avoid silently resolving or ingesting data from a different peer. This closes the
+`No-longer-member, left, or private access lost` row in
+`docs/superpowers/verification/telegram-runtime-private-source-validation.md`
+and the corresponding `docs/backlog.md` section `3.1` item when the live result
+passes.
+
+## Preferred Live Scenario
+
+Use one controlled private Telegram source owned or administered by another
+account, while account A is only a normal member:
+
+1. Private supergroup from dialogs, preferred.
+2. Private channel from dialogs, fallback if the supergroup fixture is not
+   practical.
+
+Do not start with a regular small group. Small groups remain dialog-dependent
+and do not exercise the stored channel/supergroup peer identity path with an
+access hash.
+
+The fixture must be private and must not have a public username recorded for the
+probe. A public username fallback can mask the access-loss behavior this probe
+is meant to exercise.
+
+## Existing Runtime Contract
+
+The relevant sync path is:
+
+```text
+sync_source(source_id)
+-> load_source(source_id)
+-> source.account_id
+-> get_authorized_runtime(account_id)
+-> resolve_and_refresh_peer(...)
+-> persist_items(...)
+-> finalize_sync(...)
+```
+
+`resolve_and_refresh_peer` loads typed identity from `telegram_sources` and
+tries resolution through the existing typed plan. For dialog-backed
+channel/supergroup rows with an access hash, the stored peer identity is tried
+before dialog scan. If the source cannot be resolved, the current code returns a
+typed `AppErrorKind::NotFound` with a user-actionable message for private
+sources that disappeared from dialogs. If Telegram accepts the stored peer but
+history access fails while iterating messages, the error is expected to surface
+as a typed `network` error from the grammers request.
+
+`finalize_sync` runs only after peer resolution and message ingest complete.
+Therefore, a failed sync should not advance `sources.last_sync_state` or
+`sources.last_synced_at`.
+
+## Probe Flow
+
+1. Confirm the tracked workspace is clean and record the current commit.
+2. Start the Tauri app and confirm account A is `ready`.
+3. Select or create a controlled private supergroup/channel visible in account
+   A's Telegram dialogs.
+4. Add or reuse the source through the normal app path:
+   `list_telegram_sources(account_id)` and `add_telegram_source`.
+5. Run baseline `sync_source(source_id)` while account A still has access.
+6. Capture the before-loss snapshot.
+7. Human gate: remove account A from the controlled private source or otherwise
+   revoke access.
+8. Check whether the source still appears in `list_telegram_sources(account_id)`.
+9. Run `sync_source(source_id)` and capture either the `SyncResult` or typed
+   `AppError`.
+10. Capture the after-loss snapshot.
+11. Evaluate identity, state, item-count, and wrong-peer invariants.
+12. Stop runtime processes and update tracked verification docs.
+
+## Snapshot Evidence
+
+Runtime details are written only to ignored `reference/*` files. Tracked docs
+must not include private titles, usernames, message text, phone numbers, session
+data, API credentials, or auth material.
+
+Before and after the access-loss sync attempt, capture:
+
+```sql
+SELECT id, account_id, source_type, source_subtype, external_id, title,
+       last_sync_state, last_synced_at, is_active, is_member
+FROM sources
+WHERE id = ?;
+```
+
+```sql
+SELECT source_id, account_id, source_subtype, peer_kind, peer_id,
+       access_hash IS NOT NULL AS has_access_hash,
+       username IS NOT NULL AND TRIM(username) <> '' AS has_username,
+       resolution_strategy,
+       identity_refreshed_at
+FROM telegram_sources
+WHERE source_id = ?;
+```
+
+```sql
+SELECT COUNT(*) AS item_count
+FROM items
+WHERE source_id = ?;
+```
+
+Also capture whether the source's typed peer appears in
+`list_telegram_sources(account_id)` after the human removal gate. Record this as
+presence/absence only, without private labels.
+
+## Pass Criteria
+
+The probe passes when all of these are true:
+
+- Baseline sync succeeds before access is revoked.
+- After access is revoked, `sync_source(source_id)` returns a typed,
+  explainable error or warning for inaccessible/private/lost peer behavior.
+- `telegram_sources.source_subtype`, `peer_kind`, `peer_id`, access-hash
+  presence, username presence, `resolution_strategy`, and
+  `identity_refreshed_at` do not change unless a clearly successful safe refresh
+  occurred.
+- `sources.last_sync_state` and `sources.last_synced_at` do not advance after a
+  failed sync.
+- Item count for the source does not increase after a failed sync.
+- No evidence shows resolver switching to another public username, another
+  dialog, or another peer.
+- `list_sources` or direct source queries still show an explainable source row;
+  the source does not disappear as if it never existed.
+
+## Outcome Classification
+
+- `passed`: the failure path is typed/explainable and all identity/state/item
+  invariants hold.
+- `blocked`: account A could not be removed, the private fixture could not be
+  created, account A was not ready, baseline sync failed before access loss, or
+  Telegram still showed account A as a member after the removal step.
+- `needs follow-up`: the sync unexpectedly succeeds after removal but snapshots
+  show no wrong-peer mutation; this may reflect Telegram retaining history
+  access for the tested state and needs a narrower fixture.
+- `failed`: sync inserts new items from a wrong peer, mutates typed identity
+  unsafely, advances sync state after a failed attempt, returns an unhelpful
+  internal/raw error, or makes the source unexplained/unavailable in the app
+  state.
+
+## Documentation Updates
+
+If passed, update
+`docs/superpowers/verification/telegram-runtime-private-source-validation.md`:
+
+- Change `No-longer-member, left, or private access lost` from `not run` to
+  `passed`.
+- Add `2026-05-22 Lost Access Follow-Up`.
+- Record source kind, account label, sanitized stored identity, baseline sync
+  result, post-loss typed error/warning, before/after snapshots, dialog
+  visibility, and wrong-peer check.
+
+Then update `docs/backlog.md` section `3.1` by removing the
+lost-access/no-longer-member row, leaving only the migrated small-group to
+supergroup validation row open.
+
+If blocked, failed, or needs follow-up, keep the backlog item open or replace it
+with the concrete follow-up discovered by the probe.
