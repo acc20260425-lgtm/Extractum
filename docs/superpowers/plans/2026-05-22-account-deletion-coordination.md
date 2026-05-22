@@ -1176,7 +1176,7 @@ git commit -m "feat: add account deletion active-work preflight"
 - Modify: `src-tauri/src/accounts.rs`
 - Modify: `docs/superpowers/plans/2026-05-22-account-deletion-coordination.md`
 
-- [ ] **Step 1: Write failing tests for missing-account and cleanup ordering**
+- [x] **Step 1: Write failing tests for missing-account and cleanup ordering**
 
 In `src-tauri/src/accounts.rs`, add tests:
 
@@ -1219,7 +1219,7 @@ async fn secret_cleanup_failure_keeps_deleted_database_row_deleted() {
 }
 ```
 
-- [ ] **Step 2: Run account tests and verify RED**
+- [x] **Step 2: Run account tests and verify RED**
 
 Run:
 
@@ -1229,7 +1229,7 @@ cargo test --manifest-path src-tauri/Cargo.toml accounts::tests::deleting_missin
 
 Expected: at least missing-account test fails because row deletion currently does not check `rows_affected`.
 
-- [ ] **Step 3: Implement robust account row deletion**
+- [x] **Step 3: Implement robust account row deletion**
 
 Change `delete_account_row_from_pool`:
 
@@ -1249,7 +1249,7 @@ async fn delete_account_row_from_pool(pool: &Pool<Sqlite>, account_id: i64) -> A
 }
 ```
 
-- [ ] **Step 4: Wire command preflight dependencies**
+- [x] **Step 4: Wire command preflight dependencies**
 
 Update imports in `accounts.rs`:
 
@@ -1299,7 +1299,7 @@ pub async fn delete_account(
 }
 ```
 
-- [ ] **Step 5: Run account tests and build check**
+- [x] **Step 5: Run account tests and build check**
 
 Run:
 
@@ -1310,7 +1310,7 @@ cargo test --manifest-path src-tauri/Cargo.toml account_deletion
 
 Expected: account tests and preflight tests pass.
 
-- [ ] **Step 6: Commit delete_account wiring**
+- [x] **Step 6: Commit delete_account wiring**
 
 Update this task's checkboxes to `[x]`, then run:
 

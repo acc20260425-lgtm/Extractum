@@ -2,10 +2,16 @@ use serde::Serialize;
 use sqlx::{Pool, Sqlite};
 use tauri::AppHandle;
 
+use crate::account_deletion::check_account_deletion;
+use crate::analysis::AnalysisState;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::llm::LlmSchedulerState;
 use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
+use crate::source_ingest::SourceIngestLocks;
+use crate::takeout_import::TakeoutImportState;
 use crate::telegram::{clear_account_runtime, TelegramState};
+use crate::youtube::jobs::SourceJobState;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct AccountRecord {
@@ -125,10 +131,25 @@ pub async fn clear_account_phone(handle: AppHandle, account_id: i64) -> AppResul
 pub async fn delete_account(
     handle: AppHandle,
     state: tauri::State<'_, TelegramState>,
+    source_locks: tauri::State<'_, SourceIngestLocks>,
+    takeout_state: tauri::State<'_, TakeoutImportState>,
+    source_job_state: tauri::State<'_, SourceJobState>,
+    analysis_state: tauri::State<'_, AnalysisState>,
+    llm_scheduler: tauri::State<'_, LlmSchedulerState>,
     secret_store: tauri::State<'_, SecretStoreState>,
     account_id: i64,
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
+    check_account_deletion(
+        &pool,
+        account_id,
+        source_locks.inner(),
+        takeout_state.inner(),
+        source_job_state.inner(),
+        analysis_state.inner(),
+        llm_scheduler.inner(),
+    )
+    .await?;
     delete_account_row_from_pool(&pool, account_id).await?;
     let runtime_result =
         clear_account_runtime(&handle, &state, &secret_store, account_id, true).await;
@@ -153,11 +174,15 @@ pub(crate) async fn delete_account_from_pool(
 }
 
 async fn delete_account_row_from_pool(pool: &Pool<Sqlite>, account_id: i64) -> AppResult<()> {
-    sqlx::query("DELETE FROM accounts WHERE id = ?")
+    let result = sqlx::query("DELETE FROM accounts WHERE id = ?")
         .bind(account_id)
         .execute(pool)
         .await
         .map_err(AppError::database)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found(format!("Account {account_id} not found")));
+    }
 
     Ok(())
 }
@@ -292,5 +317,42 @@ mod tests {
                 .expect("read secret"),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn deleting_missing_account_returns_not_found() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+
+        let error = delete_account_from_pool(&pool, &secret_store, 404)
+            .await
+            .expect_err("missing account");
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert_eq!(error.message, "Account 404 not found");
+    }
+
+    #[tokio::test]
+    async fn secret_cleanup_failure_keeps_deleted_database_row_deleted() {
+        let pool = memory_pool().await;
+        let (store, secret_store) = memory_secret_store();
+        let account = create_account_in_pool(
+            &pool,
+            &secret_store,
+            "Personal".to_string(),
+            12345,
+            "api-hash".to_string(),
+            1000,
+        )
+        .await
+        .expect("create account");
+        store.fail_delete("secret delete failed");
+
+        let error = delete_account_from_pool(&pool, &secret_store, account.id)
+            .await
+            .expect_err("secret cleanup fails");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert_eq!(account_count(&pool).await, 0);
     }
 }
