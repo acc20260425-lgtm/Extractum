@@ -372,7 +372,7 @@ Expected: `username_present = false`, `access_hash_present = true`, `resolution_
 - Create/Modify: `reference/telegram-lost-access-validation-snapshots.json`
 - Create/Modify: `reference/telegram-lost-access-sync-results.json`
 
-- [ ] **Step 1: Create the snapshot helper**
+- [x] **Step 1: Create the snapshot helper**
 
 Run:
 
@@ -489,7 +489,7 @@ print(json.dumps({label: snapshot}, indent=2))
 
 Expected: helper exists and captures sanitized source, typed identity, item-count, max-id, max-created-at, and optional canary presence.
 
-- [ ] **Step 2: Run baseline sync while account A still has access**
+- [x] **Step 2: Run baseline sync while account A still has access**
 
 Generate the app script:
 
@@ -523,7 +523,7 @@ Use `mcp__tauri__.webview_execute_js` and set `script` to the complete JavaScrip
 
 Expected: `{ ok: true, result: ... }`. `inserted = 0` is acceptable for a preexisting caught-up source. If baseline sync returns `{ ok: false, ... }`, stop and document `blocked`.
 
-- [ ] **Step 3: Save the baseline sync result**
+- [x] **Step 3: Save the baseline sync result**
 
 Copy the complete JSON object returned by Task 4 Step 2 to the clipboard, then run:
 
@@ -540,7 +540,7 @@ Get-Content -Raw -LiteralPath $syncResultsPath | ConvertFrom-Json | Select-Objec
 
 Expected: saved baseline sync result with `ok = true`.
 
-- [ ] **Step 4: Capture the `before_loss` snapshot**
+- [x] **Step 4: Capture the `before_loss` snapshot**
 
 Run:
 
