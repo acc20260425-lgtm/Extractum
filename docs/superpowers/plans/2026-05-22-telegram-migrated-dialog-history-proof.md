@@ -133,13 +133,13 @@ git commit -m "docs: checkpoint telegram migrated-dialog history runtime"
 - Runtime only: `reference/telegram-migrated-dialog-history-proof-sync-result.json`
 - Runtime only: `reference/telegram-migrated-dialog-history-proof-after.json`
 
-- [ ] **Step 1: Resolve source 115 from the app database**
+- [x] **Step 1: Resolve source 115 from the app database**
 
 Capture sanitized context for source `115`: account id, source subtype, external id, peer kind, peer id, access-hash presence, username presence, and resolution strategy.
 
 Expected: source `115` belongs to account `11`, has `source_subtype = supergroup`, `peer_kind = channel`, and current channel `peer_id`.
 
-- [ ] **Step 2: Capture the before snapshot**
+- [x] **Step 2: Capture the before snapshot**
 
 Read the app database in read-only mode and save counts/groups for:
 
@@ -150,25 +150,25 @@ Read the app database in read-only mode and save counts/groups for:
 
 Expected: snapshot saved to `reference/telegram-migrated-dialog-history-proof-before.json`.
 
-- [ ] **Step 3: Run normal source sync**
+- [x] **Step 3: Run normal source sync**
 
 Run app IPC command `sync_source` with `source_id = 115`.
 
 Expected: command returns `ok: true`. A successful empty sync is allowed only if the later evaluation remains `needs_follow_up`.
 
-- [ ] **Step 4: Save the sync result**
+- [x] **Step 4: Save the sync result**
 
 Save sanitized sync result to `reference/telegram-migrated-dialog-history-proof-sync-result.json`.
 
 Expected: file contains sync counts and warning codes without private message text.
 
-- [ ] **Step 5: Capture the after snapshot**
+- [x] **Step 5: Capture the after snapshot**
 
 Repeat the read-only database snapshot from Step 2 after sync completes.
 
 Expected: snapshot saved to `reference/telegram-migrated-dialog-history-proof-after.json`.
 
-- [ ] **Step 6: Mark Task 3 complete and commit**
+- [x] **Step 6: Mark Task 3 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
