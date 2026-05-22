@@ -1469,7 +1469,7 @@ Expected: checkpoint commit succeeds.
 - Verify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-live-validation.md`
 - Verify: `docs/superpowers/verification/telegram-runtime-private-source-validation.md`
 
-- [ ] **Step 1: Check tracked diff scope**
+- [x] **Step 1: Check tracked diff scope**
 
 Run:
 
@@ -1480,11 +1480,11 @@ git diff --name-only
 
 Expected: no uncommitted tracked diff before final checkbox edit. Runtime files under `reference/` must not appear.
 
-- [ ] **Step 2: Mark Task 8 checkboxes complete**
+- [x] **Step 2: Mark Task 8 checkboxes complete**
 
 Update this plan file by marking Task 8 checkboxes complete.
 
-- [ ] **Step 3: Check whitespace**
+- [x] **Step 3: Check whitespace**
 
 Run:
 
@@ -1494,7 +1494,7 @@ git diff --check
 
 Expected: exit code 0. Known LF/CRLF warnings are acceptable if no whitespace errors are reported.
 
-- [ ] **Step 4: Commit final plan checkpoint**
+- [x] **Step 4: Commit final plan checkpoint**
 
 Run:
 
@@ -1505,7 +1505,7 @@ git commit -m "docs: checkpoint telegram migrated-dialog final verification"
 
 Expected: final plan checkpoint commit succeeds.
 
-- [ ] **Step 5: Verify the branch**
+- [x] **Step 5: Verify the branch**
 
 Run:
 
@@ -1517,7 +1517,7 @@ git log -5 --oneline
 
 Expected: whitespace check exits 0, status is clean on `telegram-migrated-dialog-live-validation`, and the recent log shows the per-task checkpoint commits.
 
-- [ ] **Step 6: Prepare merge handoff**
+- [x] **Step 6: Prepare merge handoff**
 
 If all required verification passes, report:
 
