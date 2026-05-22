@@ -70,7 +70,7 @@ Do not modify Rust, Svelte, schema, or app code during this slice. If production
 - Read: `src-tauri/src/ingest_provenance.rs`
 - Modify: `docs/superpowers/plans/2026-05-22-telegram-migrated-dialog-live-validation.md`
 
-- [ ] **Step 1: Confirm tracked workspace state**
+- [x] **Step 1: Confirm tracked workspace state**
 
 Run:
 
@@ -81,7 +81,7 @@ git log -1 --oneline
 
 Expected: clean `## main` before branch creation. Record the commit line for the dated verification note.
 
-- [ ] **Step 2: Create or switch to the validation branch**
+- [x] **Step 2: Create or switch to the validation branch**
 
 Run:
 
@@ -101,7 +101,7 @@ git status --short --branch
 
 Expected: clean `## telegram-migrated-dialog-live-validation`.
 
-- [ ] **Step 3: Verify Add Source typed identity boundary**
+- [x] **Step 3: Verify Add Source typed identity boundary**
 
 Run:
 
@@ -120,7 +120,7 @@ supergroup rows should store source_subtype = supergroup and peer_kind = channel
 
 Abort as `blocked` if Add Source cannot be audited to store typed source identity.
 
-- [ ] **Step 4: Verify normal sync history-peer identity boundary**
+- [x] **Step 4: Verify normal sync history-peer identity boundary**
 
 Run:
 
@@ -136,7 +136,7 @@ current supergroup sync should persist history_peer_kind = channel and current p
 telegram_messages native identity is source_id + history_peer_kind + history_peer_id + telegram_message_id.
 ```
 
-- [ ] **Step 5: Verify Takeout migrated-history deferment contract**
+- [x] **Step 5: Verify Takeout migrated-history deferment contract**
 
 Run:
 
@@ -154,7 +154,7 @@ Warning code migrated_history_deferred is inserted into ingest_batch_warnings.co
 Terminal completed jobs with deferment classify ingest_batches.completeness as partial.
 ```
 
-- [ ] **Step 6: Commit the Task 1 checkpoint**
+- [x] **Step 6: Commit the Task 1 checkpoint**
 
 Update this plan file by marking Task 1 checkboxes complete, then run:
 
