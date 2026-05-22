@@ -862,7 +862,7 @@ Expected:
 **Files:**
 - Read: `reference/tauri-dev-lost-access.pid`
 
-- [ ] **Step 1: Stop the Tauri MCP session**
+- [x] **Step 1: Stop the Tauri MCP session**
 
 Tool call:
 
@@ -872,7 +872,7 @@ mcp__tauri__.driver_session({ "action": "stop" })
 
 Expected: all bridge sessions are stopped.
 
-- [ ] **Step 2: Stop the Tauri dev process tree**
+- [x] **Step 2: Stop the Tauri dev process tree**
 
 Run:
 
@@ -892,7 +892,7 @@ if (Test-Path -LiteralPath $pidPath) {
 
 Expected: the dev process tree exits. If access is denied, rerun the stop command with escalated permission.
 
-- [ ] **Step 3: Confirm no runtime processes remain**
+- [x] **Step 3: Confirm no runtime processes remain**
 
 Run:
 
