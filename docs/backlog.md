@@ -7,7 +7,6 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Telegram runtime/private-source validation | capture non-empty migrated-dialog history-peer proof |
 | High | Account deletion coordination | prevent deletion from racing active source sync, Takeout import, source deletion, or analysis work |
 | High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
@@ -30,46 +29,7 @@
 
 ## 3. Open Roadmap
 
-### 3.1 Telegram Runtime And Private-Source Validation
-
-Priority: high.
-
-- [ ] capture a migrated small-group-to-supergroup fixture with persisted item/history rows so the current `channel` history-peer proof can be validated
-
-Recent evidence:
-
-- `docs/superpowers/verification/telegram-runtime-private-source-validation.md`
-  records 2026-05-21 live runs where account 1 listed channels, supergroups,
-  and a regular group, synced representative `channel`, `supergroup`, and
-  `group` sources, and validated dialog-backed private `channel` and
-  `supergroup` sources through stored identity. It also records a 2026-05-21
-  DB-only username probe where source `18` synced successfully while its cached
-  username was temporarily replaced by a sentinel, proving a usable stored peer
-  identity is sufficient when the cached public username is unusable. It also
-  records a 2026-05-22 cross-account isolation probe where the same public
-  channel peer was stored as separate source rows for account `1` and account
-  `11`, and both account-scoped syncs mutated only their own source state and
-  item rows. It also records a 2026-05-22 lost-access probe where a controlled
-  private channel source for account `11` returned a typed `CHANNEL_PRIVATE`
-  sync error after access was revoked while stored identity, sync state, and
-  item counts stayed unchanged. It also records a 2026-05-22 migrated-dialog
-  probe where account `11` listed the controlled dialog as `supergroup`,
-  `add_telegram_source` created source `115` with `peer_kind = channel`,
-  `resolution_strategy = dialog`, and access-hash present; `sync_source(115)`
-  succeeded with inserted 0, skipped 1, and no warnings, but no local
-  item/history rows were persisted, so the slice remains open for a non-empty
-  history-peer proof.
-
-Acceptance:
-
-- Add Source shows channels, supergroups, and groups with correct labels.
-- A source added from account A does not affect the same source added from account B.
-- Sync inserts messages for each supported kind without resolving to the wrong peer.
-- Private dialog-picked sources resolve predictably when Telegram provides sufficient peer data.
-- Public username changes or reassignments do not override a stored peer identity
-  that can still resolve the source.
-
-### 3.2 Account Deletion Coordination
+### 3.1 Account Deletion Coordination
 
 Priority: high.
 
@@ -84,7 +44,7 @@ Acceptance:
 - Runtime and secure-storage cleanup still happens after a valid delete.
 - Missing account deletion reports a typed `not_found` error.
 
-### 3.3 Takeout Source Import Follow-Ups
+### 3.2 Takeout Source Import Follow-Ups
 
 Priority: high.
 
@@ -92,6 +52,7 @@ Priority: high.
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
+- [ ] retry the controlled migrated small-group-to-supergroup Takeout smoke after Telegram `TAKEOUT_INIT_DELAY` expires and verify migrated-history deferment without unsafe old `chat` rows
 - [ ] define the incomplete-import policy and user/recovery behavior on top of
   existing ingest batches, Telegram Takeout batch details, warnings, and item
   observations
@@ -108,7 +69,7 @@ Acceptance:
 - Migrated supergroup history has a safe provenance and validation policy
   before import is enabled.
 
-### 3.4 Database Schema Simplification
+### 3.3 Database Schema Simplification
 
 Priority: high.
 
@@ -131,7 +92,7 @@ Acceptance:
 - Any blob cleanup is validation-aware and does not remove repair input before
   the remaining real-data checks are done.
 
-### 3.5 Saved Runs Discoverability And Cleanup
+### 3.4 Saved Runs Discoverability And Cleanup
 
 Priority: medium.
 
@@ -142,7 +103,7 @@ Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-### 3.6 NotebookLM Export Follow-Ups
+### 3.5 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -152,7 +113,7 @@ Priority: medium.
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 3.7 YouTube Source Follow-Ups
+### 3.6 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -171,7 +132,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 3.8 Media Download, Preview, And Analysis
+### 3.7 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -189,7 +150,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 3.9 Stabilization
+### 3.8 Stabilization
 
 Priority: medium.
 

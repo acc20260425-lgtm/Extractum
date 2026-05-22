@@ -277,19 +277,19 @@ git commit -m "docs: checkpoint telegram migrated-dialog history cleanup"
 - Modify: `docs/superpowers/verification/telegram-runtime-private-source-validation.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Update the verification row**
+- [x] **Step 1: Update the verification row**
 
 If primary classification is `passed`, update the migrated small-group-to-supergroup row to `passed` and include sanitized proof: source id, source subtype, peer kind, peer id, item count, telegram message count, and absence of wrong-peer groups.
 
 If primary classification is not `passed`, keep the row as needs follow-up and document the sanitized blocker.
 
-- [ ] **Step 2: Update backlog**
+- [x] **Step 2: Update backlog**
 
 If primary classification is `passed`, close or remove the backlog follow-up that requested a fixture with persisted rows. If Takeout smoke is blocked or failed, leave a narrow Takeout follow-up.
 
 If primary classification is not `passed`, keep a concrete runtime follow-up.
 
-- [ ] **Step 3: Run formatting and test verification**
+- [x] **Step 3: Run formatting and test verification**
 
 Run:
 
@@ -301,7 +301,7 @@ git status --short --branch
 
 Expected: no whitespace errors, `55` Vitest files pass, and tracked changes are limited to this plan plus sanitized docs.
 
-- [ ] **Step 4: Mark Task 7 complete and commit**
+- [x] **Step 4: Mark Task 7 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
