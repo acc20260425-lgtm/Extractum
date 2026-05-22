@@ -555,7 +555,7 @@ Expected: source, typed identity, and item stats are present. `has_username = fa
 **Files:**
 - Modify: `reference/telegram-lost-access-validation-context.json`
 
-- [ ] **Step 1: Human gate for access revocation**
+- [x] **Step 1: Human gate for access revocation**
 
 Ask the operator:
 
@@ -565,7 +565,7 @@ Please remove account A (account id 1) from the controlled private source now, o
 
 Expected: operator confirms access was revoked confidently. If access state is ambiguous enough that the sync result cannot be interpreted, stop and document `blocked`.
 
-- [ ] **Step 2: Record optional canary id**
+- [x] **Step 2: Record optional canary id**
 
 If the operator provided a numeric canary message id, enter it at the prompt. If not, press Enter.
 
@@ -581,7 +581,7 @@ Get-Content -Raw -LiteralPath $contextPath | ConvertFrom-Json | Select-Object so
 
 Expected: context records either a numeric canary id or `null`.
 
-- [ ] **Step 3: Check post-loss dialog visibility**
+- [x] **Step 3: Check post-loss dialog visibility**
 
 Generate the app script:
 
@@ -616,7 +616,7 @@ Use `mcp__tauri__.webview_execute_js` and set `script` to the complete JavaScrip
 
 Expected: sanitized visibility object. `visible = false` is the clearest lost-access signal. `visible = true` does not automatically block; use operator confidence and sync result to classify.
 
-- [ ] **Step 4: Save post-loss dialog visibility**
+- [x] **Step 4: Save post-loss dialog visibility**
 
 Copy the JSON object returned by Task 5 Step 3 to the clipboard, then run:
 
