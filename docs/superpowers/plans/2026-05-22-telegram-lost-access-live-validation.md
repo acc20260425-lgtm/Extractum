@@ -50,7 +50,7 @@ Do not modify Rust, Svelte, schema, or app code during this slice. If code chang
 - Read: `src-tauri/src/sources/peer_resolution.rs`
 - Read: `src-tauri/src/error.rs`
 
-- [ ] **Step 1: Confirm tracked workspace state**
+- [x] **Step 1: Confirm tracked workspace state**
 
 Run:
 
@@ -61,7 +61,7 @@ git log -1 --oneline
 
 Expected: clean `## main` before live validation begins. Record the commit line for the dated verification note.
 
-- [ ] **Step 2: Verify sync failure boundary**
+- [x] **Step 2: Verify sync failure boundary**
 
 Run:
 
@@ -79,7 +79,7 @@ telegram_sources.identity_refreshed_at is updated only with avatar cache refresh
 
 Abort as `blocked` if failed resolution can still advance `sources.last_sync_state`, `sources.last_synced_at`, or `telegram_sources.identity_refreshed_at`.
 
-- [ ] **Step 3: Verify private lost-source error surface**
+- [x] **Step 3: Verify private lost-source error surface**
 
 Run:
 
