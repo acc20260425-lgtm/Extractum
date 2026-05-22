@@ -2,9 +2,9 @@
 
 ## Goal
 
-Make `delete_account(account_id)` safe around active work by blocking deletion
-with a typed `conflict` when any running or queued work depends on sources
-owned by that account.
+Make `delete_account(account_id)` safer around active work by blocking deletion
+with a typed `conflict` when known active related work depends on sources owned
+by that account at preflight time.
 
 ## Policy
 
@@ -58,6 +58,11 @@ Provider smoke tests, model/settings checks, and other standalone LLM requests
 with `owner_run_id = None` do not block account deletion. Active analysis or
 source jobs for sources not owned by the account do not block deletion.
 
+For this preflight, non-terminal work means queued, pending, running,
+cancel-requested, or any other in-progress state that can still write, emit
+events, release a guard, or consume source/run context. Terminal work means
+completed, failed, or cancelled after finalization and guard release.
+
 An active source deletion guard is still a blocker even though it is also a
 delete-oriented operation. Account deletion must not compete with a source-level
 delete that may already be cascading rows, releasing locks, or reporting errors
@@ -74,6 +79,13 @@ This lets account deletion recognize that a live follow-up answer is reading a
 saved-run context or writing chat output tied to sources owned by the account.
 
 Provider smoke tests and unrelated LLM checks keep `owner_run_id = None`.
+
+Active LLM requests with `owner_run_id = Some(run_id)` block deletion if that
+run's scope depends on owned sources, even when the report run itself is already
+terminal and the active work is a follow-up chat request. Therefore the preflight
+must resolve scheduler owner run ids through `analysis_runs` and, for group
+runs, through source membership; it must not only check
+`AnalysisState.active_report_run_ids()`.
 
 ## Implementation Shape
 
@@ -147,6 +159,12 @@ without duplicating state internals:
 
 These helpers must be read-only and must not cancel, finish, or release work.
 
+The first implementation resolves source-group blockers from current
+`analysis_source_group_members` membership. That matches the app's current live
+group model. Future snapshot/effective-source tracking can tighten this if the
+product needs deletion checks to reflect historical group membership at run
+start time.
+
 ## Tests
 
 Use TDD for implementation. Add focused Rust tests around the preflight and
@@ -166,7 +184,7 @@ Required cases:
   even when the run itself has no direct `source_id`;
 - active analysis run for another account/source does not block deletion;
 - active LLM scheduler request blocks only when `owner_run_id` is in the
-  relevant active run set;
+  relevant run set, including completed runs with active follow-up chat;
 - provider smoke test or model/settings request with `owner_run_id = None` does
   not block deletion;
 - preflight conflict does not delete the account row, sources, runtime state, or
@@ -178,6 +196,8 @@ Required cases:
   account row;
 - analysis follow-up chat requests register
   `LlmRequestKind::AnalysisChat` with `owner_run_id = Some(run_id)`.
+- source-group analysis blockers use current source-group membership for this
+  first implementation.
 
 Existing frontend delete-account API shape can remain unchanged unless tests
 show the UI needs to surface the typed conflict differently.
