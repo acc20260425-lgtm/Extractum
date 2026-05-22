@@ -82,7 +82,7 @@ git commit -m "docs: plan account deletion coordination"
 - Modify: `src-tauri/src/llm/scheduler.rs`
 - Modify: `docs/superpowers/plans/2026-05-22-account-deletion-coordination.md`
 
-- [ ] **Step 1: Write failing tests for source ingest active-source inspection**
+- [x] **Step 1: Write failing tests for source ingest active-source inspection**
 
 Add tests to `src-tauri/src/source_ingest.rs`:
 
@@ -111,7 +111,7 @@ async fn active_kinds_for_sources_reports_matching_locks_only() {
 }
 ```
 
-- [ ] **Step 2: Run source ingest tests and verify RED**
+- [x] **Step 2: Run source ingest tests and verify RED**
 
 Run:
 
@@ -121,7 +121,7 @@ cargo test --manifest-path src-tauri/Cargo.toml source_ingest::tests::active_kin
 
 Expected: compile failure because `active_kinds_for_sources` does not exist.
 
-- [ ] **Step 3: Implement source ingest active-source inspection**
+- [x] **Step 3: Implement source ingest active-source inspection**
 
 Add the imports and method in `src-tauri/src/source_ingest.rs`:
 
@@ -147,7 +147,7 @@ pub(crate) async fn active_kinds_for_sources(
 }
 ```
 
-- [ ] **Step 4: Write failing tests for Takeout active jobs**
+- [x] **Step 4: Write failing tests for Takeout active jobs**
 
 Add to `src-tauri/src/takeout_import/state.rs` tests:
 
@@ -173,7 +173,7 @@ async fn active_jobs_for_sources_filters_non_terminal_jobs() {
 }
 ```
 
-- [ ] **Step 5: Run Takeout test and verify RED**
+- [x] **Step 5: Run Takeout test and verify RED**
 
 Run:
 
@@ -183,7 +183,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_import::state::tests::ac
 
 Expected: compile failure because `active_jobs_for_sources` does not exist.
 
-- [ ] **Step 6: Implement Takeout active job inspection**
+- [x] **Step 6: Implement Takeout active job inspection**
 
 Add to `impl TakeoutImportState`:
 
@@ -208,7 +208,7 @@ pub(crate) async fn active_jobs_for_sources(
 }
 ```
 
-- [ ] **Step 7: Write failing tests for generic source jobs**
+- [x] **Step 7: Write failing tests for generic source jobs**
 
 Add to `src-tauri/src/youtube/jobs.rs` tests:
 
@@ -255,7 +255,7 @@ async fn active_jobs_for_sources_matches_source_and_related_source() {
 }
 ```
 
-- [ ] **Step 8: Run source job test and verify RED**
+- [x] **Step 8: Run source job test and verify RED**
 
 Run:
 
@@ -265,7 +265,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::jobs::tests::active_job
 
 Expected: compile failure because `active_jobs_for_sources` does not exist.
 
-- [ ] **Step 9: Implement generic source job active inspection**
+- [x] **Step 9: Implement generic source job active inspection**
 
 Add to `impl SourceJobState`:
 
@@ -292,7 +292,7 @@ pub(crate) async fn active_jobs_for_sources(&self, source_ids: &[i64]) -> Vec<So
 }
 ```
 
-- [ ] **Step 10: Write failing test for LLM owner-run helper**
+- [x] **Step 10: Write failing test for LLM owner-run helper**
 
 Add to `src-tauri/src/llm/scheduler.rs` tests:
 
@@ -383,7 +383,7 @@ async fn active_owner_run_ids_reports_running_and_queued_owned_requests() {
 }
 ```
 
-- [ ] **Step 11: Run LLM helper test and verify RED**
+- [x] **Step 11: Run LLM helper test and verify RED**
 
 Run:
 
@@ -393,7 +393,7 @@ cargo test --manifest-path src-tauri/Cargo.toml llm::scheduler::tests::active_ow
 
 Expected: compile failure because `active_owner_run_ids` does not exist.
 
-- [ ] **Step 12: Implement LLM owner-run helper**
+- [x] **Step 12: Implement LLM owner-run helper**
 
 Add to `impl LlmSchedulerState`:
 
@@ -409,7 +409,7 @@ pub(crate) async fn active_owner_run_ids(&self) -> std::collections::HashSet<i64
 }
 ```
 
-- [ ] **Step 13: Run helper tests and commit**
+- [x] **Step 13: Run helper tests and commit**
 
 Run:
 

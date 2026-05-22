@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -470,6 +470,16 @@ impl LlmSchedulerState {
         self.inner.lock().await.snapshots()
     }
 
+    pub(crate) async fn active_owner_run_ids(&self) -> HashSet<i64> {
+        self.inner
+            .lock()
+            .await
+            .requests
+            .values()
+            .filter_map(|entry| entry.meta.owner_run_id)
+            .collect()
+    }
+
     pub async fn run_request<T, Q, F, Fut>(
         &self,
         meta: LlmRequestMetadata,
@@ -498,6 +508,8 @@ impl LlmSchedulerState {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
     use tokio::sync::{mpsc, Mutex as TokioMutex, Notify};
@@ -957,6 +969,80 @@ mod tests {
         }
         assert_eq!(queued.await.expect("join queued"), Ok("queued"));
         assert!(scheduler.request_snapshots().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn active_owner_run_ids_reports_running_and_queued_owned_requests() {
+        let scheduler = Arc::new(LlmSchedulerState::new());
+        let released = Arc::new(AtomicBool::new(false));
+        let release = Arc::new(Notify::new());
+
+        let mut handles = Vec::new();
+        for (request_id, run_id) in [("owned-77", 77), ("owned-88", 88), ("owned-99", 99)] {
+            let scheduler = scheduler.clone();
+            let released = released.clone();
+            let release = release.clone();
+            handles.push(tokio::spawn(async move {
+                scheduler
+                    .run_request(
+                        LlmRequestMetadata {
+                            owner_run_id: Some(run_id),
+                            ..metadata(
+                                request_id,
+                                "default",
+                                LlmRequestPriority::Background,
+                                LlmRequestKind::AnalysisReportMap,
+                            )
+                        },
+                        |_| {},
+                        move |control| async move {
+                            control
+                                .run_cancellable(async move {
+                                    loop {
+                                        if released.load(Ordering::SeqCst) {
+                                            break;
+                                        }
+                                        release.notified().await;
+                                    }
+                                    Ok::<_, String>("done")
+                                })
+                                .await
+                        },
+                    )
+                    .await
+            }));
+        }
+
+        timeout(Duration::from_secs(1), async {
+            loop {
+                let snapshots = scheduler.request_snapshots().await;
+                if snapshots.len() == 3
+                    && snapshots
+                        .iter()
+                        .filter(|snapshot| snapshot.state == LlmRequestSnapshotState::Running)
+                        .count()
+                        == 2
+                    && snapshots
+                        .iter()
+                        .any(|snapshot| snapshot.state == LlmRequestSnapshotState::Queued)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("owned requests should register");
+
+        let owners = scheduler.active_owner_run_ids().await;
+        assert_eq!(owners, HashSet::from([77, 88, 99]));
+
+        released.store(true, Ordering::SeqCst);
+        release.notify_waiters();
+        for handle in handles {
+            assert_eq!(handle.await.expect("join owned"), Ok("done"));
+        }
+        assert!(scheduler.active_owner_run_ids().await.is_empty());
     }
 
     #[tokio::test]

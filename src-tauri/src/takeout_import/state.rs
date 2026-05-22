@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -179,6 +179,25 @@ impl TakeoutImportState {
         inner.cancel_requested.clear(job_id);
         inner.jobs.get(job_id).cloned()
     }
+
+    pub(crate) async fn active_jobs_for_sources(
+        &self,
+        source_ids: &[i64],
+    ) -> Vec<TakeoutImportJobRecord> {
+        let source_ids = source_ids.iter().copied().collect::<HashSet<_>>();
+        let mut jobs = self
+            .inner
+            .lock()
+            .await
+            .jobs
+            .values()
+            .filter(|job| source_ids.contains(&job.source_id))
+            .filter(|job| !is_terminal_status(&job.status))
+            .cloned()
+            .collect::<Vec<_>>();
+        jobs.sort_by_key(|job| (job.started_at, job.job_id.clone()));
+        jobs
+    }
 }
 
 pub(crate) async fn update_and_emit<F>(
@@ -204,7 +223,9 @@ fn is_terminal_status(status: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{TakeoutImportState, STATUS_CANCEL_REQUESTED, STATUS_FAILED};
+    use super::{
+        TakeoutImportState, STATUS_CANCEL_REQUESTED, STATUS_COMPLETED, STATUS_FAILED,
+    };
     use crate::error::AppErrorKind;
 
     #[tokio::test]
@@ -248,5 +269,31 @@ mod tests {
         let next = state.create_job(7, 1, 101).await.expect("source released");
         assert_eq!(next.job_id, "takeout-2");
         assert_eq!(next.batch_id, 101);
+    }
+
+    #[tokio::test]
+    async fn active_jobs_for_sources_filters_non_terminal_jobs() {
+        let state = TakeoutImportState::new();
+        let first = state.create_job(7, 1, 100).await.expect("first job");
+        let second = state.create_job(8, 1, 101).await.expect("second job");
+        let _third = state.create_job(9, 1, 102).await.expect("third job");
+        state
+            .finish_job(&first.job_id, |job| {
+                job.status = STATUS_COMPLETED.to_string();
+                job.phase = STATUS_COMPLETED.to_string();
+            })
+            .await
+            .expect("finish first");
+        state
+            .request_cancel(&second.job_id)
+            .await
+            .expect("cancel requested remains active");
+
+        let active = state.active_jobs_for_sources(&[7, 8, 10]).await;
+
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].job_id, second.job_id);
+        assert_eq!(active[0].source_id, 8);
+        assert_eq!(active[0].status, STATUS_CANCEL_REQUESTED);
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -191,6 +191,31 @@ impl SourceJobState {
                 .then_with(|| b.job_id.cmp(&a.job_id))
         });
         jobs.truncate(limit);
+        jobs
+    }
+
+    pub(crate) async fn active_jobs_for_sources(&self, source_ids: &[i64]) -> Vec<SourceJobRecord> {
+        let source_ids = source_ids.iter().copied().collect::<HashSet<_>>();
+        let mut jobs = self
+            .inner
+            .lock()
+            .await
+            .jobs
+            .values()
+            .filter(|job| {
+                source_ids.contains(&job.source_id)
+                    || job
+                        .related_source_id
+                        .is_some_and(|source_id| source_ids.contains(&source_id))
+            })
+            .filter(|job| !is_terminal_status(&job.status))
+            .cloned()
+            .collect::<Vec<_>>();
+        jobs.sort_by(|a, b| {
+            a.started_at
+                .cmp(&b.started_at)
+                .then_with(|| a.job_id.cmp(&b.job_id))
+        });
         jobs
     }
 
@@ -863,6 +888,8 @@ fn is_terminal_status(status: &SourceJobStatus) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::{
         retryable_playlist_video_rows, SourceJobListFilter, SourceJobState, SourceJobStatus,
         SourceJobType, YoutubeSyncOptions,
@@ -1062,6 +1089,68 @@ mod tests {
 
         assert_eq!(finished.status, SourceJobStatus::Cancelled);
         assert_eq!(finished.message.as_deref(), Some("Source job cancelled."));
+    }
+
+    #[tokio::test]
+    async fn active_jobs_for_sources_filters_non_terminal_direct_and_related_sources() {
+        let state = SourceJobState::new();
+        let options = YoutubeSyncOptions {
+            metadata: true,
+            transcripts: false,
+            comments: false,
+        };
+        let direct = state
+            .create_job(
+                7,
+                SourceJobType::YoutubeVideoFullSync,
+                None,
+                options.clone(),
+            )
+            .await
+            .expect("direct job");
+        let related = state
+            .create_job(
+                99,
+                SourceJobType::YoutubePlaylistVideoSync,
+                Some(8),
+                options.clone(),
+            )
+            .await
+            .expect("related job");
+        let terminal = state
+            .create_job(
+                8,
+                SourceJobType::YoutubeVideoMetadataSync,
+                None,
+                options.clone(),
+            )
+            .await
+            .expect("terminal job");
+        let _unowned = state
+            .create_job(42, SourceJobType::YoutubeVideoTranscriptSync, None, options)
+            .await
+            .expect("unowned job");
+        state
+            .finish_job(&terminal.job_id, |job| {
+                job.status = SourceJobStatus::Succeeded;
+            })
+            .await
+            .expect("finish terminal job");
+        state
+            .request_cancel(&direct.job_id)
+            .await
+            .expect("cancel requested remains non-terminal");
+
+        let active = state.active_jobs_for_sources(&[7, 8]).await;
+        let active_ids = active
+            .iter()
+            .map(|job| job.job_id.as_str())
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            active_ids,
+            BTreeSet::from([direct.job_id.as_str(), related.job_id.as_str()])
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use crate::error::{AppError, AppResult};
@@ -59,6 +59,26 @@ impl SourceIngestLocks {
             source_id,
             state: Arc::clone(&self.state),
         })
+    }
+
+    pub(crate) async fn active_kinds_for_sources(
+        &self,
+        source_ids: &[i64],
+    ) -> AppResult<HashMap<i64, SourceIngestKind>> {
+        let source_ids = source_ids.iter().copied().collect::<HashSet<_>>();
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| AppError::internal("Source ingest lock state is poisoned"))?;
+        Ok(state
+            .active
+            .iter()
+            .filter_map(|(source_id, kind)| {
+                source_ids
+                    .contains(source_id)
+                    .then_some((*source_id, *kind))
+            })
+            .collect())
     }
 }
 
@@ -126,5 +146,28 @@ mod tests {
             .try_acquire(7, SourceIngestKind::TakeoutImport)
             .await
             .expect("lock should be released");
+    }
+
+    #[tokio::test]
+    async fn active_kinds_for_sources_reports_matching_locks_only() {
+        let locks = SourceIngestLocks::new();
+        let _sync = locks
+            .try_acquire(7, SourceIngestKind::Sync)
+            .await
+            .expect("sync lock");
+        let _delete = locks
+            .try_acquire(8, SourceIngestKind::Delete)
+            .await
+            .expect("delete lock");
+
+        let active = locks
+            .active_kinds_for_sources(&[7, 9, 8])
+            .await
+            .expect("active locks");
+
+        assert_eq!(active.len(), 2);
+        assert_eq!(active.get(&7), Some(&SourceIngestKind::Sync));
+        assert_eq!(active.get(&8), Some(&SourceIngestKind::Delete));
+        assert_eq!(active.get(&9), None);
     }
 }
