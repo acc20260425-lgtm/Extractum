@@ -1396,7 +1396,7 @@ git commit -m "feat: add takeout validation comparison diagnostics"
 - Create: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Add the reusable verification template**
+- [x] **Step 1: Add the reusable verification template**
 
 Create `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md` with this content:
 
@@ -1461,7 +1461,7 @@ local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
 ```
 
-- [ ] **Step 2: Update backlog wording**
+- [x] **Step 2: Update backlog wording**
 
 In `docs/backlog.md`, under `### 3.1 Takeout Source Import Follow-Ups`, add one completed tooling bullet before the live validation bullets:
 
@@ -1472,7 +1472,7 @@ In `docs/backlog.md`, under `### 3.1 Takeout Source Import Follow-Ups`, add one 
 
 Keep the existing live validation bullets open. Do not mark representative live imports, fallback validation, migrated-history enablement, richer recovery actions, or forum-topic refresh as complete.
 
-- [ ] **Step 3: Run documentation checks**
+- [x] **Step 3: Run documentation checks**
 
 Run:
 
@@ -1483,7 +1483,7 @@ git diff --check
 
 Expected: the new backlog bullet and verification template strings are found, and `git diff --check` passes.
 
-- [ ] **Step 4: Commit verification docs**
+- [x] **Step 4: Commit verification docs**
 
 Run:
 

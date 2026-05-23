@@ -32,6 +32,8 @@
 
 Priority: high.
 
+- [x] ship repeatable sanitized Takeout validation diagnostics and reusable
+  manual validation template
 - [ ] validate Takeout import on representative public channels, supergroups, and small groups
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
