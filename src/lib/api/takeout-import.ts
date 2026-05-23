@@ -5,12 +5,17 @@ import type {
   StartTakeoutImportResponse,
   TakeoutImportEvent,
   TakeoutImportJobRecord,
+  TakeoutImportRecoveryState,
 } from "$lib/types/sources";
 
 export const TAKEOUT_IMPORT_EVENT = "sources://takeout-import";
 
 export function listTakeoutSourceImportJobs() {
   return invoke<TakeoutImportJobRecord[]>("list_takeout_source_import_jobs");
+}
+
+export function listTakeoutImportRecoveryStates() {
+  return invoke<TakeoutImportRecoveryState[]>("list_takeout_import_recovery_states");
 }
 
 export function startTakeoutSourceImport(sourceId: number) {

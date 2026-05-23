@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   TAKEOUT_IMPORT_EVENT,
   cancelTakeoutSourceImport,
+  listTakeoutImportRecoveryStates,
   listTakeoutSourceImportJobs,
   listenToTakeoutImportEvents,
   startTakeoutSourceImport,
@@ -32,6 +33,14 @@ describe("takeout import api wrapper", () => {
     await expect(listTakeoutSourceImportJobs()).resolves.toEqual([]);
 
     expect(invokeMock).toHaveBeenLastCalledWith("list_takeout_source_import_jobs");
+  });
+
+  it("lists takeout import recovery states with the read-only command", async () => {
+    invokeMock.mockResolvedValueOnce([]);
+
+    await expect(listTakeoutImportRecoveryStates()).resolves.toEqual([]);
+
+    expect(invokeMock).toHaveBeenLastCalledWith("list_takeout_import_recovery_states");
   });
 
   it("starts a takeout import for a source", async () => {
@@ -71,6 +80,7 @@ describe("takeout import api wrapper", () => {
       job_id: "takeout-1",
       source_id: 7,
       account_id: 2,
+      batch_id: 100,
       status: "running",
       phase: "importing_history",
       message: "Importing",

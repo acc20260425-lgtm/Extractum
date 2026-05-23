@@ -1,4 +1,5 @@
 import { endOfDayUnix, runTargetLabel, startOfDayUnix } from "$lib/analysis-utils";
+import type { BadgeVariant } from "$lib/components/ui/types";
 import { sourceCapabilities } from "$lib/source-capabilities";
 import type {
   AnalysisChunkSummaryEvent,
@@ -25,6 +26,7 @@ import type {
   Source,
   SyncSourceResult,
   TakeoutImportJobRecord,
+  TakeoutImportRecoveryState,
 } from "$lib/types/sources";
 
 export const ALL_TOPICS_KEY = "__all_topics__";
@@ -678,12 +680,92 @@ export function upsertTakeoutImportJob(
   };
 }
 
+export function isActiveTakeoutImportJob(job: TakeoutImportJobRecord | undefined) {
+  return (
+    job?.status === "queued" ||
+    job?.status === "running" ||
+    job?.status === "cancel_requested"
+  );
+}
+
 export function applyTakeoutImportJobs(jobs: TakeoutImportJobRecord[]) {
   let next: Record<number, TakeoutImportJobRecord> = {};
   for (const job of jobs) {
     next = upsertTakeoutImportJob(next, job);
   }
   return next;
+}
+
+export function applyTakeoutImportRecoveryStates(
+  states: TakeoutImportRecoveryState[],
+) {
+  return Object.fromEntries(states.map((state) => [state.source_id, state]));
+}
+
+export function visibleTakeoutRecoveryForSource(
+  sourceId: number,
+  takeoutJobsBySource: Record<number, TakeoutImportJobRecord>,
+  recoveryBySource: Record<number, TakeoutImportRecoveryState>,
+) {
+  if (isActiveTakeoutImportJob(takeoutJobsBySource[sourceId])) {
+    return null;
+  }
+  return recoveryBySource[sourceId] ?? null;
+}
+
+export function takeoutRecoveryTitle(recovery: TakeoutImportRecoveryState) {
+  switch (recovery.recovery_kind) {
+    case "interrupted":
+      return "Previous Takeout import was interrupted";
+    case "failed":
+      return "Previous Takeout import failed";
+    case "cancelled":
+      return "Previous Takeout import was cancelled";
+    case "partial_completed":
+      return "Previous Takeout import completed with partial history";
+  }
+}
+
+export function takeoutRecoveryBody() {
+  return "Run Takeout again to continue collecting available history. Messages already saved locally will be deduplicated.";
+}
+
+export function takeoutRecoverySeverity(
+  recovery: TakeoutImportRecoveryState,
+): BadgeVariant {
+  switch (recovery.recovery_kind) {
+    case "failed":
+      return "danger";
+    case "interrupted":
+    case "partial_completed":
+      return "warning";
+    case "cancelled":
+      return "neutral";
+  }
+}
+
+function plural(value: number, singular: string, pluralLabel: string) {
+  return `${value} ${value === 1 ? singular : pluralLabel}`;
+}
+
+export function takeoutRecoveryFacts(recovery: TakeoutImportRecoveryState) {
+  const facts: string[] = [];
+  if (recovery.item_inserted_count > 0) {
+    facts.push(plural(recovery.item_inserted_count, "inserted", "inserted"));
+  }
+  if (recovery.item_duplicate_count > 0) {
+    facts.push(plural(recovery.item_duplicate_count, "duplicate", "duplicates"));
+  }
+  if (recovery.item_skipped_count > 0) {
+    facts.push(plural(recovery.item_skipped_count, "skipped", "skipped"));
+  }
+  if (recovery.item_observed_count > 0) {
+    facts.push(plural(recovery.item_observed_count, "observed", "observed"));
+  }
+  if (recovery.warning_count > 0) {
+    facts.push(plural(recovery.warning_count, "warning", "warnings"));
+  }
+  return facts.length > 0 ? facts : ["No items were written in this attempt."];
 }
 
 export function takeoutImportEventDecision(

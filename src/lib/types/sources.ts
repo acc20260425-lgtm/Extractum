@@ -273,6 +273,7 @@ export interface TakeoutImportJobRecord {
   job_id: string;
   source_id: number;
   account_id: number;
+  batch_id: number;
   status: TakeoutImportStatus;
   phase: TakeoutImportPhase;
   message: string | null;
@@ -287,6 +288,41 @@ export interface TakeoutImportJobRecord {
 }
 
 export type TakeoutImportEvent = TakeoutImportJobRecord;
+
+export type TakeoutImportRecoveryStatus =
+  | "running"
+  | "failed"
+  | "cancelled"
+  | "completed";
+
+export type TakeoutImportRecoveryKind =
+  | "interrupted"
+  | "failed"
+  | "cancelled"
+  | "partial_completed";
+
+export type TakeoutImportCompleteness =
+  | "unknown"
+  | "complete"
+  | "partial";
+
+export interface TakeoutImportRecoveryState {
+  batch_id: number;
+  source_id: number;
+  status: TakeoutImportRecoveryStatus;
+  recovery_kind: TakeoutImportRecoveryKind;
+  completeness: TakeoutImportCompleteness;
+  item_inserted_count: number;
+  item_duplicate_count: number;
+  item_skipped_count: number;
+  item_observed_count: number;
+  warning_count: number;
+  warning_codes: string[];
+  terminal_error: string | null;
+  started_at: number;
+  finished_at: number | null;
+  updated_at: number;
+}
 
 export interface StartTakeoutImportResponse {
   job_id: string;

@@ -3,6 +3,7 @@ import {
   ALL_TOPICS_KEY,
   applyAnalysisRunEvent,
   applyTakeoutImportJobs,
+  applyTakeoutImportRecoveryStates,
   analysisTraceRefOrigin,
   canCancelAnalysisRun,
   createEmptyLiveRunState,
@@ -47,7 +48,12 @@ import {
   sourceSyncStatus,
   syncRunSnapshot,
   takeoutImportEventDecision,
+  takeoutRecoveryBody,
+  takeoutRecoveryFacts,
+  takeoutRecoverySeverity,
+  takeoutRecoveryTitle,
   upsertTakeoutImportJob,
+  visibleTakeoutRecoveryForSource,
 } from "./analysis-state";
 import type {
   AnalysisPromptTemplate,
@@ -65,6 +71,7 @@ import type {
   SourceForumTopic,
   SyncSourceResult,
   TakeoutImportJobRecord,
+  TakeoutImportRecoveryState,
 } from "./types/sources";
 
 function analysisEvent(overrides: Partial<AnalysisRunEvent>): AnalysisRunEvent {
@@ -89,6 +96,7 @@ function takeoutJob(overrides: Partial<TakeoutImportJobRecord>): TakeoutImportJo
     job_id: "job-a",
     source_id: 1,
     account_id: 2,
+    batch_id: 100,
     status: "running",
     phase: "importing_history",
     message: null,
@@ -102,6 +110,28 @@ function takeoutJob(overrides: Partial<TakeoutImportJobRecord>): TakeoutImportJo
     error: null,
     ...overrides,
   };
+}
+
+function takeoutRecovery(
+  overrides: Partial<TakeoutImportRecoveryState>,
+): TakeoutImportRecoveryState {
+  return Object.assign({
+    batch_id: 10,
+    source_id: 1,
+    status: "running",
+    recovery_kind: "interrupted",
+    completeness: "unknown",
+    item_inserted_count: 0,
+    item_duplicate_count: 0,
+    item_skipped_count: 0,
+    item_observed_count: 0,
+    warning_count: 0,
+    warning_codes: [],
+    terminal_error: null,
+    started_at: 1_700_000,
+    finished_at: null,
+    updated_at: 1_700_030,
+  }, overrides);
 }
 
 function syncResult(overrides: Partial<SyncSourceResult> = {}): SyncSourceResult {
@@ -899,6 +929,63 @@ describe("analysis-state", () => {
     });
     expect(upsertTakeoutImportJob({ 1: newer }, older)).toEqual({ 1: newer });
     expect(upsertTakeoutImportJob({ 1: older }, newer)).toEqual({ 1: newer });
+  });
+
+  it("maps takeout recovery states by source id", () => {
+    const first = takeoutRecovery({ source_id: 1, batch_id: 11 });
+    const second = takeoutRecovery({ source_id: 2, batch_id: 12, recovery_kind: "failed" });
+
+    expect(applyTakeoutImportRecoveryStates([first, second])).toEqual({
+      1: first,
+      2: second,
+    });
+  });
+
+  it("hides durable recovery while an active takeout job exists for the source", () => {
+    const recovery = takeoutRecovery({ source_id: 1 });
+    const active = takeoutJob({ source_id: 1, status: "running" });
+    const terminal = takeoutJob({ source_id: 1, status: "completed" });
+
+    expect(visibleTakeoutRecoveryForSource(1, { 1: active }, { 1: recovery })).toBeNull();
+    expect(visibleTakeoutRecoveryForSource(1, { 1: terminal }, { 1: recovery })).toBe(recovery);
+    expect(visibleTakeoutRecoveryForSource(2, { 1: active }, { 1: recovery })).toBeNull();
+  });
+
+  it("formats takeout recovery title, body, facts, and severity", () => {
+    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "interrupted" })))
+      .toBe("Previous Takeout import was interrupted");
+    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "failed" })))
+      .toBe("Previous Takeout import failed");
+    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "cancelled" })))
+      .toBe("Previous Takeout import was cancelled");
+    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "partial_completed" })))
+      .toBe("Previous Takeout import completed with partial history");
+    expect(takeoutRecoveryBody()).toBe(
+      "Run Takeout again to continue collecting available history. Messages already saved locally will be deduplicated.",
+    );
+    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "failed" }))).toBe("danger");
+    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "interrupted" }))).toBe("warning");
+    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "partial_completed" }))).toBe("warning");
+    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "cancelled" }))).toBe("neutral");
+  });
+
+  it("formats takeout recovery facts and zero-count attempts", () => {
+    expect(takeoutRecoveryFacts(takeoutRecovery({}))).toEqual([
+      "No items were written in this attempt.",
+    ]);
+    expect(takeoutRecoveryFacts(takeoutRecovery({
+      item_inserted_count: 2,
+      item_duplicate_count: 3,
+      item_skipped_count: 1,
+      item_observed_count: 6,
+      warning_count: 2,
+    }))).toEqual([
+      "2 inserted",
+      "3 duplicates",
+      "1 skipped",
+      "6 observed",
+      "2 warnings",
+    ]);
   });
 
   it("decides route effects for Takeout import events", () => {

@@ -875,7 +875,7 @@ git commit -m "feat: expose takeout recovery command"
 - Modify: `src/lib/analysis-state.ts`
 - Modify: `src/lib/analysis-state.test.ts`
 
-- [ ] **Step 1: Add failing API and state tests**
+- [x] **Step 1: Add failing API and state tests**
 
 In `src/lib/api/takeout-import.test.ts`, import the new wrapper:
 
@@ -993,7 +993,7 @@ Add these tests near the existing Takeout job tests:
   });
 ```
 
-- [ ] **Step 2: Run frontend focused tests and verify red state**
+- [x] **Step 2: Run frontend focused tests and verify red state**
 
 Run:
 
@@ -1003,7 +1003,7 @@ npm.cmd test -- src/lib/api/takeout-import.test.ts src/lib/analysis-state.test.t
 
 Expected: failures mention missing `listTakeoutImportRecoveryStates`, missing `TakeoutImportRecoveryState`, and missing recovery helper exports.
 
-- [ ] **Step 3: Add frontend types and API wrapper**
+- [x] **Step 3: Add frontend types and API wrapper**
 
 In `src/lib/types/sources.ts`, add `batch_id` to `TakeoutImportJobRecord` so TypeScript matches the existing Rust payload:
 
@@ -1068,7 +1068,7 @@ Update the `TakeoutImportEvent` payload literal in `src/lib/api/takeout-import.t
       batch_id: 100,
 ```
 
-- [ ] **Step 4: Add frontend state helpers**
+- [x] **Step 4: Add frontend state helpers**
 
 In `src/lib/analysis-state.ts`, import `BadgeVariant` and the recovery type:
 
@@ -1166,7 +1166,7 @@ export function takeoutRecoveryFacts(recovery: TakeoutImportRecoveryState) {
 
 Replace any local duplicate active-Takeout helper added later in components with `isActiveTakeoutImportJob` from this module.
 
-- [ ] **Step 5: Run frontend focused tests**
+- [x] **Step 5: Run frontend focused tests**
 
 Run:
 
@@ -1176,7 +1176,7 @@ npm.cmd test -- src/lib/api/takeout-import.test.ts src/lib/analysis-state.test.t
 
 Expected: both files pass.
 
-- [ ] **Step 6: Commit frontend API and helper layer**
+- [x] **Step 6: Commit frontend API and helper layer**
 
 Run:
 
