@@ -49,8 +49,10 @@ use sources::identity_repair::{
     run_startup_source_identity_repair, SourceIdentityRepairState,
 };
 use sources::{
-    add_telegram_source, delete_source, get_sync_settings, list_source_forum_topics,
-    list_source_items, list_sources, list_telegram_sources, save_sync_settings, sync_source,
+    add_telegram_source, audit_legacy_telegram_source_metadata,
+    clear_legacy_telegram_source_metadata, delete_source, get_sync_settings,
+    list_source_forum_topics, list_source_items, list_sources, list_telegram_sources,
+    save_sync_settings, sync_source,
 };
 
 mod youtube;
@@ -153,6 +155,8 @@ pub fn run() {
             delete_source,
             get_source_identity_repair_status,
             preview_source_identity_repair,
+            audit_legacy_telegram_source_metadata,
+            clear_legacy_telegram_source_metadata,
             list_telegram_sources,
             add_telegram_source,
             list_sources,

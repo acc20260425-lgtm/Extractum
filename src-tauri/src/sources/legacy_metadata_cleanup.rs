@@ -264,6 +264,34 @@ fn subtype_counts(
         .collect()
 }
 
+#[tauri::command]
+pub(crate) async fn audit_legacy_telegram_source_metadata(
+    handle: tauri::AppHandle,
+    repair_state: tauri::State<'_, super::identity_repair::SourceIdentityRepairState>,
+) -> AppResult<LegacyTelegramSourceMetadataCleanupReport> {
+    super::identity_repair::require_source_identity_ready(repair_state.inner()).await?;
+    let pool = crate::db::get_pool(&handle).await?;
+    run_legacy_telegram_source_metadata_cleanup(
+        &pool,
+        LegacyTelegramMetadataCleanupMode::Audit,
+    )
+    .await
+}
+
+#[tauri::command]
+pub(crate) async fn clear_legacy_telegram_source_metadata(
+    handle: tauri::AppHandle,
+    repair_state: tauri::State<'_, super::identity_repair::SourceIdentityRepairState>,
+) -> AppResult<LegacyTelegramSourceMetadataCleanupReport> {
+    super::identity_repair::require_source_identity_ready(repair_state.inner()).await?;
+    let pool = crate::db::get_pool(&handle).await?;
+    run_legacy_telegram_source_metadata_cleanup(
+        &pool,
+        LegacyTelegramMetadataCleanupMode::Clear,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

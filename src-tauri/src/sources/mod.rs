@@ -15,6 +15,9 @@ mod types;
 pub use items::list_source_items;
 #[allow(unused_imports)]
 pub use items::{ForumTopicFilter, ItemRecord, ListSourceItemsRequest};
+pub(crate) use legacy_metadata_cleanup::{
+    audit_legacy_telegram_source_metadata, clear_legacy_telegram_source_metadata,
+};
 pub use settings::{get_sync_settings, save_sync_settings};
 #[allow(unused_imports)]
 pub use settings::{InitialSyncMode, SaveSyncSettingsRequest, SyncSettingsRecord};

@@ -675,7 +675,7 @@ git commit -m "feat: add guarded legacy telegram metadata cleanup"
 - Modify: `src-tauri/src/sources/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add command wrappers**
+- [x] **Step 1: Add command wrappers**
 
 Append this code above the tests in `src-tauri/src/sources/legacy_metadata_cleanup.rs`:
 
@@ -709,7 +709,7 @@ pub(crate) async fn clear_legacy_telegram_source_metadata(
 }
 ```
 
-- [ ] **Step 2: Export commands from sources module**
+- [x] **Step 2: Export commands from sources module**
 
 Add to `src-tauri/src/sources/mod.rs` near other public command exports:
 
@@ -719,7 +719,7 @@ pub use legacy_metadata_cleanup::{
 };
 ```
 
-- [ ] **Step 3: Register commands in Tauri**
+- [x] **Step 3: Register commands in Tauri**
 
 Modify `src-tauri/src/lib.rs` imports:
 
@@ -741,7 +741,7 @@ Add both commands to `tauri::generate_handler!` after `preview_source_identity_r
             list_telegram_sources,
 ```
 
-- [ ] **Step 4: Run compile-focused tests**
+- [x] **Step 4: Run compile-focused tests**
 
 Run:
 
@@ -751,7 +751,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::legacy_metadata_cleanup
 
 Expected: tests pass and command wrappers compile.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/sources/legacy_metadata_cleanup.rs src-tauri/src/sources/mod.rs src-tauri/src/lib.rs
