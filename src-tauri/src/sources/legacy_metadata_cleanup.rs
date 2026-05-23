@@ -540,4 +540,113 @@ mod tests {
         assert!(report.eligible_source_ids.is_empty());
         assert!(report.skipped.is_empty());
     }
+
+    #[tokio::test]
+    async fn audit_skips_unsupported_subtype_and_missing_account() {
+        let pool = memory_pool_with_sources().await;
+        insert_account(&pool, 1).await;
+        insert_telegram_source(&pool, 101, "bot", Some(1), "12345", true).await;
+        insert_telegram_source(&pool, 102, "channel", None, "67890", true).await;
+        insert_typed_identity(&pool, 102, 1, "channel", "channel", 67890, "dialog").await;
+
+        let report = run_legacy_telegram_source_metadata_cleanup(
+            &pool,
+            LegacyTelegramMetadataCleanupMode::Audit,
+        )
+        .await
+        .expect("audit succeeds");
+
+        assert_eq!(report.candidate_source_ids, vec![101, 102]);
+        assert!(report.eligible_source_ids.is_empty());
+        assert_eq!(
+            report.skipped,
+            vec![
+                LegacyTelegramSourceMetadataSkip {
+                    source_id: 101,
+                    reason_code: SKIP_UNSUPPORTED_SOURCE_SUBTYPE.to_string(),
+                },
+                LegacyTelegramSourceMetadataSkip {
+                    source_id: 102,
+                    reason_code: SKIP_MISSING_ACCOUNT.to_string(),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn audit_skips_invalid_typed_identity() {
+        let pool = memory_pool_with_sources().await;
+        insert_account(&pool, 1).await;
+        insert_telegram_source(&pool, 101, "channel", Some(1), "12345", true).await;
+        insert_typed_identity(&pool, 101, 1, "channel", "channel", 0, "dialog").await;
+
+        let report = run_legacy_telegram_source_metadata_cleanup(
+            &pool,
+            LegacyTelegramMetadataCleanupMode::Audit,
+        )
+        .await
+        .expect("audit succeeds");
+
+        assert_eq!(report.candidate_source_ids, vec![101]);
+        assert!(report.eligible_source_ids.is_empty());
+        assert_eq!(
+            report.skipped,
+            vec![LegacyTelegramSourceMetadataSkip {
+                source_id: 101,
+                reason_code: SKIP_INVALID_TYPED_IDENTITY.to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn candidate_skip_reason_rejects_unparseable_typed_identity_values() {
+        let row = LegacyTelegramMetadataCandidateRow {
+            source_id: 101,
+            source_subtype: Some("channel".to_string()),
+            account_id: Some(1),
+            typed_source_id: Some(101),
+            typed_account_id: Some(1),
+            typed_source_subtype: Some("channel".to_string()),
+            typed_peer_kind: Some("user".to_string()),
+            typed_peer_id: Some(12345),
+            typed_resolution_strategy: Some("dialog".to_string()),
+        };
+        assert_eq!(candidate_skip_reason(&row), Some(SKIP_INVALID_TYPED_IDENTITY));
+
+        let row = LegacyTelegramMetadataCandidateRow {
+            typed_peer_kind: Some("channel".to_string()),
+            typed_resolution_strategy: Some("invalid_strategy".to_string()),
+            ..row
+        };
+        assert_eq!(candidate_skip_reason(&row), Some(SKIP_INVALID_TYPED_IDENTITY));
+    }
+
+    #[tokio::test]
+    async fn clear_is_idempotent_after_eligible_metadata_is_removed() {
+        let pool = memory_pool_with_sources().await;
+        insert_account(&pool, 1).await;
+        insert_telegram_source(&pool, 101, "channel", Some(1), "12345", true).await;
+        insert_typed_identity(&pool, 101, 1, "channel", "channel", 12345, "dialog").await;
+
+        let first_report = run_legacy_telegram_source_metadata_cleanup(
+            &pool,
+            LegacyTelegramMetadataCleanupMode::Clear,
+        )
+        .await
+        .expect("first clear succeeds");
+
+        let second_report = run_legacy_telegram_source_metadata_cleanup(
+            &pool,
+            LegacyTelegramMetadataCleanupMode::Clear,
+        )
+        .await
+        .expect("second clear succeeds");
+
+        assert_eq!(first_report.cleared_source_ids, vec![101]);
+        assert_eq!(first_report.cleared_count, 1);
+        assert!(second_report.candidate_source_ids.is_empty());
+        assert!(second_report.eligible_source_ids.is_empty());
+        assert!(second_report.cleared_source_ids.is_empty());
+        assert_eq!(second_report.cleared_count, 0);
+    }
 }
