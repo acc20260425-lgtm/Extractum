@@ -39,6 +39,8 @@ use pagination::{
     takeout_pagination_fallback_warning, TakeoutPageRequest, TakeoutPaginationCursor,
     TakeoutPaginationProfile,
 };
+use recovery::list_takeout_import_recovery_states_for_sources;
+pub(crate) use recovery::TakeoutImportRecoveryState;
 pub use state::TakeoutImportState;
 use state::{
     emit_takeout_import_event, update_and_emit, CancelTakeoutImportResponse,
@@ -237,6 +239,15 @@ pub async fn list_takeout_source_import_jobs(
 }
 
 #[tauri::command]
+pub async fn list_takeout_import_recovery_states(
+    handle: AppHandle,
+    state: tauri::State<'_, TakeoutImportState>,
+) -> AppResult<Vec<TakeoutImportRecoveryState>> {
+    let pool = get_pool(&handle).await?;
+    list_takeout_import_recovery_states_for_sources(&pool, state.inner(), None).await
+}
+
+#[tauri::command]
 pub async fn run_takeout_export_dc_spike(
     handle: AppHandle,
     repair_state: tauri::State<'_, SourceIdentityRepairState>,
@@ -408,6 +419,13 @@ async fn run_takeout_import_job(
                 }
             } else {
                 let terminal_error = error.to_string();
+                finalize_terminal_batch_best_effort(
+                    &handle,
+                    batch_id,
+                    TerminalBatchStatus::Failed,
+                    Some(&terminal_error),
+                )
+                .await;
                 if let Some(record) = takeout_state
                     .finish_job(&job_id, |job| {
                         job.status = STATUS_FAILED.to_string();
@@ -417,13 +435,6 @@ async fn run_takeout_import_job(
                     })
                     .await
                 {
-                    finalize_terminal_batch_best_effort(
-                        &handle,
-                        batch_id,
-                        TerminalBatchStatus::Failed,
-                        Some(&terminal_error),
-                    )
-                    .await;
                     emit_takeout_import_event(&handle, &record);
                 }
             }

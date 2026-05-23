@@ -763,7 +763,7 @@ git commit -m "feat: add takeout recovery query"
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add the Tauri command wrapper**
+- [x] **Step 1: Add the Tauri command wrapper**
 
 In `src-tauri/src/takeout_import/mod.rs`, add this import near the other state/recovery exports:
 
@@ -787,7 +787,7 @@ pub async fn list_takeout_import_recovery_states(
 
 In `src-tauri/src/lib.rs`, add `list_takeout_import_recovery_states` to the existing `use takeout_import::{ start_takeout_source_import, cancel_takeout_source_import, list_takeout_source_import_jobs, run_takeout_export_dc_spike, TakeoutImportState }` import list and to the `tauri::generate_handler!` command list next to `list_takeout_source_import_jobs`.
 
-- [ ] **Step 2: Keep failure and cancellation finalization before active-job release**
+- [x] **Step 2: Keep failure and cancellation finalization before active-job release**
 
 In `run_takeout_import_job` in `src-tauri/src/takeout_import/mod.rs`, the first cancellation branch already finalizes before `finish_job`. Keep that order.
 
@@ -837,7 +837,7 @@ if let Some(record) = takeout_state
 }
 ```
 
-- [ ] **Step 3: Run focused backend tests**
+- [x] **Step 3: Run focused backend tests**
 
 Run:
 
@@ -855,7 +855,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_import::tests::active_jo
 
 Expected: the existing active job state test passes.
 
-- [ ] **Step 4: Commit command and terminal-order wiring**
+- [x] **Step 4: Commit command and terminal-order wiring**
 
 Run:
 

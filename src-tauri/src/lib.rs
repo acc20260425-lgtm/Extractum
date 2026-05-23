@@ -38,8 +38,9 @@ mod tx;
 
 mod takeout_import;
 use takeout_import::{
-    cancel_takeout_source_import, list_takeout_source_import_jobs, run_takeout_export_dc_spike,
-    start_takeout_source_import, TakeoutImportState,
+    cancel_takeout_source_import, list_takeout_import_recovery_states,
+    list_takeout_source_import_jobs, run_takeout_export_dc_spike, start_takeout_source_import,
+    TakeoutImportState,
 };
 
 mod sources;
@@ -161,6 +162,7 @@ pub fn run() {
             start_takeout_source_import,
             cancel_takeout_source_import,
             list_takeout_source_import_jobs,
+            list_takeout_import_recovery_states,
             run_takeout_export_dc_spike,
             list_source_items,
             list_source_forum_topics,
