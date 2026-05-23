@@ -5,6 +5,18 @@
 
 Updated: 2026-05-23
 
+Current matrix summary: `2 passed`, `3 needs follow-up`, `2 blocked`,
+`3 not run`.
+
+Covered highlights:
+
+- completed small-group Takeout for source `118` / batch `6`;
+- completed repeated Takeout-after-Takeout duplicate validation for source `73`
+  / batch `3`;
+- bounded partial public supergroup and dialog-backed no-username supergroup
+  runs for sources `21` / `110`;
+- post-cancel watermark observations for cancelled partial batches `4` and `5`.
+
 ## Safety Boundary
 
 Do not paste message text, source titles, usernames, phone numbers, account

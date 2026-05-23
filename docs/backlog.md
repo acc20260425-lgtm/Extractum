@@ -1,13 +1,13 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-22
+> **Updated:** 2026-05-23
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | validate representative live imports and define incomplete-import recovery on top of persisted provenance |
+| High | Takeout source import | complete remaining public-source/fallback validation and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
@@ -34,7 +34,8 @@ Priority: high.
 
 - [x] ship repeatable sanitized Takeout validation diagnostics and reusable
   manual validation template
-- [ ] validate Takeout import on representative public channels, supergroups, and small groups
+- [ ] complete representative public channel and supergroup Takeout validation after current durable baseline and bounded partial runs
+- [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
