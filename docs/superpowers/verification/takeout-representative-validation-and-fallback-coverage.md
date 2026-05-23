@@ -29,7 +29,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Case | Status | Source id | Batch id | Evidence to paste | Result notes |
 | --- | --- | --- | --- | --- | --- |
 | Public channel Takeout | needs follow-up | 73 | 3 | existing durable source summary and batch summary | Existing durable Takeout batch is complete with no warnings, but this matrix did not capture a dedicated before/after snapshot pair for the run |
-| Public supergroup Takeout | not run |  |  | before/after source summary, Takeout batch summary, topic/reply/thread aggregate shape, warning visibility |  |
+| Public supergroup Takeout | needs follow-up | 21 | 4 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Private or dialog-backed supergroup Takeout | not run |  |  | before/after source summary, fallback/warning evidence if applicable |  |
 | Small group Takeout | not run |  |  | source subtype and peer-kind shape, before/after source summary, batch summary |  |
 | Repeated Takeout after normal sync | not run |  |  | `duplicate_after_normal_sync` summary and row-fidelity comparison |  |
@@ -127,3 +127,76 @@ Batch `3` outcome counts:
 | duplicate_observed | 417 |
 
 Warning codes for batches `1`, `2`, and `3`: none.
+
+### 2026-05-23 Public Supergroup Bounded Live Takeout
+
+App commit: `02d6cb5`. Working tree was clean before this run.
+
+Source `21` before snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 375 |
+| telegram_message_count | 375 |
+| topic_membership_count | 370 |
+| reply_count | 367 |
+| thread_count | 269 |
+| reaction_item_count | 94 |
+
+Source `21` after bounded run:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 16085 |
+| telegram_message_count | 16085 |
+| topic_membership_count | 8885 |
+| reply_count | 10737 |
+| thread_count | 7464 |
+| reaction_item_count | 281 |
+
+Explicit snapshot delta for source `21`:
+
+| Field | Delta |
+| --- | ---: |
+| item_count | 15710 |
+| telegram_message_count | 15710 |
+| topic_membership_count | 8515 |
+| reply_count | 10370 |
+| thread_count | 7195 |
+| reaction_item_count | 187 |
+
+Source `21` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 320 |
+| content_kind | text_only | 14714 |
+| content_kind | text_with_media | 1051 |
+| media_kind | audio | 25 |
+| media_kind | document | 26 |
+| media_kind | image | 28 |
+| media_kind | none | 14714 |
+| media_kind | photo | 437 |
+| media_kind | poll | 7 |
+| media_kind | sticker | 57 |
+| media_kind | video | 29 |
+| media_kind | voice | 2 |
+| media_kind | webpage | 760 |
+| history_peer_kind | channel | 16085 |
+
+Batch `4` summary:
+
+| Batch id | Source id | Status | Completeness | Subtype | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate |
+| ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 21 | cancelled | partial | supergroup | 15710 | 15710 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 132886 |
+
+Batch `4` outcome counts:
+
+| Outcome | Count |
+| --- | ---: |
+| inserted | 15710 |
+
+Warning codes for batch `4`: none.
+
+Latest durable recovery state for source `21`: `cancelled` / `partial`, warning
+count `0`.
