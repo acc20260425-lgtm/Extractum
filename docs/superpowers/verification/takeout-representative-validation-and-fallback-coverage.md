@@ -31,7 +31,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Public channel Takeout | needs follow-up | 73 | 3 | existing durable source summary and batch summary | Existing durable Takeout batch is complete with no warnings, but this matrix did not capture a dedicated before/after snapshot pair for the run |
 | Public supergroup Takeout | needs follow-up | 21 | 4 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
-| Small group Takeout | not run |  |  | source subtype and peer-kind shape, before/after source summary, batch summary |  |
+| Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
 | Repeated Takeout after normal sync | not run |  |  | `duplicate_after_normal_sync` summary and row-fidelity comparison |  |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present |  |
@@ -303,3 +303,56 @@ Follow-up: for the next bounded cancellation validation, capture
 `last_sync_state` and `last_synced_at` immediately before starting the Takeout
 job and immediately after terminalization, then record the exact before/after
 watermark equality.
+
+### 2026-05-23 Small Group Completed Live Takeout
+
+App commit: `ce5c300`. Working tree was clean before this run.
+
+Source `118` identity shape:
+
+| Field | Before | After |
+| --- | --- | --- |
+| source_subtype | group | group |
+| peer_kind | chat | chat |
+| has_username | 0 | 0 |
+| has_access_hash | 0 | 0 |
+| resolution_strategy | dialog | dialog |
+| last_sync_state | null | 241 |
+| last_synced_at | null | 1779536615 |
+
+Source `118` snapshot:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 0 | 2 | 2 |
+| telegram_message_count | 0 | 2 | 2 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 0 | 0 | 0 |
+| thread_count | 0 | 0 | 0 |
+| reaction_item_count | 0 | 0 | 0 |
+
+Source `118` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | text_only | 2 |
+| media_kind | none | 2 |
+| history_peer_kind | chat | 2 |
+
+Batch `6` summary:
+
+| Batch id | Source id | Status | Completeness | Subtype | Started | Finished | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate | Max message id |
+| ---: | ---: | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 | 118 | completed | complete | group | 2026-05-23 11:43:33 | 2026-05-23 11:43:35 | 2 | 2 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 4 | 241 |
+
+Batch `6` outcome counts:
+
+| Outcome | Count |
+| --- | ---: |
+| inserted | 2 |
+
+Warning codes for batch `6`: none.
+
+Watermark observation: because this run completed, `last_sync_state` advanced
+from `null` to `241`, matching the batch `max_message_id`. `last_synced_at`
+advanced from `null` to `1779536615`, matching the completed job finish time.
