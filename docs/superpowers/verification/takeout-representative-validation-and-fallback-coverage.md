@@ -30,7 +30,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | --- | --- | --- | --- | --- | --- |
 | Public channel Takeout | needs follow-up | 73 | 3 | existing durable source summary and batch summary | Existing durable Takeout batch is complete with no warnings, but this matrix did not capture a dedicated before/after snapshot pair for the run |
 | Public supergroup Takeout | needs follow-up | 21 | 4 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large |
-| Private or dialog-backed supergroup Takeout | not run |  |  | before/after source summary, fallback/warning evidence if applicable |  |
+| Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Small group Takeout | not run |  |  | source subtype and peer-kind shape, before/after source summary, batch summary |  |
 | Repeated Takeout after normal sync | not run |  |  | `duplicate_after_normal_sync` summary and row-fidelity comparison |  |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
@@ -200,3 +200,85 @@ Warning codes for batch `4`: none.
 
 Latest durable recovery state for source `21`: `cancelled` / `partial`, warning
 count `0`.
+
+### 2026-05-23 Dialog-Backed Supergroup Bounded Live Takeout
+
+App commit: `2721cf9`. Working tree was clean before this run.
+
+Source `110` identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_subtype | supergroup |
+| peer_kind | channel |
+| has_username | 0 |
+| has_access_hash | 1 |
+| resolution_strategy | dialog |
+
+Source `110` before snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 384 |
+| telegram_message_count | 384 |
+| topic_membership_count | 0 |
+| reply_count | 306 |
+| thread_count | 242 |
+| reaction_item_count | 65 |
+
+Source `110` after bounded run:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 12279 |
+| telegram_message_count | 12279 |
+| topic_membership_count | 0 |
+| reply_count | 5128 |
+| thread_count | 242 |
+| reaction_item_count | 69 |
+
+Explicit snapshot delta for source `110`:
+
+| Field | Delta |
+| --- | ---: |
+| item_count | 11895 |
+| telegram_message_count | 11895 |
+| topic_membership_count | 0 |
+| reply_count | 4822 |
+| thread_count | 0 |
+| reaction_item_count | 4 |
+
+Source `110` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 171 |
+| content_kind | text_only | 11734 |
+| content_kind | text_with_media | 374 |
+| media_kind | document | 10 |
+| media_kind | image | 3 |
+| media_kind | none | 11734 |
+| media_kind | photo | 91 |
+| media_kind | poll | 2 |
+| media_kind | sticker | 84 |
+| media_kind | video | 17 |
+| media_kind | voice | 2 |
+| media_kind | webpage | 336 |
+| history_peer_kind | channel | 12279 |
+
+Batch `5` summary:
+
+| Batch id | Source id | Status | Completeness | Subtype | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate |
+| ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 5 | 110 | cancelled | partial | supergroup | 11895 | 11895 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 77469 |
+
+Batch `5` outcome counts:
+
+| Outcome | Count |
+| --- | ---: |
+| inserted | 11895 |
+
+Warning codes for batch `5`: none.
+
+Latest durable recovery state for source `110`: `cancelled` / `partial`,
+warning count `0`.
