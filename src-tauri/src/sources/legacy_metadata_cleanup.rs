@@ -408,4 +408,108 @@ mod tests {
             }]
         );
     }
+
+    #[tokio::test]
+    async fn clear_nulls_only_eligible_legacy_telegram_metadata() {
+        let pool = memory_pool_with_sources().await;
+        insert_account(&pool, 1).await;
+        insert_telegram_source(&pool, 101, "channel", Some(1), "12345", true).await;
+        insert_typed_identity(&pool, 101, 1, "channel", "channel", 12345, "dialog").await;
+        insert_telegram_source(&pool, 102, "channel", Some(1), "67890", true).await;
+
+        let report = run_legacy_telegram_source_metadata_cleanup(
+            &pool,
+            LegacyTelegramMetadataCleanupMode::Clear,
+        )
+        .await
+        .expect("clear succeeds");
+
+        assert!(!report.dry_run);
+        assert_eq!(report.candidate_source_ids, vec![101, 102]);
+        assert_eq!(report.eligible_source_ids, vec![101]);
+        assert_eq!(report.cleared_source_ids, vec![101]);
+        assert_eq!(report.cleared_count, 1);
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM sources WHERE id = 101 AND metadata_zstd IS NULL",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("count cleared blob"),
+            1
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM sources WHERE id = 102 AND metadata_zstd IS NOT NULL",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("count skipped blob"),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn audit_skips_subtype_and_account_mismatches() {
+        let pool = memory_pool_with_sources().await;
+        insert_account(&pool, 1).await;
+        insert_account(&pool, 2).await;
+        insert_telegram_source(&pool, 101, "channel", Some(1), "12345", true).await;
+        insert_typed_identity(&pool, 101, 1, "supergroup", "channel", 12345, "dialog").await;
+        insert_telegram_source(&pool, 102, "channel", Some(1), "67890", true).await;
+        insert_typed_identity(&pool, 102, 2, "channel", "channel", 67890, "dialog").await;
+
+        let report = run_legacy_telegram_source_metadata_cleanup(
+            &pool,
+            LegacyTelegramMetadataCleanupMode::Audit,
+        )
+        .await
+        .expect("audit succeeds");
+
+        assert_eq!(
+            report.skipped,
+            vec![
+                LegacyTelegramSourceMetadataSkip {
+                    source_id: 101,
+                    reason_code: SKIP_SOURCE_SUBTYPE_MISMATCH.to_string(),
+                },
+                LegacyTelegramSourceMetadataSkip {
+                    source_id: 102,
+                    reason_code: SKIP_ACCOUNT_MISMATCH.to_string(),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn audit_ignores_non_telegram_and_null_metadata_rows() {
+        let pool = memory_pool_with_sources().await;
+        insert_account(&pool, 1).await;
+        insert_telegram_source(&pool, 101, "channel", Some(1), "12345", false).await;
+        insert_typed_identity(&pool, 101, 1, "channel", "channel", 12345, "dialog").await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id,
+                title, metadata_zstd, is_active, is_member, created_at
+            )
+            VALUES (201, 'youtube', 'video', NULL, 'video-id', 'video', x'00', 1, 1, 100)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert non-telegram source");
+
+        let report = run_legacy_telegram_source_metadata_cleanup(
+            &pool,
+            LegacyTelegramMetadataCleanupMode::Audit,
+        )
+        .await
+        .expect("audit succeeds");
+
+        assert_eq!(report.candidate_count, 0);
+        assert!(report.candidate_source_ids.is_empty());
+        assert!(report.eligible_source_ids.is_empty());
+        assert!(report.skipped.is_empty());
+    }
 }

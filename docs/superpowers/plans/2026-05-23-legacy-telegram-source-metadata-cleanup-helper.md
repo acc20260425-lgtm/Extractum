@@ -541,7 +541,7 @@ git commit -m "test: add legacy telegram metadata cleanup audit"
 **Files:**
 - Modify: `src-tauri/src/sources/legacy_metadata_cleanup.rs`
 
-- [ ] **Step 1: Add clear-mode and skip-reason tests**
+- [x] **Step 1: Add clear-mode and skip-reason tests**
 
 Add these tests to the existing `tests` module:
 
@@ -651,7 +651,7 @@ async fn audit_ignores_non_telegram_and_null_metadata_rows() {
 }
 ```
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -661,7 +661,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::legacy_metadata_cleanup
 
 Expected: all legacy cleanup module tests pass.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add src-tauri/src/sources/legacy_metadata_cleanup.rs
