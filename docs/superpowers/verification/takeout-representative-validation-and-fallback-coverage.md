@@ -5,8 +5,8 @@
 
 Updated: 2026-05-23
 
-Current matrix summary: `2 passed`, `3 needs follow-up`, `2 blocked`,
-`3 not run`.
+Current matrix summary: `2 passed`, `3 needs follow-up`, `3 blocked`,
+`2 not run`.
 
 Covered highlights:
 
@@ -15,6 +15,8 @@ Covered highlights:
   / batch `3`;
 - bounded partial public supergroup and dialog-backed no-username supergroup
   runs for sources `21` / `110`;
+- normal-sync-before-Takeout attempt for source `113`, blocked by
+  `TAKEOUT_INIT_DELAY` before Takeout observations were written;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`.
 
 ## Safety Boundary
@@ -44,7 +46,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Public supergroup Takeout | needs follow-up | 21 | 4 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
-| Repeated Takeout after normal sync | not run |  |  | `duplicate_after_normal_sync` summary and row-fidelity comparison |  |
+| Repeated Takeout after normal sync | blocked | 113 | 7 | normal sync before snapshot and failed Takeout batch summary | Normal sync succeeded, but Takeout failed before observations with `TAKEOUT_INIT_DELAY`, so duplicate and row-fidelity comparison could not run |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present |  |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
@@ -368,3 +370,65 @@ Warning codes for batch `6`: none.
 Watermark observation: because this run completed, `last_sync_state` advanced
 from `null` to `241`, matching the batch `max_message_id`. `last_synced_at`
 advanced from `null` to `1779536615`, matching the completed job finish time.
+
+### 2026-05-23 Normal Sync Before Takeout Attempt
+
+App commit: `55e07bc`. Working tree was clean before this run.
+
+Source `113` identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_subtype | channel |
+| peer_kind | channel |
+| has_username | 1 |
+| has_access_hash | 1 |
+| resolution_strategy | dialog |
+
+Normal sync result before Takeout:
+
+| Field | Value |
+| --- | ---: |
+| inserted | 1 |
+| skipped | 0 |
+| last_message_id | 515 |
+| warning_count | 0 |
+
+Source `113` snapshots:
+
+| Field | Before normal sync | After normal sync | After Takeout attempt |
+| --- | ---: | ---: | ---: |
+| item_count | 28 | 29 | 29 |
+| telegram_message_count | 28 | 29 | 29 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 16 | 16 | 16 |
+| thread_count | 5 | 5 | 5 |
+| reaction_item_count | 21 | 22 | 22 |
+| last_sync_state | 514 | 515 | 515 |
+| last_synced_at | 1779414158 | 1779537575 | 1779537575 |
+
+Source `113` after-sync aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 1 |
+| content_kind | text_only | 8 |
+| content_kind | text_with_media | 20 |
+| media_kind | none | 8 |
+| media_kind | photo | 6 |
+| media_kind | webpage | 15 |
+
+Batch `7` summary:
+
+| Batch id | Source id | Status | Completeness | Subtype | Started | Finished | Inserted | Observed | Duplicates | Skipped | Warnings | Terminal error class | Used export DC | Fallback used | Migrated detected | Only my messages |
+| ---: | ---: | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| 7 | 113 | failed | unknown | channel | 2026-05-23 11:59:56 | 2026-05-23 11:59:57 | 0 | 0 | 0 | 0 | 0 | TAKEOUT_INIT_DELAY | 1 | 0 | 0 | 0 |
+
+Batch `7` outcome counts: none.
+
+Warning codes for batch `7`: none.
+
+Result: this run proves the normal-sync-before-Takeout setup for source `113`
+and records a clean failed Takeout attempt before observations. It does not
+prove duplicate-after-normal-sync or row-fidelity comparison because Telegram
+blocked Takeout session initialization with `TAKEOUT_INIT_DELAY`.
