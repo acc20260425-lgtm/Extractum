@@ -326,7 +326,7 @@ git commit -m "test: add takeout validation diagnostics coverage"
 **Files:**
 - Modify: `src-tauri/src/takeout_import/validation_diagnostics.rs`
 
-- [ ] **Step 1: Add DTOs and shared query helpers**
+- [x] **Step 1: Add DTOs and shared query helpers**
 
 Add this production code above the test module in `src-tauri/src/takeout_import/validation_diagnostics.rs`:
 
@@ -451,7 +451,7 @@ fn bool_from_sql(value: i64) -> bool {
 }
 ```
 
-- [ ] **Step 2: Implement `takeout_validation_source_snapshot`**
+- [x] **Step 2: Implement `takeout_validation_source_snapshot`**
 
 Add this function and helpers below the DTO definitions:
 
@@ -606,7 +606,7 @@ async fn distribution(
 }
 ```
 
-- [ ] **Step 3: Implement `takeout_validation_batch_summary`**
+- [x] **Step 3: Implement `takeout_validation_batch_summary`**
 
 Add this function below the snapshot helpers:
 
@@ -714,7 +714,7 @@ async fn warning_codes_for_batch(pool: &SqlitePool, batch_id: i64) -> AppResult<
 }
 ```
 
-- [ ] **Step 4: Run summary tests**
+- [x] **Step 4: Run summary tests**
 
 Run:
 
@@ -724,7 +724,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_validation
 
 Expected: both summary tests pass.
 
-- [ ] **Step 5: Commit summary helpers**
+- [x] **Step 5: Commit summary helpers**
 
 Run:
 
