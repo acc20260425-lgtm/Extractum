@@ -48,6 +48,10 @@ including dialog-backed/no-username supergroup Takeout and small-group Takeout.
 cleanup after typed identity audit, but it must not claim that every possible
 private or lost-access Telegram scenario has been exhausted.
 
+These aggregate counts are decision input only. They are not an eligibility
+result for the future cleanup helper; the helper must recompute guards at run
+time.
+
 ## Cleanup Preconditions
 
 A future cleanup operation may clear a Telegram `sources.metadata_zstd` blob
@@ -61,7 +65,10 @@ only when all guards pass:
 6. `telegram_sources.source_subtype`, `peer_kind`, and `resolution_strategy`
    pass the existing enum and subtype/peer-kind invariants.
 7. Peer identity fields are valid for their subtype and peer kind.
-8. Source identity repair is ready and has no fatal diagnostic for the source.
+8. Startup source identity repair has completed successfully for the database,
+   and there is no fatal repair error for the source. Non-fatal
+   `source_identity_repair_notes` may be reported but must not automatically
+   block cleanup unless the helper explicitly treats a note code as blocking.
 
 The future helper may choose stricter product gates, such as requiring a source
 to have survived list, sync, or Takeout validation. Those gates should be policy
