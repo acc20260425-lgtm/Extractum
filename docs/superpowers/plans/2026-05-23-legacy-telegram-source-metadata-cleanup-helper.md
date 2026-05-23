@@ -28,7 +28,7 @@
 **Files:**
 - Create: `src-tauri/src/sources/legacy_metadata_cleanup.rs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add the new file with tests first. The first red run should fail before the
 eligibility query and guard logic are added.
@@ -248,7 +248,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -259,7 +259,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::legacy_metadata_cleanup
 Expected: compile failure or assertion failure because the module is not wired
 into `sources::mod.rs` and the stub returns an empty report.
 
-- [ ] **Step 3: Register the module privately**
+- [x] **Step 3: Register the module privately**
 
 Modify `src-tauri/src/sources/mod.rs`:
 
@@ -279,7 +279,7 @@ mod topics;
 mod types;
 ```
 
-- [ ] **Step 4: Run tests again and verify implementation failure**
+- [x] **Step 4: Run tests again and verify implementation failure**
 
 Run:
 

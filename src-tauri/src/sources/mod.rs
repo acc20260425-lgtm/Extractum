@@ -2,6 +2,7 @@ mod avatar;
 pub(crate) mod identity;
 pub(crate) mod identity_repair;
 mod items;
+mod legacy_metadata_cleanup;
 mod peer_resolution;
 mod settings;
 mod store;
