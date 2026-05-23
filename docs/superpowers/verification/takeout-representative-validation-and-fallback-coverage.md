@@ -5,8 +5,8 @@
 
 Updated: 2026-05-23
 
-Current matrix summary: `2 passed`, `3 needs follow-up`, `3 blocked`,
-`2 not run`.
+Current matrix summary: `2 passed`, `4 needs follow-up`, `3 blocked`,
+`1 not run`.
 
 Covered highlights:
 
@@ -17,7 +17,9 @@ Covered highlights:
   runs for sources `21` / `110`;
 - normal-sync-before-Takeout attempt for source `113`, blocked by
   `TAKEOUT_INIT_DELAY` before Takeout observations were written;
-- post-cancel watermark observations for cancelled partial batches `4` and `5`.
+- post-cancel watermark observations for cancelled partial batches `4` and `5`;
+- forum-topic decision input from source `21` / batch `4` aggregate catalog,
+  membership, and resolver-state counters.
 
 ## Safety Boundary
 
@@ -51,7 +53,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present |  |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
 | Migrated small-group-to-supergroup smoke | blocked | 115 | 2 | failed early Takeout batch summary | Existing smoke reached a failed/unknown terminal batch with zero observations before migrated-history evidence could be collected |
-| Forum-topic decision input | not run |  |  | topic membership/catalog aggregate deltas after successful Takeout | No behavior decision in this validation slice |
+| Forum-topic decision input | needs follow-up | 21 | 4 | topic catalog/membership aggregate counters from bounded partial Takeout | Bounded partial run materially increased topic memberships without refreshing the topic catalog, which is useful decision input; completed supergroup Takeout evidence is still needed before changing behavior |
 
 ## Procedure
 
@@ -214,6 +216,84 @@ Warning codes for batch `4`: none.
 
 Latest durable recovery state for source `21`: `cancelled` / `partial`, warning
 count `0`.
+
+### 2026-05-23 Forum-Topic Decision Input From Partial Takeout
+
+App commit: `9967932`. Working tree was clean before this note.
+
+This note uses source `21` / batch `4` because it is the live bounded public
+supergroup Takeout run that materially changed topic membership aggregates. The
+batch was `cancelled` / `partial`, so this is decision input only; it does not
+prove final behavior for a completed supergroup Takeout.
+
+Batch `4` window and item counters:
+
+| Field | Value |
+| --- | ---: |
+| started_unix | 1779534332 |
+| finished_unix | 1779534497 |
+| inserted | 15710 |
+| observed | 15710 |
+| message_count_estimate | 132886 |
+
+Source `21` topic catalog after batch `4`:
+
+| Field | Value |
+| --- | ---: |
+| topic_catalog_count | 10 |
+| distinct_topic_ids | 10 |
+| closed_count | 1 |
+| pinned_count | 2 |
+| hidden_count | 0 |
+| deleted_count | 0 |
+| topics_updated_in_batch_window | 0 |
+| topics_seen_in_batch_window | 0 |
+
+Source `21` topic resolver state after batch `4`:
+
+| Field | Value |
+| --- | --- |
+| resolver_version | 1 |
+| status | ready |
+| catalog_refreshed_at | 1777826884 |
+| memberships_refreshed_at | 1779038483 |
+| unresolved_count | 7200 |
+| pending_item_count | 0 |
+| has_last_error | 0 |
+| updated_at | 1779534497 |
+
+Source `21` topic memberships:
+
+| Field | Before batch `4` | After batch `4` | Delta |
+| --- | ---: | ---: | ---: |
+| membership_count | 370 | 8885 | 8515 |
+| distinct_membership_topics |  | 7 |  |
+| created_in_batch_window |  | 8515 |  |
+| updated_in_batch_window |  | 8515 |  |
+
+Membership match-kind distribution after batch `4`:
+
+| Match kind | Count |
+| --- | ---: |
+| general_fallback | 8530 |
+| reply_to_top_id | 264 |
+| reply_to_msg_id | 90 |
+| typed_root_top_message_id | 1 |
+
+Batch `4` observed item membership shape:
+
+| Field | Value |
+| --- | ---: |
+| observed_with_item_id | 15710 |
+| observed_items_with_membership | 8515 |
+| observed_distinct_membership_topics | 1 |
+
+Observation: the partial Takeout run added `8515` topic memberships while the
+forum-topic catalog had `0` rows updated or seen during the batch window. The
+resolver state remained `ready` with `pending_item_count=0`, but the source
+still has unresolved items. This supports a later product decision about
+whether completed Takeout should refresh topic catalog state, but does not
+justify changing behavior from this validation slice alone.
 
 ### 2026-05-23 Dialog-Backed Supergroup Bounded Live Takeout
 
