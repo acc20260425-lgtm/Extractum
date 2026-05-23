@@ -15,7 +15,7 @@ Covered highlights:
   / batch `3`;
 - bounded partial public supergroup and dialog-backed no-username supergroup
   runs for sources `21` / `110`;
-- normal-sync-before-Takeout attempt for source `113`, blocked by
+- normal-sync-before-Takeout attempts for source `113`, blocked by
   `TAKEOUT_INIT_DELAY` before Takeout observations were written;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
@@ -48,7 +48,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Public supergroup Takeout | needs follow-up | 21 | 4 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
-| Repeated Takeout after normal sync | blocked | 113 | 7 | normal sync before snapshot and failed Takeout batch summary | Normal sync succeeded, but Takeout failed before observations with `TAKEOUT_INIT_DELAY`, so duplicate and row-fidelity comparison could not run |
+| Repeated Takeout after normal sync | blocked | 113 | 8 | normal sync before snapshot and failed Takeout batch summaries | Normal sync succeeded, but repeated Takeout attempts failed before observations with `TAKEOUT_INIT_DELAY`, so duplicate and row-fidelity comparison could not run |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present |  |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
@@ -512,3 +512,33 @@ Result: this run proves the normal-sync-before-Takeout setup for source `113`
 and records a clean failed Takeout attempt before observations. It does not
 prove duplicate-after-normal-sync or row-fidelity comparison because Telegram
 blocked Takeout session initialization with `TAKEOUT_INIT_DELAY`.
+
+### 2026-05-23 Normal Sync Before Takeout Retry
+
+App commit: `5def5fc`. Working tree was clean before this retry.
+
+Source `113` before retry matched the previous post-normal-sync state:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 29 |
+| telegram_message_count | 29 |
+| reply_count | 16 |
+| thread_count | 5 |
+| reaction_item_count | 22 |
+| last_sync_state | 515 |
+| last_synced_at | 1779537575 |
+
+Batch `8` summary:
+
+| Batch id | Source id | Status | Completeness | Subtype | Started | Finished | Inserted | Observed | Duplicates | Skipped | Warnings | Terminal error class | Used export DC | Fallback used | Migrated detected | Only my messages |
+| ---: | ---: | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| 8 | 113 | failed | unknown | channel | 2026-05-23 12:18:47 | 2026-05-23 12:18:49 | 0 | 0 | 0 | 0 | 0 | TAKEOUT_INIT_DELAY | 1 | 0 | 0 | 0 |
+
+Batch `8` outcome counts: none.
+
+Warning codes for batch `8`: none.
+
+Result: this retry remained blocked before observations with
+`TAKEOUT_INIT_DELAY`. The `Repeated Takeout after normal sync` row stays
+`blocked`.
