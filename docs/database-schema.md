@@ -70,9 +70,11 @@ Notes:
   source resolution use typed identity and display cache fields in
   `telegram_sources`, not Telegram source metadata blobs;
 - legacy Telegram `sources.metadata_zstd` is no longer the runtime source of
-  truth; cleanup is allowed only through an explicit audit/dry-run/clear
-  operation after typed identity validation, not through startup, ordinary
-  schema migration, or opportunistic sync/update/list/Takeout paths;
+  truth; cleanup is allowed only through the explicit
+  `audit_legacy_telegram_source_metadata` and
+  `clear_legacy_telegram_source_metadata` guarded operations after typed
+  identity validation, not through startup, ordinary schema migration, or
+  opportunistic sync/update/list/Takeout paths;
 - uniqueness includes `account_id` because the same Telegram source can be added from multiple local accounts;
 - uniqueness includes `source_subtype` because Telegram bare ids are not enough to safely describe every peer shape.
 - `last_sync_state` and `last_synced_at` are advanced by normal sync and by successful Takeout import; failed or cancelled Takeout jobs leave these fields unchanged.

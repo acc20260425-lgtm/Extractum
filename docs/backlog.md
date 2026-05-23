@@ -73,7 +73,7 @@ Analysis:
   `docs/archive/database-schema-legacy-analysis.md`.
 
 - [x] decide cleanup policy for old Telegram `sources.metadata_zstd` blobs
-- [ ] implement an explicit guarded audit/dry-run/clear helper for eligible
+- [x] implement an explicit guarded audit/dry-run/clear helper for eligible
   legacy Telegram source metadata blobs
 
 Acceptance:

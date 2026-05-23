@@ -764,7 +764,7 @@ git commit -m "feat: expose legacy telegram metadata cleanup commands"
 - Modify: `docs/database-schema.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Update schema docs with command names**
+- [x] **Step 1: Update schema docs with command names**
 
 In `docs/database-schema.md`, extend the cleanup policy bullet to name the commands:
 
@@ -777,7 +777,7 @@ In `docs/database-schema.md`, extend the cleanup policy bullet to name the comma
   opportunistic sync/update/list/Takeout paths;
 ```
 
-- [ ] **Step 2: Mark helper backlog item complete**
+- [x] **Step 2: Mark helper backlog item complete**
 
 In `docs/backlog.md`, update the 3.2 helper item:
 
@@ -786,7 +786,7 @@ In `docs/backlog.md`, update the 3.2 helper item:
   legacy Telegram source metadata blobs
 ```
 
-- [ ] **Step 3: Run docs whitespace check**
+- [x] **Step 3: Run docs whitespace check**
 
 Run:
 
@@ -796,7 +796,7 @@ git diff --check
 
 Expected: exit code 0. CRLF warnings are acceptable if there are no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add docs/database-schema.md docs/backlog.md
