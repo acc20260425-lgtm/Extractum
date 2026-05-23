@@ -39,11 +39,14 @@ Priority: high.
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`
     evidence; source `113` is the strongest private/left-shape candidate, but
-    live Takeout retries are currently blocked by `TAKEOUT_INIT_DELAY`.
+    live Takeout retries, most recently batch `9`, are currently blocked by
+    `TAKEOUT_INIT_DELAY`.
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
   - Source `113` completed the normal-sync setup but Takeout batches `7` and
     `8` failed before observations with `TAKEOUT_INIT_DELAY`.
+  - Source `113` retry batch `9` remained blocked before observations with
+    `TAKEOUT_INIT_DELAY`; duplicate and row-fidelity comparison remain open.
 - [ ] retry the controlled migrated small-group-to-supergroup Takeout smoke after Telegram `TAKEOUT_INIT_DELAY` expires and verify migrated-history deferment without unsafe old `chat` rows
 - [ ] define richer incomplete-import recovery actions and user policy beyond
   the shipped read-only recovery state

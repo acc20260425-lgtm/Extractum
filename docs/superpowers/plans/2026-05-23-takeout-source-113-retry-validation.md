@@ -112,7 +112,7 @@ Forbidden evidence:
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Confirm repository state**
+- [x] **Step 1: Confirm repository state**
 
 Run:
 
@@ -129,7 +129,7 @@ Expected:
 
 Record the current `HEAD` commit in the run note.
 
-- [ ] **Step 2: Capture the current sanitized source snapshot for source 113**
+- [x] **Step 2: Capture the current sanitized source snapshot for source 113**
 
 Use the existing Tauri app diagnostic path or backend helper path that returns
 the `takeout_validation_source_snapshot` DTO for:
@@ -171,7 +171,7 @@ last_synced_at = 1779537575
 If values differ, record the actual sanitized values and treat the difference
 as part of the pre-run context.
 
-- [ ] **Step 3: Capture current Takeout recovery/batch baseline for source 113**
+- [x] **Step 3: Capture current Takeout recovery/batch baseline for source 113**
 
 Use existing durable recovery or batch diagnostics for `source_id=113`.
 
@@ -197,7 +197,7 @@ batch 7 = failed / unknown / TAKEOUT_INIT_DELAY / 0 observations
 batch 8 = failed / unknown / TAKEOUT_INIT_DELAY / 0 observations
 ```
 
-- [ ] **Step 4: Add a dated pre-run note**
+- [x] **Step 4: Add a dated pre-run note**
 
 In `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`,
 under `## Run Notes`, add:
@@ -242,7 +242,7 @@ Latest pre-run Takeout state for source `113`:
 Replace every "use captured..." cell with the actual sanitized value before
 checking the step.
 
-- [ ] **Step 5: Commit pre-run evidence**
+- [x] **Step 5: Commit pre-run evidence**
 
 Run:
 
@@ -263,14 +263,14 @@ warnings and must exit 0.
 - Modify after live run: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Start the existing app flow**
+- [x] **Step 1: Start the existing app flow**
 
 Use the already-running app if it is available. If it is not available, start
 the normal local Tauri dev flow used in this project.
 
 Do not stop user-started app processes unless explicitly instructed.
 
-- [ ] **Step 2: Trigger Takeout for source 113**
+- [x] **Step 2: Trigger Takeout for source 113**
 
 Through the existing application flow, start a Takeout import for:
 
@@ -281,7 +281,7 @@ source_id = 113
 Do not alter source identity, account settings, app code, or database rows by
 hand.
 
-- [ ] **Step 3: Monitor only coarse terminal state**
+- [x] **Step 3: Monitor only coarse terminal state**
 
 Watch for one of these outcomes:
 
@@ -297,7 +297,7 @@ failed non-delay
 Do not copy raw provider errors. Record only typed/coarse terminal classes and
 warning codes.
 
-- [ ] **Step 4: If the run grows too large, perform bounded cancellation**
+- [x] **Step 4: If the run grows too large, perform bounded cancellation**
 
 If the estimate or runtime makes a complete run impractical, cancel through the
 normal app flow.
@@ -327,7 +327,7 @@ Do not manually delete partial rows.
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Capture post-run source snapshot**
+- [x] **Step 1: Capture post-run source snapshot**
 
 Capture `takeout_validation_source_snapshot` for:
 
@@ -338,7 +338,7 @@ source_id = 113
 Record the same fields captured pre-run so watermark and aggregate deltas can
 be compared directly.
 
-- [ ] **Step 2: Capture latest batch summary**
+- [x] **Step 2: Capture latest batch summary**
 
 Capture `takeout_validation_batch_summary` for the new batch id.
 
@@ -365,7 +365,7 @@ message_count_estimate
 max_message_id
 ```
 
-- [ ] **Step 3: Capture duplicate summary when observations exist**
+- [x] **Step 3: Capture duplicate summary when observations exist**
 
 If `observed > 0`, capture the duplicate summary for the new batch.
 
@@ -384,7 +384,7 @@ If `observed = 0`, record:
 Duplicate summary not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 4: Capture row-fidelity comparison when observations exist**
+- [x] **Step 4: Capture row-fidelity comparison when observations exist**
 
 If `observed > 0`, capture row fidelity in the relevant mode:
 
@@ -401,7 +401,7 @@ If `observed = 0`, record:
 Row-fidelity comparison not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 5: Capture warning visibility**
+- [x] **Step 5: Capture warning visibility**
 
 Capture warning visibility for the new batch.
 
@@ -416,7 +416,7 @@ finish_takeout_failed
 
 Do not record warning messages.
 
-- [ ] **Step 6: Capture explicit before/after delta**
+- [x] **Step 6: Capture explicit before/after delta**
 
 Compare the pre-run and post-run sanitized source snapshots.
 
@@ -444,7 +444,7 @@ For failed or cancelled runs, explicitly state whether `last_sync_state` and
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify if status changes: `docs/backlog.md`
 
-- [ ] **Step 1: Add a post-run note**
+- [x] **Step 1: Add a post-run note**
 
 Append a dated note to the verification doc:
 
@@ -492,7 +492,7 @@ Result: write one sentence that maps the outcome to the matrix status impact.
 Replace every "captured..." and "pre/post-run value" cell with the actual
 sanitized value before checking the step.
 
-- [ ] **Step 2: Update the matrix row statuses conservatively**
+- [x] **Step 2: Update the matrix row statuses conservatively**
 
 Apply the decision table:
 
@@ -509,7 +509,7 @@ Apply the decision table:
   `needs follow-up` based on the typed/coarse terminal class and captured
   evidence.
 
-- [ ] **Step 3: Update backlog notes only if status changes**
+- [x] **Step 3: Update backlog notes only if status changes**
 
 In `docs/backlog.md`, update the nested notes under section `3.1` only if new
 evidence changes the current state.
@@ -531,7 +531,7 @@ Allowed examples:
   matched the normal-sync baseline.
 ```
 
-- [ ] **Step 4: Run documentation checks**
+- [x] **Step 4: Run documentation checks**
 
 Run:
 
@@ -547,7 +547,7 @@ Expected:
 - `git diff --check` exits 0. Existing CRLF warnings are acceptable if the exit
   code is 0.
 
-- [ ] **Step 5: Commit validation result**
+- [x] **Step 5: Commit validation result**
 
 Run:
 
@@ -565,7 +565,7 @@ If `docs/backlog.md` did not change, omit it from `git add`.
 **Files:**
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Verify final status**
+- [x] **Step 1: Verify final status**
 
 Run:
 
@@ -582,7 +582,7 @@ Expected:
 
 The latest commit should be the validation result commit.
 
-- [ ] **Step 2: Update local handoff context**
+- [x] **Step 2: Update local handoff context**
 
 Update `reference/session-context-2026-05-10-analysis-redesign.md` with:
 
@@ -597,7 +597,7 @@ Update `reference/session-context-2026-05-10-analysis-redesign.md` with:
 
 This file is ignored by Git and should remain local-only.
 
-- [ ] **Step 3: Report outcome**
+- [x] **Step 3: Report outcome**
 
 Report:
 

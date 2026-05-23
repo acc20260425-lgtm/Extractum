@@ -15,7 +15,8 @@ Covered highlights:
   / batch `3`;
 - bounded partial public supergroup and dialog-backed no-username supergroup
   runs for sources `21` / `110`;
-- normal-sync-before-Takeout attempts for source `113`, blocked by
+- normal-sync-before-Takeout attempts for source `113`, most recently batch
+  `9`, blocked by
   `TAKEOUT_INIT_DELAY` before Takeout observations were written;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
@@ -48,7 +49,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Public supergroup Takeout | needs follow-up | 21 | 4 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
-| Repeated Takeout after normal sync | blocked | 113 | 8 | normal sync before snapshot and failed Takeout batch summaries | Normal sync succeeded, but repeated Takeout attempts failed before observations with `TAKEOUT_INIT_DELAY`, so duplicate and row-fidelity comparison could not run |
+| Repeated Takeout after normal sync | blocked | 113 | 9 | normal sync before snapshot and failed Takeout batch summaries | Normal sync succeeded, but repeated Takeout attempts failed before observations with `TAKEOUT_INIT_DELAY`, so duplicate and row-fidelity comparison could not run |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present | Offline inventory found no prior fallback evidence; a live `CHANNEL_PRIVATE` observation is still needed |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
@@ -72,6 +73,95 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
+
+### 2026-05-23 Source 113 Takeout Retry Pre-Run
+
+App commit: `c2c7e4c`. Working tree was clean before this run on branch
+`takeout-source-113-retry-validation`.
+
+Source `113` pre-run identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_subtype | channel |
+| peer_kind | channel |
+| has_username | 1 |
+| has_access_hash | 1 |
+| is_member | 0 |
+| resolution_strategy | dialog |
+
+Source `113` pre-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 29 |
+| telegram_message_count | 29 |
+| topic_membership_count | 0 |
+| reply_count | 16 |
+| thread_count | 5 |
+| reaction_item_count | 22 |
+| reaction_count_sum | 86 |
+| content_zstd_present_count | 28 |
+| max_telegram_message_id | 515 |
+| last_sync_state | 515 |
+| last_synced_at | 1779537575 |
+
+Source `113` pre-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 1 |
+| content_kind | text_only | 8 |
+| content_kind | text_with_media | 20 |
+| media_kind | none | 8 |
+| media_kind | photo | 6 |
+| media_kind | webpage | 15 |
+| history_peer_kind | channel | 29 |
+
+Latest pre-run Takeout state for source `113`:
+
+| Batch id | Status | Completeness | Terminal error class | Observed | Inserted | Duplicates | Skipped | Warnings |
+| ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 8 | failed | unknown | TAKEOUT_INIT_DELAY | 0 | 0 | 0 | 0 | 0 |
+
+Pre-run warning codes for batch `8`: none.
+
+### 2026-05-23 Source 113 Takeout Retry Result
+
+App commit: `c2c7e4c`. Working tree was clean before this run on branch
+`takeout-source-113-retry-validation`.
+
+Outcome: `TAKEOUT_INIT_DELAY`.
+
+Source `113` before/after snapshot:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 29 | 29 | 0 |
+| telegram_message_count | 29 | 29 | 0 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 16 | 16 | 0 |
+| thread_count | 5 | 5 | 0 |
+| reaction_item_count | 22 | 22 | 0 |
+| last_sync_state | 515 | 515 | unchanged |
+| last_synced_at | 1779537575 | 1779537575 | unchanged |
+
+Batch summary:
+
+| Batch id | Source id | Status | Completeness | Terminal error class | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages |
+| ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 9 | 113 | failed | unknown | TAKEOUT_INIT_DELAY | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
+
+Warning codes for batch `9`: none.
+
+Duplicate summary: not applicable because the batch wrote zero observations.
+
+Row-fidelity comparison: not applicable because the batch wrote zero
+observations.
+
+Result: the repeated Takeout-after-normal-sync row remains `blocked`, and the
+`CHANNEL_PRIVATE` fallback row remains `not run` because batch `9` failed
+before observations or fallback warnings.
 
 ### 2026-05-23 Existing Durable Takeout Baseline
 
