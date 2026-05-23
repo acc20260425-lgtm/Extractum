@@ -50,7 +50,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
 | Repeated Takeout after normal sync | blocked | 113 | 8 | normal sync before snapshot and failed Takeout batch summaries | Normal sync succeeded, but repeated Takeout attempts failed before observations with `TAKEOUT_INIT_DELAY`, so duplicate and row-fidelity comparison could not run |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
-| `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present |  |
+| `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present | Offline inventory found no prior fallback evidence; a live `CHANNEL_PRIVATE` observation is still needed |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
 | Migrated small-group-to-supergroup smoke | blocked | 115 | 2 | failed early Takeout batch summary | Existing smoke reached a failed/unknown terminal batch with zero observations before migrated-history evidence could be collected |
 | Forum-topic decision input | needs follow-up | 21 | 4 | topic catalog/membership aggregate counters from bounded partial Takeout | Bounded partial run materially increased topic memberships without refreshing the topic catalog, which is useful decision input; completed supergroup Takeout evidence is still needed before changing behavior |
@@ -542,3 +542,38 @@ Warning codes for batch `8`: none.
 Result: this retry remained blocked before observations with
 `TAKEOUT_INIT_DELAY`. The `Repeated Takeout after normal sync` row stays
 `blocked`.
+
+### 2026-05-23 `CHANNEL_PRIVATE` Fallback Candidate Inventory
+
+App commit: `d369158`. Working tree was clean before this inventory.
+
+The fallback only applies to `channel` and `supergroup` sources when Telegram
+returns `CHANNEL_PRIVATE` during history loading. This inventory used local DB
+identity flags and previous Takeout provenance only; it did not call Telegram
+and cannot prove that a source will trigger `CHANNEL_PRIVATE`.
+
+Prior fallback evidence in local Takeout provenance:
+
+| Field | Count |
+| --- | ---: |
+| sources_with_prior_only_my_messages | 0 |
+| sources_with_prior_only_my_messages_warning | 0 |
+| sources_with_prior_channel_private_terminal_error | 0 |
+
+Most relevant sanitized candidates:
+
+| Source id | Subtype | Peer kind | Has username | Has access hash | Is member | Items | Prior Takeout batches | Prior Takeout delay |
+| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 113 | channel | channel | 1 | 1 | 0 | 29 | 2 | 1 |
+| 114 | channel | channel | 0 | 1 | 1 | 0 | 0 | 0 |
+| 115 | supergroup | channel | 0 | 1 | 1 | 1 | 1 | 1 |
+| 27 | channel | channel | 0 | 1 | 1 | 1052 | 0 | 0 |
+| 110 | supergroup | channel | 0 | 1 | 1 | 12279 | 1 | 0 |
+
+Observation: source `113` is the strongest private/left-shape candidate because
+it is a `channel` with `is_member=0`, but recent Takeout attempts for that
+source are blocked before observations by `TAKEOUT_INIT_DELAY`. The other
+no-username channel/supergroup sources have access hashes but local membership
+flags do not indicate private-history failure. The matrix row remains `not run`
+until a live Takeout reaches a `CHANNEL_PRIVATE` fallback warning or a typed
+terminal outcome.
