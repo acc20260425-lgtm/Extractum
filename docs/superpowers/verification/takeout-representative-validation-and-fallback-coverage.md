@@ -282,3 +282,24 @@ Warning codes for batch `5`: none.
 
 Latest durable recovery state for source `110`: `cancelled` / `partial`,
 warning count `0`.
+
+### 2026-05-23 Cancelled Takeout Watermark Observation
+
+The cancelled bounded runs above did not capture `last_sync_state` /
+`last_synced_at` before starting, so this note does not claim an exact
+before/after equality proof. It records the post-cancellation source watermark
+state and compares it to each cancelled Takeout batch time.
+
+| Source id | Batch id | Batch status | Batch completeness | Batch started | Batch finished | Post-cancel last_sync_state | Post-cancel last_synced_at |
+| ---: | ---: | --- | --- | --- | --- | ---: | --- |
+| 21 | 4 | cancelled | partial | 2026-05-23 11:05:32 | 2026-05-23 11:08:17 | 179811 | 2026-05-03T16:48:05Z |
+| 110 | 5 | cancelled | partial | 2026-05-23 11:28:18 | 2026-05-23 11:30:06 | 92374 | 2026-05-21T16:59:00Z |
+
+Observation: both post-cancel `last_synced_at` values predate their cancelled
+Takeout batch windows. This is consistent with partial rows being persisted
+without advancing the normal source sync watermark on cancellation.
+
+Follow-up: for the next bounded cancellation validation, capture
+`last_sync_state` and `last_synced_at` immediately before starting the Takeout
+job and immediately after terminalization, then record the exact before/after
+watermark equality.
