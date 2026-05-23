@@ -1655,7 +1655,7 @@ git commit -m "docs: document takeout read-only recovery"
 **Files:**
 - No planned file edits.
 
-- [ ] **Step 1: Run frontend test suite**
+- [x] **Step 1: Run frontend test suite**
 
 Run:
 
@@ -1665,7 +1665,7 @@ npm.cmd test
 
 Expected: all frontend tests pass.
 
-- [ ] **Step 2: Run Rust test suite**
+- [x] **Step 2: Run Rust test suite**
 
 Run:
 
@@ -1675,7 +1675,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: all Rust tests pass.
 
-- [ ] **Step 3: Inspect working tree**
+- [x] **Step 3: Inspect working tree**
 
 Run:
 
@@ -1685,7 +1685,7 @@ git status --short --branch
 
 Expected: clean working tree on `takeout-import-read-only-recovery`.
 
-- [ ] **Step 4: Record final verification in handoff**
+- [x] **Step 4: Record final verification in handoff**
 
 In the final handoff, report:
 
