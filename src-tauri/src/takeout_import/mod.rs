@@ -27,6 +27,8 @@ mod pagination;
 #[allow(dead_code)]
 mod raw_parse;
 mod recovery;
+#[allow(dead_code)]
+mod validation_diagnostics;
 mod state;
 
 use export_dc::{

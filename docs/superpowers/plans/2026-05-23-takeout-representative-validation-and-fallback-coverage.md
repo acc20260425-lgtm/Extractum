@@ -27,7 +27,7 @@ No Tauri command, UI, Telegram runtime call, migrated-history import, recovery a
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 - Create: `src-tauri/src/takeout_import/validation_diagnostics.rs`
 
-- [ ] **Step 1: Add the diagnostics module declaration**
+- [x] **Step 1: Add the diagnostics module declaration**
 
 Add this module declaration near the existing `mod recovery;` declaration in `src-tauri/src/takeout_import/mod.rs`:
 
@@ -36,7 +36,7 @@ Add this module declaration near the existing `mod recovery;` declaration in `sr
 mod validation_diagnostics;
 ```
 
-- [ ] **Step 2: Add red tests for sanitized source and batch summaries**
+- [x] **Step 2: Add red tests for sanitized source and batch summaries**
 
 Create `src-tauri/src/takeout_import/validation_diagnostics.rs` with this initial test-first content. The tests intentionally reference functions and DTO fields that do not exist yet.
 
@@ -300,7 +300,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run the focused backend test and verify red state**
+- [x] **Step 3: Run the focused backend test and verify red state**
 
 Run:
 
@@ -310,7 +310,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_validation
 
 Expected: compile failure mentioning missing `takeout_validation_source_snapshot`, missing `takeout_validation_batch_summary`, and missing DTO fields.
 
-- [ ] **Step 4: Commit the red tests**
+- [x] **Step 4: Commit the red tests**
 
 Run:
 
