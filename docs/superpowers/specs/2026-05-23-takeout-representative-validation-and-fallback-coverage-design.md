@@ -40,6 +40,11 @@ Build a reusable validation harness made of two parts:
 The backend helpers should be callable by tests and future operator-facing
 diagnostic commands, but this slice does not need to expose a polished user UI.
 
+This slice implements internal Rust diagnostic query helpers and tests.
+Exposing them as Tauri/operator commands is optional. If such commands are
+added, they should remain unpolished, developer-facing, and return the same
+sanitized DTOs as the internal helpers.
+
 ## Non-Goals
 
 - Do not call Telegram from diagnostic helpers.
@@ -89,6 +94,10 @@ Add backend helpers that accept only local identifiers, such as `source_id`,
 `batch_id`, or an explicit comparison tuple. They must read local database
 tables only.
 
+Diagnostics must not decode or return source display fields, usernames,
+external ids, message text, raw metadata, raw provider payloads, or warning
+message bodies. Tests should assert this on serialized helper output.
+
 ### Source Snapshot Summary
 
 For a given `source_id`, return a sanitized source-level summary:
@@ -125,12 +134,29 @@ The helper should include warning codes, not warning messages.
 
 ### Row Fidelity Comparison
 
-Compare normal-sync material and Takeout-observed material for a source using
-stable, non-content-bearing dimensions:
+Compare Takeout-observed material and canonical source material using explicit
+modes. Normal `sync_source` does not write durable ingest observations, so
+diagnostics must not infer historical normal-sync rows from timestamps or
+`ingested_at` values.
+
+Supported comparison modes:
+
+- `takeout_batch_vs_canonical_source`: compare one Takeout batch's observed
+  Telegram identities against current canonical `items` and
+  `telegram_messages` rows for the same source.
+- `duplicate_after_normal_sync`: interpret Takeout observations with duplicate
+  outcomes as evidence that already-existing canonical rows, usually from
+  normal sync, were recognized by typed Telegram identity.
+- `before_after_snapshot_delta`: compare two sanitized source snapshots
+  captured manually before and after a run. The helper does not reconstruct
+  pre-run state unless a caller supplies an explicit prior snapshot.
+
+Use stable, non-content-bearing dimensions:
 
 - typed Telegram native identity shape;
 - content kind distribution;
-- content text presence or empty/non-empty shape, not text itself;
+- content presence through `content_zstd_present_count` or item content kind
+  distribution where possible;
 - media metadata presence and media kind;
 - reply and thread metadata presence;
 - reaction count presence and aggregate counts;
@@ -138,8 +164,18 @@ stable, non-content-bearing dimensions:
 - item availability/readiness state if relevant.
 
 The comparison should report mismatches as aggregate categories with counts and
-sample local ids only when those ids are safe to paste into docs. It must not
-emit message bodies or raw payloads.
+sample local ids only when those ids are safe to paste into docs. Sample ids
+must be local numeric ids only, sorted deterministically, and capped to a small
+limit such as 10 per mismatch category.
+
+The helper cannot infer a historical pre-run state after the fact.
+Before/after comparisons use explicitly captured sanitized snapshots. Batch
+comparisons use Takeout observation rows plus current canonical source rows.
+
+Diagnostics should not decompress message text. A future narrow helper may
+decode content only if it is separately tested to return a boolean and never
+expose or log decoded text. This slice should prefer
+`content_zstd_present_count` and content-kind aggregates.
 
 ### Duplicate Observation Summary
 
@@ -165,6 +201,11 @@ provenance and current read-only recovery state:
 
 The check should verify codes and counts only. It should not expose warning
 message bodies.
+
+DB-only diagnostics verify durable provenance and read-only recovery
+visibility. Active in-memory job event visibility may be recorded manually in
+the validation checklist, but DB-only helpers do not inspect runtime job
+manager state unless a separate runtime helper is explicitly added.
 
 ## Manual Validation Matrix
 
@@ -192,8 +233,8 @@ It should include these cases:
 | Small group Takeout | source subtype and peer-kind shape, before/after source summary, batch summary |
 | Repeated Takeout after normal sync | row-fidelity comparison, duplicate observation summary |
 | Repeated Takeout after previous Takeout | duplicate observation summary and latest batch summary |
-| `CHANNEL_PRIVATE` fallback | `only_my_messages_fallback` warning code, partial/incomplete evidence, no hidden RPC error |
-| Shifted export DC fallback | export DC attempted/fallback flags, `export_dc_fallback` warning code, no hidden Telegram RPC error |
+| `CHANNEL_PRIVATE` fallback | `only_my_messages_fallback` warning code, partial/incomplete evidence, terminal provider failure represented as typed/coarse outcome when present |
+| Shifted export DC fallback | export DC attempted/fallback flags, `export_dc_fallback` warning code, terminal provider failure represented as typed/coarse outcome when present |
 | Migrated small-group-to-supergroup smoke | migrated-history detected, deferred warning, partial completeness, no old `chat` history imported |
 | Forum-topic decision input | whether Takeout materially changes topic membership/catalog aggregates |
 
@@ -214,9 +255,17 @@ For each manual case:
 6. Paste only sanitized helper output into the verification doc.
 7. Mark the row `passed`, `failed`, `blocked`, or `needs follow-up`.
 
-Live provider errors should be recorded as typed/coarse outcomes. They should
-not be hidden by diagnostic tooling, but they should also not leak raw provider
-payloads.
+Fallback cases must show:
+
+- the expected warning code or flag is present;
+- batch terminal status and completeness match expected behavior;
+- any terminal provider failure is represented as a typed/coarse outcome, not
+  swallowed by diagnostics.
+
+Live provider errors should be recorded as typed/coarse outcomes. Diagnostic
+tooling cannot prove absence of every hidden Telegram RPC error unless a
+coarse terminal/status outcome exists locally, and it must not leak raw
+provider payloads.
 
 ## Migrated-History Boundary
 
@@ -246,7 +295,13 @@ Add unit/storage tests for the diagnostic query helpers:
 - summaries read only local database state;
 - summary output excludes source names, usernames, raw metadata, message text,
   warning messages, and raw payloads;
+- fixture rows include sentinel source titles, usernames, warning messages,
+  message text, raw metadata markers, and payload-like strings; tests serialize
+  every diagnostic DTO to JSON and assert that no sentinel string appears in
+  output;
 - warning codes are sorted and deduplicated where applicable;
+- category ordering and sample-id ordering are deterministic;
+- sample ids are capped to the documented limit;
 - row-fidelity comparison is stable and content-free;
 - duplicate observation summary counts inserted, duplicate, skipped, and failed
   observations correctly;
@@ -261,6 +316,8 @@ The slice is complete when:
 - the design and implementation plan are committed;
 - diagnostic helpers are implemented with tests;
 - helper output is safe to paste into docs without manual redaction;
+- diagnostic output is deterministic enough for repeated runs: sorted warning
+  codes, stable category ordering, and capped sample ids;
 - `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
   exists as a reusable validation template;
 - the backlog can distinguish shipped validation tooling from live validation
