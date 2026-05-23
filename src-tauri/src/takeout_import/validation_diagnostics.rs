@@ -68,6 +68,67 @@ pub(crate) struct TakeoutValidationBatchSummary {
     pub(crate) max_message_id: Option<i64>,
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct TakeoutValidationMismatchCategory {
+    pub(crate) category: String,
+    pub(crate) count: i64,
+    pub(crate) sample_ids: Vec<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct TakeoutValidationRowFidelityComparison {
+    pub(crate) mode: String,
+    pub(crate) batch_id: i64,
+    pub(crate) source_id: i64,
+    pub(crate) observed_identity_count: i64,
+    pub(crate) matched_canonical_identity_count: i64,
+    pub(crate) missing_canonical_identity_count: i64,
+    pub(crate) canonical_without_observation_count: i64,
+    pub(crate) matched_content_zstd_present_count: i64,
+    pub(crate) matched_content_kind_distribution: Vec<TakeoutValidationCount>,
+    pub(crate) matched_media_kind_distribution: Vec<TakeoutValidationCount>,
+    pub(crate) matched_reply_to_msg_id_present_count: i64,
+    pub(crate) matched_reply_to_top_id_present_count: i64,
+    pub(crate) matched_reaction_count_present_count: i64,
+    pub(crate) mismatch_categories: Vec<TakeoutValidationMismatchCategory>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct TakeoutValidationDuplicateSummary {
+    pub(crate) batch_id: i64,
+    pub(crate) source_id: i64,
+    pub(crate) inserted_count: i64,
+    pub(crate) duplicate_observed_count: i64,
+    pub(crate) skipped_count: i64,
+    pub(crate) failed_count: i64,
+    pub(crate) duplicate_identity_count: i64,
+    pub(crate) has_duplicate_after_normal_sync_evidence: bool,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct TakeoutValidationSnapshotDelta {
+    pub(crate) mode: String,
+    pub(crate) source_id: i64,
+    pub(crate) item_count_delta: i64,
+    pub(crate) telegram_typed_row_count_delta: i64,
+    pub(crate) content_zstd_present_count_delta: i64,
+    pub(crate) topic_membership_count_delta: i64,
+    pub(crate) max_telegram_message_id_before: Option<i64>,
+    pub(crate) max_telegram_message_id_after: Option<i64>,
+    pub(crate) last_sync_state_before: Option<i64>,
+    pub(crate) last_sync_state_after: Option<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct TakeoutValidationWarningVisibility {
+    pub(crate) batch_id: i64,
+    pub(crate) source_id: i64,
+    pub(crate) provenance_warning_codes: Vec<String>,
+    pub(crate) batch_is_latest_for_source: bool,
+    pub(crate) durable_recovery_kind: Option<String>,
+    pub(crate) recovery_candidate_warning_codes: Vec<String>,
+}
+
 #[derive(Debug, FromRow)]
 struct SourceSnapshotBaseRow {
     source_id: i64,
@@ -366,6 +427,375 @@ async fn warning_codes_for_batch(pool: &SqlitePool, batch_id: i64) -> AppResult<
     .fetch_all(pool)
     .await
     .map_err(AppError::database)
+}
+
+pub(crate) async fn takeout_validation_batch_vs_canonical_source(
+    pool: &SqlitePool,
+    batch_id: i64,
+) -> AppResult<Option<TakeoutValidationRowFidelityComparison>> {
+    let Some(summary) = takeout_validation_batch_summary(pool, batch_id).await? else {
+        return Ok(None);
+    };
+    let source_id = summary.source_id;
+
+    let observed_identity_count = scalar_i64(
+        pool,
+        "SELECT COUNT(DISTINCT provider_identity) FROM ingest_item_observations WHERE batch_id = ?",
+        batch_id,
+    )
+    .await?;
+    let matched_canonical_identity_count = scalar_i64(
+        pool,
+        r#"
+        SELECT COUNT(DISTINCT o.provider_identity)
+        FROM ingest_item_observations o
+        JOIN telegram_messages tm
+          ON o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+        WHERE o.batch_id = ?
+          AND tm.source_id = o.source_id
+        "#,
+        batch_id,
+    )
+    .await?;
+    let missing_canonical_identity_count = scalar_i64(
+        pool,
+        r#"
+        WITH missing AS (
+            SELECT DISTINCT o.source_id, o.provider_identity
+            FROM ingest_item_observations o
+            LEFT JOIN telegram_messages tm
+              ON o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+             AND tm.source_id = o.source_id
+            WHERE o.batch_id = ?
+              AND tm.item_id IS NULL
+        )
+        SELECT COUNT(*) FROM missing
+        "#,
+        batch_id,
+    )
+    .await?;
+    let canonical_without_observation_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM telegram_messages tm
+        LEFT JOIN ingest_item_observations o
+          ON o.batch_id = ?
+         AND o.source_id = tm.source_id
+         AND o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+        WHERE tm.source_id = (SELECT source_id FROM ingest_batches WHERE id = ?)
+          AND o.id IS NULL
+        "#,
+    )
+    .bind(batch_id)
+    .bind(batch_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    let matched_content_zstd_present_count: i64 = sqlx::query_scalar(
+        r#"
+        WITH observed AS (
+            SELECT DISTINCT source_id, provider_identity
+            FROM ingest_item_observations
+            WHERE batch_id = ?
+        ),
+        matched AS (
+            SELECT DISTINCT tm.item_id
+            FROM observed o
+            JOIN telegram_messages tm
+              ON o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+             AND tm.source_id = o.source_id
+        )
+        SELECT COUNT(*)
+        FROM matched tm
+        JOIN items i ON i.id = tm.item_id
+        WHERE i.content_zstd IS NOT NULL
+        "#,
+    )
+    .bind(batch_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    let mut mismatch_categories = Vec::new();
+    push_mismatch_category(
+        pool,
+        &mut mismatch_categories,
+        "canonical_identity_missing_observation",
+        canonical_without_observation_count,
+        r#"
+        SELECT tm.item_id
+        FROM telegram_messages tm
+        LEFT JOIN ingest_item_observations o
+          ON o.batch_id = ?
+         AND o.source_id = tm.source_id
+         AND o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+        WHERE tm.source_id = (SELECT source_id FROM ingest_batches WHERE id = ?)
+          AND o.id IS NULL
+        ORDER BY tm.item_id ASC
+        LIMIT 10
+        "#,
+        batch_id,
+    )
+    .await?;
+    push_mismatch_category(
+        pool,
+        &mut mismatch_categories,
+        "observed_identity_missing_canonical",
+        missing_canonical_identity_count,
+        r#"
+        SELECT MIN(o.id)
+        FROM ingest_item_observations o
+        LEFT JOIN telegram_messages tm
+          ON o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+         AND tm.source_id = o.source_id
+        WHERE o.batch_id = ?
+          AND tm.item_id IS NULL
+          AND o.source_id = (SELECT source_id FROM ingest_batches WHERE id = ?)
+        GROUP BY o.source_id, o.provider_identity
+        ORDER BY MIN(o.id) ASC
+        LIMIT 10
+        "#,
+        batch_id,
+    )
+    .await?;
+    mismatch_categories.sort_by(|left, right| left.category.cmp(&right.category));
+
+    Ok(Some(TakeoutValidationRowFidelityComparison {
+        mode: "takeout_batch_vs_canonical_source".to_string(),
+        batch_id,
+        source_id,
+        observed_identity_count,
+        matched_canonical_identity_count,
+        missing_canonical_identity_count,
+        canonical_without_observation_count,
+        matched_content_zstd_present_count,
+        matched_content_kind_distribution: matched_distribution(pool, batch_id, "i.content_kind")
+            .await?,
+        matched_media_kind_distribution: matched_distribution(
+            pool,
+            batch_id,
+            "COALESCE(i.media_kind, 'none')",
+        )
+        .await?,
+        matched_reply_to_msg_id_present_count: matched_present_count(
+            pool,
+            batch_id,
+            "tm.reply_to_msg_id",
+        )
+        .await?,
+        matched_reply_to_top_id_present_count: matched_present_count(
+            pool,
+            batch_id,
+            "tm.reply_to_top_id",
+        )
+        .await?,
+        matched_reaction_count_present_count: matched_present_count(
+            pool,
+            batch_id,
+            "tm.reaction_count",
+        )
+        .await?,
+        mismatch_categories,
+    }))
+}
+
+async fn push_mismatch_category(
+    pool: &SqlitePool,
+    categories: &mut Vec<TakeoutValidationMismatchCategory>,
+    category: &str,
+    count: i64,
+    sample_sql: &str,
+    batch_id: i64,
+) -> AppResult<()> {
+    if count == 0 {
+        return Ok(());
+    }
+    let sample_ids = sqlx::query_scalar(sample_sql)
+        .bind(batch_id)
+        .bind(batch_id)
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)?;
+    categories.push(TakeoutValidationMismatchCategory {
+        category: category.to_string(),
+        count,
+        sample_ids,
+    });
+    Ok(())
+}
+
+async fn matched_distribution(
+    pool: &SqlitePool,
+    batch_id: i64,
+    expression: &str,
+) -> AppResult<Vec<TakeoutValidationCount>> {
+    let sql = format!(
+        "WITH observed AS (
+             SELECT DISTINCT source_id, provider_identity
+             FROM ingest_item_observations
+             WHERE batch_id = ?
+         ),
+         matched AS (
+             SELECT DISTINCT tm.item_id
+             FROM observed o
+             JOIN telegram_messages tm
+               ON o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+              AND tm.source_id = o.source_id
+         )
+         SELECT {expression}, COUNT(*)
+         FROM matched tm
+         JOIN items i ON i.id = tm.item_id
+         GROUP BY {expression}
+         ORDER BY {expression} ASC"
+    );
+    distribution(pool, &sql, batch_id).await
+}
+
+async fn matched_present_count(
+    pool: &SqlitePool,
+    batch_id: i64,
+    expression: &str,
+) -> AppResult<i64> {
+    let sql = format!(
+        "WITH observed AS (
+             SELECT DISTINCT source_id, provider_identity
+             FROM ingest_item_observations
+             WHERE batch_id = ?
+         ),
+         matched AS (
+             SELECT DISTINCT
+                 tm.item_id,
+                 tm.reply_to_msg_id,
+                 tm.reply_to_top_id,
+                 tm.reaction_count
+             FROM observed o
+             JOIN telegram_messages tm
+               ON o.provider_identity = 'telegram:history_peer:' || tm.history_peer_kind || ':' || tm.history_peer_id || ':message:' || tm.telegram_message_id
+              AND tm.source_id = o.source_id
+         )
+         SELECT COUNT(*)
+         FROM matched tm
+         WHERE {expression} IS NOT NULL"
+    );
+    scalar_i64(pool, &sql, batch_id).await
+}
+
+pub(crate) async fn takeout_validation_duplicate_after_normal_sync(
+    pool: &SqlitePool,
+    batch_id: i64,
+) -> AppResult<Option<TakeoutValidationDuplicateSummary>> {
+    let Some(summary) = takeout_validation_batch_summary(pool, batch_id).await? else {
+        return Ok(None);
+    };
+
+    let inserted_count = outcome_count(pool, batch_id, "inserted").await?;
+    let duplicate_observed_count = outcome_count(pool, batch_id, "duplicate_observed").await?;
+    let skipped_count = outcome_count(pool, batch_id, "skipped").await?;
+    let failed_count = outcome_count(pool, batch_id, "failed").await?;
+    let duplicate_identity_count = scalar_i64(
+        pool,
+        "SELECT COUNT(DISTINCT provider_identity) FROM ingest_item_observations WHERE batch_id = ? AND outcome = 'duplicate_observed'",
+        batch_id,
+    )
+    .await?;
+
+    Ok(Some(TakeoutValidationDuplicateSummary {
+        batch_id,
+        source_id: summary.source_id,
+        inserted_count,
+        duplicate_observed_count,
+        skipped_count,
+        failed_count,
+        duplicate_identity_count,
+        has_duplicate_after_normal_sync_evidence: duplicate_observed_count > 0,
+    }))
+}
+
+async fn outcome_count(pool: &SqlitePool, batch_id: i64, outcome: &str) -> AppResult<i64> {
+    sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ingest_item_observations WHERE batch_id = ? AND outcome = ?",
+    )
+    .bind(batch_id)
+    .bind(outcome)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)
+}
+
+pub(crate) fn takeout_validation_snapshot_delta(
+    before: &TakeoutValidationSourceSnapshot,
+    after: &TakeoutValidationSourceSnapshot,
+) -> TakeoutValidationSnapshotDelta {
+    TakeoutValidationSnapshotDelta {
+        mode: "before_after_snapshot_delta".to_string(),
+        source_id: after.source_id,
+        item_count_delta: after.item_count - before.item_count,
+        telegram_typed_row_count_delta: after.telegram_typed_row_count
+            - before.telegram_typed_row_count,
+        content_zstd_present_count_delta: after.content_zstd_present_count
+            - before.content_zstd_present_count,
+        topic_membership_count_delta: after.topic_membership_count - before.topic_membership_count,
+        max_telegram_message_id_before: before.max_telegram_message_id,
+        max_telegram_message_id_after: after.max_telegram_message_id,
+        last_sync_state_before: before.last_sync_state,
+        last_sync_state_after: after.last_sync_state,
+    }
+}
+
+pub(crate) async fn takeout_validation_warning_visibility(
+    pool: &SqlitePool,
+    batch_id: i64,
+) -> AppResult<Option<TakeoutValidationWarningVisibility>> {
+    let Some(summary) = takeout_validation_batch_summary(pool, batch_id).await? else {
+        return Ok(None);
+    };
+    let latest_batch_id: Option<i64> = sqlx::query_scalar(
+        "SELECT b.id
+         FROM ingest_batches b
+         JOIN telegram_takeout_batches t ON t.batch_id = b.id
+         WHERE b.source_id = ?
+           AND b.provider = 'telegram'
+           AND b.ingest_kind = 'takeout'
+         ORDER BY b.started_at DESC, b.id DESC
+         LIMIT 1",
+    )
+    .bind(summary.source_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?;
+    let batch_is_latest_for_source = latest_batch_id == Some(batch_id);
+    let durable_recovery_kind = if batch_is_latest_for_source {
+        durable_recovery_kind(&summary.status, &summary.completeness).map(str::to_string)
+    } else {
+        None
+    };
+    let provenance_warning_codes = warning_codes_for_batch(pool, batch_id).await?;
+    let recovery_candidate_warning_codes = if durable_recovery_kind.is_some() {
+        provenance_warning_codes.clone()
+    } else {
+        Vec::new()
+    };
+
+    Ok(Some(TakeoutValidationWarningVisibility {
+        batch_id,
+        source_id: summary.source_id,
+        provenance_warning_codes,
+        batch_is_latest_for_source,
+        durable_recovery_kind,
+        recovery_candidate_warning_codes,
+    }))
+}
+
+fn durable_recovery_kind(status: &str, completeness: &str) -> Option<&'static str> {
+    match (status, completeness) {
+        ("running", _) => Some("interrupted"),
+        ("failed", _) => Some("failed"),
+        ("cancelled", _) => Some("cancelled"),
+        ("completed", "partial") => Some("partial_completed"),
+        ("completed", _) => None,
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -754,6 +1184,68 @@ mod tests {
             comparison.mismatch_categories[1].category,
             "observed_identity_missing_canonical"
         );
+        assert_no_sentinel_json(&comparison);
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_row_fidelity_dedupes_matched_observations_for_aggregates() {
+        let pool = fixture_pool().await;
+        seed_canonical_message(&pool, 101, 1001, "text_only", None, Some(77), Some(2)).await;
+        let batch_id = create_running_batch(&pool).await;
+        record_observation(&pool, batch_id, Some(101), 1001, "duplicate_observed").await;
+        record_observation(&pool, batch_id, Some(101), 1001, "duplicate_observed").await;
+        record_observation(&pool, batch_id, Some(101), 1001, "duplicate_observed").await;
+
+        let comparison = takeout_validation_batch_vs_canonical_source(&pool, batch_id)
+            .await
+            .expect("row fidelity comparison")
+            .expect("comparison exists");
+
+        assert_eq!(comparison.observed_identity_count, 1);
+        assert_eq!(comparison.matched_canonical_identity_count, 1);
+        assert_eq!(comparison.matched_content_zstd_present_count, 1);
+        assert_eq!(
+            comparison.matched_content_kind_distribution,
+            vec![TakeoutValidationCount {
+                key: "text_only".to_string(),
+                count: 1,
+            }]
+        );
+        assert_eq!(
+            comparison.matched_media_kind_distribution,
+            vec![TakeoutValidationCount {
+                key: "none".to_string(),
+                count: 1,
+            }]
+        );
+        assert_eq!(comparison.matched_reply_to_msg_id_present_count, 1);
+        assert_eq!(comparison.matched_reply_to_top_id_present_count, 1);
+        assert_eq!(comparison.matched_reaction_count_present_count, 1);
+        assert_no_sentinel_json(&comparison);
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_row_fidelity_dedupes_missing_observations_by_identity() {
+        let pool = fixture_pool().await;
+        let batch_id = create_running_batch(&pool).await;
+        record_observation(&pool, batch_id, None, 1999, "skipped").await;
+        record_observation(&pool, batch_id, None, 1999, "skipped").await;
+        record_observation(&pool, batch_id, None, 2000, "skipped").await;
+
+        let comparison = takeout_validation_batch_vs_canonical_source(&pool, batch_id)
+            .await
+            .expect("row fidelity comparison")
+            .expect("comparison exists");
+
+        assert_eq!(comparison.observed_identity_count, 2);
+        assert_eq!(comparison.missing_canonical_identity_count, 2);
+        let missing = comparison
+            .mismatch_categories
+            .iter()
+            .find(|category| category.category == "observed_identity_missing_canonical")
+            .expect("missing canonical category");
+        assert_eq!(missing.count, 2);
+        assert_eq!(missing.sample_ids, vec![1, 3]);
         assert_no_sentinel_json(&comparison);
     }
 

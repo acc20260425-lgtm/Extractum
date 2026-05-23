@@ -959,7 +959,7 @@ git commit -m "test: add takeout validation comparison coverage"
 **Files:**
 - Modify: `src-tauri/src/takeout_import/validation_diagnostics.rs`
 
-- [ ] **Step 1: Add comparison DTOs**
+- [x] **Step 1: Add comparison DTOs**
 
 Add these DTOs below the batch summary DTOs:
 
@@ -1026,7 +1026,7 @@ pub(crate) struct TakeoutValidationWarningVisibility {
 }
 ```
 
-- [ ] **Step 2: Implement batch-to-canonical comparison**
+- [x] **Step 2: Implement batch-to-canonical comparison**
 
 Add this function below `warning_codes_for_batch`:
 
@@ -1203,7 +1203,7 @@ async fn push_mismatch_category(
 }
 ```
 
-- [ ] **Step 3: Add matched aggregate helpers**
+- [x] **Step 3: Add matched aggregate helpers**
 
 Add these helper functions below `push_mismatch_category`:
 
@@ -1245,7 +1245,7 @@ async fn matched_present_count(
 }
 ```
 
-- [ ] **Step 4: Implement duplicate, snapshot delta, and warning visibility helpers**
+- [x] **Step 4: Implement duplicate, snapshot delta, and warning visibility helpers**
 
 Add these functions below the matched aggregate helpers:
 
@@ -1369,7 +1369,7 @@ fn durable_recovery_kind(status: &str, completeness: &str) -> Option<&'static st
 }
 ```
 
-- [ ] **Step 5: Run all diagnostics tests**
+- [x] **Step 5: Run all diagnostics tests**
 
 Run:
 
@@ -1379,7 +1379,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_validation
 
 Expected: all Takeout validation diagnostics tests pass.
 
-- [ ] **Step 6: Commit diagnostics helpers**
+- [x] **Step 6: Commit diagnostics helpers**
 
 Run:
 
