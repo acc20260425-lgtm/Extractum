@@ -5,7 +5,12 @@
   import { sourceCapabilities } from "$lib/source-capabilities";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
-  import type { Source, SourceJobRecord, TakeoutImportJobRecord } from "$lib/types/sources";
+  import type {
+    Source,
+    SourceJobRecord,
+    TakeoutImportJobRecord,
+    TakeoutImportRecoveryState,
+  } from "$lib/types/sources";
   import type { YoutubeRuntimeStatus, YoutubeSourceSummary } from "$lib/types/youtube";
   import type { WorkspaceSelection } from "$lib/analysis-workspace-state";
 
@@ -23,6 +28,7 @@
     deletingSourceIds,
     startingTakeoutSourceIds,
     takeoutJobsBySource,
+    takeoutRecoveryBySource,
     sourceJobsBySource,
     youtubeSummaries,
     youtubeRuntimeStatus,
@@ -55,6 +61,7 @@
     deletingSourceIds: Record<number, boolean>;
     startingTakeoutSourceIds: Record<number, boolean>;
     takeoutJobsBySource: Record<number, TakeoutImportJobRecord>;
+    takeoutRecoveryBySource: Record<number, TakeoutImportRecoveryState>;
     sourceJobsBySource: Record<number, SourceJobRecord[]>;
     youtubeSummaries: Record<number, YoutubeSourceSummary>;
     youtubeRuntimeStatus: YoutubeRuntimeStatus | null;
@@ -306,6 +313,7 @@
       {deletingSourceIds}
       {startingTakeoutSourceIds}
       {takeoutJobsBySource}
+      {takeoutRecoveryBySource}
       {sourceJobsBySource}
       {youtubeSummaries}
       {youtubeRuntimeStatus}

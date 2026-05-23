@@ -38,6 +38,7 @@
     SourceForumTopic,
     SourceItem,
     SourceJobRecord,
+    TakeoutImportRecoveryState,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
   import type {
@@ -55,6 +56,7 @@
   let {
     workspaceSelection,
     currentSource,
+    takeoutRecovery = null,
     currentGroup,
     currentSourceMetric,
     currentScopeTitle,
@@ -195,6 +197,7 @@
   }: {
     workspaceSelection: WorkspaceSelection;
     currentSource: Source | null;
+    takeoutRecovery?: TakeoutImportRecoveryState | null;
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
     currentScopeTitle: string;
@@ -587,6 +590,7 @@
       {selectedTraceRef}
       {currentScopeTitle}
       {currentSource}
+      {takeoutRecovery}
       {currentGroup}
       {currentSourceMetric}
       {sourceItems}

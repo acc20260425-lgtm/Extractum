@@ -1,6 +1,7 @@
 <script lang="ts">
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import TakeoutRecoveryNotice from "$lib/components/analysis/takeout-recovery-notice.svelte";
   import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
   import SourceGroupReader from "$lib/components/analysis/source-group-reader.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
@@ -35,6 +36,7 @@
     SourceForumTopic,
     SourceItem,
     SourceJobRecord,
+    TakeoutImportRecoveryState,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
@@ -52,6 +54,7 @@
     hasMoreRunSnapshotMessages: boolean;
     workspaceSelection: WorkspaceSelection;
     currentSource: Source | null;
+    takeoutRecovery?: TakeoutImportRecoveryState | null;
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
     sourceItems: SourceItem[];
@@ -109,6 +112,7 @@
     hasMoreRunSnapshotMessages,
     workspaceSelection,
     currentSource,
+    takeoutRecovery = null,
     currentGroup,
     sourceItems,
     sourceItemsHasMore,
@@ -355,6 +359,9 @@
       {onBackToRunSnapshot}
       onChangeSelectedSourceId={onChangeSelectedGroupSourceId}
     />
+    {#if canvasSurface === "live_source" && currentSource?.sourceType === "telegram" && takeoutRecovery}
+      <TakeoutRecoveryNotice recovery={takeoutRecovery} />
+    {/if}
     {@render liveSourceSurface()}
   {/if}
 </section>

@@ -1363,7 +1363,7 @@ git commit -m "feat: add takeout recovery notice component"
 - Modify: `src/lib/components/analysis/report-canvas.svelte`
 - Modify: `src/routes/analysis/+page.svelte`
 
-- [ ] **Step 1: Wire source switcher row**
+- [x] **Step 1: Wire source switcher row**
 
 In `src/lib/components/analysis/source-switcher-panel.svelte`, import the component and helpers:
 
@@ -1410,7 +1410,7 @@ After the existing `{#if takeoutJob}` Takeout status block, add:
 
 The final priority in this row must be active job UI first, terminal job UI if present, recovery notice only when no job is present, then no Takeout notice.
 
-- [ ] **Step 2: Forward recovery state through CompactSourceRail**
+- [x] **Step 2: Forward recovery state through CompactSourceRail**
 
 In `src/lib/components/analysis/compact-source-rail.svelte`, import `TakeoutImportRecoveryState`, add `takeoutRecoveryBySource` to props, and forward it to `<SourceSwitcherPanel>`.
 
@@ -1426,7 +1426,7 @@ Forward it:
       {takeoutRecoveryBySource}
 ```
 
-- [ ] **Step 3: Wire selected source surface**
+- [x] **Step 3: Wire selected source surface**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, import the shared component and type:
 
@@ -1458,7 +1458,7 @@ Render the notice above the live selected Telegram source material. Place it aft
   {/if}
 ```
 
-- [ ] **Step 4: Forward selected recovery through ReportCanvas**
+- [x] **Step 4: Forward selected recovery through ReportCanvas**
 
 In `src/lib/components/analysis/report-canvas.svelte`, import `TakeoutImportRecoveryState`, add:
 
@@ -1472,7 +1472,7 @@ Default to `null` and pass to `<ReportSourceSurface>`:
       {takeoutRecovery}
 ```
 
-- [ ] **Step 5: Load and refresh recovery state on the analysis route**
+- [x] **Step 5: Load and refresh recovery state on the analysis route**
 
 In `src/routes/analysis/+page.svelte`, import:
 
@@ -1548,7 +1548,7 @@ Pass selected recovery to `<ReportCanvas>`:
     takeoutRecovery={currentTakeoutRecovery()}
 ```
 
-- [ ] **Step 6: Run UI-focused tests**
+- [x] **Step 6: Run UI-focused tests**
 
 Run:
 
@@ -1558,7 +1558,7 @@ npm.cmd test -- src/lib/analysis-compact-source-rail.test.ts src/lib/analysis-so
 
 Expected: all focused frontend tests pass.
 
-- [ ] **Step 7: Commit UI wiring**
+- [x] **Step 7: Commit UI wiring**
 
 Run:
 

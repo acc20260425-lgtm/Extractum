@@ -3,10 +3,20 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import TakeoutRecoveryNotice from "$lib/components/analysis/takeout-recovery-notice.svelte";
+  import {
+    isActiveTakeoutImportJob,
+    visibleTakeoutRecoveryForSource,
+  } from "$lib/analysis-state";
   import { membershipLabel, sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
-  import type { Source, SourceJobRecord, TakeoutImportJobRecord } from "$lib/types/sources";
+  import type {
+    Source,
+    SourceJobRecord,
+    TakeoutImportJobRecord,
+    TakeoutImportRecoveryState,
+  } from "$lib/types/sources";
   import type { YoutubeRuntimeStatus, YoutubeSourceSummary } from "$lib/types/youtube";
   import type { WorkspaceSelection } from "$lib/analysis-workspace-state";
   import type { BadgeVariant } from "$lib/components/ui/types";
@@ -25,6 +35,7 @@
     deletingSourceIds,
     startingTakeoutSourceIds,
     takeoutJobsBySource,
+    takeoutRecoveryBySource,
     sourceJobsBySource,
     youtubeSummaries,
     youtubeRuntimeStatus,
@@ -58,6 +69,7 @@
     deletingSourceIds: Record<number, boolean>;
     startingTakeoutSourceIds: Record<number, boolean>;
     takeoutJobsBySource: Record<number, TakeoutImportJobRecord>;
+    takeoutRecoveryBySource: Record<number, TakeoutImportRecoveryState>;
     sourceJobsBySource: Record<number, SourceJobRecord[]>;
     youtubeSummaries: Record<number, YoutubeSourceSummary>;
     youtubeRuntimeStatus: YoutubeRuntimeStatus | null;
@@ -85,14 +97,6 @@
 
   function isSelectedGroup(groupId: number) {
     return workspaceSelection.kind === "source_group" && workspaceSelection.sourceGroupId === groupId;
-  }
-
-  function isActiveTakeoutJob(job: TakeoutImportJobRecord | undefined) {
-    return (
-      job?.status === "queued" ||
-      job?.status === "running" ||
-      job?.status === "cancel_requested"
-    );
   }
 
   function isActiveSourceJob(job: SourceJobRecord) {
@@ -246,7 +250,8 @@
           {@const sourceJobs = sourceJobsBySource[source.id] ?? []}
           {@const sourceJobActive = sourceJobs.some(isActiveSourceJob)}
           {@const takeoutJob = takeoutJobsBySource[source.id]}
-          {@const takeoutActive = isActiveTakeoutJob(takeoutJob)}
+          {@const takeoutActive = isActiveTakeoutImportJob(takeoutJob)}
+          {@const takeoutRecovery = visibleTakeoutRecoveryForSource(source.id, takeoutJobsBySource, takeoutRecoveryBySource)}
           {@const deleting = !!deletingSourceIds[source.id]}
           <article class:selected={isSelectedSource(source.id)} class="source-row">
             <button
@@ -392,6 +397,8 @@
                   </div>
                 {/if}
               </div>
+            {:else if takeoutRecovery}
+              <TakeoutRecoveryNotice recovery={takeoutRecovery} compact />
             {/if}
 
             {#if sourceJobs.length > 0}

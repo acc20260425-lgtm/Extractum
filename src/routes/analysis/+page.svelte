@@ -49,6 +49,7 @@
   } from "$lib/api/llm";
   import {
     cancelTakeoutSourceImport,
+    listTakeoutImportRecoveryStates,
     listTakeoutSourceImportJobs,
     listenToTakeoutImportEvents,
     startTakeoutSourceImport,
@@ -117,6 +118,7 @@
     ALL_TOPICS_KEY,
     applyAnalysisRunEvent,
     applyTakeoutImportJobs,
+    applyTakeoutImportRecoveryStates,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
     canCancelAnalysisRun,
@@ -154,6 +156,7 @@
     syncRunSnapshot as syncLiveRunSnapshot,
     takeoutImportEventDecision,
     upsertTakeoutImportJob,
+    visibleTakeoutRecoveryForSource,
     type AnalysisRunFilter,
     type LiveRunState,
     type NotebookLmExportProgressState,
@@ -235,6 +238,7 @@
     SourceItem,
     TakeoutImportEvent,
     TakeoutImportJobRecord,
+    TakeoutImportRecoveryState,
     YoutubeTranscriptSegment,
     YoutubeTranscriptSegmentCursor,
   } from "$lib/types/sources";
@@ -368,6 +372,7 @@
   let deletingSourceIds = $state<Record<number, boolean>>({});
   let startingTakeoutSourceIds = $state<Record<number, boolean>>({});
   let takeoutJobsBySource = $state<Record<number, TakeoutImportJobRecord>>({});
+  let takeoutRecoveryBySource = $state<Record<number, TakeoutImportRecoveryState>>({});
   let sourceJobsBySource = $state<Record<number, SourceJobRecord[]>>({});
   let deletingRunIds = $state<Record<number, boolean>>({});
   let sourceManagerOpen = $state(false);
@@ -402,6 +407,10 @@
     takeoutJobsBySource = applyTakeoutImportJobs(jobs);
   }
 
+  function applyTakeoutRecoveryStates(states: TakeoutImportRecoveryState[]) {
+    takeoutRecoveryBySource = applyTakeoutImportRecoveryStates(states);
+  }
+
   function applyTakeoutImportEvent(job: TakeoutImportEvent) {
     upsertTakeoutJob(job);
 
@@ -424,6 +433,10 @@
           : Promise.resolve(),
         loadItems(sourceId),
       ]);
+    }
+
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      void loadTakeoutImportRecoveryStates();
     }
   }
 
@@ -469,6 +482,16 @@
       });
 
     return [...directJobs, ...relatedJobs].sort((left, right) => right.started_at - left.started_at);
+  }
+
+  function currentTakeoutRecovery() {
+    const source = currentSource();
+    if (!source) return null;
+    return visibleTakeoutRecoveryForSource(
+      source.id,
+      takeoutJobsBySource,
+      takeoutRecoveryBySource,
+    );
   }
 
   function currentGroup() {
@@ -1415,6 +1438,15 @@
     }
   }
 
+  async function loadTakeoutImportRecoveryStates() {
+    try {
+      const states = await listTakeoutImportRecoveryStates();
+      applyTakeoutRecoveryStates(states);
+    } catch (error) {
+      status = formatAppError("loading Takeout recovery states", error);
+    }
+  }
+
   async function loadSourceTopics(
     sourceId: number,
     { preserveSelection = false }: { preserveSelection?: boolean } = {},
@@ -2053,6 +2085,7 @@
     try {
       await startTakeoutSourceImport(sourceId);
       status = "Takeout import started.";
+      void loadTakeoutImportRecoveryStates();
     } catch (error) {
       status = formatAppError("starting Takeout import", error);
     } finally {
@@ -2072,6 +2105,7 @@
   async function refreshSourcesAfterManagement(sourceId?: number) {
     await Promise.all([loadSourceCatalog(), loadGroups(), loadActiveRuns()]);
     await loadRuns();
+    await loadTakeoutImportRecoveryStates();
 
     if (sourceId !== undefined) {
       await selectSource(sourceId);
@@ -2353,6 +2387,7 @@
     void loadLlmProfiles();
     void loadYoutubeRuntimeStatus();
     void loadTakeoutImportJobs();
+    void loadTakeoutImportRecoveryStates();
     void loadSourceJobs();
 
     void listenToAnalysisRunEvents(({ payload }) => {
@@ -2481,6 +2516,7 @@
     {deletingSourceIds}
     {startingTakeoutSourceIds}
     {takeoutJobsBySource}
+    {takeoutRecoveryBySource}
     {sourceJobsBySource}
     {youtubeSummaries}
     {youtubeRuntimeStatus}
@@ -2504,6 +2540,7 @@
   <ReportCanvas
     workspaceSelection={workspaceUiState.workspaceSelection}
     currentSource={currentSource()}
+    takeoutRecovery={currentTakeoutRecovery()}
     currentGroup={currentGroup()}
     currentSourceMetric={currentSourceMetric()}
     currentScopeTitle={currentScopeTitle()}
