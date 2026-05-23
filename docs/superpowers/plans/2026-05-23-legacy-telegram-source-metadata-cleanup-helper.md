@@ -294,7 +294,7 @@ Expected: tests compile and fail because the stub returns an empty report.
 **Files:**
 - Modify: `src-tauri/src/sources/legacy_metadata_cleanup.rs`
 
-- [ ] **Step 1: Replace the stub with row loading and guard evaluation**
+- [x] **Step 1: Replace the stub with row loading and guard evaluation**
 
 Replace `run_legacy_telegram_source_metadata_cleanup` and add the helper structs/functions below the constants:
 
@@ -519,7 +519,7 @@ fn subtype_counts(
 }
 ```
 
-- [ ] **Step 2: Run audit tests**
+- [x] **Step 2: Run audit tests**
 
 Run:
 
@@ -529,7 +529,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::legacy_metadata_cleanup
 
 Expected: both audit tests pass.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add src-tauri/src/sources/legacy_metadata_cleanup.rs src-tauri/src/sources/mod.rs

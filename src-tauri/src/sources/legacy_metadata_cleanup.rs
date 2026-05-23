@@ -8,7 +8,7 @@ use super::identity::{TelegramPeerKind, TelegramResolutionStrategy};
 use super::types::{TelegramSourceKind, TELEGRAM_SOURCE_TYPE};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum LegacyTelegramMetadataCleanupMode {
+pub(crate) enum LegacyTelegramMetadataCleanupMode {
     Audit,
     Clear,
 }
@@ -47,22 +47,221 @@ const SKIP_INVALID_TYPED_IDENTITY: &str = "invalid_typed_identity";
 const SKIP_UNSUPPORTED_SOURCE_SUBTYPE: &str = "unsupported_source_subtype";
 const SKIP_MISSING_ACCOUNT: &str = "missing_account";
 
+#[derive(sqlx::FromRow)]
+struct LegacyTelegramMetadataCandidateRow {
+    source_id: i64,
+    source_subtype: Option<String>,
+    account_id: Option<i64>,
+    typed_source_id: Option<i64>,
+    typed_account_id: Option<i64>,
+    typed_source_subtype: Option<String>,
+    typed_peer_kind: Option<String>,
+    typed_peer_id: Option<i64>,
+    typed_resolution_strategy: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct EvaluatedCandidate {
+    source_id: i64,
+    source_subtype: String,
+    eligible: bool,
+    skip_reason: Option<&'static str>,
+}
+
 pub(crate) async fn run_legacy_telegram_source_metadata_cleanup(
     pool: &sqlx::SqlitePool,
     mode: LegacyTelegramMetadataCleanupMode,
 ) -> AppResult<LegacyTelegramSourceMetadataCleanupReport> {
-    let _ = (pool, mode);
-    Ok(LegacyTelegramSourceMetadataCleanupReport {
-        dry_run: true,
-        candidate_count: 0,
-        eligible_count: 0,
-        cleared_count: 0,
-        candidate_source_ids: Vec::new(),
-        eligible_source_ids: Vec::new(),
-        cleared_source_ids: Vec::new(),
-        subtype_counts: Vec::new(),
-        skipped: Vec::new(),
-    })
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    let rows: Vec<LegacyTelegramMetadataCandidateRow> = sqlx::query_as(
+        r#"
+        SELECT
+            s.id AS source_id,
+            s.source_subtype,
+            s.account_id,
+            ts.source_id AS typed_source_id,
+            ts.account_id AS typed_account_id,
+            ts.source_subtype AS typed_source_subtype,
+            ts.peer_kind AS typed_peer_kind,
+            ts.peer_id AS typed_peer_id,
+            ts.resolution_strategy AS typed_resolution_strategy
+        FROM sources s
+        LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+        WHERE s.source_type = ?
+          AND s.metadata_zstd IS NOT NULL
+        ORDER BY s.id
+        "#,
+    )
+    .bind(TELEGRAM_SOURCE_TYPE)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(AppError::database)?;
+
+    let evaluated: Vec<EvaluatedCandidate> = rows.iter().map(evaluate_candidate).collect();
+    let eligible_source_ids: Vec<i64> = evaluated
+        .iter()
+        .filter(|candidate| candidate.eligible)
+        .map(|candidate| candidate.source_id)
+        .collect();
+
+    let mut cleared_source_ids = Vec::new();
+    if matches!(mode, LegacyTelegramMetadataCleanupMode::Clear) {
+        for source_id in &eligible_source_ids {
+            sqlx::query(
+                r#"
+                UPDATE sources
+                SET metadata_zstd = NULL
+                WHERE id = ?
+                  AND source_type = ?
+                  AND metadata_zstd IS NOT NULL
+                "#,
+            )
+            .bind(source_id)
+            .bind(TELEGRAM_SOURCE_TYPE)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::database)?;
+            cleared_source_ids.push(*source_id);
+        }
+        tx.commit().await.map_err(AppError::database)?;
+    } else {
+        tx.rollback().await.map_err(AppError::database)?;
+    }
+
+    Ok(build_report(
+        matches!(mode, LegacyTelegramMetadataCleanupMode::Audit),
+        &rows,
+        &evaluated,
+        cleared_source_ids,
+    ))
+}
+
+fn evaluate_candidate(row: &LegacyTelegramMetadataCandidateRow) -> EvaluatedCandidate {
+    let source_subtype = row
+        .source_subtype
+        .clone()
+        .unwrap_or_else(|| "unknown".to_string());
+    let skip_reason = candidate_skip_reason(row);
+    EvaluatedCandidate {
+        source_id: row.source_id,
+        source_subtype,
+        eligible: skip_reason.is_none(),
+        skip_reason,
+    }
+}
+
+fn candidate_skip_reason(row: &LegacyTelegramMetadataCandidateRow) -> Option<&'static str> {
+    let Some(source_subtype) = row.source_subtype.as_deref() else {
+        return Some(SKIP_UNSUPPORTED_SOURCE_SUBTYPE);
+    };
+    let Ok(source_kind) = TelegramSourceKind::parse(source_subtype) else {
+        return Some(SKIP_UNSUPPORTED_SOURCE_SUBTYPE);
+    };
+    let Some(source_account_id) = row.account_id else {
+        return Some(SKIP_MISSING_ACCOUNT);
+    };
+    if row.typed_source_id.is_none() {
+        return Some(SKIP_MISSING_TYPED_IDENTITY);
+    }
+    if row.typed_account_id != Some(source_account_id) {
+        return Some(SKIP_ACCOUNT_MISMATCH);
+    }
+    if row.typed_source_subtype.as_deref() != Some(source_subtype) {
+        return Some(SKIP_SOURCE_SUBTYPE_MISMATCH);
+    }
+
+    let Some(peer_kind) = row.typed_peer_kind.as_deref() else {
+        return Some(SKIP_INVALID_TYPED_IDENTITY);
+    };
+    let Ok(parsed_peer_kind) = TelegramPeerKind::parse(peer_kind) else {
+        return Some(SKIP_INVALID_TYPED_IDENTITY);
+    };
+    if parsed_peer_kind != TelegramPeerKind::from_source_subtype(source_kind) {
+        return Some(SKIP_INVALID_TYPED_IDENTITY);
+    }
+    match row.typed_peer_id {
+        Some(peer_id) if peer_id > 0 => {}
+        _ => return Some(SKIP_INVALID_TYPED_IDENTITY),
+    }
+    let Some(strategy) = row.typed_resolution_strategy.as_deref() else {
+        return Some(SKIP_INVALID_TYPED_IDENTITY);
+    };
+    if TelegramResolutionStrategy::parse(strategy).is_err() {
+        return Some(SKIP_INVALID_TYPED_IDENTITY);
+    }
+
+    None
+}
+
+fn build_report(
+    dry_run: bool,
+    rows: &[LegacyTelegramMetadataCandidateRow],
+    evaluated: &[EvaluatedCandidate],
+    cleared_source_ids: Vec<i64>,
+) -> LegacyTelegramSourceMetadataCleanupReport {
+    let candidate_source_ids = rows.iter().map(|row| row.source_id).collect::<Vec<_>>();
+    let eligible_source_ids = evaluated
+        .iter()
+        .filter(|candidate| candidate.eligible)
+        .map(|candidate| candidate.source_id)
+        .collect::<Vec<_>>();
+    let skipped = evaluated
+        .iter()
+        .filter_map(|candidate| {
+            candidate
+                .skip_reason
+                .map(|reason| LegacyTelegramSourceMetadataSkip {
+                    source_id: candidate.source_id,
+                    reason_code: reason.to_string(),
+                })
+        })
+        .collect::<Vec<_>>();
+
+    let subtype_counts = subtype_counts(evaluated, &cleared_source_ids);
+
+    LegacyTelegramSourceMetadataCleanupReport {
+        dry_run,
+        candidate_count: candidate_source_ids.len() as i64,
+        eligible_count: eligible_source_ids.len() as i64,
+        cleared_count: cleared_source_ids.len() as i64,
+        candidate_source_ids,
+        eligible_source_ids,
+        cleared_source_ids,
+        subtype_counts,
+        skipped,
+    }
+}
+
+fn subtype_counts(
+    evaluated: &[EvaluatedCandidate],
+    cleared_source_ids: &[i64],
+) -> Vec<LegacyTelegramSourceMetadataSubtypeCount> {
+    let mut counts: BTreeMap<String, (i64, i64, i64)> = BTreeMap::new();
+    for candidate in evaluated {
+        let entry = counts
+            .entry(candidate.source_subtype.clone())
+            .or_insert((0, 0, 0));
+        entry.0 += 1;
+        if candidate.eligible {
+            entry.1 += 1;
+        }
+        if cleared_source_ids.contains(&candidate.source_id) {
+            entry.2 += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .map(
+            |(source_subtype, (candidate_count, eligible_count, cleared_count))| {
+                LegacyTelegramSourceMetadataSubtypeCount {
+                    source_subtype,
+                    candidate_count,
+                    eligible_count,
+                    cleared_count,
+                }
+            },
+        )
+        .collect()
 }
 
 #[cfg(test)]
