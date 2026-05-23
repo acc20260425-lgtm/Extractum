@@ -1575,7 +1575,7 @@ git commit -m "feat: show takeout recovery notices"
 - Modify: `docs/takeout-source-import.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Update current-state Takeout docs**
+- [x] **Step 1: Update current-state Takeout docs**
 
 In `docs/takeout-source-import.md`, add a new subsection after the existing in-memory job/restart discussion in section `2. User-Facing Behavior`:
 
@@ -1620,7 +1620,7 @@ Read-only recovery state does not enable migrated-history import, resume, purge,
 or automatic retry.
 ```
 
-- [ ] **Step 2: Update backlog wording without closing broader policy work**
+- [x] **Step 2: Update backlog wording without closing broader policy work**
 
 In `docs/backlog.md`, replace:
 
@@ -1639,7 +1639,7 @@ with:
 
 Keep the real-data validation bullets open.
 
-- [ ] **Step 3: Commit docs**
+- [x] **Step 3: Commit docs**
 
 Run:
 

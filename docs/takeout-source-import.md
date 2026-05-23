@@ -32,6 +32,19 @@ An active Takeout job:
 
 Job state is in memory. If the app restarts, active job records are lost, but any rows already inserted into `items` remain.
 
+After restart, the analysis workspace can also show a read-only recovery notice
+for the latest durable Telegram Takeout batch for a source. This notice is not a
+job and has no cancel, resume, purge, or retry semantics.
+
+Recovery notice priority is:
+
+1. active in-memory Takeout job;
+2. latest durable recovery state;
+3. no Takeout notice.
+
+The suggested recovery path is to run Takeout again. Existing messages already
+saved locally are deduplicated by typed Telegram identity.
+
 ## 3. Backend Contract
 
 Public commands:
@@ -184,13 +197,25 @@ batch through item observations. Source watermarks still advance only after
 `finishTakeoutSession(success=true)` and `finalize_sync(...)` succeed.
 
 `running` batches survive restart. The schema does not persist an
-`interrupted` status; query/UI code may derive that display state from a
-durable running batch with no active in-memory job.
+`interrupted` status. The recovery query derives `interrupted` when the latest
+Telegram Takeout batch for a source is still `running` and no active in-memory
+Takeout job exists for that source.
+
+Recovery selection uses latest-attempt-wins semantics. Older failed or
+cancelled Takeout batches are hidden if a newer complete Takeout batch exists.
+A newer failed, cancelled, interrupted, or partial completed Takeout batch is
+shown even when an older complete attempt exists.
+
+The read-only recovery DTO exposes counts, sorted warning codes, bounded failed
+terminal error detail, timestamps, durable status, and derived recovery kind. It
+does not expose warning messages, Telegram payloads, message text, source
+identity details, account/session/API data, or full provenance history.
 
 Migrated supergroup history remains disabled in this foundation slice. When it
 is detected, Takeout records `migrated_history_detected = 1`,
 `migrated_history_imported = 0`, a `migrated_history_deferred` warning, and
-partial completeness.
+partial completeness. Read-only recovery state does not enable migrated-history
+import, resume, purge, or automatic retry.
 
 The current Takeout path finalizes source state after a successful import. The
 regular sync path still owns the forum-topic refresh helper. If Takeout later

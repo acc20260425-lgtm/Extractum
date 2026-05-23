@@ -37,9 +37,8 @@ Priority: high.
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
 - [ ] retry the controlled migrated small-group-to-supergroup Takeout smoke after Telegram `TAKEOUT_INIT_DELAY` expires and verify migrated-history deferment without unsafe old `chat` rows
-- [ ] define the incomplete-import policy and user/recovery behavior on top of
-  existing ingest batches, Telegram Takeout batch details, warnings, and item
-  observations
+- [ ] define richer incomplete-import recovery actions and user policy beyond
+  the shipped read-only recovery state
 - [ ] enable migrated small-group history only after provenance and real-data
   validation prove the typed Telegram identity boundary is safe
 - [ ] decide whether Takeout import should refresh the forum-topic catalog after successful finish
