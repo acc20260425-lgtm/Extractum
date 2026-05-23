@@ -808,7 +808,7 @@ git commit -m "docs: document legacy telegram metadata cleanup helper"
 **Files:**
 - No edits unless verification finds a defect.
 
-- [ ] **Step 1: Run focused module tests**
+- [x] **Step 1: Run focused module tests**
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml sources::legacy_metadata_cleanup::tests:: -- --nocapture
@@ -816,7 +816,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::legacy_metadata_cleanup
 
 Expected: all cleanup tests pass.
 
-- [ ] **Step 2: Run source identity repair tests**
+- [x] **Step 2: Run source identity repair tests**
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml sources::identity_repair::tests:: -- --nocapture
@@ -824,7 +824,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::identity_repair::tests:
 
 Expected: existing source identity repair tests pass.
 
-- [ ] **Step 3: Run full Rust tests**
+- [x] **Step 3: Run full Rust tests**
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -832,7 +832,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: all Rust tests pass.
 
-- [ ] **Step 4: Check working tree and whitespace**
+- [x] **Step 4: Check working tree and whitespace**
 
 ```powershell
 git diff --check
@@ -841,7 +841,7 @@ git status --short --branch
 
 Expected: `git diff --check` exits 0 and status is clean after all commits.
 
-- [ ] **Step 5: Record final verification commit if docs changed**
+- [x] **Step 5: Record final verification commit if docs changed**
 
 If verification requires documentation changes, commit them:
 
