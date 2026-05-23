@@ -98,6 +98,28 @@ Diagnostics must not decode or return source display fields, usernames,
 external ids, message text, raw metadata, raw provider payloads, or warning
 message bodies. Tests should assert this on serialized helper output.
 
+## Implementation Constraints
+
+Some validation cases depend on live Telegram account and network conditions.
+The tooling should make these cases repeatable when the conditions exist, but
+it must not pretend that every fallback can be forced by local tests.
+
+- Shifted export DC fallback may remain `blocked` in the verification matrix
+  unless the tester has an environment that naturally triggers a local
+  transport/session fallback. The diagnostic contract is to summarize durable
+  flags, warning codes, status, completeness, and typed/coarse terminal
+  outcomes when such a run exists.
+- `before_after_snapshot_delta` is available only when the caller captured an
+  explicit sanitized pre-run snapshot. If no prior snapshot exists, the
+  validation row should be marked `blocked` or use another comparison mode; the
+  helper must not reconstruct pre-run state from timestamps.
+- Content presence diagnostics should use SQL-level presence checks such as
+  `content_zstd IS NOT NULL` and content kind aggregates. They should not
+  select, decode, decompress, log, or return message text.
+- Sample ids must use deterministic ordering, such as `item_id ASC`, before
+  applying the per-category cap. This keeps docs output stable and tests
+  non-flaky.
+
 ### Source Snapshot Summary
 
 For a given `source_id`, return a sanitized source-level summary:
