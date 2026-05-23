@@ -72,9 +72,9 @@ Analysis:
 - Full findings are recorded in
   `docs/archive/database-schema-legacy-analysis.md`.
 
-- [ ] decide whether and when to clear old Telegram `sources.metadata_zstd`
-  blobs after typed repair validation and real private/dialog-backed source
-  validation
+- [x] decide cleanup policy for old Telegram `sources.metadata_zstd` blobs
+- [ ] implement an explicit guarded audit/dry-run/clear helper for eligible
+  legacy Telegram source metadata blobs
 
 Acceptance:
 
@@ -85,6 +85,9 @@ Acceptance:
   blobs.
 - Any blob cleanup is validation-aware and does not remove repair input before
   the remaining real-data checks are done.
+- Legacy Telegram `sources.metadata_zstd` cleanup is not an automatic
+  destructive migration, startup cleanup, or opportunistic sync/update/list/
+  Takeout side effect.
 
 ### 3.3 Saved Runs Discoverability And Cleanup
 
