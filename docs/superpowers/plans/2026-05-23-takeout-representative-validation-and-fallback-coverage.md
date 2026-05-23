@@ -1499,7 +1499,7 @@ git commit -m "docs: add takeout validation checklist"
 **Files:**
 - No planned file edits.
 
-- [ ] **Step 1: Run focused Rust diagnostics tests**
+- [x] **Step 1: Run focused Rust diagnostics tests**
 
 Run:
 
@@ -1509,7 +1509,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_validation
 
 Expected: all Takeout validation diagnostics tests pass.
 
-- [ ] **Step 2: Run broader Takeout Rust tests**
+- [x] **Step 2: Run broader Takeout Rust tests**
 
 Run:
 
@@ -1519,7 +1519,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_import
 
 Expected: all Takeout import tests pass.
 
-- [ ] **Step 3: Run full Rust test suite**
+- [x] **Step 3: Run full Rust test suite**
 
 Run:
 
@@ -1529,7 +1529,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: all Rust tests pass.
 
-- [ ] **Step 4: Inspect the working tree**
+- [x] **Step 4: Inspect the working tree**
 
 Run:
 
@@ -1539,7 +1539,7 @@ git status --short --branch
 
 Expected: clean working tree on the implementation branch.
 
-- [ ] **Step 5: Record final verification in the handoff**
+- [x] **Step 5: Record final verification in the handoff**
 
 Report:
 
