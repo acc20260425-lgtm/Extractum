@@ -36,7 +36,7 @@
 - Create: `src-tauri/src/takeout_import/recovery.rs`
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Add the module declaration and failing backend tests**
+- [x] **Step 1: Add the module declaration and failing backend tests**
 
 Add this module declaration near the existing `mod export_dc;`, `mod pagination;`, and `mod state;` declarations in `src-tauri/src/takeout_import/mod.rs`:
 
@@ -475,7 +475,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run backend recovery tests and verify the expected red state**
+- [x] **Step 2: Run backend recovery tests and verify the expected red state**
 
 Run:
 
