@@ -494,7 +494,7 @@ Commit nothing for this red step.
 **Files:**
 - Modify: `src-tauri/src/takeout_import/recovery.rs`
 
-- [ ] **Step 1: Add the minimal public shapes and query implementation**
+- [x] **Step 1: Add the minimal public shapes and query implementation**
 
 At the top of `src-tauri/src/takeout_import/recovery.rs`, above the test module, add the DTO, row shape, and query helpers.
 
@@ -730,7 +730,7 @@ async fn load_warning_codes_for_batches(
 }
 ```
 
-- [ ] **Step 2: Run backend recovery tests and fix only compile-level mismatches**
+- [x] **Step 2: Run backend recovery tests and fix only compile-level mismatches**
 
 Run:
 
@@ -746,7 +746,7 @@ If a compile mismatch appears because `TakeoutImportState` is private through th
 use super::TakeoutImportState;
 ```
 
-- [ ] **Step 3: Commit backend recovery query**
+- [x] **Step 3: Commit backend recovery query**
 
 Run:
 
