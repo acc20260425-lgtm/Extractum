@@ -740,7 +740,7 @@ git commit -m "feat: add takeout validation summary diagnostics"
 **Files:**
 - Modify: `src-tauri/src/takeout_import/validation_diagnostics.rs`
 
-- [ ] **Step 1: Add red tests for comparison, duplicate, delta, and warning helpers**
+- [x] **Step 1: Add red tests for comparison, duplicate, delta, and warning helpers**
 
 Add these tests to the existing `tests` module in `src-tauri/src/takeout_import/validation_diagnostics.rs`:
 
@@ -933,7 +933,7 @@ Add these tests to the existing `tests` module in `src-tauri/src/takeout_import/
     }
 ```
 
-- [ ] **Step 2: Run comparison tests and verify red state**
+- [x] **Step 2: Run comparison tests and verify red state**
 
 Run:
 
@@ -943,7 +943,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_validation
 
 Expected: compile failure mentioning missing comparison, duplicate, delta, and warning helper functions or DTOs.
 
-- [ ] **Step 3: Commit the red comparison tests**
+- [x] **Step 3: Commit the red comparison tests**
 
 Run:
 

@@ -388,6 +388,7 @@ mod tests {
     const SENTINEL_MESSAGE: &str = "sentinel_message_text_do_not_emit";
     const SENTINEL_METADATA: &str = "sentinel_raw_metadata_do_not_emit";
     const SENTINEL_WARNING: &str = "sentinel_warning_body_do_not_emit";
+    const SENTINEL_REASON_CODE: &str = "sentinel_reason_code_do_not_emit";
 
     async fn fixture_pool() -> sqlx::SqlitePool {
         let pool = memory_pool_with_source_items_and_topics().await;
@@ -500,12 +501,63 @@ mod tests {
             SENTINEL_MESSAGE,
             SENTINEL_METADATA,
             SENTINEL_WARNING,
+            SENTINEL_REASON_CODE,
         ] {
             assert!(
                 !json.contains(sentinel),
                 "diagnostic output leaked sentinel {sentinel}: {json}"
             );
         }
+    }
+
+    async fn create_running_batch(pool: &sqlx::SqlitePool) -> i64 {
+        create_telegram_takeout_batch(
+            pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 7,
+                account_id: 3,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create takeout batch")
+    }
+
+    async fn record_observation(
+        pool: &sqlx::SqlitePool,
+        batch_id: i64,
+        item_id: Option<i64>,
+        message_id: i64,
+        outcome: &'static str,
+    ) {
+        record_observation_with_reason(pool, batch_id, item_id, message_id, outcome, None).await;
+    }
+
+    async fn record_observation_with_reason(
+        pool: &sqlx::SqlitePool,
+        batch_id: i64,
+        item_id: Option<i64>,
+        message_id: i64,
+        outcome: &'static str,
+        reason_code: Option<&'static str>,
+    ) {
+        record_ingest_observation(
+            pool,
+            IngestObservation {
+                batch_id,
+                source_id: 7,
+                item_id,
+                provider_item_kind: "telegram_message",
+                provider_identity_kind: "telegram_message",
+                provider_identity: format!(
+                    "telegram:history_peer:channel:7000:message:{message_id}"
+                ),
+                outcome,
+                reason_code,
+            },
+        )
+        .await
+        .expect("record observation");
     }
 
     #[tokio::test]
@@ -650,5 +702,232 @@ mod tests {
         assert!(!summary.migrated_history_imported);
         assert!(!summary.terminal_error_present);
         assert_no_sentinel_json(&summary);
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_row_fidelity_compares_batch_to_canonical_without_content() {
+        let pool = fixture_pool().await;
+        seed_canonical_message(&pool, 101, 1001, "text_only", None, Some(77), Some(2)).await;
+        seed_canonical_message(&pool, 102, 1002, "media", Some("photo"), None, None).await;
+        let batch_id = create_running_batch(&pool).await;
+        record_observation(&pool, batch_id, Some(101), 1001, "duplicate_observed").await;
+        record_observation_with_reason(
+            &pool,
+            batch_id,
+            None,
+            1999,
+            "skipped",
+            Some(SENTINEL_REASON_CODE),
+        )
+        .await;
+
+        let comparison = takeout_validation_batch_vs_canonical_source(&pool, batch_id)
+            .await
+            .expect("row fidelity comparison")
+            .expect("comparison exists");
+
+        assert_eq!(comparison.mode, "takeout_batch_vs_canonical_source");
+        assert_eq!(comparison.batch_id, batch_id);
+        assert_eq!(comparison.source_id, 7);
+        assert_eq!(comparison.observed_identity_count, 2);
+        assert_eq!(comparison.matched_canonical_identity_count, 1);
+        assert_eq!(comparison.missing_canonical_identity_count, 1);
+        assert_eq!(comparison.canonical_without_observation_count, 1);
+        assert_eq!(comparison.matched_content_zstd_present_count, 1);
+        assert!(comparison
+            .matched_content_kind_distribution
+            .iter()
+            .any(|entry| entry.key == "text_only" && entry.count == 1));
+        assert!(comparison
+            .matched_media_kind_distribution
+            .iter()
+            .any(|entry| entry.key == "none" && entry.count == 1));
+        assert_eq!(comparison.matched_reply_to_msg_id_present_count, 1);
+        assert_eq!(comparison.matched_reply_to_top_id_present_count, 1);
+        assert_eq!(comparison.matched_reaction_count_present_count, 1);
+        assert_eq!(
+            comparison.mismatch_categories[0].category,
+            "canonical_identity_missing_observation"
+        );
+        assert_eq!(comparison.mismatch_categories[0].sample_ids, vec![102]);
+        assert_eq!(
+            comparison.mismatch_categories[1].category,
+            "observed_identity_missing_canonical"
+        );
+        assert_no_sentinel_json(&comparison);
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_row_fidelity_caps_samples_deterministically() {
+        let pool = fixture_pool().await;
+        let batch_id = create_running_batch(&pool).await;
+        for offset in 0..12 {
+            record_observation(&pool, batch_id, None, 2000 + offset, "skipped").await;
+        }
+
+        let comparison = takeout_validation_batch_vs_canonical_source(&pool, batch_id)
+            .await
+            .expect("row fidelity comparison")
+            .expect("comparison exists");
+
+        let missing = comparison
+            .mismatch_categories
+            .iter()
+            .find(|category| category.category == "observed_identity_missing_canonical")
+            .expect("missing canonical category");
+        assert_eq!(missing.count, 12);
+        assert_eq!(missing.sample_ids.len(), 10);
+        assert_eq!(missing.sample_ids, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_duplicate_after_normal_sync_summarizes_outcomes() {
+        let pool = fixture_pool().await;
+        seed_canonical_message(&pool, 101, 1001, "text_only", None, None, None).await;
+        seed_canonical_message(&pool, 102, 1002, "text_only", None, None, None).await;
+        let batch_id = create_running_batch(&pool).await;
+        record_observation(&pool, batch_id, Some(101), 1001, "duplicate_observed").await;
+        record_observation(&pool, batch_id, Some(101), 1001, "duplicate_observed").await;
+        record_observation(&pool, batch_id, Some(102), 1002, "inserted").await;
+        record_observation(&pool, batch_id, None, 1003, "skipped").await;
+        record_observation(&pool, batch_id, None, 1004, "failed").await;
+
+        let summary = takeout_validation_duplicate_after_normal_sync(&pool, batch_id)
+            .await
+            .expect("duplicate summary")
+            .expect("summary exists");
+
+        assert_eq!(summary.batch_id, batch_id);
+        assert_eq!(summary.source_id, 7);
+        assert_eq!(summary.inserted_count, 1);
+        assert_eq!(summary.duplicate_observed_count, 2);
+        assert_eq!(summary.duplicate_identity_count, 1);
+        assert_eq!(summary.skipped_count, 1);
+        assert_eq!(summary.failed_count, 1);
+        assert!(summary.has_duplicate_after_normal_sync_evidence);
+        assert_no_sentinel_json(&summary);
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_snapshot_delta_uses_explicit_snapshots() {
+        let before = TakeoutValidationSourceSnapshot {
+            source_id: 7,
+            source_type: "telegram".to_string(),
+            source_subtype: Some("supergroup".to_string()),
+            account_id: Some(3),
+            last_sync_state: Some(10),
+            last_synced_at: Some(1700000000),
+            item_count: 2,
+            telegram_typed_row_count: 2,
+            max_telegram_message_id: Some(1002),
+            content_zstd_present_count: 2,
+            content_kind_distribution: vec![TakeoutValidationCount {
+                key: "text_only".to_string(),
+                count: 2,
+            }],
+            media_kind_distribution: vec![TakeoutValidationCount {
+                key: "none".to_string(),
+                count: 2,
+            }],
+            history_peer_kind_distribution: vec![TakeoutValidationCount {
+                key: "channel".to_string(),
+                count: 2,
+            }],
+            reply_to_msg_id_present_count: 0,
+            reply_to_top_id_present_count: 0,
+            reaction_count_present_count: 0,
+            reaction_count_sum: 0,
+            topic_membership_count: 0,
+            topic_membership_topic_count: 0,
+        };
+        let mut after = before.clone();
+        after.last_sync_state = Some(12);
+        after.item_count = 5;
+        after.telegram_typed_row_count = 5;
+        after.max_telegram_message_id = Some(1005);
+        after.content_zstd_present_count = 4;
+        after.topic_membership_count = 2;
+
+        let delta = takeout_validation_snapshot_delta(&before, &after);
+
+        assert_eq!(delta.mode, "before_after_snapshot_delta");
+        assert_eq!(delta.source_id, 7);
+        assert_eq!(delta.item_count_delta, 3);
+        assert_eq!(delta.telegram_typed_row_count_delta, 3);
+        assert_eq!(delta.content_zstd_present_count_delta, 2);
+        assert_eq!(delta.topic_membership_count_delta, 2);
+        assert_eq!(delta.max_telegram_message_id_before, Some(1002));
+        assert_eq!(delta.max_telegram_message_id_after, Some(1005));
+        assert_eq!(delta.last_sync_state_before, Some(10));
+        assert_eq!(delta.last_sync_state_after, Some(12));
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_warning_visibility_is_durable_only() {
+        let pool = fixture_pool().await;
+        let batch_id = create_running_batch(&pool).await;
+        mark_takeout_only_my_messages_fallback(&pool, batch_id, SENTINEL_WARNING)
+            .await
+            .expect("mark fallback");
+        mark_takeout_migrated_history_deferred(&pool, batch_id, SENTINEL_WARNING)
+            .await
+            .expect("mark migrated deferred");
+
+        let visibility = takeout_validation_warning_visibility(&pool, batch_id)
+            .await
+            .expect("warning visibility")
+            .expect("visibility exists");
+
+        assert_eq!(visibility.batch_id, batch_id);
+        assert_eq!(visibility.source_id, 7);
+        assert_eq!(
+            visibility.provenance_warning_codes,
+            vec![
+                "migrated_history_deferred".to_string(),
+                "only_my_messages_fallback".to_string(),
+            ]
+        );
+        assert!(visibility.batch_is_latest_for_source);
+        assert_eq!(
+            visibility.durable_recovery_kind.as_deref(),
+            Some("interrupted")
+        );
+        assert_eq!(
+            visibility.recovery_candidate_warning_codes,
+            visibility.provenance_warning_codes
+        );
+        assert_no_sentinel_json(&visibility);
+    }
+
+    #[tokio::test]
+    async fn takeout_validation_warning_visibility_excludes_non_latest_recovery_candidates() {
+        let pool = fixture_pool().await;
+        let old_batch_id = create_running_batch(&pool).await;
+        mark_takeout_only_my_messages_fallback(&pool, old_batch_id, SENTINEL_WARNING)
+            .await
+            .expect("mark old fallback");
+        mark_takeout_migrated_history_deferred(&pool, old_batch_id, SENTINEL_WARNING)
+            .await
+            .expect("mark old migrated deferred");
+        let _new_batch_id = create_running_batch(&pool).await;
+
+        let visibility = takeout_validation_warning_visibility(&pool, old_batch_id)
+            .await
+            .expect("warning visibility")
+            .expect("visibility exists");
+
+        assert_eq!(visibility.batch_id, old_batch_id);
+        assert_eq!(visibility.source_id, 7);
+        assert_eq!(
+            visibility.provenance_warning_codes,
+            vec![
+                "migrated_history_deferred".to_string(),
+                "only_my_messages_fallback".to_string(),
+            ]
+        );
+        assert!(!visibility.batch_is_latest_for_source);
+        assert_eq!(visibility.durable_recovery_kind, None);
+        assert!(visibility.recovery_candidate_warning_codes.is_empty());
+        assert_no_sentinel_json(&visibility);
     }
 }
