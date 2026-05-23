@@ -49,6 +49,11 @@ describe("compact analysis source rail", () => {
     expect(sourceSwitcherPanelSource).toContain("takeoutJob.warnings.length");
   });
 
+  it("uses the shared takeout recovery notice in source rows", () => {
+    expect(sourceSwitcherPanelSource).toContain("TakeoutRecoveryNotice");
+    expect(sourceSwitcherPanelSource).toContain("visibleTakeoutRecoveryForSource");
+  });
+
   it("keeps YouTube video duration visible in expanded source metadata", () => {
     expect(sourceSwitcherPanelSource).toContain("formatDuration(summary.durationSeconds)");
     expect(sourceSwitcherPanelSource).toContain("youtubeMetaLine(youtubeSummary)");

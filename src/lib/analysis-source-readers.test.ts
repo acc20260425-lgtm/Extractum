@@ -62,6 +62,11 @@ describe("analysis source readers", () => {
     expect(sourceGroupReaderSource).not.toContain("topic-filter");
   });
 
+  it("uses the shared takeout recovery notice in the selected source surface", () => {
+    expect(reportSourceSurfaceSource).toContain("TakeoutRecoveryNotice");
+    expect(reportSourceSurfaceSource).toContain("takeoutRecovery");
+  });
+
   it("keeps live single-source timeline readers pageable", () => {
     expect(reportSourceSurfaceSource).toContain("sourceItemsHasMore");
     expect(reportSourceSurfaceSource).toContain("onLoadMoreSourceItems");

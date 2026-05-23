@@ -1194,7 +1194,7 @@ git commit -m "feat: add takeout recovery frontend state"
 - Modify: `src/lib/analysis-compact-source-rail.test.ts`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add raw tests for shared component usage**
+- [x] **Step 1: Add raw tests for shared component usage**
 
 In `src/lib/analysis-compact-source-rail.test.ts`, add:
 
@@ -1214,7 +1214,7 @@ In `src/lib/analysis-source-readers.test.ts`, add:
   });
 ```
 
-- [ ] **Step 2: Run raw tests and verify red state**
+- [x] **Step 2: Run raw tests and verify red state**
 
 Run:
 
@@ -1224,7 +1224,7 @@ npm.cmd test -- src/lib/analysis-compact-source-rail.test.ts src/lib/analysis-so
 
 Expected: both new tests fail because the component is not imported or used yet.
 
-- [ ] **Step 3: Create the shared notice component**
+- [x] **Step 3: Create the shared notice component**
 
 Create `src/lib/components/analysis/takeout-recovery-notice.svelte`:
 
@@ -1331,7 +1331,7 @@ Create `src/lib/components/analysis/takeout-recovery-notice.svelte`:
 </style>
 ```
 
-- [ ] **Step 4: Run the component-adjacent tests**
+- [x] **Step 4: Run the component-adjacent tests**
 
 Run:
 
@@ -1343,7 +1343,7 @@ Expected: helper tests still pass.
 
 The raw tests still fail until Task 6 wires the component into both surfaces.
 
-- [ ] **Step 5: Commit shared component**
+- [x] **Step 5: Commit shared component**
 
 Run:
 
