@@ -779,7 +779,7 @@ If `docs/backlog.md` did not change, omit it from `git add`.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-113-takeout-validation.md`
 
-- [ ] **Step 1: Verify final status**
+- [x] **Step 1: Verify final status**
 
 Run:
 
@@ -795,12 +795,12 @@ Expected branch:
 ## takeout-source-113-channel-private-validation-plan
 ```
 
-- [ ] **Step 2: Do not update local handoff context**
+- [x] **Step 2: Do not update local handoff context**
 
 Per the user's latest preference, do not continue writing task-by-task context
 to `reference/session-context-2026-05-10-analysis-redesign.md`.
 
-- [ ] **Step 3: Commit completed plan marker**
+- [x] **Step 3: Commit completed plan marker**
 
 Mark Task 5 steps complete in this plan and commit:
 
@@ -810,7 +810,7 @@ git add docs/superpowers/plans/2026-05-24-channel-private-source-113-takeout-val
 git commit -m "docs: complete source 113 channel-private validation plan"
 ```
 
-- [ ] **Step 4: Report outcome**
+- [x] **Step 4: Report outcome**
 
 Report:
 
@@ -824,6 +824,19 @@ Report:
 
 Do not include raw provider messages, usernames, source titles, message text,
 or warning bodies.
+
+Task 5 final verification:
+
+| Check | Result |
+| --- | --- |
+| branch | takeout-source-113-channel-private-validation-plan |
+| latest validation commit before completion marker | cf04562 |
+| `git diff --check` | exit 0 |
+| remaining uncommitted files | dev logs only |
+
+Final outcome: source `113` batch `14` completed as `complete` without
+`CHANNEL_PRIVATE` fallback evidence. Matrix/backlog updates keep
+`CHANNEL_PRIVATE fallback` as `not run`.
 
 ---
 
