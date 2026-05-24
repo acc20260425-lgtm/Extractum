@@ -706,7 +706,7 @@ If `docs/backlog.md` did not change, omit it from `git add`.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md`
 
-- [ ] **Step 1: Verify final status**
+- [x] **Step 1: Verify final status**
 
 Run:
 
@@ -722,12 +722,12 @@ Expected branch:
 ## takeout-source-114-channel-private-validation-plan
 ```
 
-- [ ] **Step 2: Do not update local handoff context**
+- [x] **Step 2: Do not update local handoff context**
 
 Per the user's latest preference, do not continue writing task-by-task context
 to `reference/session-context-2026-05-10-analysis-redesign.md`.
 
-- [ ] **Step 3: Commit completed plan marker**
+- [x] **Step 3: Commit completed plan marker**
 
 Mark Task 5 steps complete in this plan and commit:
 
@@ -737,7 +737,7 @@ git add docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-val
 git commit -m "docs: complete source 114 channel-private validation plan"
 ```
 
-- [ ] **Step 4: Report outcome**
+- [x] **Step 4: Report outcome**
 
 Report:
 
@@ -751,6 +751,21 @@ Report:
 
 Do not include raw provider messages, usernames, source titles, message text,
 or warning bodies.
+
+Task 5 final verification:
+
+| Check | Result |
+| --- | --- |
+| branch | takeout-source-114-channel-private-validation-plan |
+| latest validation commit before completion marker | 100c9d0 |
+| `git diff --check` | exit 0 |
+| remaining uncommitted files | none |
+
+Final outcome: source `114` batch `15` reached failed/unknown with typed
+`CHANNEL_PRIVATE` before observations and without durable
+`only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence.
+Matrix/backlog updates move `CHANNEL_PRIVATE fallback` from `not run` to
+`needs follow-up`.
 
 ---
 
