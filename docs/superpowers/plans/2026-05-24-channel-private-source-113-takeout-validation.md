@@ -277,7 +277,7 @@ Expected: commit succeeds. `git diff --check` must exit `0`.
 **Files:**
 - Modify after live run: `docs/superpowers/plans/2026-05-24-channel-private-source-113-takeout-validation.md`
 
-- [ ] **Step 1: Start or reconnect the existing app flow**
+- [x] **Step 1: Start or reconnect the existing app flow**
 
 Check Tauri bridge status:
 
@@ -289,7 +289,7 @@ If disconnected, start the normal local Tauri dev flow used in this project and
 connect the bridge before invoking app commands. Do not stop user-started app
 processes unless explicitly instructed.
 
-- [ ] **Step 2: Pause for explicit live authorization**
+- [x] **Step 2: Pause for explicit live authorization**
 
 Before triggering Takeout, stop and ask the user to authorize the live action
 for:
@@ -300,7 +300,7 @@ source_id = 113
 
 Do not proceed until the user explicitly confirms the live Takeout run.
 
-- [ ] **Step 3: Trigger Takeout for source 113**
+- [x] **Step 3: Trigger Takeout for source 113**
 
 Through the existing application flow, start a Takeout import for:
 
@@ -317,7 +317,7 @@ window.__TAURI__.core.invoke("start_takeout_source_import", { sourceId: 113 })
 Do not alter source identity, account settings, app code, or database rows by
 hand.
 
-- [ ] **Step 4: Monitor only coarse terminal state**
+- [x] **Step 4: Monitor only coarse terminal state**
 
 Watch for one of these outcomes:
 
@@ -336,7 +336,7 @@ export_dc_fallback warning
 Do not copy raw provider errors. Record only typed/coarse terminal classes,
 warning codes, aggregate counters, and local numeric ids.
 
-- [ ] **Step 5: If the run grows too large, pause before bounded cancellation**
+- [x] **Step 5: If the run grows too large, pause before bounded cancellation**
 
 If the estimate or runtime makes a complete run impractical, stop and ask the
 user whether to keep waiting or cancel through the normal app flow.
@@ -360,7 +360,7 @@ last_synced_at before/after
 
 Do not manually delete partial rows.
 
-- [ ] **Step 6: Commit live-run marker**
+- [x] **Step 6: Commit live-run marker**
 
 After a terminal state is reached or bounded cancellation is completed, mark
 Task 2 steps complete in this plan and commit:
@@ -370,6 +370,35 @@ git diff --check
 git add docs/superpowers/plans/2026-05-24-channel-private-source-113-takeout-validation.md
 git commit -m "docs: mark source 113 channel-private live run"
 ```
+
+Task 2 sanitized live-run marker:
+
+| Field | Value |
+| --- | --- |
+| source_id | 113 |
+| job_id | takeout-1 |
+| batch_id | 14 |
+| status | completed |
+| completeness | complete |
+| observed | 467 |
+| inserted | 438 |
+| duplicates | 29 |
+| skipped | 0 |
+| warnings | 0 |
+| terminal_error_class | none |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| takeout_id_present | 1 |
+| message_count_estimate | 475 |
+| max_message_id | null |
+| started_at | 2026-05-24 17:14:17 |
+| finished_at | 2026-05-24 17:14:29 |
+
+The run completed cleanly without `CHANNEL_PRIVATE` fallback evidence, so
+bounded cancellation was not needed.
 
 ---
 
