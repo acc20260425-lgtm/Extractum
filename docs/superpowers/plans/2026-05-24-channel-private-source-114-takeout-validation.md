@@ -264,7 +264,7 @@ Expected: commit succeeds. `git diff --check` must exit `0`.
 **Files:**
 - Modify after live run: `docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md`
 
-- [ ] **Step 1: Start or reconnect the existing app flow**
+- [x] **Step 1: Start or reconnect the existing app flow**
 
 Check Tauri bridge status:
 
@@ -276,7 +276,7 @@ If disconnected, start the normal local Tauri dev flow used in this project and
 connect the bridge before invoking app commands. Do not stop user-started app
 processes unless explicitly instructed.
 
-- [ ] **Step 2: Pause for explicit live authorization**
+- [x] **Step 2: Pause for explicit live authorization**
 
 Before triggering Takeout, stop and ask the user to authorize the live action
 for:
@@ -287,7 +287,7 @@ source_id = 114
 
 Do not proceed until the user explicitly confirms the live Takeout run.
 
-- [ ] **Step 3: Trigger Takeout for source 114**
+- [x] **Step 3: Trigger Takeout for source 114**
 
 Through the existing application flow, start a Takeout import for:
 
@@ -304,7 +304,7 @@ window.__TAURI__.core.invoke("start_takeout_source_import", { sourceId: 114 })
 Do not alter source identity, account settings, app code, or database rows by
 hand.
 
-- [ ] **Step 4: Monitor only coarse terminal state**
+- [x] **Step 4: Monitor only coarse terminal state**
 
 Watch for one of these outcomes:
 
@@ -323,7 +323,7 @@ export_dc_fallback warning
 Do not copy raw provider errors. Record only typed/coarse terminal classes,
 warning codes, aggregate counters, and local numeric ids.
 
-- [ ] **Step 5: If the run grows too large, pause before bounded cancellation**
+- [x] **Step 5: If the run grows too large, pause before bounded cancellation**
 
 If the estimate or runtime makes a complete run impractical, stop and ask the
 user whether to keep waiting or cancel through the normal app flow.
@@ -347,7 +347,7 @@ last_synced_at before/after
 
 Do not manually delete partial rows.
 
-- [ ] **Step 6: Commit live-run marker**
+- [x] **Step 6: Commit live-run marker**
 
 After a terminal state is reached or bounded cancellation is completed, mark
 Task 2 steps complete in this plan and commit:
