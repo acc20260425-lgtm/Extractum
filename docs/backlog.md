@@ -39,6 +39,10 @@ Priority: high.
   - Source `18` completed public-channel Takeout as batch `10` with explicit
     before/after snapshots, no warnings, and complete duplicate/fidelity
     evidence against the normal-sync baseline.
+  - Source `22` public-supergroup Takeout batch `11` was bounded-cancelled as
+    `partial` after `11162` observations because the estimate was `125813`;
+    all observed identities matched canonical source rows, but completed
+    public-supergroup evidence is still needed.
 - [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`
@@ -63,6 +67,10 @@ Priority: high.
   - Source `21` / batch `4` partial Takeout materially increased topic
     memberships without refreshing the topic catalog; completed supergroup
     evidence is still needed before changing behavior.
+  - Source `22` / batch `11` partial Takeout added `10030` topic memberships
+    while the topic catalog aggregate remained unchanged; this strengthens the
+    decision input but still does not justify behavior changes without
+    completed supergroup evidence.
 
 Acceptance:
 
