@@ -407,11 +407,11 @@ bounded cancellation was not needed.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-113-takeout-validation.md`
 
-- [ ] **Step 1: Capture post-run source snapshot**
+- [x] **Step 1: Capture post-run source snapshot**
 
 Capture the same sanitized source `113` fields recorded in Task 1.
 
-- [ ] **Step 2: Capture latest batch summary**
+- [x] **Step 2: Capture latest batch summary**
 
 Capture the new Takeout batch summary and record:
 
@@ -437,7 +437,7 @@ max_message_id
 warning_codes
 ```
 
-- [ ] **Step 3: Capture fallback evidence when present**
+- [x] **Step 3: Capture fallback evidence when present**
 
 If warning or flag evidence appears, record only:
 
@@ -457,7 +457,7 @@ If no fallback evidence appears, record:
 No only-my-messages fallback warning or durable fallback flag was captured.
 ```
 
-- [ ] **Step 4: Capture duplicate summary when observations exist**
+- [x] **Step 4: Capture duplicate summary when observations exist**
 
 If `observed > 0`, capture duplicate summary:
 
@@ -476,7 +476,7 @@ If `observed = 0`, record:
 Duplicate summary not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 5: Capture row-fidelity comparison when observations exist**
+- [x] **Step 5: Capture row-fidelity comparison when observations exist**
 
 If `observed > 0`, capture row fidelity in the relevant mode:
 
@@ -492,7 +492,7 @@ If `observed = 0`, record:
 Row-fidelity comparison not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 6: Capture warning visibility**
+- [x] **Step 6: Capture warning visibility**
 
 Capture warning visibility for the new batch.
 
@@ -507,7 +507,7 @@ finish_takeout_failed
 
 Do not record warning messages.
 
-- [ ] **Step 7: Capture explicit before/after delta**
+- [x] **Step 7: Capture explicit before/after delta**
 
 Compare the pre-run and post-run sanitized source snapshots.
 
@@ -527,7 +527,7 @@ last_synced_at before/after
 For failed or cancelled runs, explicitly state whether `last_sync_state` and
 `last_synced_at` stayed equal.
 
-- [ ] **Step 8: Commit post-run capture marker**
+- [x] **Step 8: Commit post-run capture marker**
 
 Mark Task 3 steps complete in this plan and commit:
 
@@ -536,6 +536,141 @@ git diff --check
 git add docs/superpowers/plans/2026-05-24-channel-private-source-113-takeout-validation.md
 git commit -m "docs: mark source 113 channel-private post-run capture"
 ```
+
+Task 3 sanitized post-run capture:
+
+Source `113` post-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 467 |
+| telegram_message_count | 467 |
+| max_telegram_message_id | 515 |
+| content_zstd_present_count | 420 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 155 |
+| thread_count | 38 |
+| reaction_item_count | 317 |
+| reaction_count_sum | 1592 |
+| last_sync_state | 515 |
+| last_synced_at | 1779642869 |
+
+Source `113` post-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 47 |
+| content_kind | text_only | 164 |
+| content_kind | text_with_media | 256 |
+| media_kind | animation | 1 |
+| media_kind | document | 8 |
+| media_kind | none | 164 |
+| media_kind | photo | 70 |
+| media_kind | poll | 1 |
+| media_kind | video | 5 |
+| media_kind | webpage | 218 |
+| history_peer_kind | channel | 467 |
+
+Source `113` topic catalog and resolver state after batch `14`:
+
+| Field | Value |
+| --- | --- |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| resolver_state | none |
+
+Batch `14` summary:
+
+| Field | Value |
+| --- | --- |
+| source_id | 113 |
+| status | completed |
+| completeness | complete |
+| terminal_error_class | none |
+| inserted | 438 |
+| observed | 467 |
+| duplicates | 29 |
+| skipped | 0 |
+| warnings | 0 |
+| started_at | 2026-05-24 17:14:17 |
+| finished_at | 2026-05-24 17:14:29 |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| takeout_id_present | 1 |
+| message_count_estimate | 475 |
+| max_message_id | null |
+
+Fallback evidence for batch `14`:
+
+- `only_my_messages_fallback` warning code: absent;
+- `only_my_messages`: `0`;
+- `fallback_used`: `0`;
+- durable recovery kind: none.
+
+Duplicate summary for batch `14`:
+
+| Field | Value |
+| --- | ---: |
+| inserted_count | 438 |
+| duplicate_observed_count | 29 |
+| skipped_count | 0 |
+| failed_count | 0 |
+| duplicate_identity_count | 29 |
+| has_duplicate_after_normal_sync_evidence | 1 |
+
+Row-fidelity comparison for batch `14`:
+
+| Field | Value |
+| --- | ---: |
+| observed_identity_count | 467 |
+| matched_canonical_identity_count | 467 |
+| missing_canonical_identity_count | 0 |
+| canonical_without_observation_count | 0 |
+| matched_content_zstd_present_count | 420 |
+| matched_reply_to_msg_id_present_count | 155 |
+| matched_reply_to_top_id_present_count | 38 |
+| matched_reaction_count_present_count | 317 |
+
+Matched content/media distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 47 |
+| content_kind | text_only | 164 |
+| content_kind | text_with_media | 256 |
+| media_kind | animation | 1 |
+| media_kind | document | 8 |
+| media_kind | none | 164 |
+| media_kind | photo | 70 |
+| media_kind | poll | 1 |
+| media_kind | video | 5 |
+| media_kind | webpage | 218 |
+
+Row-fidelity mismatch categories: none.
+
+Warning visibility for batch `14`:
+
+- provenance warning codes: none;
+- recovery candidate warning codes: none;
+- latest batch for source `113`: yes;
+- durable recovery kind: none.
+
+Explicit before/after delta:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 29 | 467 | 438 |
+| telegram_message_count | 29 | 467 | 438 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 16 | 155 | 139 |
+| thread_count | 5 | 38 | 33 |
+| reaction_item_count | 22 | 317 | 295 |
+| last_sync_state | 515 | 515 | unchanged |
+| last_synced_at | 1779537575 | 1779642869 | advanced |
 
 ---
 
