@@ -3,13 +3,16 @@
 > Status: reusable manual validation matrix. Rows start as `not run` until real
 > Telegram accounts and representative sources are available.
 
-Updated: 2026-05-23
+Updated: 2026-05-24
 
-Current matrix summary: `2 passed`, `4 needs follow-up`, `3 blocked`,
+Current matrix summary: `4 passed`, `3 needs follow-up`, `2 blocked`,
 `1 not run`.
 
 Covered highlights:
 
+- completed public-channel Takeout for source `18` / batch `10`, with explicit
+  before/after snapshots, duplicate-after-normal-sync evidence, and row-fidelity
+  comparison;
 - completed small-group Takeout for source `118` / batch `6`;
 - completed repeated Takeout-after-Takeout duplicate validation for source `73`
   / batch `3`;
@@ -17,7 +20,8 @@ Covered highlights:
   runs for sources `21` / `110`;
 - normal-sync-before-Takeout attempts for source `113`, most recently batch
   `9`, blocked by
-  `TAKEOUT_INIT_DELAY` before Takeout observations were written;
+  `TAKEOUT_INIT_DELAY` before Takeout observations were written; source `18`
+  later completed the public-channel after-normal-sync validation path;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
   membership, and resolver-state counters.
@@ -45,11 +49,11 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 
 | Case | Status | Source id | Batch id | Evidence to paste | Result notes |
 | --- | --- | --- | --- | --- | --- |
-| Public channel Takeout | needs follow-up | 73 | 3 | existing durable source summary and batch summary | Existing durable Takeout batch is complete with no warnings, but this matrix did not capture a dedicated before/after snapshot pair for the run |
+| Public channel Takeout | passed | 18 | 10 | before/after source summary, completed Takeout batch summary, duplicate summary, row-fidelity comparison, warning visibility, watermark before/after | Completed cleanly for a public/member channel with explicit before/after snapshots and no warnings |
 | Public supergroup Takeout | needs follow-up | 21 | 4 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
-| Repeated Takeout after normal sync | blocked | 113 | 9 | normal sync before snapshot and failed Takeout batch summaries | Normal sync succeeded, but repeated Takeout attempts failed before observations with `TAKEOUT_INIT_DELAY`, so duplicate and row-fidelity comparison could not run |
+| Repeated Takeout after normal sync | passed | 18 | 10 | duplicate observation summary, row-fidelity comparison, before/after source summary, latest batch summary | Batch 10 followed an existing normal-sync baseline for source 18; 42 observations were classified as duplicates and all 467 observed identities matched canonical rows |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present | Offline inventory found no prior fallback evidence; a live `CHANNEL_PRIVATE` observation is still needed |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
@@ -124,6 +128,109 @@ Source `18` pre-run aggregate distributions:
 Latest pre-run Takeout state for source `18`: none.
 
 Prior Takeout batch count for source `18`: `0`.
+
+### 2026-05-24 Source 18 Public Channel Takeout Result
+
+App commit: `2502923`. Working tree was clean before this run on branch
+`takeout-source-18-public-channel-validation`.
+
+Outcome: completed / complete.
+
+Source `18` before/after snapshot:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 42 | 467 | 425 |
+| telegram_message_count | 42 | 467 | 425 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 20 | 155 | 135 |
+| thread_count | 6 | 38 | 32 |
+| reaction_item_count | 28 | 317 | 289 |
+| last_sync_state | 514 | 515 | advanced |
+| last_synced_at | 1779414142 | 1779627419 | advanced |
+
+Source `18` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 47 |
+| content_kind | text_only | 164 |
+| content_kind | text_with_media | 256 |
+| media_kind | animation | 1 |
+| media_kind | document | 8 |
+| media_kind | none | 164 |
+| media_kind | photo | 70 |
+| media_kind | poll | 1 |
+| media_kind | video | 5 |
+| media_kind | webpage | 218 |
+| history_peer_kind | channel | 467 |
+
+Batch summary:
+
+| Batch id | Source id | Status | Completeness | Terminal error present | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate | Max message id |
+| ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 18 | completed | complete | 0 | 425 | 467 | 42 | 0 | 0 | 1 | 0 | 0 | 0 | 475 | 515 |
+
+Warning codes for batch `10`: none.
+
+Duplicate summary:
+
+| Field | Value |
+| --- | ---: |
+| inserted observations | 425 |
+| duplicate observations | 42 |
+| skipped observations | 0 |
+| failed observations | 0 |
+| duplicate identity count | 42 |
+| has duplicate-after-normal-sync evidence | 1 |
+
+Row-fidelity comparison:
+
+| Field | Value |
+| --- | ---: |
+| observed_identity_count | 467 |
+| matched_canonical_identity_count | 467 |
+| missing_canonical_identity_count | 0 |
+| canonical_without_observation_count | 0 |
+| matched_content_zstd_present_count | 420 |
+| matched_reply_to_msg_id_present_count | 155 |
+| matched_reply_to_top_id_present_count | 38 |
+| matched_reaction_count_present_count | 317 |
+
+Matched content-kind distribution:
+
+| Key | Count |
+| --- | ---: |
+| media_only | 47 |
+| text_only | 164 |
+| text_with_media | 256 |
+
+Matched media-kind distribution:
+
+| Key | Count |
+| --- | ---: |
+| animation | 1 |
+| document | 8 |
+| none | 164 |
+| photo | 70 |
+| poll | 1 |
+| video | 5 |
+| webpage | 218 |
+
+Row-fidelity mismatch categories: none.
+
+Warning visibility:
+
+| Field | Value |
+| --- | --- |
+| provenance warning codes | none |
+| recovery candidate warning codes | none |
+| latest batch for source | yes |
+
+Result: the public-channel Takeout row is promoted to `passed`, and the
+Takeout-after-normal-sync comparison row is promoted to `passed` because batch
+`10` completed with duplicate evidence against the normal-sync baseline and a
+full canonical row-fidelity match.
 
 ### 2026-05-23 Source 113 Takeout Retry Pre-Run
 

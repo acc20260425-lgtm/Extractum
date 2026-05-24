@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-23
+> **Updated:** 2026-05-24
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -34,7 +34,11 @@ Priority: high.
 
 - [x] ship repeatable sanitized Takeout validation diagnostics and reusable
   manual validation template
-- [ ] complete representative public channel and supergroup Takeout validation after current durable baseline and bounded partial runs
+- [ ] complete representative public supergroup Takeout validation after
+  current durable baseline and bounded partial runs
+  - Source `18` completed public-channel Takeout as batch `10` with explicit
+    before/after snapshots, no warnings, and complete duplicate/fidelity
+    evidence against the normal-sync baseline.
 - [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`
@@ -42,11 +46,14 @@ Priority: high.
     live Takeout retries, most recently batch `9`, are currently blocked by
     `TAKEOUT_INIT_DELAY`.
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
-- [ ] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
+- [x] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
   - Source `113` completed the normal-sync setup but Takeout batches `7` and
     `8` failed before observations with `TAKEOUT_INIT_DELAY`.
   - Source `113` retry batch `9` remained blocked before observations with
-    `TAKEOUT_INIT_DELAY`; duplicate and row-fidelity comparison remain open.
+    `TAKEOUT_INIT_DELAY`.
+  - Source `18` batch `10` completed after a normal-sync baseline with `42`
+    duplicate observations, `425` inserts, zero warning codes, and a full
+    row-fidelity match across `467` observed identities.
 - [ ] retry the controlled migrated small-group-to-supergroup Takeout smoke after Telegram `TAKEOUT_INIT_DELAY` expires and verify migrated-history deferment without unsafe old `chat` rows
 - [ ] define richer incomplete-import recovery actions and user policy beyond
   the shipped read-only recovery state

@@ -451,7 +451,7 @@ For failed or cancelled runs, explicitly state whether `last_sync_state` and
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify if status changes: `docs/backlog.md`
 
-- [ ] **Step 1: Add a post-run note**
+- [x] **Step 1: Add a post-run note**
 
 Append a dated note named:
 
@@ -475,7 +475,7 @@ The note must include:
   sanitized aggregate categories and capped sample ids;
 - one result sentence mapping the outcome to the matrix status impact.
 
-- [ ] **Step 2: Update matrix row statuses conservatively**
+- [x] **Step 2: Update matrix row statuses conservatively**
 
 Apply the decision table:
 
@@ -490,7 +490,7 @@ Apply the decision table:
 - If fallback warnings appear, update only the exact row supported by warning
   code/flag evidence.
 
-- [ ] **Step 3: Update backlog notes if evidence changes 3.1 status**
+- [x] **Step 3: Update backlog notes if evidence changes 3.1 status**
 
 In `docs/backlog.md`, update section `3.1` only if new evidence changes the
 current state.
@@ -507,7 +507,7 @@ Allowed examples:
   `TAKEOUT_INIT_DELAY`.
 ```
 
-- [ ] **Step 4: Run documentation checks**
+- [x] **Step 4: Run documentation checks**
 
 Run:
 
@@ -523,7 +523,7 @@ Expected:
 - `git diff --check` exits `0`. Existing CRLF warnings are acceptable if the
   exit code is `0`.
 
-- [ ] **Step 5: Commit validation result**
+- [x] **Step 5: Commit validation result**
 
 Run:
 
