@@ -78,6 +78,89 @@ Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
 
+### 2026-05-24 Source 22 Public Supergroup Takeout Pre-Run
+
+App commit: `e54b61c`. Working tree was clean before this run on branch
+`takeout-public-supergroup-validation-plan`.
+
+Source `22` pre-run identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | supergroup |
+| account_id | 1 |
+| peer_kind | channel |
+| has_username | 1 |
+| has_access_hash | 1 |
+| is_member | 1 |
+| resolution_strategy | dialog |
+
+Source `22` pre-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 1137 |
+| telegram_message_count | 1137 |
+| topic_membership_count | 1136 |
+| topic_membership_topic_count | 21 |
+| reply_count | 1133 |
+| thread_count | 760 |
+| reaction_item_count | 115 |
+| reaction_count_sum | 118 |
+| content_zstd_present_count | 1102 |
+| max_telegram_message_id | 157979 |
+| last_sync_state | 157979 |
+| last_synced_at | 1777917482 |
+
+Source `22` pre-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 35 |
+| content_kind | text_only | 997 |
+| content_kind | text_with_media | 105 |
+| media_kind | document | 10 |
+| media_kind | image | 5 |
+| media_kind | none | 997 |
+| media_kind | photo | 104 |
+| media_kind | webpage | 21 |
+| history_peer_kind | channel | 1137 |
+| membership_match_kind | general_fallback | 5 |
+| membership_match_kind | reply_to_msg_id | 365 |
+| membership_match_kind | reply_to_top_id | 759 |
+| membership_match_kind | typed_root_top_message_id | 7 |
+
+Source `22` pre-run topic catalog aggregate:
+
+| Field | Value |
+| --- | ---: |
+| topic_catalog_count | 23 |
+| distinct_topic_ids | 23 |
+| closed_count | 0 |
+| pinned_count | 0 |
+| hidden_count | 0 |
+| deleted_count | 0 |
+| max_last_seen_at | 1777917481 |
+| max_updated_at | 1777917481 |
+
+Source `22` pre-run topic resolver state:
+
+| Field | Value |
+| --- | --- |
+| resolver_version | 1 |
+| status | ready |
+| catalog_refreshed_at | 1777917481 |
+| memberships_refreshed_at | 1779038483 |
+| unresolved_count | 1 |
+| pending_item_count | 0 |
+| has_last_error | 0 |
+| updated_at | 1779038483 |
+
+Latest pre-run Takeout state for source `22`: none.
+
+Prior Takeout batch count for source `22`: `0`.
+
 ### 2026-05-24 Source 18 Public Channel Takeout Pre-Run
 
 App commit: `2502923`. Working tree was clean before this run on branch
