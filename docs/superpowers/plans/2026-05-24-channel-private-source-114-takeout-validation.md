@@ -358,6 +358,34 @@ git add docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-val
 git commit -m "docs: mark source 114 channel-private live run"
 ```
 
+Task 2 sanitized live-run marker:
+
+| Field | Value |
+| --- | --- |
+| source_id | 114 |
+| job_id | takeout-1 |
+| batch_id | 15 |
+| status | failed |
+| completeness | unknown |
+| terminal_error_class | CHANNEL_PRIVATE |
+| observed | 0 |
+| inserted | 0 |
+| duplicates | 0 |
+| skipped | 0 |
+| warnings | 0 |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| message_count_estimate | null |
+| max_message_id | null |
+| started_at | 2026-05-24 17:39:26 |
+| finished_at | 2026-05-24 17:39:27 |
+
+The run failed before observations with the typed/coarse terminal class
+`CHANNEL_PRIVATE`. No bounded cancellation was needed.
+
 ---
 
 ### Task 3: Post-Run Evidence Capture
@@ -365,11 +393,11 @@ git commit -m "docs: mark source 114 channel-private live run"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md`
 
-- [ ] **Step 1: Capture post-run source snapshot**
+- [x] **Step 1: Capture post-run source snapshot**
 
 Capture the same sanitized source `114` fields recorded in Task 1.
 
-- [ ] **Step 2: Capture latest batch summary**
+- [x] **Step 2: Capture latest batch summary**
 
 Capture the new Takeout batch summary and record:
 
@@ -395,7 +423,7 @@ max_message_id
 warning_codes
 ```
 
-- [ ] **Step 3: Capture fallback evidence when present**
+- [x] **Step 3: Capture fallback evidence when present**
 
 If warning or flag evidence appears, record only:
 
@@ -415,7 +443,7 @@ If no fallback evidence appears, record:
 No only-my-messages fallback warning or durable fallback flag was captured.
 ```
 
-- [ ] **Step 4: Capture duplicate summary when observations exist**
+- [x] **Step 4: Capture duplicate summary when observations exist**
 
 If `observed > 0`, capture duplicate summary:
 
@@ -434,7 +462,7 @@ If `observed = 0`, record:
 Duplicate summary not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 5: Capture row-fidelity comparison when observations exist**
+- [x] **Step 5: Capture row-fidelity comparison when observations exist**
 
 If `observed > 0`, capture row fidelity in the relevant mode:
 
@@ -450,7 +478,7 @@ If `observed = 0`, record:
 Row-fidelity comparison not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 6: Capture warning visibility**
+- [x] **Step 6: Capture warning visibility**
 
 Capture warning visibility for the new batch.
 
@@ -465,7 +493,7 @@ finish_takeout_failed
 
 Do not record warning messages.
 
-- [ ] **Step 7: Capture explicit before/after delta**
+- [x] **Step 7: Capture explicit before/after delta**
 
 Compare the pre-run and post-run sanitized source snapshots.
 
@@ -485,7 +513,7 @@ last_synced_at before/after
 For failed or cancelled runs, explicitly state whether `last_sync_state` and
 `last_synced_at` stayed equal.
 
-- [ ] **Step 8: Commit post-run capture marker**
+- [x] **Step 8: Commit post-run capture marker**
 
 Mark Task 3 steps complete in this plan and commit:
 
@@ -494,6 +522,82 @@ git diff --check
 git add docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md
 git commit -m "docs: mark source 114 channel-private post-run capture"
 ```
+
+Task 3 sanitized post-run capture:
+
+Source `114` post-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 0 |
+| telegram_message_count | 0 |
+| max_telegram_message_id | none |
+| content_zstd_present_count | 0 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 0 |
+| thread_count | 0 |
+| reaction_item_count | 0 |
+| reaction_count_sum | 0 |
+| last_sync_state | 1 |
+| last_synced_at | 1779418693 |
+
+Source `114` post-run aggregate distributions: none.
+
+Batch `15` summary:
+
+| Field | Value |
+| --- | --- |
+| source_id | 114 |
+| status | failed |
+| completeness | unknown |
+| terminal_error_class | CHANNEL_PRIVATE |
+| inserted | 0 |
+| observed | 0 |
+| duplicates | 0 |
+| skipped | 0 |
+| warnings | 0 |
+| started_at | 2026-05-24 17:39:26 |
+| finished_at | 2026-05-24 17:39:27 |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| message_count_estimate | null |
+| max_message_id | null |
+
+Fallback evidence for batch `15`:
+
+- `only_my_messages_fallback` warning code: absent;
+- `only_my_messages`: `0`;
+- `fallback_used`: `0`;
+- durable recovery kind: none.
+
+Duplicate summary not applicable because the batch wrote zero observations.
+
+Row-fidelity comparison not applicable because the batch wrote zero
+observations.
+
+Warning visibility for batch `15`:
+
+- provenance warning codes: none;
+- recovery candidate warning codes: none;
+- latest batch for source `114`: yes;
+- durable recovery kind: none.
+
+Explicit before/after delta:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 0 | 0 | 0 |
+| telegram_message_count | 0 | 0 | 0 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 0 | 0 | 0 |
+| thread_count | 0 | 0 | 0 |
+| reaction_item_count | 0 | 0 | 0 |
+| last_sync_state | 1 | 1 | unchanged |
+| last_synced_at | 1779418693 | 1779418693 | unchanged |
 
 ---
 
