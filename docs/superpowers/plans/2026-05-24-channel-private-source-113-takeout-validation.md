@@ -681,7 +681,7 @@ Explicit before/after delta:
 - Modify if status changes: `docs/backlog.md`
 - Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-113-takeout-validation.md`
 
-- [ ] **Step 1: Add a post-run note**
+- [x] **Step 1: Add a post-run note**
 
 Append a dated note named:
 
@@ -707,7 +707,7 @@ The note must include:
   sanitized aggregate categories and capped sample ids;
 - one result sentence mapping the outcome to the matrix status impact.
 
-- [ ] **Step 2: Update matrix row statuses conservatively**
+- [x] **Step 2: Update matrix row statuses conservatively**
 
 Apply the decision table:
 
@@ -724,7 +724,7 @@ Apply the decision table:
   `needs follow-up` based on the typed/coarse terminal class and captured
   evidence.
 
-- [ ] **Step 3: Update backlog notes if evidence changes 3.1 status**
+- [x] **Step 3: Update backlog notes if evidence changes 3.1 status**
 
 In `docs/backlog.md`, update section `3.1` only if new evidence changes the
 current state.
@@ -746,7 +746,7 @@ Allowed examples:
   `CHANNEL_PRIVATE` fallback remains unproven.
 ```
 
-- [ ] **Step 4: Run documentation checks**
+- [x] **Step 4: Run documentation checks**
 
 Run:
 
@@ -761,7 +761,7 @@ Expected:
 - no forbidden private content was added;
 - `git diff --check` exits `0`.
 
-- [ ] **Step 5: Commit validation result**
+- [x] **Step 5: Commit validation result**
 
 Run:
 

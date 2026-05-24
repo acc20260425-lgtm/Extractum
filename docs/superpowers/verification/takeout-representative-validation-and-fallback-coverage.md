@@ -21,10 +21,9 @@ Covered highlights:
   row-fidelity comparison;
 - bounded partial public supergroup and dialog-backed no-username supergroup
   runs for sources `19` / `21` / `22` / `110`;
-- normal-sync-before-Takeout attempts for source `113`, most recently batch
-  `9`, blocked by
-  `TAKEOUT_INIT_DELAY` before Takeout observations were written; source `18`
-  later completed the public-channel after-normal-sync validation path;
+- normal-sync-before-Takeout attempts for source `113`: batches `7`, `8`, and
+  `9` were blocked by `TAKEOUT_INIT_DELAY`; batch `14` later completed without
+  `CHANNEL_PRIVATE` fallback evidence, so the fallback row remains open;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
   membership, and resolver-state counters.
@@ -58,7 +57,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
 | Repeated Takeout after normal sync | passed | 18 | 10 | duplicate observation summary, row-fidelity comparison, before/after source summary, latest batch summary | Batch 10 followed an existing normal-sync baseline for source 18; 42 observations were classified as duplicates and all 467 observed identities matched canonical rows |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
-| `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present | Offline inventory found no prior fallback evidence; a live `CHANNEL_PRIVATE` observation is still needed |
+| `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present | Offline inventory found no prior fallback evidence; source `113` batch `14` completed without fallback warning/flag evidence, so a live `CHANNEL_PRIVATE` observation is still needed |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
 | Migrated small-group-to-supergroup smoke | blocked | 115 | 2 | failed early Takeout batch summary | Existing smoke reached a failed/unknown terminal batch with zero observations before migrated-history evidence could be collected |
 | Forum-topic decision input | needs follow-up | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout | Bounded partial runs materially increased topic memberships without refreshing the topic catalog, which is useful decision input; completed supergroup Takeout evidence is still needed before changing behavior |
@@ -157,6 +156,99 @@ Interpretation: source `113` remains the strongest sanitized
 still limited to pre-observation `TAKEOUT_INIT_DELAY` failures. The
 `CHANNEL_PRIVATE` fallback row remains `not run` until a live run records
 fallback warning/flag evidence or another relevant typed terminal outcome.
+
+### 2026-05-24 Source 113 Channel Private Takeout Result
+
+App commit: `f3754a9`. Working tree had only dev-log changes before this run
+on branch `takeout-source-113-channel-private-validation-plan`.
+
+Outcome: completed / complete without fallback.
+
+Source `113` before/after snapshot:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 29 | 467 | 438 |
+| telegram_message_count | 29 | 467 | 438 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 16 | 155 | 139 |
+| thread_count | 5 | 38 | 33 |
+| reaction_item_count | 22 | 317 | 295 |
+| last_sync_state | 515 | 515 | unchanged |
+| last_synced_at | 1779537575 | 1779642869 | advanced |
+
+Source `113` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 47 |
+| content_kind | text_only | 164 |
+| content_kind | text_with_media | 256 |
+| media_kind | animation | 1 |
+| media_kind | document | 8 |
+| media_kind | none | 164 |
+| media_kind | photo | 70 |
+| media_kind | poll | 1 |
+| media_kind | video | 5 |
+| media_kind | webpage | 218 |
+| history_peer_kind | channel | 467 |
+
+Source `113` topic catalog and resolver state after batch `14`:
+
+| Field | Value |
+| --- | --- |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| resolver_state | none |
+
+Batch summary:
+
+| Batch id | Source id | Status | Completeness | Terminal error class | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate | Max message id |
+| ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 14 | 113 | completed | complete | none | 438 | 467 | 29 | 0 | 0 | 1 | 0 | 0 | 0 | 475 | null |
+
+Warning codes for batch `14`: none.
+
+Fallback evidence for batch `14`: absent. No `only_my_messages_fallback`
+warning code was recorded, `only_my_messages = 0`, and `fallback_used = 0`.
+
+Duplicate summary for batch `14`:
+
+| Field | Value |
+| --- | ---: |
+| inserted_count | 438 |
+| duplicate_observed_count | 29 |
+| skipped_count | 0 |
+| failed_count | 0 |
+| duplicate_identity_count | 29 |
+| has_duplicate_after_normal_sync_evidence | 1 |
+
+Row-fidelity comparison for batch `14`:
+
+| Field | Value |
+| --- | ---: |
+| observed_identity_count | 467 |
+| matched_canonical_identity_count | 467 |
+| missing_canonical_identity_count | 0 |
+| canonical_without_observation_count | 0 |
+| matched_content_zstd_present_count | 420 |
+| matched_reply_to_msg_id_present_count | 155 |
+| matched_reply_to_top_id_present_count | 38 |
+| matched_reaction_count_present_count | 317 |
+
+Row-fidelity mismatch categories: none.
+
+Warning visibility for batch `14`:
+
+- provenance warning codes: none;
+- recovery candidate warning codes: none;
+- latest batch for source `113`: yes;
+- durable recovery kind: none.
+
+Result: batch `14` strengthens completed channel Takeout and
+duplicate-after-normal-sync evidence, but the `CHANNEL_PRIVATE` fallback row
+remains `not run` because no only-my-messages warning or fallback flag was
+captured.
 
 ### 2026-05-24 Source 122 Public Supergroup Takeout Pre-Run
 
