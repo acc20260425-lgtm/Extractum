@@ -54,11 +54,17 @@ Priority: high.
 - [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`
-    evidence; source `113` remains the strongest private/left-shape candidate.
+    evidence; source `113` was the strongest private/left-shape candidate at
+    that time.
     Live Takeout retries `7`, `8`, and `9` were blocked by
     `TAKEOUT_INIT_DELAY`; batch `14` later completed without
     `only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence,
     so this row remains open.
+  - Read-only re-inventory after source `113` batch `14` selected source `114`
+    as the strongest next candidate because prior sanitized normal-sync
+    validation observed `CHANNEL_PRIVATE`, it has no prior Takeout batches, and
+    its stored identity remains dialog-backed with access-hash presence and no
+    username.
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [x] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
   - Source `113` completed the normal-sync setup but Takeout batches `7` and

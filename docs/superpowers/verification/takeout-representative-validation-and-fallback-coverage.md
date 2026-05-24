@@ -250,6 +250,40 @@ duplicate-after-normal-sync evidence, but the `CHANNEL_PRIVATE` fallback row
 remains `not run` because no only-my-messages warning or fallback flag was
 captured.
 
+### 2026-05-24 `CHANNEL_PRIVATE` Fallback Candidate Re-Inventory
+
+App commit: `5716f69`. Working tree was clean before this read-only inventory
+on branch `main`.
+
+This inventory used local DB identity flags, durable Takeout provenance, and
+the existing sanitized normal-sync validation note for source `114`. It did not
+call Telegram and cannot prove that a source will trigger `CHANNEL_PRIVATE`
+during Takeout.
+
+Prior fallback evidence in local Takeout provenance:
+
+| Field | Count |
+| --- | ---: |
+| batches_with_only_my_messages | 0 |
+| batches_with_fallback_used | 0 |
+| only_my_messages_warning_rows | 0 |
+
+Most relevant sanitized candidates:
+
+| Source id | Subtype | Peer kind | Has username | Has access hash | Is member | Items | Prior Takeout batches | Latest Takeout outcome | Candidate note |
+| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 114 | channel | channel | 0 | 1 | 1 | 0 | 0 | none | Prior sanitized normal-sync validation observed `CHANNEL_PRIVATE`; strongest next Takeout fallback candidate |
+| 27 | channel | channel | 0 | 1 | 1 | 1052 | 0 | none | Dialog-backed no-username channel, but no known access-loss evidence |
+| 110 | supergroup | channel | 0 | 1 | 1 | 12279 | 1 | cancelled / partial, no fallback | Dialog-backed no-username supergroup, already partial without fallback evidence |
+| 115 | supergroup | channel | 0 | 1 | 1 | 1 | 1 | failed / TAKEOUT_INIT_DELAY | Better suited to migrated small-group-to-supergroup smoke |
+
+Observation: source `114` is now the strongest `CHANNEL_PRIVATE` Takeout
+fallback candidate. Source `113` completed batch `14` without fallback evidence,
+while source `114` has prior normal-sync `CHANNEL_PRIVATE` evidence and no
+prior Takeout batches. The matrix row remains `not run` until a live Takeout
+records `only_my_messages_fallback` warning/flag evidence or another typed
+outcome from the relevant path.
+
 ### 2026-05-24 Source 122 Public Supergroup Takeout Pre-Run
 
 App commit: `aea8ffd`. Working tree was clean before this run on branch

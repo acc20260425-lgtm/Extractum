@@ -1,0 +1,667 @@
+# Channel Private Source 114 Takeout Validation Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Run a controlled, sanitized `CHANNEL_PRIVATE` Takeout fallback validation for local Telegram `source_id=114`.
+
+**Architecture:** This is a validation-only slice using existing Tauri app flows and existing sanitized SQLite/diagnostic queries. The plan captures explicit pre-run and post-run evidence, pauses before live Telegram action, and updates docs conservatively based only on durable evidence.
+
+**Tech Stack:** Tauri app flow, SQLite read-only diagnostics, existing Takeout provenance tables, Markdown verification docs.
+
+---
+
+## Goal
+
+Validate whether source `114` reaches the Takeout `CHANNEL_PRIVATE` fallback
+path and records durable only-my-messages evidence.
+
+Target source:
+
+```text
+source_id = 114
+```
+
+Current sanitized candidate shape:
+
+```text
+source_subtype = channel
+peer_kind = channel
+account_id = 11
+has_username = 0
+has_access_hash = 1
+is_active = 1
+is_member = 1
+resolution_strategy = dialog
+item_count = 0
+telegram_message_count = 0
+last_sync_state = 1
+last_synced_at = 1779418693
+prior_takeout_batches = 0
+```
+
+Why this source:
+
+- prior sanitized runtime validation recorded `CHANNEL_PRIVATE` on normal sync
+  after access was revoked;
+- source `113` batch `14` completed without fallback warning/flag evidence, so
+  source `113` is no longer a strong fallback candidate;
+- source `114` has no prior Takeout batches;
+- a live run can either produce fallback evidence or record a precise typed
+  blocker before history loading.
+
+Known limitation:
+
+- source `114` may have no available only-my-messages observations. A fallback
+  warning/flag can still validate the access-limited path even when inserted
+  row counts are zero.
+
+Current local readiness at plan creation:
+
+```text
+tauri_driver_connected = false
+extractum_processes_seen = 0
+cargo_processes_seen = 0
+```
+
+The live task must start or reconnect the app before any Takeout action.
+
+## Safety Boundary
+
+Allowed evidence:
+
+- local numeric ids such as `source_id`, `account_id`, and `batch_id`;
+- source subtype and peer kind;
+- boolean identity flags such as `has_username`, `has_access_hash`, and
+  `is_member`;
+- aggregate counters;
+- durable batch status, completeness, and warning codes;
+- typed/coarse terminal error classes, such as `TAKEOUT_INIT_DELAY` and
+  `CHANNEL_PRIVATE`;
+- `last_sync_state` and `last_synced_at`;
+- source snapshot deltas;
+- capped local sample ids from row-fidelity diagnostics if observations exist.
+
+Forbidden evidence:
+
+- message text;
+- source titles;
+- usernames;
+- phone numbers;
+- account labels that identify a person/source;
+- session/auth material;
+- headers/cookies;
+- raw TL payloads;
+- raw provider payloads;
+- compressed dumps;
+- warning message bodies;
+- screenshots revealing private content;
+- `sources.metadata_zstd` contents.
+
+## Outcome Decision Table
+
+| Outcome | What to record | Matrix status impact |
+| --- | --- | --- |
+| `CHANNEL_PRIVATE` fallback | `only_my_messages_fallback` warning code or equivalent durable flag, `only_my_messages` flag, fallback flag, status/completeness, partial/incomplete evidence | update `CHANNEL_PRIVATE fallback` from `not run` to the supported status |
+| `TAKEOUT_INIT_DELAY` | typed/coarse error class, batch state, zero observations, before/after watermark equality | keep `CHANNEL_PRIVATE fallback` `not run`; add retry note |
+| completed / complete without fallback | before/after snapshots, batch summary, duplicate summary if observations exist, row-fidelity comparison if observations exist, warning visibility | keep `CHANNEL_PRIVATE fallback` `not run`; document that Takeout did not reproduce normal-sync access loss |
+| completed / partial or cancelled | partial row counts, duplicate/fidelity aggregates if observations exist, warning visibility, watermark equality/advance | keep fallback `not run` unless warning/flag evidence proves fallback |
+| failed non-delay | typed/coarse terminal class, sanitized batch state, warning visibility, no raw body | mark fallback `failed` or `needs follow-up` only if the terminal class reached the relevant path |
+| shifted export DC fallback warning | `export_dc_fallback` warning code and flags only | update only the shifted export DC row if exact warning evidence exists |
+
+## Non-Goals
+
+- Do not change runtime code.
+- Do not add or modify Tauri commands.
+- Do not decode or log private payloads.
+- Do not paste message text, source title, username, phone number, or warning
+  body.
+- Do not delete Takeout batches, observations, source rows, or item rows.
+- Do not try to bypass Telegram `TAKEOUT_INIT_DELAY`.
+- Do not mark `CHANNEL_PRIVATE` fallback complete without warning/flag
+  evidence.
+- Do not treat fallback evidence as proof of full-history import.
+- Do not update the local handoff file unless explicitly requested.
+
+---
+
+### Task 1: Pre-Run Evidence Capture
+
+**Files:**
+- Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
+
+- [ ] **Step 1: Confirm repository state**
+
+Run:
+
+```powershell
+git status --short --branch
+git log --oneline -5
+```
+
+Expected branch:
+
+```text
+## takeout-source-114-channel-private-validation-plan
+```
+
+Record the current `HEAD` commit in the run note.
+
+- [ ] **Step 2: Capture current sanitized source snapshot for source 114**
+
+Use existing sanitized diagnostics or read-only SQLite aggregate queries for:
+
+```text
+source_id = 114
+```
+
+Record only:
+
+```text
+source_id
+source_type
+source_subtype
+account_id
+peer_kind
+has_username
+has_access_hash
+is_active
+is_member
+resolution_strategy if available
+last_sync_state
+last_synced_at
+item_count
+telegram_message_count
+topic_membership_count
+topic_membership_topic_count
+reply_count
+thread_count
+reaction_item_count
+reaction_count_sum
+content_zstd_present_count
+max_telegram_message_id
+content/media/history aggregate distributions
+```
+
+Expected from the latest sanitized inventory:
+
+```text
+source_subtype = channel
+peer_kind = channel
+account_id = 11
+has_username = 0
+has_access_hash = 1
+is_active = 1
+is_member = 1
+item_count = 0
+telegram_message_count = 0
+last_sync_state = 1
+last_synced_at = 1779418693
+```
+
+If values differ, record the actual sanitized values and treat the difference
+as the pre-run context.
+
+- [ ] **Step 3: Capture current Takeout baseline for source 114**
+
+Use durable batch diagnostics for `source_id=114`.
+
+Record:
+
+```text
+prior batch count
+latest batch id, if any
+latest durable status, if any
+latest completeness, if any
+latest terminal error class/presence, if any
+warning count and warning codes, if any
+observed count, if any
+inserted count, if any
+duplicate count, if any
+skipped count, if any
+used_export_dc flag, if any
+fallback_used flag, if any
+only_my_messages flag, if any
+message_count_estimate, if any
+max_message_id, if any
+```
+
+Expected from the latest sanitized inventory:
+
+```text
+prior_takeout_batches = 0
+```
+
+- [ ] **Step 4: Add a dated pre-run note**
+
+In `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`,
+under `## Run Notes`, add:
+
+```md
+### 2026-05-24 Source 114 Channel Private Takeout Pre-Run
+```
+
+Write the note with the current `HEAD` from Step 1 and the actual values from
+Steps 2-3. Include aggregate distributions if available. Because the latest
+inventory has zero items and zero typed Telegram rows, empty distributions are
+expected and should be recorded as `none`.
+
+- [ ] **Step 5: Commit pre-run evidence**
+
+Run:
+
+```powershell
+git diff --check
+git add docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md
+git commit -m "docs: record source 114 channel-private pre-run"
+```
+
+Expected: commit succeeds. `git diff --check` must exit `0`.
+
+---
+
+### Task 2: Live Takeout Run
+
+**Files:**
+- Modify after live run: `docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md`
+
+- [ ] **Step 1: Start or reconnect the existing app flow**
+
+Check Tauri bridge status:
+
+```text
+mcp__tauri__.driver_session({ "action": "status" })
+```
+
+If disconnected, start the normal local Tauri dev flow used in this project and
+connect the bridge before invoking app commands. Do not stop user-started app
+processes unless explicitly instructed.
+
+- [ ] **Step 2: Pause for explicit live authorization**
+
+Before triggering Takeout, stop and ask the user to authorize the live action
+for:
+
+```text
+source_id = 114
+```
+
+Do not proceed until the user explicitly confirms the live Takeout run.
+
+- [ ] **Step 3: Trigger Takeout for source 114**
+
+Through the existing application flow, start a Takeout import for:
+
+```text
+source_id = 114
+```
+
+Preferred invocation when the Tauri bridge is connected:
+
+```javascript
+window.__TAURI__.core.invoke("start_takeout_source_import", { sourceId: 114 })
+```
+
+Do not alter source identity, account settings, app code, or database rows by
+hand.
+
+- [ ] **Step 4: Monitor only coarse terminal state**
+
+Watch for one of these outcomes:
+
+```text
+CHANNEL_PRIVATE / only-my-messages fallback
+only_my_messages_fallback warning
+TAKEOUT_INIT_DELAY
+observations written
+completed / complete
+completed / partial
+bounded cancellation
+failed non-delay
+export_dc_fallback warning
+```
+
+Do not copy raw provider errors. Record only typed/coarse terminal classes,
+warning codes, aggregate counters, and local numeric ids.
+
+- [ ] **Step 5: If the run grows too large, pause before bounded cancellation**
+
+If the estimate or runtime makes a complete run impractical, stop and ask the
+user whether to keep waiting or cancel through the normal app flow.
+
+Record:
+
+```text
+batch id
+status
+completeness
+inserted
+observed
+duplicates
+skipped
+warnings
+only_my_messages
+fallback_used
+last_sync_state before/after
+last_synced_at before/after
+```
+
+Do not manually delete partial rows.
+
+- [ ] **Step 6: Commit live-run marker**
+
+After a terminal state is reached or bounded cancellation is completed, mark
+Task 2 steps complete in this plan and commit:
+
+```powershell
+git diff --check
+git add docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md
+git commit -m "docs: mark source 114 channel-private live run"
+```
+
+---
+
+### Task 3: Post-Run Evidence Capture
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md`
+
+- [ ] **Step 1: Capture post-run source snapshot**
+
+Capture the same sanitized source `114` fields recorded in Task 1.
+
+- [ ] **Step 2: Capture latest batch summary**
+
+Capture the new Takeout batch summary and record:
+
+```text
+batch_id
+source_id
+status
+completeness
+started
+finished
+inserted
+observed
+duplicates
+skipped
+warnings
+terminal_error_class_or_presence
+used_export_dc
+fallback_used
+migrated_detected
+only_my_messages
+message_count_estimate
+max_message_id
+warning_codes
+```
+
+- [ ] **Step 3: Capture fallback evidence when present**
+
+If warning or flag evidence appears, record only:
+
+```text
+only_my_messages_fallback warning code presence
+only_my_messages flag
+fallback_used flag
+observed count
+inserted count
+completeness
+durable recovery kind if any
+```
+
+If no fallback evidence appears, record:
+
+```text
+No only-my-messages fallback warning or durable fallback flag was captured.
+```
+
+- [ ] **Step 4: Capture duplicate summary when observations exist**
+
+If `observed > 0`, capture duplicate summary:
+
+```text
+inserted observations
+duplicate observations
+skipped observations
+failed observations
+duplicate identity count
+has duplicate-after-normal-sync evidence
+```
+
+If `observed = 0`, record:
+
+```text
+Duplicate summary not applicable because the batch wrote zero observations.
+```
+
+- [ ] **Step 5: Capture row-fidelity comparison when observations exist**
+
+If `observed > 0`, capture row fidelity in the relevant mode:
+
+```text
+takeout_batch_vs_canonical_source
+```
+
+Record aggregate categories and capped local sample ids only.
+
+If `observed = 0`, record:
+
+```text
+Row-fidelity comparison not applicable because the batch wrote zero observations.
+```
+
+- [ ] **Step 6: Capture warning visibility**
+
+Capture warning visibility for the new batch.
+
+Record warning codes only, especially:
+
+```text
+only_my_messages_fallback
+export_dc_fallback
+migrated_history_deferred
+finish_takeout_failed
+```
+
+Do not record warning messages.
+
+- [ ] **Step 7: Capture explicit before/after delta**
+
+Compare the pre-run and post-run sanitized source snapshots.
+
+Record:
+
+```text
+item_count delta
+telegram_message_count delta
+topic_membership_count delta
+reply_count delta
+thread_count delta
+reaction_item_count delta
+last_sync_state before/after
+last_synced_at before/after
+```
+
+For failed or cancelled runs, explicitly state whether `last_sync_state` and
+`last_synced_at` stayed equal.
+
+- [ ] **Step 8: Commit post-run capture marker**
+
+Mark Task 3 steps complete in this plan and commit:
+
+```powershell
+git diff --check
+git add docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md
+git commit -m "docs: mark source 114 channel-private post-run capture"
+```
+
+---
+
+### Task 4: Matrix And Backlog Update
+
+**Files:**
+- Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
+- Modify if status changes: `docs/backlog.md`
+- Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md`
+
+- [ ] **Step 1: Add a post-run note**
+
+Append a dated note named:
+
+```md
+### 2026-05-24 Source 114 Channel Private Takeout Result
+```
+
+The note must include:
+
+- exactly one outcome category from the decision table;
+- a before/after snapshot table for `item_count`,
+  `telegram_message_count`, `topic_membership_count`, `reply_count`,
+  `thread_count`, `reaction_item_count`, `last_sync_state`, and
+  `last_synced_at`;
+- a batch summary table for the new source `114` batch using the captured
+  status, completeness, typed terminal class/presence, aggregate counts, and
+  flags;
+- warning codes as `none` or sorted warning code names;
+- fallback evidence as present or absent;
+- duplicate summary as `not applicable` when `observed = 0`, otherwise the
+  sanitized aggregate counts;
+- row-fidelity comparison as `not applicable` when `observed = 0`, otherwise
+  sanitized aggregate categories and capped sample ids;
+- one result sentence mapping the outcome to the matrix status impact.
+
+- [ ] **Step 2: Update matrix row statuses conservatively**
+
+Apply the decision table:
+
+- If `only_my_messages_fallback` warning and `only_my_messages`/fallback flags
+  are present, update `CHANNEL_PRIVATE fallback` with source/batch id and the
+  exact evidence.
+- If `TAKEOUT_INIT_DELAY` occurs, keep `CHANNEL_PRIVATE fallback` as `not run`
+  and add the new blocked retry note.
+- If observations are written without fallback, update only duplicate/fidelity
+  rows supported by the captured evidence.
+- If the run completes cleanly without fallback evidence, keep
+  `CHANNEL_PRIVATE fallback` as `not run`.
+- If a non-delay provider failure occurs, mark the relevant row `failed` or
+  `needs follow-up` based on the typed/coarse terminal class and captured
+  evidence.
+
+- [ ] **Step 3: Update backlog notes if evidence changes 3.1 status**
+
+In `docs/backlog.md`, update section `3.1` only if new evidence changes the
+current state.
+
+Allowed examples:
+
+```md
+- Source `114` Takeout batch `15` produced `only_my_messages_fallback`
+  evidence; full-history import validation remains separate.
+```
+
+```md
+- Source `114` Takeout batch `15` remained blocked before observations with
+  `TAKEOUT_INIT_DELAY`.
+```
+
+```md
+- Source `114` Takeout batch `15` completed without fallback evidence even
+  though prior normal sync produced `CHANNEL_PRIVATE`.
+```
+
+- [ ] **Step 4: Run documentation checks**
+
+Run:
+
+```powershell
+rg -n 'Source 114 Channel Private Takeout|source `114`|TAKEOUT_INIT_DELAY|only_my_messages_fallback|CHANNEL_PRIVATE fallback' docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md docs/backlog.md
+git diff --check
+```
+
+Expected:
+
+- the new notes are present;
+- no forbidden private content was added;
+- `git diff --check` exits `0`.
+
+- [ ] **Step 5: Commit validation result**
+
+Run:
+
+```powershell
+git add docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md docs/backlog.md docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md
+git commit -m "docs: record source 114 channel-private validation"
+```
+
+If `docs/backlog.md` did not change, omit it from `git add`.
+
+---
+
+### Task 5: Final Verification
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md`
+
+- [ ] **Step 1: Verify final status**
+
+Run:
+
+```powershell
+git status --short --branch
+git log --oneline -6
+git diff --check
+```
+
+Expected branch:
+
+```text
+## takeout-source-114-channel-private-validation-plan
+```
+
+- [ ] **Step 2: Do not update local handoff context**
+
+Per the user's latest preference, do not continue writing task-by-task context
+to `reference/session-context-2026-05-10-analysis-redesign.md`.
+
+- [ ] **Step 3: Commit completed plan marker**
+
+Mark Task 5 steps complete in this plan and commit:
+
+```powershell
+git diff --check
+git add docs/superpowers/plans/2026-05-24-channel-private-source-114-takeout-validation.md
+git commit -m "docs: complete source 114 channel-private validation plan"
+```
+
+- [ ] **Step 4: Report outcome**
+
+Report:
+
+```text
+- outcome category from the decision table;
+- source id and batch id only;
+- matrix/backlog changes;
+- verification commands run;
+- next recommended 3.1 action.
+```
+
+Do not include raw provider messages, usernames, source titles, message text,
+or warning bodies.
+
+---
+
+## Self-Review Checklist
+
+- Spec coverage: The plan covers pre-run watermark proof, source `114` live
+  Takeout, fallback-specific evidence, post-run diagnostics, conservative
+  matrix updates, backlog notes, and final verification.
+- Safety: The plan forbids private content, raw payloads, warning bodies,
+  session/auth material, source titles, usernames, message text, and
+  `sources.metadata_zstd` contents.
+- Scope: The plan does not change runtime code, Tauri commands, recovery
+  behavior, forum-topic behavior, migrated-history import, or database rows by
+  hand.
+- Evidence: The plan requires explicit before/after snapshots and does not
+  infer fallback behavior from source shape alone.
+- Status discipline: The plan only updates matrix rows supported by exact
+  captured warning/flag, batch, and observation evidence.
