@@ -65,6 +65,10 @@ Priority: high.
     validation observed `CHANNEL_PRIVATE`, it has no prior Takeout batches, and
     its stored identity remains dialog-backed with access-hash presence and no
     username.
+  - Source `114` Takeout batch `15` reproduced the typed `CHANNEL_PRIVATE`
+    terminal outcome before observations, but recorded no
+    `only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence;
+    the fallback path now needs follow-up rather than another candidate search.
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [x] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
   - Source `113` completed the normal-sync setup but Takeout batches `7` and

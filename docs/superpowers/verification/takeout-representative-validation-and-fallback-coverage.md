@@ -5,8 +5,8 @@
 
 Updated: 2026-05-24
 
-Current matrix summary: `5 passed`, `2 needs follow-up`, `2 blocked`,
-`1 not run`.
+Current matrix summary: `5 passed`, `3 needs follow-up`, `2 blocked`,
+`0 not run`.
 
 Covered highlights:
 
@@ -24,6 +24,9 @@ Covered highlights:
 - normal-sync-before-Takeout attempts for source `113`: batches `7`, `8`, and
   `9` were blocked by `TAKEOUT_INIT_DELAY`; batch `14` later completed without
   `CHANNEL_PRIVATE` fallback evidence, so the fallback row remains open;
+- source `114` Takeout batch `15` reproduced the typed `CHANNEL_PRIVATE`
+  terminal outcome before observations, but did not record
+  `only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
   membership, and resolver-state counters.
@@ -57,7 +60,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
 | Repeated Takeout after normal sync | passed | 18 | 10 | duplicate observation summary, row-fidelity comparison, before/after source summary, latest batch summary | Batch 10 followed an existing normal-sync baseline for source 18; 42 observations were classified as duplicates and all 467 observed identities matched canonical rows |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
-| `CHANNEL_PRIVATE` fallback | not run |  |  | `only_my_messages_fallback` warning code, partial/incomplete evidence, typed/coarse terminal outcome if present | Offline inventory found no prior fallback evidence; source `113` batch `14` completed without fallback warning/flag evidence, so a live `CHANNEL_PRIVATE` observation is still needed |
+| `CHANNEL_PRIVATE` fallback | needs follow-up | 114 | 15 | `CHANNEL_PRIVATE` terminal class, failed/unknown batch summary, zero observations, warning visibility, fallback flags | Source `114` batch `15` reproduced the typed access-limited terminal outcome before observations, but no `only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence was recorded |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
 | Migrated small-group-to-supergroup smoke | blocked | 115 | 2 | failed early Takeout batch summary | Existing smoke reached a failed/unknown terminal batch with zero observations before migrated-history evidence could be collected |
 | Forum-topic decision input | needs follow-up | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout | Bounded partial runs materially increased topic memberships without refreshing the topic catalog, which is useful decision input; completed supergroup Takeout evidence is still needed before changing behavior |
@@ -347,6 +350,59 @@ observed the typed access-limited outcome, while Takeout has not yet been run
 for this source. The `CHANNEL_PRIVATE` fallback row remains `not run` until a
 live run records `only_my_messages_fallback` warning/flag evidence or another
 relevant typed terminal outcome.
+
+### 2026-05-24 Source 114 Channel Private Takeout Result
+
+Outcome category: failed non-delay.
+
+Before/after source `114` snapshot:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 0 | 0 | 0 |
+| telegram_message_count | 0 | 0 | 0 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 0 | 0 | 0 |
+| thread_count | 0 | 0 | 0 |
+| reaction_item_count | 0 | 0 | 0 |
+| last_sync_state | 1 | 1 | unchanged |
+| last_synced_at | 1779418693 | 1779418693 | unchanged |
+
+Batch `15` summary:
+
+| Field | Value |
+| --- | --- |
+| source_id | 114 |
+| status | failed |
+| completeness | unknown |
+| terminal_error_class | CHANNEL_PRIVATE |
+| inserted | 0 |
+| observed | 0 |
+| duplicates | 0 |
+| skipped | 0 |
+| warnings | 0 |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| message_count_estimate | null |
+| max_message_id | null |
+
+Warning codes for batch `15`: none.
+
+Fallback evidence: absent. No `only_my_messages_fallback` warning code was
+recorded, `only_my_messages = 0`, and `fallback_used = 0`.
+
+Duplicate summary: not applicable because the batch wrote zero observations.
+
+Row-fidelity comparison: not applicable because the batch wrote zero
+observations.
+
+Result: batch `15` moves the `CHANNEL_PRIVATE` fallback row from `not run` to
+`needs follow-up`, because Takeout reproduced the typed access-limited terminal
+outcome but did not record the durable fallback warning or flags required to
+mark the fallback path as passed.
 
 ### 2026-05-24 Source 122 Public Supergroup Takeout Pre-Run
 
