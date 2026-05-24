@@ -541,7 +541,7 @@ If `docs/backlog.md` did not change, omit it from `git add`.
 **Files:**
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Verify final status**
+- [x] **Step 1: Verify final status**
 
 Run:
 
@@ -556,7 +556,7 @@ Expected:
 ## takeout-source-18-public-channel-validation
 ```
 
-- [ ] **Step 2: Update local handoff context**
+- [x] **Step 2: Update local handoff context**
 
 Update `reference/session-context-2026-05-10-analysis-redesign.md` with:
 
@@ -571,7 +571,7 @@ Update `reference/session-context-2026-05-10-analysis-redesign.md` with:
 
 This file is ignored by Git and should remain local-only.
 
-- [ ] **Step 3: Report outcome**
+- [x] **Step 3: Report outcome**
 
 Report:
 
