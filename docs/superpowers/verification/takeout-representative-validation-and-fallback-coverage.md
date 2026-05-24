@@ -284,6 +284,70 @@ prior Takeout batches. The matrix row remains `not run` until a live Takeout
 records `only_my_messages_fallback` warning/flag evidence or another typed
 outcome from the relevant path.
 
+### 2026-05-24 Source 114 Channel Private Takeout Pre-Run
+
+App commit: `0513971`. Working tree was clean before this pre-run capture on
+branch `takeout-source-114-channel-private-validation-plan`.
+
+Source `114` pre-run identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | channel |
+| account_id | 11 |
+| peer_kind | channel |
+| has_username | 0 |
+| has_access_hash | 1 |
+| is_active | 1 |
+| is_member | 1 |
+| resolution_strategy | dialog |
+
+Source `114` pre-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 0 |
+| telegram_message_count | 0 |
+| max_telegram_message_id | none |
+| content_zstd_present_count | 0 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 0 |
+| thread_count | 0 |
+| reaction_item_count | 0 |
+| reaction_count_sum | 0 |
+| last_sync_state | 1 |
+| last_synced_at | 1779418693 |
+
+Source `114` pre-run aggregate distributions: none.
+
+Source `114` topic catalog and resolver state:
+
+| Field | Value |
+| --- | --- |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| resolver_state | none |
+
+Latest pre-run Takeout state for source `114`:
+
+| Field | Value |
+| --- | ---: |
+| prior_takeout_batch_count | 0 |
+| latest_batch_id | none |
+
+Latest batch summary: none.
+
+Pre-run warning codes for source `114`: none.
+
+Interpretation: source `114` remains the strongest sanitized
+`CHANNEL_PRIVATE` fallback candidate because prior normal-sync validation
+observed the typed access-limited outcome, while Takeout has not yet been run
+for this source. The `CHANNEL_PRIVATE` fallback row remains `not run` until a
+live run records `only_my_messages_fallback` warning/flag evidence or another
+relevant typed terminal outcome.
+
 ### 2026-05-24 Source 122 Public Supergroup Takeout Pre-Run
 
 App commit: `aea8ffd`. Working tree was clean before this run on branch

@@ -129,7 +129,7 @@ Forbidden evidence:
 **Files:**
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 
-- [ ] **Step 1: Confirm repository state**
+- [x] **Step 1: Confirm repository state**
 
 Run:
 
@@ -146,7 +146,7 @@ Expected branch:
 
 Record the current `HEAD` commit in the run note.
 
-- [ ] **Step 2: Capture current sanitized source snapshot for source 114**
+- [x] **Step 2: Capture current sanitized source snapshot for source 114**
 
 Use existing sanitized diagnostics or read-only SQLite aggregate queries for:
 
@@ -201,7 +201,7 @@ last_synced_at = 1779418693
 If values differ, record the actual sanitized values and treat the difference
 as the pre-run context.
 
-- [ ] **Step 3: Capture current Takeout baseline for source 114**
+- [x] **Step 3: Capture current Takeout baseline for source 114**
 
 Use durable batch diagnostics for `source_id=114`.
 
@@ -231,7 +231,7 @@ Expected from the latest sanitized inventory:
 prior_takeout_batches = 0
 ```
 
-- [ ] **Step 4: Add a dated pre-run note**
+- [x] **Step 4: Add a dated pre-run note**
 
 In `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`,
 under `## Run Notes`, add:
@@ -245,7 +245,7 @@ Steps 2-3. Include aggregate distributions if available. Because the latest
 inventory has zero items and zero typed Telegram rows, empty distributions are
 expected and should be recorded as `none`.
 
-- [ ] **Step 5: Commit pre-run evidence**
+- [x] **Step 5: Commit pre-run evidence**
 
 Run:
 
