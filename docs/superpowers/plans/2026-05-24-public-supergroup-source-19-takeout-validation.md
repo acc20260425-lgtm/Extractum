@@ -735,7 +735,7 @@ If `docs/backlog.md` did not change, omit it from `git add`.
 - Modify: `docs/superpowers/plans/2026-05-24-public-supergroup-source-19-takeout-validation.md`
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Verify final status**
+- [x] **Step 1: Verify final status**
 
 Run:
 
@@ -751,9 +751,12 @@ Expected:
 ## takeout-source-19-public-supergroup-validation-plan
 ```
 
-- [ ] **Step 2: Update local handoff context**
+- [x] **Step 2: Skip local handoff context update**
 
-Update `reference/session-context-2026-05-10-analysis-redesign.md` with:
+Per the user's latest instruction, do not continue writing task-by-task context
+to `reference/session-context-2026-05-10-analysis-redesign.md`.
+
+Previously this plan expected a local handoff update with:
 
 ```text
 - source_id 19 validation outcome;
@@ -764,9 +767,9 @@ Update `reference/session-context-2026-05-10-analysis-redesign.md` with:
 - reminder of safety boundary.
 ```
 
-This file is ignored by Git and should remain local-only.
+This step is intentionally satisfied by skipping that local-only update.
 
-- [ ] **Step 3: Commit completed plan marker**
+- [x] **Step 3: Commit completed plan marker**
 
 Mark Task 5 steps complete in this plan and commit:
 
@@ -776,7 +779,7 @@ git add docs/superpowers/plans/2026-05-24-public-supergroup-source-19-takeout-va
 git commit -m "docs: complete source 19 public supergroup validation plan"
 ```
 
-- [ ] **Step 4: Report outcome**
+- [x] **Step 4: Report outcome**
 
 Report:
 
