@@ -74,6 +74,57 @@ Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
 
+### 2026-05-24 Source 18 Public Channel Takeout Pre-Run
+
+App commit: `2502923`. Working tree was clean before this run on branch
+`takeout-source-18-public-channel-validation`.
+
+Source `18` pre-run identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | channel |
+| account_id | 1 |
+| peer_kind | channel |
+| has_username | 1 |
+| has_access_hash | 1 |
+| is_member | 1 |
+| resolution_strategy | dialog |
+
+Source `18` pre-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 42 |
+| telegram_message_count | 42 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 20 |
+| thread_count | 6 |
+| reaction_item_count | 28 |
+| reaction_count_sum | 128 |
+| content_zstd_present_count | 37 |
+| max_telegram_message_id | 514 |
+| last_sync_state | 514 |
+| last_synced_at | 1779414142 |
+
+Source `18` pre-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 5 |
+| content_kind | text_only | 12 |
+| content_kind | text_with_media | 25 |
+| media_kind | none | 12 |
+| media_kind | photo | 13 |
+| media_kind | webpage | 17 |
+| history_peer_kind | channel | 42 |
+
+Latest pre-run Takeout state for source `18`: none.
+
+Prior Takeout batch count for source `18`: `0`.
+
 ### 2026-05-23 Source 113 Takeout Retry Pre-Run
 
 App commit: `c2c7e4c`. Working tree was clean before this run on branch
