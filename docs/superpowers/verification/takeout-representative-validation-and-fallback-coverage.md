@@ -27,6 +27,9 @@ Covered highlights:
 - source `114` Takeout batch `17` completed as partial private history with
   `only_my_messages_fallback`, `only_my_messages = 1`, and
   `history_scope = partial_private_history`;
+- source `115` remains the selected migrated small-group-to-supergroup Takeout
+  smoke retry after prior batch `2` failed before observations with
+  `TAKEOUT_INIT_DELAY`;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
   membership, and resolver-state counters.
@@ -62,7 +65,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | passed | 114 | 17 | `only_my_messages_fallback` warning code, `only_my_messages` flag, partial/private history scope, completed/partial batch summary | Source `114` batch `17` completed as partial private history with durable only-my-messages fallback evidence and zero observations |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
-| Migrated small-group-to-supergroup smoke | blocked | 115 | 2 | failed early Takeout batch summary | Existing smoke reached a failed/unknown terminal batch with zero observations before migrated-history evidence could be collected |
+| Migrated small-group-to-supergroup smoke | blocked | 115 | 2 | failed early Takeout batch summary, source `115` pre-run shape, retry plan | Existing smoke reached a failed/unknown terminal batch with zero observations before migrated-history evidence could be collected; source `115` remains queued for retry |
 | Forum-topic decision input | needs follow-up | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout | Bounded partial runs materially increased topic memberships without refreshing the topic catalog, which is useful decision input; completed supergroup Takeout evidence is still needed before changing behavior |
 
 ## Procedure
@@ -82,6 +85,64 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
+
+### 2026-05-24 Source 115 Migrated Takeout Smoke Pre-Run Plan
+
+App commit at docs-prep time: `9c19220`. Working tree was clean on `main`
+before the plan was created.
+
+Source `115` current sanitized candidate shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | supergroup |
+| account_id | 11 |
+| peer_kind | channel |
+| has_username | 0 |
+| has_access_hash | 1 |
+| is_active | 1 |
+| is_member | 1 |
+| resolution_strategy | dialog |
+| last_sync_state | 2 |
+| last_synced_at | 1779472613 |
+
+Source `115` current aggregate snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 1 |
+| telegram_message_count | 1 |
+| topic_membership_count | 0 |
+| reply_count | 0 |
+| thread_count | 0 |
+| reaction_item_count | 0 |
+
+Prior Takeout blocker for source `115`:
+
+| Field | Value |
+| --- | --- |
+| batch_id | 2 |
+| status | failed |
+| completeness | unknown |
+| terminal_error_class | TAKEOUT_INIT_DELAY |
+| observed | 0 |
+| inserted | 0 |
+| warnings | 0 |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| history_scope | unknown |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| takeout_id_present | 0 |
+
+Next plan:
+`docs/superpowers/plans/2026-05-24-migrated-source-115-takeout-smoke.md`.
+The row remains `blocked` until a live retry records either the same typed
+blocker or durable migrated-history deferment evidence. Passing evidence
+requires `migrated_history_detected = 1`, `migrated_history_imported = 0`, a
+`migrated_history_deferred` warning code, and no unsafe old `chat` history rows.
 
 ### 2026-05-24 Source 113 Channel Private Takeout Pre-Run
 
