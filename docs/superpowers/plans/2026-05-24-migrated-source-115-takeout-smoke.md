@@ -136,7 +136,7 @@ Forbidden tracked evidence:
 - Modify: `docs/superpowers/plans/2026-05-24-migrated-source-115-takeout-smoke.md`
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 
-- [ ] **Step 1: Confirm repository state**
+- [x] **Step 1: Confirm repository state**
 
 Run:
 
@@ -153,7 +153,7 @@ Expected branch for execution after the docs-prep commit:
 
 Record the current `HEAD` commit in the run note.
 
-- [ ] **Step 2: Capture current sanitized source snapshot for source 115**
+- [x] **Step 2: Capture current sanitized source snapshot for source 115**
 
 Run:
 
@@ -217,7 +217,7 @@ con.close()
 Expected: sanitized source shape only; no titles, usernames, raw ids, message
 text, metadata blobs, or compressed payloads.
 
-- [ ] **Step 3: Capture prior Takeout batch summary for source 115**
+- [x] **Step 3: Capture prior Takeout batch summary for source 115**
 
 Run:
 
@@ -297,7 +297,7 @@ Expected: prior batch `2` is visible as `failed / unknown` with
 `terminal_error_class = TAKEOUT_INIT_DELAY`, zero observations, and no warning
 codes.
 
-- [ ] **Step 4: Add a pre-run note**
+- [x] **Step 4: Add a pre-run note**
 
 Add a dated source `115` pre-run note to
 `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
@@ -313,11 +313,16 @@ Expected: the matrix row remains `blocked` before the live retry.
 - Create: `reference/tauri-dev-source-115-migrated-smoke.stderr.log`
 - Create: `reference/tauri-dev-source-115-migrated-smoke.pid`
 
-- [ ] **Step 1: Start the Tauri dev app**
+- [x] **Step 1: Start the Tauri dev app**
 
 Run:
 
 ```powershell
+New-Item -ItemType Directory -Force -Path reference | Out-Null
+if (-not (Test-Path -LiteralPath node_modules)) {
+  npm.cmd install --prefer-offline --no-audit --no-fund
+  if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+}
 $stdout = Join-Path (Get-Location) 'reference\tauri-dev-source-115-migrated-smoke.stdout.log'
 $stderr = Join-Path (Get-Location) 'reference\tauri-dev-source-115-migrated-smoke.stderr.log'
 $pidPath = Join-Path (Get-Location) 'reference\tauri-dev-source-115-migrated-smoke.pid'
@@ -334,7 +339,7 @@ $p.Id | Set-Content -LiteralPath $pidPath
 Expected: a Tauri process starts and writes logs under ignored `reference/`
 paths.
 
-- [ ] **Step 2: Connect the Tauri MCP bridge**
+- [x] **Step 2: Connect the Tauri MCP bridge**
 
 Tool call:
 
@@ -344,7 +349,7 @@ Use mcp__tauri__.driver_session with action = "start".
 
 Expected: driver session connects to the running app.
 
-- [ ] **Step 3: Confirm app state without private output**
+- [x] **Step 3: Confirm app state without private output**
 
 Tool calls:
 
@@ -361,7 +366,7 @@ screenshots into tracked docs.
 **Files:**
 - Create/Modify: `reference/source-115-migrated-smoke-result.json`
 
-- [ ] **Step 1: Confirm no active Takeout job for source 115**
+- [x] **Step 1: Confirm no active Takeout job for source 115**
 
 Tool call:
 
@@ -385,7 +390,7 @@ Expected: no `queued`, `running`, or `cancel_requested` job for source `115`.
 If an active job exists, classify the smoke as `blocked_active_job`, skip
 Step 2, and continue to Task 4.
 
-- [ ] **Step 2: Start Takeout import**
+- [x] **Step 2: Start Takeout import**
 
 Tool call:
 
@@ -414,7 +419,7 @@ Expected: either `{ ok: true, started: ... }` or a typed blocker without raw
 error message bodies. Save the returned object to
 `reference/source-115-migrated-smoke-result.json`.
 
-- [ ] **Step 3: Poll the job to terminal state**
+- [x] **Step 3: Poll the job to terminal state**
 
 Tool call repeatedly, with a short wait between polls:
 
@@ -449,7 +454,7 @@ flow and document the partial/cancelled state.
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Capture latest durable Takeout summary**
+- [x] **Step 1: Capture latest durable Takeout summary**
 
 Run the query from Task 1 Step 3 again.
 
@@ -457,7 +462,7 @@ Expected: the newest batch for source `115` is present with sanitized status,
 completeness, counters, warning codes, migrated-history flags, and terminal
 class if any.
 
-- [ ] **Step 2: Check for unsafe migrated rows**
+- [x] **Step 2: Check for unsafe migrated rows**
 
 Run:
 
@@ -490,7 +495,7 @@ Expected for a safe deferment smoke: `chat_history_rows = 0` and
 `migrated_history_rows = 0`. A nonzero value is a `failed` smoke result until
 the rows and provenance are investigated without exposing content.
 
-- [ ] **Step 3: Update the validation matrix**
+- [x] **Step 3: Update the validation matrix**
 
 Update
 `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`:
@@ -507,7 +512,7 @@ Update
 
 Expected: the dated run note contains only sanitized evidence.
 
-- [ ] **Step 4: Update backlog**
+- [x] **Step 4: Update backlog**
 
 Update `docs/backlog.md`:
 
@@ -525,7 +530,7 @@ Update `docs/backlog.md`:
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Stop runtime process**
+- [x] **Step 1: Stop runtime process**
 
 Tool call:
 
@@ -547,7 +552,7 @@ if (Test-Path -LiteralPath reference\tauri-dev-source-115-migrated-smoke.pid) {
 
 Expected: no lingering Tauri dev app for this validation run.
 
-- [ ] **Step 2: Verify docs and workspace state**
+- [x] **Step 2: Verify docs and workspace state**
 
 Run:
 
@@ -559,7 +564,7 @@ rg -n "Source 115|Migrated small-group-to-supergroup smoke|migrated_history_defe
 
 Expected: no whitespace errors; tracked docs show the sanitized outcome.
 
-- [ ] **Step 3: Commit the validation result**
+- [x] **Step 3: Commit the validation result**
 
 Run:
 

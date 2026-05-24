@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | retry source `115` migrated-history Takeout smoke, complete remaining export-DC validation, and define incomplete-import recovery on top of persisted provenance |
+| High | Takeout source import | complete remaining export-DC validation and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
@@ -87,16 +87,17 @@ Priority: high.
   - Source `18` batch `10` completed after a normal-sync baseline with `42`
     duplicate observations, `425` inserts, zero warning codes, and a full
     row-fidelity match across `467` observed identities.
-- [ ] retry the controlled migrated small-group-to-supergroup Takeout smoke after Telegram `TAKEOUT_INIT_DELAY` expires and verify migrated-history deferment without unsafe old `chat` rows
+- [x] retry the controlled migrated small-group-to-supergroup Takeout smoke after Telegram `TAKEOUT_INIT_DELAY` expires and verify migrated-history deferment without unsafe old `chat` rows
   - Source `115` remains the selected smoke source: it is a dialog-backed
     `supergroup` with `peer_kind = channel`, no username, access-hash presence,
     one current-history item, and prior Takeout batch `2` blocked before
     observations with `TAKEOUT_INIT_DELAY`.
-  - The next execution plan is
-    `docs/superpowers/plans/2026-05-24-migrated-source-115-takeout-smoke.md`;
-    pass criteria require durable `migrated_history_detected = 1`,
-    `migrated_history_imported = 0`, a `migrated_history_deferred` warning
-    code, and no unsafe old `chat` history rows.
+  - Source `115` retry batch `18` completed as `partial` with
+    `migrated_history_detected = 1`, `migrated_history_imported = 0`,
+    `history_scope = current_history_with_migrated_deferred`, one
+    `migrated_history_deferred` warning, and zero unsafe old `chat` history
+    rows. This validates detection/deferment only; migrated-history import
+    enablement remains open below.
 - [ ] define richer incomplete-import recovery actions and user policy beyond
   the shipped read-only recovery state
 - [ ] enable migrated small-group history only after provenance and real-data

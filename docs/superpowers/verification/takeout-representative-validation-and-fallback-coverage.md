@@ -5,7 +5,7 @@
 
 Updated: 2026-05-24
 
-Current matrix summary: `6 passed`, `2 needs follow-up`, `2 blocked`,
+Current matrix summary: `7 passed`, `2 needs follow-up`, `1 blocked`,
 `0 not run`.
 
 Covered highlights:
@@ -27,9 +27,9 @@ Covered highlights:
 - source `114` Takeout batch `17` completed as partial private history with
   `only_my_messages_fallback`, `only_my_messages = 1`, and
   `history_scope = partial_private_history`;
-- source `115` remains the selected migrated small-group-to-supergroup Takeout
-  smoke retry after prior batch `2` failed before observations with
-  `TAKEOUT_INIT_DELAY`;
+- source `115` completed migrated small-group-to-supergroup Takeout smoke as
+  batch `18`, recording `migrated_history_deferred` without importing old
+  `chat` history rows;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
   membership, and resolver-state counters.
@@ -65,7 +65,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | passed | 114 | 17 | `only_my_messages_fallback` warning code, `only_my_messages` flag, partial/private history scope, completed/partial batch summary | Source `114` batch `17` completed as partial private history with durable only-my-messages fallback evidence and zero observations |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
-| Migrated small-group-to-supergroup smoke | blocked | 115 | 2 | failed early Takeout batch summary, source `115` pre-run shape, retry plan | Existing smoke reached a failed/unknown terminal batch with zero observations before migrated-history evidence could be collected; source `115` remains queued for retry |
+| Migrated small-group-to-supergroup smoke | passed | 115 | 18 | completed/partial Takeout batch summary, `migrated_history_deferred` warning code, migrated-history flags, unsafe old `chat` row check | Batch `18` detected migrated history, deferred import, and left old `chat` history rows at zero |
 | Forum-topic decision input | needs follow-up | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout | Bounded partial runs materially increased topic memberships without refreshing the topic catalog, which is useful decision input; completed supergroup Takeout evidence is still needed before changing behavior |
 
 ## Procedure
@@ -143,6 +143,65 @@ The row remains `blocked` until a live retry records either the same typed
 blocker or durable migrated-history deferment evidence. Passing evidence
 requires `migrated_history_detected = 1`, `migrated_history_imported = 0`, a
 `migrated_history_deferred` warning code, and no unsafe old `chat` history rows.
+
+### 2026-05-24 Source 115 Migrated Takeout Smoke Retry
+
+App commit: `367c049`. Working tree was clean before live execution on branch
+`takeout-source-115-migrated-smoke`.
+
+Source `115` Takeout retry job:
+
+| Field | Value |
+| --- | --- |
+| batch_id | 18 |
+| status | completed |
+| completeness | partial |
+| terminal_error_class | none |
+| observed | 1 |
+| inserted | 0 |
+| duplicates | 1 |
+| skipped | 0 |
+| warnings | 1 |
+| source_subtype | supergroup |
+| resolved_peer_kind | channel |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| history_scope | current_history_with_migrated_deferred |
+| migrated_history_detected | 1 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| split_count | 1 |
+| selected_split_count | 1 |
+| message_count_estimate | 2 |
+| takeout_id_present | 1 |
+
+Warning codes:
+
+| Batch id | Code | Count |
+| ---: | --- | ---: |
+| 18 | migrated_history_deferred | 1 |
+
+Unsafe migrated-history row check after batch `18`:
+
+| Field | Value |
+| --- | ---: |
+| telegram_message_count | 1 |
+| chat_history_rows | 0 |
+| migrated_history_rows | 0 |
+| history_peer_kind_count | 1 |
+
+Source `115` post-run aggregate snapshot:
+
+| Field | Value |
+| --- | ---: |
+| last_sync_state | 2 |
+| last_synced_at | 1779650800 |
+| item_count | 1 |
+| telegram_message_count | 1 |
+
+Result: batch `18` moves the migrated small-group-to-supergroup smoke row from
+`blocked` to `passed`. The run validated detection and deferment only; it does
+not enable old small-group history import.
 
 ### 2026-05-24 Source 113 Channel Private Takeout Pre-Run
 
