@@ -270,14 +270,14 @@ warnings and must exit `0`.
 - Modify after live run: `docs/superpowers/plans/2026-05-24-public-supergroup-source-19-takeout-validation.md`
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Start or reconnect the existing app flow**
+- [x] **Step 1: Start or reconnect the existing app flow**
 
 Use the already-running app if it is available. If it is not available, start
 the normal local Tauri dev flow used in this project.
 
 Do not stop user-started app processes unless explicitly instructed.
 
-- [ ] **Step 2: Pause for explicit live authorization**
+- [x] **Step 2: Pause for explicit live authorization**
 
 Before triggering Takeout, stop and ask the user to authorize the live action
 for:
@@ -288,7 +288,7 @@ source_id = 19
 
 Do not proceed until the user explicitly confirms.
 
-- [ ] **Step 3: Trigger Takeout for source 19**
+- [x] **Step 3: Trigger Takeout for source 19**
 
 Through the existing application flow, start a Takeout import for:
 
@@ -305,7 +305,7 @@ window.__TAURI__.core.invoke("start_takeout_source_import", { sourceId: 19 })
 Do not alter source identity, account settings, app code, or database rows by
 hand.
 
-- [ ] **Step 4: Monitor only coarse terminal state**
+- [x] **Step 4: Monitor only coarse terminal state**
 
 Watch for one of these outcomes:
 
@@ -322,7 +322,7 @@ fallback warning
 Do not copy raw provider errors. Record only typed/coarse terminal classes,
 warning codes, aggregate counters, and local numeric ids.
 
-- [ ] **Step 5: If the run grows too large, perform bounded cancellation**
+- [x] **Step 5: If the run grows too large, perform bounded cancellation**
 
 If the estimate or runtime makes a complete run impractical, cancel through the
 normal app flow.
@@ -344,7 +344,7 @@ last_synced_at before/after
 
 Do not manually delete partial rows.
 
-- [ ] **Step 6: Commit live-run marker**
+- [x] **Step 6: Commit live-run marker**
 
 After a terminal state is reached or bounded cancellation is completed, mark
 Task 2 steps complete in this plan and commit:
@@ -354,6 +354,36 @@ git diff --check
 git add docs/superpowers/plans/2026-05-24-public-supergroup-source-19-takeout-validation.md
 git commit -m "docs: mark source 19 live takeout run"
 ```
+
+Task 2 sanitized live-run marker:
+
+| Field | Value |
+| --- | --- |
+| source_id | 19 |
+| job_id | takeout-1 |
+| batch_id | 12 |
+| status | cancelled |
+| completeness | partial |
+| observed | 20397 |
+| inserted | 20397 |
+| duplicates | 0 |
+| skipped | 0 |
+| warnings | 0 |
+| terminal_error_present | 0 |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| takeout_id_present | 1 |
+| message_count_estimate | 52723 |
+| max_message_id | null |
+| started_at | 1779639050 |
+| finished_at | 1779639233 |
+
+Bounded cancellation was performed through the normal app flow because the
+estimate was `52723` and the run was not practical for a completed bounded
+session. No database rows were manually deleted or edited.
 
 ---
 
