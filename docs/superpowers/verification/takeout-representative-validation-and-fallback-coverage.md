@@ -78,6 +78,89 @@ Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
 
+### 2026-05-24 Source 19 Public Supergroup Takeout Pre-Run
+
+App commit: `18c2cb8`. Working tree was clean before this run on branch
+`takeout-source-19-public-supergroup-validation-plan`.
+
+Source `19` pre-run identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | supergroup |
+| account_id | 1 |
+| peer_kind | channel |
+| has_username | 1 |
+| has_access_hash | 1 |
+| is_member | 1 |
+| resolution_strategy | dialog |
+
+Source `19` pre-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 1950 |
+| telegram_message_count | 1950 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 920 |
+| thread_count | 551 |
+| reaction_item_count | 249 |
+| reaction_count_sum | 461 |
+| content_zstd_present_count | 1922 |
+| max_telegram_message_id | 63721 |
+| last_sync_state | 63721 |
+| last_synced_at | 1777826899 |
+
+Source `19` pre-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 28 |
+| content_kind | text_only | 1807 |
+| content_kind | text_with_media | 115 |
+| media_kind | document | 1 |
+| media_kind | none | 1807 |
+| media_kind | photo | 60 |
+| media_kind | sticker | 7 |
+| media_kind | video | 4 |
+| media_kind | voice | 1 |
+| media_kind | webpage | 70 |
+| history_peer_kind | channel | 1950 |
+
+Source `19` pre-run topic catalog aggregate:
+
+| Field | Value |
+| --- | ---: |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| closed_count | 0 |
+| pinned_count | 0 |
+| hidden_count | 0 |
+| deleted_count | 0 |
+| max_last_seen_at | null |
+| max_updated_at | null |
+
+Source `19` pre-run topic resolver state:
+
+| Field | Value |
+| --- | --- |
+| resolver_version | 1 |
+| status | never_run |
+| catalog_refreshed_at | null |
+| memberships_refreshed_at | null |
+| unresolved_count | 0 |
+| pending_item_count | 0 |
+| has_last_error | 0 |
+| updated_at | 1779038483 |
+
+Latest pre-run Takeout state for source `19`: none.
+
+Prior Takeout batch count for source `19`: `0`.
+
+Warning codes for prior source `19` Takeout batches: none.
+
 ### 2026-05-24 Source 22 Public Supergroup Takeout Pre-Run
 
 App commit: `e54b61c`. Working tree was clean before this run on branch
