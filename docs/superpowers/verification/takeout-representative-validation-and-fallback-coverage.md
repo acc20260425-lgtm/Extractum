@@ -78,6 +78,75 @@ Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
 
+### 2026-05-24 Source 122 Public Supergroup Takeout Pre-Run
+
+App commit: `aea8ffd`. Working tree was clean before this run on branch
+`takeout-source-122-public-supergroup-validation-plan`.
+
+Source `122` pre-run identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | supergroup |
+| account_id | 1 |
+| peer_kind | channel |
+| has_username | 1 |
+| has_access_hash | 1 |
+| is_member | 1 |
+| resolution_strategy | dialog |
+
+Source `122` pre-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 117 |
+| telegram_message_count | 117 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 74 |
+| thread_count | 53 |
+| reaction_item_count | 18 |
+| reaction_count_sum | 23 |
+| content_zstd_present_count | 115 |
+| max_telegram_message_id | 12238 |
+| last_sync_state | 12238 |
+| last_synced_at | 1779640088 |
+
+Source `122` pre-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 2 |
+| content_kind | text_only | 101 |
+| content_kind | text_with_media | 14 |
+| media_kind | none | 101 |
+| media_kind | photo | 6 |
+| media_kind | video | 1 |
+| media_kind | webpage | 9 |
+| history_peer_kind | channel | 117 |
+
+Source `122` pre-run topic catalog aggregate:
+
+| Field | Value |
+| --- | ---: |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| closed_count | 0 |
+| pinned_count | 0 |
+| hidden_count | 0 |
+| deleted_count | 0 |
+| max_last_seen_at | null |
+| max_updated_at | null |
+
+Source `122` pre-run topic resolver state: none.
+
+Latest pre-run Takeout state for source `122`: none.
+
+Prior Takeout batch count for source `122`: `0`.
+
+Warning codes for prior source `122` Takeout batches: none.
+
 ### 2026-05-24 Source 19 Public Supergroup Takeout Pre-Run
 
 App commit: `18c2cb8`. Working tree was clean before this run on branch
