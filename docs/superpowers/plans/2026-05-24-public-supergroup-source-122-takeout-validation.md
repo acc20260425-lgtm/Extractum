@@ -388,11 +388,11 @@ The run completed cleanly, so bounded cancellation was not needed.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-24-public-supergroup-source-122-takeout-validation.md`
 
-- [ ] **Step 1: Capture post-run source snapshot**
+- [x] **Step 1: Capture post-run source snapshot**
 
 Capture the same sanitized source `122` fields recorded in Task 1.
 
-- [ ] **Step 2: Capture latest batch summary**
+- [x] **Step 2: Capture latest batch summary**
 
 Capture the new Takeout batch summary and record:
 
@@ -418,7 +418,7 @@ max_message_id
 warning_codes
 ```
 
-- [ ] **Step 3: Capture duplicate summary when observations exist**
+- [x] **Step 3: Capture duplicate summary when observations exist**
 
 If `observed > 0`, capture duplicate summary:
 
@@ -437,7 +437,7 @@ If `observed = 0`, record:
 Duplicate summary not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 4: Capture row-fidelity comparison when observations exist**
+- [x] **Step 4: Capture row-fidelity comparison when observations exist**
 
 If `observed > 0`, capture row fidelity in the relevant mode:
 
@@ -453,7 +453,7 @@ If `observed = 0`, record:
 Row-fidelity comparison not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 5: Capture warning visibility**
+- [x] **Step 5: Capture warning visibility**
 
 Capture warning visibility for the new batch.
 
@@ -468,7 +468,7 @@ finish_takeout_failed
 
 Do not record warning messages.
 
-- [ ] **Step 6: Capture explicit before/after delta**
+- [x] **Step 6: Capture explicit before/after delta**
 
 Compare the pre-run and post-run sanitized source snapshots.
 
@@ -488,7 +488,7 @@ last_synced_at before/after
 For failed or cancelled runs, explicitly state whether `last_sync_state` and
 `last_synced_at` stayed equal.
 
-- [ ] **Step 7: Commit post-run capture marker**
+- [x] **Step 7: Commit post-run capture marker**
 
 Mark Task 3 steps complete in this plan and commit:
 
@@ -497,6 +497,121 @@ git diff --check
 git add docs/superpowers/plans/2026-05-24-public-supergroup-source-122-takeout-validation.md
 git commit -m "docs: mark source 122 post-run capture"
 ```
+
+Task 3 sanitized post-run capture:
+
+Source `122` post-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 4564 |
+| telegram_message_count | 4564 |
+| max_telegram_message_id | 12238 |
+| content_zstd_present_count | 4250 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 1676 |
+| thread_count | 654 |
+| reaction_item_count | 288 |
+| reaction_count_sum | 719 |
+| last_sync_state | 12238 |
+| last_synced_at | 1779640790 |
+
+Source `122` post-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 314 |
+| content_kind | text_only | 3815 |
+| content_kind | text_with_media | 435 |
+| media_kind | animation | 1 |
+| media_kind | document | 33 |
+| media_kind | image | 23 |
+| media_kind | none | 3815 |
+| media_kind | photo | 305 |
+| media_kind | poll | 3 |
+| media_kind | sticker | 151 |
+| media_kind | video | 13 |
+| media_kind | webpage | 220 |
+| history_peer_kind | channel | 4564 |
+
+Source `122` topic catalog and resolver state after batch `13`:
+
+| Field | Value |
+| --- | --- |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| resolver_state | none |
+
+Batch `13` summary:
+
+| Field | Value |
+| --- | --- |
+| source_id | 122 |
+| status | completed |
+| completeness | complete |
+| terminal_error_present | 0 |
+| inserted | 4447 |
+| observed | 4564 |
+| duplicates | 117 |
+| skipped | 0 |
+| warnings | 0 |
+| started_at | 1779640726 |
+| finished_at | 1779640790 |
+| used_export_dc | 1 |
+| fallback_used | 0 |
+| migrated_history_detected | 0 |
+| migrated_history_imported | 0 |
+| only_my_messages | 0 |
+| takeout_id_present | 1 |
+| message_count_estimate | 5768 |
+| max_message_id | null |
+
+Duplicate summary for batch `13`:
+
+| Field | Value |
+| --- | ---: |
+| inserted_count | 4447 |
+| duplicate_observed_count | 117 |
+| skipped_count | 0 |
+| failed_count | 0 |
+| duplicate_identity_count | 117 |
+| has_duplicate_after_normal_sync_evidence | 1 |
+
+Row-fidelity comparison for batch `13`:
+
+| Field | Value |
+| --- | ---: |
+| observed_identity_count | 4564 |
+| matched_canonical_identity_count | 4564 |
+| missing_canonical_identity_count | 0 |
+| canonical_without_observation_count | 0 |
+| matched_content_zstd_present_count | 4250 |
+| matched_reply_to_msg_id_present_count | 1676 |
+| matched_reply_to_top_id_present_count | 654 |
+| matched_reaction_count_present_count | 288 |
+
+Row-fidelity mismatch categories: none.
+
+Warning visibility for batch `13`:
+
+- provenance warning codes: none;
+- recovery candidate warning codes: none;
+- latest batch for source `122`: yes;
+- durable recovery kind: none.
+
+Explicit before/after delta:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 117 | 4564 | 4447 |
+| telegram_message_count | 117 | 4564 | 4447 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 74 | 1676 | 1602 |
+| thread_count | 53 | 654 | 601 |
+| reaction_item_count | 18 | 288 | 270 |
+| last_sync_state | 12238 | 12238 | unchanged |
+| last_synced_at | 1779640088 | 1779640790 | advanced |
 
 ---
 
