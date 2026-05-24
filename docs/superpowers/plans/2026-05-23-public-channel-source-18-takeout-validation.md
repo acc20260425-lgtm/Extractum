@@ -262,14 +262,14 @@ warnings and must exit `0`.
 - Modify after live run: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Start or reconnect the existing app flow**
+- [x] **Step 1: Start or reconnect the existing app flow**
 
 Use the already-running app if it is available. If it is not available, start
 the normal local Tauri dev flow used in this project.
 
 Do not stop user-started app processes unless explicitly instructed.
 
-- [ ] **Step 2: Pause for explicit live authorization**
+- [x] **Step 2: Pause for explicit live authorization**
 
 Before triggering Takeout, stop and ask the user to authorize the live action
 for:
@@ -280,7 +280,7 @@ source_id = 18
 
 Do not proceed until the user explicitly confirms.
 
-- [ ] **Step 3: Trigger Takeout for source 18**
+- [x] **Step 3: Trigger Takeout for source 18**
 
 Through the existing application flow, start a Takeout import for:
 
@@ -297,7 +297,7 @@ window.__TAURI__.core.invoke("start_takeout_source_import", { sourceId: 18 })
 Do not alter source identity, account settings, app code, or database rows by
 hand.
 
-- [ ] **Step 4: Monitor only coarse terminal state**
+- [x] **Step 4: Monitor only coarse terminal state**
 
 Watch for one of these outcomes:
 
@@ -313,7 +313,7 @@ fallback warning
 Do not copy raw provider errors. Record only typed/coarse terminal classes,
 warning codes, aggregate counters, and local numeric ids.
 
-- [ ] **Step 5: If the run grows too large, perform bounded cancellation**
+- [x] **Step 5: If the run grows too large, perform bounded cancellation**
 
 If the estimate or runtime makes a complete run impractical, cancel through the
 normal app flow.
