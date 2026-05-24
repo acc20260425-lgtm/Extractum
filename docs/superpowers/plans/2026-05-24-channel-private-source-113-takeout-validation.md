@@ -126,7 +126,7 @@ Forbidden evidence:
 **Files:**
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 
-- [ ] **Step 1: Confirm repository state**
+- [x] **Step 1: Confirm repository state**
 
 Run:
 
@@ -143,7 +143,7 @@ Expected branch:
 
 Record the current `HEAD` commit in the run note.
 
-- [ ] **Step 2: Capture current sanitized source snapshot for source 113**
+- [x] **Step 2: Capture current sanitized source snapshot for source 113**
 
 Use existing sanitized diagnostics or read-only SQLite aggregate queries for:
 
@@ -196,7 +196,7 @@ last_synced_at = 1779537575
 If values differ, record the actual sanitized values and treat the difference
 as the pre-run context.
 
-- [ ] **Step 3: Capture current Takeout baseline for source 113**
+- [x] **Step 3: Capture current Takeout baseline for source 113**
 
 Use durable batch diagnostics for `source_id=113`.
 
@@ -238,7 +238,7 @@ fallback_used = 0
 only_my_messages = 0
 ```
 
-- [ ] **Step 4: Add a dated pre-run note**
+- [x] **Step 4: Add a dated pre-run note**
 
 In `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`,
 under `## Run Notes`, add:
@@ -258,7 +258,7 @@ media_kind: none 8, photo 6, webpage 15
 history_peer_kind: channel 29
 ```
 
-- [ ] **Step 5: Commit pre-run evidence**
+- [x] **Step 5: Commit pre-run evidence**
 
 Run:
 

@@ -81,6 +81,83 @@ Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
 
+### 2026-05-24 Source 113 Channel Private Takeout Pre-Run
+
+App commit: `f474dff`. Working tree was clean before this pre-run capture on
+branch `takeout-source-113-channel-private-validation-plan`.
+
+Source `113` pre-run identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | channel |
+| account_id | 11 |
+| peer_kind | channel |
+| has_username | 1 |
+| has_access_hash | 1 |
+| is_active | 1 |
+| is_member | 0 |
+| resolution_strategy | dialog |
+
+Source `113` pre-run snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 29 |
+| telegram_message_count | 29 |
+| max_telegram_message_id | 515 |
+| content_zstd_present_count | 28 |
+| topic_membership_count | 0 |
+| topic_membership_topic_count | 0 |
+| reply_count | 16 |
+| thread_count | 5 |
+| reaction_item_count | 22 |
+| reaction_count_sum | 86 |
+| last_sync_state | 515 |
+| last_synced_at | 1779537575 |
+
+Source `113` pre-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 1 |
+| content_kind | text_only | 8 |
+| content_kind | text_with_media | 20 |
+| media_kind | none | 8 |
+| media_kind | photo | 6 |
+| media_kind | webpage | 15 |
+| history_peer_kind | channel | 29 |
+
+Source `113` topic catalog and resolver state:
+
+| Field | Value |
+| --- | --- |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| resolver_state | none |
+
+Latest pre-run Takeout state for source `113`:
+
+| Field | Value |
+| --- | ---: |
+| prior_takeout_batch_count | 3 |
+| latest_batch_id | 9 |
+
+Latest batch summary:
+
+| Batch id | Status | Completeness | Terminal error class | Observed | Inserted | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Only my messages | Migrated detected |
+| ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 9 | failed | unknown | TAKEOUT_INIT_DELAY | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
+
+Pre-run warning codes for batch `9`: none.
+
+Interpretation: source `113` remains the strongest sanitized
+`CHANNEL_PRIVATE` fallback candidate, but current durable Takeout evidence is
+still limited to pre-observation `TAKEOUT_INIT_DELAY` failures. The
+`CHANNEL_PRIVATE` fallback row remains `not run` until a live run records
+fallback warning/flag evidence or another relevant typed terminal outcome.
+
 ### 2026-05-24 Source 122 Public Supergroup Takeout Pre-Run
 
 App commit: `aea8ffd`. Working tree was clean before this run on branch
