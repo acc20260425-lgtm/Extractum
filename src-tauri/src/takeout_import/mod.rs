@@ -645,6 +645,7 @@ async fn run_started_takeout_source_import_inner(
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let input_peer: tl::enums::InputPeer = resolved_peer.peer.into();
+    let mut only_my_messages_recorded = false;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_VALIDATING_PEER.to_string();
@@ -663,6 +664,7 @@ async fn run_started_takeout_source_import_inner(
         warnings,
         fallback_used,
         export_attempts,
+        &mut only_my_messages_recorded,
     )
     .await?;
     let migrated_detected = detect_supergroup_migration(
@@ -719,7 +721,6 @@ async fn run_started_takeout_source_import_inner(
     .await;
     let mut counted_ranges = Vec::new();
     let mut total = 0_i64;
-    let mut only_my_messages_recorded = false;
     for range in selected_ranges {
         let probe = takeout_history_count_probe(
             pool,
@@ -861,11 +862,12 @@ async fn validate_takeout_peer(
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
     export_attempts: &mut ExportDcAttemptState,
+    only_my_messages_recorded: &mut bool,
 ) -> AppResult<()> {
     match telegram_source_subtype {
         TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
             let input_channel: tl::enums::InputChannel = peer.into();
-            export_dc_invoke_with_provenance(
+            let result = export_dc_invoke_with_provenance(
                 pool,
                 batch_id,
                 client,
@@ -880,7 +882,22 @@ async fn validate_takeout_peer(
                 fallback_used,
                 export_attempts,
             )
-            .await?;
+            .await;
+            if let Err(error) = result {
+                if record_channel_private_fallback_if_supported(
+                    pool,
+                    batch_id,
+                    telegram_source_subtype,
+                    &error,
+                    warnings,
+                    only_my_messages_recorded,
+                )
+                .await?
+                {
+                    return Ok(());
+                }
+                return Err(error);
+            }
         }
         TELEGRAM_KIND_GROUP => {
             export_dc_invoke_with_provenance(
@@ -1331,6 +1348,29 @@ async fn record_only_my_messages_fallback_if_needed(
     Ok(())
 }
 
+async fn record_channel_private_fallback_if_supported(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    telegram_source_subtype: &str,
+    error: &AppError,
+    warnings: &mut Vec<String>,
+    only_my_messages_recorded: &mut bool,
+) -> AppResult<bool> {
+    if supports_only_my_messages_fallback(telegram_source_subtype)
+        && is_channel_private_error(error)
+    {
+        record_only_my_messages_fallback_if_needed(
+            pool,
+            batch_id,
+            warnings,
+            only_my_messages_recorded,
+        )
+        .await?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 async fn takeout_get_history(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     batch_id: i64,
@@ -1453,7 +1493,8 @@ fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult
 mod tests {
     use super::{
         create_locked_takeout_start_records, is_channel_private_error, load_takeout_source_subtype,
-        raw_parse, record_only_my_messages_fallback_if_needed, supports_only_my_messages_fallback,
+        raw_parse, record_channel_private_fallback_if_supported,
+        record_only_my_messages_fallback_if_needed, supports_only_my_messages_fallback,
         TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::{AppError, AppErrorKind};
@@ -1519,6 +1560,55 @@ mod tests {
         .await
         .expect("record fallback idempotently");
 
+        assert!(only_my_messages_recorded);
+        assert_eq!(warnings.len(), 1);
+        let state: (i64, String) = sqlx::query_as(
+            "SELECT only_my_messages, history_scope FROM telegram_takeout_batches WHERE batch_id = ?",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load takeout fallback state");
+        assert_eq!(state, (1, "partial_private_history".to_string()));
+        let warning_codes: Vec<String> =
+            sqlx::query_scalar("SELECT code FROM ingest_batch_warnings WHERE batch_id = ?")
+                .bind(batch_id)
+                .fetch_all(&pool)
+                .await
+                .expect("load warning codes");
+        assert_eq!(warning_codes, vec!["only_my_messages_fallback".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn channel_private_validation_preflight_records_fallback_and_continues() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: TELEGRAM_KIND_CHANNEL.to_string(),
+            },
+        )
+        .await
+        .expect("create takeout batch");
+        let mut warnings = Vec::new();
+        let mut only_my_messages_recorded = false;
+
+        let should_continue = record_channel_private_fallback_if_supported(
+            &pool,
+            batch_id,
+            TELEGRAM_KIND_CHANNEL,
+            &AppError::network("Rpc error 400: CHANNEL_PRIVATE"),
+            &mut warnings,
+            &mut only_my_messages_recorded,
+        )
+        .await
+        .expect("handle channel private validation");
+
+        assert!(should_continue);
         assert!(only_my_messages_recorded);
         assert_eq!(warnings.len(), 1);
         let state: (i64, String) = sqlx::query_as(
