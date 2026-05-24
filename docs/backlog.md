@@ -34,7 +34,7 @@ Priority: high.
 
 - [x] ship repeatable sanitized Takeout validation diagnostics and reusable
   manual validation template
-- [ ] complete representative public supergroup Takeout validation after
+- [x] complete representative public supergroup Takeout validation after
   current durable baseline and bounded partial runs
   - Source `18` completed public-channel Takeout as batch `10` with explicit
     before/after snapshots, no warnings, and complete duplicate/fidelity
@@ -47,6 +47,10 @@ Priority: high.
     `partial` after `20397` observations because the estimate was `52723`;
     all observed identities matched canonical source rows, but completed
     public-supergroup evidence is still needed.
+  - Source `122` completed public-supergroup Takeout as batch `13` with
+    explicit before/after snapshots, `117` duplicate observations against the
+    normal-sync baseline, `4447` inserts, zero warnings, and a full
+    row-fidelity match across `4564` observed identities.
 - [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`

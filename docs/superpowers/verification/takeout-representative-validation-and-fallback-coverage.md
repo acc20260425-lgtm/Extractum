@@ -5,7 +5,7 @@
 
 Updated: 2026-05-24
 
-Current matrix summary: `4 passed`, `3 needs follow-up`, `2 blocked`,
+Current matrix summary: `5 passed`, `2 needs follow-up`, `2 blocked`,
 `1 not run`.
 
 Covered highlights:
@@ -16,6 +16,9 @@ Covered highlights:
 - completed small-group Takeout for source `118` / batch `6`;
 - completed repeated Takeout-after-Takeout duplicate validation for source `73`
   / batch `3`;
+- completed public-supergroup Takeout for source `122` / batch `13`, with
+  explicit before/after snapshots, duplicate-after-normal-sync evidence, and
+  row-fidelity comparison;
 - bounded partial public supergroup and dialog-backed no-username supergroup
   runs for sources `19` / `21` / `22` / `110`;
 - normal-sync-before-Takeout attempts for source `113`, most recently batch
@@ -50,7 +53,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Case | Status | Source id | Batch id | Evidence to paste | Result notes |
 | --- | --- | --- | --- | --- | --- |
 | Public channel Takeout | passed | 18 | 10 | before/after source summary, completed Takeout batch summary, duplicate summary, row-fidelity comparison, warning visibility, watermark before/after | Completed cleanly for a public/member channel with explicit before/after snapshots and no warnings |
-| Public supergroup Takeout | needs follow-up | 19 | 12 | before/after source summary, cancelled partial Takeout batch summary, reply/thread/reaction aggregate shape, warning visibility, row-fidelity comparison | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large; all observed identities matched canonical source rows |
+| Public supergroup Takeout | passed | 122 | 13 | before/after source summary, completed Takeout batch summary, duplicate summary, warning visibility, row-fidelity comparison | Completed cleanly for a public/member supergroup with explicit before/after snapshots, duplicate evidence against the normal-sync baseline, full row-fidelity match, and no warnings |
 | Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
 | Repeated Takeout after normal sync | passed | 18 | 10 | duplicate observation summary, row-fidelity comparison, before/after source summary, latest batch summary | Batch 10 followed an existing normal-sync baseline for source 18; 42 observations were classified as duplicates and all 467 observed identities matched canonical rows |
@@ -146,6 +149,123 @@ Latest pre-run Takeout state for source `122`: none.
 Prior Takeout batch count for source `122`: `0`.
 
 Warning codes for prior source `122` Takeout batches: none.
+
+### 2026-05-24 Source 122 Public Supergroup Takeout Result
+
+App commit: `aea8ffd`. Working tree was clean before this run on branch
+`takeout-source-122-public-supergroup-validation-plan`.
+
+Outcome: completed / complete.
+
+Source `122` before/after snapshot:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 117 | 4564 | 4447 |
+| telegram_message_count | 117 | 4564 | 4447 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 74 | 1676 | 1602 |
+| thread_count | 53 | 654 | 601 |
+| reaction_item_count | 18 | 288 | 270 |
+| last_sync_state | 12238 | 12238 | unchanged |
+| last_synced_at | 1779640088 | 1779640790 | advanced |
+
+Source `122` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 314 |
+| content_kind | text_only | 3815 |
+| content_kind | text_with_media | 435 |
+| media_kind | animation | 1 |
+| media_kind | document | 33 |
+| media_kind | image | 23 |
+| media_kind | none | 3815 |
+| media_kind | photo | 305 |
+| media_kind | poll | 3 |
+| media_kind | sticker | 151 |
+| media_kind | video | 13 |
+| media_kind | webpage | 220 |
+| history_peer_kind | channel | 4564 |
+
+Source `122` topic catalog and resolver state after batch `13`:
+
+| Field | Value |
+| --- | --- |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| resolver_state | none |
+
+Batch summary:
+
+| Batch id | Source id | Status | Completeness | Terminal error present | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate | Max message id |
+| ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 13 | 122 | completed | complete | 0 | 4447 | 4564 | 117 | 0 | 0 | 1 | 0 | 0 | 0 | 5768 | null |
+
+Warning codes for batch `13`: none.
+
+Duplicate summary:
+
+| Field | Value |
+| --- | ---: |
+| inserted observations | 4447 |
+| duplicate observations | 117 |
+| skipped observations | 0 |
+| failed observations | 0 |
+| duplicate identity count | 117 |
+| has duplicate-after-normal-sync evidence | 1 |
+
+Row-fidelity comparison:
+
+| Field | Value |
+| --- | ---: |
+| observed_identity_count | 4564 |
+| matched_canonical_identity_count | 4564 |
+| missing_canonical_identity_count | 0 |
+| canonical_without_observation_count | 0 |
+| matched_content_zstd_present_count | 4250 |
+| matched_reply_to_msg_id_present_count | 1676 |
+| matched_reply_to_top_id_present_count | 654 |
+| matched_reaction_count_present_count | 288 |
+
+Matched content-kind distribution:
+
+| Key | Count |
+| --- | ---: |
+| media_only | 314 |
+| text_only | 3815 |
+| text_with_media | 435 |
+
+Matched media-kind distribution:
+
+| Key | Count |
+| --- | ---: |
+| animation | 1 |
+| document | 33 |
+| image | 23 |
+| none | 3815 |
+| photo | 305 |
+| poll | 3 |
+| sticker | 151 |
+| video | 13 |
+| webpage | 220 |
+
+Row-fidelity mismatch categories: none.
+
+Warning visibility:
+
+| Field | Value |
+| --- | --- |
+| provenance warning codes | none |
+| recovery candidate warning codes | none |
+| latest batch for source | yes |
+| durable recovery kind | none |
+
+Result: the public-supergroup Takeout row is now `passed` because source `122`
+/ batch `13` completed cleanly with duplicate evidence against the normal-sync
+baseline, a full canonical row-fidelity match, warning visibility, and explicit
+before/after snapshots. `Forum-topic decision input` remains unchanged because
+source `122` had no topic membership or topic catalog evidence.
 
 ### 2026-05-24 Source 19 Public Supergroup Takeout Pre-Run
 
