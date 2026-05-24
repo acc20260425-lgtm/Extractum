@@ -17,7 +17,7 @@ Covered highlights:
 - completed repeated Takeout-after-Takeout duplicate validation for source `73`
   / batch `3`;
 - bounded partial public supergroup and dialog-backed no-username supergroup
-  runs for sources `21` / `22` / `110`;
+  runs for sources `19` / `21` / `22` / `110`;
 - normal-sync-before-Takeout attempts for source `113`, most recently batch
   `9`, blocked by
   `TAKEOUT_INIT_DELAY` before Takeout observations were written; source `18`
@@ -50,7 +50,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Case | Status | Source id | Batch id | Evidence to paste | Result notes |
 | --- | --- | --- | --- | --- | --- |
 | Public channel Takeout | passed | 18 | 10 | before/after source summary, completed Takeout batch summary, duplicate summary, row-fidelity comparison, warning visibility, watermark before/after | Completed cleanly for a public/member channel with explicit before/after snapshots and no warnings |
-| Public supergroup Takeout | needs follow-up | 22 | 11 | before/after source summary, cancelled partial Takeout batch summary, topic/reply/thread aggregate shape, warning visibility, row-fidelity comparison | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large; all observed identities matched canonical source rows |
+| Public supergroup Takeout | needs follow-up | 19 | 12 | before/after source summary, cancelled partial Takeout batch summary, reply/thread/reaction aggregate shape, warning visibility, row-fidelity comparison | Bounded live run imported partial history and was cancelled before full completion because the Takeout estimate was large; all observed identities matched canonical source rows |
 | Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
 | Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash |
 | Repeated Takeout after normal sync | passed | 18 | 10 | duplicate observation summary, row-fidelity comparison, before/after source summary, latest batch summary | Batch 10 followed an existing normal-sync baseline for source 18; 42 observations were classified as duplicates and all 467 observed identities matched canonical rows |
@@ -160,6 +160,137 @@ Latest pre-run Takeout state for source `19`: none.
 Prior Takeout batch count for source `19`: `0`.
 
 Warning codes for prior source `19` Takeout batches: none.
+
+### 2026-05-24 Source 19 Public Supergroup Takeout Result
+
+App commit: `18c2cb8`. Working tree was clean before this run on branch
+`takeout-source-19-public-supergroup-validation-plan`.
+
+Outcome: cancelled / partial.
+
+Source `19` before/after snapshot:
+
+| Field | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| item_count | 1950 | 22347 | 20397 |
+| telegram_message_count | 1950 | 22347 | 20397 |
+| topic_membership_count | 0 | 0 | 0 |
+| reply_count | 920 | 10509 | 9589 |
+| thread_count | 551 | 5858 | 5307 |
+| reaction_item_count | 249 | 3558 | 3309 |
+| last_sync_state | 63721 | 63721 | unchanged |
+| last_synced_at | 1777826899 | 1777826899 | unchanged |
+
+Source `19` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 275 |
+| content_kind | text_only | 20601 |
+| content_kind | text_with_media | 1471 |
+| media_kind | document | 19 |
+| media_kind | image | 15 |
+| media_kind | none | 20601 |
+| media_kind | photo | 647 |
+| media_kind | poll | 4 |
+| media_kind | sticker | 39 |
+| media_kind | video | 30 |
+| media_kind | voice | 1 |
+| media_kind | webpage | 991 |
+| history_peer_kind | channel | 22347 |
+
+Source `19` topic catalog and resolver state after batch `12`:
+
+| Field | Value |
+| --- | --- |
+| topic_catalog_count | 0 |
+| distinct_topic_ids | 0 |
+| resolver_version | 1 |
+| resolver_status | never_run |
+| catalog_refreshed_at | null |
+| memberships_refreshed_at | null |
+| unresolved_count | 0 |
+| pending_item_count | 0 |
+| has_last_error | 0 |
+| resolver_updated_at | 1779038483 |
+
+Batch summary:
+
+| Batch id | Source id | Status | Completeness | Terminal error present | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate | Max message id |
+| ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 12 | 19 | cancelled | partial | 0 | 20397 | 20397 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 52723 | null |
+
+Warning codes for batch `12`: none.
+
+Duplicate summary:
+
+| Field | Value |
+| --- | ---: |
+| inserted observations | 20397 |
+| duplicate observations | 0 |
+| skipped observations | 0 |
+| failed observations | 0 |
+| duplicate identity count | 0 |
+| has duplicate-after-normal-sync evidence | 0 |
+
+Row-fidelity comparison:
+
+| Field | Value |
+| --- | ---: |
+| observed_identity_count | 20397 |
+| matched_canonical_identity_count | 20397 |
+| missing_canonical_identity_count | 0 |
+| canonical_without_observation_count | 1950 |
+| matched_content_zstd_present_count | 20150 |
+| matched_reply_to_msg_id_present_count | 9589 |
+| matched_reply_to_top_id_present_count | 5307 |
+| matched_reaction_count_present_count | 3309 |
+
+Matched content-kind distribution:
+
+| Key | Count |
+| --- | ---: |
+| media_only | 247 |
+| text_only | 18794 |
+| text_with_media | 1356 |
+
+Matched media-kind distribution:
+
+| Key | Count |
+| --- | ---: |
+| document | 18 |
+| image | 15 |
+| none | 18794 |
+| photo | 587 |
+| poll | 4 |
+| sticker | 32 |
+| video | 26 |
+| webpage | 921 |
+
+Row-fidelity mismatch categories:
+
+| Category | Count | Sample ids |
+| --- | ---: | --- |
+| canonical_identity_missing_observation | 1950 | 43079, 43080, 43081, 43082, 43083, 43084, 43085, 43086, 43087, 43088 |
+
+Interpretation: all observed Takeout identities matched canonical source rows.
+The canonical rows without observations are the pre-run normal-sync baseline
+rows, which is expected in this bounded partial run.
+
+Warning visibility:
+
+| Field | Value |
+| --- | --- |
+| provenance warning codes | none |
+| recovery candidate warning codes | none |
+| latest batch for source | yes |
+| durable recovery kind | cancelled |
+
+Result: the public-supergroup Takeout row remains `needs follow-up` because
+the run was bounded-cancelled as partial. The row now points to source `19` /
+batch `12` as the latest public-supergroup evidence. `Forum-topic decision
+input` remains unchanged because source `19` had no topic membership or topic
+catalog evidence.
 
 ### 2026-05-24 Source 22 Public Supergroup Takeout Pre-Run
 

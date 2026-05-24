@@ -43,6 +43,10 @@ Priority: high.
     `partial` after `11162` observations because the estimate was `125813`;
     all observed identities matched canonical source rows, but completed
     public-supergroup evidence is still needed.
+  - Source `19` public-supergroup Takeout batch `12` was bounded-cancelled as
+    `partial` after `20397` observations because the estimate was `52723`;
+    all observed identities matched canonical source rows, but completed
+    public-supergroup evidence is still needed.
 - [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
 - [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`
