@@ -339,11 +339,11 @@ git commit -m "docs: mark source 22 live takeout run"
 - Modify: `docs/superpowers/plans/2026-05-24-public-supergroup-source-22-takeout-validation.md`
 - Optional local-only: `reference/session-context-2026-05-10-analysis-redesign.md`
 
-- [ ] **Step 1: Capture post-run source snapshot**
+- [x] **Step 1: Capture post-run source snapshot**
 
 Capture the same sanitized source `22` fields recorded in Task 1.
 
-- [ ] **Step 2: Capture latest batch summary**
+- [x] **Step 2: Capture latest batch summary**
 
 Capture the new Takeout batch summary and record:
 
@@ -369,7 +369,7 @@ max_message_id
 warning_codes
 ```
 
-- [ ] **Step 3: Capture duplicate summary when observations exist**
+- [x] **Step 3: Capture duplicate summary when observations exist**
 
 If `observed > 0`, capture duplicate summary:
 
@@ -388,7 +388,7 @@ If `observed = 0`, record:
 Duplicate summary not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 4: Capture row-fidelity comparison when observations exist**
+- [x] **Step 4: Capture row-fidelity comparison when observations exist**
 
 If `observed > 0`, capture row fidelity in the relevant mode:
 
@@ -404,7 +404,7 @@ If `observed = 0`, record:
 Row-fidelity comparison not applicable because the batch wrote zero observations.
 ```
 
-- [ ] **Step 5: Capture warning visibility**
+- [x] **Step 5: Capture warning visibility**
 
 Capture warning visibility for the new batch.
 
@@ -419,7 +419,7 @@ finish_takeout_failed
 
 Do not record warning messages.
 
-- [ ] **Step 6: Capture explicit before/after delta**
+- [x] **Step 6: Capture explicit before/after delta**
 
 Compare the pre-run and post-run sanitized source snapshots.
 
@@ -439,7 +439,7 @@ last_synced_at before/after
 For failed or cancelled runs, explicitly state whether `last_sync_state` and
 `last_synced_at` stayed equal.
 
-- [ ] **Step 7: Commit post-run capture marker**
+- [x] **Step 7: Commit post-run capture marker**
 
 Mark Task 3 steps complete in this plan and commit:
 
