@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | complete remaining public-source/fallback validation and define incomplete-import recovery on top of persisted provenance |
+| High | Takeout source import | complete remaining export-DC and migrated-history validation and define incomplete-import recovery on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
@@ -52,7 +52,7 @@ Priority: high.
     normal-sync baseline, `4447` inserts, zero warnings, and a full
     row-fidelity match across `4564` observed identities.
 - [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
-- [ ] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
+- [x] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`
     evidence; source `113` was the strongest private/left-shape candidate at
     that time.
@@ -68,7 +68,13 @@ Priority: high.
   - Source `114` Takeout batch `15` reproduced the typed `CHANNEL_PRIVATE`
     terminal outcome before observations, but recorded no
     `only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence;
-    the fallback path now needs follow-up rather than another candidate search.
+    a follow-up code investigation found the preflight path was failing before
+    the fallback marker could be persisted.
+  - Source `114` post-fix Takeout batch `17` completed as `partial` with
+    `only_my_messages_fallback`, `only_my_messages = 1`, and
+    `history_scope = partial_private_history`; Telegram exposed zero
+    only-my-messages observations, so full-history import remains a separate
+    concern.
 - [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
 - [x] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
   - Source `113` completed the normal-sync setup but Takeout batches `7` and
