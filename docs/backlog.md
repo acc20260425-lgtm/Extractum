@@ -98,8 +98,12 @@ Priority: high.
     `migrated_history_deferred` warning, and zero unsafe old `chat` history
     rows. This validates detection/deferment only; migrated-history import
     enablement remains open below.
-- [ ] define richer incomplete-import recovery actions and user policy beyond
+- [x] define richer incomplete-import recovery actions and user policy beyond
   the shipped read-only recovery state
+  - Implemented the safe recovery-policy slice: failed, cancelled,
+    interrupted, and partial-completed Takeout notices now describe the
+    safe re-run policy and known warning-code limitations without adding
+    discard, persisted dismiss, or true resume behavior.
 - [ ] enable migrated small-group history only after provenance and real-data
   validation prove the typed Telegram identity boundary is safe
 - [ ] decide whether Takeout import should refresh the forum-topic catalog after successful finish
