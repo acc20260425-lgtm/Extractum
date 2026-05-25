@@ -19,7 +19,7 @@ use super::settings::{
     SECONDS_PER_DAY,
 };
 use super::store::load_source;
-use super::topics::refresh_forum_topics;
+use super::refresh_forum_topics;
 use super::types::{
     now_secs, SourceSyncTarget, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
     TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,

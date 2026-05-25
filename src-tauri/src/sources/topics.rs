@@ -56,7 +56,7 @@ struct ForumTopicSnapshot {
     sort_order: i64,
 }
 
-pub(super) async fn refresh_forum_topics(
+pub(crate) async fn refresh_forum_topics(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     client: &Client,
     peer: PeerRef,
