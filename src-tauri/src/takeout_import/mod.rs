@@ -1506,11 +1506,16 @@ mod tests {
     use super::{
         create_locked_takeout_start_records, is_channel_private_error, load_takeout_source_subtype,
         raw_parse, record_channel_private_fallback_if_supported,
+        record_export_dc_attempt_if_needed, record_export_dc_fallback_if_needed,
         record_only_my_messages_fallback_if_needed, supports_only_my_messages_fallback,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        ExportDcAlias, ExportDcAttemptState, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+        TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::{AppError, AppErrorKind};
-    use crate::ingest_provenance::{create_telegram_takeout_batch, CreateTelegramTakeoutBatch};
+    use crate::ingest_provenance::{
+        create_telegram_takeout_batch, finalize_ingest_batch, CreateTelegramTakeoutBatch,
+        TerminalBatchStatus,
+    };
     use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
     use crate::sources::insert_telegram_source_item;
     use crate::sources::test_support::{
@@ -1589,6 +1594,66 @@ mod tests {
                 .await
                 .expect("load warning codes");
         assert_eq!(warning_codes, vec!["only_my_messages_fallback".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn export_dc_fallback_provenance_records_once_before_finalize() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: TELEGRAM_KIND_SUPERGROUP.to_string(),
+            },
+        )
+        .await
+        .expect("create takeout batch");
+        let alias = ExportDcAlias {
+            home_dc_id: 2,
+            export_dc_id: 40_002,
+        };
+        let mut attempts = ExportDcAttemptState::new();
+        let mut warnings = vec![
+            "Export DC 40002 failed with local transport error; falling back to home DC 2: invalid DC"
+                .to_string(),
+        ];
+
+        record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut attempts)
+            .await
+            .expect("record export DC attempt");
+        record_export_dc_fallback_if_needed(&pool, batch_id, &warnings, false, true, &mut attempts)
+            .await
+            .expect("record first export DC fallback");
+        warnings.push("second fallback detail should not create a second warning".to_string());
+        record_export_dc_fallback_if_needed(&pool, batch_id, &warnings, false, true, &mut attempts)
+            .await
+            .expect("record duplicate fallback idempotently");
+        finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
+            .await
+            .expect("finalize batch");
+
+        let state: (Option<i64>, i64, i64, i64) = sqlx::query_as(
+            "SELECT t.export_dc_id, t.used_export_dc, t.fallback_used, b.warning_count
+             FROM telegram_takeout_batches t
+             JOIN ingest_batches b ON b.id = t.batch_id
+             WHERE t.batch_id = ?",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load export DC provenance");
+        assert_eq!(state, (Some(40_002), 1, 1, 1));
+
+        let warning_codes: Vec<String> =
+            sqlx::query_scalar("SELECT code FROM ingest_batch_warnings WHERE batch_id = ?")
+                .bind(batch_id)
+                .fetch_all(&pool)
+                .await
+                .expect("load warning codes");
+        assert_eq!(warning_codes, vec!["export_dc_fallback".to_string()]);
     }
 
     #[tokio::test]

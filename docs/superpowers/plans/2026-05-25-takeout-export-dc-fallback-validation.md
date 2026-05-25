@@ -313,7 +313,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 - Modify: `docs/superpowers/plans/2026-05-25-takeout-export-dc-fallback-validation.md`
 
-- [ ] **Step 1: Add provenance imports**
+- [x] **Step 1: Add provenance imports**
 
 In `src-tauri/src/takeout_import/mod.rs`, update the `#[cfg(test)] mod tests`
 imports.
@@ -347,7 +347,7 @@ With:
     };
 ```
 
-- [ ] **Step 2: Add the provenance characterization test**
+- [x] **Step 2: Add the provenance characterization test**
 
 Add this test after `channel_private_count_probe_records_fallback_before_search_continuation`:
 
@@ -429,7 +429,7 @@ Add this test after `channel_private_count_probe_records_fallback_before_search_
 
 This is a characterization test for existing provenance behavior. It may pass immediately. If it fails, fix only the fallback provenance guard or warning insertion path needed to satisfy the test.
 
-- [ ] **Step 3: Run targeted provenance test**
+- [x] **Step 3: Run targeted provenance test**
 
 Run:
 
@@ -439,7 +439,7 @@ cargo test --manifest-path src-tauri/Cargo.toml export_dc_fallback_provenance_re
 
 Expected: pass. If it fails because fallback warning count is greater than one, inspect `record_export_dc_fallback_if_needed` and `ExportDcAttemptState::mark_fallback` before changing database helpers.
 
-- [ ] **Step 4: Run validation diagnostics fallback summary test**
+- [x] **Step 4: Run validation diagnostics fallback summary test**
 
 Run:
 
@@ -449,7 +449,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_validation_batch_summary
 
 Expected: pass. This confirms validation diagnostics continue exposing `used_export_dc`, `fallback_used`, and distinct warning code `export_dc_fallback` without exposing warning bodies.
 
-- [ ] **Step 5: Format Rust**
+- [x] **Step 5: Format Rust**
 
 Run:
 
@@ -459,7 +459,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: exit code 0.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 Run:
 
