@@ -29,7 +29,7 @@ No database migration, new Tauri command, frontend control, migrated-history imp
 - Modify: `src-tauri/src/sources/mod.rs`
 - Modify: `src-tauri/src/sources/sync.rs`
 
-- [ ] **Step 1: Widen the helper visibility**
+- [x] **Step 1: Widen the helper visibility**
 
 In `src-tauri/src/sources/topics.rs`, change the function signature from:
 
@@ -53,7 +53,7 @@ pub(crate) async fn refresh_forum_topics(
 ) -> Vec<String> {
 ```
 
-- [ ] **Step 2: Re-export the helper for Rust-internal callers**
+- [x] **Step 2: Re-export the helper for Rust-internal callers**
 
 In `src-tauri/src/sources/mod.rs`, replace:
 
@@ -68,7 +68,7 @@ pub use topics::list_source_forum_topics;
 pub(crate) use topics::refresh_forum_topics;
 ```
 
-- [ ] **Step 3: Keep normal sync on the shared import path**
+- [x] **Step 3: Keep normal sync on the shared import path**
 
 In `src-tauri/src/sources/sync.rs`, remove this import:
 
@@ -94,7 +94,7 @@ use super::types::{
 
 If rustfmt reorders imports, keep the final code rustfmt-clean and do not change runtime logic.
 
-- [ ] **Step 4: Verify the visibility-only refactor**
+- [x] **Step 4: Verify the visibility-only refactor**
 
 Run:
 
@@ -104,7 +104,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 Expected: exit 0.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 Run:
 
@@ -119,7 +119,7 @@ git commit -m "refactor: expose forum topic refresh internally"
 - Create: `src-tauri/src/takeout_import/forum_topics.rs`
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Declare the new module**
+- [x] **Step 1: Declare the new module**
 
 In `src-tauri/src/takeout_import/mod.rs`, add the module declaration after `mod export_dc;`:
 
@@ -129,7 +129,7 @@ mod forum_topics;
 mod pagination;
 ```
 
-- [ ] **Step 2: Write the failing policy and durable-warning tests**
+- [x] **Step 2: Write the failing policy and durable-warning tests**
 
 Create `src-tauri/src/takeout_import/forum_topics.rs` with compileable failing stubs and tests:
 
@@ -334,7 +334,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run the focused Rust tests and verify RED**
+- [x] **Step 3: Run the focused Rust tests and verify RED**
 
 Run:
 
@@ -344,7 +344,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_forum_topic
 
 Expected: fail. At least `completed_takeout_forum_topic_refresh_policy_only_refreshes_supergroups` must fail because the stub returns `Skip`; the warning-count test should also fail because the stub records no durable warning.
 
-- [ ] **Step 4: Implement the policy helper**
+- [x] **Step 4: Implement the policy helper**
 
 Replace the non-test body of `src-tauri/src/takeout_import/forum_topics.rs`, above `#[cfg(test)]`, with:
 
@@ -434,7 +434,7 @@ pub(crate) async fn record_takeout_forum_topic_refresh_failure_if_needed(
 }
 ```
 
-- [ ] **Step 5: Run the focused Rust tests and verify GREEN**
+- [x] **Step 5: Run the focused Rust tests and verify GREEN**
 
 Run:
 
@@ -444,7 +444,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_forum_topic
 
 Expected: all `takeout_forum_topic` tests pass.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 Run:
 
@@ -458,7 +458,7 @@ git commit -m "feat: add takeout forum topic refresh policy"
 **Files:**
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Import the helper**
+- [x] **Step 1: Import the helper**
 
 In `src-tauri/src/takeout_import/mod.rs`, add this import near the existing internal module imports:
 
@@ -477,7 +477,7 @@ use forum_topics::refresh_forum_topics_after_completed_takeout;
 use pagination::{
 ```
 
-- [ ] **Step 2: Call refresh after successful Takeout finish and before batch finalization**
+- [x] **Step 2: Call refresh after successful Takeout finish and before batch finalization**
 
 In `run_started_takeout_source_import_inner`, find this block:
 
@@ -537,7 +537,7 @@ Replace it with:
 
 This preserves the chosen ordering: successful Takeout finish, export-DC provenance, forum-topic refresh, source sync finalization, then completed batch finalization.
 
-- [ ] **Step 3: Run focused Rust tests**
+- [x] **Step 3: Run focused Rust tests**
 
 Run:
 
@@ -549,7 +549,7 @@ cargo test --manifest-path src-tauri/Cargo.toml topic_refresh_rebuilds_materiali
 
 Expected: all focused tests pass.
 
-- [ ] **Step 4: Run cargo check**
+- [x] **Step 4: Run cargo check**
 
 Run:
 
@@ -559,7 +559,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 Expected: exit 0.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 Run:
 
@@ -575,7 +575,7 @@ git commit -m "feat: refresh forum topics after completed takeout"
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify: `docs/superpowers/plans/2026-05-25-takeout-forum-topic-refresh-policy.md`
 
-- [ ] **Step 1: Update the backlog decision**
+- [x] **Step 1: Update the backlog decision**
 
 In `docs/backlog.md`, replace:
 
@@ -603,7 +603,7 @@ with:
     partial-run decision input, not proof of completed live behavior.
 ```
 
-- [ ] **Step 2: Update the verification matrix row**
+- [x] **Step 2: Update the verification matrix row**
 
 In `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`, replace the row:
 
@@ -617,7 +617,7 @@ with:
 | Forum-topic decision input | passed | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout plus code-level refresh-policy tests | Policy is now decided and code-backed: completed supergroup Takeout refreshes the topic catalog and refresh failure records `forum_topic_refresh_failed`; source 21/22 partial runs remain supporting decision input, not completed live proof |
 ```
 
-- [ ] **Step 3: Add an implementation note near the source 22 conclusion**
+- [x] **Step 3: Add an implementation note near the source 22 conclusion**
 
 In the same verification doc, replace:
 
@@ -637,11 +637,11 @@ supergroup Takeout refreshes the topic catalog, while cancelled and failed
 Takeout attempts still do not refresh.
 ```
 
-- [ ] **Step 4: Mark this implementation plan complete as work lands**
+- [x] **Step 4: Mark this implementation plan complete as work lands**
 
 In `docs/superpowers/plans/2026-05-25-takeout-forum-topic-refresh-policy.md`, change every completed checkbox from `- [ ]` to `- [x]`. Do this only after the corresponding command or edit has actually completed.
 
-- [ ] **Step 5: Run final verification**
+- [x] **Step 5: Run final verification**
 
 Run:
 
@@ -659,7 +659,7 @@ Expected:
 - `npm.cmd run check` exits 0.
 - `git diff --check` exits 0.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 Run:
 
@@ -670,11 +670,11 @@ git commit -m "docs: record takeout forum topic refresh policy"
 
 ## Final Acceptance Checklist
 
-- [ ] Completed Takeout imports call the shared forum-topic refresh helper for eligible supergroup sources.
-- [ ] Completed partial Takeout imports follow the same refresh policy because the hook runs before completeness classification and only depends on completed terminal status plus source subtype.
-- [ ] Failed and cancelled Takeout paths do not call the completed-path helper.
-- [ ] Actionable refresh failures record durable warning code `forum_topic_refresh_failed`.
-- [ ] Refresh failure does not turn a completed Takeout batch into a failed batch.
-- [ ] Non-forum outcomes remain silent no-ops through the existing refresh helper.
-- [ ] No private Telegram content, raw provider data, warning bodies, source titles, usernames, phone numbers, or session material are added to docs or tests.
-- [ ] Normal sync still uses the same forum-topic refresh behavior as before.
+- [x] Completed Takeout imports call the shared forum-topic refresh helper for eligible supergroup sources.
+- [x] Completed partial Takeout imports follow the same refresh policy because the hook runs before completeness classification and only depends on completed terminal status plus source subtype.
+- [x] Failed and cancelled Takeout paths do not call the completed-path helper.
+- [x] Actionable refresh failures record durable warning code `forum_topic_refresh_failed`.
+- [x] Refresh failure does not turn a completed Takeout batch into a failed batch.
+- [x] Non-forum outcomes remain silent no-ops through the existing refresh helper.
+- [x] No private Telegram content, raw provider data, warning bodies, source titles, usernames, phone numbers, or session material are added to docs or tests.
+- [x] Normal sync still uses the same forum-topic refresh behavior as before.

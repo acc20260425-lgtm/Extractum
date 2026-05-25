@@ -5,7 +5,7 @@
 
 Updated: 2026-05-24
 
-Current matrix summary: `7 passed`, `2 needs follow-up`, `1 blocked`,
+Current matrix summary: `8 passed`, `1 needs follow-up`, `1 blocked`,
 `0 not run`.
 
 Covered highlights:
@@ -66,7 +66,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | `CHANNEL_PRIVATE` fallback | passed | 114 | 17 | `only_my_messages_fallback` warning code, `only_my_messages` flag, partial/private history scope, completed/partial batch summary | Source `114` batch `17` completed as partial private history with durable only-my-messages fallback evidence and zero observations |
 | Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
 | Migrated small-group-to-supergroup smoke | passed | 115 | 18 | completed/partial Takeout batch summary, `migrated_history_deferred` warning code, migrated-history flags, unsafe old `chat` row check | Batch `18` detected migrated history, deferred import, and left old `chat` history rows at zero |
-| Forum-topic decision input | needs follow-up | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout | Bounded partial runs materially increased topic memberships without refreshing the topic catalog, which is useful decision input; completed supergroup Takeout evidence is still needed before changing behavior |
+| Forum-topic decision input | passed | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout plus code-level refresh-policy tests | Policy is now decided and code-backed: completed supergroup Takeout refreshes the topic catalog and refresh failure records `forum_topic_refresh_failed`; source 21/22 partial runs remain supporting decision input, not completed live proof |
 
 ## Procedure
 
@@ -1201,9 +1201,11 @@ Warning visibility:
 Result: the public-supergroup Takeout row remains `needs follow-up` because
 batch `11` was cancelled / partial, but the run strengthens partial
 public-supergroup evidence with row-fidelity, warning visibility, and explicit
-watermark behavior. The forum-topic decision input row remains
-`needs follow-up`: the partial run added `10030` topic memberships while the
-topic catalog aggregate stayed unchanged.
+watermark behavior. The historical partial run added `10030` topic memberships
+while the topic catalog aggregate stayed unchanged. The forum-topic policy
+decision is now closed by code-level tests and runtime wiring: completed
+supergroup Takeout refreshes the topic catalog, while cancelled and failed
+Takeout attempts still do not refresh.
 
 ### 2026-05-24 Source 18 Public Channel Takeout Pre-Run
 

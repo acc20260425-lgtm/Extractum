@@ -106,14 +106,14 @@ Priority: high.
     discard, persisted dismiss, or true resume behavior.
 - [ ] enable migrated small-group history only after provenance and real-data
   validation prove the typed Telegram identity boundary is safe
-- [ ] decide whether Takeout import should refresh the forum-topic catalog after successful finish
-  - Source `21` / batch `4` partial Takeout materially increased topic
-    memberships without refreshing the topic catalog; completed supergroup
-    evidence is still needed before changing behavior.
-  - Source `22` / batch `11` partial Takeout added `10030` topic memberships
-    while the topic catalog aggregate remained unchanged; this strengthens the
-    decision input but still does not justify behavior changes without
-    completed supergroup evidence.
+- [x] decide whether Takeout import should refresh the forum-topic catalog after successful finish
+  - Policy implemented: completed Takeout imports refresh forum topics for
+    eligible supergroup sources, including completed partial imports, while
+    failed and cancelled attempts do not refresh.
+  - Refresh failures preserve completed Takeout status and record durable
+    warning code `forum_topic_refresh_failed`.
+  - Source `21` / batch `4` and source `22` / batch `11` remain sanitized
+    partial-run decision input, not proof of completed live behavior.
 
 Acceptance:
 
