@@ -26,7 +26,7 @@ No Rust files, database migrations, Tauri commands, import semantics, or dedupli
 - Modify: `src/lib/analysis-state.test.ts`
 - Modify: `src/lib/components/analysis/takeout-recovery-notice.svelte`
 
-- [ ] **Step 1: Write the failing policy-copy test**
+- [x] **Step 1: Write the failing policy-copy test**
 
 In `src/lib/analysis-state.test.ts`, replace the existing test named
 `formats takeout recovery title, body, facts, and severity` with this test:
@@ -74,7 +74,7 @@ In `src/lib/analysis-state.test.ts`, replace the existing test named
   });
 ```
 
-- [ ] **Step 2: Run the focused test and verify it fails**
+- [x] **Step 2: Run the focused test and verify it fails**
 
 Run:
 
@@ -84,7 +84,7 @@ npm.cmd test -- src/lib/analysis-state.test.ts
 
 Expected: fail in `formats distinct takeout recovery titles, bodies, and severity` because `takeoutRecoveryBody` still returns the old generic body.
 
-- [ ] **Step 3: Implement the recovery-kind body map**
+- [x] **Step 3: Implement the recovery-kind body map**
 
 In `src/lib/analysis-state.ts`, replace the current no-argument `takeoutRecoveryBody` function:
 
@@ -128,7 +128,7 @@ with:
   const body = $derived(takeoutRecoveryBody(recovery));
 ```
 
-- [ ] **Step 4: Run the focused test and type check**
+- [x] **Step 4: Run the focused test and type check**
 
 Run:
 
@@ -139,7 +139,7 @@ npm.cmd run check
 
 Expected: the focused Vitest file passes, and `svelte-check` exits 0.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 Run:
 
@@ -155,7 +155,7 @@ git commit -m "feat: clarify takeout recovery policy copy"
 - Modify: `src/lib/analysis-state.test.ts`
 - Modify: `src/lib/components/analysis/takeout-recovery-notice.svelte`
 
-- [ ] **Step 1: Write the failing warning-explanation test**
+- [x] **Step 1: Write the failing warning-explanation test**
 
 In the import list at the top of `src/lib/analysis-state.test.ts`, add `takeoutRecoveryWarningExplanations` next to the other Takeout recovery helpers:
 
@@ -191,7 +191,7 @@ Add this test after the recovery title/body/severity test:
   });
 ```
 
-- [ ] **Step 2: Run the focused test and verify it fails**
+- [x] **Step 2: Run the focused test and verify it fails**
 
 Run:
 
@@ -201,7 +201,7 @@ npm.cmd test -- src/lib/analysis-state.test.ts
 
 Expected: fail because `takeoutRecoveryWarningExplanations` is not exported yet.
 
-- [ ] **Step 3: Implement the warning-code helper**
+- [x] **Step 3: Implement the warning-code helper**
 
 In `src/lib/analysis-state.ts`, add this constant near the recovery body map:
 
@@ -231,7 +231,7 @@ export function takeoutRecoveryWarningExplanations(
 }
 ```
 
-- [ ] **Step 4: Render explanations in full recovery notices only**
+- [x] **Step 4: Render explanations in full recovery notices only**
 
 In `src/lib/components/analysis/takeout-recovery-notice.svelte`, add the helper to the import:
 
@@ -276,7 +276,7 @@ Add CSS before `.takeout-recovery-error`:
   }
 ```
 
-- [ ] **Step 5: Run the focused test and type check**
+- [x] **Step 5: Run the focused test and type check**
 
 Run:
 
@@ -287,7 +287,7 @@ npm.cmd run check
 
 Expected: the focused Vitest file passes, and `svelte-check` exits 0. The compact notice path still renders badges only because the explanations block is guarded by `!compact`.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 Run:
 
@@ -301,7 +301,7 @@ git commit -m "feat: explain takeout recovery warning codes"
 **Files:**
 - Modify: `docs/backlog.md`
 
-- [ ] **Step 1: Update the Takeout backlog item**
+- [x] **Step 1: Update the Takeout backlog item**
 
 In `docs/backlog.md`, replace:
 
@@ -321,7 +321,7 @@ with:
     discard, persisted dismiss, or true resume behavior.
 ```
 
-- [ ] **Step 2: Run final frontend verification**
+- [x] **Step 2: Run final frontend verification**
 
 Run:
 
@@ -339,7 +339,7 @@ Expected:
 
 No `cargo test` is required for this slice because no Rust code, migrations, or backend DTOs changed.
 
-- [ ] **Step 3: Commit Task 3**
+- [x] **Step 3: Commit Task 3**
 
 Run:
 
@@ -348,7 +348,7 @@ git add docs/backlog.md
 git commit -m "docs: record takeout recovery policy completion"
 ```
 
-- [ ] **Step 4: Confirm final repository state**
+- [x] **Step 4: Confirm final repository state**
 
 Run:
 
