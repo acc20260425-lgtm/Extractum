@@ -726,8 +726,22 @@ export function takeoutRecoveryTitle(recovery: TakeoutImportRecoveryState) {
   }
 }
 
-export function takeoutRecoveryBody() {
-  return "Run Takeout again to continue collecting available history. Messages already saved locally will be deduplicated.";
+const TAKEOUT_RECOVERY_BODIES: Record<
+  TakeoutImportRecoveryState["recovery_kind"],
+  string
+> = {
+  interrupted:
+    "The previous Takeout import stopped before Extractum could finish tracking it. Run Takeout again to start a fresh import; messages already saved locally will be deduplicated.",
+  failed:
+    "The previous Takeout import ended with an error. Run Takeout again to retry; messages already saved locally will be deduplicated.",
+  cancelled:
+    "The previous Takeout import was cancelled. Run Takeout again to continue collecting available history; messages already saved locally will be deduplicated.",
+  partial_completed:
+    "The previous Takeout import completed with partial history. Running Takeout again may collect more available history and will deduplicate messages already saved locally, but it does not guarantee a complete archive.",
+};
+
+export function takeoutRecoveryBody(recovery: TakeoutImportRecoveryState) {
+  return TAKEOUT_RECOVERY_BODIES[recovery.recovery_kind];
 }
 
 export function takeoutRecoverySeverity(

@@ -17,7 +17,7 @@
   } = $props();
 
   const title = $derived(takeoutRecoveryTitle(recovery));
-  const body = $derived(takeoutRecoveryBody());
+  const body = $derived(takeoutRecoveryBody(recovery));
   const severity = $derived(takeoutRecoverySeverity(recovery));
   const facts = $derived(takeoutRecoveryFacts(recovery));
   const showTerminalError = $derived(

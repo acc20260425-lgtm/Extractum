@@ -951,22 +951,45 @@ describe("analysis-state", () => {
     expect(visibleTakeoutRecoveryForSource(2, { 1: active }, { 1: recovery })).toBeNull();
   });
 
-  it("formats takeout recovery title, body, facts, and severity", () => {
-    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "interrupted" })))
-      .toBe("Previous Takeout import was interrupted");
-    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "failed" })))
-      .toBe("Previous Takeout import failed");
-    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "cancelled" })))
-      .toBe("Previous Takeout import was cancelled");
-    expect(takeoutRecoveryTitle(takeoutRecovery({ recovery_kind: "partial_completed" })))
-      .toBe("Previous Takeout import completed with partial history");
-    expect(takeoutRecoveryBody()).toBe(
-      "Run Takeout again to continue collecting available history. Messages already saved locally will be deduplicated.",
-    );
-    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "failed" }))).toBe("danger");
-    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "interrupted" }))).toBe("warning");
-    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "partial_completed" }))).toBe("warning");
-    expect(takeoutRecoverySeverity(takeoutRecovery({ recovery_kind: "cancelled" }))).toBe("neutral");
+  it("formats distinct takeout recovery titles, bodies, and severity", () => {
+    const cases: Array<[
+      TakeoutImportRecoveryState["recovery_kind"],
+      string,
+      string,
+      "danger" | "warning" | "neutral",
+    ]> = [
+      [
+        "interrupted",
+        "Previous Takeout import was interrupted",
+        "The previous Takeout import stopped before Extractum could finish tracking it. Run Takeout again to start a fresh import; messages already saved locally will be deduplicated.",
+        "warning",
+      ],
+      [
+        "failed",
+        "Previous Takeout import failed",
+        "The previous Takeout import ended with an error. Run Takeout again to retry; messages already saved locally will be deduplicated.",
+        "danger",
+      ],
+      [
+        "cancelled",
+        "Previous Takeout import was cancelled",
+        "The previous Takeout import was cancelled. Run Takeout again to continue collecting available history; messages already saved locally will be deduplicated.",
+        "neutral",
+      ],
+      [
+        "partial_completed",
+        "Previous Takeout import completed with partial history",
+        "The previous Takeout import completed with partial history. Running Takeout again may collect more available history and will deduplicate messages already saved locally, but it does not guarantee a complete archive.",
+        "warning",
+      ],
+    ];
+
+    for (const [recoveryKind, title, body, severity] of cases) {
+      const recovery = takeoutRecovery({ recovery_kind: recoveryKind });
+      expect(takeoutRecoveryTitle(recovery)).toBe(title);
+      expect(takeoutRecoveryBody(recovery)).toBe(body);
+      expect(takeoutRecoverySeverity(recovery)).toBe(severity);
+    }
   });
 
   it("formats takeout recovery facts and zero-count attempts", () => {
