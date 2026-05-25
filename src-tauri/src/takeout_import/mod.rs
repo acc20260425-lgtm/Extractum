@@ -36,6 +36,7 @@ use export_dc::{
     export_dc_invoke, finish_takeout_session, prepare_export_dc_alias,
     takeout_init_request_for_source_subtype, ExportDcAlias, ExportDcAttemptState,
 };
+use forum_topics::refresh_forum_topics_after_completed_takeout;
 use pagination::{
     message_range_min_id, next_takeout_cursor, parse_takeout_page, select_history_splits,
     should_restart_with_descending_fallback, takeout_page_request,
@@ -801,6 +802,16 @@ async fn run_started_takeout_source_import_inner(
         fallback_before,
         *fallback_used,
         export_attempts,
+    )
+    .await?;
+    refresh_forum_topics_after_completed_takeout(
+        pool,
+        batch_id,
+        client,
+        resolved_peer.peer,
+        source,
+        telegram_source_subtype,
+        warnings,
     )
     .await?;
     finalize_sync(
