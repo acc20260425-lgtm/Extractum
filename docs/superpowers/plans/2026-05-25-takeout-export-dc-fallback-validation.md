@@ -613,7 +613,7 @@ Expected: commit succeeds.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-25-takeout-export-dc-fallback-validation.md`
 
-- [ ] **Step 1: Run targeted Rust tests**
+- [x] **Step 1: Run targeted Rust tests**
 
 Run:
 
@@ -623,7 +623,7 @@ cargo test --manifest-path src-tauri/Cargo.toml export_dc
 
 Expected: exit code 0 and all export-DC-related tests pass.
 
-- [ ] **Step 2: Run Takeout validation diagnostics test**
+- [x] **Step 2: Run Takeout validation diagnostics test**
 
 Run:
 
@@ -633,7 +633,7 @@ cargo test --manifest-path src-tauri/Cargo.toml takeout_validation_batch_summary
 
 Expected: exit code 0.
 
-- [ ] **Step 3: Run cargo check**
+- [x] **Step 3: Run cargo check**
 
 Run:
 
@@ -643,7 +643,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 Expected: exit code 0.
 
-- [ ] **Step 4: Run full Rust tests**
+- [x] **Step 4: Run full Rust tests**
 
 Run:
 
@@ -653,7 +653,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: exit code 0.
 
-- [ ] **Step 5: Run whitespace check**
+- [x] **Step 5: Run whitespace check**
 
 Run:
 
@@ -663,7 +663,7 @@ git diff --check
 
 Expected: exit code 0. Windows LF/CRLF warnings from Git are acceptable if there are no whitespace errors.
 
-- [ ] **Step 6: Check working tree**
+- [x] **Step 6: Check working tree**
 
 Run:
 
@@ -673,7 +673,7 @@ git status --short --branch
 
 Expected: on the implementation branch or `main`, with no unstaged changes except this plan file if its completion checkboxes are not yet committed.
 
-- [ ] **Step 7: Commit completed plan checkboxes**
+- [x] **Step 7: Commit completed plan checkboxes**
 
 After every task checkbox above has been updated to `[x]`, run:
 
@@ -688,12 +688,12 @@ Expected: commit succeeds.
 
 ## Acceptance Checklist
 
-- [ ] `export_dc_invoke_with` or equivalent internal helper has deterministic tests for local-error fallback, direct-home mode after fallback, and RPC non-fallback.
-- [ ] Production `export_dc_invoke` still uses the same grammers client calls and warning text.
-- [ ] Durable fallback provenance test proves `export_dc_id`, `used_export_dc`, `fallback_used`, and one `export_dc_fallback` warning before finalization.
-- [ ] Validation diagnostics warning-code coverage remains sanitized.
-- [ ] Verification matrix row is `passed` with a natural-live-fallback caveat.
-- [ ] Backlog export-DC validation item is checked and migrated-history policy remains the next Takeout priority.
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml` passes.
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` passes.
-- [ ] `git diff --check` is clean.
+- [x] `export_dc_invoke_with` or equivalent internal helper has deterministic tests for local-error fallback, direct-home mode after fallback, and RPC non-fallback.
+- [x] Production `export_dc_invoke` still uses the same grammers client calls and warning text.
+- [x] Durable fallback provenance test proves `export_dc_id`, `used_export_dc`, `fallback_used`, and one `export_dc_fallback` warning before finalization.
+- [x] Validation diagnostics warning-code coverage remains sanitized.
+- [x] Verification matrix row is `passed` with a natural-live-fallback caveat.
+- [x] Backlog export-DC validation item is checked and migrated-history policy remains the next Takeout priority.
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml` passes.
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` passes.
+- [x] `git diff --check` is clean.
