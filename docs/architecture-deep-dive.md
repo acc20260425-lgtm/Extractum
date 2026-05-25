@@ -147,11 +147,17 @@ Current source-kind behavior:
 
 Takeout import writes to the same `items` table and does not download media bytes, thumbnails, custom emoji documents, or Telegram Desktop export assets. Failed and cancelled jobs may leave partial rows, but they do not update `last_sync_state`.
 
-There is no durable Takeout provenance table yet. In-memory job records explain
-the active import, while completed database rows remain ordinary source items.
-The next storage slice should add durable ingest batches, Telegram Takeout
-batch details, and item origin/observation rows before migrated-history import
-is enabled.
+Takeout imports also write durable ingest provenance after the same-source lock
+is acquired: generic ingest batches, Telegram Takeout batch details, warning
+codes, and item observations. In-memory job records still explain the active
+runtime import, while durable recovery state explains the latest terminal or
+interrupted attempt after restart.
+
+Completed supergroup Takeout imports refresh the forum-topic catalog after
+successful Takeout finish and export-DC provenance, before source and batch
+finalization. Failed, cancelled, and interrupted attempts do not refresh forum
+topics. Refresh failures preserve the completed Takeout status and record
+`forum_topic_refresh_failed`.
 
 ## 3. YouTube ingest flow
 
@@ -327,9 +333,9 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 ## 9. Known architectural debt
 
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
-- Takeout import still needs broader live validation across supergroups, groups, private/left sources, and shifted export DC behavior;
-- migrated supergroup history is detected but not imported until durable
-  Takeout provenance and real-data validation are designed;
+- Takeout import still needs shifted export DC fallback validation;
+- migrated supergroup history is detected but not imported until the import
+  policy and real-data validation prove the typed history boundary is safe;
 - RSS and forum ingestion are not implemented yet despite the provider-ready source model;
 - YouTube needs broader live validation for active livestreams, upcoming videos, auto-caption-only videos, no-caption videos, private/member/age/geo-gated content, and large playlists;
 - YouTube jobs are not persistent or resumable across app restart;

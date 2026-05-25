@@ -1,13 +1,13 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-24
+> **Updated:** 2026-05-25
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | complete remaining export-DC validation and decide forum-topic refresh plus migrated-history policy on top of persisted provenance |
+| High | Takeout source import | complete remaining export-DC validation and decide migrated-history import policy on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |

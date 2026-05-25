@@ -218,9 +218,11 @@ partial completeness. Read-only recovery state does not enable migrated-history
 import, resume, purge, or automatic retry.
 
 The current Takeout path finalizes source state after a successful import. The
-regular sync path still owns the forum-topic refresh helper. If Takeout later
-gains a distinct forum-topic refresh step, add its emitted Rust phase and
-frontend `TakeoutImportPhase` value in the same change.
+completed supergroup Takeout path also reuses the forum-topic refresh helper
+after successful Takeout finish and export-DC provenance, before source and
+batch finalization. Failed, cancelled, and interrupted Takeout attempts do not
+refresh forum topics. Actionable refresh failures keep the Takeout batch
+completed and record durable warning code `forum_topic_refresh_failed`.
 
 ## 10. Current Validation Baseline
 
@@ -233,4 +235,4 @@ Recorded baseline from the Takeout pagination work:
 
 Open validation still belongs in the backlog: broader real-account coverage for
 supergroups, groups, private/left sources, shifted export DC behavior,
-provenance queries/UI, and migrated-history import policy.
+completed forum-topic catalog deltas, and migrated-history import policy.
