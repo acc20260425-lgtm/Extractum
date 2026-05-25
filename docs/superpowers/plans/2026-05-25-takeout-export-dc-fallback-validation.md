@@ -33,7 +33,7 @@
 - Modify: `src-tauri/src/takeout_import/export_dc.rs`
 - Modify: `docs/superpowers/plans/2026-05-25-takeout-export-dc-fallback-validation.md`
 
-- [ ] **Step 1: Add RED tests for shifted fallback invocation**
+- [x] **Step 1: Add RED tests for shifted fallback invocation**
 
 In `src-tauri/src/takeout_import/export_dc.rs`, update the test imports at the bottom of the file.
 
@@ -185,7 +185,7 @@ Then add these tests before `export_dc_fallback_is_only_for_local_transport_erro
     }
 ```
 
-- [ ] **Step 2: Run RED test command**
+- [x] **Step 2: Run RED test command**
 
 Run:
 
@@ -195,7 +195,7 @@ cargo test --manifest-path src-tauri/Cargo.toml export_dc_invoke_falls_back_to_h
 
 Expected: compile failure because `export_dc_invoke_with` does not exist yet. The failure should mention an unresolved import or missing function named `export_dc_invoke_with`.
 
-- [ ] **Step 3: Add the internal helper and route production through it**
+- [x] **Step 3: Add the internal helper and route production through it**
 
 In `src-tauri/src/takeout_import/export_dc.rs`, replace the first line:
 
@@ -264,7 +264,7 @@ where
 }
 ```
 
-- [ ] **Step 4: Run GREEN targeted export-DC tests**
+- [x] **Step 4: Run GREEN targeted export-DC tests**
 
 Run:
 
@@ -274,7 +274,7 @@ cargo test --manifest-path src-tauri/Cargo.toml export_dc_invoke
 
 Expected: all `export_dc_invoke_*` tests pass.
 
-- [ ] **Step 5: Run the existing export-DC test group**
+- [x] **Step 5: Run the existing export-DC test group**
 
 Run:
 
@@ -284,7 +284,7 @@ cargo test --manifest-path src-tauri/Cargo.toml export_dc
 
 Expected: all export-DC-related tests pass.
 
-- [ ] **Step 6: Format Rust**
+- [x] **Step 6: Format Rust**
 
 Run:
 
@@ -294,7 +294,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: exit code 0.
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 Run:
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use grammers_client::{tl, Client};
 use grammers_mtsender::InvocationError;
@@ -99,8 +99,31 @@ pub(crate) async fn export_dc_invoke<R: tl::RemoteCall>(
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
 ) -> AppResult<R::Return> {
+    export_dc_invoke_with(
+        alias,
+        warnings,
+        fallback_used,
+        || client.invoke_in_dc(alias.export_dc_id, request),
+        || client.invoke(request),
+    )
+    .await
+}
+
+async fn export_dc_invoke_with<R, Shifted, Home, ShiftedFuture, HomeFuture>(
+    alias: &ExportDcAlias,
+    warnings: &mut Vec<String>,
+    fallback_used: &mut bool,
+    shifted_invoke: Shifted,
+    home_invoke: Home,
+) -> AppResult<R>
+where
+    Shifted: FnOnce() -> ShiftedFuture,
+    Home: FnOnce() -> HomeFuture,
+    ShiftedFuture: Future<Output = Result<R, InvocationError>>,
+    HomeFuture: Future<Output = Result<R, InvocationError>>,
+{
     if !*fallback_used {
-        match client.invoke_in_dc(alias.export_dc_id, request).await {
+        match shifted_invoke().await {
             Ok(response) => return Ok(response),
             Err(error) if should_fallback_export_dc_error(&error) => {
                 *fallback_used = true;
@@ -113,8 +136,7 @@ pub(crate) async fn export_dc_invoke<R: tl::RemoteCall>(
         }
     }
 
-    client
-        .invoke(request)
+    home_invoke()
         .await
         .map_err(|error| AppError::network(error.to_string()))
 }
@@ -155,11 +177,14 @@ pub(crate) async fn finish_takeout_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        export_dc_id_for_home_dc, should_fallback_export_dc_error,
-        takeout_init_request_for_source_subtype, ExportDcAttemptState, TAKEOUT_FILE_MAX_SIZE,
+        export_dc_id_for_home_dc, export_dc_invoke_with, should_fallback_export_dc_error,
+        takeout_init_request_for_source_subtype, ExportDcAlias, ExportDcAttemptState,
+        TAKEOUT_FILE_MAX_SIZE,
     };
+    use crate::error::AppErrorKind;
     use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
     use grammers_mtsender::{InvocationError, RpcError};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn export_dc_id_applies_tdesktop_shift() {
@@ -198,6 +223,125 @@ mod tests {
         assert!(!channel.message_chats);
         assert!(!channel.message_megagroups);
         assert!(channel.message_channels);
+    }
+
+    #[tokio::test]
+    async fn export_dc_invoke_falls_back_to_home_dc_on_local_error() {
+        let alias = ExportDcAlias {
+            home_dc_id: 2,
+            export_dc_id: 40_002,
+        };
+        let calls = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+        let shifted_calls = Arc::clone(&calls);
+        let home_calls = Arc::clone(&calls);
+        let mut warnings = Vec::new();
+        let mut fallback_used = false;
+
+        let result = export_dc_invoke_with(
+            &alias,
+            &mut warnings,
+            &mut fallback_used,
+            || async move {
+                shifted_calls
+                    .lock()
+                    .expect("lock shifted calls")
+                    .push("shifted");
+                Err::<i32, InvocationError>(InvocationError::InvalidDc)
+            },
+            || async move {
+                home_calls.lock().expect("lock home calls").push("home");
+                Ok(42_i32)
+            },
+        )
+        .await
+        .expect("fallback should use home DC");
+
+        assert_eq!(result, 42);
+        assert!(fallback_used);
+        assert_eq!(*calls.lock().expect("lock calls"), vec!["shifted", "home"]);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("Export DC 40002 failed"));
+        assert!(warnings[0].contains("falling back to home DC 2"));
+    }
+
+    #[tokio::test]
+    async fn export_dc_invoke_uses_home_dc_directly_after_fallback() {
+        let alias = ExportDcAlias {
+            home_dc_id: 2,
+            export_dc_id: 40_002,
+        };
+        let calls = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+        let shifted_calls = Arc::clone(&calls);
+        let home_calls = Arc::clone(&calls);
+        let mut warnings = Vec::new();
+        let mut fallback_used = true;
+
+        let result = export_dc_invoke_with(
+            &alias,
+            &mut warnings,
+            &mut fallback_used,
+            || async move {
+                shifted_calls
+                    .lock()
+                    .expect("lock shifted calls")
+                    .push("shifted");
+                Err::<i32, InvocationError>(InvocationError::InvalidDc)
+            },
+            || async move {
+                home_calls.lock().expect("lock home calls").push("home");
+                Ok(7_i32)
+            },
+        )
+        .await
+        .expect("already-fallback mode should use home DC");
+
+        assert_eq!(result, 7);
+        assert!(fallback_used);
+        assert!(warnings.is_empty());
+        assert_eq!(*calls.lock().expect("lock calls"), vec!["home"]);
+    }
+
+    #[tokio::test]
+    async fn export_dc_invoke_does_not_fallback_for_rpc_errors() {
+        let alias = ExportDcAlias {
+            home_dc_id: 2,
+            export_dc_id: 40_002,
+        };
+        let calls = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+        let shifted_calls = Arc::clone(&calls);
+        let home_calls = Arc::clone(&calls);
+        let mut warnings = Vec::new();
+        let mut fallback_used = false;
+
+        let error = export_dc_invoke_with(
+            &alias,
+            &mut warnings,
+            &mut fallback_used,
+            || async move {
+                shifted_calls
+                    .lock()
+                    .expect("lock shifted calls")
+                    .push("shifted");
+                Err::<i32, InvocationError>(InvocationError::Rpc(RpcError {
+                    code: 400,
+                    name: "TAKEOUT_INVALID".to_string(),
+                    value: None,
+                    caused_by: None,
+                }))
+            },
+            || async move {
+                home_calls.lock().expect("lock home calls").push("home");
+                Ok(99_i32)
+            },
+        )
+        .await
+        .expect_err("RPC errors should not use export-DC fallback");
+
+        assert_eq!(error.kind, AppErrorKind::Network);
+        assert!(error.message.contains("TAKEOUT_INVALID"));
+        assert!(!fallback_used);
+        assert!(warnings.is_empty());
+        assert_eq!(*calls.lock().expect("lock calls"), vec!["shifted"]);
     }
 
     #[test]
