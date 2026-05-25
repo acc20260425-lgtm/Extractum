@@ -1,9 +1,10 @@
 # Takeout Representative Validation And Fallback Coverage
 
-> Status: reusable manual validation matrix. Rows start as `not run` until real
-> Telegram accounts and representative sources are available.
+> Status: reusable manual and code-backed validation matrix. Live rows start as
+> `not run` until real Telegram accounts and representative sources are
+> available.
 
-Updated: 2026-05-24
+Updated: 2026-05-25
 
 Current matrix summary: `9 passed`, `1 needs follow-up`, `0 blocked`,
 `0 not run`.
