@@ -23,6 +23,7 @@ use crate::telegram::{get_authorized_runtime, AuthorizedTelegramRuntime, Telegra
 use grammers_session::types::{PeerKind, PeerRef};
 
 mod export_dc;
+mod forum_topics;
 mod pagination;
 #[allow(dead_code)]
 mod raw_parse;
