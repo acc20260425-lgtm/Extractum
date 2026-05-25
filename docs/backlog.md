@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | complete remaining export-DC validation and decide migrated-history import policy on top of persisted provenance |
+| High | Takeout source import | decide migrated-history import policy on top of persisted provenance |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
@@ -75,7 +75,11 @@ Priority: high.
     `history_scope = partial_private_history`; Telegram exposed zero
     only-my-messages observations, so full-history import remains a separate
     concern.
-- [ ] validate shifted export DC behavior and the warning path when fallback to home DC is used
+- [x] validate shifted export DC behavior and the warning path when fallback to home DC is used
+  - Code-backed validation proves local shifted export-DC fallback, Telegram RPC
+    non-fallback, one durable `export_dc_fallback` warning, and sanitized
+    diagnostics. Natural live fallback remains unobserved in the current
+    environment.
 - [x] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
   - Source `113` completed the normal-sync setup but Takeout batches `7` and
     `8` failed before observations with `TAKEOUT_INIT_DELAY`.

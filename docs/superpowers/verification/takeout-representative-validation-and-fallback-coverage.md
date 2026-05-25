@@ -5,7 +5,7 @@
 
 Updated: 2026-05-24
 
-Current matrix summary: `8 passed`, `1 needs follow-up`, `1 blocked`,
+Current matrix summary: `9 passed`, `1 needs follow-up`, `0 blocked`,
 `0 not run`.
 
 Covered highlights:
@@ -30,6 +30,10 @@ Covered highlights:
 - source `115` completed migrated small-group-to-supergroup Takeout smoke as
   batch `18`, recording `migrated_history_deferred` without importing old
   `chat` history rows;
+- deterministic code-backed shifted export-DC fallback coverage proving local
+  fallback transition, non-fallback Telegram RPC behavior, durable
+  `export_dc_fallback` warning provenance, and sanitized diagnostics; natural
+  live fallback remains unobserved in the current environment;
 - post-cancel watermark observations for cancelled partial batches `4` and `5`;
 - forum-topic decision input from source `21` / batch `4` aggregate catalog,
   membership, and resolver-state counters.
@@ -64,7 +68,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | Repeated Takeout after normal sync | passed | 18 | 10 | duplicate observation summary, row-fidelity comparison, before/after source summary, latest batch summary | Batch 10 followed an existing normal-sync baseline for source 18; 42 observations were classified as duplicates and all 467 observed identities matched canonical rows |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | passed | 114 | 17 | `only_my_messages_fallback` warning code, `only_my_messages` flag, partial/private history scope, completed/partial batch summary | Source `114` batch `17` completed as partial private history with durable only-my-messages fallback evidence and zero observations |
-| Shifted export DC fallback | blocked |  |  | export DC attempted/fallback flags, `export_dc_fallback` warning code, typed/coarse terminal outcome if present | Requires an environment that naturally triggers local transport/session fallback |
+| Shifted export DC fallback | passed | n/a | n/a | deterministic Rust fallback/provenance tests, validation diagnostic warning-code coverage | Code-backed validation proves shifted export-DC local-error fallback, non-fallback Telegram RPC behavior, one durable `export_dc_fallback` warning, and sanitized diagnostics; natural live fallback remains unobserved |
 | Migrated small-group-to-supergroup smoke | passed | 115 | 18 | completed/partial Takeout batch summary, `migrated_history_deferred` warning code, migrated-history flags, unsafe old `chat` row check | Batch `18` detected migrated history, deferred import, and left old `chat` history rows at zero |
 | Forum-topic decision input | passed | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout plus code-level refresh-policy tests | Policy is now decided and code-backed: completed supergroup Takeout refreshes the topic catalog and refresh failure records `forum_topic_refresh_failed`; source 21/22 partial runs remain supporting decision input, not completed live proof |
 
@@ -85,6 +89,28 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
+
+### 2026-05-25 Shifted Export DC Fallback Code-Backed Validation
+
+This note records deterministic code-backed validation, not natural live
+Telegram fallback evidence.
+
+Evidence:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml export_dc_invoke` passed
+  after adding fake-invoker coverage for shifted local-error fallback,
+  direct-home behavior after fallback, and Telegram RPC non-fallback.
+- `cargo test --manifest-path src-tauri/Cargo.toml export_dc_fallback_provenance_records_once_before_finalize`
+  passed, proving `export_dc_id`, `used_export_dc = 1`, `fallback_used = 1`,
+  and exactly one durable `export_dc_fallback` warning before batch
+  finalization.
+- `cargo test --manifest-path src-tauri/Cargo.toml takeout_validation_batch_summary_is_durable_and_sanitized`
+  passed, confirming validation diagnostics expose fallback flags and warning
+  codes without warning bodies or private source data.
+
+Caveat: no local live run naturally triggered shifted export-DC fallback in
+Telegram transport. Future live evidence can strengthen this row without
+reopening the local warning/provenance mechanics.
 
 ### 2026-05-24 Source 115 Migrated Takeout Smoke Pre-Run Plan
 

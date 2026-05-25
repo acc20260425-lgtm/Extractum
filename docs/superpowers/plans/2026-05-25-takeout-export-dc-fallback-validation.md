@@ -479,7 +479,7 @@ Expected: commit succeeds.
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify: `docs/superpowers/plans/2026-05-25-takeout-export-dc-fallback-validation.md`
 
-- [ ] **Step 1: Update validation matrix summary**
+- [x] **Step 1: Update validation matrix summary**
 
 In `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`, replace:
 
@@ -495,7 +495,7 @@ Current matrix summary: `9 passed`, `1 needs follow-up`, `0 blocked`,
 `0 not run`.
 ```
 
-- [ ] **Step 2: Update covered highlights**
+- [x] **Step 2: Update covered highlights**
 
 In the same file, add this bullet after the `source 115` migrated smoke bullet:
 
@@ -506,7 +506,7 @@ In the same file, add this bullet after the `source 115` migrated smoke bullet:
   live fallback remains unobserved in the current environment;
 ```
 
-- [ ] **Step 3: Update shifted export-DC matrix row**
+- [x] **Step 3: Update shifted export-DC matrix row**
 
 Replace the matrix row:
 
@@ -520,7 +520,7 @@ With:
 | Shifted export DC fallback | passed | n/a | n/a | deterministic Rust fallback/provenance tests, validation diagnostic warning-code coverage | Code-backed validation proves shifted export-DC local-error fallback, non-fallback Telegram RPC behavior, one durable `export_dc_fallback` warning, and sanitized diagnostics; natural live fallback remains unobserved |
 ```
 
-- [ ] **Step 4: Add dated validation note**
+- [x] **Step 4: Add dated validation note**
 
 Add this note directly below `## Run Notes` and before the existing dated notes:
 
@@ -548,7 +548,7 @@ Telegram transport. Future live evidence can strengthen this row without
 reopening the local warning/provenance mechanics.
 ```
 
-- [ ] **Step 5: Update backlog priority snapshot**
+- [x] **Step 5: Update backlog priority snapshot**
 
 In `docs/backlog.md`, replace:
 
@@ -562,7 +562,7 @@ With:
 | High | Takeout source import | decide migrated-history import policy on top of persisted provenance |
 ```
 
-- [ ] **Step 6: Mark the backlog export-DC validation item complete**
+- [x] **Step 6: Mark the backlog export-DC validation item complete**
 
 In `docs/backlog.md`, replace:
 
@@ -580,7 +580,7 @@ With:
     environment.
 ```
 
-- [ ] **Step 7: Run docs grep sanity check**
+- [x] **Step 7: Run docs grep sanity check**
 
 Run:
 
@@ -595,7 +595,7 @@ Expected:
 - `complete remaining export-DC validation` is absent;
 - the natural-live caveat is visible in the verification note or row.
 
-- [ ] **Step 8: Commit Task 3**
+- [x] **Step 8: Commit Task 3**
 
 Run:
 
