@@ -5,6 +5,7 @@
     takeoutRecoveryFacts,
     takeoutRecoverySeverity,
     takeoutRecoveryTitle,
+    takeoutRecoveryWarningExplanations,
   } from "$lib/analysis-state";
   import type { TakeoutImportRecoveryState } from "$lib/types/sources";
 
@@ -20,6 +21,7 @@
   const body = $derived(takeoutRecoveryBody(recovery));
   const severity = $derived(takeoutRecoverySeverity(recovery));
   const facts = $derived(takeoutRecoveryFacts(recovery));
+  const warningExplanations = $derived(takeoutRecoveryWarningExplanations(recovery));
   const showTerminalError = $derived(
     recovery.recovery_kind === "failed" && !!recovery.terminal_error,
   );
@@ -44,6 +46,13 @@
         <Badge variant="neutral">{code}</Badge>
       {/each}
     </div>
+  {/if}
+  {#if !compact && warningExplanations.length > 0}
+    <ul class="takeout-recovery-explanations">
+      {#each warningExplanations as explanation (explanation)}
+        <li>{explanation}</li>
+      {/each}
+    </ul>
   {/if}
   {#if showTerminalError}
     <p class="takeout-recovery-error">{recovery.terminal_error}</p>
@@ -92,6 +101,18 @@
     color: var(--muted);
     font-size: 0.78rem;
     line-height: 1.35;
+  }
+
+  .takeout-recovery-explanations {
+    margin: 0;
+    padding-left: 1rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .takeout-recovery-explanations li + li {
+    margin-top: 0.2rem;
   }
 
   .takeout-recovery-error {

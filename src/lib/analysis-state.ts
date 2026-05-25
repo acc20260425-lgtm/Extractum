@@ -740,6 +740,17 @@ const TAKEOUT_RECOVERY_BODIES: Record<
     "The previous Takeout import completed with partial history. Running Takeout again may collect more available history and will deduplicate messages already saved locally, but it does not guarantee a complete archive.",
 };
 
+const TAKEOUT_RECOVERY_WARNING_EXPLANATIONS: Record<string, string> = {
+  only_my_messages_fallback:
+    "Telegram limited available channel or supergroup history; the import used the only-my-messages fallback.",
+  migrated_history_deferred:
+    "Migrated small-group history was detected and intentionally deferred.",
+  export_dc_fallback:
+    "The import used the home-DC fallback after an export-DC path was attempted.",
+  finish_takeout_failed:
+    "Extractum could not cleanly finish the Takeout session after a terminal error. Local provenance remains available.",
+};
+
 export function takeoutRecoveryBody(recovery: TakeoutImportRecoveryState) {
   return TAKEOUT_RECOVERY_BODIES[recovery.recovery_kind];
 }
@@ -756,6 +767,15 @@ export function takeoutRecoverySeverity(
     case "cancelled":
       return "neutral";
   }
+}
+
+export function takeoutRecoveryWarningExplanations(
+  recovery: TakeoutImportRecoveryState,
+) {
+  return recovery.warning_codes.flatMap((code) => {
+    const explanation = TAKEOUT_RECOVERY_WARNING_EXPLANATIONS[code];
+    return explanation ? [explanation] : [];
+  });
 }
 
 function plural(value: number, singular: string, pluralLabel: string) {

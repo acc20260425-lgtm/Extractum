@@ -52,6 +52,7 @@ import {
   takeoutRecoveryFacts,
   takeoutRecoverySeverity,
   takeoutRecoveryTitle,
+  takeoutRecoveryWarningExplanations,
   upsertTakeoutImportJob,
   visibleTakeoutRecoveryForSource,
 } from "./analysis-state";
@@ -990,6 +991,27 @@ describe("analysis-state", () => {
       expect(takeoutRecoveryBody(recovery)).toBe(body);
       expect(takeoutRecoverySeverity(recovery)).toBe(severity);
     }
+  });
+
+  it("explains known takeout recovery warning codes without inventing unknown explanations", () => {
+    expect(takeoutRecoveryWarningExplanations(takeoutRecovery({
+      warning_codes: [
+        "only_my_messages_fallback",
+        "migrated_history_deferred",
+        "export_dc_fallback",
+        "finish_takeout_failed",
+        "new_future_warning",
+      ],
+    }))).toEqual([
+      "Telegram limited available channel or supergroup history; the import used the only-my-messages fallback.",
+      "Migrated small-group history was detected and intentionally deferred.",
+      "The import used the home-DC fallback after an export-DC path was attempted.",
+      "Extractum could not cleanly finish the Takeout session after a terminal error. Local provenance remains available.",
+    ]);
+
+    expect(takeoutRecoveryWarningExplanations(takeoutRecovery({
+      warning_codes: ["new_future_warning"],
+    }))).toEqual([]);
   });
 
   it("formats takeout recovery facts and zero-count attempts", () => {
