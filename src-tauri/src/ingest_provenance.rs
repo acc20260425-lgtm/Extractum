@@ -230,7 +230,7 @@ pub(crate) async fn mark_takeout_migrated_history_deferred(
     .execute(pool)
     .await
     .map_err(AppError::database)?;
-    record_ingest_batch_warning(pool, batch_id, "migrated_history_deferred", message).await
+    record_ingest_batch_warning_once(pool, batch_id, "migrated_history_deferred", message).await
 }
 
 pub(crate) async fn mark_takeout_only_my_messages_fallback(
@@ -292,6 +292,26 @@ pub(crate) async fn record_ingest_batch_warning(
     .await
     .map_err(AppError::database)?;
     Ok(())
+}
+
+async fn record_ingest_batch_warning_once(
+    pool: &sqlx::Pool<Sqlite>,
+    batch_id: i64,
+    code: &str,
+    message: &str,
+) -> AppResult<()> {
+    let existing: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM ingest_batch_warnings WHERE batch_id = ? AND code = ?",
+    )
+    .bind(batch_id)
+    .bind(code)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+    if existing > 0 {
+        return Ok(());
+    }
+    record_ingest_batch_warning(pool, batch_id, code, message).await
 }
 
 pub(crate) async fn record_ingest_observation(
@@ -632,6 +652,66 @@ mod tests {
                 .await
                 .expect("load completeness");
         assert_eq!(completeness, "complete");
+    }
+
+    #[tokio::test]
+    async fn migrated_history_deferred_scope_finalizes_partial_and_records_warning_once() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_source(&pool).await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+
+        mark_takeout_migrated_history_deferred(&pool, batch_id, "historical scope detected")
+            .await
+            .expect("mark migrated deferred");
+        mark_takeout_migrated_history_deferred(&pool, batch_id, "historical scope detected again")
+            .await
+            .expect("mark migrated deferred again");
+
+        finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
+            .await
+            .expect("finalize partial batch");
+
+        let row: (String, String, i64, i64, i64) = sqlx::query_as(
+            "SELECT b.completeness, t.history_scope, t.migrated_history_detected,
+                    t.migrated_history_imported, b.warning_count
+             FROM ingest_batches b
+             JOIN telegram_takeout_batches t ON t.batch_id = b.id
+             WHERE b.id = ?",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load final state");
+        assert_eq!(
+            row,
+            (
+                "partial".to_string(),
+                "current_history_with_migrated_deferred".to_string(),
+                1,
+                0,
+                1,
+            )
+        );
+
+        let warning_rows: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM ingest_batch_warnings
+             WHERE batch_id = ? AND code = 'migrated_history_deferred'",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count migrated warnings");
+        assert_eq!(warning_rows, 1);
     }
 
     #[tokio::test]

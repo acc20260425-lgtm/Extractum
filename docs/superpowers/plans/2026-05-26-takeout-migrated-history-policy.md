@@ -53,7 +53,7 @@ The implementation must preserve these policy decisions:
 - Modify: `src-tauri/src/ingest_provenance.rs`
 - Modify: `docs/superpowers/plans/2026-05-26-takeout-migrated-history-policy.md`
 
-- [ ] **Step 1: Write the failing idempotence regression**
+- [x] **Step 1: Write the failing idempotence regression**
 
 In `src-tauri/src/ingest_provenance.rs`, add this test inside the existing `#[cfg(test)] mod tests`, after `completed_zero_observation_batch_is_complete_without_partial_flags` and before `mixed_partial_scope_finalizes_as_partial`:
 
@@ -119,7 +119,7 @@ In `src-tauri/src/ingest_provenance.rs`, add this test inside the existing `#[cf
     }
 ```
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -129,7 +129,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_history_deferred_scope_
 
 Expected: FAIL because `mark_takeout_migrated_history_deferred` currently records a warning row every time it is called, so `warning_count` and `warning_rows` are `2`.
 
-- [ ] **Step 3: Add a one-shot warning helper**
+- [x] **Step 3: Add a one-shot warning helper**
 
 In `src-tauri/src/ingest_provenance.rs`, add this helper immediately after `record_ingest_batch_warning`:
 
@@ -155,7 +155,7 @@ async fn record_ingest_batch_warning_once(
 }
 ```
 
-- [ ] **Step 4: Use the helper for migrated-history deferment**
+- [x] **Step 4: Use the helper for migrated-history deferment**
 
 In `mark_takeout_migrated_history_deferred`, replace:
 
@@ -171,7 +171,7 @@ with:
 
 Do not change `record_ingest_batch_warning` itself and do not change the only-my-messages warning path.
 
-- [ ] **Step 5: Run the focused test to verify it passes**
+- [x] **Step 5: Run the focused test to verify it passes**
 
 Run:
 
@@ -181,7 +181,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_history_deferred_scope_
 
 Expected: PASS.
 
-- [ ] **Step 6: Run related Rust regression tests**
+- [x] **Step 6: Run related Rust regression tests**
 
 Run:
 
@@ -197,7 +197,7 @@ Expected:
 - `takeout_validation_batch_summary_is_durable_and_sanitized` passes and still exposes warning codes without warning bodies;
 - `insert_telegram_source_item_allows_same_message_id_in_different_history_domains` passes, confirming current and historical peer identities can coexist without relying on `items.external_id` uniqueness.
 
-- [ ] **Step 7: Mark Task 1 complete and commit**
+- [x] **Step 7: Mark Task 1 complete and commit**
 
 Update this plan's Task 1 checkboxes to `[x]`, then run:
 
