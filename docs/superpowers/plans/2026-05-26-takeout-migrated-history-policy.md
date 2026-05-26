@@ -473,7 +473,7 @@ Expected: commit succeeds with only docs and plan updates.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-26-takeout-migrated-history-policy.md`
 
-- [ ] **Step 1: Run focused Rust tests**
+- [x] **Step 1: Run focused Rust tests**
 
 Run:
 
@@ -486,7 +486,7 @@ cargo test --manifest-path src-tauri\Cargo.toml insert_telegram_source_item_allo
 
 Expected: all focused Rust tests pass.
 
-- [ ] **Step 2: Run completed Rust slice verification**
+- [x] **Step 2: Run completed Rust slice verification**
 
 Run:
 
@@ -499,7 +499,7 @@ Expected: `cargo check` passes and full Rust tests pass.
 
 Known caveat: do not use full `cargo fmt --manifest-path src-tauri\Cargo.toml --check` as a completion gate for this slice unless the unrelated pre-existing rustfmt drift has already been handled.
 
-- [ ] **Step 3: Run frontend verification**
+- [x] **Step 3: Run frontend verification**
 
 Run:
 
@@ -511,7 +511,7 @@ npm.cmd run check
 
 Expected: focused Vitest passes, full Vitest passes, and Svelte check reports zero errors.
 
-- [ ] **Step 4: Run repository hygiene checks**
+- [x] **Step 4: Run repository hygiene checks**
 
 Run:
 
@@ -523,7 +523,7 @@ git log --oneline -5
 
 Expected: no whitespace errors; branch is `main`; tracked changes are only this plan's unchecked-to-checked completion marks before the final commit.
 
-- [ ] **Step 5: Mark Task 4 complete and commit**
+- [x] **Step 5: Mark Task 4 complete and commit**
 
 Update this plan's Task 4 checkboxes and any remaining unchecked completed steps to `[x]`, then run:
 
