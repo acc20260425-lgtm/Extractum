@@ -141,7 +141,7 @@ The history loop is TDesktop-first, not just `add_offset = -100`. Each split sta
 Current source-kind behavior:
 
 - `channel`: import the last split only;
-- `supergroup`: import the last split only and warn if migrated small-group history is detected;
+- `supergroup`: import the last current-history split only and warn if migrated small-group history is detected as a separate historical scope;
 - `group`: import all selected split ranges;
 - `CHANNEL_PRIVATE` on channel/supergroup history switches to `messages.search(from_id=self)` and records an only-my-messages warning.
 
@@ -334,8 +334,9 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - Takeout import still needs shifted export DC fallback validation;
-- migrated supergroup history is detected but not imported until the import
-  policy and real-data validation prove the typed history boundary is safe;
+- migrated supergroup history is detected as a separate historical scope; old
+  small-group import still needs explicit opt-in behavior before it can be
+  enabled;
 - RSS and forum ingestion are not implemented yet despite the provider-ready source model;
 - YouTube needs broader live validation for active livestreams, upcoming videos, auto-caption-only videos, no-caption videos, private/member/age/geo-gated content, and large playlists;
 - YouTube jobs are not persistent or resumable across app restart;

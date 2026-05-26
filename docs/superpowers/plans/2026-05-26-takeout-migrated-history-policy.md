@@ -289,7 +289,7 @@ Expected: commit succeeds with only frontend recovery-copy and plan updates.
 - Modify: `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
 - Modify: `docs/superpowers/plans/2026-05-26-takeout-migrated-history-policy.md`
 
-- [ ] **Step 1: Update backlog priority snapshot**
+- [x] **Step 1: Update backlog priority snapshot**
 
 In `docs/backlog.md`, change the `Updated` date:
 
@@ -303,7 +303,7 @@ Then replace the Takeout priority row with:
 | High | Takeout source import | define explicit opt-in behavior for migrated historical scope before enabling import |
 ```
 
-- [ ] **Step 2: Replace the open migrated-history item**
+- [x] **Step 2: Replace the open migrated-history item**
 
 In `docs/backlog.md`, replace:
 
@@ -324,7 +324,7 @@ with:
   enabling old small-group history import
 ```
 
-- [ ] **Step 3: Update Takeout import docs**
+- [x] **Step 3: Update Takeout import docs**
 
 In `docs/takeout-source-import.md`, replace this paragraph:
 
@@ -385,7 +385,7 @@ supergroups, groups, private/left sources, and explicit opt-in behavior for the
 migrated historical scope before old small-group history import is enabled.
 ```
 
-- [ ] **Step 4: Update architecture docs**
+- [x] **Step 4: Update architecture docs**
 
 In `docs/architecture-deep-dive.md`, replace the source-kind bullet:
 
@@ -414,7 +414,7 @@ with:
   enabled;
 ```
 
-- [ ] **Step 5: Update the representative validation matrix note**
+- [x] **Step 5: Update the representative validation matrix note**
 
 In `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`, add this dated note immediately after `### 2026-05-25 Shifted Export DC Fallback Code-Backed Validation` section, before the `2026-05-24 Source 115 Migrated Takeout Smoke Pre-Run Plan` section:
 
@@ -435,7 +435,7 @@ old-history import requires a separate explicit opt-in historical-scope design
 and must not be inferred from the passed smoke row.
 ```
 
-- [ ] **Step 6: Search docs for stale policy wording**
+- [x] **Step 6: Search docs for stale policy wording**
 
 Run:
 
@@ -445,7 +445,7 @@ rg -n "migrated-history import policy|policy and real-data validation|product en
 
 Expected: no stale wording remains in the edited current-state docs. It is acceptable for the new backlog item to mention `enabling old small-group history import`.
 
-- [ ] **Step 7: Verify docs whitespace**
+- [x] **Step 7: Verify docs whitespace**
 
 Run:
 
@@ -455,7 +455,7 @@ git diff --check
 
 Expected: no output and exit code `0`.
 
-- [ ] **Step 8: Mark Task 3 complete and commit**
+- [x] **Step 8: Mark Task 3 complete and commit**
 
 Update this plan's Task 3 checkboxes to `[x]`, then run:
 

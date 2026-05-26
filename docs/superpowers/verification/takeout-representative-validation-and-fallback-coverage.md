@@ -113,6 +113,21 @@ Caveat: no local live run naturally triggered shifted export-DC fallback in
 Telegram transport. Future live evidence can strengthen this row without
 reopening the local warning/provenance mechanics.
 
+### 2026-05-26 Migrated-History Policy Decision
+
+Policy decision: migrated small-group history is a separate historical scope,
+not part of normal current supergroup Takeout reruns.
+
+Existing source `115` / batch `18` evidence remains the representative
+detect-and-defer proof: `migrated_history_detected = 1`,
+`migrated_history_imported = 0`, `history_scope =
+current_history_with_migrated_deferred`, one `migrated_history_deferred`
+warning code, and zero old `chat` rows imported.
+
+Result: normal Takeout reruns keep old small-group history deferred. Any future
+old-history import requires a separate explicit opt-in historical-scope design
+and must not be inferred from the passed smoke row.
+
 ### 2026-05-24 Source 115 Migrated Takeout Smoke Pre-Run Plan
 
 App commit at docs-prep time: `9c19220`. Working tree was clean on `main`

@@ -121,10 +121,12 @@ Split selection follows the current single-source export model:
 - empty `messages.getSplitRanges` response: use fallback range `1..i32::MAX`.
 
 For supergroups, `channels.getFullChannel` is used to detect
-`migrated_from_chat_id`. Migrated small-group history is currently not
-imported. The storage layer can represent overlapping Telegram message ids
-through `telegram_messages`, but product enablement is deferred until durable
-Takeout provenance and real-data validation are designed.
+`migrated_from_chat_id`. Migrated small-group history is treated as a separate
+historical scope. Normal Takeout imports keep importing current supergroup
+history only and record `migrated_history_deferred` when the historical scope is
+detected. The storage layer can represent overlapping Telegram message ids
+through `telegram_messages`, but importing old `chat` history requires a future
+explicit opt-in historical-scope design.
 
 ## 7. Pagination Contract
 
@@ -211,11 +213,12 @@ terminal error detail, timestamps, durable status, and derived recovery kind. It
 does not expose warning messages, Telegram payloads, message text, source
 identity details, account/session/API data, or full provenance history.
 
-Migrated supergroup history remains disabled in this foundation slice. When it
-is detected, Takeout records `migrated_history_detected = 1`,
+Old small-group historical scope remains disabled for normal Takeout reruns.
+When it is detected, Takeout records `migrated_history_detected = 1`,
 `migrated_history_imported = 0`, a `migrated_history_deferred` warning, and
-partial completeness. Read-only recovery state does not enable migrated-history
-import, resume, purge, or automatic retry.
+partial completeness. The selected policy treats old small-group history as a
+separate historical scope, so read-only recovery state does not enable
+migrated-history import, resume, purge, or automatic retry.
 
 The current Takeout path finalizes source state after a successful import. The
 completed supergroup Takeout path also reuses the forum-topic refresh helper
@@ -234,5 +237,5 @@ Recorded baseline from the Takeout pagination work:
 - a later NotebookLM export with only 14 messages was traced to the selected 30-day analysis period, not to Takeout pagination.
 
 Open validation still belongs in the backlog: broader real-account coverage for
-supergroups, groups, private/left sources, shifted export DC behavior,
-completed forum-topic catalog deltas, and migrated-history import policy.
+supergroups, groups, private/left sources, and explicit opt-in behavior for the
+migrated historical scope before old small-group history import is enabled.

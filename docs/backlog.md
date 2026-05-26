@@ -1,13 +1,13 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-25
+> **Updated:** 2026-05-26
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | decide migrated-history import policy on top of persisted provenance |
+| High | Takeout source import | define explicit opt-in behavior for migrated historical scope before enabling import |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
@@ -108,8 +108,13 @@ Priority: high.
     interrupted, and partial-completed Takeout notices now describe the
     safe re-run policy and known warning-code limitations without adding
     discard, persisted dismiss, or true resume behavior.
-- [ ] enable migrated small-group history only after provenance and real-data
-  validation prove the typed Telegram identity boundary is safe
+- [x] decide migrated historical-scope policy on top of persisted provenance
+  - Policy selected on 2026-05-26: migrated small-group history is a separate
+    historical scope, not part of normal current supergroup Takeout reruns.
+    Normal reruns keep `migrated_history_deferred`; any future import requires
+    an explicit opt-in historical-scope design.
+- [ ] define explicit opt-in behavior for migrated historical scope before
+  enabling old small-group history import
 - [x] decide whether Takeout import should refresh the forum-topic catalog after successful finish
   - Policy implemented: completed Takeout imports refresh forum topics for
     eligible supergroup sources, including completed partial imports, while
