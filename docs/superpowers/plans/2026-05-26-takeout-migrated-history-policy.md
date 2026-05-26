@@ -217,7 +217,7 @@ Expected: commit succeeds with the Rust provenance guard and this plan update.
 - Modify: `src/lib/analysis-state.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-26-takeout-migrated-history-policy.md`
 
-- [ ] **Step 1: Update the frontend warning-copy test first**
+- [x] **Step 1: Update the frontend warning-copy test first**
 
 In `src/lib/analysis-state.test.ts`, inside `explains known takeout recovery warning codes without inventing unknown explanations`, replace the expected migrated-history explanation:
 
@@ -231,7 +231,7 @@ with:
       "Migrated small-group history was detected as a separate historical scope. Normal Takeout reruns keep it deferred until an explicit historical import exists.",
 ```
 
-- [ ] **Step 2: Run the focused frontend test to verify it fails**
+- [x] **Step 2: Run the focused frontend test to verify it fails**
 
 Run:
 
@@ -241,7 +241,7 @@ npm.cmd test -- src/lib/analysis-state.test.ts
 
 Expected: FAIL with a mismatch for the `migrated_history_deferred` explanation.
 
-- [ ] **Step 3: Update the recovery warning explanation**
+- [x] **Step 3: Update the recovery warning explanation**
 
 In `src/lib/analysis-state.ts`, replace:
 
@@ -257,7 +257,7 @@ with:
     "Migrated small-group history was detected as a separate historical scope. Normal Takeout reruns keep it deferred until an explicit historical import exists.",
 ```
 
-- [ ] **Step 4: Run the focused frontend test to verify it passes**
+- [x] **Step 4: Run the focused frontend test to verify it passes**
 
 Run:
 
@@ -267,7 +267,7 @@ npm.cmd test -- src/lib/analysis-state.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Mark Task 2 complete and commit**
+- [x] **Step 5: Mark Task 2 complete and commit**
 
 Update this plan's Task 2 checkboxes to `[x]`, then run:
 

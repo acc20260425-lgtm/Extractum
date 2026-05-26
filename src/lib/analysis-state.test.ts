@@ -1004,7 +1004,7 @@ describe("analysis-state", () => {
       ],
     }))).toEqual([
       "Telegram limited available channel or supergroup history; the import used the only-my-messages fallback.",
-      "Migrated small-group history was detected and intentionally deferred.",
+      "Migrated small-group history was detected as a separate historical scope. Normal Takeout reruns keep it deferred until an explicit historical import exists.",
       "The import used the home-DC fallback after an export-DC path was attempted.",
       "Extractum could not cleanly finish the Takeout session after a terminal error. Local provenance remains available.",
     ]);

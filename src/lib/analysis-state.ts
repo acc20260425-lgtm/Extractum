@@ -744,7 +744,7 @@ const TAKEOUT_RECOVERY_WARNING_EXPLANATIONS: Record<string, string> = {
   only_my_messages_fallback:
     "Telegram limited available channel or supergroup history; the import used the only-my-messages fallback.",
   migrated_history_deferred:
-    "Migrated small-group history was detected and intentionally deferred.",
+    "Migrated small-group history was detected as a separate historical scope. Normal Takeout reruns keep it deferred until an explicit historical import exists.",
   export_dc_fallback:
     "The import used the home-DC fallback after an export-DC path was attempted.",
   finish_takeout_failed:
