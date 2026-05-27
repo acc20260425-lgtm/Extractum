@@ -209,29 +209,63 @@ sanitized warning codes.
 ## Historical Capability And Availability
 
 The opt-in UI and backend need durable knowledge that a migrated historical
-scope exists. The first implementation plan must choose where this availability
-state lives.
+scope exists. This state should be source-scoped, not only batch-scoped.
 
-Acceptable first version:
+Batch provenance remains the audit trail:
 
-- current normal Takeout detection records durable provenance that
-  `migrated_history_detected = 1`;
-- UI can offer historical import after restart from sanitized source recovery
-  or provenance state;
+- normal Takeout detection records `migrated_history_detected = 1`;
+- the detecting batch records `migrated_history_deferred`;
+- historical import batches record their own success, failure, or cancellation.
+
+The first implementation should also add source-level historical capability
+state, either on `telegram_sources` or in a private one-row-per-source companion
+table. The state should be equivalent to:
+
+```text
+migrated_history_status = none | available | unavailable
+migrated_from_chat_id = private nullable old chat id
+migrated_from_max_id = private nullable Telegram boundary hint
+migrated_history_detected_at = nullable timestamp
+migrated_history_refreshed_at = nullable timestamp
+```
+
+The exact schema can be chosen in the implementation plan, but the behavior is
+fixed:
+
+- normal current-history Takeout detection sets source-level status to
+  `available` and stores the private old-chat hints when Telegram provides
+  them;
+- UI offers historical import after restart from source-level capability state,
+  not by scanning arbitrary old batches;
+- deleting or compacting ingest batch history must not erase source-level
+  historical availability;
 - starting historical import revalidates the current supergroup with
   `channels.getFullChannel`;
 - row writes only proceed when `migrated_from_chat_id` is currently available
   and the old chat input can be opened.
 
 If a previous batch detected migrated history but a later validation no longer
-returns `migrated_from_chat_id`, the historical command should fail or remain
-disabled with sanitized unavailable-scope state. It must not guess old peer
-identity from docs, UI text, warning bodies, or private payloads.
+returns `migrated_from_chat_id`, the historical command should mark the
+source-level capability as `unavailable` or leave it disabled with sanitized
+unavailable-scope state. It must not guess old peer identity from docs, UI
+text, warning bodies, or private payloads.
 
 If storing old-chat access hints becomes necessary for restart-safe import, the
 implementation must treat them as private source capability state. They may be
 used internally, but must not appear in tracked docs, diagnostics, recovery
 DTOs, or UI copy.
+
+Expected unavailable-scope errors must be typed and predictable, not generic
+internal errors:
+
+- if no source-level migrated-history capability exists, return a validation
+  error with a stable sanitized message such as
+  `migrated_history_not_detected`;
+- if stored capability exists but revalidation no longer exposes usable
+  `migrated_from_chat_id`, return a conflict error with a stable sanitized
+  message such as `migrated_history_unavailable`;
+- Telegram auth and transport failures keep using the existing auth/network
+  error kinds.
 
 ## Import Flow
 
@@ -371,6 +405,12 @@ Required tests for historical import enablement:
   opt-in intent;
 - historical import revalidates or loads durable availability for the migrated
   historical scope;
+- source-level historical capability survives restart and does not depend on
+  arbitrary old batch rows being retained;
+- normal Takeout detection stores private source-level old-chat hints without
+  exposing them in diagnostics, recovery DTOs, UI copy, or tracked docs;
+- historical import returns typed validation/conflict errors for
+  not-detected/unavailable historical scope cases instead of internal errors;
 - old rows are written under native `chat` identity and migrated domain flags;
 - current rows and historical rows with the same `telegram_message_id` do not
   conflict;
@@ -392,6 +432,8 @@ Required tests for historical import enablement:
 - Do not design full merged timeline UI in this slice.
 - Do not include historical rows in default analysis, reports, or NotebookLM
   export in the first implementation.
+- Do not expose stored migrated old-chat ids or boundary hints outside private
+  source capability state.
 - Do not clear old Telegram metadata blobs as part of this work.
 
 ## Acceptance
@@ -404,6 +446,10 @@ Required tests for historical import enablement:
 - Provenance can distinguish current-history deferment from historical import.
 - Historical import does not advance current-history source watermarks.
 - Historical import uses a separate command and the same source ingest lock.
+- Historical availability is source-scoped and restart-safe, with private
+  old-chat hints hidden from diagnostics and UI.
+- Unavailable historical scope cases return typed validation/conflict errors,
+  not generic internal errors.
 - Current history remains the default read and analysis corpus until an
   explicit historical-domain option exists.
 - The design preserves existing safe behavior until explicit implementation
