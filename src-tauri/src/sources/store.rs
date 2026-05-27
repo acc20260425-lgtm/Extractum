@@ -26,7 +26,7 @@ use super::peer_resolution::{
 };
 use super::types::{
     now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, SourceType, TelegramSourceInfo,
-    TelegramSourceKind, TELEGRAM_SOURCE_TYPE,
+    TelegramSourceKind, MIGRATED_HISTORY_STATUS_NONE, TELEGRAM_SOURCE_TYPE,
 };
 
 #[derive(serde::Deserialize)]
@@ -119,9 +119,13 @@ pub(crate) async fn load_source_record(
                s.title, s.metadata_zstd,
                s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
                ts.username AS telegram_username,
-               ts.avatar_cache_key AS telegram_avatar_cache_key
+               ts.avatar_cache_key AS telegram_avatar_cache_key,
+               mhc.status AS migrated_history_status,
+               mhc.detected_at AS migrated_history_detected_at,
+               mhc.refreshed_at AS migrated_history_refreshed_at
         FROM sources s
         LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+        LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
         WHERE s.id = ?
         "#,
     )
@@ -354,9 +358,13 @@ pub async fn list_sources(
                    s.title, s.metadata_zstd,
                    s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
                    ts.username AS telegram_username,
-                   ts.avatar_cache_key AS telegram_avatar_cache_key
+                   ts.avatar_cache_key AS telegram_avatar_cache_key,
+                   mhc.status AS migrated_history_status,
+                   mhc.detected_at AS migrated_history_detected_at,
+                   mhc.refreshed_at AS migrated_history_refreshed_at
             FROM sources s
             LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+            LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
             WHERE s.account_id = ?
             ORDER BY s.created_at DESC
             "#,
@@ -372,9 +380,13 @@ pub async fn list_sources(
                    s.title, s.metadata_zstd,
                    s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
                    ts.username AS telegram_username,
-                   ts.avatar_cache_key AS telegram_avatar_cache_key
+                   ts.avatar_cache_key AS telegram_avatar_cache_key,
+                   mhc.status AS migrated_history_status,
+                   mhc.detected_at AS migrated_history_detected_at,
+                   mhc.refreshed_at AS migrated_history_refreshed_at
             FROM sources s
             LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+            LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
             ORDER BY s.created_at DESC
             "#,
         )
@@ -409,6 +421,11 @@ fn source_record_from_row_parts(
         created_at: row.created_at,
         telegram_username,
         avatar_data_url,
+        migrated_history_status: row
+            .migrated_history_status
+            .unwrap_or_else(|| MIGRATED_HISTORY_STATUS_NONE.to_string()),
+        migrated_history_detected_at: row.migrated_history_detected_at,
+        migrated_history_refreshed_at: row.migrated_history_refreshed_at,
     }
 }
 
@@ -499,8 +516,8 @@ mod tests {
     use crate::error::AppErrorKind;
     use crate::sources::test_support::{
         create_analysis_documents_table, create_canonical_telegram_identity_index,
-        create_youtube_typed_source_tables, memory_pool_with_source_items_and_topics,
-        memory_pool_with_sources,
+        create_migrated_history_capability_tables, create_youtube_typed_source_tables,
+        memory_pool_with_source_items_and_topics, memory_pool_with_sources,
     };
     use crate::sources::types::{
         TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
@@ -509,6 +526,42 @@ mod tests {
         YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
     };
     use serde_json::json;
+
+    async fn seed_telegram_source_identity(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        account_id: i64,
+        source_subtype: &str,
+        peer_kind: &str,
+        peer_id: i64,
+    ) {
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id, title,
+                is_active, is_member, created_at
+             ) VALUES (?, 'telegram', ?, ?, ?, 'Forum', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .bind(source_subtype)
+        .bind(account_id)
+        .bind(peer_id.to_string())
+        .execute(pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id, resolution_strategy
+             ) VALUES (?, ?, ?, ?, ?, 'dialog')",
+        )
+        .bind(source_id)
+        .bind(account_id)
+        .bind(source_subtype)
+        .bind(peer_kind)
+        .bind(peer_id)
+        .execute(pool)
+        .await
+        .expect("seed telegram source");
+    }
 
     #[test]
     fn source_record_parts_allow_non_telegram_source() {
@@ -528,6 +581,9 @@ mod tests {
                 created_at: 1_700_500,
                 telegram_username: None,
                 telegram_avatar_cache_key: None,
+                migrated_history_status: None,
+                migrated_history_detected_at: None,
+                migrated_history_refreshed_at: None,
             },
             None,
             None,
@@ -556,6 +612,9 @@ mod tests {
                 created_at: 100,
                 telegram_username: Some("example".to_string()),
                 telegram_avatar_cache_key: None,
+                migrated_history_status: None,
+                migrated_history_detected_at: None,
+                migrated_history_refreshed_at: None,
             },
             Some("example".to_string()),
             None,
@@ -589,9 +648,49 @@ mod tests {
             created_at: 1,
             telegram_username: None,
             telegram_avatar_cache_key: None,
+            migrated_history_status: None,
+            migrated_history_detected_at: None,
+            migrated_history_refreshed_at: None,
         };
 
         assert_eq!(source_avatar_cache_key_from_row(&row).unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn list_sources_exposes_sanitized_migrated_history_status_without_chat_id() {
+        let pool = memory_pool_with_sources().await;
+        create_migrated_history_capability_tables(&pool).await;
+        seed_telegram_source_identity(&pool, 1, 10, "supergroup", "channel", 12345).await;
+        crate::takeout_import::migrated_history::upsert_migrated_history_available(
+            &pool, 1, 777, 100,
+        )
+        .await
+        .expect("mark available");
+
+        let row: SourceRecordRow = sqlx::query_as(
+            "SELECT s.id, s.source_type, s.source_subtype, s.account_id, s.external_id,
+                    s.title, s.metadata_zstd,
+                    s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
+                    ts.username AS telegram_username,
+                    ts.avatar_cache_key AS telegram_avatar_cache_key,
+                    mhc.status AS migrated_history_status,
+                    mhc.detected_at AS migrated_history_detected_at,
+                    mhc.refreshed_at AS migrated_history_refreshed_at
+             FROM sources s
+             LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+             LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
+             WHERE s.id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load row");
+
+        let record = source_record_from_row_parts(row, None, None);
+
+        assert_eq!(record.migrated_history_status, "available");
+        assert_eq!(record.migrated_history_detected_at, Some(100));
+        assert_eq!(record.migrated_history_refreshed_at, Some(100));
+        assert!(!format!("{record:?}").contains("777"));
     }
 
     #[tokio::test]

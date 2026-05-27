@@ -13,6 +13,7 @@ import type {
   SyncSettings,
   SyncSourceResult,
   TelegramDialogSource,
+  TelegramMigratedHistoryStatus,
   TelegramSourceKind,
   TopicResolutionStatus,
   YoutubeAvailabilityStatus,
@@ -59,6 +60,9 @@ interface RawSource {
   created_at: number;
   telegram_username?: string | null;
   avatar_data_url: string | null;
+  migrated_history_status?: TelegramMigratedHistoryStatus | null;
+  migrated_history_detected_at?: number | null;
+  migrated_history_refreshed_at?: number | null;
 }
 
 interface RawSourceItem {
@@ -293,6 +297,9 @@ function mapSource(source: RawSource): Source {
     createdAt: source.created_at,
     telegramUsername: source.telegram_username ?? null,
     avatarDataUrl: source.avatar_data_url,
+    migratedHistoryStatus: source.migrated_history_status ?? "none",
+    migratedHistoryDetectedAt: source.migrated_history_detected_at ?? null,
+    migratedHistoryRefreshedAt: source.migrated_history_refreshed_at ?? null,
   };
 }
 

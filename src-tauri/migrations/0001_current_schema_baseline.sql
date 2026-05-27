@@ -453,6 +453,29 @@ CREATE TABLE telegram_sources (
     CHECK (resolution_strategy IN ('username', 'dialog', 'legacy_metadata', 'unknown'))
 );
 
+CREATE TABLE telegram_migrated_history_capabilities (
+    source_id INTEGER PRIMARY KEY REFERENCES telegram_sources(source_id) ON DELETE CASCADE,
+    status TEXT NOT NULL,
+    unavailable_reason TEXT,
+    migrated_from_chat_id INTEGER,
+    detected_at INTEGER,
+    refreshed_at INTEGER NOT NULL,
+    CHECK (status IN ('none', 'available', 'unavailable')),
+    CHECK (
+        unavailable_reason IS NULL
+        OR unavailable_reason IN (
+            'not_detected',
+            'missing_migrated_from_chat_id',
+            'current_source_unavailable',
+            'old_chat_input_unavailable',
+            'revalidation_failed'
+        )
+    ),
+    CHECK (migrated_from_chat_id IS NULL OR migrated_from_chat_id > 0),
+    CHECK (status <> 'available' OR migrated_from_chat_id IS NOT NULL),
+    CHECK (status <> 'unavailable' OR unavailable_reason IS NOT NULL)
+);
+
 CREATE TABLE telegram_takeout_batches (
   batch_id INTEGER PRIMARY KEY REFERENCES ingest_batches(id) ON DELETE CASCADE,
 
@@ -759,6 +782,9 @@ CREATE INDEX idx_telegram_messages_source_reply_top
 
 CREATE UNIQUE INDEX idx_telegram_sources_account_peer
     ON telegram_sources(account_id, peer_kind, peer_id);
+
+CREATE INDEX idx_telegram_migrated_history_capabilities_status
+    ON telegram_migrated_history_capabilities(status);
 
 CREATE INDEX idx_telegram_sources_account_subtype
     ON telegram_sources(account_id, source_subtype);

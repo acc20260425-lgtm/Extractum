@@ -129,7 +129,7 @@ pub(crate) struct TelegramSourcePeerIdentity {
     pub(crate) peer_id: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct SourceRecord {
     pub id: i64,
     pub source_type: String,
@@ -144,6 +144,9 @@ pub struct SourceRecord {
     pub created_at: i64,
     pub telegram_username: Option<String>,
     pub avatar_data_url: Option<String>,
+    pub migrated_history_status: String,
+    pub migrated_history_detected_at: Option<i64>,
+    pub migrated_history_refreshed_at: Option<i64>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -174,6 +177,9 @@ pub(super) struct SourceRecordRow {
     pub(super) created_at: i64,
     pub(super) telegram_username: Option<String>,
     pub(super) telegram_avatar_cache_key: Option<String>,
+    pub(super) migrated_history_status: Option<String>,
+    pub(super) migrated_history_detected_at: Option<i64>,
+    pub(super) migrated_history_refreshed_at: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, sqlx::FromRow)]

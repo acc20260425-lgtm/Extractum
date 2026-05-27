@@ -97,6 +97,7 @@ mod tests {
         for table in [
             "sources",
             "telegram_sources",
+            "telegram_migrated_history_capabilities",
             "source_identity_repair_notes",
         ] {
             let exists: i64 = sqlx::query_scalar(
@@ -123,6 +124,10 @@ mod tests {
         assert!(migrations[0]
             .sql
             .contains("CREATE TABLE archive_read_items"));
+        assert!(migrations[0].sql.contains("'migrated_small_group_history'"));
+        assert!(migrations[0]
+            .sql
+            .contains("migration_domain IS NULL OR migration_domain IN ('migrated_from_chat')"));
     }
 
     #[test]

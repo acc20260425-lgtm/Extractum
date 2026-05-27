@@ -24,6 +24,7 @@ use grammers_session::types::{PeerKind, PeerRef};
 
 mod export_dc;
 mod forum_topics;
+pub(crate) mod migrated_history;
 mod pagination;
 #[allow(dead_code)]
 mod raw_parse;

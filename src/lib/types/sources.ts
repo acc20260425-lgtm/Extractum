@@ -1,4 +1,5 @@
 export type TelegramSourceKind = "channel" | "supergroup" | "group";
+export type TelegramMigratedHistoryStatus = "none" | "available" | "unavailable";
 export type SourceType = "telegram" | "youtube" | "rss" | "forum";
 export type SourceSubtype =
   | TelegramSourceKind
@@ -50,6 +51,9 @@ export interface Source {
   createdAt: number;
   telegramUsername: string | null;
   avatarDataUrl: string | null;
+  migratedHistoryStatus: TelegramMigratedHistoryStatus;
+  migratedHistoryDetectedAt: number | null;
+  migratedHistoryRefreshedAt: number | null;
 }
 
 export interface SourceCapabilities {

@@ -38,6 +38,9 @@ describe("sources api wrappers", () => {
         created_at: 1_600_000,
         telegram_username: "newsroom",
         avatar_data_url: "data:image/jpeg;base64,abc",
+        migrated_history_status: "available",
+        migrated_history_detected_at: 100,
+        migrated_history_refreshed_at: 200,
       },
     ]);
 
@@ -56,9 +59,39 @@ describe("sources api wrappers", () => {
         createdAt: 1_600_000,
         telegramUsername: "newsroom",
         avatarDataUrl: "data:image/jpeg;base64,abc",
+        migratedHistoryStatus: "available",
+        migratedHistoryDetectedAt: 100,
+        migratedHistoryRefreshedAt: 200,
       },
     ]);
     expect(invokeMock).toHaveBeenLastCalledWith("list_sources", { accountId: null });
+  });
+
+  it("defaults missing migrated history capability to none", async () => {
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: 9,
+        source_type: "youtube",
+        source_subtype: "video",
+        account_id: null,
+        external_id: "video-id",
+        title: "Video",
+        last_sync_state: null,
+        last_synced_at: null,
+        is_member: false,
+        is_active: true,
+        created_at: 1_600_002,
+        avatar_data_url: null,
+      },
+    ]);
+
+    await expect(listSources(null)).resolves.toMatchObject([
+      {
+        migratedHistoryStatus: "none",
+        migratedHistoryDetectedAt: null,
+        migratedHistoryRefreshedAt: null,
+      },
+    ]);
   });
 
   it("adds telegram sources with expectedSubtype", async () => {
@@ -205,6 +238,9 @@ describe("sources api wrappers", () => {
         createdAt: 1_700_500,
         telegramUsername: null,
         avatarDataUrl: null,
+        migratedHistoryStatus: "none",
+        migratedHistoryDetectedAt: null,
+        migratedHistoryRefreshedAt: null,
       },
     ]);
   });

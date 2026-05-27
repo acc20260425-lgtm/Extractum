@@ -403,7 +403,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/api/sources.ts`
 - Modify: `src/lib/api/sources.test.ts`
 
-- [ ] **Step 1: Add backend tests for capability storage**
+- [x] **Step 1: Add backend tests for capability storage**
 
 Create `src-tauri/src/takeout_import/migrated_history.rs` with the module shell and tests:
 
@@ -629,7 +629,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the new tests and verify they fail**
+- [x] **Step 2: Run the new tests and verify they fail**
 
 Run:
 
@@ -639,7 +639,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_history::tests
 
 Expected: fail because the module is not declared and the test-support helper does not exist.
 
-- [ ] **Step 3: Add the companion table to schemas**
+- [x] **Step 3: Add the companion table to schemas**
 
 In `src-tauri/migrations/0001_current_schema_baseline.sql`, add the table immediately after `telegram_sources`:
 
@@ -683,7 +683,7 @@ pub(crate) async fn create_migrated_history_capability_tables(pool: &sqlx::Sqlit
 
 Call `create_migrated_history_capability_tables(&pool).await;` at the end of `create_source_identity_tables`.
 
-- [ ] **Step 4: Declare the module**
+- [x] **Step 4: Declare the module**
 
 In `src-tauri/src/takeout_import/mod.rs`, add:
 
@@ -691,7 +691,7 @@ In `src-tauri/src/takeout_import/mod.rs`, add:
 pub(crate) mod migrated_history;
 ```
 
-- [ ] **Step 5: Expose sanitized capability status on source records**
+- [x] **Step 5: Expose sanitized capability status on source records**
 
 In `src-tauri/src/sources/types.rs`, extend `SourceRecord`:
 
@@ -735,7 +735,7 @@ In `source_record_from_row_parts`, set:
 
 Import `MIGRATED_HISTORY_STATUS_NONE` from `types.rs`.
 
-- [ ] **Step 6: Add backend source-record tests**
+- [x] **Step 6: Add backend source-record tests**
 
 In `src-tauri/src/sources/store.rs`, update `source_record_parts_allow_non_telegram_source` and `source_record_parts_emit_only_source_subtype` expected records to include:
 
@@ -826,7 +826,7 @@ If `seed_telegram_source_identity` does not exist, add this private helper insid
     }
 ```
 
-- [ ] **Step 7: Update frontend source types and mapper**
+- [x] **Step 7: Update frontend source types and mapper**
 
 In `src/lib/types/sources.ts`, add:
 
@@ -858,7 +858,7 @@ In `mapSource`, add:
     migratedHistoryRefreshedAt: source.migrated_history_refreshed_at ?? null,
 ```
 
-- [ ] **Step 8: Update frontend mapper tests**
+- [x] **Step 8: Update frontend mapper tests**
 
 In `src/lib/api/sources.test.ts`, in `lists sources with typed arguments and maps source fields`, add these raw fields:
 
@@ -907,7 +907,7 @@ Add a test proving omitted fields map to `none`:
   });
 ```
 
-- [ ] **Step 9: Add migration assertions**
+- [x] **Step 9: Add migration assertions**
 
 In `src-tauri/src/migrations.rs`, add assertions to the fresh schema test:
 
@@ -927,7 +927,7 @@ Add a check that the baseline SQL contains the row marker check:
     assert!(migration.sql.contains("migration_domain IS NULL OR migration_domain IN ('migrated_from_chat')"));
 ```
 
-- [ ] **Step 10: Run focused tests**
+- [x] **Step 10: Run focused tests**
 
 Run:
 
@@ -940,7 +940,7 @@ npm.cmd test -- src/lib/api/sources.test.ts
 
 Expected: all pass.
 
-- [ ] **Step 11: Commit Task 2**
+- [x] **Step 11: Commit Task 2**
 
 Run:
 

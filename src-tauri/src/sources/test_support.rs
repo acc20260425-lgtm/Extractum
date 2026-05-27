@@ -293,6 +293,13 @@ pub(crate) async fn create_source_identity_tables(pool: &sqlx::SqlitePool) {
     .execute(pool)
     .await
     .expect("create source identity bridge schema");
+    create_migrated_history_capability_tables(pool).await;
+}
+
+pub(crate) async fn create_migrated_history_capability_tables(pool: &sqlx::SqlitePool) {
+    crate::takeout_import::migrated_history::create_migrated_history_capability_schema(pool)
+        .await
+        .expect("create migrated history capability schema");
 }
 
 pub(crate) async fn create_youtube_typed_source_tables(pool: &sqlx::SqlitePool) {
