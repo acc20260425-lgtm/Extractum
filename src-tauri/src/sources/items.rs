@@ -710,7 +710,10 @@ mod tests {
         create_analysis_documents_table, create_ingest_provenance_tables,
         create_item_identity_indexes, memory_pool_with_source_items_and_topics,
     };
-    use crate::sources::types::{TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE};
+    use crate::sources::types::{
+        TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+        TELEGRAM_MIGRATION_DOMAIN_MIGRATED_FROM_CHAT,
+    };
 
     #[test]
     fn forum_topic_filter_deserializes_camel_case_topic_id() {
@@ -1291,7 +1294,7 @@ mod tests {
             history_peer_kind: "chat".to_string(),
             history_peer_id: 777,
             telegram_message_id: 42,
-            migration_domain: Some("migrated_from_chat".to_string()),
+            migration_domain: Some(TELEGRAM_MIGRATION_DOMAIN_MIGRATED_FROM_CHAT.to_string()),
             is_migrated_history: true,
         };
 

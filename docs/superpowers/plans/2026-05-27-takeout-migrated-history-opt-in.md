@@ -109,7 +109,7 @@ This plan implements these accepted decisions:
 - Modify: `src-tauri/src/sources/test_support.rs`
 - Modify: `src-tauri/migrations/0001_current_schema_baseline.sql`
 
-- [ ] **Step 1: Add typed constants**
+- [x] **Step 1: Add typed constants**
 
 In `src-tauri/src/sources/types.rs`, add these constants near the existing Telegram kind constants:
 
@@ -133,7 +133,7 @@ pub(crate) const TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP: &str =
     "migrated_small_group_history";
 ```
 
-- [ ] **Step 2: Replace string literals in provenance helpers**
+- [x] **Step 2: Replace string literals in provenance helpers**
 
 In `mark_takeout_migrated_history_deferred`, replace the SQL string with a formatted query that uses the constants:
 
@@ -156,7 +156,7 @@ In `mark_takeout_migrated_history_deferred`, replace the SQL string with a forma
 
 In `mark_takeout_only_my_messages_fallback`, use the same pattern with `TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL` and `TAKEOUT_HISTORY_SCOPE_PARTIAL_PRIVATE`.
 
-- [ ] **Step 3: Add the migrated small-group batch helper tests first**
+- [x] **Step 3: Add the migrated small-group batch helper tests first**
 
 In `src-tauri/src/ingest_provenance.rs`, add these tests inside the existing test module:
 
@@ -264,7 +264,7 @@ In `src-tauri/src/ingest_provenance.rs`, add these tests inside the existing tes
     }
 ```
 
-- [ ] **Step 4: Run the focused tests and verify they fail**
+- [x] **Step 4: Run the focused tests and verify they fail**
 
 Run:
 
@@ -275,7 +275,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_small_group_imported
 
 Expected: both fail because `migrated_small_group_history`, `mark_takeout_migrated_small_group_scope`, and `mark_takeout_migrated_history_imported` do not exist yet.
 
-- [ ] **Step 5: Extend schema checks**
+- [x] **Step 5: Extend schema checks**
 
 In `src-tauri/migrations/0001_current_schema_baseline.sql`, add `migrated_small_group_history` to the `telegram_takeout_batches.history_scope` check:
 
@@ -294,7 +294,7 @@ Put it after `CHECK (is_migrated_history IN (0, 1))`.
 
 In `src-tauri/src/sources/test_support.rs`, mirror both changes in `TELEGRAM_MESSAGES_SCHEMA_SQL` and `INGEST_PROVENANCE_SCHEMA_SQL`.
 
-- [ ] **Step 6: Add the provenance helpers**
+- [x] **Step 6: Add the provenance helpers**
 
 In `src-tauri/src/ingest_provenance.rs`, add:
 
@@ -340,7 +340,7 @@ pub(crate) async fn mark_takeout_migrated_history_imported(
 }
 ```
 
-- [ ] **Step 7: Replace row-level marker literals in tests**
+- [x] **Step 7: Replace row-level marker literals in tests**
 
 In `src-tauri/src/sources/items.rs`, import the migration-domain constant in the test module:
 
@@ -363,7 +363,7 @@ with:
             migration_domain: Some(TELEGRAM_MIGRATION_DOMAIN_MIGRATED_FROM_CHAT.to_string()),
 ```
 
-- [ ] **Step 8: Run focused regressions**
+- [x] **Step 8: Run focused regressions**
 
 Run:
 
@@ -376,7 +376,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_history_deferred_scope_
 
 Expected: all pass.
 
-- [ ] **Step 9: Commit Task 1**
+- [x] **Step 9: Commit Task 1**
 
 Run:
 

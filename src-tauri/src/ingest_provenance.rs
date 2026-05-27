@@ -7,6 +7,13 @@ use crate::sources::TelegramMessageIdentity;
 use crate::tx::{begin_immediate, finish_manual_transaction};
 
 pub(crate) const PROVENANCE_TEXT_MAX_LEN: usize = 512;
+pub(crate) const TAKEOUT_HISTORY_SCOPE_CURRENT: &str = "current_history";
+pub(crate) const TAKEOUT_HISTORY_SCOPE_CURRENT_WITH_MIGRATED_DEFERRED: &str =
+    "current_history_with_migrated_deferred";
+pub(crate) const TAKEOUT_HISTORY_SCOPE_PARTIAL_PRIVATE: &str = "partial_private_history";
+pub(crate) const TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL: &str = "mixed_partial";
+pub(crate) const TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP: &str =
+    "migrated_small_group_history";
 
 pub(crate) struct CreateTelegramTakeoutBatch {
     pub(crate) source_id: i64,
@@ -215,17 +222,20 @@ pub(crate) async fn mark_takeout_migrated_history_deferred(
     batch_id: i64,
     message: &str,
 ) -> AppResult<()> {
-    sqlx::query(
+    let query = format!(
         "UPDATE telegram_takeout_batches
          SET migrated_history_detected = 1,
              migrated_history_imported = 0,
              history_scope = CASE
-               WHEN only_my_messages = 1 THEN 'mixed_partial'
-               ELSE 'current_history_with_migrated_deferred'
+               WHEN only_my_messages = 1 THEN '{}'
+               ELSE '{}'
              END,
              updated_at = CURRENT_TIMESTAMP
          WHERE batch_id = ?",
-    )
+        TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL,
+        TAKEOUT_HISTORY_SCOPE_CURRENT_WITH_MIGRATED_DEFERRED
+    );
+    sqlx::query(&query)
     .bind(batch_id)
     .execute(pool)
     .await
@@ -233,21 +243,63 @@ pub(crate) async fn mark_takeout_migrated_history_deferred(
     record_ingest_batch_warning_once(pool, batch_id, "migrated_history_deferred", message).await
 }
 
+pub(crate) async fn mark_takeout_migrated_small_group_scope(
+    pool: &sqlx::Pool<Sqlite>,
+    batch_id: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE telegram_takeout_batches
+         SET migrated_history_detected = 1,
+             migrated_history_imported = 0,
+             history_scope = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE batch_id = ?",
+    )
+    .bind(TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP)
+    .bind(batch_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+pub(crate) async fn mark_takeout_migrated_history_imported(
+    pool: &sqlx::Pool<Sqlite>,
+    batch_id: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE telegram_takeout_batches
+         SET migrated_history_detected = 1,
+             migrated_history_imported = 1,
+             history_scope = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE batch_id = ?",
+    )
+    .bind(TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP)
+    .bind(batch_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 pub(crate) async fn mark_takeout_only_my_messages_fallback(
     pool: &sqlx::Pool<Sqlite>,
     batch_id: i64,
     message: &str,
 ) -> AppResult<()> {
-    sqlx::query(
+    let query = format!(
         "UPDATE telegram_takeout_batches
          SET only_my_messages = 1,
              history_scope = CASE
-               WHEN migrated_history_detected = 1 THEN 'mixed_partial'
-               ELSE 'partial_private_history'
+               WHEN migrated_history_detected = 1 THEN '{}'
+               ELSE '{}'
              END,
              updated_at = CURRENT_TIMESTAMP
          WHERE batch_id = ?",
-    )
+        TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL, TAKEOUT_HISTORY_SCOPE_PARTIAL_PRIVATE
+    );
+    sqlx::query(&query)
     .bind(batch_id)
     .execute(pool)
     .await
@@ -423,9 +475,14 @@ fn classify_completeness(
     let (only_my_messages, migrated_history_detected, history_scope) = detail;
     match status {
         TerminalBatchStatus::Completed
+            if history_scope == TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP =>
+        {
+            "complete"
+        }
+        TerminalBatchStatus::Completed
             if only_my_messages == 0
                 && migrated_history_detected == 0
-                && history_scope != "mixed_partial" =>
+                && history_scope != TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL =>
         {
             "complete"
         }
@@ -440,6 +497,7 @@ fn classify_completeness(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sources::ITEM_KIND_TELEGRAM_MESSAGE;
     use crate::sources::test_support::{
         create_ingest_provenance_tables, memory_pool_with_source_items_and_topics,
     };
@@ -712,6 +770,109 @@ mod tests {
         .await
         .expect("count migrated warnings");
         assert_eq!(warning_rows, 1);
+    }
+
+    #[tokio::test]
+    async fn migrated_small_group_scope_can_be_marked_running_and_completed() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_source(&pool).await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+
+        mark_takeout_migrated_small_group_scope(&pool, batch_id)
+            .await
+            .expect("mark historical scope");
+        mark_takeout_migrated_history_imported(&pool, batch_id)
+            .await
+            .expect("mark imported");
+        finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
+            .await
+            .expect("finalize");
+
+        let row: (String, i64, i64) = sqlx::query_as(
+            "SELECT history_scope, migrated_history_detected, migrated_history_imported
+             FROM telegram_takeout_batches
+             WHERE batch_id = ?",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load batch");
+
+        assert_eq!(
+            row,
+            (
+                TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP.to_string(),
+                1,
+                1,
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn migrated_small_group_imported_allows_duplicate_only_success() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_source(&pool).await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+        seed_item(&pool, 55).await;
+
+        mark_takeout_migrated_small_group_scope(&pool, batch_id)
+            .await
+            .expect("mark scope");
+        record_ingest_observation(
+            &pool,
+            IngestObservation {
+                batch_id,
+                source_id: 1,
+                item_id: Some(55),
+                provider_item_kind: ITEM_KIND_TELEGRAM_MESSAGE,
+                provider_identity_kind: "telegram_message",
+                provider_identity: "telegram:history_peer:chat:777:message:42".to_string(),
+                outcome: "duplicate_observed",
+                reason_code: None,
+            },
+        )
+        .await
+        .expect("record duplicate observation");
+        mark_takeout_migrated_history_imported(&pool, batch_id)
+            .await
+            .expect("mark imported");
+        finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
+            .await
+            .expect("finalize");
+
+        let row: (String, i64, i64, i64, i64) = sqlx::query_as(
+            "SELECT b.completeness, t.migrated_history_imported,
+                    b.item_observed_count, b.item_inserted_count, b.item_duplicate_count
+             FROM ingest_batches b
+             JOIN telegram_takeout_batches t ON t.batch_id = b.id
+             WHERE b.id = ?",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load final state");
+
+        assert_eq!(row, ("complete".to_string(), 1, 1, 0, 1));
     }
 
     #[tokio::test]

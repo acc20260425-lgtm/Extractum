@@ -12,6 +12,14 @@ pub(crate) const TELEGRAM_KIND_GROUP: &str = "group";
 pub(crate) const TELEGRAM_PEER_KIND_CHANNEL: &str = "channel";
 pub(crate) const TELEGRAM_PEER_KIND_CHAT: &str = "chat";
 pub(crate) const TELEGRAM_PEER_KIND_USER: &str = "user";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_MIGRATION_DOMAIN_MIGRATED_FROM_CHAT: &str = "migrated_from_chat";
+#[allow(dead_code)]
+pub(crate) const MIGRATED_HISTORY_STATUS_NONE: &str = "none";
+#[allow(dead_code)]
+pub(crate) const MIGRATED_HISTORY_STATUS_AVAILABLE: &str = "available";
+#[allow(dead_code)]
+pub(crate) const MIGRATED_HISTORY_STATUS_UNAVAILABLE: &str = "unavailable";
 pub(crate) const ITEM_KIND_TELEGRAM_MESSAGE: &str = "telegram_message";
 pub(crate) const ITEM_KIND_YOUTUBE_TRANSCRIPT: &str = "youtube_transcript";
 pub(crate) const ITEM_KIND_YOUTUBE_COMMENT: &str = "youtube_comment";

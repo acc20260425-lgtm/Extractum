@@ -419,6 +419,7 @@ CREATE TABLE telegram_messages (
     CHECK (history_peer_kind IN ('channel', 'chat', 'user')),
     CHECK (telegram_message_id > 0),
     CHECK (is_migrated_history IN (0, 1)),
+    CHECK (migration_domain IS NULL OR migration_domain IN ('migrated_from_chat')),
     CHECK (reply_to_msg_id IS NULL OR reply_to_msg_id > 0),
     CHECK (
         reply_to_peer_kind IS NULL
@@ -490,7 +491,8 @@ CREATE TABLE telegram_takeout_batches (
     'current_history',
     'current_history_with_migrated_deferred',
     'partial_private_history',
-    'mixed_partial'
+    'mixed_partial',
+    'migrated_small_group_history'
   )),
   CHECK (used_export_dc IN (0, 1)),
   CHECK (fallback_used IN (0, 1)),
