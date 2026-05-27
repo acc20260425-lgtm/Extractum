@@ -5,7 +5,10 @@ use std::collections::{HashMap, HashSet};
 use super::TakeoutImportState;
 use crate::error::{AppError, AppResult};
 #[cfg(test)]
-use crate::ingest_provenance::TAKEOUT_HISTORY_SCOPE_CURRENT;
+use crate::ingest_provenance::{
+    create_telegram_takeout_batch, finalize_ingest_batch, mark_takeout_migrated_small_group_scope,
+    CreateTelegramTakeoutBatch, TerminalBatchStatus, TAKEOUT_HISTORY_SCOPE_CURRENT,
+};
 use crate::sql_helpers::push_i64_bind_list;
 
 const STATUS_RUNNING: &str = "running";
@@ -18,6 +21,7 @@ const COMPLETENESS_PARTIAL: &str = "partial";
 pub(crate) struct TakeoutImportRecoveryState {
     pub(crate) batch_id: i64,
     pub(crate) source_id: i64,
+    pub(crate) history_scope: String,
     pub(crate) status: String,
     pub(crate) recovery_kind: String,
     pub(crate) completeness: String,
@@ -37,6 +41,7 @@ pub(crate) struct TakeoutImportRecoveryState {
 struct LatestTakeoutBatchRow {
     batch_id: i64,
     source_id: i64,
+    history_scope: String,
     status: String,
     completeness: String,
     item_inserted_count: i64,
@@ -93,6 +98,7 @@ pub(crate) async fn list_takeout_import_recovery_states_for_sources(
         states.push(TakeoutImportRecoveryState {
             batch_id: batch.batch_id,
             source_id: batch.source_id,
+            history_scope: batch.history_scope,
             status: batch.status,
             recovery_kind: kind.to_string(),
             completeness: batch.completeness,
@@ -122,6 +128,7 @@ async fn latest_takeout_batches(
           SELECT
             b.id AS batch_id,
             b.source_id,
+            t.history_scope,
             b.status,
             b.completeness,
             b.item_inserted_count,
@@ -157,6 +164,7 @@ async fn latest_takeout_batches(
         SELECT
           batch_id,
           source_id,
+          history_scope,
           status,
           completeness,
           item_inserted_count,
@@ -368,6 +376,38 @@ mod tests {
             .expect("list recovery states");
 
         assert!(states.is_empty());
+    }
+
+    #[tokio::test]
+    async fn recovery_state_includes_migrated_history_scope_for_historical_batches() {
+        let (pool, state) = recovery_fixture().await;
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+        mark_takeout_migrated_small_group_scope(&pool, batch_id)
+            .await
+            .expect("mark scope");
+        finalize_ingest_batch(
+            &pool,
+            batch_id,
+            TerminalBatchStatus::Failed,
+            Some("migrated_history_unavailable"),
+        )
+        .await
+        .expect("finalize failed");
+
+        let states = list_takeout_import_recovery_states_for_sources(&pool, &state, None)
+            .await
+            .expect("list recovery");
+
+        assert_eq!(states[0].history_scope, "migrated_small_group_history");
     }
 
     #[tokio::test]

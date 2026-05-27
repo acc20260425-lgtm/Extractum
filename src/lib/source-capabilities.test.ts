@@ -7,7 +7,7 @@ import {
 import type { Source } from "./types/sources";
 
 function source(overrides: Partial<Source>): Source {
-  return {
+  return Object.assign({
     id: 1,
     sourceType: "telegram",
     sourceSubtype: "channel",
@@ -21,8 +21,10 @@ function source(overrides: Partial<Source>): Source {
     createdAt: 100,
     telegramUsername: null,
     avatarDataUrl: null,
-    ...overrides,
-  };
+    migratedHistoryStatus: "none",
+    migratedHistoryDetectedAt: null,
+    migratedHistoryRefreshedAt: null,
+  }, overrides);
 }
 
 describe("source capabilities", () => {

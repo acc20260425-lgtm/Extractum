@@ -208,6 +208,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn default_source_browsing_does_not_surface_migrated_rows_after_archive_ready() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_direct_item(&pool, 1, 10, "10", 1000, "current").await;
+        seed_direct_item(&pool, 1, 11, "11", 900, "migrated").await;
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (10, 1, 'channel', 12345, 10, NULL, 0),
+                      (11, 1, 'chat', 777, 10, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed telegram rows");
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive");
+
+        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
+            .await
+            .expect("load rows");
+
+        assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), vec![10]);
+    }
+
+    #[tokio::test]
     async fn load_item_rows_attaches_topic_metadata_and_root_matches() {
         let pool = memory_pool_with_source_items_and_topics().await;
         sqlx::query(

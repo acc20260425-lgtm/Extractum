@@ -47,6 +47,9 @@ function source(id: number): Source {
     createdAt: 100,
     telegramUsername: null,
     avatarDataUrl: null,
+    migratedHistoryStatus: "none",
+    migratedHistoryDetectedAt: null,
+    migratedHistoryRefreshedAt: null,
   };
 }
 

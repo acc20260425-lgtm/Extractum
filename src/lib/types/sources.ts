@@ -314,6 +314,13 @@ export type TakeoutImportCompleteness =
 export interface TakeoutImportRecoveryState {
   batch_id: number;
   source_id: number;
+  history_scope:
+    | "current_history"
+    | "current_history_with_migrated_deferred"
+    | "partial_private_history"
+    | "mixed_partial"
+    | "migrated_small_group_history"
+    | "unknown";
   status: TakeoutImportRecoveryStatus;
   recovery_kind: TakeoutImportRecoveryKind;
   completeness: TakeoutImportCompleteness;

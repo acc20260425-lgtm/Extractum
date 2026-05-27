@@ -30,7 +30,7 @@ function runtimeStatus(overrides: Partial<AccountRuntimeStatus> = {}): AccountRu
 }
 
 function source(overrides: Partial<Source> = {}): Source {
-  return {
+  return Object.assign({
     id: 7,
     sourceType: "telegram",
     sourceSubtype: "channel",
@@ -44,8 +44,10 @@ function source(overrides: Partial<Source> = {}): Source {
     createdAt: 10,
     telegramUsername: null,
     avatarDataUrl: null,
-    ...overrides,
-  };
+    migratedHistoryStatus: "none",
+    migratedHistoryDetectedAt: null,
+    migratedHistoryRefreshedAt: null,
+  }, overrides);
 }
 
 function metric(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOption {

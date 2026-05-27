@@ -1042,6 +1042,58 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn default_analysis_corpus_excludes_migrated_history_documents() {
+        let pool = snapshot_pool().await;
+        crate::sources::test_support::create_telegram_messages_table(&pool).await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (1, 'telegram', 'supergroup', '12345', 'Forum')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at, content_zstd
+             ) VALUES
+                (1, 1, '10', 'telegram_message', 'Ada', 1700000010, ?),
+                (2, 1, '10', 'telegram_message', 'Ada', 1700000009, ?)",
+        )
+        .bind(compress_text("current").expect("compress current"))
+        .bind(compress_text("migrated").expect("compress migrated"))
+        .execute(&pool)
+        .await
+        .expect("seed items");
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (1, 1, 'channel', 12345, 10, NULL, 0),
+                      (2, 1, 'chat', 777, 10, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed telegram rows");
+
+        crate::analysis_documents::rebuild_analysis_documents_for_source(&pool, 1)
+            .await
+            .expect("rebuild docs");
+
+        let document_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)
+             FROM analysis_documents d
+             JOIN telegram_messages tm ON tm.item_id = d.item_id
+             WHERE d.source_id = 1 AND tm.is_migrated_history = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count migrated docs");
+
+        assert_eq!(document_count, 0);
+    }
+
     fn youtube_metadata_zstd(video_id: &str, title: &str, description: Option<&str>) -> Vec<u8> {
         let metadata = YoutubeVideoMetadata {
             video_id: video_id.to_string(),

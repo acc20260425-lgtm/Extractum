@@ -98,6 +98,7 @@ function takeoutJob(overrides: Partial<TakeoutImportJobRecord>): TakeoutImportJo
     source_id: 1,
     account_id: 2,
     batch_id: 100,
+    history_scope: "current_history",
     status: "running",
     phase: "importing_history",
     message: null,
@@ -119,6 +120,7 @@ function takeoutRecovery(
   return Object.assign({
     batch_id: 10,
     source_id: 1,
+    history_scope: "current_history",
     status: "running",
     recovery_kind: "interrupted",
     completeness: "unknown",
@@ -271,7 +273,7 @@ function promptTemplate(overrides: Partial<AnalysisPromptTemplate>): AnalysisPro
 }
 
 function sourceRecord(overrides: Partial<Source>): Source {
-  return {
+  return Object.assign({
     id: 1,
     sourceType: "telegram",
     sourceSubtype: "channel",
@@ -285,8 +287,10 @@ function sourceRecord(overrides: Partial<Source>): Source {
     createdAt: 100,
     telegramUsername: null,
     avatarDataUrl: null,
-    ...overrides,
-  };
+    migratedHistoryStatus: "none",
+    migratedHistoryDetectedAt: null,
+    migratedHistoryRefreshedAt: null,
+  }, overrides);
 }
 
 function sourceGroup(overrides: Partial<AnalysisSourceGroup>): AnalysisSourceGroup {

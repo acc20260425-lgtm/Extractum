@@ -2531,6 +2531,63 @@ mod tests {
         assert!(error.message.contains("migrated_history_not_detected"));
     }
 
+    #[tokio::test]
+    async fn historical_batch_completion_does_not_advance_source_watermark() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_takeout_source(&pool, 1, 10, "supergroup", "channel", 12345).await;
+        sqlx::query("UPDATE sources SET last_sync_state = 99, last_synced_at = 1000 WHERE id = 1")
+            .execute(&pool)
+            .await
+            .expect("seed watermark");
+        let batch_id = create_telegram_takeout_batch(
+            &pool,
+            CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+
+        crate::ingest_provenance::mark_takeout_migrated_small_group_scope(&pool, batch_id)
+            .await
+            .expect("mark scope");
+        crate::ingest_provenance::mark_takeout_migrated_history_imported(&pool, batch_id)
+            .await
+            .expect("mark imported");
+        finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
+            .await
+            .expect("finalize");
+
+        let watermark: (Option<i64>, Option<i64>) =
+            sqlx::query_as("SELECT last_sync_state, last_synced_at FROM sources WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("load watermark");
+        let batch: (String, String, i64) = sqlx::query_as(
+            "SELECT b.status, t.history_scope, t.migrated_history_imported
+             FROM ingest_batches b
+             JOIN telegram_takeout_batches t ON t.batch_id = b.id
+             WHERE b.id = ?",
+        )
+        .bind(batch_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load batch");
+
+        assert_eq!(watermark, (Some(99), Some(1000)));
+        assert_eq!(
+            batch,
+            (
+                "completed".to_string(),
+                "migrated_small_group_history".to_string(),
+                1,
+            )
+        );
+    }
+
     async fn seed_item_source(pool: &sqlx::SqlitePool, source_id: i64) {
         sqlx::query(
             "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)

@@ -379,6 +379,11 @@ fn base_query(where_clause: &str) -> String {
       ON forum_topics.source_id = memberships.source_id
      AND forum_topics.topic_id = memberships.topic_id
     WHERE {where_clause}
+      AND NOT EXISTS (
+        SELECT 1 FROM telegram_messages tm
+        WHERE tm.item_id = items.id
+          AND tm.is_migrated_history = 1
+      )
     ORDER BY items.published_at ASC, items.id ASC
 "#
     )
@@ -408,6 +413,11 @@ fn archive_base_query(where_clause: &str) -> String {
         forum_topic_top_message_id
     FROM archive_read_items
     WHERE {where_clause}
+      AND NOT EXISTS (
+        SELECT 1 FROM telegram_messages tm
+        WHERE tm.item_id = archive_read_items.item_id
+          AND tm.is_migrated_history = 1
+      )
     ORDER BY published_at ASC, item_id ASC
 "#
     )
@@ -792,6 +802,69 @@ mod tests {
         assert!(!archive_rows[1].media_placeholders.is_empty());
         assert!(!archive_rows[2].media_placeholders.is_empty());
         assert_eq!(archive_rows[4].forum_topic_id, None);
+    }
+
+    #[tokio::test]
+    async fn notebooklm_default_export_excludes_migrated_history_rows() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (1, 1, 'channel', 12345, 1, NULL, 0),
+                      (2, 1, 'chat', 777, 1, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed telegram rows");
+
+        let messages = load_export_messages_from_items_path(&pool, 1, None, None)
+            .await
+            .expect("load export messages");
+
+        assert!(messages.iter().all(|message| message.item_id != 2));
+    }
+
+    #[tokio::test]
+    async fn notebooklm_archive_export_excludes_migrated_history_rows_even_if_materialized() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (1, 1, 'channel', 12345, 1, NULL, 0),
+                      (2, 1, 'chat', 777, 1, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed telegram rows");
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive");
+        sqlx::query(
+            "INSERT INTO archive_read_items (
+                source_id, item_id, ref, external_id, item_kind, author, published_at,
+                content_kind, has_media, has_raw_data, model_version, built_at
+             ) VALUES (
+                1, 2, 'manual-migrated', '20', 'telegram_message', 'Ada', 100,
+                'text_only', 0, 0, ?, 100
+             )
+             ON CONFLICT(source_id, item_id) DO UPDATE SET
+                ref = excluded.ref,
+                model_version = excluded.model_version",
+        )
+        .bind(crate::archive_read_model::ARCHIVE_READ_MODEL_VERSION)
+        .execute(&pool)
+        .await
+        .expect("force archive row");
+
+        let messages = load_export_messages_from_archive(&pool, 1, None, None)
+            .await
+            .expect("load archive messages");
+
+        assert!(messages.iter().all(|message| message.item_id != 2));
     }
 
     #[tokio::test]

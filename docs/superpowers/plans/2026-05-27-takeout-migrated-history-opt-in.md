@@ -2553,7 +2553,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/archive_read_model.rs`
 - Modify: `src-tauri/src/analysis_documents.rs`
 
-- [ ] **Step 1: Add provenance/watermark test**
+- [x] **Step 1: Add provenance/watermark test**
 
 In `src-tauri/src/takeout_import/mod.rs`, add a pure storage regression that does not need live Telegram:
 
@@ -2621,7 +2621,7 @@ In `src-tauri/src/takeout_import/mod.rs`, add a pure storage regression that doe
     }
 ```
 
-- [ ] **Step 2: Add recovery visibility test**
+- [x] **Step 2: Add recovery visibility test**
 
 In `src-tauri/src/takeout_import/recovery.rs`, add a test proving failed historical batches are listed with `history_scope = migrated_small_group_history` in diagnostics:
 
@@ -2663,7 +2663,7 @@ In `src-tauri/src/takeout_import/recovery.rs`, add a test proving failed histori
 
 Add `pub history_scope: String` to Rust and TypeScript recovery DTOs and map `t.history_scope` from the recovery query.
 
-- [ ] **Step 3: Add default consumer safety tests**
+- [x] **Step 3: Add default consumer safety tests**
 
 Add one focused test per default consumer:
 
@@ -2751,7 +2751,7 @@ In `src-tauri/src/analysis/corpus.rs`, add:
 
 Use `snapshot_pool().await` in this module, create `telegram_messages` with the same schema used by `sources::test_support::create_telegram_messages_table`, seed one current Telegram item plus one migrated Telegram item, then rebuild `analysis_documents`.
 
-- [ ] **Step 4: Run safety tests and verify failures**
+- [x] **Step 4: Run safety tests and verify failures**
 
 Run:
 
@@ -2765,7 +2765,7 @@ cargo test --manifest-path src-tauri\Cargo.toml default_analysis_corpus_excludes
 
 Expected: watermark test passes, and the recovery, export, corpus, and browsing tests fail until DTO and filter changes in the next steps are applied.
 
-- [ ] **Step 5: Add recovery `history_scope` DTO**
+- [x] **Step 5: Add recovery `history_scope` DTO**
 
 In `src-tauri/src/takeout_import/recovery.rs`, extend the recovery row and DTO:
 
@@ -2783,7 +2783,7 @@ In `src/lib/types/sources.ts`, extend `TakeoutImportRecoveryState`:
 
 Update fixtures in frontend tests with `history_scope: "current_history"`.
 
-- [ ] **Step 6: Ensure NotebookLM items-path excludes migrated rows**
+- [x] **Step 6: Ensure NotebookLM items-path excludes migrated rows**
 
 In `src-tauri/src/notebooklm_export/query.rs`, add the `NOT EXISTS` migrated-row filter to the items-path export query:
 
@@ -2797,7 +2797,7 @@ AND NOT EXISTS (
 
 Also add the same `NOT EXISTS` filter to the archive-path export query through `archive_read_items.item_id`, so manually inserted archive rows cannot bypass the default-domain contract.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -2811,7 +2811,7 @@ cargo test --manifest-path src-tauri\Cargo.toml default_analysis_corpus_excludes
 
 Expected: all pass.
 
-- [ ] **Step 8: Commit Task 7**
+- [x] **Step 8: Commit Task 7**
 
 Run:
 
