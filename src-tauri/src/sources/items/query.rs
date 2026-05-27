@@ -44,7 +44,16 @@ pub(crate) async fn load_item_rows_from_items_path(
 ) -> AppResult<Vec<StoredItemRow>> {
     let around_published_at = if let Some(item_id) = around_item_id {
         sqlx::query_scalar::<_, i64>(
-            "SELECT published_at FROM items WHERE source_id = ? AND id = ? LIMIT 1",
+            "SELECT items.published_at
+             FROM items
+             WHERE items.source_id = ?
+               AND items.id = ?
+               AND NOT EXISTS (
+                 SELECT 1 FROM telegram_messages tm
+                 WHERE tm.item_id = items.id
+                   AND tm.is_migrated_history = 1
+               )
+             LIMIT 1",
         )
         .bind(source_id)
         .bind(item_id)
@@ -91,6 +100,11 @@ pub(crate) async fn load_item_rows_from_items_path(
           ON forum_topics.source_id = memberships.source_id
          AND forum_topics.topic_id = memberships.topic_id
         WHERE items.source_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM telegram_messages tm
+            WHERE tm.item_id = items.id
+              AND tm.is_migrated_history = 1
+          )
         "#,
     );
 
@@ -135,6 +149,63 @@ mod tests {
     use crate::compression::compress_text;
     use crate::sources::items::ForumTopicFilter;
     use crate::sources::test_support::memory_pool_with_source_items_and_topics;
+
+    async fn seed_direct_item(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        item_id: i64,
+        external_id: &str,
+        published_at: i64,
+        content: &str,
+    ) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (
+                id, source_type, source_subtype, external_id, title, is_active, is_member, created_at
+             ) VALUES (?, 'telegram', 'supergroup', '12345', 'Forum', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .execute(pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                content_zstd, raw_data_zstd, content_kind, has_media
+             ) VALUES (?, ?, ?, 'telegram_message', 'alice', ?, ?, ?, NULL, 'text_only', 0)",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(external_id)
+        .bind(published_at)
+        .bind(published_at)
+        .bind(crate::compression::compress_text(content).expect("compress"))
+        .execute(pool)
+        .await
+        .expect("seed item");
+    }
+
+    #[tokio::test]
+    async fn default_items_path_excludes_migrated_history_rows() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_direct_item(&pool, 1, 10, "10", 1000, "current").await;
+        seed_direct_item(&pool, 1, 11, "11", 900, "migrated").await;
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (10, 1, 'channel', 12345, 10, NULL, 0),
+                      (11, 1, 'chat', 777, 10, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed telegram messages");
+
+        let rows = load_item_rows_from_items_path(&pool, 1, 20, None, None, None)
+            .await
+            .expect("load rows");
+
+        assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), vec![10]);
+    }
 
     #[tokio::test]
     async fn load_item_rows_attaches_topic_metadata_and_root_matches() {

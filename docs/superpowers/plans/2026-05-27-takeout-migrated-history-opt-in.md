@@ -961,7 +961,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/archive_read_model.rs`
 - Modify: `src-tauri/src/analysis_documents.rs`
 
-- [ ] **Step 1: Add failing insert-context test**
+- [x] **Step 1: Add failing insert-context test**
 
 In `src-tauri/src/sources/items.rs`, add this test after `insert_telegram_source_item_allows_same_message_id_in_different_history_domains`:
 
@@ -1057,7 +1057,7 @@ In `src-tauri/src/sources/items.rs`, add this test after `insert_telegram_source
     }
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run:
 
@@ -1067,7 +1067,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_small_group_insert_skip
 
 Expected: fail because `TelegramInsertContext` and the context-specific insert function do not exist.
 
-- [ ] **Step 3: Add `TelegramInsertContext`**
+- [x] **Step 3: Add `TelegramInsertContext`**
 
 In `src-tauri/src/sources/items.rs`, add near `ArchiveReadMaintenanceMode`:
 
@@ -1102,7 +1102,7 @@ Extend `ArchiveReadMaintenanceMode`:
     Skip,
 ```
 
-- [ ] **Step 4: Route current helpers through the enum**
+- [x] **Step 4: Route current helpers through the enum**
 
 Change `insert_telegram_source_item_outcome` to call:
 
@@ -1179,7 +1179,7 @@ Change `insert_telegram_source_item_on_connection` signature:
     archive_maintenance: ArchiveReadMaintenanceMode,
 ```
 
-- [ ] **Step 5: Gate derived writes in one place**
+- [x] **Step 5: Gate derived writes in one place**
 
 In `insert_telegram_source_item_on_connection`, replace the unconditional derived writes with:
 
@@ -1209,7 +1209,7 @@ In `insert_telegram_source_item_on_connection`, replace the unconditional derive
     }
 ```
 
-- [ ] **Step 6: Add failing default read tests**
+- [x] **Step 6: Add failing default read tests**
 
 In `src-tauri/src/sources/items/query.rs`, add:
 
@@ -1345,7 +1345,7 @@ In `src-tauri/src/analysis_documents.rs`, add:
 
 For `archive_read_model.rs`, use the existing `seed_archive_source_fixture(&pool).await` helper before inserting the two `telegram_messages` rows. For `analysis_documents.rs`, use `seed_sources(&pool).await`, then call `seed_text_item(&pool, 1, 1, "1", "telegram_message", 100, "Current").await` and `seed_text_item(&pool, 2, 1, "2", "telegram_message", 90, "Migrated").await` before inserting the two `telegram_messages` rows.
 
-- [ ] **Step 7: Run default read tests and verify they fail**
+- [x] **Step 7: Run default read tests and verify they fail**
 
 Run:
 
@@ -1356,7 +1356,7 @@ cargo test --manifest-path src-tauri\Cargo.toml default_items_path_excludes_migr
 
 Expected: fail because readers still include migrated rows.
 
-- [ ] **Step 8: Filter migrated rows from direct item reads**
+- [x] **Step 8: Filter migrated rows from direct item reads**
 
 In `src-tauri/src/sources/items/query.rs`, change the `around_published_at` query to:
 
@@ -1383,7 +1383,7 @@ In the main item query, add to the `WHERE` clause:
           )
 ```
 
-- [ ] **Step 9: Filter migrated rows from archive read model**
+- [x] **Step 9: Filter migrated rows from archive read model**
 
 In `src-tauri/src/archive_read_model.rs`, add the same `NOT EXISTS` filter to:
 
@@ -1392,7 +1392,7 @@ In `src-tauri/src/archive_read_model.rs`, add the same `NOT EXISTS` filter to:
 
 For `load_builder_row_for_item`, keep `fetch_optional` and return `AppError::not_found("Item is not eligible for archive read materialization")` if the row is filtered out.
 
-- [ ] **Step 10: Filter migrated rows from analysis documents**
+- [x] **Step 10: Filter migrated rows from analysis documents**
 
 In `src-tauri/src/analysis_documents.rs`, add the same `NOT EXISTS` filter to:
 
@@ -1401,7 +1401,7 @@ In `src-tauri/src/analysis_documents.rs`, add the same `NOT EXISTS` filter to:
 
 When `upsert_item_backed_document_on_connection` filters out a migrated item, the existing `None` path deletes any stale document for that `item_id`.
 
-- [ ] **Step 11: Run focused tests**
+- [x] **Step 11: Run focused tests**
 
 Run:
 
@@ -1416,7 +1416,7 @@ cargo test --manifest-path src-tauri\Cargo.toml takeout_observation_insert_marks
 
 Expected: all pass.
 
-- [ ] **Step 12: Commit Task 3**
+- [x] **Step 12: Commit Task 3**
 
 Run:
 

@@ -119,6 +119,34 @@ impl TelegramItemInsertOutcome {
 enum ArchiveReadMaintenanceMode {
     MaintainSingleWrite,
     MarkSourceStaleOnly,
+    Skip,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum TelegramInsertContext {
+    CurrentHistory,
+    MigratedSmallGroupHistory,
+}
+
+impl TelegramInsertContext {
+    fn writes_topic_memberships(self) -> bool {
+        matches!(self, Self::CurrentHistory)
+    }
+
+    fn writes_analysis_documents(self) -> bool {
+        matches!(self, Self::CurrentHistory)
+    }
+
+    fn archive_maintenance(
+        self,
+        requested: ArchiveReadMaintenanceMode,
+    ) -> ArchiveReadMaintenanceMode {
+        match self {
+            Self::CurrentHistory => requested,
+            Self::MigratedSmallGroupHistory => ArchiveReadMaintenanceMode::Skip,
+        }
+    }
 }
 
 fn prepare_source_item(item: &SourceItemInsert) -> AppResult<Option<PreparedSourceItem>> {
@@ -236,6 +264,7 @@ pub(crate) async fn insert_telegram_source_item_outcome(
         source_id,
         identity,
         item,
+        TelegramInsertContext::CurrentHistory,
         ArchiveReadMaintenanceMode::MaintainSingleWrite,
     )
     .await;
@@ -263,6 +292,25 @@ pub(crate) async fn insert_telegram_source_item_with_observation(
     identity: TelegramMessageIdentity,
     item: SourceItemInsert,
 ) -> AppResult<TelegramItemInsertOutcome> {
+    insert_telegram_source_item_with_observation_in_context(
+        pool,
+        batch_id,
+        source_id,
+        identity,
+        item,
+        TelegramInsertContext::CurrentHistory,
+    )
+    .await
+}
+
+pub(crate) async fn insert_telegram_source_item_with_observation_in_context(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    source_id: i64,
+    identity: TelegramMessageIdentity,
+    item: SourceItemInsert,
+    insert_context: TelegramInsertContext,
+) -> AppResult<TelegramItemInsertOutcome> {
     let provider_identity = crate::ingest_provenance::telegram_provider_identity(&identity);
     let mut conn = begin_immediate(pool).await?;
 
@@ -272,6 +320,7 @@ pub(crate) async fn insert_telegram_source_item_with_observation(
             source_id,
             identity,
             item,
+            insert_context,
             ArchiveReadMaintenanceMode::MarkSourceStaleOnly,
         )
         .await?;
@@ -302,6 +351,7 @@ async fn insert_telegram_source_item_on_connection(
     source_id: i64,
     identity: TelegramMessageIdentity,
     item: SourceItemInsert,
+    insert_context: TelegramInsertContext,
     archive_maintenance: ArchiveReadMaintenanceMode,
 ) -> AppResult<TelegramItemInsertOutcome> {
     identity.validate()?;
@@ -423,22 +473,28 @@ async fn insert_telegram_source_item_on_connection(
     .await
     .map_err(AppError::database)?;
 
-    crate::topic_memberships::resolve_scoped_topic_memberships_on_connection(
-        conn,
-        source_id,
-        &[item_id],
-        now_secs(),
-    )
-    .await?;
+    if insert_context.writes_topic_memberships() {
+        crate::topic_memberships::resolve_scoped_topic_memberships_on_connection(
+            conn,
+            source_id,
+            &[item_id],
+            now_secs(),
+        )
+        .await?;
+    }
 
-    crate::analysis_documents::upsert_item_backed_document_on_connection(conn, item_id).await?;
-    match archive_maintenance {
+    if insert_context.writes_analysis_documents() {
+        crate::analysis_documents::upsert_item_backed_document_on_connection(conn, item_id).await?;
+    }
+
+    match insert_context.archive_maintenance(archive_maintenance) {
         ArchiveReadMaintenanceMode::MaintainSingleWrite => {
             crate::archive_read_model::upsert_item_on_connection(conn, item_id).await?;
         }
         ArchiveReadMaintenanceMode::MarkSourceStaleOnly => {
             crate::archive_read_model::mark_source_stale_on_connection(conn, source_id).await?;
         }
+        ArchiveReadMaintenanceMode::Skip => {}
     }
 
     Ok(TelegramItemInsertOutcome::Inserted { item_id })
@@ -697,9 +753,11 @@ mod tests {
     use super::{
         decode_media_metadata, encode_media_metadata, insert_source_item,
         insert_telegram_source_item, insert_telegram_source_item_outcome,
-        insert_telegram_source_item_with_observation, reply_peer_context, tl,
+        insert_telegram_source_item_with_observation,
+        insert_telegram_source_item_with_observation_in_context, reply_peer_context, tl,
         upsert_youtube_comment_item, upsert_youtube_transcript_item, ForumTopicFilter,
-        SourceItemInsert, StoredItemRow, TelegramItemContext, TelegramItemInsertOutcome,
+        SourceItemInsert, StoredItemRow, TelegramInsertContext, TelegramItemContext,
+        TelegramItemInsertOutcome,
     };
     use crate::compression::{compress_text, decompress_bytes, decompress_text};
     use crate::media::{
@@ -1316,6 +1374,95 @@ mod tests {
         .await
         .expect("count items");
         assert_eq!(item_count, 2);
+    }
+
+    #[tokio::test]
+    async fn migrated_small_group_insert_skips_current_history_derived_writes() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        create_ingest_provenance_tables(&pool).await;
+        crate::sources::test_support::create_archive_read_model_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        sqlx::query(
+            "INSERT INTO telegram_forum_topics (
+                source_id, topic_id, top_message_id, title, last_seen_at, updated_at
+             ) VALUES (1, 200, 700, 'Roadmap', 100, 100)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed topic");
+        sqlx::query(
+            "INSERT INTO telegram_topic_resolution_state (
+                source_id, resolver_version, status, unresolved_count, pending_item_count
+             ) VALUES (1, 1, 'ready', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed ready state");
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("ready archive");
+        let batch_id = crate::ingest_provenance::create_telegram_takeout_batch(
+            &pool,
+            crate::ingest_provenance::CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+
+        let identity = TelegramMessageIdentity {
+            history_peer_kind: "chat".to_string(),
+            history_peer_id: 777,
+            telegram_message_id: 42,
+            migration_domain: Some(TELEGRAM_MIGRATION_DOMAIN_MIGRATED_FROM_CHAT.to_string()),
+            is_migrated_history: true,
+        };
+        let mut item = telegram_insert("42", "historical body");
+        item.telegram_context.reply_to_top_id = Some(200);
+
+        let outcome = insert_telegram_source_item_with_observation_in_context(
+            &pool,
+            batch_id,
+            1,
+            identity,
+            item,
+            TelegramInsertContext::MigratedSmallGroupHistory,
+        )
+        .await
+        .expect("insert migrated row");
+        assert!(outcome.is_inserted());
+
+        let analysis_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM analysis_documents WHERE source_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("count analysis docs");
+        let archive_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM archive_read_items WHERE source_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("count archive rows");
+        let membership_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM item_topic_memberships WHERE source_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("count memberships");
+        let state: (String, i64, i64) = sqlx::query_as(
+            "SELECT status, unresolved_count, pending_item_count
+             FROM telegram_topic_resolution_state
+             WHERE source_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load topic state");
+
+        assert_eq!(analysis_count, 0);
+        assert_eq!(archive_count, 0);
+        assert_eq!(membership_count, 0);
+        assert_eq!(state, ("ready".to_string(), 0, 0));
     }
 
     #[tokio::test]

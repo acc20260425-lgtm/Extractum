@@ -254,6 +254,11 @@ async fn rebuild_source_in_transaction(
           ON forum_topics.source_id = memberships.source_id
          AND forum_topics.topic_id = memberships.topic_id
         WHERE items.source_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM telegram_messages tm
+            WHERE tm.item_id = items.id
+              AND tm.is_migrated_history = 1
+          )
         ORDER BY items.published_at DESC, items.id DESC
         "#,
     )
@@ -351,13 +356,19 @@ async fn load_builder_row_for_item(
           ON forum_topics.source_id = memberships.source_id
          AND forum_topics.topic_id = memberships.topic_id
         WHERE items.id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM telegram_messages tm
+            WHERE tm.item_id = items.id
+              AND tm.is_migrated_history = 1
+          )
         LIMIT 1
         "#,
     )
     .bind(item_id)
-    .fetch_one(conn)
+    .fetch_optional(conn)
     .await
-    .map_err(AppError::database)
+    .map_err(AppError::database)?
+    .ok_or_else(|| AppError::not_found("Item is not eligible for archive read materialization"))
 }
 
 async fn upsert_archive_row_on_connection(
@@ -681,6 +692,33 @@ mod tests {
         assert_eq!(state.row_count, 2);
         assert!(state.built_at.is_some());
         assert_eq!(state.last_error, None);
+    }
+
+    #[tokio::test]
+    async fn rebuild_source_excludes_migrated_history_rows() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_archive_source_fixture(&pool).await;
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (1, 1, 'channel', 12345, 10, NULL, 0),
+                      (2, 1, 'chat', 777, 10, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed telegram messages");
+
+        rebuild_source(&pool, 1).await.expect("rebuild source");
+
+        let item_ids: Vec<i64> = sqlx::query_scalar(
+            "SELECT item_id FROM archive_read_items WHERE source_id = 1 ORDER BY item_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("load archive rows");
+
+        assert_eq!(item_ids, vec![1]);
     }
 
     #[tokio::test]

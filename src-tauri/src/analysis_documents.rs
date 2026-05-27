@@ -226,6 +226,11 @@ async fn insert_item_backed_documents_for_source(
           AND items.content_zstd IS NOT NULL
           AND items.content_kind IN ('text_only', 'text_with_media')
           AND items.item_kind IN ('telegram_message', 'youtube_comment')
+          AND NOT EXISTS (
+            SELECT 1 FROM telegram_messages tm
+            WHERE tm.item_id = items.id
+              AND tm.is_migrated_history = 1
+          )
         ORDER BY items.id
         "#,
     )
@@ -262,6 +267,11 @@ pub(crate) async fn upsert_item_backed_document_on_connection(
           AND items.content_zstd IS NOT NULL
           AND items.content_kind IN ('text_only', 'text_with_media')
           AND items.item_kind IN ('telegram_message', 'youtube_comment')
+          AND NOT EXISTS (
+            SELECT 1 FROM telegram_messages tm
+            WHERE tm.item_id = items.id
+              AND tm.is_migrated_history = 1
+          )
         "#,
     )
     .bind(item_id)
@@ -971,6 +981,40 @@ mod tests {
         assert_eq!(content[0], "Telegram text");
         assert_eq!(content[2], "early");
         assert_eq!(content[3], "late");
+    }
+
+    #[tokio::test]
+    async fn rebuild_analysis_documents_excludes_migrated_history_rows() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_schema(&pool)
+            .await
+            .expect("create analysis docs");
+        seed_sources(&pool).await;
+        seed_text_item(&pool, 1, 1, "1", "telegram_message", 100, "Current").await;
+        seed_text_item(&pool, 2, 1, "2", "telegram_message", 90, "Migrated").await;
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (1, 1, 'channel', 12345, 10, NULL, 0),
+                      (2, 1, 'chat', 777, 10, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed telegram messages");
+
+        rebuild_analysis_documents_for_source(&pool, 1)
+            .await
+            .expect("rebuild docs");
+
+        let item_ids: Vec<i64> = sqlx::query_scalar(
+            "SELECT item_id FROM analysis_documents WHERE source_id = 1 ORDER BY item_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("load docs");
+
+        assert_eq!(item_ids, vec![1]);
     }
 
     #[tokio::test]
