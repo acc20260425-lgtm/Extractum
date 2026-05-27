@@ -6,6 +6,8 @@
   import TakeoutRecoveryNotice from "$lib/components/analysis/takeout-recovery-notice.svelte";
   import {
     isActiveTakeoutImportJob,
+    migratedHistoryActionDisabledReason,
+    migratedHistoryActionLabel,
     visibleTakeoutRecoveryForSource,
   } from "$lib/analysis-state";
   import { membershipLabel, sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
@@ -34,6 +36,7 @@
     syncingIds,
     deletingSourceIds,
     startingTakeoutSourceIds,
+    startingMigratedHistorySourceIds,
     takeoutJobsBySource,
     takeoutRecoveryBySource,
     sourceJobsBySource,
@@ -50,6 +53,7 @@
     onSelectGroup,
     onSyncSource,
     onStartTakeoutImport,
+    onStartMigratedHistoryImport,
     onCancelTakeoutImport,
     onCancelSourceJob,
     onOpenSourceManager,
@@ -68,6 +72,7 @@
     syncingIds: Record<number, boolean>;
     deletingSourceIds: Record<number, boolean>;
     startingTakeoutSourceIds: Record<number, boolean>;
+    startingMigratedHistorySourceIds: Record<number, boolean>;
     takeoutJobsBySource: Record<number, TakeoutImportJobRecord>;
     takeoutRecoveryBySource: Record<number, TakeoutImportRecoveryState>;
     sourceJobsBySource: Record<number, SourceJobRecord[]>;
@@ -84,6 +89,7 @@
     onSelectGroup: (groupId: number) => void;
     onSyncSource: (sourceId: number) => void;
     onStartTakeoutImport: (sourceId: number) => void;
+    onStartMigratedHistoryImport: (sourceId: number) => void;
     onCancelTakeoutImport: (jobId: string) => void;
     onCancelSourceJob: (jobId: string) => void;
     onOpenSourceManager: () => void;
@@ -351,6 +357,26 @@
                   >
                     <Archive size={13} aria-hidden="true" />
                     {startingTakeoutSourceIds[source.id] ? "Starting..." : "Takeout"}
+                  </Button>
+                {/if}
+                {#if source.migratedHistoryStatus === "available"}
+                  {@const migratedHistoryReason = migratedHistoryActionDisabledReason(
+                    source,
+                    sourceJobActive,
+                    takeoutActive,
+                    !!startingMigratedHistorySourceIds[source.id],
+                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onclick={() => onStartMigratedHistoryImport(source.id)}
+                    disabled={migratedHistoryReason !== null}
+                    title={migratedHistoryReason ?? undefined}
+                  >
+                    <Archive size={13} aria-hidden="true" />
+                    {startingMigratedHistorySourceIds[source.id]
+                      ? "Starting historical import..."
+                      : migratedHistoryActionLabel()}
                   </Button>
                 {/if}
               {/if}

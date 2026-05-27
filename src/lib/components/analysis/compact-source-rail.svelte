@@ -27,6 +27,7 @@
     syncingIds,
     deletingSourceIds,
     startingTakeoutSourceIds,
+    startingMigratedHistorySourceIds,
     takeoutJobsBySource,
     takeoutRecoveryBySource,
     sourceJobsBySource,
@@ -43,6 +44,7 @@
     onSelectGroup,
     onSyncSource,
     onStartTakeoutImport,
+    onStartMigratedHistoryImport,
     onCancelTakeoutImport,
     onCancelSourceJob,
     onOpenSourceManager,
@@ -60,6 +62,7 @@
     syncingIds: Record<number, boolean>;
     deletingSourceIds: Record<number, boolean>;
     startingTakeoutSourceIds: Record<number, boolean>;
+    startingMigratedHistorySourceIds: Record<number, boolean>;
     takeoutJobsBySource: Record<number, TakeoutImportJobRecord>;
     takeoutRecoveryBySource: Record<number, TakeoutImportRecoveryState>;
     sourceJobsBySource: Record<number, SourceJobRecord[]>;
@@ -76,6 +79,7 @@
     onSelectGroup: (groupId: number) => void;
     onSyncSource: (sourceId: number) => void;
     onStartTakeoutImport: (sourceId: number) => void;
+    onStartMigratedHistoryImport: (sourceId: number) => void;
     onCancelTakeoutImport: (jobId: string) => void;
     onCancelSourceJob: (jobId: string) => void;
     onOpenSourceManager: () => void;
@@ -312,6 +316,7 @@
       {syncingIds}
       {deletingSourceIds}
       {startingTakeoutSourceIds}
+      {startingMigratedHistorySourceIds}
       {takeoutJobsBySource}
       {takeoutRecoveryBySource}
       {sourceJobsBySource}
@@ -328,6 +333,7 @@
       onSelectGroup={selectGroupAndClose}
       {onSyncSource}
       {onStartTakeoutImport}
+      {onStartMigratedHistoryImport}
       {onCancelTakeoutImport}
       {onCancelSourceJob}
       {onOpenSourceManager}

@@ -14,6 +14,8 @@ describe("analysis source access placement", () => {
     expect(analysisPageSource).toContain("workspaceSelection={workspaceUiState.workspaceSelection}");
     expect(analysisPageSource).toContain("onSelectSource={(sourceId) => void selectSource(sourceId)}");
     expect(analysisPageSource).toContain("onSelectGroup={selectGroup}");
+    expect(analysisPageSource).toContain("{startingMigratedHistorySourceIds}");
+    expect(analysisPageSource).toContain("onStartMigratedHistoryImport={(sourceId) => void startMigratedHistoryImport(sourceId)}");
     expect(analysisPageSource).toContain("sourceJobsBySource");
   });
 

@@ -586,6 +586,25 @@ export function sourceSyncStatus(result: SyncSourceResult) {
   );
 }
 
+export function migratedHistoryActionLabel() {
+  return "Import migrated history";
+}
+
+export function migratedHistoryActionDisabledReason(
+  source: Source,
+  sourceJobActive: boolean,
+  takeoutActive: boolean,
+  startingHistoricalImport: boolean,
+) {
+  if (source.migratedHistoryStatus !== "available") {
+    return "Migrated history is not available.";
+  }
+  if (sourceJobActive) return "Source job is active.";
+  if (takeoutActive) return "Takeout import is active.";
+  if (startingHistoricalImport) return "Starting migrated history import.";
+  return null;
+}
+
 export function sourceDeletionResetState(
   deletedSourceId: number,
   selectedSourceId: string,

@@ -52,6 +52,7 @@
     listTakeoutImportRecoveryStates,
     listTakeoutSourceImportJobs,
     listenToTakeoutImportEvents,
+    startTakeoutMigratedHistoryImport,
     startTakeoutSourceImport,
   } from "$lib/api/takeout-import";
   import {
@@ -371,6 +372,7 @@
   let syncingIds = $state<Record<number, boolean>>({});
   let deletingSourceIds = $state<Record<number, boolean>>({});
   let startingTakeoutSourceIds = $state<Record<number, boolean>>({});
+  let startingMigratedHistorySourceIds = $state<Record<number, boolean>>({});
   let takeoutJobsBySource = $state<Record<number, TakeoutImportJobRecord>>({});
   let takeoutRecoveryBySource = $state<Record<number, TakeoutImportRecoveryState>>({});
   let sourceJobsBySource = $state<Record<number, SourceJobRecord[]>>({});
@@ -2093,6 +2095,22 @@
     }
   }
 
+  async function startMigratedHistoryImport(sourceId: number) {
+    startingMigratedHistorySourceIds = sourceActionPending(startingMigratedHistorySourceIds, sourceId);
+    try {
+      await startTakeoutMigratedHistoryImport(sourceId);
+      status = "Migrated history import started.";
+      void loadTakeoutImportRecoveryStates();
+    } catch (error) {
+      status = formatAppError("starting migrated history import", error);
+    } finally {
+      startingMigratedHistorySourceIds = clearSourceActionPending(
+        startingMigratedHistorySourceIds,
+        sourceId,
+      );
+    }
+  }
+
   async function cancelTakeoutImport(jobId: string) {
     try {
       const result = await cancelTakeoutSourceImport(jobId);
@@ -2515,6 +2533,7 @@
     {syncingIds}
     {deletingSourceIds}
     {startingTakeoutSourceIds}
+    {startingMigratedHistorySourceIds}
     {takeoutJobsBySource}
     {takeoutRecoveryBySource}
     {sourceJobsBySource}
@@ -2531,6 +2550,7 @@
     onSelectGroup={selectGroup}
     onSyncSource={(sourceId) => void syncSelectedSource(sourceId)}
     onStartTakeoutImport={(sourceId) => void startTakeoutImport(sourceId)}
+    onStartMigratedHistoryImport={(sourceId) => void startMigratedHistoryImport(sourceId)}
     onCancelTakeoutImport={(jobId) => void cancelTakeoutImport(jobId)}
     onCancelSourceJob={(jobId) => void cancelYoutubeSourceJob(jobId)}
     onOpenSourceManager={() => (sourceManagerOpen = true)}

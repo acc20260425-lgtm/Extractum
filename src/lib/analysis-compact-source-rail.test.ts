@@ -34,7 +34,18 @@ describe("compact analysis source rail", () => {
     expect(sourceSwitcherPanelSource).toContain("sourceJobsBySource");
     expect(sourceSwitcherPanelSource).toContain("onSyncSource(source.id)");
     expect(sourceSwitcherPanelSource).toContain("onStartTakeoutImport(source.id)");
+    expect(sourceSwitcherPanelSource).toContain("onStartMigratedHistoryImport(source.id)");
+    expect(sourceSwitcherPanelSource).toContain("migratedHistoryActionLabel()");
+    expect(sourceSwitcherPanelSource).not.toContain("Retry migrated history");
+    expect(sourceSwitcherPanelSource).not.toContain("Sync migrated history");
     expect(sourceSwitcherPanelSource).toContain("onDeleteSource(source)");
+  });
+
+  it("passes migrated history action state through the compact rail", () => {
+    expect(compactRailSource).toContain("startingMigratedHistorySourceIds");
+    expect(compactRailSource).toContain("onStartMigratedHistoryImport");
+    expect(sourceSwitcherPanelSource).toContain("migratedHistoryActionDisabledReason");
+    expect(sourceSwitcherPanelSource).toContain("migratedHistoryActionLabel");
   });
 
   it("keeps detailed Takeout import progress in the expanded source panel", () => {

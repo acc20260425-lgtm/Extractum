@@ -2833,7 +2833,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/components/analysis/compact-source-rail.svelte`
 - Modify: `src/routes/analysis/+page.svelte`
 
-- [ ] **Step 1: Add UX policy tests**
+- [x] **Step 1: Add UX policy tests**
 
 In `src/lib/analysis-state.test.ts`, add:
 
@@ -2874,7 +2874,7 @@ In `src/lib/analysis-state.test.ts`, add:
 
 Use the existing `sourceRecord(...)` helper in this file.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -2884,7 +2884,7 @@ npm.cmd test -- src/lib/analysis-state.test.ts
 
 Expected: fail because the helper functions do not exist.
 
-- [ ] **Step 3: Add UX helper functions**
+- [x] **Step 3: Add UX helper functions**
 
 In `src/lib/analysis-state.ts`, add:
 
@@ -2913,7 +2913,7 @@ export function migratedHistoryActionDisabledReason(
 
 `Source` is already imported in this file; keep that existing import.
 
-- [ ] **Step 4: Wire route state**
+- [x] **Step 4: Wire route state**
 
 In `src/routes/analysis/+page.svelte`, import:
 
@@ -2951,7 +2951,7 @@ Pass to source panels:
 onStartMigratedHistoryImport={handleStartMigratedHistoryImport}
 ```
 
-- [ ] **Step 5: Render the action in `source-switcher-panel.svelte`**
+- [x] **Step 5: Render the action in `source-switcher-panel.svelte`**
 
 Add props:
 
@@ -2995,7 +2995,7 @@ Near the existing Takeout button, add:
 
 Use the same button class as the existing Takeout action in this component.
 
-- [ ] **Step 6: Propagate through compact rail**
+- [x] **Step 6: Propagate through compact rail**
 
 `src/lib/components/analysis/compact-source-rail.svelte` renders `SourceSwitcherPanel`; add the same props and pass them through unchanged:
 
@@ -3004,7 +3004,7 @@ Use the same button class as the existing Takeout action in this component.
       {onStartMigratedHistoryImport}
 ```
 
-- [ ] **Step 7: Add route/component tests**
+- [x] **Step 7: Add route/component tests**
 
 In the existing route/component tests that cover source action placement, add one expectation:
 
@@ -3016,7 +3016,7 @@ expect(rendered.text()).not.toContain("Sync migrated history");
 
 Use the established test renderer in `src/lib/analysis-source-access-placement.test.ts` or `src/lib/analysis-compact-source-rail.test.ts`.
 
-- [ ] **Step 8: Run frontend tests**
+- [x] **Step 8: Run frontend tests**
 
 Run:
 
@@ -3027,7 +3027,7 @@ npm.cmd run check
 
 Expected: all listed tests pass and `svelte-check` exits 0.
 
-- [ ] **Step 9: Commit Task 8**
+- [x] **Step 9: Commit Task 8**
 
 Run:
 

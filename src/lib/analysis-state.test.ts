@@ -36,6 +36,8 @@ import {
   reportLaunchDisabledReason,
   runDeletionDecision,
   runDeletedStatus,
+  migratedHistoryActionDisabledReason,
+  migratedHistoryActionLabel,
   shouldShowTopicSelector,
   selectedAnalysisGroup,
   selectedAnalysisTemplate,
@@ -911,6 +913,39 @@ describe("analysis-state", () => {
     }))).toBe(
       "Sync complete: inserted 10, skipped 2. First sync policy applied: recent_days:30. Warnings: one two",
     );
+  });
+
+  it("labels migrated history action as historical import, not retry or sync", () => {
+    expect(migratedHistoryActionLabel()).toBe("Import migrated history");
+    expect(migratedHistoryActionLabel().toLowerCase()).not.toContain("retry");
+    expect(migratedHistoryActionLabel().toLowerCase()).not.toContain("sync");
+  });
+
+  it("enables migrated history action only for available capability without active source work", () => {
+    const source = sourceRecord({
+      sourceType: "telegram",
+      sourceSubtype: "supergroup",
+      migratedHistoryStatus: "available",
+    });
+
+    expect(migratedHistoryActionDisabledReason(source, false, false, false)).toBeNull();
+    expect(migratedHistoryActionDisabledReason(source, true, false, false)).toBe(
+      "Source job is active.",
+    );
+    expect(migratedHistoryActionDisabledReason(source, false, true, false)).toBe(
+      "Takeout import is active.",
+    );
+    expect(migratedHistoryActionDisabledReason(source, false, false, true)).toBe(
+      "Starting migrated history import.",
+    );
+    expect(
+      migratedHistoryActionDisabledReason(
+        sourceRecord({ migratedHistoryStatus: "none" }),
+        false,
+        false,
+        false,
+      ),
+    ).toBe("Migrated history is not available.");
   });
 
   it("formats run progress from counters, queue position, terminal events, or prior progress", () => {
