@@ -565,13 +565,16 @@ async fn run_takeout_migrated_history_import_job(
     emit_takeout_import_event(&handle, &running_record);
     let batch_id = running_record.batch_id;
     let source_id = running_record.source_id;
-    match run_takeout_migrated_history_validation_only(&handle, &job_id, batch_id).await {
+    match run_takeout_migrated_history_import(&handle, &job_id, batch_id).await {
         Ok(outcome) => {
             if let Some(record) = takeout_state
                 .finish_job(&job_id, |job| {
                     job.status = STATUS_COMPLETED.to_string();
                     job.phase = PHASE_COMPLETED.to_string();
-                    job.message = Some("Migrated history validation completed.".to_string());
+                    job.message = Some(format!(
+                        "Migrated history import completed. Inserted {}, skipped {}.",
+                        outcome.inserted, outcome.skipped
+                    ));
                     job.inserted = outcome.inserted;
                     job.skipped = outcome.skipped;
                     job.progress_current = outcome.progress_total;
@@ -628,7 +631,7 @@ struct TakeoutImportOutcome {
     warnings: Vec<String>,
 }
 
-async fn run_takeout_migrated_history_validation_only(
+async fn run_takeout_migrated_history_import(
     handle: &AppHandle,
     job_id: &str,
     batch_id: i64,
@@ -725,6 +728,113 @@ async fn run_takeout_migrated_history_validation_only(
     )
     .await?;
 
+    let input_peer = tl::enums::InputPeer::Chat(tl::types::InputPeerChat {
+        chat_id: validation.migrated_from_chat_id,
+    });
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_LOADING_SPLITS.to_string();
+        job.message = Some("Loading migrated history Takeout message ranges.".to_string());
+        job.warnings = warnings.to_vec();
+    })
+    .await;
+    let split_ranges = export_dc_invoke_with_provenance(
+        &pool,
+        batch_id,
+        &client,
+        &alias,
+        &tl::functions::InvokeWithTakeout {
+            takeout_id,
+            query: tl::functions::messages::GetSplitRanges {},
+        },
+        &mut warnings,
+        &mut fallback_used,
+        &mut export_attempts,
+    )
+    .await?;
+    let split_count = split_ranges.len() as i64;
+    let selected_ranges = select_history_splits(TELEGRAM_KIND_GROUP, split_ranges)?;
+    let selected_split_count = selected_ranges.len() as i64;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_COUNTING.to_string();
+        job.message = Some("Counting migrated history messages.".to_string());
+        job.warnings = warnings.to_vec();
+    })
+    .await;
+    let mut counted_ranges = Vec::new();
+    let mut total = 0_i64;
+    let mut only_my_messages_recorded = false;
+    for range in selected_ranges {
+        let probe = takeout_history_count_probe(
+            &pool,
+            batch_id,
+            &client,
+            &alias,
+            takeout_id,
+            input_peer.clone(),
+            range.clone(),
+            TELEGRAM_KIND_GROUP,
+            &mut warnings,
+            &mut fallback_used,
+            &mut export_attempts,
+            &mut only_my_messages_recorded,
+        )
+        .await?;
+        total += probe.count;
+        counted_ranges.push(CountedMessageRange {
+            range,
+            count: probe.count,
+            only_my_messages: probe.only_my_messages,
+        });
+    }
+    update_takeout_split_metadata(
+        &pool,
+        batch_id,
+        split_count,
+        selected_split_count,
+        Some(total),
+    )
+    .await?;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_IMPORTING_HISTORY.to_string();
+        job.message = Some("Importing migrated history.".to_string());
+        job.progress_current = Some(0);
+        job.progress_total = Some(total);
+        job.warnings = warnings.to_vec();
+    })
+    .await;
+    let import = import_takeout_history_ranges(
+        handle,
+        job_id,
+        batch_id,
+        &client,
+        &alias,
+        takeout_id,
+        input_peer,
+        counted_ranges,
+        &source,
+        total,
+        TELEGRAM_KIND_GROUP,
+        &mut warnings,
+        &mut fallback_used,
+        &mut export_attempts,
+        &mut only_my_messages_recorded,
+        Some(validation.migrated_from_chat_id),
+    )
+    .await?;
+
+    if takeout_state.is_cancel_requested(job_id).await {
+        return Err(AppError::validation("Takeout import cancelled"));
+    }
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_FINISHING_TAKEOUT.to_string();
+        job.message = Some("Finishing Takeout session.".to_string());
+        job.warnings = warnings.to_vec();
+    })
+    .await;
     let fallback_before = fallback_used;
     record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut export_attempts).await?;
     finish_takeout_session(&client, &alias, takeout_id, true, &mut warnings, &mut fallback_used)
@@ -742,9 +852,9 @@ async fn run_takeout_migrated_history_validation_only(
     finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None).await?;
 
     Ok(TakeoutImportOutcome {
-        inserted: 0,
-        skipped: 0,
-        progress_total: Some(0),
+        inserted: import.inserted,
+        skipped: import.skipped,
+        progress_total: Some(total),
         warnings,
     })
 }
@@ -1081,6 +1191,7 @@ async fn run_started_takeout_source_import_inner(
         fallback_used,
         export_attempts,
         &mut only_my_messages_recorded,
+        None,
     )
     .await?;
 
@@ -1412,6 +1523,7 @@ async fn import_takeout_history_ranges(
     fallback_used: &mut bool,
     export_attempts: &mut ExportDcAttemptState,
     only_my_messages_recorded: &mut bool,
+    migrated_from_chat_id: Option<i64>,
 ) -> AppResult<TakeoutHistoryImport> {
     let mut imported = TakeoutHistoryImport {
         inserted: 0,
@@ -1437,6 +1549,7 @@ async fn import_takeout_history_ranges(
             fallback_used,
             export_attempts,
             only_my_messages_recorded,
+            migrated_from_chat_id,
         )
         .await?;
     }
@@ -1461,6 +1574,7 @@ async fn import_takeout_history_pages(
     fallback_used: &mut bool,
     export_attempts: &mut ExportDcAttemptState,
     only_my_messages_recorded: &mut bool,
+    migrated_from_chat_id: Option<i64>,
 ) -> AppResult<TakeoutHistoryImport> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let pool = get_pool(handle).await?;
@@ -1534,16 +1648,37 @@ async fn import_takeout_history_pages(
             }
             match raw_parse::parse_raw_message(&source.title, message) {
                 Ok(Some(item)) => {
-                    let identity = item.telegram_identity.clone().ok_or_else(|| {
+                    let parsed_identity = item.telegram_identity.clone().ok_or_else(|| {
                         AppError::validation(
                             "Parsed Takeout Telegram item is missing native message identity",
                         )
                     })?;
-                    match crate::sources::insert_telegram_source_item_with_observation(
-                        &pool, batch_id, source.id, identity, item,
-                    )
-                    .await?
+                    let insert_outcome = if let Some(migrated_from_chat_id) = migrated_from_chat_id
                     {
+                        let identity = migrated_history::migrated_small_group_identity(
+                            parsed_identity.telegram_message_id,
+                            migrated_from_chat_id,
+                        );
+                        crate::sources::insert_telegram_source_item_with_observation_in_context(
+                            &pool,
+                            batch_id,
+                            source.id,
+                            identity,
+                            item,
+                            crate::sources::TelegramInsertContext::MigratedSmallGroupHistory,
+                        )
+                        .await?
+                    } else {
+                        crate::sources::insert_telegram_source_item_with_observation(
+                            &pool,
+                            batch_id,
+                            source.id,
+                            parsed_identity,
+                            item,
+                        )
+                        .await?
+                    };
+                    match insert_outcome {
                         crate::sources::TelegramItemInsertOutcome::Inserted { .. } => {
                             imported.inserted += 1;
                         }

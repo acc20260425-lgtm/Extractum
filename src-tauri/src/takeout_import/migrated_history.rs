@@ -38,6 +38,19 @@ pub(crate) fn validate_revalidated_chat_id(
     }
 }
 
+pub(crate) fn migrated_small_group_identity(
+    telegram_message_id: i64,
+    migrated_from_chat_id: i64,
+) -> crate::sources::TelegramMessageIdentity {
+    crate::sources::TelegramMessageIdentity {
+        history_peer_kind: "chat".to_string(),
+        history_peer_id: migrated_from_chat_id,
+        telegram_message_id,
+        migration_domain: Some("migrated_from_chat".to_string()),
+        is_migrated_history: true,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, sqlx::FromRow)]
 pub(crate) struct MigratedHistoryCapability {
     pub(crate) source_id: i64,
@@ -207,6 +220,20 @@ mod tests {
                 .kind,
             crate::error::AppErrorKind::Conflict
         );
+    }
+
+    #[test]
+    fn migrated_small_group_identity_uses_native_old_chat_scope() {
+        let identity = migrated_small_group_identity(42, 777);
+
+        assert_eq!(identity.history_peer_kind, "chat");
+        assert_eq!(identity.history_peer_id, 777);
+        assert_eq!(identity.telegram_message_id, 42);
+        assert_eq!(
+            identity.migration_domain.as_deref(),
+            Some("migrated_from_chat")
+        );
+        assert!(identity.is_migrated_history);
     }
 
     async fn seed_telegram_source(pool: &sqlx::SqlitePool) {

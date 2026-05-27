@@ -38,8 +38,9 @@ pub(crate) use identity_repair::{require_source_identity_ready, SourceIdentityRe
 #[allow(unused_imports)]
 pub(crate) use items::{
     insert_source_item, insert_telegram_source_item, insert_telegram_source_item_outcome,
-    insert_telegram_source_item_with_observation, upsert_youtube_comment_item,
-    upsert_youtube_transcript_item, SourceItemInsert, TelegramItemContext,
+    insert_telegram_source_item_with_observation,
+    insert_telegram_source_item_with_observation_in_context, upsert_youtube_comment_item,
+    upsert_youtube_transcript_item, SourceItemInsert, TelegramInsertContext, TelegramItemContext,
     TelegramItemInsertOutcome,
 };
 pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};

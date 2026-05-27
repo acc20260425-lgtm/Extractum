@@ -2279,7 +2279,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/takeout_import/migrated_history.rs`
 - Modify: `src-tauri/src/sources/items.rs`
 
-- [ ] **Step 1: Add identity override unit test**
+- [x] **Step 1: Add identity override unit test**
 
 In `src-tauri/src/takeout_import/migrated_history.rs`, add:
 
@@ -2317,7 +2317,7 @@ Add test:
     }
 ```
 
-- [ ] **Step 2: Run the identity test**
+- [x] **Step 2: Run the identity test**
 
 Run:
 
@@ -2327,7 +2327,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_small_group_identity_us
 
 Expected: pass after the helper is added.
 
-- [ ] **Step 3: Add importer idempotency storage test**
+- [x] **Step 3: Add importer idempotency storage test**
 
 In `src-tauri/src/sources/items.rs`, add:
 
@@ -2398,7 +2398,7 @@ In `src-tauri/src/sources/items.rs`, add:
     }
 ```
 
-- [ ] **Step 4: Run idempotency storage test**
+- [x] **Step 4: Run idempotency storage test**
 
 Run:
 
@@ -2408,7 +2408,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_insert_idempotency_uses
 
 Expected: pass after Task 3 and Step 1 are in place.
 
-- [ ] **Step 5: Replace validation-only historical runner with import runner**
+- [x] **Step 5: Replace validation-only historical runner with import runner**
 
 In `src-tauri/src/takeout_import/mod.rs`, replace `run_takeout_migrated_history_validation_only` with `run_takeout_migrated_history_import`. Keep the validation code, then build:
 
@@ -2450,7 +2450,7 @@ Change `import_takeout_history_ranges` and `import_takeout_history_pages` signat
 
 For current Takeout calls, pass `None`.
 
-- [ ] **Step 6: Override identity and insert context in page import**
+- [x] **Step 6: Override identity and insert context in page import**
 
 In `import_takeout_history_pages`, after parsing a message, replace:
 
@@ -2496,7 +2496,7 @@ Replace `insert_telegram_source_item_with_observation` with:
                     .await?
 ```
 
-- [ ] **Step 7: Prevent current watermark and topic refresh for historical import**
+- [x] **Step 7: Prevent current watermark and topic refresh for historical import**
 
 In the historical import runner, after successful `finish_takeout_session(success=true)`, do:
 
@@ -2516,7 +2516,7 @@ Set the completion message:
 "Migrated history import completed. Inserted {}, skipped {}."
 ```
 
-- [ ] **Step 8: Run focused tests and check**
+- [x] **Step 8: Run focused tests and check**
 
 Run:
 
@@ -2529,7 +2529,7 @@ cargo check --manifest-path src-tauri\Cargo.toml
 
 Expected: all pass.
 
-- [ ] **Step 9: Commit Task 6**
+- [x] **Step 9: Commit Task 6**
 
 Run:
 

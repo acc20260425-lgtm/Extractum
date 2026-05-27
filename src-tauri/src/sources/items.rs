@@ -1466,6 +1466,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn migrated_insert_idempotency_uses_old_chat_native_identity() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_item_source(&pool, 1).await;
+        let batch_id = crate::ingest_provenance::create_telegram_takeout_batch(
+            &pool,
+            crate::ingest_provenance::CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+        let identity =
+            crate::takeout_import::migrated_history::migrated_small_group_identity(42, 777);
+
+        let inserted = insert_telegram_source_item_with_observation_in_context(
+            &pool,
+            batch_id,
+            1,
+            identity.clone(),
+            telegram_insert("42", "historical"),
+            TelegramInsertContext::MigratedSmallGroupHistory,
+        )
+        .await
+        .expect("insert");
+        let item_id = match inserted {
+            TelegramItemInsertOutcome::Inserted { item_id } => item_id,
+            other => panic!("expected insert, got {other:?}"),
+        };
+
+        let duplicate = insert_telegram_source_item_with_observation_in_context(
+            &pool,
+            batch_id,
+            1,
+            identity,
+            telegram_insert("42", "historical duplicate"),
+            TelegramInsertContext::MigratedSmallGroupHistory,
+        )
+        .await
+        .expect("duplicate");
+
+        assert_eq!(
+            duplicate,
+            TelegramItemInsertOutcome::DuplicateObserved { item_id }
+        );
+
+        let row: (String, i64, i64, String, i64) = sqlx::query_as(
+            "SELECT history_peer_kind, history_peer_id, telegram_message_id,
+                    migration_domain, is_migrated_history
+             FROM telegram_messages
+             WHERE item_id = ?",
+        )
+        .bind(item_id)
+        .fetch_one(&pool)
+        .await
+        .expect("load telegram row");
+
+        assert_eq!(
+            row,
+            (
+                "chat".to_string(),
+                777,
+                42,
+                "migrated_from_chat".to_string(),
+                1,
+            )
+        );
+    }
+
+    #[tokio::test]
     async fn youtube_transcript_upsert_targets_non_telegram_partial_unique_index() {
         let pool = memory_pool_with_source_items_and_topics().await;
         sqlx::query("DROP INDEX IF EXISTS idx_items_ext")
