@@ -95,14 +95,13 @@ intentional historical-scope boundary, not as a transient failure.
 The primary storage identity should remain native and scoped. The importer must
 not rewrite old `chat` messages into current `channel` identity.
 
-The durable uniqueness model should be equivalent to:
+The primary duplicate identity remains native Telegram identity:
 
 ```text
 source_id
 history_peer_kind
 history_peer_id
 telegram_message_id
-history_domain
 ```
 
 Existing fields such as `history_peer_kind`, `history_peer_id`,
@@ -110,7 +109,13 @@ Existing fields such as `history_peer_kind`, `history_peer_id`,
 used where possible. Schema changes are acceptable only if the implementation
 proves the current model cannot express the historical-domain contract clearly.
 
-Expected domains:
+Historical domain is a required classification and invariant, not part of the
+dedupe key by default. It must not be added to a unique index unless an
+implementation proves that one native Telegram message
+`(history_peer_kind, history_peer_id, telegram_message_id)` can legitimately
+belong to two historical domains inside the same source.
+
+Expected history-domain semantics:
 
 - `current_history` for the current supergroup history;
 - `migrated_small_group_history` for the old group history.
@@ -121,6 +126,32 @@ native Telegram histories.
 
 If a merged timeline needs a single display id later, that id should be a
 read-model or export-model projection, not the primary storage key.
+
+## Schema Impact
+
+The first implementation should prefer existing columns:
+
+- `history_peer_kind`;
+- `history_peer_id`;
+- `telegram_message_id`;
+- `migration_domain`;
+- `is_migrated_history`.
+
+`migration_domain` is currently documented as diagnostic / future-proofing
+metadata and is not used for duplicate detection, topic matching, or reference
+resolution. If the historical importer makes `migration_domain` a functional
+storage contract, the implementation plan must explicitly decide:
+
+- whether to reuse `migration_domain` or add a separate field;
+- the allowed values, starting with `migrated_from_chat`;
+- whether a database `CHECK` constraint is needed;
+- which schema docs and tests need updates;
+- whether analysis rows, archive read models, export DTOs, and diagnostics
+  should expose, filter, or preserve the domain marker.
+
+If the first implementation keeps `migration_domain` as classification metadata
+only, tests must still prove that old rows are marked consistently with
+`is_migrated_history = 1` and native old-`chat` identity.
 
 ## Provenance Contract
 
@@ -148,6 +179,33 @@ warning = migrated_history_deferred
 Historical import failure must not retroactively mark a current-history batch
 as failed. It should produce its own failed or partial historical batch with
 sanitized warning codes.
+
+## Historical Capability And Availability
+
+The opt-in UI and backend need durable knowledge that a migrated historical
+scope exists. The first implementation plan must choose where this availability
+state lives.
+
+Acceptable first version:
+
+- current normal Takeout detection records durable provenance that
+  `migrated_history_detected = 1`;
+- UI can offer historical import after restart from sanitized source recovery
+  or provenance state;
+- starting historical import revalidates the current supergroup with
+  `channels.getFullChannel`;
+- row writes only proceed when `migrated_from_chat_id` is currently available
+  and the old chat input can be opened.
+
+If a previous batch detected migrated history but a later validation no longer
+returns `migrated_from_chat_id`, the historical command should fail or remain
+disabled with sanitized unavailable-scope state. It must not guess old peer
+identity from docs, UI text, warning bodies, or private payloads.
+
+If storing old-chat access hints becomes necessary for restart-safe import, the
+implementation must treat them as private source capability state. They may be
+used internally, but must not appear in tracked docs, diagnostics, recovery
+DTOs, or UI copy.
 
 ## Import Flow
 
@@ -177,6 +235,42 @@ The historical flow should be idempotent. Repeating it should update or skip
 already-imported rows without duplicating them and without changing current
 history rows.
 
+## Watermark Semantics
+
+Historical import must not advance the current-history source watermark.
+
+For the first implementation, historical import should write historical rows
+and historical batch provenance only. It should not update
+`sources.last_sync_state` or `sources.last_synced_at` as though current
+supergroup history had been synchronized.
+
+If a later design needs historical watermarks, they should be separate from the
+current-history `sources.last_sync_state` contract.
+
+## Command And Locking Contract
+
+Historical import should have its own backend command instead of a flag on the
+normal command. The intended shape is:
+
+```text
+start_takeout_migrated_history_import(source_id) -> { job_id }
+```
+
+This keeps `start_takeout_source_import(source_id)` current-history-only and
+makes accidental old-history import harder.
+
+Historical import must use the same same-source ingest lock as normal sync,
+normal Takeout, and delete:
+
+- no current Takeout and historical Takeout may run for the same source at the
+  same time;
+- no normal `sync_source` may run for the same source during historical import;
+- no `delete_source` may run for the same source during historical import;
+- different sources may continue to ingest independently.
+
+Batch or job records should be created only after the same-source lock is
+acquired, matching the normal Takeout lock contract.
+
 ## Read Model
 
 The first implementation does not need to build a fully merged timeline.
@@ -185,8 +279,10 @@ Minimum acceptable read behavior:
 
 - current history remains visible exactly as today;
 - historical rows, once imported, can be identified as older migrated history;
-- analysis and diagnostics can include or exclude the historical domain
-  deliberately.
+- current history remains the default corpus for browsing, analysis, reports,
+  and NotebookLM export;
+- historical rows are visible in diagnostics and may be included by an explicit
+  domain/scope option when a reader or exporter supports it.
 
 A later merged view can combine current and migrated history for reading, but
 that view must keep provenance and native peer identity recoverable.
@@ -201,6 +297,8 @@ The following are safe outcomes:
 - historical opt-in import fails or is cancelled without changing current
   history state;
 - repeated historical imports are idempotent.
+- historical opt-in import leaves current-history `sources.last_sync_state` and
+  `sources.last_synced_at` unchanged.
 
 The following are data-integrity failures:
 
@@ -210,6 +308,7 @@ The following are data-integrity failures:
 - `migrated_history_imported = 1` is recorded before actual historical rows are
   imported;
 - a failed historical import rewrites the current-history batch status.
+- historical import changes current-history source watermarks.
 
 ## Privacy Boundary
 
@@ -230,19 +329,28 @@ Required tests before enabling row writes:
 - normal migrated-supergroup Takeout still records
   `migrated_history_deferred` and writes zero old `chat` rows;
 - the deferment warning remains once-only per batch;
-- overlapping Telegram message ids are accepted across current and migrated
-  domains;
+- overlapping Telegram message ids are accepted when native history peer
+  identity differs;
+- the same native Telegram message is still deduplicated even if domain metadata
+  is inconsistent;
 - recovery copy describes migrated history as a separate historical scope.
 
 Required tests for historical import enablement:
 
-- historical import requires explicit opt-in intent;
+- historical import uses a separate backend command and requires explicit
+  opt-in intent;
+- historical import revalidates or loads durable availability for the migrated
+  historical scope;
 - old rows are written under native `chat` identity and migrated domain flags;
 - current rows and historical rows with the same `telegram_message_id` do not
   conflict;
 - rerunning historical import is idempotent;
 - failed or cancelled historical import leaves current-history provenance
   unchanged;
+- historical import does not advance current-history `sources.last_sync_state`
+  or `sources.last_synced_at`;
+- same-source ingest locking blocks concurrent current Takeout, historical
+  Takeout, sync, and delete for the same source;
 - sanitized diagnostics expose warning codes and counters only.
 
 ## Non-Goals
@@ -252,6 +360,8 @@ Required tests for historical import enablement:
 - Do not add destructive recovery actions.
 - Do not merge old `chat` identity into current `channel` identity.
 - Do not design full merged timeline UI in this slice.
+- Do not include historical rows in default analysis, reports, or NotebookLM
+  export in the first implementation.
 - Do not clear old Telegram metadata blobs as part of this work.
 
 ## Acceptance
@@ -259,8 +369,13 @@ Required tests for historical import enablement:
 - The opt-in behavior is defined as a separate historical import action, not a
   retry of current-history Takeout.
 - Storage keeps current supergroup history and old small-group history in
-  separate native history domains.
+  separate native history identities, with historical domain as a required
+  classification invariant.
 - Provenance can distinguish current-history deferment from historical import.
+- Historical import does not advance current-history source watermarks.
+- Historical import uses a separate command and the same source ingest lock.
+- Current history remains the default read and analysis corpus until an
+  explicit historical-domain option exists.
 - The design preserves existing safe behavior until explicit implementation
   work enables historical row writes.
 - The next implementation plan can be written from this contract without
