@@ -344,8 +344,46 @@ Minimum acceptable read behavior:
 - historical rows are visible in diagnostics and may be included by an explicit
   domain/scope option when a reader or exporter supports it.
 
+Default source browsing must remain current-history-only. `list_source_items`
+and any equivalent "get items" path must not return
+`is_migrated_history = 1` rows unless the request carries an explicit
+historical-domain option. If no such option exists in the first implementation,
+historical rows remain hidden from browsing and visible only through sanitized
+diagnostics/provenance.
+
+This default exclusion applies to both item-query paths:
+
+- the direct `items` fallback path must join or otherwise consult
+  `telegram_messages` and exclude migrated rows by default;
+- the archive read model path must either exclude migrated rows when building
+  the model or filter them when reading the model.
+
+Historical rows must also stay out of the default analysis corpus, report
+surfaces, and NotebookLM export. The implementation can satisfy this either by
+not creating default `analysis_documents` / archive-read rows for historical
+items, or by making those readers domain-aware and defaulting them to
+current-history only. The chosen approach must be covered by tests.
+
 A later merged view can combine current and migrated history for reading, but
 that view must keep provenance and native peer identity recoverable.
+
+## Forum Topic Memberships
+
+Migrated small-group history has no forum topic domain. Historical rows must
+not be assigned current-supergroup forum topic memberships.
+
+The historical insert path must therefore skip
+`item_topic_memberships` resolution for `is_migrated_history = 1` rows, or the
+topic resolver must explicitly check and ignore those rows. Historical rows
+must not:
+
+- create `item_topic_memberships` rows;
+- be placed in `General`, `Unrecognized topic`, or any current supergroup
+  forum topic;
+- increment topic resolver pending or unresolved counts for the current
+  supergroup;
+- appear under source forum-topic filters unless a future merged historical
+  topic design explicitly defines that behavior.
 
 ## Error Handling
 
@@ -356,7 +394,7 @@ The following are safe outcomes:
 - historical opt-in import completes independently;
 - historical opt-in import fails or is cancelled without changing current
   history state;
-- repeated historical imports are idempotent.
+- repeated historical imports are idempotent;
 - historical opt-in import leaves current-history `sources.last_sync_state` and
   `sources.last_synced_at` unchanged.
 
@@ -367,7 +405,7 @@ The following are data-integrity failures:
 - historical rows lose `is_migrated_history` or equivalent domain labeling;
 - `migrated_history_imported = 1` is recorded before actual historical rows are
   imported;
-- a failed historical import rewrites the current-history batch status.
+- a failed historical import rewrites the current-history batch status;
 - historical import changes current-history source watermarks.
 
 ## Privacy Boundary
@@ -414,6 +452,13 @@ Required tests for historical import enablement:
 - old rows are written under native `chat` identity and migrated domain flags;
 - current rows and historical rows with the same `telegram_message_id` do not
   conflict;
+- `list_source_items` and archive-read browsing exclude historical rows by
+  default;
+- historical rows are excluded from default analysis documents, reports, and
+  NotebookLM export until an explicit historical-domain option exists;
+- historical rows do not create `item_topic_memberships` rows and do not affect
+  current-supergroup topic resolver counts;
+- forum topic filters do not surface historical rows by default;
 - rerunning historical import is idempotent;
 - failed or cancelled historical import leaves current-history provenance
   unchanged;
@@ -430,8 +475,11 @@ Required tests for historical import enablement:
 - Do not add destructive recovery actions.
 - Do not merge old `chat` identity into current `channel` identity.
 - Do not design full merged timeline UI in this slice.
+- Do not show historical rows in default source browsing or forum-topic
+  browsing in the first implementation.
 - Do not include historical rows in default analysis, reports, or NotebookLM
   export in the first implementation.
+- Do not assign historical rows to current supergroup forum topics.
 - Do not expose stored migrated old-chat ids or boundary hints outside private
   source capability state.
 - Do not clear old Telegram metadata blobs as part of this work.
@@ -452,6 +500,10 @@ Required tests for historical import enablement:
   not generic internal errors.
 - Current history remains the default read and analysis corpus until an
   explicit historical-domain option exists.
+- Historical rows are hidden from default `list_source_items`, archive-read,
+  analysis, report, NotebookLM, and forum-topic paths until explicit
+  historical-domain support exists.
+- Historical rows do not create current-supergroup topic memberships.
 - The design preserves existing safe behavior until explicit implementation
   work enables historical row writes.
 - The next implementation plan can be written from this contract without
