@@ -124,6 +124,21 @@ It must be valid for the same Telegram `message_id` to exist once in current
 history and once in migrated history, because those ids belong to different
 native Telegram histories.
 
+For migrated small-group import, the native identity invariant is stricter:
+
+- `migrated_small_group_history` rows must use `history_peer_kind = chat`;
+- `history_peer_id` must be the old `migrated_from_chat_id` history peer, not
+  the current supergroup/channel peer;
+- `is_migrated_history = 1` rows must not be normalized to the current source
+  peer identity.
+
+The current SQLite schema protects duplicate identity, but it cannot by itself
+prove that a migrated row used the old chat peer rather than the current
+channel peer. The first implementation should enforce this in Rust identity
+construction and deterministic tests. A database `CHECK` such as "migrated rows
+must use chat peer kind" can be added only if the implementation commits
+`is_migrated_history` to mean this migrated-from-chat domain exclusively.
+
 If a merged timeline needs a single display id later, that id should be a
 read-model or export-model projection, not the primary storage key.
 
@@ -143,11 +158,22 @@ resolution. If the historical importer makes `migration_domain` a functional
 storage contract, the implementation plan must explicitly decide:
 
 - whether to reuse `migration_domain` or add a separate field;
-- the allowed values, starting with `migrated_from_chat`;
+- the allowed values;
 - whether a database `CHECK` constraint is needed;
 - which schema docs and tests need updates;
 - whether analysis rows, archive read models, export DTOs, and diagnostics
   should expose, filter, or preserve the domain marker.
+
+For this design, the only allowed migrated-history domain value is:
+
+```text
+migrated_from_chat
+```
+
+The implementation should introduce this as a shared Rust constant rather than
+spelling the string in multiple call sites. Additional domain values require a
+separate design update because they may have different peer-kind and
+dedupe-safety rules.
 
 If the first implementation keeps `migration_domain` as classification metadata
 only, tests must still prove that old rows are marked consistently with
@@ -333,6 +359,10 @@ Required tests before enabling row writes:
   identity differs;
 - the same native Telegram message is still deduplicated even if domain metadata
   is inconsistent;
+- migrated-history identity construction rejects or cannot produce rows
+  normalized to the current channel peer;
+- `migrated_from_chat` is centralized as the only domain marker for this
+  historical scope;
 - recovery copy describes migrated history as a separate historical scope.
 
 Required tests for historical import enablement:
