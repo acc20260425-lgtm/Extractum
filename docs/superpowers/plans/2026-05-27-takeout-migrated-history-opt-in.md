@@ -1820,7 +1820,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/takeout_import/migrated_history.rs`
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 
-- [ ] **Step 1: Add validation unit tests for typed errors**
+- [x] **Step 1: Add validation unit tests for typed errors**
 
 In `src-tauri/src/takeout_import/migrated_history.rs`, add:
 
@@ -1849,7 +1849,7 @@ Add tests:
     }
 ```
 
-- [ ] **Step 2: Run typed error test**
+- [x] **Step 2: Run typed error test**
 
 Run:
 
@@ -1859,7 +1859,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_history_errors_are_type
 
 Expected: pass after adding the helpers.
 
-- [ ] **Step 3: Change normal migration detection to return the old chat id**
+- [x] **Step 3: Change normal migration detection to return the old chat id**
 
 In `src-tauri/src/takeout_import/mod.rs`, change:
 
@@ -1942,7 +1942,7 @@ with:
 
 Keep the existing `mark_takeout_migrated_history_deferred` call inside that block.
 
-- [ ] **Step 4: Add a sanitized warning regression**
+- [x] **Step 4: Add a sanitized warning regression**
 
 In `src-tauri/src/takeout_import/mod.rs`, add a small pure helper for the warning copy:
 
@@ -1968,7 +1968,7 @@ Then test:
 
 Use the helper in `detect_supergroup_migration`.
 
-- [ ] **Step 5: Add validation result type**
+- [x] **Step 5: Add validation result type**
 
 In `src-tauri/src/takeout_import/migrated_history.rs`, add:
 
@@ -2026,7 +2026,7 @@ Add tests:
     }
 ```
 
-- [ ] **Step 6: Implement live validation flow without importing rows**
+- [x] **Step 6: Implement live validation flow without importing rows**
 
 Replace the scaffold runner body with this call and terminal-state handling:
 
@@ -2246,7 +2246,7 @@ async fn revalidate_migrated_from_chat_id(
 
 On validation conflict in the runner, call `mark_migrated_history_unavailable` with `MIGRATED_HISTORY_REASON_REVALIDATION_FAILED` before finalizing failed.
 
-- [ ] **Step 7: Run focused tests and compile check**
+- [x] **Step 7: Run focused tests and compile check**
 
 Run:
 
@@ -2259,7 +2259,7 @@ cargo check --manifest-path src-tauri\Cargo.toml
 
 Expected: tests pass and `cargo check` exits 0.
 
-- [ ] **Step 8: Commit Task 5**
+- [x] **Step 8: Commit Task 5**
 
 Run:
 

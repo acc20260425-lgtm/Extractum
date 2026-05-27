@@ -12,6 +12,32 @@ pub(crate) const MIGRATED_HISTORY_REASON_OLD_CHAT_INPUT_UNAVAILABLE: &str =
     "old_chat_input_unavailable";
 pub(crate) const MIGRATED_HISTORY_REASON_REVALIDATION_FAILED: &str = "revalidation_failed";
 
+pub(crate) fn not_detected_error() -> AppError {
+    AppError::validation("migrated_history_not_detected")
+}
+
+pub(crate) fn unavailable_error() -> AppError {
+    AppError::conflict("migrated_history_unavailable")
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct MigratedHistoryValidation {
+    pub(crate) migrated_from_chat_id: i64,
+}
+
+pub(crate) fn validate_revalidated_chat_id(
+    expected: Option<i64>,
+    revalidated: Option<i64>,
+) -> AppResult<MigratedHistoryValidation> {
+    let expected = expected.ok_or_else(not_detected_error)?;
+    match revalidated {
+        Some(actual) if actual == expected => Ok(MigratedHistoryValidation {
+            migrated_from_chat_id: actual,
+        }),
+        Some(_) | None => Err(unavailable_error()),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, sqlx::FromRow)]
 pub(crate) struct MigratedHistoryCapability {
     pub(crate) source_id: i64,
@@ -141,6 +167,47 @@ mod tests {
     use crate::sources::test_support::{
         create_migrated_history_capability_tables, memory_pool_with_sources,
     };
+
+    #[test]
+    fn migrated_history_errors_are_typed_for_frontend_behavior() {
+        let not_detected = not_detected_error();
+        assert_eq!(not_detected.kind, crate::error::AppErrorKind::Validation);
+        assert_eq!(not_detected.message, "migrated_history_not_detected");
+
+        let unavailable = unavailable_error();
+        assert_eq!(unavailable.kind, crate::error::AppErrorKind::Conflict);
+        assert_eq!(unavailable.message, "migrated_history_unavailable");
+    }
+
+    #[test]
+    fn validation_accepts_matching_revalidated_chat_id() {
+        let validation =
+            validate_revalidated_chat_id(Some(777), Some(777)).expect("matching id");
+
+        assert_eq!(validation.migrated_from_chat_id, 777);
+    }
+
+    #[test]
+    fn validation_rejects_missing_or_changed_revalidated_chat_id() {
+        assert_eq!(
+            validate_revalidated_chat_id(None, Some(777))
+                .expect_err("missing expected")
+                .kind,
+            crate::error::AppErrorKind::Validation
+        );
+        assert_eq!(
+            validate_revalidated_chat_id(Some(777), None)
+                .expect_err("missing revalidated")
+                .kind,
+            crate::error::AppErrorKind::Conflict
+        );
+        assert_eq!(
+            validate_revalidated_chat_id(Some(777), Some(888))
+                .expect_err("changed revalidated")
+                .kind,
+            crate::error::AppErrorKind::Conflict
+        );
+    }
 
     async fn seed_telegram_source(pool: &sqlx::SqlitePool) {
         sqlx::query(

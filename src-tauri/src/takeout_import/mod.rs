@@ -5,14 +5,15 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppErrorKind, AppResult};
 use crate::ingest_provenance::{
     create_telegram_takeout_batch, finalize_ingest_batch, mark_takeout_export_dc_attempted,
     mark_takeout_export_dc_fallback, mark_takeout_migrated_history_deferred,
-    mark_takeout_migrated_small_group_scope, mark_takeout_only_my_messages_fallback,
-    record_ingest_batch_warning, update_takeout_max_message_id, update_takeout_resolved_peer,
-    update_takeout_session_started, update_takeout_split_metadata, CreateTelegramTakeoutBatch,
-    TerminalBatchStatus, TAKEOUT_HISTORY_SCOPE_CURRENT, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
+    mark_takeout_migrated_history_imported, mark_takeout_migrated_small_group_scope,
+    mark_takeout_only_my_messages_fallback, record_ingest_batch_warning,
+    update_takeout_max_message_id, update_takeout_resolved_peer, update_takeout_session_started,
+    update_takeout_split_metadata, CreateTelegramTakeoutBatch, TerminalBatchStatus,
+    TAKEOUT_HISTORY_SCOPE_CURRENT, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
 };
 use crate::source_ingest::{SourceIngestGuard, SourceIngestKind, SourceIngestLocks};
 use crate::sources::{
@@ -21,6 +22,7 @@ use crate::sources::{
     TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
 use crate::telegram::{get_authorized_runtime, AuthorizedTelegramRuntime, TelegramState};
+use crate::time::now_secs;
 use grammers_session::types::{PeerKind, PeerRef};
 
 mod export_dc;
@@ -302,6 +304,11 @@ fn peer_ref_identity(peer: PeerRef) -> (&'static str, i64) {
     (kind, peer.id.bare_id())
 }
 
+fn migrated_history_detected_warning() -> String {
+    "Migrated small-group history detected; current Takeout keeps it deferred until explicit historical import."
+        .to_string()
+}
+
 async fn finalize_terminal_batch_best_effort(
     handle: &AppHandle,
     batch_id: i64,
@@ -557,23 +564,59 @@ async fn run_takeout_migrated_history_import_job(
     };
     emit_takeout_import_event(&handle, &running_record);
     let batch_id = running_record.batch_id;
-    finalize_terminal_batch_best_effort(
-        &handle,
-        batch_id,
-        TerminalBatchStatus::Failed,
-        Some("migrated_history_import_not_implemented"),
-    )
-    .await;
-    if let Some(record) = takeout_state
-        .finish_job(&job_id, |job| {
-            job.status = STATUS_FAILED.to_string();
-            job.phase = PHASE_FAILED.to_string();
-            job.message = None;
-            job.error = Some("migrated_history_import_not_implemented".to_string());
-        })
-        .await
-    {
-        emit_takeout_import_event(&handle, &record);
+    let source_id = running_record.source_id;
+    match run_takeout_migrated_history_validation_only(&handle, &job_id, batch_id).await {
+        Ok(outcome) => {
+            if let Some(record) = takeout_state
+                .finish_job(&job_id, |job| {
+                    job.status = STATUS_COMPLETED.to_string();
+                    job.phase = PHASE_COMPLETED.to_string();
+                    job.message = Some("Migrated history validation completed.".to_string());
+                    job.inserted = outcome.inserted;
+                    job.skipped = outcome.skipped;
+                    job.progress_current = outcome.progress_total;
+                    job.progress_total = outcome.progress_total;
+                    job.warnings = outcome.warnings;
+                })
+                .await
+            {
+                emit_takeout_import_event(&handle, &record);
+            }
+        }
+        Err(error) => {
+            if error.kind == AppErrorKind::Conflict
+                && error.message == migrated_history::unavailable_error().message
+            {
+                if let Ok(pool) = get_pool(&handle).await {
+                    let _ = migrated_history::mark_migrated_history_unavailable(
+                        &pool,
+                        source_id,
+                        migrated_history::MIGRATED_HISTORY_REASON_REVALIDATION_FAILED,
+                        now_secs(),
+                    )
+                    .await;
+                }
+            }
+            let terminal_error = error.to_string();
+            finalize_terminal_batch_best_effort(
+                &handle,
+                batch_id,
+                TerminalBatchStatus::Failed,
+                Some(&terminal_error),
+            )
+            .await;
+            if let Some(record) = takeout_state
+                .finish_job(&job_id, |job| {
+                    job.status = STATUS_FAILED.to_string();
+                    job.phase = PHASE_FAILED.to_string();
+                    job.message = None;
+                    job.error = Some(terminal_error.clone());
+                })
+                .await
+            {
+                emit_takeout_import_event(&handle, &record);
+            }
+        }
     }
     drop(ingest_guard);
 }
@@ -583,6 +626,127 @@ struct TakeoutImportOutcome {
     skipped: i64,
     progress_total: Option<i64>,
     warnings: Vec<String>,
+}
+
+async fn run_takeout_migrated_history_validation_only(
+    handle: &AppHandle,
+    job_id: &str,
+    batch_id: i64,
+) -> AppResult<TakeoutImportOutcome> {
+    let takeout_state = handle.state::<TakeoutImportState>();
+    let telegram_state = handle.state::<TelegramState>();
+    let repair_state = handle.state::<SourceIdentityRepairState>();
+    require_source_identity_ready(repair_state.inner()).await?;
+    let pool = get_pool(handle).await?;
+    let source_id = takeout_state
+        .update_job(job_id, |_| {})
+        .await
+        .ok_or_else(|| AppError::internal(format!("Takeout job {job_id} not found")))?
+        .source_id;
+    let source = load_source(&pool, source_id).await?;
+    let capability = migrated_history::load_migrated_history_capability(&pool, source_id)
+        .await?
+        .ok_or_else(migrated_history::not_detected_error)?;
+    let expected_chat_id = capability.migrated_from_chat_id;
+    let account_id = source.account_id.ok_or_else(|| {
+        AppError::validation(format!("Source {} is not linked to an account", source.id))
+    })?;
+    let runtime = get_authorized_runtime(&telegram_state, account_id).await?;
+    let client = runtime.client;
+    let session = runtime.session;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_RESOLVING_SOURCE.to_string();
+        job.message = Some("Resolving Telegram source.".to_string());
+    })
+    .await;
+    let resolved_peer =
+        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id).await?;
+    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer);
+    update_takeout_resolved_peer(
+        &pool,
+        batch_id,
+        resolved_peer_kind,
+        resolved_peer_id,
+        "chat",
+        expected_chat_id.unwrap_or_default(),
+    )
+    .await?;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_STARTING_TAKEOUT.to_string();
+        job.message = Some("Starting Takeout session.".to_string());
+    })
+    .await;
+    let alias = prepare_export_dc_alias(&session).await?;
+    let init_request = takeout_init_request_for_source_subtype(TELEGRAM_KIND_GROUP)?;
+    let mut warnings = Vec::new();
+    let mut fallback_used = false;
+    let mut export_attempts = ExportDcAttemptState::new();
+    let takeout = export_dc_invoke_with_provenance(
+        &pool,
+        batch_id,
+        &client,
+        &alias,
+        &init_request,
+        &mut warnings,
+        &mut fallback_used,
+        &mut export_attempts,
+    )
+    .await?;
+    let tl::enums::account::Takeout::Takeout(takeout) = takeout;
+    let takeout_id = takeout.id;
+    update_takeout_session_started(&pool, batch_id, takeout_id).await?;
+
+    update_and_emit(handle, &takeout_state, job_id, |job| {
+        job.phase = PHASE_VALIDATING_PEER.to_string();
+        job.message = Some("Revalidating migrated history availability.".to_string());
+    })
+    .await;
+    let revalidated_chat_id = revalidate_migrated_from_chat_id(
+        &pool,
+        batch_id,
+        &client,
+        &alias,
+        takeout_id,
+        resolved_peer.peer,
+        &mut warnings,
+        &mut fallback_used,
+        &mut export_attempts,
+    )
+    .await?;
+    let validation =
+        migrated_history::validate_revalidated_chat_id(expected_chat_id, revalidated_chat_id)?;
+    migrated_history::upsert_migrated_history_available(
+        &pool,
+        source_id,
+        validation.migrated_from_chat_id,
+        now_secs(),
+    )
+    .await?;
+
+    let fallback_before = fallback_used;
+    record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut export_attempts).await?;
+    finish_takeout_session(&client, &alias, takeout_id, true, &mut warnings, &mut fallback_used)
+        .await?;
+    record_export_dc_fallback_if_needed(
+        &pool,
+        batch_id,
+        &warnings,
+        fallback_before,
+        fallback_used,
+        &mut export_attempts,
+    )
+    .await?;
+    mark_takeout_migrated_history_imported(&pool, batch_id).await?;
+    finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None).await?;
+
+    Ok(TakeoutImportOutcome {
+        inserted: 0,
+        skipped: 0,
+        progress_total: Some(0),
+        warnings,
+    })
 }
 
 async fn run_takeout_source_import(
@@ -800,7 +964,7 @@ async fn run_started_takeout_source_import_inner(
         &mut only_my_messages_recorded,
     )
     .await?;
-    let migrated_detected = detect_supergroup_migration(
+    let migrated_from_chat_id = detect_supergroup_migration(
         pool,
         batch_id,
         client,
@@ -813,7 +977,14 @@ async fn run_started_takeout_source_import_inner(
         export_attempts,
     )
     .await?;
-    if migrated_detected {
+    if let Some(migrated_from_chat_id) = migrated_from_chat_id {
+        migrated_history::upsert_migrated_history_available(
+            pool,
+            source.id,
+            migrated_from_chat_id,
+            now_secs(),
+        )
+        .await?;
         mark_takeout_migrated_history_deferred(
             pool,
             batch_id,
@@ -1081,9 +1252,9 @@ async fn detect_supergroup_migration(
     warnings: &mut Vec<String>,
     fallback_used: &mut bool,
     export_attempts: &mut ExportDcAttemptState,
-) -> AppResult<bool> {
+) -> AppResult<Option<i64>> {
     if telegram_source_subtype != TELEGRAM_KIND_SUPERGROUP {
-        return Ok(false);
+        return Ok(None);
     }
 
     let input_channel: tl::enums::InputChannel = peer.into();
@@ -1107,14 +1278,48 @@ async fn detect_supergroup_migration(
     let tl::enums::messages::ChatFull::Full(chat_full) = chat_full;
     if let tl::enums::ChatFull::ChannelFull(full) = chat_full.full_chat {
         if let Some(migrated_from_chat_id) = full.migrated_from_chat_id {
-            warnings.push(format!(
-                "Supergroup migrated_from_chat_id {migrated_from_chat_id} detected; migrated history import is deferred to avoid source item id collisions."
-            ));
-            return Ok(true);
+            warnings.push(migrated_history_detected_warning());
+            return Ok(Some(migrated_from_chat_id));
         }
     }
 
-    Ok(false)
+    Ok(None)
+}
+
+async fn revalidate_migrated_from_chat_id(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    client: &Client,
+    alias: &ExportDcAlias,
+    takeout_id: i64,
+    peer: grammers_session::types::PeerRef,
+    warnings: &mut Vec<String>,
+    fallback_used: &mut bool,
+    export_attempts: &mut ExportDcAttemptState,
+) -> AppResult<Option<i64>> {
+    let input_channel: tl::enums::InputChannel = peer.into();
+    let chat_full = export_dc_invoke_with_provenance(
+        pool,
+        batch_id,
+        client,
+        alias,
+        &tl::functions::InvokeWithTakeout {
+            takeout_id,
+            query: tl::functions::channels::GetFullChannel {
+                channel: input_channel,
+            },
+        },
+        warnings,
+        fallback_used,
+        export_attempts,
+    )
+    .await?;
+
+    let tl::enums::messages::ChatFull::Full(chat_full) = chat_full;
+    if let tl::enums::ChatFull::ChannelFull(full) = chat_full.full_chat {
+        return Ok(full.migrated_from_chat_id);
+    }
+    Ok(None)
 }
 
 async fn takeout_history_count_probe(
@@ -1636,11 +1841,12 @@ fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult
 mod tests {
     use super::{
         create_locked_migrated_history_start_records, create_locked_takeout_start_records,
-        is_channel_private_error, load_takeout_source_subtype, raw_parse,
-        record_channel_private_fallback_if_supported, record_export_dc_attempt_if_needed,
-        record_export_dc_fallback_if_needed, record_only_my_messages_fallback_if_needed,
-        supports_only_my_messages_fallback, ExportDcAlias, ExportDcAttemptState,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        is_channel_private_error, load_takeout_source_subtype, migrated_history_detected_warning,
+        raw_parse, record_channel_private_fallback_if_supported,
+        record_export_dc_attempt_if_needed, record_export_dc_fallback_if_needed,
+        record_only_my_messages_fallback_if_needed, supports_only_my_messages_fallback,
+        ExportDcAlias, ExportDcAttemptState, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+        TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::{AppError, AppErrorKind};
     use crate::ingest_provenance::{
@@ -2123,6 +2329,15 @@ mod tests {
         assert_eq!(batch_count, 1);
 
         drop(first);
+    }
+
+    #[test]
+    fn migrated_history_detected_warning_is_sanitized() {
+        let warning = migrated_history_detected_warning();
+
+        assert!(warning.contains("Migrated small-group history detected"));
+        assert!(!warning.contains("migrated_from_chat_id"));
+        assert!(!warning.contains("777"));
     }
 
     #[tokio::test]
