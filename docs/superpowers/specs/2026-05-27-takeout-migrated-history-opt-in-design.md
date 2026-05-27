@@ -206,8 +206,21 @@ Recommended provenance shape:
 history_scope = migrated_small_group_history
 trigger = explicit_user_opt_in
 migrated_history_detected = 1
-migrated_history_imported = 1 only after rows are actually imported
+migrated_history_imported = 1 after the historical traversal successfully
+  observes/imports the migrated scope, including duplicate-only idempotent
+  reruns
 ```
+
+New row writes are measured by counters, not by the boolean import flag:
+
+- `item_observed_count`;
+- `item_inserted_count`;
+- `item_duplicate_count`;
+- `item_skipped_count`.
+
+An idempotent rerun that observes the migrated scope and finds only duplicate
+rows may set `migrated_history_imported = 1` with `item_inserted_count = 0` and
+non-zero duplicate observations.
 
 The existing current-history batch should remain truthful:
 
@@ -244,6 +257,11 @@ migrated_from_max_id = private nullable Telegram boundary hint
 migrated_history_detected_at = nullable timestamp
 migrated_history_refreshed_at = nullable timestamp
 ```
+
+The first implementation may omit `migrated_from_max_id` if Telegram does not
+expose a stable validated boundary hint through the chosen validation path. It
+must not add speculative boundary data just because this field appears in the
+capability shape.
 
 The exact schema can be chosen in the implementation plan, but the behavior is
 fixed:
@@ -371,8 +389,8 @@ This default exclusion applies to both item-query paths:
 
 - the direct `items` fallback path must join or otherwise consult
   `telegram_messages` and exclude migrated rows by default;
-- the archive read model path must either exclude migrated rows when building
-  the model or filter them when reading the model.
+- the archive read model must not materialize migrated rows into
+  `archive_read_items` until archive/read supports explicit domain filtering.
 
 Historical rows must also stay out of the default analysis corpus, report
 surfaces, and NotebookLM export. The first implementation must not create
@@ -385,10 +403,9 @@ helper needs a mode that skips default `analysis_documents` upsert for
 `is_migrated_history = 1` rows. A later design can add historical-domain
 analysis builder/rebuild semantics.
 
-For archive-read rows, the first implementation may either skip building
-default archive rows for historical items or make archive readers filter them
-by domain. Either choice must keep default browsing current-history-only and be
-covered by tests.
+The first implementation must not build `archive_read_items` rows for migrated
+historical items. This avoids accidental direct archive consumers surfacing old
+history before archive/read supports explicit domain filtering.
 
 A later merged view can combine current and migrated history for reading, but
 that view must keep provenance and native peer identity recoverable.
@@ -483,6 +500,8 @@ Required tests for historical import enablement:
 - historical rows do not create default `analysis_documents` rows and are
   excluded from reports and NotebookLM export until an explicit
   historical-domain option exists;
+- historical rows do not create `archive_read_items` rows until archive/read
+  supports explicit historical-domain filtering;
 - historical rows do not create `item_topic_memberships` rows and do not affect
   current-supergroup topic resolver counts;
 - forum topic filters do not surface historical rows by default;
@@ -508,6 +527,8 @@ Required tests for historical import enablement:
   export in the first implementation.
 - Do not create default `analysis_documents` rows for historical rows in the
   first implementation.
+- Do not create `archive_read_items` rows for historical rows in the first
+  implementation.
 - Do not assign historical rows to current supergroup forum topics.
 - Do not expose stored migrated old-chat ids or boundary hints outside private
   source capability state.
@@ -533,6 +554,7 @@ Required tests for historical import enablement:
   analysis, report, NotebookLM, and forum-topic paths until explicit
   historical-domain support exists.
 - Historical rows do not create default `analysis_documents` rows.
+- Historical rows do not create `archive_read_items` rows.
 - Historical rows do not create current-supergroup topic memberships.
 - The design preserves existing safe behavior until explicit implementation
   work enables historical row writes.
