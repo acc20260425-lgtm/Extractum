@@ -52,6 +52,22 @@ Source `115` / batch `18` is the representative safe-deferment evidence. It
 validates detection and deferment only. It does not validate migrated-history
 import enablement.
 
+## Terminology And Field Levels
+
+The design uses separate concepts at batch and row level:
+
+| Level | Field | Values |
+| --- | --- | --- |
+| Batch provenance | `history_scope` | `current_history`, `current_history_with_migrated_deferred`, `migrated_small_group_history` |
+| Row classification | `is_migrated_history` | `0`, `1` |
+| Row migration marker | `migration_domain` | `NULL`, `migrated_from_chat` |
+
+`migrated_small_group_history` is a run-level historical scope. It describes
+what a Takeout batch attempted to import.
+
+`migrated_from_chat` is a row-level marker. It describes old `chat` rows that
+came from the migrated small-group history.
+
 ## Chosen Approach
 
 Use one local source with separate history domains.
@@ -359,10 +375,20 @@ This default exclusion applies to both item-query paths:
   the model or filter them when reading the model.
 
 Historical rows must also stay out of the default analysis corpus, report
-surfaces, and NotebookLM export. The implementation can satisfy this either by
-not creating default `analysis_documents` / archive-read rows for historical
-items, or by making those readers domain-aware and defaulting them to
-current-history only. The chosen approach must be covered by tests.
+surfaces, and NotebookLM export. The first implementation must not create
+default `analysis_documents` rows for migrated historical rows. This avoids
+making analysis readers domain-aware before an explicit historical-domain
+analysis option exists.
+
+If the historical insert path reuses the generic Telegram insert helper, the
+helper needs a mode that skips default `analysis_documents` upsert for
+`is_migrated_history = 1` rows. A later design can add historical-domain
+analysis builder/rebuild semantics.
+
+For archive-read rows, the first implementation may either skip building
+default archive rows for historical items or make archive readers filter them
+by domain. Either choice must keep default browsing current-history-only and be
+covered by tests.
 
 A later merged view can combine current and migrated history for reading, but
 that view must keep provenance and native peer identity recoverable.
@@ -454,8 +480,9 @@ Required tests for historical import enablement:
   conflict;
 - `list_source_items` and archive-read browsing exclude historical rows by
   default;
-- historical rows are excluded from default analysis documents, reports, and
-  NotebookLM export until an explicit historical-domain option exists;
+- historical rows do not create default `analysis_documents` rows and are
+  excluded from reports and NotebookLM export until an explicit
+  historical-domain option exists;
 - historical rows do not create `item_topic_memberships` rows and do not affect
   current-supergroup topic resolver counts;
 - forum topic filters do not surface historical rows by default;
@@ -479,6 +506,8 @@ Required tests for historical import enablement:
   browsing in the first implementation.
 - Do not include historical rows in default analysis, reports, or NotebookLM
   export in the first implementation.
+- Do not create default `analysis_documents` rows for historical rows in the
+  first implementation.
 - Do not assign historical rows to current supergroup forum topics.
 - Do not expose stored migrated old-chat ids or boundary hints outside private
   source capability state.
@@ -503,6 +532,7 @@ Required tests for historical import enablement:
 - Historical rows are hidden from default `list_source_items`, archive-read,
   analysis, report, NotebookLM, and forum-topic paths until explicit
   historical-domain support exists.
+- Historical rows do not create default `analysis_documents` rows.
 - Historical rows do not create current-supergroup topic memberships.
 - The design preserves existing safe behavior until explicit implementation
   work enables historical row writes.
