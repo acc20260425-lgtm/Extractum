@@ -43,6 +43,7 @@ pub struct TakeoutImportJobRecord {
     pub batch_id: i64,
     pub source_id: i64,
     pub account_id: i64,
+    pub history_scope: String,
     pub status: String,
     pub phase: String,
     pub message: Option<String>,
@@ -80,6 +81,7 @@ impl TakeoutImportState {
         source_id: i64,
         account_id: i64,
         batch_id: i64,
+        history_scope: &str,
     ) -> AppResult<TakeoutImportJobRecord> {
         let mut inner = self.inner.lock().await;
         if let Some(job_id) = inner.active_jobs.active_job_id(&source_id) {
@@ -95,6 +97,7 @@ impl TakeoutImportState {
             batch_id,
             source_id,
             account_id,
+            history_scope: history_scope.to_string(),
             status: STATUS_QUEUED.to_string(),
             phase: PHASE_QUEUED.to_string(),
             message: Some("Takeout import queued.".to_string()),
@@ -223,18 +226,22 @@ fn is_terminal_status(status: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        TakeoutImportState, STATUS_CANCEL_REQUESTED, STATUS_COMPLETED, STATUS_FAILED,
-    };
+    use super::{TakeoutImportState, STATUS_CANCEL_REQUESTED, STATUS_COMPLETED, STATUS_FAILED};
     use crate::error::AppErrorKind;
+    use crate::ingest_provenance::{
+        TAKEOUT_HISTORY_SCOPE_CURRENT, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
+    };
 
     #[tokio::test]
     async fn job_state_rejects_duplicate_active_source_jobs() {
         let state = TakeoutImportState::new();
-        let first = state.create_job(7, 1, 100).await.expect("create first job");
+        let first = state
+            .create_job(7, 1, 100, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("create first job");
 
         let error = state
-            .create_job(7, 1, 101)
+            .create_job(7, 1, 101, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP)
             .await
             .expect_err("duplicate source job should fail");
 
@@ -246,7 +253,10 @@ mod tests {
     #[tokio::test]
     async fn job_state_can_cancel_and_finish_job() {
         let state = TakeoutImportState::new();
-        let job = state.create_job(7, 1, 100).await.expect("create job");
+        let job = state
+            .create_job(7, 1, 100, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("create job");
 
         let cancelled = state
             .request_cancel(&job.job_id)
@@ -266,17 +276,43 @@ mod tests {
         assert!(finished.finished_at.is_some());
         assert!(!state.is_cancel_requested(&job.job_id).await);
 
-        let next = state.create_job(7, 1, 101).await.expect("source released");
+        let next = state
+            .create_job(7, 1, 101, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("source released");
         assert_eq!(next.job_id, "takeout-2");
         assert_eq!(next.batch_id, 101);
     }
 
     #[tokio::test]
+    async fn job_state_records_history_scope_for_frontend_labels() {
+        let state = TakeoutImportState::new();
+        let job = state
+            .create_job(7, 1, 100, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP)
+            .await
+            .expect("create historical job");
+
+        assert_eq!(
+            job.history_scope,
+            TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP
+        );
+    }
+
+    #[tokio::test]
     async fn active_jobs_for_sources_filters_non_terminal_jobs() {
         let state = TakeoutImportState::new();
-        let first = state.create_job(7, 1, 100).await.expect("first job");
-        let second = state.create_job(8, 1, 101).await.expect("second job");
-        let _third = state.create_job(9, 1, 102).await.expect("third job");
+        let first = state
+            .create_job(7, 1, 100, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("first job");
+        let second = state
+            .create_job(8, 1, 101, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("second job");
+        let _third = state
+            .create_job(9, 1, 102, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("third job");
         state
             .finish_job(&first.job_id, |job| {
                 job.status = STATUS_COMPLETED.to_string();

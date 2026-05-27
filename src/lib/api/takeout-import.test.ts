@@ -5,6 +5,7 @@ import {
   listTakeoutImportRecoveryStates,
   listTakeoutSourceImportJobs,
   listenToTakeoutImportEvents,
+  startTakeoutMigratedHistoryImport,
   startTakeoutSourceImport,
 } from "./takeout-import";
 import type { TakeoutImportEvent } from "$lib/types/sources";
@@ -55,6 +56,18 @@ describe("takeout import api wrapper", () => {
     });
   });
 
+  it("starts a migrated history import with a separate command", async () => {
+    invokeMock.mockResolvedValueOnce({ job_id: "takeout-2" });
+
+    await expect(startTakeoutMigratedHistoryImport(7)).resolves.toEqual({
+      job_id: "takeout-2",
+    });
+
+    expect(invokeMock).toHaveBeenLastCalledWith("start_takeout_migrated_history_import", {
+      sourceId: 7,
+    });
+  });
+
   it("cancels a takeout import job", async () => {
     invokeMock.mockResolvedValueOnce({ cancelled: true });
 
@@ -81,6 +94,7 @@ describe("takeout import api wrapper", () => {
       source_id: 7,
       account_id: 2,
       batch_id: 100,
+      history_scope: "current_history",
       status: "running",
       phase: "importing_history",
       message: "Importing",

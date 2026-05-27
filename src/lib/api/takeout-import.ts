@@ -22,6 +22,12 @@ export function startTakeoutSourceImport(sourceId: number) {
   return invoke<StartTakeoutImportResponse>("start_takeout_source_import", { sourceId });
 }
 
+export function startTakeoutMigratedHistoryImport(sourceId: number) {
+  return invoke<StartTakeoutImportResponse>("start_takeout_migrated_history_import", {
+    sourceId,
+  });
+}
+
 export function cancelTakeoutSourceImport(jobId: string) {
   return invoke<CancelTakeoutImportResponse>("cancel_takeout_source_import", { jobId });
 }

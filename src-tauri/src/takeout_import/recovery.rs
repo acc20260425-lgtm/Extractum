@@ -4,6 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use super::TakeoutImportState;
 use crate::error::{AppError, AppResult};
+#[cfg(test)]
+use crate::ingest_provenance::TAKEOUT_HISTORY_SCOPE_CURRENT;
 use crate::sql_helpers::push_i64_bind_list;
 
 const STATUS_RUNNING: &str = "running";
@@ -595,7 +597,7 @@ mod tests {
         )
         .await;
         state
-            .create_job(1, 1, running_id)
+            .create_job(1, 1, running_id, TAKEOUT_HISTORY_SCOPE_CURRENT)
             .await
             .expect("create active job");
 

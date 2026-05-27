@@ -205,6 +205,7 @@ mod tests {
 
     use crate::analysis::AnalysisState;
     use crate::error::{AppError, AppErrorKind};
+    use crate::ingest_provenance::TAKEOUT_HISTORY_SCOPE_CURRENT;
     use crate::llm::{
         LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
     };
@@ -484,7 +485,7 @@ mod tests {
         let states = States::new();
         states
             .takeout_state
-            .create_job(7, 11, 100)
+            .create_job(7, 11, 100, TAKEOUT_HISTORY_SCOPE_CURRENT)
             .await
             .expect("takeout job");
 

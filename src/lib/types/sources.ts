@@ -278,6 +278,7 @@ export interface TakeoutImportJobRecord {
   source_id: number;
   account_id: number;
   batch_id: number;
+  history_scope: "current_history" | "migrated_small_group_history";
   status: TakeoutImportStatus;
   phase: TakeoutImportPhase;
   message: string | null;

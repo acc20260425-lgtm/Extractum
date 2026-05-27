@@ -1439,7 +1439,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/api/takeout-import.ts`
 - Modify: `src/lib/api/takeout-import.test.ts`
 
-- [ ] **Step 1: Add job history-scope tests**
+- [x] **Step 1: Add job history-scope tests**
 
 In `src-tauri/src/takeout_import/state.rs`, add `history_scope` to `TakeoutImportJobRecord`:
 
@@ -1497,7 +1497,7 @@ Add:
     }
 ```
 
-- [ ] **Step 2: Run state tests and verify they fail**
+- [x] **Step 2: Run state tests and verify they fail**
 
 Run:
 
@@ -1507,7 +1507,7 @@ cargo test --manifest-path src-tauri\Cargo.toml job_state_records_history_scope_
 
 Expected: fail until `create_job` stores the new field.
 
-- [ ] **Step 3: Store history scope in job records**
+- [x] **Step 3: Store history scope in job records**
 
 In `create_job`, set:
 
@@ -1517,7 +1517,7 @@ In `create_job`, set:
 
 Update every `create_job` call in backend tests and production code to pass `TAKEOUT_HISTORY_SCOPE_CURRENT`.
 
-- [ ] **Step 4: Add command wrapper tests**
+- [x] **Step 4: Add command wrapper tests**
 
 In `src-tauri/src/takeout_import/mod.rs`, add a test near the existing start-record tests:
 
@@ -1583,7 +1583,7 @@ Add another test:
     }
 ```
 
-- [ ] **Step 5: Run command wrapper tests and verify they fail**
+- [x] **Step 5: Run command wrapper tests and verify they fail**
 
 Run:
 
@@ -1593,7 +1593,7 @@ cargo test --manifest-path src-tauri\Cargo.toml migrated_history_start
 
 Expected: fail because `create_locked_migrated_history_start_records` does not exist.
 
-- [ ] **Step 6: Implement start-record creation**
+- [x] **Step 6: Implement start-record creation**
 
 In `src-tauri/src/takeout_import/mod.rs`, add imports:
 
@@ -1658,7 +1658,7 @@ async fn create_locked_migrated_history_start_records(
 
 Import `MIGRATED_HISTORY_STATUS_AVAILABLE`.
 
-- [ ] **Step 7: Add the Tauri command shell**
+- [x] **Step 7: Add the Tauri command shell**
 
 In `src-tauri/src/takeout_import/mod.rs`, add:
 
@@ -1745,11 +1745,11 @@ async fn run_takeout_migrated_history_import_job(
 }
 ```
 
-- [ ] **Step 8: Register the command**
+- [x] **Step 8: Register the command**
 
 In `src-tauri/src/lib.rs`, add `start_takeout_migrated_history_import` to the existing `use takeout_import` list and to the existing `tauri::generate_handler!` command list.
 
-- [ ] **Step 9: Add frontend API wrapper**
+- [x] **Step 9: Add frontend API wrapper**
 
 In `src/lib/types/sources.ts`, extend `TakeoutImportJobRecord`:
 
@@ -1789,7 +1789,7 @@ Update existing `TakeoutImportEvent` fixture objects with:
 
 Import `startTakeoutMigratedHistoryImport`.
 
-- [ ] **Step 10: Run focused tests**
+- [x] **Step 10: Run focused tests**
 
 Run:
 
@@ -1801,7 +1801,7 @@ npm.cmd test -- src/lib/api/takeout-import.test.ts
 
 Expected: all pass.
 
-- [ ] **Step 11: Commit Task 4**
+- [x] **Step 11: Commit Task 4**
 
 Run:
 

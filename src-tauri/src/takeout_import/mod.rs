@@ -9,15 +9,16 @@ use crate::error::{AppError, AppResult};
 use crate::ingest_provenance::{
     create_telegram_takeout_batch, finalize_ingest_batch, mark_takeout_export_dc_attempted,
     mark_takeout_export_dc_fallback, mark_takeout_migrated_history_deferred,
-    mark_takeout_only_my_messages_fallback, record_ingest_batch_warning,
-    update_takeout_max_message_id, update_takeout_resolved_peer, update_takeout_session_started,
-    update_takeout_split_metadata, CreateTelegramTakeoutBatch, TerminalBatchStatus,
+    mark_takeout_migrated_small_group_scope, mark_takeout_only_my_messages_fallback,
+    record_ingest_batch_warning, update_takeout_max_message_id, update_takeout_resolved_peer,
+    update_takeout_session_started, update_takeout_split_metadata, CreateTelegramTakeoutBatch,
+    TerminalBatchStatus, TAKEOUT_HISTORY_SCOPE_CURRENT, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
 };
 use crate::source_ingest::{SourceIngestGuard, SourceIngestKind, SourceIngestLocks};
 use crate::sources::{
     finalize_sync, load_source, require_source_identity_ready, resolve_and_refresh_peer,
-    SourceIdentityRepairState, TelegramSourceKind, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
-    TELEGRAM_KIND_SUPERGROUP,
+    SourceIdentityRepairState, TelegramSourceKind, MIGRATED_HISTORY_STATUS_AVAILABLE,
+    TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
 use crate::telegram::{get_authorized_runtime, AuthorizedTelegramRuntime, TelegramState};
 use grammers_session::types::{PeerKind, PeerRef};
@@ -106,6 +107,43 @@ pub async fn start_takeout_source_import(
     })
 }
 
+#[tauri::command]
+pub async fn start_takeout_migrated_history_import(
+    handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
+    state: tauri::State<'_, TakeoutImportState>,
+    source_id: i64,
+) -> AppResult<StartTakeoutImportResponse> {
+    require_source_identity_ready(repair_state.inner()).await?;
+    let pool = get_pool(&handle).await?;
+    let source = load_source(&pool, source_id).await?;
+    let account_id = source.account_id.ok_or_else(|| {
+        AppError::validation(format!("Source {source_id} is not linked to an account"))
+    })?;
+    let telegram_source_subtype = load_takeout_source_subtype(&pool, source.id).await?;
+    let ingest_locks = handle.state::<SourceIngestLocks>();
+    let (record, ingest_guard) = create_locked_migrated_history_start_records(
+        &pool,
+        &ingest_locks,
+        state.inner(),
+        source_id,
+        account_id,
+        telegram_source_subtype,
+    )
+    .await?;
+    emit_takeout_import_event(&handle, &record);
+
+    let job_id = record.job_id.clone();
+    let task_handle = handle.clone();
+    tauri::async_runtime::spawn(async move {
+        run_takeout_migrated_history_import_job(task_handle, job_id, ingest_guard).await;
+    });
+
+    Ok(StartTakeoutImportResponse {
+        job_id: record.job_id,
+    })
+}
+
 async fn create_locked_takeout_start_records(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     ingest_locks: &SourceIngestLocks,
@@ -126,7 +164,59 @@ async fn create_locked_takeout_start_records(
         },
     )
     .await?;
-    let record = state.create_job(source_id, account_id, batch_id).await?;
+    let record = state
+        .create_job(
+            source_id,
+            account_id,
+            batch_id,
+            TAKEOUT_HISTORY_SCOPE_CURRENT,
+        )
+        .await?;
+    Ok((record, ingest_guard))
+}
+
+async fn create_locked_migrated_history_start_records(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    ingest_locks: &SourceIngestLocks,
+    state: &TakeoutImportState,
+    source_id: i64,
+    account_id: i64,
+    source_subtype: String,
+) -> AppResult<(TakeoutImportJobRecord, SourceIngestGuard)> {
+    let capability = migrated_history::load_migrated_history_capability(pool, source_id).await?;
+    let is_available = capability
+        .as_ref()
+        .is_some_and(|capability| capability.status == MIGRATED_HISTORY_STATUS_AVAILABLE);
+    if !is_available {
+        return Err(AppError::validation("migrated_history_not_detected"));
+    }
+    if source_subtype != TELEGRAM_KIND_SUPERGROUP {
+        return Err(AppError::validation(
+            "migrated_history_not_detected: only Telegram supergroups can have migrated small-group history",
+        ));
+    }
+
+    let ingest_guard = ingest_locks
+        .try_acquire(source_id, SourceIngestKind::TakeoutImport)
+        .await?;
+    let batch_id = create_telegram_takeout_batch(
+        pool,
+        CreateTelegramTakeoutBatch {
+            source_id,
+            account_id,
+            source_subtype,
+        },
+    )
+    .await?;
+    mark_takeout_migrated_small_group_scope(pool, batch_id).await?;
+    let record = state
+        .create_job(
+            source_id,
+            account_id,
+            batch_id,
+            TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
+        )
+        .await?;
     Ok((record, ingest_guard))
 }
 
@@ -444,6 +534,46 @@ async fn run_takeout_import_job(
                 }
             }
         }
+    }
+    drop(ingest_guard);
+}
+
+async fn run_takeout_migrated_history_import_job(
+    handle: AppHandle,
+    job_id: String,
+    ingest_guard: SourceIngestGuard,
+) {
+    let takeout_state = handle.state::<TakeoutImportState>();
+    let Some(running_record) = takeout_state
+        .update_job(&job_id, |job| {
+            job.status = STATUS_RUNNING.to_string();
+            job.phase = PHASE_VALIDATING_PEER.to_string();
+            job.message = Some("Validating migrated history availability.".to_string());
+        })
+        .await
+    else {
+        drop(ingest_guard);
+        return;
+    };
+    emit_takeout_import_event(&handle, &running_record);
+    let batch_id = running_record.batch_id;
+    finalize_terminal_batch_best_effort(
+        &handle,
+        batch_id,
+        TerminalBatchStatus::Failed,
+        Some("migrated_history_import_not_implemented"),
+    )
+    .await;
+    if let Some(record) = takeout_state
+        .finish_job(&job_id, |job| {
+            job.status = STATUS_FAILED.to_string();
+            job.phase = PHASE_FAILED.to_string();
+            job.message = None;
+            job.error = Some("migrated_history_import_not_implemented".to_string());
+        })
+        .await
+    {
+        emit_takeout_import_event(&handle, &record);
     }
     drop(ingest_guard);
 }
@@ -1505,12 +1635,12 @@ fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::{
-        create_locked_takeout_start_records, is_channel_private_error, load_takeout_source_subtype,
-        raw_parse, record_channel_private_fallback_if_supported,
-        record_export_dc_attempt_if_needed, record_export_dc_fallback_if_needed,
-        record_only_my_messages_fallback_if_needed, supports_only_my_messages_fallback,
-        ExportDcAlias, ExportDcAttemptState, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
-        TELEGRAM_KIND_SUPERGROUP,
+        create_locked_migrated_history_start_records, create_locked_takeout_start_records,
+        is_channel_private_error, load_takeout_source_subtype, raw_parse,
+        record_channel_private_fallback_if_supported, record_export_dc_attempt_if_needed,
+        record_export_dc_fallback_if_needed, record_only_my_messages_fallback_if_needed,
+        supports_only_my_messages_fallback, ExportDcAlias, ExportDcAttemptState,
+        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::{AppError, AppErrorKind};
     use crate::ingest_provenance::{
@@ -1521,7 +1651,8 @@ mod tests {
     use crate::sources::insert_telegram_source_item;
     use crate::sources::test_support::{
         create_analysis_documents_table, create_ingest_provenance_tables,
-        memory_pool_with_source_items_and_topics, memory_pool_with_sources,
+        create_migrated_history_capability_tables, memory_pool_with_source_items_and_topics,
+        memory_pool_with_sources,
     };
     use crate::takeout_import::state::TakeoutImportState;
     use grammers_client::tl;
@@ -1994,6 +2125,62 @@ mod tests {
         drop(first);
     }
 
+    #[tokio::test]
+    async fn migrated_history_start_records_use_same_source_takeout_lock() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        create_migrated_history_capability_tables(&pool).await;
+        seed_takeout_source(&pool, 1, 10, "supergroup", "channel", 12345).await;
+        crate::takeout_import::migrated_history::upsert_migrated_history_available(
+            &pool, 1, 777, 100,
+        )
+        .await
+        .expect("capability");
+        let locks = SourceIngestLocks::new();
+        let state = TakeoutImportState::new();
+        let _current = locks
+            .try_acquire(1, SourceIngestKind::TakeoutImport)
+            .await
+            .expect("current takeout lock");
+
+        let error = create_locked_migrated_history_start_records(
+            &pool,
+            &locks,
+            &state,
+            1,
+            10,
+            "supergroup".to_string(),
+        )
+        .await
+        .expect_err("same source historical import should be locked");
+
+        assert_eq!(error.kind, AppErrorKind::Conflict);
+    }
+
+    #[tokio::test]
+    async fn migrated_history_start_requires_available_capability() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        create_migrated_history_capability_tables(&pool).await;
+        seed_takeout_source(&pool, 1, 10, "supergroup", "channel", 12345).await;
+        let locks = SourceIngestLocks::new();
+        let state = TakeoutImportState::new();
+
+        let error = create_locked_migrated_history_start_records(
+            &pool,
+            &locks,
+            &state,
+            1,
+            10,
+            "supergroup".to_string(),
+        )
+        .await
+        .expect_err("missing capability should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert!(error.message.contains("migrated_history_not_detected"));
+    }
+
     async fn seed_item_source(pool: &sqlx::SqlitePool, source_id: i64) {
         sqlx::query(
             "INSERT OR IGNORE INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at)
@@ -2003,6 +2190,42 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed source");
+    }
+
+    async fn seed_takeout_source(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        account_id: i64,
+        source_subtype: &str,
+        peer_kind: &str,
+        peer_id: i64,
+    ) {
+        sqlx::query(
+            "INSERT OR IGNORE INTO sources (
+                id, source_type, source_subtype, account_id, external_id, title,
+                is_active, is_member, created_at
+             ) VALUES (?, 'telegram', ?, ?, ?, 'Forum', 1, 1, 1)",
+        )
+        .bind(source_id)
+        .bind(source_subtype)
+        .bind(account_id)
+        .bind(peer_id.to_string())
+        .execute(pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO telegram_sources (
+                source_id, account_id, source_subtype, peer_kind, peer_id, resolution_strategy
+             ) VALUES (?, ?, ?, ?, ?, 'dialog')",
+        )
+        .bind(source_id)
+        .bind(account_id)
+        .bind(source_subtype)
+        .bind(peer_kind)
+        .bind(peer_id)
+        .execute(pool)
+        .await
+        .expect("seed telegram source");
     }
 
     fn takeout_raw_message_for_identity_test(

@@ -39,8 +39,8 @@ mod tx;
 mod takeout_import;
 use takeout_import::{
     cancel_takeout_source_import, list_takeout_import_recovery_states,
-    list_takeout_source_import_jobs, run_takeout_export_dc_spike, start_takeout_source_import,
-    TakeoutImportState,
+    list_takeout_source_import_jobs, run_takeout_export_dc_spike,
+    start_takeout_migrated_history_import, start_takeout_source_import, TakeoutImportState,
 };
 
 mod sources;
@@ -163,6 +163,7 @@ pub fn run() {
             get_sync_settings,
             save_sync_settings,
             sync_source,
+            start_takeout_migrated_history_import,
             start_takeout_source_import,
             cancel_takeout_source_import,
             list_takeout_source_import_jobs,
