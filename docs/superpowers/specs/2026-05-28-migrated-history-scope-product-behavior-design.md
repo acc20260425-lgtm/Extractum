@@ -1,0 +1,148 @@
+# Migrated History Scope Product Behavior Design
+
+## Goal
+
+Define how users should browse, analyze, and export Telegram migrated
+small-group history after explicit historical-scope import is available.
+
+This design applies to the historical scope generally, not only to the current
+source `115` validation fixture. Source `115` / batch `20` proved the storage
+and import path: explicit migrated-history import can write migrated rows with
+no bad migrated-domain rows and without adding those rows to default
+`analysis_documents` or `archive_read_items` projections. The remaining product
+question is how a user should intentionally use that historical scope.
+
+## Chosen Policy
+
+Default behavior remains current history only.
+
+Migrated small-group history is a separate historical scope. It is not part of
+normal current supergroup reruns, and it must not become part of default
+browsing, analysis, or export by surprise. Any view or workflow that includes
+migrated history must require an explicit user choice.
+
+The accepted labels are:
+
+- Current supergroup history
+- Migrated small-group history
+- Merged timeline
+
+Rows from the migrated historical scope must carry a visible label when mixed
+with current history, such as `Migrated from old group` or
+`Historical small-group history`.
+
+## Browsing
+
+The source reader opens in `Current supergroup history` by default.
+
+When a source has imported migrated rows, the reader shows a scope control:
+
+```text
+Current history | Migrated small-group history | Merged timeline
+```
+
+Scope behavior:
+
+- `Current history` shows only current supergroup rows.
+- `Migrated small-group history` shows only rows with
+  `migration_domain = migrated_from_chat` and `is_migrated_history = 1`.
+- `Merged timeline` combines current and migrated rows, but every migrated row
+  must be visibly labeled.
+
+`Merged timeline` is never the default. It is an explicit viewing mode for users
+who want conversational continuity and understand that old rows came from the
+pre-upgrade small-group history.
+
+If migrated history is only available but not imported yet, browsing keeps the
+existing explicit import action/status and does not expose an empty historical
+scope mode.
+
+## Analysis
+
+Default corpus selection remains current history only.
+
+Report setup adds an explicit option such as:
+
+```text
+Include migrated historical scope
+```
+
+When this option is off, migrated rows stay excluded from analysis corpus
+construction. When it is on, corpus capture includes migrated rows and records
+the scope decision in saved-run metadata. Follow-up chat, evidence, run detail,
+and saved-run inspection must be able to explain whether historical rows were
+included.
+
+The snapshot contract is important: a completed run must not later look as if
+migrated history was part of the ordinary source history. The saved snapshot
+must preserve the explicit inclusion decision and expose migrated evidence with
+a historical-scope marker.
+
+## Export
+
+Default export remains current history only.
+
+NotebookLM and related export flows add an explicit option such as:
+
+```text
+Include migrated historical scope
+```
+
+When included, export output must make the historical scope visible. Acceptable
+first-slice output shapes are:
+
+- separate current-history and migrated-history sections; or
+- merged output where every migrated row has explicit metadata markers.
+
+Exported migrated rows carry markers equivalent to:
+
+```yaml
+history_scope: migrated_small_group_history
+migration_domain: migrated_from_chat
+```
+
+The export must not silently flatten migrated small-group history into one
+continuous current-history source, because downstream tools would treat that as
+ordinary source history.
+
+## Data And Read-Model Contract
+
+The existing storage markers remain the source of truth:
+
+- `telegram_messages.is_migrated_history = 1`
+- `telegram_messages.migration_domain = migrated_from_chat`
+- native old-history identity in `history_peer_kind` / `history_peer_id`
+
+Default `analysis_documents` and `archive_read_items` projections continue to
+exclude migrated rows. Opted-in browsing, analysis, and export may query or
+build scoped projections, but they must not weaken the default exclusion
+contract.
+
+Schema changes are non-goals unless implementation proves that explicit scope
+selection cannot be represented safely with existing columns and snapshot/export
+metadata.
+
+## Non-Goals
+
+- Do not make merged timeline the default browsing mode.
+- Do not include migrated rows in default analysis corpus selection.
+- Do not include migrated rows in default NotebookLM/export output.
+- Do not create default `analysis_documents` or `archive_read_items` rows for
+  migrated history.
+- Do not rewrite migrated old-chat rows into current supergroup identity.
+- Do not design deletion, purge, or unimport behavior in this slice.
+
+## Tests And Validation
+
+The implementation plan should include tests proving:
+
+- default browsing/read-model paths exclude migrated rows;
+- opted-in migrated-history browsing returns migrated rows with labels;
+- merged timeline includes both domains and labels migrated rows;
+- default analysis corpus excludes migrated rows;
+- opted-in analysis corpus includes migrated rows and persists the decision in
+  saved-run snapshot metadata;
+- default export excludes migrated rows;
+- opted-in export includes migrated rows with visible historical-scope markers;
+- existing source `115` E2E evidence remains valid: migrated rows have no bad
+  migrated-domain flags and default projections contain zero migrated rows.

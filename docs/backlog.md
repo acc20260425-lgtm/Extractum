@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | define domain-aware merged timeline, analysis, and export behavior for migrated historical scope |
+| High | Takeout source import | implement explicit browsing, analysis, and export controls for migrated historical scope |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
@@ -122,11 +122,18 @@ Priority: high.
     `migrated_history_imported = 1`, `3` inserted migrated rows, zero warnings,
     zero bad migrated-domain rows, and zero migrated rows in default
     `analysis_documents` / `archive_read_items` projections.
-- [ ] define domain-aware merged timeline, browsing, analysis, and export
+- [x] define domain-aware merged timeline, browsing, analysis, and export
   behavior for migrated historical scope after explicit import
-  - The remaining work is product behavior for viewing/using the imported
-    historical scope; the storage/import path itself has passed the sanitized
-    source `115` E2E check.
+  - Product behavior is specified in
+    `docs/superpowers/specs/2026-05-28-migrated-history-scope-product-behavior-design.md`.
+    Defaults remain current-history only; browsing, analysis, and export include
+    migrated historical scope only after explicit user choice.
+- [ ] implement explicit browsing, analysis, and export controls for migrated
+  historical scope
+  - Scope selector: `Current history`, `Migrated small-group history`, and
+    explicit `Merged timeline`.
+  - Analysis/export opt-ins must preserve historical-scope markers in snapshots
+    and output metadata.
 - [x] decide whether Takeout import should refresh the forum-topic catalog after successful finish
   - Policy implemented: completed Takeout imports refresh forum topics for
     eligible supergroup sources, including completed partial imports, while
