@@ -43,6 +43,7 @@ export type TelegramHistoryScope = "current" | "migrated" | "merged";
 - Telegram source browsing uses the direct scoped query for first and subsequent pages. The archive read model may remain available for non-Telegram or legacy current-only paths, but it is not used for Telegram reader pagination until it stores the full ordering tuple.
 - `analysis_runs.telegram_history_scope` is a nullable text/check migration; old runs map to `current`.
 - Source-group analysis opt-in includes migrated rows only for group members that actually have imported migrated rows.
+- Backend analysis opt-in is the source of truth: if a Telegram request explicitly sets `include_migrated_history = true`, store `analysis_runs.telegram_history_scope = current_plus_migrated` even when the selected sources match zero migrated rows.
 - Opt-in migrated rows participate in analysis preflight message count, chunk estimate, and estimated input chars.
 - NotebookLM first slice uses separate current/migrated sections, not a silently merged export.
 
@@ -57,6 +58,15 @@ Use explicit constants per layer. Do not reuse one layer's values in another lay
 | Analysis run | `analysis_runs.telegram_history_scope` | `current`, `current_plus_migrated` |
 | Analysis message metadata | `metadata.history_scope` | `current`, `migrated` |
 | NotebookLM YAML/export rows | `history_scope` | `current_supergroup_history`, `migrated_small_group_history` |
+
+## Pre-Implementation Hardening Decisions
+
+1. Telegram source browsing uses the direct scoped query for all scoped cursor pages until archive rows expose the full cursor tuple.
+2. Source item cursors are opaque strings at the frontend boundary; raw peer ids stay backend-internal and are never rendered, logged, or persisted in frontend snapshots.
+3. Archive export current loader populates default scope markers: `history_scope = current_supergroup_history`, `migration_domain = NULL`.
+4. Available-but-not-imported UI state is implemented and tested separately from imported-zero-row state.
+5. Migration `0003_analysis_telegram_history_scope.sql` is added to the docs migration table.
+6. Explicit Telegram analysis opt-in with zero migrated rows succeeds and records `current_plus_migrated`; the UI usually hides the option without rows, but backend behavior remains deterministic.
 
 ## File Structure
 
@@ -1293,7 +1303,24 @@ cargo test --manifest-path src-tauri\Cargo.toml default_source_browsing_does_not
 
 Expected: all pass.
 
-- [ ] **Step 11: Commit Task 2**
+- [ ] **Step 11: Run manual source browsing smoke**
+
+In a local development build, open the analysis source reader for a Telegram source where `migratedHistoryRowCount > 0`. Do not copy source titles, usernames, message text, or raw peer ids into docs or logs.
+
+Manual checks:
+
+```text
+1. Default source reader mode shows Current supergroup history.
+2. Default mode does not show migrated-history badges.
+3. Switching to Migrated small-group history returns only migrated rows and shows migrated-history badges.
+4. Switching to Merged timeline returns current and migrated rows with stable order.
+5. Loading another page in Merged timeline does not duplicate or skip rows with equal published_at.
+6. Browser/dev console does not print decoded cursor payloads or history_peer_id values.
+```
+
+Expected: all checks pass before starting Task 3.
+
+- [ ] **Step 12: Commit Task 2**
 
 Run:
 
@@ -2237,6 +2264,38 @@ async fn source_group_opt_in_includes_only_members_with_migrated_rows() {
 
     assert_eq!(corpus.iter().map(|message| message.item_id).collect::<Vec<_>>(), vec![11, 20, 10]);
 }
+
+#[tokio::test]
+async fn explicit_analysis_opt_in_with_zero_migrated_rows_keeps_current_corpus() {
+    let pool = snapshot_pool().await;
+    seed_analysis_source(&pool, 1, "telegram", "supergroup").await;
+    seed_telegram_item(&pool, 10, 1, "10", 100, "current only", false).await;
+    crate::analysis_documents::rebuild_analysis_documents_for_source(&pool, 1)
+        .await
+        .expect("rebuild docs");
+
+    let request = CorpusLoadRequest {
+        source_type: "telegram".to_string(),
+        source_ids: vec![1],
+        period_from: 1,
+        period_to: 200,
+        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+        include_migrated_history: true,
+    };
+
+    let corpus = load_corpus_messages(&pool, &request).await.expect("load corpus");
+    assert_eq!(corpus.iter().map(|message| message.item_id).collect::<Vec<_>>(), vec![10]);
+
+    let preflight = preflight_analysis_run(
+        &pool,
+        &request,
+        16000,
+        AnalysisRunPreflightLimits::default(),
+    )
+    .await
+    .expect("preflight");
+    assert_eq!(preflight.message_count, 1);
+}
 ```
 
 The helper `seed_telegram_item` inserts an item plus `telegram_messages`; for migrated rows set:
@@ -2264,6 +2323,7 @@ Run:
 ```powershell
 cargo test --manifest-path src-tauri\Cargo.toml opted_in_analysis_corpus_includes_migrated_rows_and_counts_preflight
 cargo test --manifest-path src-tauri\Cargo.toml source_group_opt_in_includes_only_members_with_migrated_rows
+cargo test --manifest-path src-tauri\Cargo.toml explicit_analysis_opt_in_with_zero_migrated_rows_keeps_current_corpus
 ```
 
 Expected: fail until the direct migrated corpus loader exists.
@@ -2376,22 +2436,42 @@ telegram_history_scope: row.telegram_history_scope,
 
 - [ ] **Step 7: Thread report opt-in through preflight and insert**
 
-In `start_analysis_report_run`, after resolving sources:
+In `src-tauri/src/analysis/report.rs`, add a small backend-owned resolver:
 
 ```rust
-let include_migrated_history =
-    request.include_migrated_history && resolved_sources.source_type == "telegram";
-if request.include_migrated_history && resolved_sources.source_type != "telegram" {
-    return Err(AppError::validation(
-        "Migrated historical scope can be included only for Telegram analysis",
-    ));
+fn resolve_analysis_telegram_history_scope(
+    include_migrated_history: bool,
+    source_type: &str,
+) -> AppResult<(&'static str, bool)> {
+    if include_migrated_history && source_type != crate::sources::types::TELEGRAM_SOURCE_TYPE {
+        return Err(AppError::validation(
+            "Migrated historical scope can be included only for Telegram analysis",
+        ));
+    }
+    if include_migrated_history {
+        return Ok((
+            crate::sources::types::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED,
+            true,
+        ));
+    }
+    Ok((
+        crate::sources::types::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+        false,
+    ))
 }
-let telegram_history_scope = if include_migrated_history {
-    crate::sources::types::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED
-} else {
-    crate::sources::types::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT
-};
 ```
+
+In `start_analysis_report_run`, after resolving sources, call the resolver:
+
+```rust
+let (telegram_history_scope, include_migrated_history) =
+    resolve_analysis_telegram_history_scope(
+        request.include_migrated_history,
+        &resolved_sources.source_type,
+    )?;
+```
+
+Do not normalize `telegram_history_scope` back to `current` based on migrated row counts. If the caller explicitly opted in for a Telegram scope, keep `current_plus_migrated` even when no migrated rows match the selected sources or period.
 
 Build `CorpusLoadRequest` with:
 
@@ -2415,6 +2495,26 @@ assert_eq!(current_plus_migrated_duplicate, Some(migrated_run_id));
 In `src-tauri/src/analysis/report.rs`, add:
 
 ```rust
+#[test]
+fn telegram_history_scope_opt_in_preserves_policy_when_zero_migrated_rows_match() {
+    let (scope, include_migrated_history) =
+        resolve_analysis_telegram_history_scope(true, "telegram")
+            .expect("resolve Telegram opt-in");
+
+    assert!(include_migrated_history);
+    assert_eq!(
+        scope,
+        crate::sources::types::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED
+    );
+}
+
+#[test]
+fn migrated_history_opt_in_rejects_non_telegram_analysis() {
+    let error = resolve_analysis_telegram_history_scope(true, "youtube")
+        .expect_err("reject non-Telegram opt-in");
+    assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+}
+
 #[test]
 fn report_start_request_carries_migrated_history_opt_in_to_corpus_request_shape() {
     let request = StartAnalysisReportRequest {
@@ -2473,6 +2573,9 @@ Run:
 ```powershell
 cargo test --manifest-path src-tauri\Cargo.toml opted_in_analysis_corpus_includes_migrated_rows_and_counts_preflight
 cargo test --manifest-path src-tauri\Cargo.toml source_group_opt_in_includes_only_members_with_migrated_rows
+cargo test --manifest-path src-tauri\Cargo.toml explicit_analysis_opt_in_with_zero_migrated_rows_keeps_current_corpus
+cargo test --manifest-path src-tauri\Cargo.toml telegram_history_scope_opt_in_preserves_policy_when_zero_migrated_rows_match
+cargo test --manifest-path src-tauri\Cargo.toml migrated_history_opt_in_rejects_non_telegram_analysis
 cargo test --manifest-path src-tauri\Cargo.toml default_analysis_corpus_excludes_migrated_history_documents
 cargo test --manifest-path src-tauri\Cargo.toml capture_report_corpus_returns_reloaded_snapshot_before_provider_phases
 cargo test --manifest-path src-tauri\Cargo.toml duplicate
@@ -2781,6 +2884,12 @@ In `docs/database-schema.md`, document:
 `current_plus_migrated`.
 ```
 
+Add migration `0003` to the migration history table:
+
+```markdown
+| 3 | `0003_analysis_telegram_history_scope.sql` | Telegram migrated-history analysis scope marker |
+```
+
 Document source DTO counts:
 
 ```markdown
@@ -2884,6 +2993,7 @@ Expected: commit succeeds.
 - [ ] Default analysis corpus excludes migrated rows.
 - [ ] Opted-in Telegram analysis includes migrated rows from every selected source that has them.
 - [ ] Source-group analysis opt-in does not fail when only some group members have migrated rows.
+- [ ] Explicit Telegram analysis opt-in with zero migrated rows succeeds and stores `current_plus_migrated`.
 - [ ] Analysis preflight counts include opted-in migrated rows.
 - [ ] `analysis_runs.telegram_history_scope` stores `current` or `current_plus_migrated`; old `NULL` runs map to `current`.
 - [ ] Snapshot rows include message-level historical markers in `analysis_run_messages.metadata_zstd`.
@@ -2892,4 +3002,5 @@ Expected: commit succeeds.
 - [ ] `cargo test --manifest-path src-tauri\Cargo.toml` passes.
 - [ ] `npm.cmd test` passes.
 - [ ] `npm.cmd run check` passes.
+- [ ] `docs/database-schema.md` migration table includes version `3`.
 - [ ] `git diff --check` passes.
