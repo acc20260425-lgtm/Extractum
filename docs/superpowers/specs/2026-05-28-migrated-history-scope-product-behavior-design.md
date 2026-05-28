@@ -2,7 +2,7 @@
 
 ## Goal
 
-Define how users should browse, analyze, and export Telegram migrated
+Define how users browse, analyze, and export Telegram migrated
 small-group history after explicit historical-scope import is available.
 
 This design applies to the historical scope generally, not only to the current
@@ -10,7 +10,7 @@ source `115` validation fixture. Source `115` / batch `20` proved the storage
 and import path: explicit migrated-history import can write migrated rows with
 no bad migrated-domain rows and without adding those rows to default
 `analysis_documents` or `archive_read_items` projections. The remaining product
-question is how a user should intentionally use that historical scope.
+question is how a user intentionally uses that historical scope.
 
 ## Chosen Policy
 
@@ -21,11 +21,18 @@ normal current supergroup reruns, and it must not become part of default
 browsing, analysis, or export by surprise. Any view or workflow that includes
 migrated history must require an explicit user choice.
 
-The accepted labels are:
+The stable scope labels are:
 
 - Current supergroup history
 - Migrated small-group history
 - Merged timeline
+
+Compact UI may shorten these labels visually, but DTOs, APIs, tests, and
+stored metadata use stable enum values:
+
+```ts
+type TelegramHistoryScope = 'current' | 'migrated' | 'merged';
+```
 
 Rows from the migrated historical scope must carry a visible label when mixed
 with current history, such as `Migrated from old group` or
@@ -38,12 +45,12 @@ The source reader opens in `Current supergroup history` by default.
 When a source has imported migrated rows, the reader shows a scope control:
 
 ```text
-Current history | Migrated small-group history | Merged timeline
+Current supergroup history | Migrated small-group history | Merged timeline
 ```
 
 Scope behavior:
 
-- `Current history` shows only current supergroup rows.
+- `current` / `Current supergroup history` shows only current supergroup rows.
 - `Migrated small-group history` shows only rows with
   `migration_domain = migrated_from_chat` and `is_migrated_history = 1`.
 - `Merged timeline` combines current and migrated rows, but every migrated row
@@ -56,6 +63,49 @@ pre-upgrade small-group history.
 If migrated history is only available but not imported yet, browsing keeps the
 existing explicit import action/status and does not expose an empty historical
 scope mode.
+
+## API And DTO Contract
+
+Backend defaults must match UI defaults. Direct command calls without a scope
+parameter return current history only.
+
+Source-reader item commands accept an optional history-scope parameter:
+
+```ts
+history_scope?: 'current' | 'migrated' | 'merged'
+```
+
+The backend default is `current`.
+
+Returned item DTOs expose backend-owned scope metadata so the frontend does not
+infer migrated labels from ad hoc heuristics:
+
+```ts
+history_scope: 'current' | 'migrated'
+is_migrated_history: boolean
+migration_domain: null | 'migrated_from_chat'
+history_scope_label: 'Current supergroup history' | 'Migrated small-group history'
+```
+
+For `merged` queries, each row still has row-level `history_scope` of `current`
+or `migrated`. The query-level scope is the request mode, not the row label.
+
+## Merged Timeline Ordering
+
+Merged timeline ordering must be deterministic across paging, around-item
+loading, snapshots, and export.
+
+Order rows by:
+
+1. `published_at`;
+2. history-scope order, with current supergroup rows before migrated
+   small-group rows when timestamps tie;
+3. native Telegram identity, using `history_peer_kind`, `history_peer_id`, and
+   `telegram_message_id`;
+4. local `item_id` as the final tie-breaker.
+
+The implementation may reverse the primary direction for newest-first readers,
+but the same tie-breakers must remain stable within that direction.
 
 ## Analysis
 
@@ -72,6 +122,13 @@ construction. When it is on, corpus capture includes migrated rows and records
 the scope decision in saved-run metadata. Follow-up chat, evidence, run detail,
 and saved-run inspection must be able to explain whether historical rows were
 included.
+
+The first implementation avoids adding a new persistent projection table. The
+analysis corpus loader takes an `include_migrated_history` flag and, when
+enabled, adds a direct scoped query over `items` plus `telegram_messages` for
+migrated rows. The saved snapshot stores the resulting corpus and the metadata
+decision, so completed runs remain reproducible without changing the default
+`analysis_documents` projection.
 
 The snapshot contract is important: a completed run must not later look as if
 migrated history was part of the ordinary source history. The saved snapshot
@@ -134,7 +191,7 @@ metadata.
 
 ## Tests And Validation
 
-The implementation plan should include tests proving:
+The implementation plan includes tests proving:
 
 - default browsing/read-model paths exclude migrated rows;
 - opted-in migrated-history browsing returns migrated rows with labels;
