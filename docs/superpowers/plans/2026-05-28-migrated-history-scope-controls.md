@@ -4,7 +4,7 @@
 
 **Goal:** Add explicit browsing, NotebookLM export, and analysis controls for Telegram migrated small-group history while keeping default behavior current-history-only.
 
-**Architecture:** Preserve the existing storage contract: migrated rows stay in `items + telegram_messages` with `is_migrated_history = 1` and do not enter default `analysis_documents` or `archive_read_items`. Browsing gets a scoped item loader with row markers and deterministic cursors; export gets an explicit opt-in that renders separate current/migrated sections; analysis gets an explicit opt-in that loads migrated rows directly into the saved snapshot and records the run-level decision.
+**Architecture:** Preserve the existing storage contract: migrated rows stay in `items + telegram_messages` with `is_migrated_history = 1` and do not enter default `analysis_documents` or `archive_read_items`. Telegram browsing always uses a scoped direct item loader with row markers and backend-opaque deterministic cursors; archive first-page reads are not mixed with direct cursor paging while archive rows lack the full Telegram ordering tuple. Export gets an explicit opt-in that renders separate current/migrated sections; analysis gets an explicit opt-in that loads migrated rows directly into the saved snapshot and records the run-level decision.
 
 **Tech Stack:** Rust/Tauri commands, SQLx SQLite migrations and tests, existing analysis/report and NotebookLM export modules, Svelte 5, TypeScript API wrappers, Vitest, Cargo tests.
 
@@ -39,6 +39,8 @@ export type TelegramHistoryScope = "current" | "migrated" | "merged";
   2. history-scope order, current before migrated on ties
   3. `history_peer_kind`, `history_peer_id`, `telegram_message_id`
   4. local `item_id`
+- The full cursor tuple stays backend-internal. The source-reader DTO exposes `page_cursor: string` / `before_cursor?: string | null` as an opaque encoded cursor so raw Telegram peer ids are not copied into frontend state, logs, or snapshots.
+- Telegram source browsing uses the direct scoped query for first and subsequent pages. The archive read model may remain available for non-Telegram or legacy current-only paths, but it is not used for Telegram reader pagination until it stores the full ordering tuple.
 - `analysis_runs.telegram_history_scope` is a nullable text/check migration; old runs map to `current`.
 - Source-group analysis opt-in includes migrated rows only for group members that actually have imported migrated rows.
 - Opt-in migrated rows participate in analysis preflight message count, chunk estimate, and estimated input chars.
@@ -55,7 +57,7 @@ export type TelegramHistoryScope = "current" | "migrated" | "merged";
 - Modify: `src-tauri/src/sources/store.rs`
   - Expose sanitized `migrated_history_row_count` and `migrated_history_import_completed`.
 - Modify: `src-tauri/src/sources/items.rs`
-  - Accept `history_scope`, `before_cursor`, and return row-level scope markers.
+  - Accept `history_scope`, opaque `before_cursor`, and return row-level scope markers plus opaque `page_cursor`.
 - Modify: `src-tauri/src/sources/items/query.rs`
   - Add scoped current/migrated/merged item queries and deterministic cursor predicates.
 - Modify: `src/lib/types/sources.ts`
@@ -311,6 +313,40 @@ pub(crate) struct SourceItemsCursor {
     pub(crate) telegram_message_id: i64,
     pub(crate) item_id: i64,
 }
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SourceItemsCursorEnvelope {
+    version: u8,
+    cursor: SourceItemsCursor,
+}
+
+impl SourceItemsCursor {
+    pub(crate) fn encode_opaque(&self) -> crate::error::AppResult<String> {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+
+        let envelope = SourceItemsCursorEnvelope {
+            version: 1,
+            cursor: self.clone(),
+        };
+        let json = serde_json::to_vec(&envelope)
+            .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
+        Ok(URL_SAFE_NO_PAD.encode(json))
+    }
+
+    pub(crate) fn decode_opaque(value: &str) -> crate::error::AppResult<Self> {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+
+        let json = URL_SAFE_NO_PAD
+            .decode(value)
+            .map_err(|_| crate::error::AppError::validation("Invalid source item cursor"))?;
+        let envelope: SourceItemsCursorEnvelope = serde_json::from_slice(&json)
+            .map_err(|_| crate::error::AppError::validation("Invalid source item cursor"))?;
+        if envelope.version != 1 {
+            return Err(crate::error::AppError::validation("Unsupported source item cursor"));
+        }
+        Ok(envelope.cursor)
+    }
+}
 ```
 
 Extend `SourceRecord` and `SourceRecordRow`:
@@ -457,15 +493,8 @@ In `src/lib/types/sources.ts`, add:
 ```ts
 export type TelegramHistoryScope = "current" | "migrated" | "merged";
 export type TelegramItemHistoryScope = "current" | "migrated";
-
-export interface SourceItemsCursor {
-  publishedAt: number;
-  historyScopeOrder: number;
-  historyPeerKind: string;
-  historyPeerId: number;
-  telegramMessageId: number;
-  itemId: number;
-}
+// Backend-opaque cursor. Do not parse, log, snapshot, or render it.
+export type SourceItemsCursor = string;
 ```
 
 Extend `Source`:
@@ -506,14 +535,7 @@ history_scope: "current" | "migrated";
 is_migrated_history: boolean;
 migration_domain: "migrated_from_chat" | null;
 history_scope_label: "Current supergroup history" | "Migrated small-group history";
-page_cursor: {
-  published_at: number;
-  history_scope_order: number;
-  history_peer_kind: string;
-  history_peer_id: number;
-  telegram_message_id: number;
-  item_id: number;
-};
+page_cursor: string;
 ```
 
 Map source fields:
@@ -528,14 +550,7 @@ Map request cursor:
 ```ts
 historyScope: input.historyScope ?? "current",
 beforeCursor: input.beforeCursor
-  ? {
-      published_at: input.beforeCursor.publishedAt,
-      history_scope_order: input.beforeCursor.historyScopeOrder,
-      history_peer_kind: input.beforeCursor.historyPeerKind,
-      history_peer_id: input.beforeCursor.historyPeerId,
-      telegram_message_id: input.beforeCursor.telegramMessageId,
-      item_id: input.beforeCursor.itemId,
-    }
+  ? input.beforeCursor
   : null,
 ```
 
@@ -546,14 +561,7 @@ historyScope: item.history_scope,
 isMigratedHistory: item.is_migrated_history,
 migrationDomain: item.migration_domain,
 historyScopeLabel: item.history_scope_label,
-pageCursor: {
-  publishedAt: item.page_cursor.published_at,
-  historyScopeOrder: item.page_cursor.history_scope_order,
-  historyPeerKind: item.page_cursor.history_peer_kind,
-  historyPeerId: item.page_cursor.history_peer_id,
-  telegramMessageId: item.page_cursor.telegram_message_id,
-  itemId: item.page_cursor.item_id,
-},
+pageCursor: item.page_cursor,
 ```
 
 - [ ] **Step 10: Update API tests**
@@ -561,7 +569,7 @@ pageCursor: {
 In `src/lib/api/sources.test.ts`, update the existing `listSourceItems` fixture with current-history fields and add:
 
 ```ts
-it("passes explicit Telegram history scope and deterministic cursor to source item loading", async () => {
+it("passes explicit Telegram history scope and opaque cursor to source item loading", async () => {
   invokeMock.mockResolvedValueOnce([]);
 
   await expect(
@@ -569,14 +577,7 @@ it("passes explicit Telegram history scope and deterministic cursor to source it
       sourceId: 7,
       limit: 50,
       beforePublishedAt: null,
-      beforeCursor: {
-        publishedAt: 1000,
-        historyScopeOrder: 1,
-        historyPeerKind: "chat",
-        historyPeerId: 777,
-        telegramMessageId: 42,
-        itemId: 99,
-      },
+      beforeCursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
       topicFilter: null,
       historyScope: "merged",
     }),
@@ -587,14 +588,7 @@ it("passes explicit Telegram history scope and deterministic cursor to source it
       sourceId: 7,
       limit: 50,
       beforePublishedAt: null,
-      beforeCursor: {
-        published_at: 1000,
-        history_scope_order: 1,
-        history_peer_kind: "chat",
-        history_peer_id: 777,
-        telegram_message_id: 42,
-        item_id: 99,
-      },
+      beforeCursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
       topicFilter: null,
       historyScope: "merged",
     },
@@ -643,14 +637,16 @@ pub history_scope: String,
 pub is_migrated_history: bool,
 pub migration_domain: Option<String>,
 pub history_scope_label: String,
-pub page_cursor: SourceItemsCursor,
+pub page_cursor: String,
 ```
 
 Update imports:
 
 ```rust
 use super::types::{
-    now_secs, SourceItemsCursor, StoredItemRow, TelegramHistoryScope, TelegramMessageIdentity,
+    now_secs, SourceItemsCursor, StoredItemRow, TELEGRAM_HISTORY_SCOPE_CURRENT,
+    TELEGRAM_HISTORY_SCOPE_LABEL_CURRENT, TELEGRAM_SOURCE_TYPE, TelegramHistoryScope,
+    TelegramMessageIdentity,
     ITEM_KIND_TELEGRAM_MESSAGE, ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
 };
 ```
@@ -659,7 +655,7 @@ Extend `ListSourceItemsRequest`:
 
 ```rust
 pub history_scope: Option<TelegramHistoryScope>,
-pub before_cursor: Option<SourceItemsCursor>,
+pub before_cursor: Option<String>,
 ```
 
 - [ ] **Step 2: Add scoped row type**
@@ -700,46 +696,6 @@ pub(super) struct BrowsableItemRow {
 }
 ```
 
-Add conversion for archive current rows:
-
-```rust
-impl From<StoredItemRow> for BrowsableItemRow {
-    fn from(row: StoredItemRow) -> Self {
-        let telegram_message_id = row.external_id.parse::<i64>().unwrap_or(row.id);
-        Self {
-            id: row.id,
-            source_id: row.source_id,
-            external_id: row.external_id,
-            item_kind: row.item_kind,
-            author: row.author,
-            published_at: row.published_at,
-            content_kind: row.content_kind,
-            has_media: row.has_media,
-            media_kind: row.media_kind,
-            content_zstd: row.content_zstd,
-            media_metadata_zstd: row.media_metadata_zstd,
-            has_raw_data: row.has_raw_data,
-            forum_topic_id: row.forum_topic_id,
-            forum_topic_title: row.forum_topic_title,
-            forum_topic_top_message_id: row.forum_topic_top_message_id,
-            reply_to_msg_id: row.reply_to_msg_id,
-            reply_to_peer_kind: row.reply_to_peer_kind,
-            reply_to_peer_id: row.reply_to_peer_id,
-            reply_to_top_id: row.reply_to_top_id,
-            reaction_count: row.reaction_count,
-            history_scope: TELEGRAM_HISTORY_SCOPE_CURRENT.to_string(),
-            is_migrated_history: false,
-            migration_domain: None,
-            history_scope_label: TELEGRAM_HISTORY_SCOPE_LABEL_CURRENT.to_string(),
-            history_scope_order: 0,
-            history_peer_kind: TELEGRAM_PEER_KIND_CHANNEL.to_string(),
-            history_peer_id: 0,
-            telegram_message_id,
-        }
-    }
-}
-```
-
 - [ ] **Step 3: Add backend tests first**
 
 In `src-tauri/src/sources/items/query.rs`, add:
@@ -765,6 +721,7 @@ async fn scoped_browsing_defaults_to_current_rows() {
     let rows = load_item_rows_from_pool(
         &pool,
         1,
+        "telegram",
         20,
         None,
         None,
@@ -799,6 +756,7 @@ async fn scoped_browsing_can_load_only_migrated_rows_with_labels() {
     let rows = load_item_rows_from_pool(
         &pool,
         1,
+        "telegram",
         20,
         None,
         None,
@@ -841,6 +799,7 @@ async fn merged_browsing_uses_full_cursor_tuple_for_equal_timestamps() {
     let first_page = load_item_rows_from_pool(
         &pool,
         1,
+        "telegram",
         2,
         None,
         None,
@@ -854,9 +813,16 @@ async fn merged_browsing_uses_full_cursor_tuple_for_equal_timestamps() {
     assert_eq!(first_page.iter().map(|row| row.id).collect::<Vec<_>>(), vec![10, 11]);
 
     let cursor = first_page[1].cursor();
+    let encoded_cursor = cursor.encode_opaque().expect("encode opaque cursor");
+    assert!(!encoded_cursor.contains("12345"));
+    assert_eq!(
+        SourceItemsCursor::decode_opaque(&encoded_cursor).expect("decode opaque cursor"),
+        cursor
+    );
     let second_page = load_item_rows_from_pool(
         &pool,
         1,
+        "telegram",
         2,
         None,
         None,
@@ -878,6 +844,7 @@ async fn topic_filters_are_rejected_for_non_current_history_scope() {
     let error = load_item_rows_from_pool(
         &pool,
         1,
+        "telegram",
         20,
         None,
         Some(ForumTopicFilter::Topic { topic_id: 200 }),
@@ -1000,6 +967,16 @@ query = query
     .bind(cursor.item_id);
 ```
 
+The opaque cursor is encoded only at the command DTO boundary:
+
+```rust
+let encoded = row.cursor().encode_opaque()?;
+let decoded = SourceItemsCursor::decode_opaque(&encoded)?;
+assert_eq!(decoded, row.cursor());
+```
+
+Never expose `history_peer_id` or the decoded tuple to TypeScript types, UI state, logs, or snapshots.
+
 - [ ] **Step 6: Implement scoped direct query**
 
 Replace the existing direct items-path SQL builder with a scoped builder. Use a CTE so cursor predicates can refer to the computed ordering fields:
@@ -1099,13 +1076,48 @@ LIMIT ?
 
 For `around_item_id`, resolve the selected row through the same CTE and scope filter into a `SourceItemsCursor`, then call `push_after_cursor_predicate(&mut sql, &cursor, true)`. For normal paging, call `push_after_cursor_predicate(&mut sql, &cursor, false)`.
 
-- [ ] **Step 7: Keep archive path only for current scope**
+- [ ] **Step 7: Use direct scoped query for Telegram browsing**
 
-In `load_item_rows_from_pool`, use archive only when all are true:
+Change `load_item_rows_from_pool` so callers pass the source type:
+
+```rust
+pub(super) async fn load_item_rows_from_pool(
+    pool: &SqlitePool,
+    source_id: i64,
+    source_type: &str,
+    limit: i64,
+    before_published_at: Option<i64>,
+    topic_filter: Option<ForumTopicFilter>,
+    around_item_id: Option<i64>,
+    history_scope: Option<TelegramHistoryScope>,
+    before_cursor: Option<SourceItemsCursor>,
+) -> AppResult<Vec<BrowsableItemRow>>
+```
+
+Use the direct scoped query whenever `source_type == TELEGRAM_SOURCE_TYPE`:
 
 ```rust
 let scope = TelegramHistoryScope::from_optional(history_scope);
-if scope == TelegramHistoryScope::Current
+
+if source_type == TELEGRAM_SOURCE_TYPE {
+    return load_scoped_telegram_item_rows(
+        pool,
+        source_id,
+        limit,
+        topic_filter,
+        around_item_id,
+        scope,
+        before_cursor,
+    )
+    .await;
+}
+```
+
+Keep archive only for non-Telegram, current-history requests that still use the old published-at cursor:
+
+```rust
+if source_type != TELEGRAM_SOURCE_TYPE
+    && scope == TelegramHistoryScope::Current
     && before_cursor.is_none()
     && crate::archive_read_model::source_archive_model_is_ready(pool, source_id).await?
 {
@@ -1118,11 +1130,48 @@ if scope == TelegramHistoryScope::Current
         around_item_id,
     )
     .await
-    .map(|rows| rows.into_iter().map(BrowsableItemRow::from).collect());
+    .map(|rows| rows.into_iter().map(non_telegram_item_row_from_archive).collect());
 }
 ```
 
-For `current` with `before_cursor`, use the direct path so the cursor tuple stays exact.
+Add the non-Telegram archive conversion with synthetic non-private cursor fields:
+
+```rust
+fn non_telegram_item_row_from_archive(row: StoredItemRow) -> BrowsableItemRow {
+    BrowsableItemRow {
+        id: row.id,
+        source_id: row.source_id,
+        external_id: row.external_id,
+        item_kind: row.item_kind,
+        author: row.author,
+        published_at: row.published_at,
+        content_kind: row.content_kind,
+        has_media: row.has_media,
+        media_kind: row.media_kind,
+        content_zstd: row.content_zstd,
+        media_metadata_zstd: row.media_metadata_zstd,
+        has_raw_data: row.has_raw_data,
+        forum_topic_id: row.forum_topic_id,
+        forum_topic_title: row.forum_topic_title,
+        forum_topic_top_message_id: row.forum_topic_top_message_id,
+        reply_to_msg_id: row.reply_to_msg_id,
+        reply_to_peer_kind: row.reply_to_peer_kind,
+        reply_to_peer_id: row.reply_to_peer_id,
+        reply_to_top_id: row.reply_to_top_id,
+        reaction_count: row.reaction_count,
+        history_scope: TELEGRAM_HISTORY_SCOPE_CURRENT.to_string(),
+        is_migrated_history: false,
+        migration_domain: None,
+        history_scope_label: TELEGRAM_HISTORY_SCOPE_LABEL_CURRENT.to_string(),
+        history_scope_order: 0,
+        history_peer_kind: String::new(),
+        history_peer_id: 0,
+        telegram_message_id: row.id,
+    }
+}
+```
+
+Do not convert archive rows into Telegram `BrowsableItemRow` values. Archive rows do not contain the real `history_peer_kind`, `history_peer_id`, and `telegram_message_id`, so mixing an archive first page with a direct `before_cursor` page would make equal-timestamp paging unstable.
 
 - [ ] **Step 8: Map scoped row to item record**
 
@@ -1133,20 +1182,60 @@ history_scope: row.history_scope,
 is_migrated_history: row.is_migrated_history,
 migration_domain: row.migration_domain,
 history_scope_label: row.history_scope_label,
-page_cursor: row.cursor(),
+page_cursor: row.cursor().encode_opaque()?,
 ```
 
 - [ ] **Step 9: Validate non-current scope requests**
 
-In `list_source_items`, reject non-current topic filters:
+In `list_source_items`, load the source type before dispatch:
+
+```rust
+let source_type: String = sqlx::query_scalar("SELECT source_type FROM sources WHERE id = ?")
+    .bind(request.source_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(AppError::database)?
+    .ok_or_else(|| AppError::not_found("Source not found"))?;
+let is_telegram_source = source_type == TELEGRAM_SOURCE_TYPE;
+```
+
+Reject non-current topic filters for Telegram historical scopes:
 
 ```rust
 let history_scope = TelegramHistoryScope::from_optional(request.history_scope);
-if history_scope != TelegramHistoryScope::Current && request.topic_filter.is_some() {
+if !is_telegram_source && history_scope != TelegramHistoryScope::Current {
+    return Err(AppError::validation(
+        "Telegram history scope applies only to Telegram source browsing",
+    ));
+}
+if is_telegram_source
+    && history_scope != TelegramHistoryScope::Current
+    && request.topic_filter.is_some()
+{
     return Err(AppError::validation(
         "Telegram forum topic filters apply only to current supergroup history",
     ));
 }
+```
+
+Decode opaque cursors only for Telegram source browsing:
+
+```rust
+let before_cursor = match (is_telegram_source, request.before_cursor.as_deref()) {
+    (true, Some(cursor)) => Some(SourceItemsCursor::decode_opaque(cursor)?),
+    (true, None) => None,
+    (false, Some(_)) => {
+        return Err(AppError::validation(
+            "Opaque source item cursors are only supported for Telegram source browsing",
+        ));
+    }
+    (false, None) => None,
+};
+let before_published_at = if is_telegram_source {
+    None
+} else {
+    request.before_published_at
+};
 ```
 
 Then call:
@@ -1155,12 +1244,13 @@ Then call:
 let rows = load_item_rows_from_pool(
     &pool,
     request.source_id,
+    &source_type,
     limit,
-    request.before_published_at,
+    before_published_at,
     request.topic_filter,
     request.around_item_id,
     Some(history_scope),
-    request.before_cursor,
+    before_cursor,
 )
 .await?;
 ```
@@ -1246,14 +1336,7 @@ historyScope: "current",
 isMigratedHistory: false,
 migrationDomain: null,
 historyScopeLabel: "Current supergroup history",
-pageCursor: {
-  publishedAt: 1710000000,
-  historyScopeOrder: 0,
-  historyPeerKind: "channel",
-  historyPeerId: 12345,
-  telegramMessageId: 100,
-  itemId: 1,
-},
+pageCursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
 ```
 
 Add:
@@ -1423,26 +1506,40 @@ In `src/routes/analysis/+page.svelte`, add state:
 ```ts
 let telegramHistoryScope = $state<TelegramHistoryScope>("current");
 let sourceItemsCursor = $state<SourceItemsCursor | null>(null);
+let sourceItemsBeforePublishedAt = $state<number | null>(null);
 ```
 
-Replace the previous numeric cursor assignment:
+Replace the previous numeric cursor assignment with separate Telegram and legacy cursors:
 
 ```ts
-sourceItemsCursor = items.at(-1)?.pageCursor ?? (append ? previousCursor : null);
+const previousCursor = sourceItemsCursor;
+const previousBeforePublishedAt = sourceItemsBeforePublishedAt;
+const lastItem = items.at(-1);
+sourceItemsCursor = lastItem?.pageCursor ?? (append ? previousCursor : null);
+sourceItemsBeforePublishedAt =
+  lastItem?.publishedAt ?? (append ? previousBeforePublishedAt : null);
 ```
 
 When loading source items, send:
 
 ```ts
+const isTelegramSource = source.sourceType === "telegram";
 historyScope: source.sourceType === "telegram" ? telegramHistoryScope : "current",
 beforeCursor: null,
+beforePublishedAt: null,
 ```
 
 When loading more:
 
 ```ts
-historyScope: source.sourceType === "telegram" ? telegramHistoryScope : "current",
-beforeCursor: sourceItemsCursor,
+const isTelegramSource = source.sourceType === "telegram";
+const canPage = isTelegramSource
+  ? sourceItemsCursor !== null
+  : sourceItemsBeforePublishedAt !== null;
+if (!canPage) return;
+historyScope: isTelegramSource ? telegramHistoryScope : "current",
+beforeCursor: isTelegramSource ? sourceItemsCursor : null,
+beforePublishedAt: isTelegramSource ? null : sourceItemsBeforePublishedAt,
 ```
 
 Add a scope-change handler:
@@ -1464,6 +1561,8 @@ Reset to current when selecting a different source:
 
 ```ts
 telegramHistoryScope = "current";
+sourceItemsCursor = null;
+sourceItemsBeforePublishedAt = null;
 ```
 
 - [ ] **Step 7: Update frontend contract tests**
@@ -1486,8 +1585,11 @@ In `src/lib/analysis-source-readers-route.test.ts`, add:
 ```ts
 it("passes Telegram history scope and cursor through live source item loading", () => {
   expect(analysisPageSource).toContain("telegramHistoryScope");
-  expect(analysisPageSource).toContain("beforeCursor: sourceItemsCursor");
-  expect(analysisPageSource).toContain("historyScope: source.sourceType === \"telegram\" ? telegramHistoryScope : \"current\"");
+  expect(analysisPageSource).toContain("sourceItemsBeforePublishedAt");
+  expect(analysisPageSource).toContain("const canPage = isTelegramSource");
+  expect(analysisPageSource).toContain("beforeCursor: isTelegramSource ? sourceItemsCursor : null");
+  expect(analysisPageSource).toContain("beforePublishedAt: isTelegramSource ? null : sourceItemsBeforePublishedAt");
+  expect(analysisPageSource).toContain("historyScope: isTelegramSource ? telegramHistoryScope : \"current\"");
   expect(analysisPageSource).toContain("function changeTelegramHistoryScope");
 });
 ```
@@ -2670,10 +2772,12 @@ Expected: commit succeeds.
 ## Final Acceptance Checklist
 
 - [ ] Direct `list_source_items` calls without `history_scope` return current history only.
-- [ ] Current browsing excludes migrated rows through both archive and items paths.
+- [ ] Telegram browsing never mixes archive first pages with direct cursor pages; it uses the direct scoped query for every Telegram reader page.
+- [ ] Current Telegram browsing excludes migrated rows through the direct scoped items path.
 - [ ] Migrated browsing returns only `is_migrated_history = 1` rows with backend-owned labels.
 - [ ] Merged browsing returns both current and migrated rows and labels every migrated row.
 - [ ] Merged paging and around-item loading use the full ordering tuple, not only `published_at` or `item_id`.
+- [ ] Frontend source item cursors are opaque strings and never expose `history_peer_id` or other raw Telegram peer ids.
 - [ ] Current forum-topic filters are not applied to migrated small-group history.
 - [ ] Source DTOs expose row counts and import-completed state without old chat ids.
 - [ ] Available-but-not-imported and imported-zero-row states render explanatory UI states.
