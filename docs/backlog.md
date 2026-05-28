@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-26
+> **Updated:** 2026-05-28
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -116,8 +116,17 @@ Priority: high.
 - [x] implement explicit migrated small-group history opt-in import as a
   separate Takeout action with source-level capability state, native old-chat
   identity, same-source locking, and default current-history read behavior
+  - Source `115` E2E validation on 2026-05-28 passed: normal Takeout batch
+    `19` refreshed capability to `available`; explicit migrated-history batch
+    `20` completed with `history_scope = migrated_small_group_history`,
+    `migrated_history_imported = 1`, `3` inserted migrated rows, zero warnings,
+    zero bad migrated-domain rows, and zero migrated rows in default
+    `analysis_documents` / `archive_read_items` projections.
 - [ ] define domain-aware merged timeline, browsing, analysis, and export
   behavior for migrated historical scope after explicit import
+  - The remaining work is product behavior for viewing/using the imported
+    historical scope; the storage/import path itself has passed the sanitized
+    source `115` E2E check.
 - [x] decide whether Takeout import should refresh the forum-topic catalog after successful finish
   - Policy implemented: completed Takeout imports refresh forum topics for
     eligible supergroup sources, including completed partial imports, while

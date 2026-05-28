@@ -4,9 +4,9 @@
 > `not run` until real Telegram accounts and representative sources are
 > available.
 
-Updated: 2026-05-25
+Updated: 2026-05-28
 
-Current matrix summary: `9 passed`, `1 needs follow-up`, `0 blocked`,
+Current matrix summary: `10 passed`, `1 needs follow-up`, `0 blocked`,
 `0 not run`.
 
 Covered highlights:
@@ -31,6 +31,10 @@ Covered highlights:
 - source `115` completed migrated small-group-to-supergroup Takeout smoke as
   batch `18`, recording `migrated_history_deferred` without importing old
   `chat` history rows;
+- source `115` later completed the explicit migrated-history opt-in E2E path:
+  normal Takeout batch `19` refreshed source-level availability and explicit
+  migrated-history batch `20` imported `3` old-history rows with the migrated
+  domain while default read projections stayed clean;
 - deterministic code-backed shifted export-DC fallback coverage proving local
   fallback transition, non-fallback Telegram RPC behavior, durable
   `export_dc_fallback` warning provenance, and sanitized diagnostics; natural
@@ -71,6 +75,7 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | `CHANNEL_PRIVATE` fallback | passed | 114 | 17 | `only_my_messages_fallback` warning code, `only_my_messages` flag, partial/private history scope, completed/partial batch summary | Source `114` batch `17` completed as partial private history with durable only-my-messages fallback evidence and zero observations |
 | Shifted export DC fallback | passed | n/a | n/a | deterministic Rust fallback/provenance tests, validation diagnostic warning-code coverage | Code-backed validation proves shifted export-DC local-error fallback, non-fallback Telegram RPC behavior, one durable `export_dc_fallback` warning, and sanitized diagnostics; natural live fallback remains unobserved |
 | Migrated small-group-to-supergroup smoke | passed | 115 | 18 | completed/partial Takeout batch summary, `migrated_history_deferred` warning code, migrated-history flags, unsafe old `chat` row check | Batch `18` detected migrated history, deferred import, and left old `chat` history rows at zero |
+| Explicit migrated-history opt-in import | passed | 115 | 20 | source-level capability state, completed migrated historical-scope batch summary, migrated-domain row flags, default projection exclusion checks | Batch `19` refreshed availability; batch `20` imported `3` migrated rows under `migrated_from_chat`, with no migrated rows in default analysis/read projections |
 | Forum-topic decision input | passed | 22 | 11 | topic catalog/membership aggregate counters from bounded partial Takeout plus code-level refresh-policy tests | Policy is now decided and code-backed: completed supergroup Takeout refreshes the topic catalog and refresh failure records `forum_topic_refresh_failed`; source 21/22 partial runs remain supporting decision input, not completed live proof |
 
 ## Procedure
@@ -90,6 +95,58 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
+
+### 2026-05-28 Source 115 Explicit Migrated-History Opt-In E2E
+
+App commit: `3c3c5e3`. Working tree was clean before live execution on
+`main`. A live database backup was created before starting the Takeout flow.
+
+Normal Takeout availability refresh:
+
+| Field | Value |
+| --- | --- |
+| source_id | 115 |
+| account_id | 11 |
+| batch_id | 19 |
+| status | completed |
+| completeness | partial |
+| history_scope | current_history_with_migrated_deferred |
+| migrated_history_detected | 1 |
+| migrated_history_imported | 0 |
+| inserted | 0 |
+| skipped | 1 |
+| warnings | 1 |
+| warning_code | migrated_history_deferred |
+| capability_status_after_batch | available |
+
+Explicit migrated-history import:
+
+| Field | Value |
+| --- | --- |
+| batch_id | 20 |
+| status | completed |
+| completeness | complete |
+| history_scope | migrated_small_group_history |
+| migrated_history_detected | 1 |
+| migrated_history_imported | 1 |
+| inserted | 3 |
+| skipped | 0 |
+| warnings | 0 |
+
+Post-run aggregate checks:
+
+| Field | Value |
+| --- | ---: |
+| migrated_rows | 3 |
+| bad_migrated_rows | 0 |
+| migrated_rows_in_analysis_documents | 0 |
+| migrated_rows_in_archive_read_items | 0 |
+| quick_check_ok | 1 |
+| foreign_key_check_count | 0 |
+
+Result: explicit migrated-history opt-in import passed for source `115`.
+Imported rows were stored with the migrated-history domain and remained excluded
+from default analysis/read projections.
 
 ### 2026-05-25 Shifted Export DC Fallback Code-Backed Validation
 
