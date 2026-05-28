@@ -64,6 +64,17 @@ If migrated history is only available but not imported yet, browsing keeps the
 existing explicit import action/status and does not expose an empty historical
 scope mode.
 
+Capability and import-state UI rules:
+
+- `available` but not imported: show a CTA/status such as
+  `Migrated small-group history available`.
+- imported with `migrated_row_count > 0`: show the scope control.
+- imported and completed with `migrated_row_count = 0`: show an informational
+  empty state such as `Migrated small-group history imported; no messages were
+  found`. Do not show the normal scope control unless a direct route/state
+  requests the historical scope; in that case, render the same informational
+  empty state.
+
 ## API And DTO Contract
 
 Backend defaults must match UI defaults. Direct command calls without a scope
@@ -130,6 +141,33 @@ migrated rows. The saved snapshot stores the resulting corpus and the metadata
 decision, so completed runs remain reproducible without changing the default
 `analysis_documents` projection.
 
+Run-level snapshot decision storage uses a new nullable field on
+`analysis_runs`:
+
+```text
+telegram_history_scope = current | current_plus_migrated
+```
+
+This is the justified schema addition for the first implementation. Existing
+`analysis_runs` has snapshot fields and `youtube_corpus_mode`, but no general
+run-level metadata blob. A dedicated nullable field keeps the Telegram scope
+decision queryable, easy to expose in saved-run DTOs, and aligned with the
+existing YouTube corpus-mode pattern.
+
+Message-level metadata stays in `analysis_run_messages.metadata_zstd` and
+includes historical-scope markers for Telegram rows:
+
+```yaml
+history_scope: current | migrated
+migration_domain: null | migrated_from_chat
+history_peer_kind: channel | chat
+history_peer_id: <private numeric peer id>
+```
+
+Docs and UI expose only sanitized labels and booleans. Raw peer ids remain
+internal snapshot metadata for deterministic evidence resolution and must not be
+rendered in tracked docs or user-facing copy.
+
 The snapshot contract is important: a completed run must not later look as if
 migrated history was part of the ordinary source history. The saved snapshot
 must preserve the explicit inclusion decision and expose migrated evidence with
@@ -146,10 +184,15 @@ Include migrated historical scope
 ```
 
 When included, export output must make the historical scope visible. Acceptable
-first-slice output shapes are:
+first-slice output uses separate sections:
 
-- separate current-history and migrated-history sections; or
-- merged output where every migrated row has explicit metadata markers.
+```text
+# Current supergroup history
+...
+
+# Migrated small-group history
+...
+```
 
 Exported migrated rows carry markers equivalent to:
 
@@ -161,6 +204,9 @@ migration_domain: migrated_from_chat
 The export must not silently flatten migrated small-group history into one
 continuous current-history source, because downstream tools would treat that as
 ordinary source history.
+
+Merged export is deferred. It can be designed later if users need a continuity
+export after the safer sectioned export exists.
 
 ## Data And Read-Model Contract
 
@@ -179,6 +225,40 @@ Schema changes are non-goals unless implementation proves that explicit scope
 selection cannot be represented safely with existing columns and snapshot/export
 metadata.
 
+## Reply And Topic Semantics
+
+Reply lookup respects history scope.
+
+- Replies inside migrated rows look up targets inside the original old-history
+  domain.
+- Replies inside current rows look up targets inside current supergroup
+  history.
+- Cross-scope replies are not guessed. A migrated row and a current row are
+  connected only through an explicit native identity match or a later designed
+  bridge.
+
+Forum topic semantics also stay scoped. Current supergroup topic filters do not
+automatically apply to migrated small-group history, because the old group did
+not necessarily have forum topics. A source reader or export can show migrated
+rows under a historical-scope section, but it must not infer current forum-topic
+membership for those rows.
+
+## Implementation Slicing
+
+Implement in this order:
+
+1. Browsing first: backend scope parameter, DTO markers, deterministic merged
+   ordering, source reader segmented control, and tests for `current`,
+   `migrated`, and `merged`.
+2. Export second: explicit opt-in and separate current/migrated sections.
+   Tests cover default exclusion and marker inclusion.
+3. Analysis third: report setup opt-in, preflight counts, corpus loader flag,
+   run-level `telegram_history_scope`, snapshot metadata markers, and evidence
+   labels.
+4. Docs/backlog cleanup after implementation: move completed behavior from
+   backlog into current-state docs and archive superseded planning notes only
+   when they remain useful as historical context.
+
 ## Non-Goals
 
 - Do not make merged timeline the default browsing mode.
@@ -186,20 +266,32 @@ metadata.
 - Do not include migrated rows in default NotebookLM/export output.
 - Do not create default `analysis_documents` or `archive_read_items` rows for
   migrated history.
+- Do not add a persistent scoped analysis projection table in the first
+  implementation.
 - Do not rewrite migrated old-chat rows into current supergroup identity.
 - Do not design deletion, purge, or unimport behavior in this slice.
+- Do not implement merged NotebookLM/export output in the first slice.
 
 ## Tests And Validation
 
 The implementation plan includes tests proving:
 
 - default browsing/read-model paths exclude migrated rows;
+- backend direct calls default to `current` when `history_scope` is omitted;
 - opted-in migrated-history browsing returns migrated rows with labels;
 - merged timeline includes both domains and labels migrated rows;
+- merged timeline ordering is stable across paging and around-item loading;
+- available-but-not-imported and imported-zero-row states render explanatory
+  status instead of empty broken readers;
 - default analysis corpus excludes migrated rows;
 - opted-in analysis corpus includes migrated rows and persists the decision in
-  saved-run snapshot metadata;
+  `analysis_runs.telegram_history_scope`;
+- opted-in snapshot rows include message-level historical markers in
+  `analysis_run_messages.metadata_zstd`;
 - default export excludes migrated rows;
-- opted-in export includes migrated rows with visible historical-scope markers;
+- opted-in export writes separate current and migrated sections with visible
+  historical-scope markers;
+- reply and topic lookup does not infer current supergroup topic/reply semantics
+  for migrated rows;
 - existing source `115` E2E evidence remains valid: migrated rows have no bad
   migrated-domain flags and default projections contain zero migrated rows.
