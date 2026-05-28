@@ -4,7 +4,7 @@
 
 **Goal:** Add explicit browsing, NotebookLM export, and analysis controls for Telegram migrated small-group history while keeping default behavior current-history-only.
 
-**Architecture:** Preserve the existing storage contract: migrated rows stay in `items + telegram_messages` with `is_migrated_history = 1` and do not enter default `analysis_documents` or `archive_read_items`. Telegram browsing always uses a scoped direct item loader with row markers and backend-opaque deterministic cursors; archive first-page reads are not mixed with direct cursor paging while archive rows lack the full Telegram ordering tuple. Export gets an explicit opt-in that renders separate current/migrated sections; analysis gets an explicit opt-in that loads migrated rows directly into the saved snapshot and records the run-level decision.
+**Architecture:** Preserve the existing storage contract: migrated rows stay in `items + telegram_messages` with `is_migrated_history = 1` and do not enter default `analysis_documents` or `archive_read_items`. Telegram browsing always uses a scoped direct item loader with row markers and pragmatic opaque deterministic cursors; archive first-page reads are not mixed with direct cursor paging while archive rows lack the full Telegram ordering tuple. Export gets an explicit opt-in that renders separate current/migrated sections; analysis gets an explicit opt-in that loads migrated rows directly into the saved snapshot and records the run-level decision.
 
 **Tech Stack:** Rust/Tauri commands, SQLx SQLite migrations and tests, existing analysis/report and NotebookLM export modules, Svelte 5, TypeScript API wrappers, Vitest, Cargo tests.
 
@@ -39,7 +39,7 @@ export type TelegramHistoryScope = "current" | "migrated" | "merged";
   2. history-scope order, current before migrated on ties
   3. `history_peer_kind`, `history_peer_id`, `telegram_message_id`
   4. local `item_id`
-- The full cursor tuple stays backend-internal. The source-reader DTO exposes `page_cursor: string` / `before_cursor?: string | null` as an opaque encoded cursor so raw Telegram peer ids are not copied into frontend state, logs, or snapshots.
+- The source-reader DTO exposes `page_cursor: string` / `before_cursor?: string | null` as a pragmatic opaque cursor. In this first slice it is base64-encoded JSON, so it is opaque to TypeScript types and UI code but not a confidentiality boundary. Frontend code must not parse, render, log, or snapshot-test decoded cursor contents.
 - Telegram source browsing uses the direct scoped query for first and subsequent pages. The archive read model may remain available for non-Telegram or legacy current-only paths, but it is not used for Telegram reader pagination until it stores the full ordering tuple.
 - `analysis_runs.telegram_history_scope` is a nullable text/check migration; old runs map to `current`.
 - Source-group analysis opt-in includes migrated rows only for group members that actually have imported migrated rows.
@@ -62,7 +62,7 @@ Use explicit constants per layer. Do not reuse one layer's values in another lay
 ## Pre-Implementation Hardening Decisions
 
 1. Telegram source browsing uses the direct scoped query for all scoped cursor pages until archive rows expose the full cursor tuple.
-2. Source item cursors are opaque strings at the frontend boundary; raw peer ids stay backend-internal and are never rendered, logged, or persisted in frontend snapshots.
+2. Source item cursors are opaque strings at the frontend application-code boundary. They are base64-encoded JSON in this first slice, so frontend code must not parse, render, log, or snapshot decoded cursor contents. A strict privacy boundary would require encrypted cursors or backend-issued cursor tokens.
 3. Archive export current loader populates default scope markers: `history_scope = current_supergroup_history`, `migration_domain = NULL`.
 4. Available-but-not-imported UI state is implemented and tested separately from imported-zero-row state.
 5. Migration `0003_analysis_telegram_history_scope.sql` is added to the docs migration table.
@@ -527,7 +527,7 @@ In `src/lib/types/sources.ts`, add:
 ```ts
 export type TelegramHistoryScope = "current" | "migrated" | "merged";
 export type TelegramItemHistoryScope = "current" | "migrated";
-// Backend-opaque cursor. Do not parse, log, snapshot, or render it.
+// Pragmatic opaque cursor. Do not parse, log, snapshot, or render it.
 export type SourceItemsCursor = string;
 ```
 
@@ -848,7 +848,10 @@ async fn merged_browsing_uses_full_cursor_tuple_for_equal_timestamps() {
 
     let cursor = first_page[1].cursor();
     let encoded_cursor = cursor.encode_opaque().expect("encode opaque cursor");
-    assert!(!encoded_cursor.contains("12345"));
+    assert_ne!(
+        encoded_cursor,
+        serde_json::to_string(&cursor).expect("serialize cursor")
+    );
     assert_eq!(
         SourceItemsCursor::decode_opaque(&encoded_cursor).expect("decode opaque cursor"),
         cursor
@@ -1001,7 +1004,7 @@ query = query
     .bind(cursor.item_id);
 ```
 
-The opaque cursor is encoded only at the command DTO boundary:
+The pragmatic opaque cursor is encoded only at the command DTO boundary:
 
 ```rust
 let encoded = row.cursor().encode_opaque()?;
@@ -1009,7 +1012,7 @@ let decoded = SourceItemsCursor::decode_opaque(&encoded)?;
 assert_eq!(decoded, row.cursor());
 ```
 
-Never expose `history_peer_id` or the decoded tuple to TypeScript types, UI state, logs, or snapshots.
+Do not parse, render, log, or snapshot-test decoded cursor contents in frontend code. Base64 JSON keeps the TypeScript surface small and discourages UI coupling to the tuple; it does not hide values from a user with DevTools or local filesystem access.
 
 - [ ] **Step 6: Implement scoped direct query**
 
@@ -1315,7 +1318,8 @@ Manual checks:
 3. Switching to Migrated small-group history returns only migrated rows and shows migrated-history badges.
 4. Switching to Merged timeline returns current and migrated rows with stable order.
 5. Loading another page in Merged timeline does not duplicate or skip rows with equal published_at.
-6. Browser/dev console does not print decoded cursor payloads or history_peer_id values.
+6. Browser/dev console does not print decoded cursor payloads.
+7. Frontend source code treats pageCursor as an opaque string and does not parse it.
 ```
 
 Expected: all checks pass before starting Task 3.
@@ -1674,6 +1678,9 @@ it("passes Telegram history scope and cursor through live source item loading", 
   expect(analysisPageSource).toContain("beforePublishedAt: isTelegramSource ? null : sourceItemsBeforePublishedAt");
   expect(analysisPageSource).toContain("historyScope: isTelegramSource ? telegramHistoryScope : \"current\"");
   expect(analysisPageSource).toContain("function changeTelegramHistoryScope");
+  expect(analysisPageSource).not.toContain("decode_opaque");
+  expect(analysisPageSource).not.toContain("JSON.parse(sourceItemsCursor");
+  expect(analysisPageSource).not.toContain("atob(sourceItemsCursor");
 });
 ```
 
@@ -2980,7 +2987,7 @@ Expected: commit succeeds.
 - [ ] Migrated browsing returns only `is_migrated_history = 1` rows with backend-owned labels.
 - [ ] Merged browsing returns both current and migrated rows and labels every migrated row.
 - [ ] Merged paging and around-item loading use the full ordering tuple, not only `published_at` or `item_id`.
-- [ ] Frontend source item cursors are opaque strings and never expose `history_peer_id` or other raw Telegram peer ids.
+- [ ] Frontend source item cursors are opaque strings to application code; frontend code does not parse, render, log, or snapshot-test decoded cursor contents.
 - [ ] Current forum-topic filters are not applied to migrated small-group history.
 - [ ] Source DTOs expose row counts and import-completed state without old chat ids.
 - [ ] Available-but-not-imported and imported-zero-row states render explanatory UI states.
