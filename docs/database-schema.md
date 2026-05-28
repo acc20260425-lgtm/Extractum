@@ -129,6 +129,29 @@ Notes:
 - legacy metadata is decoded during startup repair and compatibility paths, not
   as the normal runtime source identity fallback.
 
+### `telegram_migrated_history_capabilities`
+
+Source-level Telegram capability state for explicit migrated small-group
+history import. The table is keyed by `source_id` and stores private old-chat
+access hints separately from `telegram_sources`.
+
+Allowed `status` values:
+
+- `none`
+- `available`
+- `unavailable`
+
+Allowed `unavailable_reason` values are internal diagnostics:
+
+- `not_detected`
+- `missing_migrated_from_chat_id`
+- `current_source_unavailable`
+- `old_chat_input_unavailable`
+- `revalidation_failed`
+
+Frontend source records expose only sanitized availability status and
+timestamps. They do not expose `migrated_from_chat_id`.
+
 ### 1.3 `telegram_messages`
 
 Stores typed native identity and Telegram message context for `telegram_message`
@@ -169,8 +192,9 @@ Notes:
   `telegram_sources.peer_*`.
 - for migrated history, `history_peer_*` identifies the original Telegram
   history domain.
-- `migration_domain` is diagnostic/future-proofing metadata in this slice and
-  is not used for duplicate detection, topic matching, or ref resolution.
+- `migration_domain` is a row-level marker. The first functional value is
+  `migrated_from_chat`; it marks rows imported from a supergroup's old
+  small-group history. It is not part of the primary duplicate identity.
 - `telegram_messages.source_id` must equal `items.source_id`, and
   `telegram_messages.item_id` must point to an item whose `item_kind` is
   `telegram_message`; migration/runtime tests enforce this application
@@ -193,6 +217,10 @@ by query/UI code as interrupted when no in-memory job exists after restart.
 be `complete` when selected history traversal finished normally and no partial
 flags were set. Only-my-messages fallback and migrated-history deferment are
 `partial`.
+
+`history_scope = migrated_small_group_history` identifies an explicit
+historical import batch. It is a run-level scope, not a row-level migration
+domain.
 
 `item_observed_count` counts all item-level observation rows. It can be greater
 than `item_inserted_count + item_duplicate_count + item_skipped_count` when

@@ -1339,7 +1339,18 @@ mod tests {
     async fn insert_telegram_source_item_allows_same_message_id_in_different_history_domains() {
         let pool = memory_pool_with_source_items_and_topics().await;
         create_analysis_documents_table(&pool).await;
+        create_ingest_provenance_tables(&pool).await;
         seed_item_source(&pool, 1).await;
+        let batch_id = crate::ingest_provenance::create_telegram_takeout_batch(
+            &pool,
+            crate::ingest_provenance::CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
 
         let first = TelegramMessageIdentity {
             history_peer_kind: "channel".to_string(),
@@ -1361,11 +1372,17 @@ mod tests {
                 .await
                 .expect("insert current")
         );
-        assert!(
-            insert_telegram_source_item(&pool, 1, second, telegram_insert("42", "migrated"))
-                .await
-                .expect("insert migrated")
-        );
+        assert!(insert_telegram_source_item_with_observation_in_context(
+            &pool,
+            batch_id,
+            1,
+            second,
+            telegram_insert("42", "migrated"),
+            TelegramInsertContext::MigratedSmallGroupHistory,
+        )
+        .await
+        .expect("insert migrated")
+        .is_inserted());
 
         let item_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM items WHERE source_id = 1 AND external_id = '42'",

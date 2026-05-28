@@ -125,8 +125,37 @@ For supergroups, `channels.getFullChannel` is used to detect
 historical scope. Normal Takeout imports keep importing current supergroup
 history only and record `migrated_history_deferred` when the historical scope is
 detected. The storage layer can represent overlapping Telegram message ids
-through `telegram_messages`, but importing old `chat` history requires a future
-explicit opt-in historical-scope design.
+through `telegram_messages`, but importing old `chat` history requires the
+explicit opt-in historical-scope action described below.
+
+## Migrated Small-Group History Opt-In
+
+Normal Takeout imports current source history only. When a supergroup exposes a
+`migrated_from_chat_id`, Extractum records source-level availability and keeps
+the old small-group history deferred.
+
+The explicit command is:
+
+- `start_takeout_migrated_history_import(source_id) -> { job_id }`
+
+The command uses the same source ingest lock as sync, delete, and current
+Takeout. It revalidates the current supergroup before opening the old
+`InputPeerChat`. If revalidation fails, the backend returns a typed
+`migrated_history_unavailable` conflict and records an internal availability
+reason.
+
+Historical import writes rows with native old chat identity:
+
+- `history_peer_kind = chat`
+- `history_peer_id = migrated_from_chat_id`
+- `is_migrated_history = 1`
+- `migration_domain = migrated_from_chat`
+
+Historical import does not update `sources.last_sync_state` or
+`sources.last_synced_at`. The first implementation does not materialize
+historical rows into `analysis_documents`, `archive_read_items`, or
+`item_topic_memberships`, and default browsing, analysis, reports, and
+NotebookLM export stay current-history-only.
 
 ## 7. Pagination Contract
 

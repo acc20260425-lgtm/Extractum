@@ -3048,7 +3048,7 @@ Expected: commit succeeds.
 - Modify: `docs/backlog.md`
 - Modify: `docs/superpowers/plans/2026-05-27-takeout-migrated-history-opt-in.md`
 
-- [ ] **Step 1: Update Takeout docs**
+- [x] **Step 1: Update Takeout docs**
 
 In `docs/takeout-source-import.md`, add a section named `Migrated Small-Group History Opt-In` with these points:
 
@@ -3083,7 +3083,7 @@ historical rows into `analysis_documents`, `archive_read_items`, or
 NotebookLM export stay current-history-only.
 ```
 
-- [ ] **Step 2: Update database schema docs**
+- [x] **Step 2: Update database schema docs**
 
 In `docs/database-schema.md`, document:
 
@@ -3128,7 +3128,7 @@ historical import batch. It is a run-level scope, not a row-level migration
 domain.
 ```
 
-- [ ] **Step 3: Update backlog**
+- [x] **Step 3: Update backlog**
 
 In `docs/backlog.md`, under `3.1 Takeout Source Import Follow-Ups`, add a completed entry:
 
@@ -3140,7 +3140,7 @@ In `docs/backlog.md`, under `3.1 Takeout Source Import Follow-Ups`, add a comple
 
 Keep any future merged timeline or domain-aware analysis/export work open.
 
-- [ ] **Step 4: Run full backend verification**
+- [x] **Step 4: Run full backend verification**
 
 Run:
 
@@ -3151,7 +3151,7 @@ cargo test --manifest-path src-tauri\Cargo.toml
 
 Expected: both commands exit 0.
 
-- [ ] **Step 5: Run full frontend verification**
+- [x] **Step 5: Run full frontend verification**
 
 Run:
 
@@ -3162,7 +3162,7 @@ npm.cmd run check
 
 Expected: both commands exit 0.
 
-- [ ] **Step 6: Run formatting and whitespace checks**
+- [x] **Step 6: Run formatting and whitespace checks**
 
 Run:
 
@@ -3172,7 +3172,7 @@ git diff --check
 
 Expected: no output and exit 0.
 
-- [ ] **Step 7: Commit Task 9**
+- [x] **Step 7: Commit Task 9**
 
 Run:
 
@@ -3187,25 +3187,25 @@ Expected: commit succeeds.
 
 ## Final Acceptance Checklist
 
-- [ ] Normal `start_takeout_source_import` still records migrated history as deferred and does not import old `chat` rows.
-- [ ] `start_takeout_migrated_history_import` exists as a separate command.
-- [ ] Historical import uses the same same-source ingest lock as sync, delete, and current Takeout.
-- [ ] Source-level capability survives restart in `telegram_migrated_history_capabilities`.
-- [ ] Frontend sees sanitized status only and never receives `migrated_from_chat_id`.
-- [ ] `unavailable` has an internal reason code and a typed frontend-safe error.
-- [ ] Migrated rows use `chat` native identity and `migration_domain = migrated_from_chat`.
-- [ ] Native duplicate identity remains `(source_id, history_peer_kind, history_peer_id, telegram_message_id)`.
-- [ ] Re-running historical import observes duplicates without inserting extra rows.
-- [ ] Duplicate-only successful reruns set `migrated_history_imported = 1`.
-- [ ] Historical import does not update `last_sync_state` or `last_synced_at`.
-- [ ] Historical rows do not create `analysis_documents`.
-- [ ] Historical rows do not create `archive_read_items`.
-- [ ] Historical rows do not create `item_topic_memberships`.
-- [ ] Default browsing excludes historical rows from items path and archive path.
-- [ ] Default analysis corpus, reports, and NotebookLM export exclude historical rows.
-- [ ] UI action text says `Import migrated history` and does not say retry or sync.
-- [ ] `cargo check --manifest-path src-tauri\Cargo.toml` passes.
-- [ ] `cargo test --manifest-path src-tauri\Cargo.toml` passes.
-- [ ] `npm.cmd test` passes.
-- [ ] `npm.cmd run check` passes.
-- [ ] `git diff --check` passes.
+- [x] Normal `start_takeout_source_import` still records migrated history as deferred and does not import old `chat` rows.
+- [x] `start_takeout_migrated_history_import` exists as a separate command.
+- [x] Historical import uses the same same-source ingest lock as sync, delete, and current Takeout.
+- [x] Source-level capability survives restart in `telegram_migrated_history_capabilities`.
+- [x] Frontend sees sanitized status only and never receives `migrated_from_chat_id`.
+- [x] `unavailable` has an internal reason code and a typed frontend-safe error.
+- [x] Migrated rows use `chat` native identity and `migration_domain = migrated_from_chat`.
+- [x] Native duplicate identity remains `(source_id, history_peer_kind, history_peer_id, telegram_message_id)`.
+- [x] Re-running historical import observes duplicates without inserting extra rows.
+- [x] Duplicate-only successful reruns set `migrated_history_imported = 1`.
+- [x] Historical import does not update `last_sync_state` or `last_synced_at`.
+- [x] Historical rows do not create `analysis_documents`.
+- [x] Historical rows do not create `archive_read_items`.
+- [x] Historical rows do not create `item_topic_memberships`.
+- [x] Default browsing excludes historical rows from items path and archive path.
+- [x] Default analysis corpus, reports, and NotebookLM export exclude historical rows.
+- [x] UI action text says `Import migrated history` and does not say retry or sync.
+- [x] `cargo check --manifest-path src-tauri\Cargo.toml` passes.
+- [x] `cargo test --manifest-path src-tauri\Cargo.toml` passes.
+- [x] `npm.cmd test` passes.
+- [x] `npm.cmd run check` passes.
+- [x] `git diff --check` passes.

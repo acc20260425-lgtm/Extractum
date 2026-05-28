@@ -890,6 +890,7 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create items");
+        crate::sources::test_support::create_telegram_messages_table(&pool).await;
 
         sqlx::query(
             r#"
