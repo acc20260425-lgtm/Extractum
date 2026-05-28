@@ -946,6 +946,8 @@ baseline checksum. It must also add or update migration tests proving:
 - a fresh database receives the full current schema after all migrations run;
 - an existing baseline database can upgrade through every post-baseline
   migration;
+- baseline reset preparation accepts an existing baseline database after
+  post-baseline migrations have already been applied;
 - the new tables, columns, indexes, and constraints exist after upgrade;
 - representative existing rows survive table-rebuild migrations without
   integrity or foreign-key failures.
@@ -960,7 +962,9 @@ migration against a copy or in-memory backup. The smoke check must include:
 - validation that existing data values satisfy any new `CHECK` constraints.
 
 Only after the copy passes should the Tauri app be launched so the SQL plugin
-can apply the migration to the live database.
+can apply the migration to the live database. After the live migration succeeds,
+restart the app once more to verify startup with the newly recorded
+post-baseline migration history.
 
 | Version | File | Purpose |
 | --- | --- | --- |

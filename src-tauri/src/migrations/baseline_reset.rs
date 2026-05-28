@@ -53,7 +53,7 @@ pub(super) async fn classify_migration_history(
         .map_err(AppError::database)?;
 
     if let Some(checksum) = baseline_checksum {
-        if total_count == 1 && checksum == expected_baseline_checksum {
+        if checksum == expected_baseline_checksum {
             return Ok(MigrationHistoryState::BaselineReady);
         }
         if total_count == 1 {
@@ -270,6 +270,19 @@ mod tests {
         let state = classify_migration_history(&pool, BASELINE_SQL_FOR_TEST)
             .await
             .expect("classify history");
+
+        assert_eq!(state, MigrationHistoryState::BaselineReady);
+    }
+
+    #[tokio::test]
+    async fn classifies_baseline_history_after_post_baseline_migrations() {
+        let pool = pool_with_migrations_table().await;
+        insert_migration(&pool, 1, true, baseline_checksum()).await;
+        insert_migration(&pool, 2, true, vec![2]).await;
+
+        let state = classify_migration_history(&pool, BASELINE_SQL_FOR_TEST)
+            .await
+            .expect("classify history with post-baseline migration");
 
         assert_eq!(state, MigrationHistoryState::BaselineReady);
     }
