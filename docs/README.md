@@ -27,8 +27,9 @@ history.
 ## Archives
 
 - `archive/migrations-pre-baseline-reset/`: pre-baseline SQL and runner-managed
-  Rust migration history. It is reference-only; active migrations start at
-  `src-tauri/migrations/0001_current_schema_baseline.sql`.
+  Rust migration history. It is reference-only; active migrations start at the
+  frozen `src-tauri/migrations/0001_current_schema_baseline.sql` and continue
+  with numbered post-baseline migrations.
 - `archive/database-schema-legacy-analysis.md`: historical schema debt
   analysis. Use it for background, then confirm current state in
   `database-schema.md`.

@@ -930,6 +930,7 @@ Product tables are not modified.
 | Version | File | Purpose |
 | --- | --- | --- |
 | 1 | `0001_current_schema_baseline.sql` | Current supported schema baseline |
+| 2 | `0002_migrated_history_opt_in_schema.sql` | Migrated small-group history opt-in schema |
 
 ## 4. Current behavior implications
 

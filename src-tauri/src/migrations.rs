@@ -8,6 +8,10 @@ const DB_FILENAME: &str = "extractum.db";
 const BASELINE_VERSION: i64 = 1;
 const BASELINE_DESCRIPTION: &str = "current schema baseline";
 const BASELINE_SQL: &str = include_str!("../migrations/0001_current_schema_baseline.sql");
+const MIGRATED_HISTORY_OPT_IN_VERSION: i64 = 2;
+const MIGRATED_HISTORY_OPT_IN_DESCRIPTION: &str = "migrated history opt-in schema";
+const MIGRATED_HISTORY_OPT_IN_SQL: &str =
+    include_str!("../migrations/0002_migrated_history_opt_in_schema.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -46,18 +50,32 @@ fn current_schema_baseline_migration() -> Migration {
     }
 }
 
+fn migrated_history_opt_in_migration() -> Migration {
+    Migration {
+        version: MIGRATED_HISTORY_OPT_IN_VERSION,
+        description: MIGRATED_HISTORY_OPT_IN_DESCRIPTION,
+        sql: MIGRATED_HISTORY_OPT_IN_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
-    vec![current_schema_baseline_migration()]
+    vec![
+        current_schema_baseline_migration(),
+        migrated_history_opt_in_migration(),
+    ]
 }
 
 #[cfg(test)]
 pub(crate) async fn apply_all_migrations_for_test_pool(
     pool: &sqlx::SqlitePool,
 ) -> crate::error::AppResult<()> {
-    sqlx::raw_sql(BASELINE_SQL)
-        .execute(pool)
-        .await
-        .map_err(crate::error::AppError::database)?;
+    for migration in build_migrations() {
+        sqlx::raw_sql(migration.sql)
+            .execute(pool)
+            .await
+            .map_err(crate::error::AppError::database)?;
+    }
     Ok(())
 }
 
@@ -67,6 +85,17 @@ mod tests {
         apply_all_migrations_for_test_pool, build_migrations, current_schema_baseline_migration,
         prepare_database_at_path,
     };
+    use sha2::{Digest, Sha384};
+
+    const FROZEN_BASELINE_SHA384: &str =
+        "88d7ee88f58531ebed340f2b9a8f1d02ba0ff6eec17b7e2a0d5f1a293cbd14e26a40c9155985c1652538ff0e9df70962";
+
+    fn sha384_hex(value: &str) -> String {
+        Sha384::digest(value.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    }
 
     #[test]
     fn current_schema_baseline_migration_is_version_one() {
@@ -76,6 +105,13 @@ mod tests {
         assert_eq!(migration.description, "current schema baseline");
         assert!(migration.sql.contains("CREATE TABLE accounts"));
         assert!(migration.sql.contains("CREATE TABLE archive_read_items"));
+    }
+
+    #[test]
+    fn current_schema_baseline_checksum_matches_frozen_reset_boundary() {
+        let migration = current_schema_baseline_migration();
+
+        assert_eq!(sha384_hex(migration.sql), FROZEN_BASELINE_SHA384);
     }
 
     #[tokio::test]
@@ -119,15 +155,85 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1]);
+        assert_eq!(versions, vec![1, 2]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
             .contains("CREATE TABLE archive_read_items"));
-        assert!(migrations[0].sql.contains("'migrated_small_group_history'"));
-        assert!(migrations[0]
+        assert!(!migrations[0].sql.contains("'migrated_small_group_history'"));
+        assert!(!migrations[0]
             .sql
-            .contains("migration_domain IS NULL OR migration_domain IN ('migrated_from_chat')"));
+            .contains("CREATE TABLE telegram_migrated_history_capabilities"));
+        assert_eq!(migrations[1].description, "migrated history opt-in schema");
+        assert!(migrations[1].sql.contains("'migrated_small_group_history'"));
+        assert!(migrations[1]
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS telegram_migrated_history_capabilities"));
+    }
+
+    #[tokio::test]
+    async fn post_baseline_migration_upgrades_frozen_baseline_for_migrated_history() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        let migrations = build_migrations();
+        let baseline = migrations.get(0).expect("baseline migration");
+        let post_baseline = migrations.get(1).expect("post-baseline migration");
+
+        sqlx::raw_sql(baseline.sql)
+            .execute(&pool)
+            .await
+            .expect("apply frozen baseline");
+        sqlx::raw_sql(post_baseline.sql)
+            .execute(&pool)
+            .await
+            .expect("apply post-baseline migrated history migration");
+
+        let capability_table_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master
+             WHERE type = 'table' AND name = 'telegram_migrated_history_capabilities'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("check capability table");
+        assert_eq!(capability_table_count, 1);
+
+        sqlx::query(
+            "INSERT INTO accounts (id, label, api_id, api_hash, phone, created_at)
+             VALUES (10, 'Test', 1, 'hash', '+10000000000', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed account");
+
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, account_id, external_id, title,
+                metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
+             ) VALUES (1, 'telegram', 'supergroup', 10, '12345', 'Forum',
+                NULL, NULL, NULL, 1, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
+
+        let batch_id: i64 = sqlx::query_scalar(
+            "INSERT INTO ingest_batches (source_id, provider, ingest_kind, status)
+             VALUES (1, 'telegram', 'takeout', 'running')
+             RETURNING id",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("insert running batch");
+
+        sqlx::query(
+            "INSERT INTO telegram_takeout_batches (batch_id, account_id, source_subtype, history_scope)
+             VALUES (?, 10, 'supergroup', 'migrated_small_group_history')",
+        )
+        .bind(batch_id)
+        .execute(&pool)
+        .await
+        .expect("insert migrated history batch scope");
     }
 
     #[test]

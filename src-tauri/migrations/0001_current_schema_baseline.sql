@@ -419,7 +419,6 @@ CREATE TABLE telegram_messages (
     CHECK (history_peer_kind IN ('channel', 'chat', 'user')),
     CHECK (telegram_message_id > 0),
     CHECK (is_migrated_history IN (0, 1)),
-    CHECK (migration_domain IS NULL OR migration_domain IN ('migrated_from_chat')),
     CHECK (reply_to_msg_id IS NULL OR reply_to_msg_id > 0),
     CHECK (
         reply_to_peer_kind IS NULL
@@ -451,29 +450,6 @@ CREATE TABLE telegram_sources (
         (source_subtype = 'group' AND peer_kind = 'chat')
     ),
     CHECK (resolution_strategy IN ('username', 'dialog', 'legacy_metadata', 'unknown'))
-);
-
-CREATE TABLE telegram_migrated_history_capabilities (
-    source_id INTEGER PRIMARY KEY REFERENCES telegram_sources(source_id) ON DELETE CASCADE,
-    status TEXT NOT NULL,
-    unavailable_reason TEXT,
-    migrated_from_chat_id INTEGER,
-    detected_at INTEGER,
-    refreshed_at INTEGER NOT NULL,
-    CHECK (status IN ('none', 'available', 'unavailable')),
-    CHECK (
-        unavailable_reason IS NULL
-        OR unavailable_reason IN (
-            'not_detected',
-            'missing_migrated_from_chat_id',
-            'current_source_unavailable',
-            'old_chat_input_unavailable',
-            'revalidation_failed'
-        )
-    ),
-    CHECK (migrated_from_chat_id IS NULL OR migrated_from_chat_id > 0),
-    CHECK (status <> 'available' OR migrated_from_chat_id IS NOT NULL),
-    CHECK (status <> 'unavailable' OR unavailable_reason IS NOT NULL)
 );
 
 CREATE TABLE telegram_takeout_batches (
@@ -514,8 +490,7 @@ CREATE TABLE telegram_takeout_batches (
     'current_history',
     'current_history_with_migrated_deferred',
     'partial_private_history',
-    'mixed_partial',
-    'migrated_small_group_history'
+    'mixed_partial'
   )),
   CHECK (used_export_dc IN (0, 1)),
   CHECK (fallback_used IN (0, 1)),
@@ -782,9 +757,6 @@ CREATE INDEX idx_telegram_messages_source_reply_top
 
 CREATE UNIQUE INDEX idx_telegram_sources_account_peer
     ON telegram_sources(account_id, peer_kind, peer_id);
-
-CREATE INDEX idx_telegram_migrated_history_capabilities_status
-    ON telegram_migrated_history_capabilities(status);
 
 CREATE INDEX idx_telegram_sources_account_subtype
     ON telegram_sources(account_id, source_subtype);
