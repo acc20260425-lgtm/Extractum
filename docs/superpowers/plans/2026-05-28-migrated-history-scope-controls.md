@@ -46,6 +46,18 @@ export type TelegramHistoryScope = "current" | "migrated" | "merged";
 - Opt-in migrated rows participate in analysis preflight message count, chunk estimate, and estimated input chars.
 - NotebookLM first slice uses separate current/migrated sections, not a silently merged export.
 
+## Scope Translation Contract
+
+Use explicit constants per layer. Do not reuse one layer's values in another layer, and never write `merged` into `analysis_runs.telegram_history_scope`.
+
+| Layer | Field | Values |
+| --- | --- | --- |
+| Browsing request | `history_scope` | `current`, `migrated`, `merged` |
+| Browsing item DTO | `history_scope` | `current`, `migrated` |
+| Analysis run | `analysis_runs.telegram_history_scope` | `current`, `current_plus_migrated` |
+| Analysis message metadata | `metadata.history_scope` | `current`, `migrated` |
+| NotebookLM YAML/export rows | `history_scope` | `current_supergroup_history`, `migrated_small_group_history` |
+
 ## File Structure
 
 - Create: `src-tauri/migrations/0003_analysis_telegram_history_scope.sql`
@@ -72,6 +84,8 @@ export type TelegramHistoryScope = "current" | "migrated" | "merged";
   - Prove migrated labels survive live and snapshot normalization.
 - Modify: `src/lib/components/analysis/report-source-surface.svelte`
   - Render the single-source Telegram scope selector and empty/import states.
+- Modify: `src/lib/components/ui/StatusMessage.svelte`
+  - Add an informational tone for migrated-history availability status.
 - Modify: `src/lib/components/analysis/telegram-timeline-reader.svelte`
   - Render migrated row badges.
 - Modify: `src/routes/analysis/+page.svelte`
@@ -281,6 +295,14 @@ pub(crate) const ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT: &str = "current";
 pub(crate) const ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED: &str =
     "current_plus_migrated";
 
+pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_CURRENT: &str = "current";
+pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_MIGRATED: &str = "migrated";
+
+pub(crate) const NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP: &str =
+    "current_supergroup_history";
+pub(crate) const NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP: &str =
+    "migrated_small_group_history";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum TelegramHistoryScope {
@@ -348,6 +370,8 @@ impl SourceItemsCursor {
     }
 }
 ```
+
+These constants implement the translation table at the top of this plan. Use them in analysis corpus metadata, analysis run insert/read paths, and NotebookLM export mapping instead of repeating string literals.
 
 Extend `SourceRecord` and `SourceRecordRow`:
 
@@ -1288,6 +1312,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/source-reader-model.ts`
 - Modify: `src/lib/source-reader-model.test.ts`
 - Modify: `src/lib/components/analysis/report-source-surface.svelte`
+- Modify: `src/lib/components/ui/StatusMessage.svelte`
 - Modify: `src/lib/components/analysis/report-canvas.svelte`
 - Modify: `src/lib/components/analysis/telegram-timeline-reader.svelte`
 - Modify: `src/routes/analysis/+page.svelte`
@@ -1416,6 +1441,25 @@ Import the type:
 import type { TelegramHistoryScope } from "$lib/types/sources";
 ```
 
+Extend `src/lib/components/ui/StatusMessage.svelte` before using `tone="info"`:
+
+```ts
+type StatusTone = "default" | "error" | "info" | "muted";
+```
+
+Add CSS:
+
+```css
+.ui-status-message.info.surface {
+  background: color-mix(in srgb, var(--primary) 10%, var(--status-bg));
+  color: var(--text);
+}
+
+.ui-status-message.info.plain {
+  color: var(--text);
+}
+```
+
 Add scope options:
 
 ```ts
@@ -1433,6 +1477,12 @@ const telegramHistoryScopeOptions = $derived.by(() => {
 Render before the single-source Telegram timeline:
 
 ```svelte
+{#if currentSource.sourceType === "telegram"
+  && currentSource.migratedHistoryStatus === "available"
+  && !currentSource.migratedHistoryImportCompleted}
+  <StatusMessage tone="info">Migrated small-group history available.</StatusMessage>
+{/if}
+
 {#if currentSource.sourceType === "telegram" && telegramHistoryScopeOptions.length > 0}
   <div class="history-scope-control" role="group" aria-label="Telegram history scope">
     {#each telegramHistoryScopeOptions as option (option.value)}
@@ -1578,6 +1628,12 @@ it("renders Telegram history scope controls and migrated row badges", () => {
   expect(telegramTimelineSource).toContain("history-scope-badge");
   expect(telegramTimelineSource).toContain("item.historyScopeLabel");
 });
+
+it("renders available migrated history status before explicit import", () => {
+  expect(reportSourceSurfaceSource).toContain("migratedHistoryStatus === \"available\"");
+  expect(reportSourceSurfaceSource).toContain("!currentSource.migratedHistoryImportCompleted");
+  expect(reportSourceSurfaceSource).toContain("Migrated small-group history available.");
+});
 ```
 
 In `src/lib/analysis-source-readers-route.test.ts`, add:
@@ -1610,7 +1666,7 @@ Expected: all pass.
 Run:
 
 ```powershell
-git add src\lib\source-reader-model.ts src\lib\source-reader-model.test.ts src\lib\components\analysis\report-source-surface.svelte src\lib\components\analysis\report-canvas.svelte src\lib\components\analysis\telegram-timeline-reader.svelte src\routes\analysis\+page.svelte src\lib\analysis-source-readers.test.ts src\lib\analysis-source-readers-route.test.ts docs\superpowers\plans\2026-05-28-migrated-history-scope-controls.md
+git add src\lib\source-reader-model.ts src\lib\source-reader-model.test.ts src\lib\components\analysis\report-source-surface.svelte src\lib\components\ui\StatusMessage.svelte src\lib\components\analysis\report-canvas.svelte src\lib\components\analysis\telegram-timeline-reader.svelte src\routes\analysis\+page.svelte src\lib\analysis-source-readers.test.ts src\lib\analysis-source-readers-route.test.ts docs\superpowers\plans\2026-05-28-migrated-history-scope-controls.md
 git commit -m "feat: add migrated history reader controls"
 ```
 
@@ -1692,6 +1748,29 @@ async fn opted_in_export_loads_migrated_rows_separately_with_markers() {
 }
 ```
 
+Add archive-current marker test:
+
+```rust
+#[tokio::test]
+async fn current_export_archive_loader_sets_scope_markers() {
+    let pool = export_pool().await;
+    seed_notebooklm_export_parity_fixture(&pool).await;
+    crate::archive_read_model::rebuild_source(&pool, 1)
+        .await
+        .expect("rebuild archive");
+
+    let messages = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Current)
+        .await
+        .expect("current archive messages");
+
+    assert!(!messages.is_empty());
+    assert!(messages.iter().all(|message| {
+        message.history_scope == crate::sources::types::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP
+    }));
+    assert!(messages.iter().all(|message| message.migration_domain.is_none()));
+}
+```
+
 Add reply-domain test:
 
 ```rust
@@ -1766,14 +1845,28 @@ pub(crate) async fn load_export_messages(
 ) -> AppResult<Vec<NotebookLmExportMessage>>
 ```
 
-For `Current`, keep existing loader selection. For `Migrated`, always use the items path with:
+For `Current`, keep existing loader selection. Both the archive loader and the items-path loader must populate current markers:
+
+```sql
+'current_supergroup_history' AS history_scope,
+NULL AS migration_domain
+```
+
+If the archive loader maps rows in Rust instead of selecting literal columns, set:
+
+```rust
+history_scope: crate::sources::types::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP.to_string(),
+migration_domain: None,
+```
+
+For `Migrated`, always use the items path with:
 
 ```sql
 AND tm.is_migrated_history = 1
 AND tm.migration_domain = 'migrated_from_chat'
 ```
 
-For current items-path rows, select:
+For current items-path rows, select the same current markers:
 
 ```sql
 'current_supergroup_history' AS history_scope,
@@ -2010,6 +2103,7 @@ Run:
 
 ```powershell
 cargo test --manifest-path src-tauri\Cargo.toml opted_in_export_loads_migrated_rows_separately_with_markers
+cargo test --manifest-path src-tauri\Cargo.toml current_export_archive_loader_sets_scope_markers
 cargo test --manifest-path src-tauri\Cargo.toml migrated_export_reply_lookup_stays_inside_old_history_domain
 cargo test --manifest-path src-tauri\Cargo.toml renders_migrated_history_scope_metadata
 cargo test --manifest-path src-tauri\Cargo.toml notebooklm_default_export_excludes_migrated_history_rows
@@ -2781,7 +2875,9 @@ Expected: commit succeeds.
 - [ ] Current forum-topic filters are not applied to migrated small-group history.
 - [ ] Source DTOs expose row counts and import-completed state without old chat ids.
 - [ ] Available-but-not-imported and imported-zero-row states render explanatory UI states.
+- [ ] Scope values are translated through explicit layer constants; `merged` is never persisted into analysis run or message metadata.
 - [ ] Default NotebookLM export excludes migrated rows.
+- [ ] Current NotebookLM export rows include `history_scope: current_supergroup_history` and `migration_domain: null` through both archive and items loaders.
 - [ ] Opted-in NotebookLM export writes current and migrated history as separate sections.
 - [ ] Migrated export rows contain `history_scope: migrated_small_group_history` and `migration_domain: migrated_from_chat`.
 - [ ] Migrated export reply lookup stays inside the old-history domain.
