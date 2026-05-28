@@ -14,7 +14,8 @@ history.
 - `architecture-deep-dive.md`: broader architecture notes.
 - `backend-architecture-simplification-analysis.md`: current backend
   maintainability direction and remaining simplification work.
-- `database-schema.md`: current supported SQLite schema and migration baseline.
+- `database-schema.md`: current supported SQLite schema, migration baseline,
+  and post-baseline migration authoring requirements.
 - `backlog.md`: open work only. Shipped work should not accumulate here.
 
 ## Focused Decisions And Analysis

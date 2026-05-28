@@ -927,6 +927,41 @@ history through version 26, creates a mandatory backup beside the database,
 then rewrites only `_sqlx_migrations` to baseline v1 in one transaction.
 Product tables are not modified.
 
+### 3.1 Migration authoring requirements
+
+`0001_current_schema_baseline.sql` is frozen. Do not edit it after a database
+has recorded baseline version 1 in `_sqlx_migrations`; changing its SQL changes
+the checksum and blocks startup for existing baseline databases.
+
+All schema changes after the baseline reset must be new numbered migrations:
+`0003_<short_name>.sql`, `0004_<short_name>.sql`, and so on. Add each file to
+`build_migrations()` after the existing migrations. Already-applied migration
+files are immutable; corrections to an applied migration must be expressed as a
+new later migration.
+
+Every schema-change task must preserve the guard test that verifies the frozen
+baseline checksum. It must also add or update migration tests proving:
+
+- `build_migrations()` exposes the expected ordered version list;
+- a fresh database receives the full current schema after all migrations run;
+- an existing baseline database can upgrade through every post-baseline
+  migration;
+- the new tables, columns, indexes, and constraints exist after upgrade;
+- representative existing rows survive table-rebuild migrations without
+  integrity or foreign-key failures.
+
+Before applying a new migration to the live app database, create a backup of
+`extractum.db`, `extractum.db-wal`, and `extractum.db-shm`, then run the new
+migration against a copy or in-memory backup. The smoke check must include:
+
+- `PRAGMA integrity_check`;
+- `PRAGMA foreign_key_check`;
+- explicit checks for the expected new schema objects;
+- validation that existing data values satisfy any new `CHECK` constraints.
+
+Only after the copy passes should the Tauri app be launched so the SQL plugin
+can apply the migration to the live database.
+
 | Version | File | Purpose |
 | --- | --- | --- |
 | 1 | `0001_current_schema_baseline.sql` | Current supported schema baseline |
