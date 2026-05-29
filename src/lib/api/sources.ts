@@ -8,10 +8,12 @@ import type {
   Source,
   SourceForumTopic,
   SourceForumTopicsResult,
+  SourceItemsCursor,
   SourceItem,
   SourceSubtype,
   SyncSettings,
   SyncSourceResult,
+  TelegramItemHistoryScope,
   TelegramDialogSource,
   TelegramMigratedHistoryStatus,
   TelegramSourceKind,
@@ -63,6 +65,8 @@ interface RawSource {
   migrated_history_status?: TelegramMigratedHistoryStatus | null;
   migrated_history_detected_at?: number | null;
   migrated_history_refreshed_at?: number | null;
+  migrated_history_row_count?: number | null;
+  migrated_history_import_completed?: boolean | null;
 }
 
 interface RawSourceItem {
@@ -88,6 +92,11 @@ interface RawSourceItem {
   reply_to_peer_id: string | null;
   reply_to_top_id: number | null;
   reaction_count: number | null;
+  history_scope: TelegramItemHistoryScope;
+  is_migrated_history: boolean;
+  migration_domain: "migrated_from_chat" | null;
+  history_scope_label: "Current supergroup history" | "Migrated small-group history";
+  page_cursor: SourceItemsCursor;
 }
 
 interface RawYoutubeTranscriptSegmentCursor {
@@ -239,7 +248,9 @@ export function listSourceItems(input: ListSourceItemsInput) {
       sourceId: input.sourceId,
       limit: input.limit,
       beforePublishedAt: input.beforePublishedAt,
+      beforeCursor: input.beforeCursor ? input.beforeCursor : null,
       topicFilter: mapForumTopicFilter(input.topicFilter),
+      historyScope: input.historyScope ?? "current",
       ...(input.aroundItemId !== undefined ? { aroundItemId: input.aroundItemId } : {}),
     },
   }).then((items) => items.map(mapSourceItem));
@@ -300,6 +311,8 @@ function mapSource(source: RawSource): Source {
     migratedHistoryStatus: source.migrated_history_status ?? "none",
     migratedHistoryDetectedAt: source.migrated_history_detected_at ?? null,
     migratedHistoryRefreshedAt: source.migrated_history_refreshed_at ?? null,
+    migratedHistoryRowCount: source.migrated_history_row_count ?? 0,
+    migratedHistoryImportCompleted: source.migrated_history_import_completed ?? false,
   };
 }
 
@@ -327,6 +340,11 @@ function mapSourceItem(item: RawSourceItem): SourceItem {
     replyToPeerId: item.reply_to_peer_id,
     replyToTopMessageId: item.reply_to_top_id,
     reactionCount: item.reaction_count,
+    historyScope: item.history_scope,
+    isMigratedHistory: item.is_migrated_history,
+    migrationDomain: item.migration_domain,
+    historyScopeLabel: item.history_scope_label,
+    pageCursor: item.page_cursor,
   };
 }
 

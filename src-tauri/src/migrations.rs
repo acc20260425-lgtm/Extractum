@@ -12,6 +12,10 @@ const MIGRATED_HISTORY_OPT_IN_VERSION: i64 = 2;
 const MIGRATED_HISTORY_OPT_IN_DESCRIPTION: &str = "migrated history opt-in schema";
 const MIGRATED_HISTORY_OPT_IN_SQL: &str =
     include_str!("../migrations/0002_migrated_history_opt_in_schema.sql");
+const ANALYSIS_TELEGRAM_HISTORY_SCOPE_VERSION: i64 = 3;
+const ANALYSIS_TELEGRAM_HISTORY_SCOPE_DESCRIPTION: &str = "analysis telegram history scope";
+const ANALYSIS_TELEGRAM_HISTORY_SCOPE_SQL: &str =
+    include_str!("../migrations/0003_analysis_telegram_history_scope.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -59,10 +63,20 @@ fn migrated_history_opt_in_migration() -> Migration {
     }
 }
 
+fn analysis_telegram_history_scope_migration() -> Migration {
+    Migration {
+        version: ANALYSIS_TELEGRAM_HISTORY_SCOPE_VERSION,
+        description: ANALYSIS_TELEGRAM_HISTORY_SCOPE_DESCRIPTION,
+        sql: ANALYSIS_TELEGRAM_HISTORY_SCOPE_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
         migrated_history_opt_in_migration(),
+        analysis_telegram_history_scope_migration(),
     ]
 }
 
@@ -155,7 +169,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2]);
+        assert_eq!(versions, vec![1, 2, 3]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -169,6 +183,60 @@ mod tests {
         assert!(migrations[1]
             .sql
             .contains("CREATE TABLE IF NOT EXISTS telegram_migrated_history_capabilities"));
+        assert_eq!(
+            migrations[2].description,
+            "analysis telegram history scope"
+        );
+        assert!(migrations[2]
+            .sql
+            .contains("ADD COLUMN telegram_history_scope TEXT"));
+    }
+
+    #[tokio::test]
+    async fn analysis_telegram_history_scope_migration_adds_nullable_checked_column() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        let columns: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM pragma_table_info('analysis_runs') ORDER BY cid",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("load columns");
+        assert!(columns.contains(&"telegram_history_scope".to_string()));
+
+        sqlx::query(
+            "INSERT INTO analysis_runs (
+                run_type, scope_type, period_from, period_to, output_language,
+                prompt_template_version, provider_profile, provider, model,
+                status, created_at, telegram_history_scope
+             ) VALUES (
+                'report', 'single_source', 1, 2, 'Russian', 1,
+                'default', 'openai', 'gpt-test', 'queued', 3, 'current_plus_migrated'
+             )",
+        )
+        .execute(&pool)
+        .await
+        .expect("valid scope");
+
+        let invalid = sqlx::query(
+            "INSERT INTO analysis_runs (
+                run_type, scope_type, period_from, period_to, output_language,
+                prompt_template_version, provider_profile, provider, model,
+                status, created_at, telegram_history_scope
+             ) VALUES (
+                'report', 'single_source', 1, 2, 'Russian', 1,
+                'default', 'openai', 'gpt-test', 'queued', 3, 'merged'
+             )",
+        )
+        .execute(&pool)
+        .await;
+        assert!(invalid.is_err());
     }
 
     #[tokio::test]

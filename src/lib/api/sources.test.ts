@@ -41,6 +41,8 @@ describe("sources api wrappers", () => {
         migrated_history_status: "available",
         migrated_history_detected_at: 100,
         migrated_history_refreshed_at: 200,
+        migrated_history_row_count: 3,
+        migrated_history_import_completed: true,
       },
     ]);
 
@@ -62,6 +64,8 @@ describe("sources api wrappers", () => {
         migratedHistoryStatus: "available",
         migratedHistoryDetectedAt: 100,
         migratedHistoryRefreshedAt: 200,
+        migratedHistoryRowCount: 3,
+        migratedHistoryImportCompleted: true,
       },
     ]);
     expect(invokeMock).toHaveBeenLastCalledWith("list_sources", { accountId: null });
@@ -90,6 +94,8 @@ describe("sources api wrappers", () => {
         migratedHistoryStatus: "none",
         migratedHistoryDetectedAt: null,
         migratedHistoryRefreshedAt: null,
+        migratedHistoryRowCount: 0,
+        migratedHistoryImportCompleted: false,
       },
     ]);
   });
@@ -241,6 +247,8 @@ describe("sources api wrappers", () => {
         migratedHistoryStatus: "none",
         migratedHistoryDetectedAt: null,
         migratedHistoryRefreshedAt: null,
+        migratedHistoryRowCount: 0,
+        migratedHistoryImportCompleted: false,
       },
     ]);
   });
@@ -290,6 +298,11 @@ describe("sources api wrappers", () => {
         reply_to_peer_id: "99",
         reply_to_top_id: 12,
         reaction_count: 5,
+        history_scope: "current",
+        is_migrated_history: false,
+        migration_domain: null,
+        history_scope_label: "Current supergroup history",
+        page_cursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
       },
     ]);
 
@@ -324,6 +337,11 @@ describe("sources api wrappers", () => {
         replyToPeerId: "99",
         replyToTopMessageId: 12,
         reactionCount: 5,
+        historyScope: "current",
+        isMigratedHistory: false,
+        migrationDomain: null,
+        historyScopeLabel: "Current supergroup history",
+        pageCursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
       },
     ]);
     expect(invokeMock).toHaveBeenLastCalledWith("list_source_items", {
@@ -331,7 +349,35 @@ describe("sources api wrappers", () => {
         sourceId: 7,
         limit: 120,
         beforePublishedAt: null,
+        beforeCursor: null,
         topicFilter: { kind: "topic", topicId: 200 },
+        historyScope: "current",
+      },
+    });
+  });
+
+  it("passes explicit Telegram history scope and opaque cursor to source item loading", async () => {
+    invokeMock.mockResolvedValueOnce([]);
+
+    await expect(
+      listSourceItems({
+        sourceId: 7,
+        limit: 50,
+        beforePublishedAt: null,
+        beforeCursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
+        topicFilter: null,
+        historyScope: "merged",
+      }),
+    ).resolves.toEqual([]);
+
+    expect(invokeMock).toHaveBeenLastCalledWith("list_source_items", {
+      request: {
+        sourceId: 7,
+        limit: 50,
+        beforePublishedAt: null,
+        beforeCursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
+        topicFilter: null,
+        historyScope: "merged",
       },
     });
   });
@@ -354,7 +400,9 @@ describe("sources api wrappers", () => {
         sourceId: 7,
         limit: 50,
         beforePublishedAt: null,
+        beforeCursor: null,
         topicFilter: null,
+        historyScope: "current",
         aroundItemId: 99,
       },
     });

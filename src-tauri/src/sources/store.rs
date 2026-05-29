@@ -122,7 +122,23 @@ pub(crate) async fn load_source_record(
                ts.avatar_cache_key AS telegram_avatar_cache_key,
                mhc.status AS migrated_history_status,
                mhc.detected_at AS migrated_history_detected_at,
-               mhc.refreshed_at AS migrated_history_refreshed_at
+               mhc.refreshed_at AS migrated_history_refreshed_at,
+               COALESCE((
+                   SELECT COUNT(*)
+                   FROM telegram_messages tm
+                   WHERE tm.source_id = s.id
+                     AND tm.is_migrated_history = 1
+                     AND tm.migration_domain = 'migrated_from_chat'
+               ), 0) AS migrated_history_row_count,
+               EXISTS (
+                   SELECT 1
+                   FROM telegram_takeout_batches tt
+                   JOIN ingest_batches ib ON ib.id = tt.batch_id
+                   WHERE ib.source_id = s.id
+                     AND ib.status = 'completed'
+                     AND tt.history_scope = 'migrated_small_group_history'
+                     AND tt.migrated_history_imported = 1
+               ) AS migrated_history_import_completed
         FROM sources s
         LEFT JOIN telegram_sources ts ON ts.source_id = s.id
         LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
@@ -361,7 +377,23 @@ pub async fn list_sources(
                    ts.avatar_cache_key AS telegram_avatar_cache_key,
                    mhc.status AS migrated_history_status,
                    mhc.detected_at AS migrated_history_detected_at,
-                   mhc.refreshed_at AS migrated_history_refreshed_at
+                   mhc.refreshed_at AS migrated_history_refreshed_at,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM telegram_messages tm
+                       WHERE tm.source_id = s.id
+                         AND tm.is_migrated_history = 1
+                         AND tm.migration_domain = 'migrated_from_chat'
+                   ), 0) AS migrated_history_row_count,
+                   EXISTS (
+                       SELECT 1
+                       FROM telegram_takeout_batches tt
+                       JOIN ingest_batches ib ON ib.id = tt.batch_id
+                       WHERE ib.source_id = s.id
+                         AND ib.status = 'completed'
+                         AND tt.history_scope = 'migrated_small_group_history'
+                         AND tt.migrated_history_imported = 1
+                   ) AS migrated_history_import_completed
             FROM sources s
             LEFT JOIN telegram_sources ts ON ts.source_id = s.id
             LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
@@ -383,7 +415,23 @@ pub async fn list_sources(
                    ts.avatar_cache_key AS telegram_avatar_cache_key,
                    mhc.status AS migrated_history_status,
                    mhc.detected_at AS migrated_history_detected_at,
-                   mhc.refreshed_at AS migrated_history_refreshed_at
+                   mhc.refreshed_at AS migrated_history_refreshed_at,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM telegram_messages tm
+                       WHERE tm.source_id = s.id
+                         AND tm.is_migrated_history = 1
+                         AND tm.migration_domain = 'migrated_from_chat'
+                   ), 0) AS migrated_history_row_count,
+                   EXISTS (
+                       SELECT 1
+                       FROM telegram_takeout_batches tt
+                       JOIN ingest_batches ib ON ib.id = tt.batch_id
+                       WHERE ib.source_id = s.id
+                         AND ib.status = 'completed'
+                         AND tt.history_scope = 'migrated_small_group_history'
+                         AND tt.migrated_history_imported = 1
+                   ) AS migrated_history_import_completed
             FROM sources s
             LEFT JOIN telegram_sources ts ON ts.source_id = s.id
             LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
@@ -426,6 +474,8 @@ fn source_record_from_row_parts(
             .unwrap_or_else(|| MIGRATED_HISTORY_STATUS_NONE.to_string()),
         migrated_history_detected_at: row.migrated_history_detected_at,
         migrated_history_refreshed_at: row.migrated_history_refreshed_at,
+        migrated_history_row_count: row.migrated_history_row_count.max(0),
+        migrated_history_import_completed: row.migrated_history_import_completed,
     }
 }
 
@@ -516,8 +566,9 @@ mod tests {
     use crate::error::AppErrorKind;
     use crate::sources::test_support::{
         create_analysis_documents_table, create_canonical_telegram_identity_index,
-        create_migrated_history_capability_tables, create_youtube_typed_source_tables,
-        memory_pool_with_source_items_and_topics, memory_pool_with_sources,
+        create_ingest_provenance_tables, create_migrated_history_capability_tables,
+        create_youtube_typed_source_tables, memory_pool_with_source_items_and_topics,
+        memory_pool_with_sources,
     };
     use crate::sources::types::{
         TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
@@ -584,6 +635,8 @@ mod tests {
                 migrated_history_status: None,
                 migrated_history_detected_at: None,
                 migrated_history_refreshed_at: None,
+                migrated_history_row_count: 0,
+                migrated_history_import_completed: false,
             },
             None,
             None,
@@ -615,6 +668,8 @@ mod tests {
                 migrated_history_status: None,
                 migrated_history_detected_at: None,
                 migrated_history_refreshed_at: None,
+                migrated_history_row_count: 0,
+                migrated_history_import_completed: false,
             },
             Some("example".to_string()),
             None,
@@ -651,6 +706,8 @@ mod tests {
             migrated_history_status: None,
             migrated_history_detected_at: None,
             migrated_history_refreshed_at: None,
+            migrated_history_row_count: 0,
+            migrated_history_import_completed: false,
         };
 
         assert_eq!(source_avatar_cache_key_from_row(&row).unwrap(), None);
@@ -675,7 +732,9 @@ mod tests {
                     ts.avatar_cache_key AS telegram_avatar_cache_key,
                     mhc.status AS migrated_history_status,
                     mhc.detected_at AS migrated_history_detected_at,
-                    mhc.refreshed_at AS migrated_history_refreshed_at
+                    mhc.refreshed_at AS migrated_history_refreshed_at,
+                    0 AS migrated_history_row_count,
+                    0 AS migrated_history_import_completed
              FROM sources s
              LEFT JOIN telegram_sources ts ON ts.source_id = s.id
              LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
@@ -690,6 +749,100 @@ mod tests {
         assert_eq!(record.migrated_history_status, "available");
         assert_eq!(record.migrated_history_detected_at, Some(100));
         assert_eq!(record.migrated_history_refreshed_at, Some(100));
+        assert!(!format!("{record:?}").contains("777"));
+    }
+
+    #[tokio::test]
+    async fn list_sources_exposes_migrated_history_counts_without_old_chat_identity() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_ingest_provenance_tables(&pool).await;
+        seed_telegram_source_identity(&pool, 1, 10, "supergroup", "channel", 12345).await;
+        crate::takeout_import::migrated_history::upsert_migrated_history_available(
+            &pool, 1, 777, 100,
+        )
+        .await
+        .expect("mark capability");
+
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, published_at, ingested_at,
+                content_kind, has_media
+             ) VALUES (10, 1, '42', 'telegram_message', 100, 100, 'text_only', 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed item");
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (10, 1, 'chat', 777, 42, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed migrated row");
+
+        let batch_id = crate::ingest_provenance::create_telegram_takeout_batch(
+            &pool,
+            crate::ingest_provenance::CreateTelegramTakeoutBatch {
+                source_id: 1,
+                account_id: 10,
+                source_subtype: "supergroup".to_string(),
+            },
+        )
+        .await
+        .expect("create batch");
+        crate::ingest_provenance::mark_takeout_migrated_history_imported(&pool, batch_id)
+            .await
+            .expect("mark imported");
+        crate::ingest_provenance::finalize_ingest_batch(
+            &pool,
+            batch_id,
+            crate::ingest_provenance::TerminalBatchStatus::Completed,
+            None,
+        )
+        .await
+        .expect("finish batch");
+
+        let row: SourceRecordRow = sqlx::query_as(
+            "SELECT s.id, s.source_type, s.source_subtype, s.account_id, s.external_id,
+                    s.title, s.metadata_zstd,
+                    s.last_sync_state, s.last_synced_at, s.is_active, s.is_member, s.created_at,
+                    ts.username AS telegram_username,
+                    ts.avatar_cache_key AS telegram_avatar_cache_key,
+                    mhc.status AS migrated_history_status,
+                    mhc.detected_at AS migrated_history_detected_at,
+                    mhc.refreshed_at AS migrated_history_refreshed_at,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM telegram_messages tm
+                        WHERE tm.source_id = s.id
+                          AND tm.is_migrated_history = 1
+                          AND tm.migration_domain = 'migrated_from_chat'
+                    ), 0) AS migrated_history_row_count,
+                    EXISTS (
+                        SELECT 1
+                        FROM telegram_takeout_batches tt
+                        JOIN ingest_batches ib ON ib.id = tt.batch_id
+                        WHERE ib.source_id = s.id
+                          AND ib.status = 'completed'
+                          AND tt.history_scope = 'migrated_small_group_history'
+                          AND tt.migrated_history_imported = 1
+                    ) AS migrated_history_import_completed
+             FROM sources s
+             LEFT JOIN telegram_sources ts ON ts.source_id = s.id
+             LEFT JOIN telegram_migrated_history_capabilities mhc ON mhc.source_id = s.id
+             WHERE s.id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load row");
+
+        let record = source_record_from_row_parts(row, None, None);
+        let json = serde_json::to_value(&record).expect("serialize source record");
+
+        assert_eq!(json["migrated_history_row_count"], 1);
+        assert_eq!(json["migrated_history_import_completed"], true);
         assert!(!format!("{record:?}").contains("777"));
     }
 

@@ -20,6 +20,31 @@ pub(crate) const MIGRATED_HISTORY_STATUS_NONE: &str = "none";
 pub(crate) const MIGRATED_HISTORY_STATUS_AVAILABLE: &str = "available";
 #[allow(dead_code)]
 pub(crate) const MIGRATED_HISTORY_STATUS_UNAVAILABLE: &str = "unavailable";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_HISTORY_SCOPE_CURRENT: &str = "current";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_HISTORY_SCOPE_MIGRATED: &str = "migrated";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_HISTORY_SCOPE_MERGED: &str = "merged";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_HISTORY_SCOPE_LABEL_CURRENT: &str = "Current supergroup history";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_HISTORY_SCOPE_LABEL_MIGRATED: &str = "Migrated small-group history";
+#[allow(dead_code)]
+pub(crate) const ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT: &str = "current";
+#[allow(dead_code)]
+pub(crate) const ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED: &str =
+    "current_plus_migrated";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_CURRENT: &str = "current";
+#[allow(dead_code)]
+pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_MIGRATED: &str = "migrated";
+#[allow(dead_code)]
+pub(crate) const NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP: &str =
+    "current_supergroup_history";
+#[allow(dead_code)]
+pub(crate) const NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP: &str =
+    "migrated_small_group_history";
 pub(crate) const ITEM_KIND_TELEGRAM_MESSAGE: &str = "telegram_message";
 pub(crate) const ITEM_KIND_YOUTUBE_TRANSCRIPT: &str = "youtube_transcript";
 pub(crate) const ITEM_KIND_YOUTUBE_COMMENT: &str = "youtube_comment";
@@ -74,6 +99,80 @@ impl TelegramSourceKind {
 
     pub(crate) fn parse(value: &str) -> crate::error::AppResult<Self> {
         Self::from_source_subtype(value)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
+pub(crate) enum TelegramHistoryScope {
+    Current,
+    Migrated,
+    Merged,
+}
+
+#[allow(dead_code)]
+impl TelegramHistoryScope {
+    pub(crate) fn from_optional(value: Option<Self>) -> Self {
+        value.unwrap_or(Self::Current)
+    }
+
+    pub(crate) fn as_wire(self) -> &'static str {
+        match self {
+            Self::Current => TELEGRAM_HISTORY_SCOPE_CURRENT,
+            Self::Migrated => TELEGRAM_HISTORY_SCOPE_MIGRATED,
+            Self::Merged => TELEGRAM_HISTORY_SCOPE_MERGED,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
+pub(crate) struct SourceItemsCursor {
+    pub(crate) published_at: i64,
+    pub(crate) history_scope_order: i64,
+    pub(crate) history_peer_kind: String,
+    pub(crate) history_peer_id: i64,
+    pub(crate) telegram_message_id: i64,
+    pub(crate) item_id: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
+struct SourceItemsCursorEnvelope {
+    version: u8,
+    cursor: SourceItemsCursor,
+}
+
+#[allow(dead_code)]
+impl SourceItemsCursor {
+    pub(crate) fn encode_opaque(&self) -> crate::error::AppResult<String> {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+
+        let envelope = SourceItemsCursorEnvelope {
+            version: 1,
+            cursor: self.clone(),
+        };
+        let json = serde_json::to_vec(&envelope)
+            .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
+        Ok(URL_SAFE_NO_PAD.encode(json))
+    }
+
+    pub(crate) fn decode_opaque(value: &str) -> crate::error::AppResult<Self> {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+
+        let json = URL_SAFE_NO_PAD
+            .decode(value)
+            .map_err(|_| crate::error::AppError::validation("Invalid source item cursor"))?;
+        let envelope: SourceItemsCursorEnvelope = serde_json::from_slice(&json)
+            .map_err(|_| crate::error::AppError::validation("Invalid source item cursor"))?;
+        if envelope.version != 1 {
+            return Err(crate::error::AppError::validation(
+                "Unsupported source item cursor",
+            ));
+        }
+        Ok(envelope.cursor)
     }
 }
 
@@ -147,6 +246,8 @@ pub struct SourceRecord {
     pub migrated_history_status: String,
     pub migrated_history_detected_at: Option<i64>,
     pub migrated_history_refreshed_at: Option<i64>,
+    pub migrated_history_row_count: i64,
+    pub migrated_history_import_completed: bool,
 }
 
 #[derive(sqlx::FromRow)]
@@ -180,6 +281,8 @@ pub(super) struct SourceRecordRow {
     pub(super) migrated_history_status: Option<String>,
     pub(super) migrated_history_detected_at: Option<i64>,
     pub(super) migrated_history_refreshed_at: Option<i64>,
+    pub(super) migrated_history_row_count: i64,
+    pub(super) migrated_history_import_completed: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, sqlx::FromRow)]

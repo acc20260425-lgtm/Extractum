@@ -1,5 +1,9 @@
 export type TelegramSourceKind = "channel" | "supergroup" | "group";
 export type TelegramMigratedHistoryStatus = "none" | "available" | "unavailable";
+export type TelegramHistoryScope = "current" | "migrated" | "merged";
+export type TelegramItemHistoryScope = "current" | "migrated";
+// Pragmatic opaque cursor. Do not parse, log, snapshot, or render it.
+export type SourceItemsCursor = string;
 export type SourceType = "telegram" | "youtube" | "rss" | "forum";
 export type SourceSubtype =
   | TelegramSourceKind
@@ -54,6 +58,8 @@ export interface Source {
   migratedHistoryStatus: TelegramMigratedHistoryStatus;
   migratedHistoryDetectedAt: number | null;
   migratedHistoryRefreshedAt: number | null;
+  migratedHistoryRowCount: number;
+  migratedHistoryImportCompleted: boolean;
 }
 
 export interface SourceCapabilities {
@@ -89,6 +95,11 @@ export interface SourceItem {
   replyToPeerId: string | null;
   replyToTopMessageId: number | null;
   reactionCount: number | null;
+  historyScope: TelegramItemHistoryScope;
+  isMigratedHistory: boolean;
+  migrationDomain: "migrated_from_chat" | null;
+  historyScopeLabel: "Current supergroup history" | "Migrated small-group history";
+  pageCursor: SourceItemsCursor;
 }
 
 export type ForumTopicFilter =
@@ -129,7 +140,9 @@ export interface ListSourceItemsInput {
   sourceId: number;
   limit: number;
   beforePublishedAt: number | null;
+  beforeCursor?: SourceItemsCursor | null;
   topicFilter: ForumTopicFilter | null;
+  historyScope?: TelegramHistoryScope;
   aroundItemId?: number | null;
 }
 

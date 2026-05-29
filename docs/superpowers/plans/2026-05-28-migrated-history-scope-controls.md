@@ -159,7 +159,7 @@ Use explicit constants per layer. Do not reuse one layer's values in another lay
 - Test: `src-tauri/src/sources/store.rs`
 - Test: `src/lib/api/sources.test.ts`
 
-- [ ] **Step 1: Add the analysis run migration**
+- [x] **Step 1: Add the analysis run migration**
 
 Create `src-tauri/migrations/0003_analysis_telegram_history_scope.sql`:
 
@@ -172,7 +172,7 @@ CHECK (
 );
 ```
 
-- [ ] **Step 2: Register migration 0003**
+- [x] **Step 2: Register migration 0003**
 
 In `src-tauri/src/migrations.rs`, add the new migration constant near the existing migrated-history migration:
 
@@ -217,7 +217,7 @@ assert!(migrations[2]
     .contains("ADD COLUMN telegram_history_scope TEXT"));
 ```
 
-- [ ] **Step 3: Add migration tests**
+- [x] **Step 3: Add migration tests**
 
 In `src-tauri/src/migrations.rs`, add:
 
@@ -279,7 +279,7 @@ async fn analysis_telegram_history_scope_migration_adds_nullable_checked_column(
 }
 ```
 
-- [ ] **Step 4: Run the migration test and verify failure**
+- [x] **Step 4: Run the migration test and verify failure**
 
 Run:
 
@@ -289,7 +289,7 @@ cargo test --manifest-path src-tauri\Cargo.toml analysis_telegram_history_scope_
 
 Expected: fail until migration registration and the version-list expectation are completed.
 
-- [ ] **Step 5: Add shared backend scope types**
+- [x] **Step 5: Add shared backend scope types**
 
 In `src-tauri/src/sources/types.rs`, add:
 
@@ -390,7 +390,7 @@ pub migrated_history_row_count: i64,
 pub migrated_history_import_completed: bool,
 ```
 
-- [ ] **Step 6: Expose source migrated-history counts**
+- [x] **Step 6: Expose source migrated-history counts**
 
 In every `src-tauri/src/sources/store.rs` source record SELECT, add these selected fields:
 
@@ -420,7 +420,7 @@ migrated_history_row_count: row.migrated_history_row_count.max(0),
 migrated_history_import_completed: row.migrated_history_import_completed,
 ```
 
-- [ ] **Step 7: Add source store tests**
+- [x] **Step 7: Add source store tests**
 
 In `src-tauri/src/sources/store.rs`, add:
 
@@ -520,7 +520,7 @@ async fn list_sources_exposes_migrated_history_counts_without_old_chat_identity(
 }
 ```
 
-- [ ] **Step 8: Add TypeScript DTO fields**
+- [x] **Step 8: Add TypeScript DTO fields**
 
 In `src/lib/types/sources.ts`, add:
 
@@ -555,7 +555,7 @@ historyScope?: TelegramHistoryScope;
 beforeCursor?: SourceItemsCursor | null;
 ```
 
-- [ ] **Step 9: Map TypeScript source fields**
+- [x] **Step 9: Map TypeScript source fields**
 
 In `src/lib/api/sources.ts`, extend raw types:
 
@@ -598,7 +598,7 @@ historyScopeLabel: item.history_scope_label,
 pageCursor: item.page_cursor,
 ```
 
-- [ ] **Step 10: Update API tests**
+- [x] **Step 10: Update API tests**
 
 In `src/lib/api/sources.test.ts`, update the existing `listSourceItems` fixture with current-history fields and add:
 
@@ -630,7 +630,7 @@ it("passes explicit Telegram history scope and opaque cursor to source item load
 });
 ```
 
-- [ ] **Step 11: Run focused tests**
+- [x] **Step 11: Run focused tests**
 
 Run:
 
@@ -642,7 +642,7 @@ npm.cmd test -- src/lib/api/sources.test.ts
 
 Expected: all pass.
 
-- [ ] **Step 12: Commit Task 1**
+- [x] **Step 12: Commit Task 1**
 
 Run:
 
