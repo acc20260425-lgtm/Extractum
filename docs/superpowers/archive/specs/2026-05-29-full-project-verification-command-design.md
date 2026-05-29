@@ -1,9 +1,12 @@
 # Full Project Verification Command Design
 
 > Date: 2026-05-29
-> Status: approved design
+> Status: implemented and archived
 > Scope: local verification command and documentation; no CI, dependency
 > pinning, lint policy, or runtime behavior changes.
+
+Current source of truth: `scripts/verify.mjs`, `package.json`, and the
+verification section in `docs/project.md`.
 
 ## Goal
 
@@ -116,4 +119,4 @@ The implementation is considered complete when:
 - `docs/backlog.md` marks the covered backlog item complete while leaving the
   remaining stabilization items open;
 - `npm.cmd run verify` passes on the local Windows environment;
-- `git diff --check` passes after documentation and script changes.
+- `git diff HEAD --check` passes after documentation and script changes.
