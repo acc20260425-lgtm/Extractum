@@ -31,6 +31,7 @@ function runSummary(overrides: Partial<AnalysisRunSummary> = {}): AnalysisRunSum
     provider: "gemini",
     model: "gemini-2.5-flash",
     youtube_corpus_mode: "transcript_description",
+    telegram_history_scope: "current",
     status: "completed",
     error: null,
     has_trace_data: false,
@@ -417,6 +418,7 @@ describe("analysis-run-workflow", () => {
       profileId: null,
       modelOverride: "",
       youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: false,
     });
 
     expect(state.status).toBe("Select a source first.");
@@ -446,6 +448,7 @@ describe("analysis-run-workflow", () => {
       profileId: "research",
       modelOverride: " ",
       youtubeCorpusMode: "transcript_description_comments",
+      includeMigratedHistory: false,
     });
 
     expect(deps.cancelChatSilently).toHaveBeenCalled();
@@ -486,6 +489,7 @@ describe("analysis-run-workflow", () => {
       profileId: null,
       modelOverride: "gemini-2.5-pro",
       youtubeCorpusMode: "transcript_only",
+      includeMigratedHistory: false,
     });
 
     expect(state.status).toBe("Error starting the analysis report: model busy");

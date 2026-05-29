@@ -31,6 +31,7 @@ function runSummary(overrides: Partial<AnalysisRunSummary> = {}): AnalysisRunSum
     provider: "gemini",
     model: "gemini-2.5-flash",
     youtube_corpus_mode: "transcript_description",
+    telegram_history_scope: "current",
     status: "completed",
     error: null,
     has_trace_data: true,

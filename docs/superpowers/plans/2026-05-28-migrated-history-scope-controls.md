@@ -2623,7 +2623,7 @@ Expected: commit succeeds.
 - Test: `src/lib/analysis-redesign-route-contract.test.ts`
 - Test: `src/lib/analysis-redesign-safety-contract.test.ts`
 
-- [ ] **Step 1: Add TypeScript run and command fields**
+- [x] **Step 1: Add TypeScript run and command fields**
 
 In `src/lib/types/analysis.ts`, add:
 
@@ -2643,7 +2643,7 @@ Add to `AnalysisReportStartCommand`:
 includeMigratedHistory: boolean;
 ```
 
-- [ ] **Step 2: Pass report command field**
+- [x] **Step 2: Pass report command field**
 
 In `src/lib/api/analysis-runs.ts`, keep spreading the command. In `src/lib/api/analysis-runs.test.ts`, update both `startAnalysisReport` fixtures:
 
@@ -2657,7 +2657,7 @@ Expected Tauri invocation includes:
 includeMigratedHistory: true,
 ```
 
-- [ ] **Step 3: Extend report start state**
+- [x] **Step 3: Extend report start state**
 
 In `src/lib/analysis-state.ts`, extend `AnalysisReportStartState`:
 
@@ -2694,7 +2694,7 @@ export function canIncludeMigratedHistoryInReport(
 }
 ```
 
-- [ ] **Step 4: Add analysis-state tests**
+- [x] **Step 4: Add analysis-state tests**
 
 In `src/lib/analysis-state.test.ts`, add:
 
@@ -2745,7 +2745,7 @@ it("enables migrated analysis opt-in for Telegram groups when at least one membe
 });
 ```
 
-- [ ] **Step 5: Add report setup checkbox**
+- [x] **Step 5: Add report setup checkbox**
 
 In `src/lib/components/analysis/report-setup-panel.svelte`, add props:
 
@@ -2771,7 +2771,7 @@ Render near YouTube corpus controls:
 {/if}
 ```
 
-- [ ] **Step 6: Wire page state**
+- [x] **Step 6: Wire page state**
 
 In `src/routes/analysis/+page.svelte`, add:
 
@@ -2804,7 +2804,7 @@ if (!canIncludeMigratedHistoryInReport(currentReportLaunchState())) {
 }
 ```
 
-- [ ] **Step 7: Show saved run marker**
+- [x] **Step 7: Show saved run marker**
 
 In `src/lib/components/analysis/report-run-header.svelte`, render a meta cell when the saved run included migrated history:
 
@@ -2814,7 +2814,7 @@ In `src/lib/components/analysis/report-run-header.svelte`, render a meta cell wh
 {/if}
 ```
 
-- [ ] **Step 8: Update route and safety tests**
+- [x] **Step 8: Update route and safety tests**
 
 In `src/lib/analysis-redesign-route-contract.test.ts`, add:
 
@@ -2836,7 +2836,7 @@ it("surfaces saved Telegram historical scope instead of treating it as ordinary 
 });
 ```
 
-- [ ] **Step 9: Run frontend analysis tests**
+- [x] **Step 9: Run frontend analysis tests**
 
 Run:
 
@@ -2847,7 +2847,7 @@ npm.cmd run check
 
 Expected: all pass.
 
-- [ ] **Step 10: Commit Task 6**
+- [x] **Step 10: Commit Task 6**
 
 Run:
 

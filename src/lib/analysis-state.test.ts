@@ -33,6 +33,7 @@ import {
   activeAnalysisRunIds,
   activeRunSyncDecision,
   analysisReportStartCommand,
+  canIncludeMigratedHistoryInReport,
   reportLaunchDisabledReason,
   runDeletionDecision,
   runDeletedStatus,
@@ -240,6 +241,7 @@ function runSummary(overrides: Partial<AnalysisRunSummary>): AnalysisRunSummary 
     provider: "gemini",
     model: "gemini-2.5-flash",
     youtube_corpus_mode: "transcript_description",
+    telegram_history_scope: "current",
     status: "running",
     error: null,
     has_trace_data: false,
@@ -580,6 +582,7 @@ describe("analysis-state", () => {
       profileId: null,
       modelOverride: "",
       youtubeCorpusMode: "transcript_description" as const,
+      includeMigratedHistory: false,
     };
 
     expect(analysisReportStartCommand({ ...base, selectedSourceId: "" })).toEqual({
@@ -628,6 +631,7 @@ describe("analysis-state", () => {
       profileId: null,
       modelOverride: " ",
       youtubeCorpusMode: "transcript_description_comments",
+      includeMigratedHistory: false,
     })).toEqual({
       ok: true,
       command: {
@@ -640,6 +644,7 @@ describe("analysis-state", () => {
         modelOverride: null,
         profileId: null,
         youtubeCorpusMode: "transcript_description_comments",
+        includeMigratedHistory: false,
       },
     });
 
@@ -654,6 +659,7 @@ describe("analysis-state", () => {
       profileId: "research",
       modelOverride: "gemini-2.5-pro",
       youtubeCorpusMode: "transcript_only",
+      includeMigratedHistory: false,
     })).toMatchObject({
       ok: true,
       command: {
@@ -662,8 +668,54 @@ describe("analysis-state", () => {
         profileId: "research",
         modelOverride: "gemini-2.5-pro",
         youtubeCorpusMode: "transcript_only",
+        includeMigratedHistory: false,
       },
     });
+  });
+
+  it("passes migrated historical scope opt-in into report start command", () => {
+    const decision = analysisReportStartCommand({
+      analysisScope: "single_source",
+      selectedSourceId: "7",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-02",
+      outputLanguage: "Russian",
+      profileId: null,
+      modelOverride: "",
+      youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: true,
+    });
+
+    expect(decision).toMatchObject({
+      ok: true,
+      command: {
+        includeMigratedHistory: true,
+      },
+    });
+  });
+
+  it("enables migrated analysis opt-in for Telegram groups when at least one member has imported rows", () => {
+    expect(canIncludeMigratedHistoryInReport({
+      analysisScope: "source_group",
+      currentSource: null,
+      currentGroup: {
+        id: 1,
+        name: "Group",
+        source_type: "telegram",
+        members: [
+          { source_id: 7, source_title: "A", item_count: 10 },
+          { source_id: 8, source_title: "B", item_count: 10 },
+        ],
+        created_at: 1,
+        updated_at: 1,
+      },
+      sourceCatalog: [
+        sourceRecord({ id: 7, sourceType: "telegram", migratedHistoryRowCount: 0 }),
+        sourceRecord({ id: 8, sourceType: "telegram", migratedHistoryRowCount: 3 }),
+      ],
+    })).toBe(true);
   });
 
   it("blocks report launch when LLM profile or source runtime is unusable", () => {
@@ -679,6 +731,7 @@ describe("analysis-state", () => {
       profileId: null,
       modelOverride: "",
       youtubeCorpusMode: "transcript_description" as const,
+      includeMigratedHistory: false,
       llmProfiles: [
         {
           profile_id: "default",
@@ -720,6 +773,7 @@ describe("analysis-state", () => {
       profileId: null,
       modelOverride: "",
       youtubeCorpusMode: "transcript_description" as const,
+      includeMigratedHistory: false,
       llmProfiles: [
         {
           profile_id: "default",
@@ -785,6 +839,7 @@ describe("analysis-state", () => {
       profileId: null,
       modelOverride: "",
       youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: false,
       llmProfiles: [
         {
           profile_id: "default",

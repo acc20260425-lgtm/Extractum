@@ -111,6 +111,9 @@
       <MetaCell label="Provider profile">{currentRun.provider_profile}</MetaCell>
       <MetaCell label="Source basis">{basisDescription}</MetaCell>
       <MetaCell label="YouTube corpus">{youtubeCorpusModeLabel(currentRun.youtube_corpus_mode)}</MetaCell>
+      {#if currentRun.telegram_history_scope === "current_plus_migrated"}
+        <MetaCell label="Telegram history">Current + migrated historical scope</MetaCell>
+      {/if}
       <MetaCell label="Live phase">{activePhase || currentRun.status}</MetaCell>
       <MetaCell label="Live progress">{activeProgress || "n/a"}</MetaCell>
     </div>

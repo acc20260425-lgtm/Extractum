@@ -128,6 +128,7 @@ export type AnalysisReportStartState = {
   profileId: string | null;
   modelOverride: string;
   youtubeCorpusMode: YoutubeCorpusMode;
+  includeMigratedHistory: boolean;
 };
 export type AnalysisReportStartDecision =
   | { ok: true; command: AnalysisReportStartCommand }
@@ -410,8 +411,31 @@ export function analysisReportStartCommand(
       modelOverride: modelOverride ? modelOverride : null,
       profileId,
       youtubeCorpusMode: state.youtubeCorpusMode,
+      includeMigratedHistory: state.includeMigratedHistory,
     },
   };
+}
+
+export function canIncludeMigratedHistoryInReport(
+  state: Pick<
+    ReportLaunchPreflightState,
+    "analysisScope" | "currentSource" | "currentGroup" | "sourceCatalog"
+  >,
+) {
+  if (state.analysisScope === "single_source") {
+    return !!state.currentSource
+      && state.currentSource.sourceType === "telegram"
+      && state.currentSource.migratedHistoryRowCount > 0;
+  }
+
+  if (!state.currentGroup || state.currentGroup.source_type !== "telegram") {
+    return false;
+  }
+
+  return state.currentGroup.members.some((member) => {
+    const source = state.sourceCatalog.find((candidate) => candidate.id === member.source_id);
+    return source?.sourceType === "telegram" && source.migratedHistoryRowCount > 0;
+  });
 }
 
 function selectedRunProfile(state: ReportLaunchPreflightState) {

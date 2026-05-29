@@ -106,6 +106,12 @@ describe("analysis redesign final route contract", () => {
     expect(reportRunHeaderSource).not.toContain("Template editor");
   });
 
+  it("passes migrated historical scope opt-in through report setup", () => {
+    expect(analysisPageSource).toContain("includeMigratedHistoryInReport");
+    expect(analysisPageSource).toContain("canIncludeMigratedHistoryInReport");
+    expect(reportSetupSource).toContain("Include migrated historical scope");
+  });
+
   it("keeps companion tabs as Evidence, Chat, and Runs only", () => {
     expect(runCompanionSource).toContain('role="tablist"');
     expect(runCompanionSource).toContain('aria-label="Run companion tabs"');

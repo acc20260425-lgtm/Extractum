@@ -133,6 +133,12 @@ describe("analysis redesign final safety contract", () => {
     expect(reportRunHeaderSource).toContain('return "warning"');
   });
 
+  it("surfaces saved Telegram historical scope instead of treating it as ordinary current history", () => {
+    expect(reportRunHeaderSource).toContain("telegram_history_scope");
+    expect(reportRunHeaderSource).toContain("Current + migrated historical scope");
+    expect(analysisTypesSource).toContain("AnalysisTelegramHistoryScope");
+  });
+
   it("does not hide completed chat persistence failures", () => {
     expect(chatBackendSource).toContain("persist_chat_exchange");
     expect(chatBackendSource).not.toContain("let _ = persist_chat_exchange");

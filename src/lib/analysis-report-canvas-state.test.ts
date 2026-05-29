@@ -29,6 +29,7 @@ function run(overrides: Partial<AnalysisRunDetail> = {}): AnalysisRunDetail {
     provider: "openai",
     model: "gpt-5.4",
     youtube_corpus_mode: "transcript_description_comments",
+    telegram_history_scope: "current",
     status: "completed",
     error: null,
     has_trace_data: true,

@@ -4,6 +4,7 @@
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
+  import CheckboxRow from "$lib/components/ui/CheckboxRow.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
@@ -36,6 +37,8 @@
     templates,
     outputLanguage,
     youtubeCorpusMode,
+    includeMigratedHistory,
+    canIncludeMigratedHistory,
     llmProfiles,
     activeLlmProfile,
     selectedLlmProfileId,
@@ -79,6 +82,7 @@
     onChangeSelectedTemplateId,
     onChangeOutputLanguage,
     onChangeYoutubeCorpusMode,
+    onChangeIncludeMigratedHistory,
     onChangeLlmProfile,
     onChangeLlmModel,
     onChangeCustomModelOverride,
@@ -110,6 +114,8 @@
     templates: AnalysisPromptTemplate[];
     outputLanguage: string;
     youtubeCorpusMode: YoutubeCorpusMode;
+    includeMigratedHistory: boolean;
+    canIncludeMigratedHistory: boolean;
     llmProfiles: LlmProfile[];
     activeLlmProfile: string;
     selectedLlmProfileId: string;
@@ -153,6 +159,7 @@
     onChangeSelectedTemplateId: (value: string) => void;
     onChangeOutputLanguage: (value: string) => void;
     onChangeYoutubeCorpusMode: (value: YoutubeCorpusMode) => void;
+    onChangeIncludeMigratedHistory: (value: boolean) => void;
     onChangeLlmProfile: (value: string) => void;
     onChangeLlmModel: (value: string) => void;
     onChangeCustomModelOverride: (value: string) => void;
@@ -293,6 +300,15 @@
             <option value="transcript_description_comments">Transcript + description + comments</option>
           </Select>
         </label>
+      {/if}
+      {#if canIncludeMigratedHistory}
+        <CheckboxRow
+          title="Include migrated historical scope"
+          description="Add imported small-group history to this saved snapshot."
+          checked={includeMigratedHistory}
+          disabled={startingReport}
+          onchange={(event) => onChangeIncludeMigratedHistory((event.currentTarget as HTMLInputElement).checked)}
+        />
       {/if}
     </div>
 

@@ -84,6 +84,8 @@
     templates,
     outputLanguage,
     youtubeCorpusMode,
+    includeMigratedHistory,
+    canIncludeMigratedHistory,
     llmProfiles,
     activeLlmProfile,
     selectedLlmProfileId,
@@ -160,6 +162,7 @@
     onChangeSelectedTemplateId,
     onChangeOutputLanguage,
     onChangeYoutubeCorpusMode,
+    onChangeIncludeMigratedHistory,
     onChangeLlmProfile,
     onChangeLlmModel,
     onChangeCustomModelOverride,
@@ -227,6 +230,8 @@
     templates: AnalysisPromptTemplate[];
     outputLanguage: string;
     youtubeCorpusMode: YoutubeCorpusMode;
+    includeMigratedHistory: boolean;
+    canIncludeMigratedHistory: boolean;
     llmProfiles: LlmProfile[];
     activeLlmProfile: string;
     selectedLlmProfileId: string;
@@ -311,6 +316,7 @@
     onChangeSelectedTemplateId: (value: string) => void;
     onChangeOutputLanguage: (value: string) => void;
     onChangeYoutubeCorpusMode: (value: YoutubeCorpusMode) => void;
+    onChangeIncludeMigratedHistory: (value: boolean) => void;
     onChangeLlmProfile: (value: string) => void;
     onChangeLlmModel: (value: string) => void;
     onChangeCustomModelOverride: (value: string) => void;
@@ -520,6 +526,8 @@
         {templates}
         {outputLanguage}
         {youtubeCorpusMode}
+        {includeMigratedHistory}
+        {canIncludeMigratedHistory}
         {llmProfiles}
         {activeLlmProfile}
         {selectedLlmProfileId}
@@ -563,6 +571,7 @@
         onChangeSelectedTemplateId={onChangeSelectedTemplateId}
         onChangeOutputLanguage={onChangeOutputLanguage}
         onChangeYoutubeCorpusMode={onChangeYoutubeCorpusMode}
+        onChangeIncludeMigratedHistory={onChangeIncludeMigratedHistory}
         onChangeLlmProfile={onChangeLlmProfile}
         onChangeLlmModel={onChangeLlmModel}
         onChangeCustomModelOverride={onChangeCustomModelOverride}

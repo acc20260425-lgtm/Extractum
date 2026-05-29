@@ -39,6 +39,7 @@ export interface AnalysisSourceGroup {
 }
 
 export type AnalysisSnapshotState = "captured" | "missing_legacy" | "capture_failed";
+export type AnalysisTelegramHistoryScope = "current" | "current_plus_migrated";
 
 export interface AnalysisRunSummary {
   id: number;
@@ -59,6 +60,7 @@ export interface AnalysisRunSummary {
   provider: string;
   model: string;
   youtube_corpus_mode: YoutubeCorpusMode;
+  telegram_history_scope: AnalysisTelegramHistoryScope;
   status: string;
   error: string | null;
   has_trace_data: boolean;
@@ -128,6 +130,7 @@ export interface AnalysisReportStartCommand {
   modelOverride: string | null;
   profileId: string | null;
   youtubeCorpusMode: YoutubeCorpusMode;
+  includeMigratedHistory: boolean;
 }
 
 export interface AnalysisTraceRef {

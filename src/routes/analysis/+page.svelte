@@ -122,6 +122,7 @@
     applyTakeoutImportRecoveryStates,
     analysisTraceRefOrigin as traceRefOriginFromState,
     activeAnalysisRunIds,
+    canIncludeMigratedHistoryInReport,
     canCancelAnalysisRun,
     createEmptyLiveRunState,
     currentTopicFilter as currentTopicFilterFromState,
@@ -342,6 +343,7 @@
   let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("Russian");
   let youtubeCorpusMode = $state<YoutubeCorpusMode>("transcript_description");
+  let includeMigratedHistoryInReport = $state(false);
   let llmModelStatus = $state("");
   let templateName = $state("");
   let templateBody = $state("");
@@ -530,8 +532,8 @@
     return getSourceSyncDisabledReason(source, accountStatuses, youtubeRuntimeStatus);
   }
 
-  function currentReportLaunchDisabledReason() {
-    return getReportLaunchDisabledReason({
+  function currentReportLaunchState() {
+    return {
       analysisScope,
       selectedSourceId,
       selectedGroupId,
@@ -542,6 +544,7 @@
       profileId: runProfileId(),
       modelOverride: runModelOverride(),
       youtubeCorpusMode,
+      includeMigratedHistory: includeMigratedHistoryInReport,
       llmProfiles,
       activeLlmProfile,
       currentSourceMetric: currentSourceMetric(),
@@ -549,8 +552,18 @@
       currentGroup: currentGroup(),
       sourceCatalog,
       sourceSyncDisabledReason,
-    });
+    };
   }
+
+  function currentReportLaunchDisabledReason() {
+    return getReportLaunchDisabledReason(currentReportLaunchState());
+  }
+
+  $effect(() => {
+    if (!canIncludeMigratedHistoryInReport(currentReportLaunchState())) {
+      includeMigratedHistoryInReport = false;
+    }
+  });
 
   function dedupeProviderModels(models: LlmProviderModel[]) {
     const unique: LlmProviderModel[] = [];
@@ -1972,6 +1985,7 @@
     const isYoutubeAnalysisScope =
       (analysisScope === "single_source" && currentSource()?.sourceType === "youtube") ||
       (analysisScope === "source_group" && currentGroup()?.source_type === "youtube");
+    const canIncludeMigratedHistory = canIncludeMigratedHistoryInReport(currentReportLaunchState());
     await runWorkflow.startReport({
       analysisScope,
       selectedSourceId,
@@ -1983,6 +1997,7 @@
       profileId: runProfileId(),
       modelOverride: runModelOverride(),
       youtubeCorpusMode: isYoutubeAnalysisScope ? youtubeCorpusMode : "transcript_description",
+      includeMigratedHistory: canIncludeMigratedHistory ? includeMigratedHistoryInReport : false,
     });
   }
 
@@ -2635,6 +2650,8 @@
     {templates}
     {outputLanguage}
     {youtubeCorpusMode}
+    includeMigratedHistory={includeMigratedHistoryInReport}
+    canIncludeMigratedHistory={canIncludeMigratedHistoryInReport(currentReportLaunchState())}
     {llmProfiles}
     {activeLlmProfile}
     {selectedLlmProfileId}
@@ -2711,6 +2728,7 @@
     onChangeSelectedTemplateId={(value) => (selectedTemplateId = value)}
     onChangeOutputLanguage={(value) => (outputLanguage = value)}
     onChangeYoutubeCorpusMode={(value) => (youtubeCorpusMode = value)}
+    onChangeIncludeMigratedHistory={(value) => (includeMigratedHistoryInReport = value)}
     onChangeLlmProfile={changeLlmProfile}
     onChangeLlmModel={changeLlmModel}
     onChangeCustomModelOverride={(value) => (customModelOverride = value)}

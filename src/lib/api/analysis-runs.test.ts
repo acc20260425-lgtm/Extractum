@@ -120,6 +120,7 @@ describe("analysis run api wrappers", () => {
       modelOverride: null,
       profileId: null,
       youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: true,
     })).resolves.toBe(77);
     expect(invokeMock).toHaveBeenLastCalledWith("start_analysis_report", {
       sourceId: 7,
@@ -131,6 +132,7 @@ describe("analysis run api wrappers", () => {
       modelOverride: null,
       profileId: null,
       youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: true,
     });
 
     invokeMock.mockResolvedValueOnce(undefined);
@@ -155,6 +157,7 @@ describe("analysis run api wrappers", () => {
       modelOverride: null,
       profileId: "work",
       youtubeCorpusMode: "transcript_description_comments",
+      includeMigratedHistory: true,
     })).resolves.toBe(78);
 
     expect(invokeMock).toHaveBeenLastCalledWith("start_analysis_report", {
@@ -167,6 +170,7 @@ describe("analysis run api wrappers", () => {
       modelOverride: null,
       profileId: "work",
       youtubeCorpusMode: "transcript_description_comments",
+      includeMigratedHistory: true,
     });
   });
 
