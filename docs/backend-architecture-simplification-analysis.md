@@ -116,6 +116,52 @@ Recommended path:
 This will make frontend error behavior more predictable and reduce reliance on
 message substring classification.
 
+### 3. Telegram Desktop-Informed Backend Boundaries
+
+Reference review:
+
+- local source tree: `reference/tdesktop-dev`
+- reviewed areas: request lifecycle, histories, forum topics, shared media,
+  sparse history ranges, local session/storage helpers
+- date: 2026-05-29
+
+Telegram Desktop is a live Telegram client, while Extractum is an archive and
+analysis backend. The useful lesson is its domain split, not its cache layout or
+UI state model.
+
+Backend ideas worth carrying forward:
+
+- request/job lifecycle helper: Telegram Desktop consistently tracks request
+  ids, cancellation, delayed sends, postponed work, and terminal cleanup. In
+  Extractum, `TakeoutImportState`, source ingest locks, YouTube jobs, and LLM
+  runs already solve pieces of this separately. If another long-running
+  workflow is added, prefer extracting a small shared lifecycle helper for
+  queued/running/cancel-requested/terminal state plus event emission instead of
+  adding another bespoke state machine.
+- history coverage diagnostics: Telegram Desktop models loaded history as
+  sparse id ranges with skipped-before/skipped-after counts. Extractum should
+  not copy that cache structure, but a future
+  `telegram_history_coverage_ranges`-style audit model would help explain
+  Takeout gaps, only-my-messages fallback, migrated-history scope, and partial
+  source validation better than `sources.last_sync_state` alone.
+- stale/batched forum-topic refresh: Telegram Desktop keeps stale topic root ids
+  and batches targeted refreshes. Extractum currently performs catalog refresh
+  around sync/Takeout. If topic enrichment becomes more dynamic, add targeted
+  stale-topic refresh for unknown or outdated topic ids before reaching for a
+  broader forum-topic subsystem.
+- media download queue and policy: Telegram Desktop has a dedicated media
+  download manager with priorities, retry/backoff, and session balancing.
+  Extractum should keep the current metadata-first ingest path, but any future
+  media download feature should be a separate opt-in job queue with explicit
+  storage, bandwidth, retry, and citation policy. Do not hide downloads inside
+  ordinary source sync.
+- projection writers for Telegram enrichments: `sources/items.rs` already owns
+  item insertion, `telegram_messages`, topic membership resolution,
+  `analysis_documents`, and archive-read maintenance. Future forward, reply,
+  reaction, media, or coverage enrichments should be added as small typed
+  projection writers invoked from the insert transaction, not as a wider
+  monolithic insert function.
+
 ## What Not To Do
 
 - Do not merge `analysis_documents` and `archive_read_items`. They serve
@@ -126,12 +172,28 @@ message substring classification.
   `archive_read_items`; `youtube_playlist_items` is the right owner.
 - Do not introduce a broad ORM/repository abstraction over every SQL query.
   Clearer service boundaries should be enough.
+- Do not copy Telegram Desktop's unread state, muted state, drafts,
+  notification queues, active thread state, or chat-list ordering into
+  Extractum's persistent backend model.
+- Do not copy Telegram Desktop's local cache structures directly. Translate
+  them into archive-oriented provenance, coverage, and projection models only
+  when they solve a current Extractum workflow.
 
 ## Suggested Order
 
 1. Gradually convert storage/service APIs from `Result<T, String>` to
    `AppResult<T>`.
 2. Split large backend files only when an extracted boundary is already clear.
+3. Before adding another long-running backend workflow, consider extracting a
+   small shared job/request lifecycle helper from the existing Takeout,
+   YouTube, and LLM patterns.
+4. Before expanding Telegram enrichment, split insert-time side effects into
+   typed projection writers so forward/reply/reaction/media work does not grow
+   `sources/items.rs` further.
+5. Model Telegram history coverage only when Takeout/sync diagnostics need it;
+   keep it audit-oriented rather than cache-oriented.
+6. Treat media downloads as an explicit opt-in job system, not as a side effect
+   of normal sync.
 
 ## Expected Payoff
 
