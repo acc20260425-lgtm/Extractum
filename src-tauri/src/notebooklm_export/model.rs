@@ -14,6 +14,7 @@ pub struct NotebookLmExportRequest {
     pub period_from: Option<i64>,
     pub period_to: Option<i64>,
     pub include_media_placeholders: bool,
+    pub include_migrated_history: bool,
     pub min_message_length: i64,
     pub max_words_per_file: i64,
     pub max_bytes_per_file: i64,
@@ -28,6 +29,7 @@ pub(crate) struct NotebookLmExportConfig {
     pub(crate) period_from: Option<i64>,
     pub(crate) period_to: Option<i64>,
     pub(crate) include_media_placeholders: bool,
+    pub(crate) include_migrated_history: bool,
     pub(crate) min_message_length: usize,
     pub(crate) max_words_per_file: usize,
     pub(crate) max_bytes_per_file: usize,
@@ -86,6 +88,8 @@ pub(crate) struct NotebookLmExportMessage {
     pub(crate) forum_topic_id: Option<i64>,
     pub(crate) forum_topic_title: Option<String>,
     pub(crate) forum_topic_top_message_id: Option<i64>,
+    pub(crate) history_scope: String,
+    pub(crate) migration_domain: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -38,6 +38,12 @@ pub(crate) enum ArchiveReadinessFallbackReason {
     OldModelVersion { found: i64, current: i64 },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExportHistoryScope {
+    Current,
+    Migrated,
+}
+
 pub(crate) async fn load_export_source(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
@@ -120,11 +126,13 @@ pub(crate) async fn load_export_messages_from_items_path(
     source_id: i64,
     period_from: Option<i64>,
     period_to: Option<i64>,
+    scope: ExportHistoryScope,
 ) -> AppResult<Vec<NotebookLmExportMessage>> {
     let rows: Vec<ExportMessageRow> = match (period_from, period_to) {
         (Some(from), Some(to)) => {
             let sql = base_query(
                 "items.source_id = ? AND items.published_at >= ? AND items.published_at <= ?",
+                scope,
             );
             sqlx::query_as(&sql)
                 .bind(source_id)
@@ -134,7 +142,7 @@ pub(crate) async fn load_export_messages_from_items_path(
                 .await
         }
         (Some(from), None) => {
-            let sql = base_query("items.source_id = ? AND items.published_at >= ?");
+            let sql = base_query("items.source_id = ? AND items.published_at >= ?", scope);
             sqlx::query_as(&sql)
                 .bind(source_id)
                 .bind(from)
@@ -142,7 +150,7 @@ pub(crate) async fn load_export_messages_from_items_path(
                 .await
         }
         (None, Some(to)) => {
-            let sql = base_query("items.source_id = ? AND items.published_at <= ?");
+            let sql = base_query("items.source_id = ? AND items.published_at <= ?", scope);
             sqlx::query_as(&sql)
                 .bind(source_id)
                 .bind(to)
@@ -150,7 +158,7 @@ pub(crate) async fn load_export_messages_from_items_path(
                 .await
         }
         (None, None) => {
-            let sql = base_query("items.source_id = ?");
+            let sql = base_query("items.source_id = ?", scope);
             sqlx::query_as(&sql).bind(source_id).fetch_all(pool).await
         }
     }
@@ -226,13 +234,26 @@ pub(crate) async fn load_export_messages(
     source_id: i64,
     period_from: Option<i64>,
     period_to: Option<i64>,
+    scope: ExportHistoryScope,
 ) -> AppResult<Vec<NotebookLmExportMessage>> {
+    if scope == ExportHistoryScope::Migrated {
+        return load_export_messages_from_items_path(
+            pool,
+            source_id,
+            period_from,
+            period_to,
+            scope,
+        )
+        .await;
+    }
+
     match select_notebooklm_export_loader(pool, source_id).await? {
         ExportLoaderSelection::ArchiveReadModel { .. } => {
             load_export_messages_from_archive(pool, source_id, period_from, period_to).await
         }
         ExportLoaderSelection::ItemsPath { .. } => {
-            load_export_messages_from_items_path(pool, source_id, period_from, period_to).await
+            load_export_messages_from_items_path(pool, source_id, period_from, period_to, scope)
+                .await
         }
     }
 }
@@ -242,53 +263,96 @@ async fn load_reply_contexts_from_items_path(
     source_id: i64,
     rows: &[ExportMessageRow],
 ) -> AppResult<HashMap<i64, ReplyContext>> {
-    let mut reply_ids = rows
-        .iter()
-        .filter_map(|row| row.reply_to_msg_id)
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    reply_ids.sort_unstable();
-
     let mut contexts = HashMap::new();
-    for chunk in reply_ids.chunks(500) {
-        if chunk.is_empty() {
+
+    for row in rows.iter().filter(|row| row.reply_to_msg_id.is_some()) {
+        if let Some(context) = load_domain_reply_context_from_items_path(pool, row).await? {
+            contexts.insert(row.id, context);
             continue;
         }
 
-        let placeholders = std::iter::repeat_n("?", chunk.len())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let sql = format!(
-            r#"
-            SELECT external_id, author, content_zstd, has_media, media_kind
-            FROM items
-            WHERE source_id = ? AND external_id IN ({placeholders})
-            "#
-        );
-
-        let mut query = sqlx::query_as::<_, ReplyLookupRow>(&sql).bind(source_id);
-        for reply_id in chunk {
-            query = query.bind(reply_id.to_string());
-        }
-
-        let lookup_rows = query.fetch_all(pool).await.map_err(AppError::database)?;
-        for row in lookup_rows {
-            let Ok(reply_id) = row.external_id.parse::<i64>() else {
-                continue;
-            };
-            let snippet = reply_snippet(&row)?;
-            contexts.insert(
-                reply_id,
-                ReplyContext {
-                    author: row.author,
-                    snippet,
-                },
-            );
+        if let Some(reply_to_msg_id) = row.reply_to_msg_id {
+            if let Some(context) =
+                load_legacy_reply_context_from_items_path(pool, source_id, reply_to_msg_id).await?
+            {
+                contexts.insert(row.id, context);
+            }
         }
     }
 
     Ok(contexts)
+}
+
+async fn load_domain_reply_context_from_items_path(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    row: &ExportMessageRow,
+) -> AppResult<Option<ReplyContext>> {
+    let Some(_) = row.reply_to_msg_id else {
+        return Ok(None);
+    };
+
+    let reply = sqlx::query_as::<_, ReplyLookupRow>(
+        r#"
+        SELECT
+          target_items.external_id,
+          target_items.author,
+          target_items.content_zstd,
+          target_items.has_media,
+          target_items.media_kind
+        FROM telegram_messages reply_tm
+        JOIN telegram_messages target_tm
+          ON target_tm.source_id = reply_tm.source_id
+         AND target_tm.history_peer_kind = reply_tm.history_peer_kind
+         AND target_tm.history_peer_id = reply_tm.history_peer_id
+         AND target_tm.telegram_message_id = reply_tm.reply_to_msg_id
+        JOIN items target_items
+          ON target_items.id = target_tm.item_id
+        WHERE reply_tm.item_id = ?
+        "#,
+    )
+    .bind(row.id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    reply
+        .map(|reply| {
+            reply_snippet(&reply).map(|snippet| ReplyContext {
+                author: reply.author,
+                snippet,
+            })
+        })
+        .transpose()
+}
+
+async fn load_legacy_reply_context_from_items_path(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    reply_to_msg_id: i64,
+) -> AppResult<Option<ReplyContext>> {
+    let reply = sqlx::query_as::<_, ReplyLookupRow>(
+        r#"
+        SELECT external_id, author, content_zstd, has_media, media_kind
+        FROM items
+        WHERE source_id = ? AND external_id = ?
+        ORDER BY id ASC
+        LIMIT 1
+        "#,
+    )
+    .bind(source_id)
+    .bind(reply_to_msg_id.to_string())
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    reply
+        .map(|reply| {
+            reply_snippet(&reply).map(|snippet| ReplyContext {
+                author: reply.author,
+                snippet,
+            })
+        })
+        .transpose()
 }
 
 async fn load_reply_contexts_from_archive(
@@ -305,6 +369,7 @@ async fn load_reply_contexts_from_archive(
     reply_ids.sort_unstable();
 
     let mut contexts = HashMap::new();
+    let mut lookup_by_reply_id = HashMap::new();
     for chunk in reply_ids.chunks(500) {
         if chunk.is_empty() {
             continue;
@@ -337,7 +402,7 @@ async fn load_reply_contexts_from_archive(
                 continue;
             };
             let snippet = reply_snippet(&row)?;
-            contexts.insert(
+            lookup_by_reply_id.insert(
                 reply_id,
                 ReplyContext {
                     author: row.author,
@@ -347,10 +412,41 @@ async fn load_reply_contexts_from_archive(
         }
     }
 
+    for row in rows {
+        if let Some(context) = row
+            .reply_to_msg_id
+            .and_then(|reply_id| lookup_by_reply_id.get(&reply_id))
+        {
+            contexts.insert(row.id, context.clone());
+        }
+    }
+
     Ok(contexts)
 }
 
-fn base_query(where_clause: &str) -> String {
+fn base_query(where_clause: &str, scope: ExportHistoryScope) -> String {
+    let (history_scope, migration_domain, telegram_join, history_filter) = match scope {
+        ExportHistoryScope::Current => (
+            crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP,
+            "NULL",
+            "",
+            r#"
+      AND NOT EXISTS (
+        SELECT 1 FROM telegram_messages tm
+        WHERE tm.item_id = items.id
+          AND tm.is_migrated_history = 1
+      )"#,
+        ),
+        ExportHistoryScope::Migrated => (
+            crate::sources::NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
+            "tm.migration_domain",
+            "JOIN telegram_messages tm ON tm.item_id = items.id",
+            r#"
+      AND tm.is_migrated_history = 1
+      AND tm.migration_domain = 'migrated_from_chat'"#,
+        ),
+    };
+
     format!(
         r#"
     SELECT
@@ -371,19 +467,18 @@ fn base_query(where_clause: &str) -> String {
         items.reaction_count,
         forum_topics.topic_id AS forum_topic_id,
         forum_topics.title AS forum_topic_title,
-        forum_topics.top_message_id AS forum_topic_top_message_id
+        forum_topics.top_message_id AS forum_topic_top_message_id,
+        '{history_scope}' AS history_scope,
+        {migration_domain} AS migration_domain
     FROM items
+    {telegram_join}
     LEFT JOIN item_topic_memberships AS memberships
       ON memberships.item_id = items.id
     LEFT JOIN telegram_forum_topics AS forum_topics
       ON forum_topics.source_id = memberships.source_id
      AND forum_topics.topic_id = memberships.topic_id
     WHERE {where_clause}
-      AND NOT EXISTS (
-        SELECT 1 FROM telegram_messages tm
-        WHERE tm.item_id = items.id
-          AND tm.is_migrated_history = 1
-      )
+      {history_filter}
     ORDER BY items.published_at ASC, items.id ASC
 "#
     )
@@ -410,7 +505,9 @@ fn archive_base_query(where_clause: &str) -> String {
         reaction_count,
         forum_topic_id,
         forum_topic_title,
-        forum_topic_top_message_id
+        forum_topic_top_message_id,
+        '{current_scope}' AS history_scope,
+        NULL AS migration_domain
     FROM archive_read_items
     WHERE {where_clause}
       AND NOT EXISTS (
@@ -419,7 +516,8 @@ fn archive_base_query(where_clause: &str) -> String {
           AND tm.is_migrated_history = 1
       )
     ORDER BY published_at ASC, item_id ASC
-"#
+"#,
+        current_scope = crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP,
     )
 }
 
@@ -428,7 +526,7 @@ mod tests {
     use super::{
         load_export_messages, load_export_messages_from_archive,
         load_export_messages_from_items_path, load_export_source, select_notebooklm_export_loader,
-        ArchiveReadinessFallbackReason, ExportLoaderSelection,
+        ArchiveReadinessFallbackReason, ExportHistoryScope, ExportLoaderSelection,
     };
     use crate::compression::compress_text;
     use crate::error::AppErrorKind;
@@ -775,9 +873,10 @@ mod tests {
             .await
             .expect("rebuild archive model");
 
-        let old_rows = load_export_messages_from_items_path(&pool, 1, None, None)
-            .await
-            .expect("load old path");
+        let old_rows =
+            load_export_messages_from_items_path(&pool, 1, None, None, ExportHistoryScope::Current)
+                .await
+                .expect("load old path");
         let archive_rows = load_export_messages_from_archive(&pool, 1, None, None)
             .await
             .expect("load archive path");
@@ -819,11 +918,133 @@ mod tests {
         .await
         .expect("seed telegram rows");
 
-        let messages = load_export_messages_from_items_path(&pool, 1, None, None)
-            .await
-            .expect("load export messages");
+        let messages =
+            load_export_messages_from_items_path(&pool, 1, None, None, ExportHistoryScope::Current)
+                .await
+                .expect("load export messages");
 
         assert!(messages.iter().all(|message| message.item_id != 2));
+    }
+
+    #[tokio::test]
+    async fn opted_in_export_loads_migrated_rows_separately_with_markers() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                content_zstd, raw_data_zstd, content_kind, has_media
+             ) VALUES (30, 1, '42', 'telegram_message', 'Old', 130, 130, ?, NULL, 'text_only', 0)",
+        )
+        .bind(crate::compression::compress_text("old history").expect("compress"))
+        .execute(&pool)
+        .await
+        .expect("seed migrated item");
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (30, 1, 'chat', 777, 42, 'migrated_from_chat', 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed migrated identity");
+
+        let current = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Current)
+            .await
+            .expect("current messages");
+        let migrated = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Migrated)
+            .await
+            .expect("migrated messages");
+
+        assert!(current.iter().all(|message| {
+            message.history_scope == crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP
+        }));
+        assert_eq!(
+            migrated
+                .iter()
+                .map(|message| message.item_id)
+                .collect::<Vec<_>>(),
+            vec![30]
+        );
+        assert_eq!(
+            migrated[0].history_scope,
+            crate::sources::NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP
+        );
+        assert_eq!(
+            migrated[0].migration_domain.as_deref(),
+            Some("migrated_from_chat")
+        );
+    }
+
+    #[tokio::test]
+    async fn current_export_archive_loader_sets_scope_markers() {
+        let pool = export_pool().await;
+        seed_notebooklm_export_parity_fixture(&pool).await;
+        crate::archive_read_model::rebuild_source(&pool, 1)
+            .await
+            .expect("rebuild archive");
+
+        let messages = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Current)
+            .await
+            .expect("current archive messages");
+
+        assert!(!messages.is_empty());
+        assert!(messages.iter().all(|message| {
+            message.history_scope == crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP
+        }));
+        assert!(messages
+            .iter()
+            .all(|message| message.migration_domain.is_none()));
+    }
+
+    #[tokio::test]
+    async fn migrated_export_reply_lookup_stays_inside_old_history_domain() {
+        let pool = export_pool().await;
+        seed_export_source(&pool).await;
+        for (id, external_id, text, reply_to) in [
+            (20_i64, "7", "current seven", None),
+            (30_i64, "7", "old seven", None),
+            (31_i64, "8", "old reply", Some(7_i64)),
+        ] {
+            sqlx::query(
+                "INSERT INTO items (
+                    id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                    content_zstd, raw_data_zstd, content_kind, has_media, reply_to_msg_id
+                 ) VALUES (?, 1, ?, 'telegram_message', 'A', ?, ?, ?, NULL, 'text_only', 0, ?)",
+            )
+            .bind(id)
+            .bind(external_id)
+            .bind(id)
+            .bind(id)
+            .bind(crate::compression::compress_text(text).expect("compress"))
+            .bind(reply_to)
+            .execute(&pool)
+            .await
+            .expect("seed item");
+        }
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history, reply_to_msg_id
+             ) VALUES
+                (20, 1, 'channel', 12345, 7, NULL, 0, NULL),
+                (30, 1, 'chat', 777, 7, 'migrated_from_chat', 1, NULL),
+                (31, 1, 'chat', 777, 8, 'migrated_from_chat', 1, 7)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed identities");
+
+        let migrated = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Migrated)
+            .await
+            .expect("migrated messages");
+        let reply = migrated
+            .iter()
+            .find(|message| message.item_id == 31)
+            .expect("reply");
+
+        assert_eq!(reply.reply_to_snippet.as_deref(), Some("old seven"));
     }
 
     #[tokio::test]
@@ -875,9 +1096,15 @@ mod tests {
             .await
             .expect("rebuild archive model");
 
-        let old_rows = load_export_messages_from_items_path(&pool, 1, Some(50), Some(115))
-            .await
-            .expect("load old bounded path");
+        let old_rows = load_export_messages_from_items_path(
+            &pool,
+            1,
+            Some(50),
+            Some(115),
+            ExportHistoryScope::Current,
+        )
+        .await
+        .expect("load old bounded path");
         let archive_rows = load_export_messages_from_archive(&pool, 1, Some(50), Some(115))
             .await
             .expect("load archive bounded path");
@@ -927,12 +1154,19 @@ mod tests {
                 .await;
             }
 
-            let direct = load_export_messages_from_items_path(&pool, 1, Some(50), Some(125))
-                .await
-                .expect("load direct items path");
-            let wrapped = load_export_messages(&pool, 1, Some(50), Some(125))
-                .await
-                .expect("load wrapped fallback");
+            let direct = load_export_messages_from_items_path(
+                &pool,
+                1,
+                Some(50),
+                Some(125),
+                ExportHistoryScope::Current,
+            )
+            .await
+            .expect("load direct items path");
+            let wrapped =
+                load_export_messages(&pool, 1, Some(50), Some(125), ExportHistoryScope::Current)
+                    .await
+                    .expect("load wrapped fallback");
 
             assert_eq!(wrapped, direct, "unexpected fallback result for {status:?}");
         }
@@ -959,9 +1193,10 @@ mod tests {
         .await
         .expect("mutate archive reply target");
 
-        let messages = load_export_messages(&pool, 1, Some(50), Some(115))
-            .await
-            .expect("load wrapped archive path");
+        let messages =
+            load_export_messages(&pool, 1, Some(50), Some(115), ExportHistoryScope::Current)
+                .await
+                .expect("load wrapped archive path");
 
         assert_eq!(
             messages[0].reply_to_snippet.as_deref(),
@@ -977,9 +1212,15 @@ mod tests {
             .await
             .expect("rebuild archive model");
 
-        let direct = load_export_messages_from_items_path(&pool, 1, Some(50), Some(115))
-            .await
-            .expect("items path remains valid");
+        let direct = load_export_messages_from_items_path(
+            &pool,
+            1,
+            Some(50),
+            Some(115),
+            ExportHistoryScope::Current,
+        )
+        .await
+        .expect("items path remains valid");
         assert!(!direct.is_empty());
 
         sqlx::query(
@@ -991,9 +1232,10 @@ mod tests {
         .await
         .expect("corrupt archive row");
 
-        let error = load_export_messages(&pool, 1, Some(50), Some(115))
-            .await
-            .expect_err("archive decode failure is returned");
+        let error =
+            load_export_messages(&pool, 1, Some(50), Some(115), ExportHistoryScope::Current)
+                .await
+                .expect_err("archive decode failure is returned");
 
         assert_eq!(error.kind, AppErrorKind::Internal);
         assert!(!error.message.is_empty());
@@ -1016,9 +1258,10 @@ mod tests {
         .await
         .expect("corrupt archive reply target");
 
-        let error = load_export_messages(&pool, 1, Some(50), Some(115))
-            .await
-            .expect_err("corrupt reply target fails archive loader");
+        let error =
+            load_export_messages(&pool, 1, Some(50), Some(115), ExportHistoryScope::Current)
+                .await
+                .expect_err("corrupt reply target fails archive loader");
 
         assert_eq!(error.kind, AppErrorKind::Internal);
         assert!(!error.message.is_empty());
@@ -1112,7 +1355,7 @@ mod tests {
         .await
         .expect("insert reply");
 
-        let messages = load_export_messages(&pool, 1, Some(50), None)
+        let messages = load_export_messages(&pool, 1, Some(50), None, ExportHistoryScope::Current)
             .await
             .expect("load export messages");
 
@@ -1271,7 +1514,7 @@ mod tests {
             .expect("insert topic membership");
         }
 
-        let messages = load_export_messages(&pool, 1, None, None)
+        let messages = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Current)
             .await
             .expect("load export messages");
 
@@ -1358,7 +1601,7 @@ mod tests {
         .await
         .expect("insert general membership");
 
-        let messages = load_export_messages(&pool, 1, None, None)
+        let messages = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Current)
             .await
             .expect("load export messages");
 
@@ -1418,7 +1661,7 @@ mod tests {
         .await
         .expect("insert message");
 
-        let messages = load_export_messages(&pool, 1, None, None)
+        let messages = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Current)
             .await
             .expect("load export messages");
 
@@ -1465,7 +1708,7 @@ mod tests {
         .await
         .expect("seed membership");
 
-        let messages = load_export_messages(&pool, 1, None, None)
+        let messages = load_export_messages(&pool, 1, None, None, ExportHistoryScope::Current)
             .await
             .expect("load export messages");
 

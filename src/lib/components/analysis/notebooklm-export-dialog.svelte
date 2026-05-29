@@ -18,6 +18,7 @@
     fromDate: string;
     toDate: string;
     includeMediaPlaceholders: boolean;
+    includeMigratedHistory: boolean;
     minMessageLength: number;
     maxWordsPerFile: number;
     maxBytesPerFile: number;
@@ -204,6 +205,15 @@
         disabled={exporting}
         onchange={(event) => updateForm({ includeMediaPlaceholders: (event.currentTarget as HTMLInputElement).checked })}
       />
+      {#if source?.sourceType === "telegram" && source.migratedHistoryRowCount > 0}
+        <CheckboxRow
+          title="Include migrated historical scope"
+          description="Export current and migrated history as separate sections."
+          checked={form.includeMigratedHistory}
+          disabled={exporting}
+          onchange={(event) => updateForm({ includeMigratedHistory: (event.currentTarget as HTMLInputElement).checked })}
+        />
+      {/if}
       <CheckboxRow
         title="Overwrite deterministic export folder"
         description="Only replaces files in a marked Extractum NotebookLM export folder."

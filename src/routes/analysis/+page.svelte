@@ -393,6 +393,7 @@
     fromDate: "",
     toDate: "",
     includeMediaPlaceholders: true,
+    includeMigratedHistory: false,
     minMessageLength: 3,
     maxWordsPerFile: 300000,
     maxBytesPerFile: 50000000,

@@ -8,6 +8,7 @@ use crate::notebooklm_export::model::{
 pub(crate) struct DocumentRenderContext<'a> {
     pub(crate) source: &'a NotebookLmExportSource,
     pub(crate) topic: &'a ExportTopicDescriptor,
+    pub(crate) history_scope_heading: Option<&'a str>,
     pub(crate) generated_at: i64,
     pub(crate) title_period: &'a str,
     pub(crate) period_start: i64,
@@ -22,6 +23,7 @@ impl<'a> DocumentRenderContext<'a> {
         Self {
             source: self.source,
             topic: self.topic,
+            history_scope_heading: self.history_scope_heading,
             generated_at: self.generated_at,
             title_period: self.title_period,
             period_start: self.period_start,
@@ -124,6 +126,14 @@ pub(crate) fn render_message_block(message: &NotebookLmExportMessage) -> Rendere
         "content_kind: {}\n",
         yaml_string(&message.content_kind)
     ));
+    markdown.push_str(&format!(
+        "history_scope: {}\n",
+        yaml_string(&message.history_scope)
+    ));
+    markdown.push_str(&format!(
+        "migration_domain: {}\n",
+        yaml_optional_string(message.migration_domain.as_deref())
+    ));
     markdown.push_str("```\n\n");
 
     if let Some(text) = message
@@ -195,6 +205,10 @@ fn render_document_header(context: &DocumentRenderContext<'_>) -> String {
         .as_deref()
         .unwrap_or(&context.source.external_id);
     let mut output = String::new();
+
+    if let Some(heading) = context.history_scope_heading {
+        output.push_str(&format!("# {heading}\n\n"));
+    }
 
     output.push_str(&format!(
         "# Telegram Export: {source_name} / {}\n\n",
@@ -307,6 +321,8 @@ mod tests {
             forum_topic_id: Some(200),
             forum_topic_title: Some("Roadmap".to_string()),
             forum_topic_top_message_id: Some(700),
+            history_scope: crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP.to_string(),
+            migration_domain: None,
         });
 
         assert!(block.markdown.contains("source_id: 2"));
@@ -341,6 +357,8 @@ mod tests {
             forum_topic_id: Some(200),
             forum_topic_title: Some("Roadmap".to_string()),
             forum_topic_top_message_id: Some(700),
+            history_scope: crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP.to_string(),
+            migration_domain: None,
         });
 
         assert!(block.markdown.contains("reply_to_id: 3"));
@@ -349,6 +367,43 @@ mod tests {
         assert!(block.markdown.contains("thread_id: 3"));
         assert!(block.markdown.contains("reaction_count: 2"));
         assert!(block.markdown.contains("**Reactions:**"));
+    }
+
+    #[test]
+    fn renders_migrated_history_scope_metadata() {
+        let block = render_message_block(&NotebookLmExportMessage {
+            item_id: 1,
+            source_id: 2,
+            external_id: "3".to_string(),
+            author: Some("Ada".to_string()),
+            published_at: 0,
+            text: Some("Old message".to_string()),
+            content_kind: "text_only".to_string(),
+            has_media: false,
+            media_kind: None,
+            media_metadata: ItemMediaMetadata::default(),
+            media_placeholders: Vec::new(),
+            urls: Vec::new(),
+            reply_to_msg_id: None,
+            reply_to_author: None,
+            reply_to_snippet: None,
+            reply_to_peer_kind: None,
+            reply_to_peer_id: None,
+            reply_to_top_id: None,
+            reaction_count: None,
+            forum_topic_id: None,
+            forum_topic_title: None,
+            forum_topic_top_message_id: None,
+            history_scope: "migrated_small_group_history".to_string(),
+            migration_domain: Some("migrated_from_chat".to_string()),
+        });
+
+        assert!(block
+            .markdown
+            .contains("history_scope: \"migrated_small_group_history\""));
+        assert!(block
+            .markdown
+            .contains("migration_domain: \"migrated_from_chat\""));
     }
 
     #[test]
@@ -376,6 +431,8 @@ mod tests {
             forum_topic_id: Some(200),
             forum_topic_title: Some("Дорожная карта \"Q2\"".to_string()),
             forum_topic_top_message_id: Some(700),
+            history_scope: crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP.to_string(),
+            migration_domain: None,
         });
 
         assert!(block
@@ -408,6 +465,7 @@ mod tests {
         let context = DocumentRenderContext {
             source: &source,
             topic: &topic,
+            history_scope_heading: None,
             generated_at: 100,
             title_period: "2024-01",
             period_start: 0,

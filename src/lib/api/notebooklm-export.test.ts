@@ -31,6 +31,7 @@ function notebookLmExportRequest(
     period_from: 1_700_000,
     period_to: 1_786_000,
     include_media_placeholders: true,
+    include_migrated_history: false,
     min_message_length: 5,
     max_words_per_file: 1000,
     max_bytes_per_file: 5000,

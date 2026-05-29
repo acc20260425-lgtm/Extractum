@@ -1730,7 +1730,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/notebooklm_export/renderer.rs`
 - Test: `src-tauri/src/notebooklm_export/mod.rs`
 
-- [ ] **Step 1: Add export request/config fields**
+- [x] **Step 1: Add export request/config fields**
 
 In `src-tauri/src/notebooklm_export/model.rs`, add to `NotebookLmExportRequest` and `NotebookLmExportConfig`:
 
@@ -1745,7 +1745,7 @@ pub(crate) history_scope: String,
 pub(crate) migration_domain: Option<String>,
 ```
 
-- [ ] **Step 2: Add export query tests**
+- [x] **Step 2: Add export query tests**
 
 In `src-tauri/src/notebooklm_export/query.rs`, add:
 
@@ -1861,7 +1861,7 @@ async fn migrated_export_reply_lookup_stays_inside_old_history_domain() {
 }
 ```
 
-- [ ] **Step 3: Implement export scope enum and loaders**
+- [x] **Step 3: Implement export scope enum and loaders**
 
 In `src-tauri/src/notebooklm_export/query.rs`, add:
 
@@ -1922,7 +1922,7 @@ tm.migration_domain AS migration_domain
 
 Extend `ExportMessageRow` and `map_export_rows` to carry those fields into `NotebookLmExportMessage`.
 
-- [ ] **Step 4: Make migrated reply lookup domain-aware**
+- [x] **Step 4: Make migrated reply lookup domain-aware**
 
 For items-path scoped reply lookup, join `telegram_messages` and match replies by original history domain:
 
@@ -1946,7 +1946,7 @@ WHERE reply_tm.item_id = ?
 
 Use one query per reply row in the first implementation. Keep archive reply lookup unchanged because archive is current-only.
 
-- [ ] **Step 5: Render YAML markers and section headings**
+- [x] **Step 5: Render YAML markers and section headings**
 
 In `src-tauri/src/notebooklm_export/renderer.rs`, add to `render_message_block`:
 
@@ -1975,7 +1975,7 @@ if let Some(heading) = context.history_scope_heading {
 }
 ```
 
-- [ ] **Step 6: Split opted-in export into sections**
+- [x] **Step 6: Split opted-in export into sections**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, load messages like this:
 
@@ -2035,7 +2035,7 @@ Skip writing an empty migrated section file and add warning:
 "Migrated small-group history was included, but no migrated messages matched the export range."
 ```
 
-- [ ] **Step 7: Add renderer/mod tests**
+- [x] **Step 7: Add renderer/mod tests**
 
 In `src-tauri/src/notebooklm_export/renderer.rs`, add:
 
@@ -2074,7 +2074,7 @@ fn renders_migrated_history_scope_metadata() {
 }
 ```
 
-- [ ] **Step 8: Add frontend export opt-in**
+- [x] **Step 8: Add frontend export opt-in**
 
 In `src/lib/types/sources.ts`, extend `NotebookLmExportRequest`:
 
@@ -2114,7 +2114,7 @@ In `src/routes/analysis/+page.svelte`, add the default:
 includeMigratedHistory: false,
 ```
 
-- [ ] **Step 9: Update export tests**
+- [x] **Step 9: Update export tests**
 
 In `src/lib/api/notebooklm-export.test.ts` or `src/lib/analysis-state.test.ts`, add:
 
@@ -2137,7 +2137,7 @@ it("maps NotebookLM migrated history opt-in to the backend request", () => {
 });
 ```
 
-- [ ] **Step 10: Run export tests**
+- [x] **Step 10: Run export tests**
 
 Run:
 
@@ -2153,7 +2153,7 @@ npm.cmd run check
 
 Expected: all pass.
 
-- [ ] **Step 11: Commit Task 4**
+- [x] **Step 11: Commit Task 4**
 
 Run:
 

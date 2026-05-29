@@ -1250,6 +1250,7 @@ describe("analysis-state", () => {
       fromDate: "2026-05-03",
       toDate: "2026-05-04",
       includeMediaPlaceholders: true,
+      includeMigratedHistory: false,
       minMessageLength: 5,
       maxWordsPerFile: 1000,
       maxBytesPerFile: 5000,
@@ -1263,6 +1264,7 @@ describe("analysis-state", () => {
       period_from: Math.floor(new Date("2026-05-03T00:00:00").getTime() / 1000),
       period_to: Math.floor(new Date("2026-05-04T23:59:59").getTime() / 1000),
       include_media_placeholders: true,
+      include_migrated_history: false,
       min_message_length: 5,
       max_words_per_file: 1000,
       max_bytes_per_file: 5000,
@@ -1275,6 +1277,7 @@ describe("analysis-state", () => {
       fromDate: "2026-05-03",
       toDate: "2026-05-04",
       includeMediaPlaceholders: false,
+      includeMigratedHistory: false,
       minMessageLength: 3,
       maxWordsPerFile: 2000,
       maxBytesPerFile: 8000,
@@ -1286,8 +1289,26 @@ describe("analysis-state", () => {
       period_from: null,
       period_to: null,
       include_media_placeholders: false,
+      include_migrated_history: false,
       overwrite_existing: true,
     });
+  });
+
+  it("maps NotebookLM migrated history opt-in to the backend request", () => {
+    const request = notebookLmExportRequestFromForm("export-1", 7, {
+      outputDir: "C:/Export",
+      range: "entire_history",
+      fromDate: "",
+      toDate: "",
+      includeMediaPlaceholders: true,
+      includeMigratedHistory: true,
+      minMessageLength: 3,
+      maxWordsPerFile: 300000,
+      maxBytesPerFile: 50000000,
+      overwriteExisting: false,
+    });
+
+    expect(request.include_migrated_history).toBe(true);
   });
 
   it("formats NotebookLM export initial progress and completion status", () => {

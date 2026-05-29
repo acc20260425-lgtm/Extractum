@@ -29,6 +29,8 @@ pub(super) struct ExportMessageRow {
     pub(super) forum_topic_id: Option<i64>,
     pub(super) forum_topic_title: Option<String>,
     pub(super) forum_topic_top_message_id: Option<i64>,
+    pub(super) history_scope: String,
+    pub(super) migration_domain: Option<String>,
 }
 
 #[derive(FromRow)]
@@ -64,7 +66,7 @@ pub(super) fn map_export_rows(
                 render_media_placeholders(row.media_kind.as_deref(), &media_metadata);
             let reply_context = row
                 .reply_to_msg_id
-                .and_then(|reply_to_msg_id| reply_contexts.get(&reply_to_msg_id));
+                .and_then(|_| reply_contexts.get(&row.id));
 
             Ok(NotebookLmExportMessage {
                 item_id: row.id,
@@ -93,6 +95,8 @@ pub(super) fn map_export_rows(
                 forum_topic_id: row.forum_topic_id,
                 forum_topic_title: row.forum_topic_title,
                 forum_topic_top_message_id: row.forum_topic_top_message_id,
+                history_scope: row.history_scope,
+                migration_domain: row.migration_domain,
             })
         })
         .collect()

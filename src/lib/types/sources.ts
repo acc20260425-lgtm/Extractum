@@ -364,6 +364,7 @@ export interface NotebookLmExportRequest {
   period_from: number | null;
   period_to: number | null;
   include_media_placeholders: boolean;
+  include_migrated_history: boolean;
   min_message_length: number;
   max_words_per_file: number;
   max_bytes_per_file: number;

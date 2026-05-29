@@ -111,6 +111,7 @@ export type NotebookLmExportFormState = {
   fromDate: string;
   toDate: string;
   includeMediaPlaceholders: boolean;
+  includeMigratedHistory: boolean;
   minMessageLength: number;
   maxWordsPerFile: number;
   maxBytesPerFile: number;
@@ -971,6 +972,7 @@ export function notebookLmExportRequestFromForm(
       ? endOfDayUnix(form.toDate)
       : null,
     include_media_placeholders: form.includeMediaPlaceholders,
+    include_migrated_history: form.includeMigratedHistory,
     min_message_length: form.minMessageLength,
     max_words_per_file: form.maxWordsPerFile,
     max_bytes_per_file: form.maxBytesPerFile,

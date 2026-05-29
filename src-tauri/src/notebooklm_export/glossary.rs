@@ -114,6 +114,8 @@ mod tests {
             forum_topic_id: None,
             forum_topic_title: None,
             forum_topic_top_message_id: None,
+            history_scope: crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP.to_string(),
+            migration_domain: None,
         }
     }
 
