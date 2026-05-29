@@ -51,7 +51,7 @@ Priority: high.
     explicit before/after snapshots, `117` duplicate observations against the
     normal-sync baseline, `4447` inserts, zero warnings, and a full
     row-fidelity match across `4564` observed identities.
-- [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes
+- [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes; use `docs/superpowers/verification/takeout-small-group-rich-fixture-checklist.md`
 - [x] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
   - Offline inventory found no prior local `only_my_messages_fallback`
     evidence; source `113` was the strongest private/left-shape candidate at
