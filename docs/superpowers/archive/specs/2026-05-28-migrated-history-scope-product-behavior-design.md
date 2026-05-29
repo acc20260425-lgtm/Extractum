@@ -1,5 +1,10 @@
 # Migrated History Scope Product Behavior Design
 
+> Date: 2026-05-28
+> Status: implemented and archived
+> Current source of truth: `docs/project.md`, `docs/takeout-source-import.md`,
+> and `docs/database-schema.md`.
+
 ## Goal
 
 Define how users browse, analyze, and export Telegram migrated
@@ -9,8 +14,9 @@ This design applies to the historical scope generally, not only to the current
 source `115` validation fixture. Source `115` / batch `20` proved the storage
 and import path: explicit migrated-history import can write migrated rows with
 no bad migrated-domain rows and without adding those rows to default
-`analysis_documents` or `archive_read_items` projections. The remaining product
-question is how a user intentionally uses that historical scope.
+`analysis_documents` or `archive_read_items` projections. At the time, the
+remaining product question was how a user intentionally uses that historical
+scope; that behavior has since shipped.
 
 ## Chosen Policy
 

@@ -333,10 +333,11 @@ This is intentionally minimal: the app gets better UX than raw strings without i
 ## 9. Known architectural debt
 
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
-- Takeout import still needs shifted export DC fallback validation;
-- migrated supergroup history is detected as a separate historical scope; old
-  small-group import still needs explicit opt-in behavior before it can be
-  enabled;
+- natural shifted export DC fallback remains unobserved in live Takeout data,
+  although local fallback behavior and durable warnings are code-validated;
+- migrated small-group history is a separate historical scope with explicit
+  import and opt-in browsing/export/analysis; merged export and purge/unimport
+  behavior remain future product choices;
 - RSS and forum ingestion are not implemented yet despite the provider-ready source model;
 - YouTube needs broader live validation for active livestreams, upcoming videos, auto-caption-only videos, no-caption videos, private/member/age/geo-gated content, and large playlists;
 - YouTube jobs are not persistent or resumable across app restart;

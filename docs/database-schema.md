@@ -63,7 +63,7 @@ Notes:
 - new Telegram source rows keep `metadata_zstd` `NULL`;
 - old Telegram blobs may remain in existing databases as legacy repair input;
   the cleanup policy is defined in
-  `docs/superpowers/specs/2026-05-23-legacy-telegram-source-metadata-cleanup-policy-design.md`;
+  `docs/superpowers/archive/specs/2026-05-23-legacy-telegram-source-metadata-cleanup-policy-design.md`;
 - normal Telegram runtime updates preserve old Telegram blobs rather than
   clearing them opportunistically;
 - normal Telegram sync, Takeout, forum topic refresh, source list display, and
@@ -400,8 +400,11 @@ Takeout implication:
 
 - repeated Takeout runs, or a Takeout run after normal sync, rely on
   `telegram_messages` native identity handling to skip Telegram duplicates;
-- migrated supergroup history has a typed identity boundary, but enabling full
-  migrated-history import still requires a separate validation slice.
+- normal Takeout runs keep migrated small-group history out of current-history
+  projections unless the user starts the explicit migrated-history import;
+- imported migrated rows use their own old-chat identity domain through
+  `history_peer_kind`, `history_peer_id`, `migration_domain`, and
+  `is_migrated_history`;
 - Telegram Takeout writes generic ingest batch rows, Telegram Takeout batch
   detail, warnings, and item observations; it does not persist raw Telegram
   payloads as provenance.

@@ -46,8 +46,12 @@ Implemented:
 - YouTube metadata, transcript, comment, and playlist membership sync into local SQLite
 - provider-dispatched source sync for Telegram and YouTube
 - Takeout source import for existing Telegram sources with TDesktop-first pagination
+- explicit migrated small-group history import for Telegram supergroups when
+  Takeout has detected the historical scope
 - durable ingest batch, warning, and item-observation provenance for Takeout
   attempts
+- explicit migrated-history scope controls for browsing, NotebookLM export, and
+  analysis, with current-history-only defaults
 - materialized Telegram forum topic memberships with source-level resolver state
 - media-aware sync metadata for text-bearing and media-only items
 - Telegram reply/thread/reaction context metadata for newly synced items
@@ -65,6 +69,8 @@ Implemented:
 - provider-neutral analysis refs for new live corpus rows
 - YouTube timestamp evidence refs for transcript segments
 - typed app errors across Tauri commands
+- guarded audit and clear commands for eligible legacy Telegram source metadata
+  blobs
 - OS secure storage for saved LLM API keys and Telegram `api_hash` values
 - encrypted Telegram session file contents with per-account OS secure storage keys
 - OS secure storage for YouTube cookies
@@ -110,6 +116,8 @@ Not implemented yet:
   - sync Telegram source history
   - sync YouTube metadata, transcripts, comments, and playlists
   - start/cancel Takeout source imports and monitor import progress
+  - start explicit migrated small-group history imports for eligible Telegram
+    supergroups
   - configure the first sync policy
   - manage report templates
   - manage source groups
@@ -145,11 +153,14 @@ Not implemented yet:
 - `get_youtube_playlist_detail`
 - YouTube source-job commands for metadata, transcript, comments, playlist sync, retry, cancel, and listing
 - `start_takeout_source_import`
+- `start_takeout_migrated_history_import`
 - `cancel_takeout_source_import`
 - `list_takeout_source_import_jobs`
 - `get_items`
 - `get_sync_settings`
 - `save_sync_settings`
+- `audit_legacy_telegram_source_metadata`
+- `clear_legacy_telegram_source_metadata`
 
 ### Analysis
 
@@ -219,9 +230,11 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 - YouTube cookies, when enabled, use OS secure storage and are written only to temporary backend cookie files for `yt-dlp`;
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
-- Takeout import does not download media bytes and currently defers migrated
-  supergroup history until incomplete-import policy and real-data validation
-  are complete.
+- Takeout import does not download media bytes.
+- Normal Takeout imports current supergroup history by default; migrated
+  small-group history is imported only through the explicit historical-scope
+  action and remains excluded from default projections unless the user opts in
+  where supported.
 
 ## Reading order for implementation work
 

@@ -140,7 +140,7 @@ project is actively growing:
 
 - new provider or source-reader work;
 - additional archive/export consumers;
-- Takeout provenance and migrated-history enablement;
+- Takeout provenance and explicit migrated-history scope maintenance;
 - YouTube playlist detail improvements;
 - future migrations starting from a compact current-schema baseline.
 

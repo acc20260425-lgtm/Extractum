@@ -340,16 +340,17 @@ as design rationale for future archive/read model changes:
   rollout shape.
 - The first implementation consumer is source browsing, because its item-list
   parity is easier to validate than full NotebookLM export output.
-- NotebookLM export should migrate only after export-specific parity tests prove
-  the archive/read UI model preserves reply/topic/reaction/media fidelity.
+- NotebookLM export migrated after export-specific parity tests proved the
+  archive/read UI model preserves reply/topic/reaction/media fidelity.
 - "Proves fidelity" means the model does not exclude the required Telegram
   NotebookLM export fields listed above, even if export rendering remains on
   the old path until a later slice.
 - Current-schema baseline reset has shipped after the archive read-model
   boundary stabilized; future schema changes start at `0002` and must preserve
   the archive readiness semantics.
-- Legacy Telegram blob cleanup remains blocked on real Telegram
-  runtime/private-source validation.
+- Legacy Telegram blob cleanup policy and guarded maintenance helpers have
+  shipped separately. Cleanup remains explicit, audit-first, and never an
+  automatic migration or normal runtime side effect.
 
 ## Dependency Map
 
@@ -360,22 +361,21 @@ as design rationale for future archive/read model changes:
 | Takeout provenance | Can proceed in parallel while it writes provenance tables only. If it adds new archive-display fields or origin semantics that consumers need, the archive builder contract and readiness/backfill rules must be updated before consumer migration. |
 | YouTube playlist simplification | Related but separate. Playlist entries remain typed YouTube membership/detail state, not `archive_read_items` rows. Canonical cleanup of `availability_status` versus `is_removed_from_playlist` belongs to a later YouTube slice. |
 | Current-schema baseline | Implemented after the archive read-model boundary and migration/backfill rules stabilized. Future migrations start at `0002`. |
-| Legacy Telegram metadata blob cleanup | Blocked on typed repair plus real private/dialog-backed source validation, not on the archive read model. |
+| Legacy Telegram metadata blob cleanup | Resolved separately with guarded audit/clear helpers. Current behavior is documented in `docs/database-schema.md` and implemented in `src-tauri/src/sources/legacy_metadata_cleanup.rs`. |
 
-## Follow-up Implementation Slices
+## Resolved Follow-up Implementation Slices
 
-1. [x] Define update semantics, builder-failure rollback rules, lazy
-   per-source backfill/gating, YouTube transcript segment ownership,
-   stale-row handling, and the full export-ready field set before adding
-   schema.
-2. [x] Build the archive/read UI model for source browsing first.
-3. [x] Migrate source browsing behind old-path versus new-path parity tests.
-4. [x] Migrate Telegram NotebookLM export after export parity tests pass.
-5. [x] Decide whether future YouTube playlist-entry browsing needs archive rows
-   or typed detail only.
-6. [x] Ship a current-schema baseline after the read-model boundary settles.
-7. [ ] Consider legacy Telegram metadata blob cleanup only after typed repair
-   and real private/dialog-backed source validation are proven safe.
+1. Defined update semantics, builder-failure rollback rules, lazy per-source
+   backfill/gating, YouTube transcript segment ownership, stale-row handling,
+   and the full export-ready field set before adding schema.
+2. Built the archive/read UI model for source browsing first.
+3. Migrated source browsing behind old-path versus new-path parity tests.
+4. Migrated Telegram NotebookLM export after export parity tests passed.
+5. Decided that future YouTube playlist-entry browsing uses typed detail, not
+   archive rows.
+6. Shipped a current-schema baseline after the read-model boundary settled.
+7. Resolved legacy Telegram metadata blob cleanup as explicit guarded
+   audit/clear maintenance, not an automatic migration or runtime side effect.
 
 ## Resolved Implementation Questions
 

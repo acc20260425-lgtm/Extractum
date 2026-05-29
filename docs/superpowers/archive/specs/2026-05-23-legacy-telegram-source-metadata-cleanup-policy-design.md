@@ -1,8 +1,11 @@
 # Legacy Telegram Source Metadata Cleanup Policy Design
 
 > Date: 2026-05-23
-> Status: approved policy slice
-> Scope: documentation and decision only; no Rust, SQL, or live data mutation.
+> Status: implemented and archived
+> Scope: historical policy and implementation shape for guarded legacy Telegram
+> source metadata cleanup.
+> Current source of truth: `docs/database-schema.md` and
+> `src-tauri/src/sources/legacy_metadata_cleanup.rs`.
 
 ## Goal
 
@@ -10,8 +13,10 @@ Close the architecture decision for old Telegram `sources.metadata_zstd` blobs:
 whether and when they may be cleared now that Telegram runtime identity lives in
 typed tables.
 
-This slice does not clear any blob. It defines the cleanup policy and the shape
-of a future explicit maintenance operation.
+This historical slice defined the cleanup policy and the shape of the explicit
+maintenance operation. The guarded audit/clear helper has since been
+implemented; cleanup remains explicit and is not an automatic migration or
+normal runtime side effect.
 
 ## Decision
 
@@ -27,9 +32,10 @@ audit/dry-run/clear operation. They must not be cleared by automatic destructive
 startup migration, opportunistic sync/update/list/Takeout behavior, or ordinary
 schema migration.
 
-## Current Evidence
+## Evidence At The Time
 
-Current live DB aggregate evidence, collected without decoding blob contents:
+Live DB aggregate evidence for the original policy decision, collected without
+decoding blob contents:
 
 | Field | Count |
 | --- | ---: |
@@ -44,18 +50,18 @@ Current live DB aggregate evidence, collected without decoding blob contents:
 
 Recent real-data validation has exercised representative typed identity paths,
 including dialog-backed/no-username supergroup Takeout and small-group Takeout.
-`CHANNEL_PRIVATE` fallback is still not run. Therefore this policy can permit
-cleanup after typed identity audit, but it must not claim that every possible
-private or lost-access Telegram scenario has been exhausted.
+At the time, `CHANNEL_PRIVATE` fallback was not yet run. Later validation and
+current cleanup behavior are tracked in current-state docs and reusable
+verification notes; this archived spec remains the policy rationale.
 
 These aggregate counts are decision input only. They are not an eligibility
-result for the future cleanup helper; the helper must recompute guards at run
+result for the implemented cleanup helper; the helper recomputes guards at run
 time.
 
 ## Cleanup Preconditions
 
-A future cleanup operation may clear a Telegram `sources.metadata_zstd` blob
-only when all guards pass:
+The implemented cleanup operation may clear a Telegram `sources.metadata_zstd`
+blob only when all guards pass:
 
 1. `sources.source_type = 'telegram'`.
 2. `sources.metadata_zstd IS NOT NULL`.
@@ -70,15 +76,15 @@ only when all guards pass:
    `source_identity_repair_notes` may be reported but must not automatically
    block cleanup unless the helper explicitly treats a note code as blocking.
 
-The future helper may choose stricter product gates, such as requiring a source
-to have survived list, sync, or Takeout validation. Those gates should be policy
+The helper may choose stricter product gates, such as requiring a source to
+have survived list, sync, or Takeout validation. Those gates should be policy
 parameters or documented implementation choices, not implicit side effects of
 normal runtime paths.
 
 ## Explicit Operation Shape
 
-The preferred future implementation is a guarded maintenance helper, not a
-schema migration:
+The shipped implementation is a guarded maintenance helper, not a schema
+migration:
 
 - `audit_legacy_telegram_source_metadata()`
 - `clear_legacy_telegram_source_metadata(dry_run: bool)`
@@ -118,22 +124,22 @@ data cleanup and migration-history cutover. This decision follows that boundary:
 schema migrations may add or reshape schema, but clearing repair input requires
 an explicit guarded operation with a dry-run/audit path.
 
-## Non-Goals
+## Historical Non-Goals For This Policy Slice
 
-- Do not clear blobs in this slice.
-- Do not add a Rust helper in this slice.
-- Do not add SQL migration `0002` for blob cleanup.
-- Do not decode or log legacy blob contents.
-- Do not change startup source identity repair semantics.
-- Do not change normal sync, list, update, Takeout, or source resolution paths.
-- Do not mark `CHANNEL_PRIVATE` fallback validation complete.
+- It did not add SQL migration `0002` for blob cleanup.
+- It did not decode or log legacy blob contents.
+- It did not change startup source identity repair semantics.
+- It did not change normal sync, list, update, Takeout, or source resolution paths.
+- It did not mark `CHANNEL_PRIVATE` fallback validation complete.
 
-## Follow-Up
+## Implementation Status
 
-Implement the explicit guarded helper in a separate slice if and when the
-project is ready to mutate existing local data.
+Implemented as:
 
-That slice should include focused tests for:
+- `audit_legacy_telegram_source_metadata`
+- `clear_legacy_telegram_source_metadata(dry_run: bool)`
+
+The helper has focused tests for:
 
 - audit output with eligible rows;
 - skipped rows for missing typed identity;

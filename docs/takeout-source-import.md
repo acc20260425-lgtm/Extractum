@@ -270,13 +270,25 @@ completed and record durable warning code `forum_topic_refresh_failed`.
 
 ## 10. Current Validation Baseline
 
-Recorded baseline from the Takeout pagination work:
+Baseline project verification is the documented local gate:
 
-- `cargo test takeout_import` passed with 20 tests.
-- full `cargo test` passed with 130 tests.
-- the tested live public channel imported without a descending fallback warning and had 1009 local `items` rows, 1008 of them text records.
-- a later NotebookLM export with only 14 messages was traced to the selected 30-day analysis period, not to Takeout pagination.
+```bash
+npm run verify
+```
 
-Open validation still belongs in the backlog: broader real-account coverage for
-supergroups, groups, private/left sources, and explicit opt-in behavior for the
-migrated historical scope before old small-group history import is enabled.
+Reusable Takeout evidence and manual validation notes live in:
+
+- `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
+- `docs/superpowers/verification/takeout-small-group-rich-fixture-checklist.md`
+
+Current status:
+
+- representative public, private/left, duplicate/fidelity, export-DC fallback,
+  and migrated-history validation is recorded in the reusable verification
+  notes;
+- explicit migrated small-group history import is implemented as a separate
+  historical-scope action with current-history-only defaults for normal
+  browsing, analysis, and export;
+- the remaining Takeout backlog item is narrow: compare against future richer
+  small-group fixtures if they expose reply, media, or reaction shapes not
+  covered by the current evidence.

@@ -8,13 +8,12 @@
 | Priority | Area | Next outcome |
 | --- | --- | --- |
 | High | Takeout source import | compare completed small-group Takeout validation against richer future fixtures |
-| High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
 | Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
-| Medium | Stabilization and secret safety | add repeatable verification, CI, dependency policy, and secret-leak audit coverage |
+| Medium | Stabilization and secret safety | add CI, dependency policy, event-flow validation, and secret-leak audit coverage |
 
 ## 2. Planning Principles
 
@@ -32,157 +31,26 @@
 
 Priority: high.
 
-- [x] ship repeatable sanitized Takeout validation diagnostics and reusable
-  manual validation template
-- [x] complete representative public supergroup Takeout validation after
-  current durable baseline and bounded partial runs
-  - Source `18` completed public-channel Takeout as batch `10` with explicit
-    before/after snapshots, no warnings, and complete duplicate/fidelity
-    evidence against the normal-sync baseline.
-  - Source `22` public-supergroup Takeout batch `11` was bounded-cancelled as
-    `partial` after `11162` observations because the estimate was `125813`;
-    all observed identities matched canonical source rows, but completed
-    public-supergroup evidence is still needed.
-  - Source `19` public-supergroup Takeout batch `12` was bounded-cancelled as
-    `partial` after `20397` observations because the estimate was `52723`;
-    all observed identities matched canonical source rows, but completed
-    public-supergroup evidence is still needed.
-  - Source `122` completed public-supergroup Takeout as batch `13` with
-    explicit before/after snapshots, `117` duplicate observations against the
-    normal-sync baseline, `4447` inserts, zero warnings, and a full
-    row-fidelity match across `4564` observed identities.
-- [ ] compare completed small-group Takeout validation against any future additional small-group fixtures if they expose richer reply, media, or reaction shapes; use `docs/superpowers/verification/takeout-small-group-rich-fixture-checklist.md`
-- [x] validate `CHANNEL_PRIVATE` fallback on a private/left channel or supergroup
-  - Offline inventory found no prior local `only_my_messages_fallback`
-    evidence; source `113` was the strongest private/left-shape candidate at
-    that time.
-    Live Takeout retries `7`, `8`, and `9` were blocked by
-    `TAKEOUT_INIT_DELAY`; batch `14` later completed without
-    `only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence,
-    so this row remains open.
-  - Read-only re-inventory after source `113` batch `14` selected source `114`
-    as the strongest next candidate because prior sanitized normal-sync
-    validation observed `CHANNEL_PRIVATE`, it has no prior Takeout batches, and
-    its stored identity remains dialog-backed with access-hash presence and no
-    username.
-  - Source `114` Takeout batch `15` reproduced the typed `CHANNEL_PRIVATE`
-    terminal outcome before observations, but recorded no
-    `only_my_messages_fallback`, `only_my_messages`, or fallback-used evidence;
-    a follow-up code investigation found the preflight path was failing before
-    the fallback marker could be persisted.
-  - Source `114` post-fix Takeout batch `17` completed as `partial` with
-    `only_my_messages_fallback`, `only_my_messages = 1`, and
-    `history_scope = partial_private_history`; Telegram exposed zero
-    only-my-messages observations, so full-history import remains a separate
-    concern.
-- [x] validate shifted export DC behavior and the warning path when fallback to home DC is used
-  - Code-backed validation proves local shifted export-DC fallback, Telegram RPC
-    non-fallback, one durable `export_dc_fallback` warning, and sanitized
-    diagnostics. Natural live fallback remains unobserved in the current
-    environment.
-- [x] compare Takeout-imported rows with normal sync rows for content, media metadata, reply/thread metadata, reaction counts, and duplicate skipping
-  - Source `113` completed the normal-sync setup but Takeout batches `7` and
-    `8` failed before observations with `TAKEOUT_INIT_DELAY`.
-  - Source `113` retry batch `9` remained blocked before observations with
-    `TAKEOUT_INIT_DELAY`.
-  - Source `113` batch `14` completed with `467` observed identities, `438`
-    inserts, `29` duplicate observations against the normal-sync baseline, zero
-    warnings, and a full row-fidelity match.
-  - Source `18` batch `10` completed after a normal-sync baseline with `42`
-    duplicate observations, `425` inserts, zero warning codes, and a full
-    row-fidelity match across `467` observed identities.
-- [x] retry the controlled migrated small-group-to-supergroup Takeout smoke after Telegram `TAKEOUT_INIT_DELAY` expires and verify migrated-history deferment without unsafe old `chat` rows
-  - Source `115` remains the selected smoke source: it is a dialog-backed
-    `supergroup` with `peer_kind = channel`, no username, access-hash presence,
-    one current-history item, and prior Takeout batch `2` blocked before
-    observations with `TAKEOUT_INIT_DELAY`.
-  - Source `115` retry batch `18` completed as `partial` with
-    `migrated_history_detected = 1`, `migrated_history_imported = 0`,
-    `history_scope = current_history_with_migrated_deferred`, one
-    `migrated_history_deferred` warning, and zero unsafe old `chat` history
-    rows. This validates detection/deferment only; migrated-history import
-    enablement remains open below.
-- [x] define richer incomplete-import recovery actions and user policy beyond
-  the shipped read-only recovery state
-  - Implemented the safe recovery-policy slice: failed, cancelled,
-    interrupted, and partial-completed Takeout notices now describe the
-    safe re-run policy and known warning-code limitations without adding
-    discard, persisted dismiss, or true resume behavior.
-- [x] decide migrated historical-scope policy on top of persisted provenance
-  - Policy selected on 2026-05-26: migrated small-group history is a separate
-    historical scope, not part of normal current supergroup Takeout reruns.
-    Normal reruns keep `migrated_history_deferred`; any future import requires
-    an explicit opt-in historical-scope design.
-- [x] implement explicit migrated small-group history opt-in import as a
-  separate Takeout action with source-level capability state, native old-chat
-  identity, same-source locking, and default current-history read behavior
-  - Source `115` E2E validation on 2026-05-28 passed: normal Takeout batch
-    `19` refreshed capability to `available`; explicit migrated-history batch
-    `20` completed with `history_scope = migrated_small_group_history`,
-    `migrated_history_imported = 1`, `3` inserted migrated rows, zero warnings,
-    zero bad migrated-domain rows, and zero migrated rows in default
-    `analysis_documents` / `archive_read_items` projections.
-- [x] define domain-aware merged timeline, browsing, analysis, and export
-  behavior for migrated historical scope after explicit import
-  - Product behavior is specified in
-    `docs/superpowers/specs/2026-05-28-migrated-history-scope-product-behavior-design.md`.
-    Defaults remain current-history only; browsing, analysis, and export include
-    migrated historical scope only after explicit user choice.
-- [x] implement explicit browsing, analysis, and export controls for migrated
-  historical scope
-  - Browsing defaults to current history, provides explicit current/migrated/
-    merged scope selection for imported migrated rows, and labels migrated
-    rows.
-  - NotebookLM export defaults to current history and uses an explicit opt-in
-    with separate current and migrated sections.
-  - Analysis defaults to current history and stores opt-in runs as
-    `telegram_history_scope = current_plus_migrated` with row-level snapshot
-    metadata.
-- [x] decide whether Takeout import should refresh the forum-topic catalog after successful finish
-  - Policy implemented: completed Takeout imports refresh forum topics for
-    eligible supergroup sources, including completed partial imports, while
-    failed and cancelled attempts do not refresh.
-  - Refresh failures preserve completed Takeout status and record durable
-    warning code `forum_topic_refresh_failed`.
-  - Source `21` / batch `4` and source `22` / batch `11` remain sanitized
-    partial-run decision input, not proof of completed live behavior.
+Completed representative Takeout validation, fallback behavior, forum-topic
+refresh policy, and migrated-history import/scope behavior are documented in
+current-state docs and reusable verification notes. Keep this section limited
+to validation gaps that still need new evidence.
+
+- [ ] compare completed small-group Takeout validation against any future
+  additional small-group fixtures if they expose richer reply, media, or
+  reaction shapes; use
+  `docs/superpowers/verification/takeout-small-group-rich-fixture-checklist.md`
 
 Acceptance:
 
-- Successful Takeout import updates `last_sync_state` and `last_synced_at`.
-- Failed or cancelled Takeout imports are explainable and recoverable without
-  being mistaken for complete history.
-- Export DC fallback and only-my-messages fallback warnings remain visible in job state.
-- Migrated supergroup history has a safe provenance and validation policy
-  before import is enabled.
+- New fixture comparison records whether reply, media, reaction, and duplicate
+  semantics still match normal sync expectations.
+- Historical validation evidence remains reusable without expanding this
+  backlog file; use
+  `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
+  for representative Takeout coverage and fallback context.
 
-### 3.2 Database Schema Simplification
-
-Priority: high.
-
-Analysis:
-
-- Full findings are recorded in
-  `docs/archive/database-schema-legacy-analysis.md`.
-
-- [x] decide cleanup policy for old Telegram `sources.metadata_zstd` blobs
-- [x] implement an explicit guarded audit/dry-run/clear helper for eligible
-  legacy Telegram source metadata blobs
-
-Acceptance:
-
-- New provider work does not need to touch legacy Telegram subtype compatibility.
-- Migrated Telegram history has durable provenance and validation policy before import is enabled.
-- Normal Telegram source, sync, Takeout, browsing, and export paths keep using
-  typed identity/display cache fields rather than legacy Telegram metadata
-  blobs.
-- Any blob cleanup is validation-aware and does not remove repair input before
-  the remaining real-data checks are done.
-- Legacy Telegram `sources.metadata_zstd` cleanup is not an automatic
-  destructive migration, startup cleanup, or opportunistic sync/update/list/
-  Takeout side effect.
-
-### 3.3 Saved Runs Discoverability And Cleanup
+### 3.2 Saved Runs Discoverability And Cleanup
 
 Priority: medium.
 
@@ -193,7 +61,7 @@ Acceptance:
 
 - Large saved-run histories can be narrowed quickly without reconstructing the original run context.
 
-### 3.4 NotebookLM Export Follow-Ups
+### 3.3 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -203,7 +71,7 @@ Priority: medium.
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 3.5 YouTube Source Follow-Ups
+### 3.4 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -222,7 +90,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 3.6 Media Download, Preview, And Analysis
+### 3.5 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -240,11 +108,10 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 3.7 Stabilization
+### 3.6 Stabilization
 
 Priority: medium.
 
-- [x] add a single documented full-project verification command or script
 - [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
 - [ ] pin `grammers-*` dependencies to an explicit `rev` or owned release policy
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes

@@ -358,9 +358,10 @@ The most meaningful remaining design questions are:
 
 - whether RSS or forum ingestion should be implemented next;
 - whether private Telegram peer resolution should gain stronger cached identity data;
-- how to validate shifted export DC fallback behavior against sanitized evidence;
-- whether and how to enable migrated supergroup history import on top of
-  durable Takeout provenance;
+- whether natural shifted export DC fallback appears in future live Takeout
+  evidence beyond the current code-backed validation;
+- whether migrated-history merged export or purge/unimport behavior is needed
+  beyond the current explicit import and opt-in browsing/export/analysis flows;
 - whether YouTube jobs should become persistent/resumable across app restart;
 - whether YouTube-specific NotebookLM export enrichment should be shipped;
 - how to expand analysis beyond text-bearing corpus items;
