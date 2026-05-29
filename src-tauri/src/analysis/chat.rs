@@ -109,6 +109,16 @@ fn clip_excerpt(content: &str, max_chars: usize) -> String {
     format!("{clipped}...")
 }
 
+fn history_scope_label_from_metadata(metadata_zstd: &[u8]) -> Option<&'static str> {
+    let bytes = crate::compression::decompress_bytes(metadata_zstd).ok()?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    match value.get("history_scope").and_then(|value| value.as_str()) {
+        Some("migrated") => Some("Migrated small-group history"),
+        Some("current") => Some("Current supergroup history"),
+        _ => None,
+    }
+}
+
 fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
     if messages.is_empty() {
         return "No additional local source document matches were found for the current question."
@@ -118,10 +128,16 @@ fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
     messages
         .iter()
         .map(|message| {
+            let history_scope = message
+                .metadata_zstd
+                .as_deref()
+                .and_then(history_scope_label_from_metadata)
+                .unwrap_or("Current supergroup history");
             format!(
-                "[{ref}] Date: {published_at}\nAuthor: {author}\nExcerpt:\n{excerpt}",
+                "[{ref}] Date: {published_at}\nHistory scope: {history_scope}\nAuthor: {author}\nExcerpt:\n{excerpt}",
                 ref = message.r#ref,
                 published_at = message.published_at,
+                history_scope = history_scope,
                 author = message.author.as_deref().unwrap_or("unknown"),
                 excerpt = clip_excerpt(&message.content, 420)
             )
@@ -430,7 +446,7 @@ pub async fn ask_analysis_run_question(
                         .emit(&app_handle);
                     return;
                 }
-        };
+            };
 
         let scheduler = app_handle.state::<LlmSchedulerState>();
         let request_meta = analysis_chat_request_metadata(
@@ -556,6 +572,8 @@ mod tests {
             provider: "gemini".to_string(),
             model: "gemini-2.5-flash".to_string(),
             youtube_corpus_mode: "transcript_description".to_string(),
+            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT
+                .to_string(),
             status: "completed".to_string(),
             result_markdown: Some("Saved report".to_string()),
             error: None,
@@ -584,6 +602,19 @@ mod tests {
             source_subtype: None,
             metadata_zstd: None,
         }
+    }
+
+    #[test]
+    fn chat_context_labels_migrated_history_scope_from_metadata() {
+        let mut message = sample_message();
+        message.metadata_zstd = Some(
+            crate::compression::compress_json_bytes(br#"{"history_scope":"migrated"}"#)
+                .expect("compress metadata"),
+        );
+
+        let text = format_chat_context_messages(&[&message]);
+
+        assert!(text.contains("History scope: Migrated small-group history"));
     }
 
     #[test]

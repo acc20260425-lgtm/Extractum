@@ -48,6 +48,28 @@ pub(crate) struct StartAnalysisReportRequest {
     pub(crate) model_override: Option<String>,
     pub(crate) profile_id: Option<String>,
     pub(crate) youtube_corpus_mode: Option<String>,
+    pub(crate) include_migrated_history: bool,
+}
+
+fn resolve_analysis_telegram_history_scope(
+    include_migrated_history: bool,
+    source_type: &str,
+) -> AppResult<(&'static str, bool)> {
+    if include_migrated_history && source_type != crate::sources::TELEGRAM_SOURCE_TYPE {
+        return Err(AppError::validation(
+            "Migrated historical scope can be included only for Telegram analysis",
+        ));
+    }
+    if include_migrated_history {
+        return Ok((
+            crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED,
+            true,
+        ));
+    }
+    Ok((
+        crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+        false,
+    ))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -970,6 +992,7 @@ pub(crate) async fn start_analysis_report_run(
         model_override,
         profile_id,
         youtube_corpus_mode,
+        include_migrated_history,
     } = request;
 
     if period_from > period_to {
@@ -1052,12 +1075,18 @@ pub(crate) async fn start_analysis_report_run(
 
     let resolved_sources =
         resolve_analysis_sources(&pool, resolved_source_id, resolved_group_id).await?;
+    let (telegram_history_scope, include_migrated_history) =
+        resolve_analysis_telegram_history_scope(
+            include_migrated_history,
+            &resolved_sources.source_type,
+        )?;
     let corpus_request = CorpusLoadRequest {
         source_type: resolved_sources.source_type.clone(),
         source_ids: resolved_sources.source_ids.clone(),
         period_from,
         period_to,
         youtube_corpus_mode,
+        include_migrated_history,
     };
 
     let preflight = preflight_analysis_run(
@@ -1083,6 +1112,7 @@ pub(crate) async fn start_analysis_report_run(
             provider_profile: &resolved_profile.profile_id,
             model: &effective_model,
             youtube_corpus_mode,
+            telegram_history_scope,
         },
     )
     .await?
@@ -1120,6 +1150,7 @@ pub(crate) async fn start_analysis_report_run(
             provider: resolved_profile.provider.as_str(),
             model: &effective_model,
             youtube_corpus_mode,
+            telegram_history_scope,
         },
     )
     .await?;
@@ -1168,7 +1199,8 @@ mod tests {
     use super::{
         build_map_request, build_reduce_request, capture_report_corpus, extract_json_payload,
         finish_map_phase, mark_interrupted_analysis_runs, parse_chunk_summary,
-        validate_report_preflight, ReduceRequestParams, ReportRunError,
+        resolve_analysis_telegram_history_scope, validate_report_preflight, ReduceRequestParams,
+        ReportRunError, StartAnalysisReportRequest,
     };
     use crate::analysis::corpus::{
         AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
@@ -1214,6 +1246,44 @@ mod tests {
             source_subtype: Some("channel".to_string()),
             metadata_zstd: None,
         }
+    }
+
+    #[test]
+    fn telegram_history_scope_opt_in_preserves_policy_when_zero_migrated_rows_match() {
+        let (scope, include_migrated_history) =
+            resolve_analysis_telegram_history_scope(true, "telegram")
+                .expect("resolve Telegram opt-in");
+
+        assert!(include_migrated_history);
+        assert_eq!(
+            scope,
+            crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED
+        );
+    }
+
+    #[test]
+    fn migrated_history_opt_in_rejects_non_telegram_analysis() {
+        let error = resolve_analysis_telegram_history_scope(true, "youtube")
+            .expect_err("reject non-Telegram opt-in");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+    }
+
+    #[test]
+    fn report_start_request_carries_migrated_history_opt_in_to_corpus_request_shape() {
+        let request = StartAnalysisReportRequest {
+            source_id: Some(1),
+            source_group_id: None,
+            period_from: 1,
+            period_to: 2,
+            output_language: "Russian".to_string(),
+            prompt_template_id: 1,
+            model_override: None,
+            profile_id: None,
+            youtube_corpus_mode: None,
+            include_migrated_history: true,
+        };
+
+        assert!(request.include_migrated_history);
     }
 
     #[tokio::test]
@@ -1300,6 +1370,7 @@ mod tests {
             period_from: 1,
             period_to: 1_000,
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+            include_migrated_history: false,
         };
 
         let captured = capture_report_corpus(&pool, 1, "Frozen source", &request)

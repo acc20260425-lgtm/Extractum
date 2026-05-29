@@ -9,7 +9,7 @@ use super::models::{
 use super::store::fetch_source_group;
 #[cfg(test)]
 use super::{ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP};
-use crate::compression::{decompress_bytes, decompress_text};
+use crate::compression::{compress_json_bytes, decompress_bytes, decompress_text};
 use crate::error::{internal_error, AppError, AppResult};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,6 +88,7 @@ pub(crate) struct CorpusLoadRequest {
     pub(crate) period_from: i64,
     pub(crate) period_to: i64,
     pub(crate) youtube_corpus_mode: YoutubeCorpusMode,
+    pub(crate) include_migrated_history: bool,
 }
 
 pub(crate) struct ResolvedAnalysisSources {
@@ -317,7 +318,185 @@ pub(crate) async fn load_corpus_messages(
         return Ok(Vec::new());
     }
 
+    if request.source_type == "telegram" {
+        return load_telegram_corpus_messages(pool, request).await;
+    }
+
     load_analysis_document_messages(pool, request).await
+}
+
+fn telegram_history_metadata_zstd(
+    history_scope: &str,
+    migration_domain: Option<&str>,
+    history_peer_kind: &str,
+    history_peer_id: i64,
+) -> AppResult<Vec<u8>> {
+    compress_json_bytes(
+        &serde_json::to_vec(&serde_json::json!({
+            "history_scope": history_scope,
+            "migration_domain": migration_domain,
+            "history_peer_kind": history_peer_kind,
+            "history_peer_id": history_peer_id
+        }))
+        .map_err(internal_error)?,
+    )
+    .map_err(internal_error)
+}
+
+#[derive(sqlx::FromRow)]
+struct TelegramCorpusRow {
+    item_id: i64,
+    source_id: i64,
+    external_id: String,
+    author: Option<String>,
+    published_at: i64,
+    ref_: Option<String>,
+    content_zstd: Vec<u8>,
+    source_type: String,
+    source_subtype: Option<String>,
+    history_scope: String,
+    migration_domain: Option<String>,
+    history_peer_kind: String,
+    history_peer_id: i64,
+}
+
+async fn fetch_telegram_corpus_rows(
+    pool: &Pool<Sqlite>,
+    request: &CorpusLoadRequest,
+    include_migrated_rows: bool,
+) -> AppResult<Vec<TelegramCorpusRow>> {
+    let mut query = if include_migrated_rows {
+        QueryBuilder::<Sqlite>::new(
+            r#"
+            SELECT
+                items.id AS item_id,
+                items.source_id,
+                items.external_id,
+                items.author,
+                items.published_at,
+                NULL AS ref_,
+                items.content_zstd AS content_zstd,
+                sources.source_type,
+                sources.source_subtype,
+                'migrated' AS history_scope,
+                tm.migration_domain AS migration_domain,
+                tm.history_peer_kind AS history_peer_kind,
+                tm.history_peer_id AS history_peer_id
+            FROM items
+            JOIN sources ON sources.id = items.source_id
+            JOIN telegram_messages tm ON tm.item_id = items.id
+            WHERE items.published_at >=
+            "#,
+        )
+    } else {
+        QueryBuilder::<Sqlite>::new(
+            r#"
+            SELECT
+                COALESCE(d.item_id, 0) AS item_id,
+                d.source_id,
+                d.external_id,
+                d.author,
+                d.published_at,
+                d.ref AS ref_,
+                d.content_zstd,
+                d.source_type,
+                d.source_subtype,
+                'current' AS history_scope,
+                NULL AS migration_domain,
+                COALESCE(tm.history_peer_kind, 'channel') AS history_peer_kind,
+                COALESCE(tm.history_peer_id, 0) AS history_peer_id
+            FROM analysis_documents d
+            LEFT JOIN telegram_messages tm ON tm.item_id = d.item_id
+            WHERE d.published_at >=
+            "#,
+        )
+    };
+
+    query.push_bind(request.period_from);
+    if include_migrated_rows {
+        query.push(" AND items.published_at <= ");
+    } else {
+        query.push(" AND d.published_at <= ");
+    }
+    query.push_bind(request.period_to);
+    if include_migrated_rows {
+        query.push(" AND items.source_id IN (");
+    } else {
+        query.push(" AND d.source_id IN (");
+    }
+    {
+        let mut separated = query.separated(", ");
+        for source_id in &request.source_ids {
+            separated.push_bind(source_id);
+        }
+    }
+    query.push(")");
+    if include_migrated_rows {
+        query.push(
+            r#"
+              AND sources.source_type = 'telegram'
+              AND items.item_kind = 'telegram_message'
+              AND tm.is_migrated_history = 1
+              AND tm.migration_domain = 'migrated_from_chat'
+              AND items.content_zstd IS NOT NULL
+              AND items.content_kind IN ('text_only', 'text_with_media')
+            "#,
+        );
+    } else {
+        query.push(" AND d.source_type = 'telegram' AND d.document_kind = 'telegram_message'");
+    }
+
+    query
+        .build_query_as()
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)
+}
+
+async fn load_telegram_corpus_messages(
+    pool: &Pool<Sqlite>,
+    request: &CorpusLoadRequest,
+) -> AppResult<Vec<CorpusMessage>> {
+    let mut rows = fetch_telegram_corpus_rows(pool, request, false).await?;
+    if request.include_migrated_history {
+        rows.extend(fetch_telegram_corpus_rows(pool, request, true).await?);
+    }
+
+    let mut messages = rows
+        .into_iter()
+        .map(|row| {
+            let metadata_zstd = telegram_history_metadata_zstd(
+                &row.history_scope,
+                row.migration_domain.as_deref(),
+                &row.history_peer_kind,
+                row.history_peer_id,
+            )?;
+            Ok(CorpusMessage {
+                item_id: row.item_id,
+                source_id: row.source_id,
+                external_id: row.external_id,
+                published_at: row.published_at,
+                author: row.author,
+                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
+                r#ref: row
+                    .ref_
+                    .unwrap_or_else(|| live_corpus_ref(row.source_id, row.item_id)),
+                item_kind: Some("telegram_message".to_string()),
+                source_type: Some(row.source_type),
+                source_subtype: row.source_subtype,
+                metadata_zstd: Some(metadata_zstd),
+            })
+        })
+        .collect::<AppResult<Vec<_>>>()?;
+
+    messages.sort_by(|left, right| {
+        left.published_at
+            .cmp(&right.published_at)
+            .then_with(|| left.source_id.cmp(&right.source_id))
+            .then_with(|| left.r#ref.cmp(&right.r#ref))
+    });
+
+    Ok(messages)
 }
 
 #[derive(sqlx::FromRow)]
@@ -1031,6 +1210,7 @@ mod tests {
             period_from: 1_700_000_000,
             period_to: 1_800_000_000,
             youtube_corpus_mode,
+            include_migrated_history: false,
         }
     }
 
@@ -1041,6 +1221,74 @@ mod tests {
                 .await
                 .unwrap_or_else(|error| panic!("rebuild source {source_id}: {error}"));
         }
+    }
+
+    async fn seed_analysis_source(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        source_type: &str,
+        source_subtype: &str,
+    ) {
+        sqlx::query(
+            "INSERT OR REPLACE INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(source_id)
+        .bind(source_type)
+        .bind(source_subtype)
+        .bind(format!("{source_type}-{source_id}"))
+        .bind(format!("Source {source_id}"))
+        .execute(pool)
+        .await
+        .expect("seed analysis source");
+    }
+
+    async fn seed_telegram_item(
+        pool: &sqlx::SqlitePool,
+        item_id: i64,
+        source_id: i64,
+        external_id: &str,
+        published_at: i64,
+        text: &str,
+        migrated: bool,
+    ) {
+        sqlx::query(
+            "INSERT INTO items (
+                id, source_id, external_id, item_kind, author, published_at, ingested_at,
+                content_kind, has_media, content_zstd
+             ) VALUES (?, ?, ?, 'telegram_message', 'Ada', ?, ?, 'text_only', 0, ?)",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(external_id)
+        .bind(published_at)
+        .bind(published_at)
+        .bind(compress_text(text).expect("compress telegram item"))
+        .execute(pool)
+        .await
+        .expect("seed telegram item");
+
+        let (peer_kind, peer_id, migration_domain, is_migrated_history) = if migrated {
+            ("chat", 777_i64, Some("migrated_from_chat"), 1_i64)
+        } else {
+            ("channel", 12345_i64, None, 0_i64)
+        };
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(peer_kind)
+        .bind(peer_id)
+        .bind(external_id.parse::<i64>().expect("numeric telegram id"))
+        .bind(migration_domain)
+        .bind(is_migrated_history)
+        .execute(pool)
+        .await
+        .expect("seed telegram identity");
     }
 
     #[tokio::test]
@@ -1093,6 +1341,134 @@ mod tests {
         .expect("count migrated docs");
 
         assert_eq!(document_count, 0);
+    }
+
+    #[tokio::test]
+    async fn opted_in_analysis_corpus_includes_migrated_rows_and_counts_preflight() {
+        let pool = snapshot_pool().await;
+        seed_analysis_source(&pool, 1, "telegram", "supergroup").await;
+        seed_telegram_item(&pool, 10, 1, "10", 100, "current", false).await;
+        seed_telegram_item(&pool, 11, 1, "11", 90, "migrated", true).await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
+        crate::analysis_documents::rebuild_analysis_documents_for_source(&pool, 1)
+            .await
+            .expect("rebuild docs");
+
+        let request = CorpusLoadRequest {
+            source_type: "telegram".to_string(),
+            source_ids: vec![1],
+            period_from: 1,
+            period_to: 200,
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+            include_migrated_history: true,
+        };
+
+        let corpus = load_corpus_messages(&pool, &request)
+            .await
+            .expect("load corpus");
+        assert_eq!(
+            corpus
+                .iter()
+                .map(|message| message.item_id)
+                .collect::<Vec<_>>(),
+            vec![11, 10]
+        );
+
+        let migrated_metadata =
+            super::decode_optional_metadata_json(corpus[0].metadata_zstd.as_deref())
+                .expect("decode metadata")
+                .expect("metadata");
+        assert_eq!(migrated_metadata["history_scope"], "migrated");
+        assert_eq!(migrated_metadata["migration_domain"], "migrated_from_chat");
+
+        let preflight = preflight_analysis_run(
+            &pool,
+            &request,
+            16000,
+            AnalysisRunPreflightLimits::default(),
+        )
+        .await
+        .expect("preflight");
+        assert_eq!(preflight.message_count, 2);
+    }
+
+    #[tokio::test]
+    async fn source_group_opt_in_includes_only_members_with_migrated_rows() {
+        let pool = snapshot_pool().await;
+        seed_analysis_source(&pool, 1, "telegram", "supergroup").await;
+        seed_analysis_source(&pool, 2, "telegram", "supergroup").await;
+        seed_telegram_item(&pool, 10, 1, "10", 100, "current one", false).await;
+        seed_telegram_item(&pool, 11, 1, "11", 90, "migrated one", true).await;
+        seed_telegram_item(&pool, 20, 2, "20", 95, "current two", false).await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
+        crate::analysis_documents::rebuild_analysis_documents_for_source(&pool, 1)
+            .await
+            .expect("rebuild source 1");
+        crate::analysis_documents::rebuild_analysis_documents_for_source(&pool, 2)
+            .await
+            .expect("rebuild source 2");
+
+        let request = CorpusLoadRequest {
+            source_type: "telegram".to_string(),
+            source_ids: vec![1, 2],
+            period_from: 1,
+            period_to: 200,
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+            include_migrated_history: true,
+        };
+
+        let corpus = load_corpus_messages(&pool, &request)
+            .await
+            .expect("load corpus");
+
+        assert_eq!(
+            corpus
+                .iter()
+                .map(|message| message.item_id)
+                .collect::<Vec<_>>(),
+            vec![11, 20, 10]
+        );
+    }
+
+    #[tokio::test]
+    async fn explicit_analysis_opt_in_with_zero_migrated_rows_keeps_current_corpus() {
+        let pool = snapshot_pool().await;
+        seed_analysis_source(&pool, 1, "telegram", "supergroup").await;
+        seed_telegram_item(&pool, 10, 1, "10", 100, "current only", false).await;
+        crate::sources::test_support::create_analysis_documents_table(&pool).await;
+        crate::analysis_documents::rebuild_analysis_documents_for_source(&pool, 1)
+            .await
+            .expect("rebuild docs");
+
+        let request = CorpusLoadRequest {
+            source_type: "telegram".to_string(),
+            source_ids: vec![1],
+            period_from: 1,
+            period_to: 200,
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+            include_migrated_history: true,
+        };
+
+        let corpus = load_corpus_messages(&pool, &request)
+            .await
+            .expect("load corpus");
+        assert_eq!(
+            corpus
+                .iter()
+                .map(|message| message.item_id)
+                .collect::<Vec<_>>(),
+            vec![10]
+        );
+
+        let preflight = preflight_analysis_run(
+            &pool,
+            &request,
+            16000,
+            AnalysisRunPreflightLimits::default(),
+        )
+        .await
+        .expect("preflight");
+        assert_eq!(preflight.message_count, 1);
     }
 
     fn youtube_metadata_zstd(video_id: &str, title: &str, description: Option<&str>) -> Vec<u8> {
@@ -1245,6 +1621,7 @@ mod tests {
             period_from: 1,
             period_to: i64::MAX,
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+            include_migrated_history: false,
         };
         let messages = load_corpus_messages(&pool, &request)
             .await
@@ -1274,6 +1651,7 @@ mod tests {
             period_from: 1,
             period_to: i64::MAX,
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+            include_migrated_history: false,
         };
         let messages = load_corpus_messages(&pool, &request)
             .await
@@ -1318,6 +1696,7 @@ mod tests {
             period_from: 1,
             period_to: i64::MAX,
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptOnly,
+            include_migrated_history: false,
         };
         let messages = load_corpus_messages(&pool, &request)
             .await
@@ -1359,6 +1738,8 @@ mod tests {
             provider: "gemini".to_string(),
             model: "gemini-2.5-flash".to_string(),
             youtube_corpus_mode: "transcript_description".to_string(),
+            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT
+                .to_string(),
             status: "completed".to_string(),
             result_markdown: Some("Saved report".to_string()),
             error: None,

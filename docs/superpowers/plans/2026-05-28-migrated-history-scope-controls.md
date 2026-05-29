@@ -2179,7 +2179,7 @@ Expected: commit succeeds.
 - Test: `src-tauri/src/analysis/report.rs`
 - Test: `src-tauri/src/analysis/store.rs`
 
-- [ ] **Step 1: Add backend request fields and run model fields**
+- [x] **Step 1: Add backend request fields and run model fields**
 
 In `src-tauri/src/analysis/report.rs`, extend `StartAnalysisReportRequest`:
 
@@ -2205,7 +2205,7 @@ In `src-tauri/src/analysis/models.rs`, add to `AnalysisRunSummary`, `AnalysisRun
 pub telegram_history_scope: String,
 ```
 
-- [ ] **Step 2: Add corpus tests**
+- [x] **Step 2: Add corpus tests**
 
 In `src-tauri/src/analysis/corpus.rs`, add:
 
@@ -2329,7 +2329,7 @@ migration_domain = NULL
 is_migrated_history = 0
 ```
 
-- [ ] **Step 3: Run corpus tests and verify failures**
+- [x] **Step 3: Run corpus tests and verify failures**
 
 Run:
 
@@ -2341,7 +2341,7 @@ cargo test --manifest-path src-tauri\Cargo.toml explicit_analysis_opt_in_with_ze
 
 Expected: fail until the direct migrated corpus loader exists.
 
-- [ ] **Step 4: Implement Telegram metadata helper**
+- [x] **Step 4: Implement Telegram metadata helper**
 
 In `src-tauri/src/analysis/corpus.rs`, add:
 
@@ -2365,7 +2365,7 @@ fn telegram_history_metadata_zstd(
 }
 ```
 
-- [ ] **Step 5: Implement direct migrated corpus loader**
+- [x] **Step 5: Implement direct migrated corpus loader**
 
 In `src-tauri/src/analysis/corpus.rs`, add a row type:
 
@@ -2409,7 +2409,7 @@ messages.sort_by(|left, right| {
 });
 ```
 
-- [ ] **Step 6: Store run-level telegram history scope**
+- [x] **Step 6: Store run-level telegram history scope**
 
 In `src-tauri/src/analysis/store.rs`, extend `DuplicateRunLookup` and `AnalysisRunInsert`:
 
@@ -2447,7 +2447,7 @@ Map summary/detail:
 telegram_history_scope: row.telegram_history_scope,
 ```
 
-- [ ] **Step 7: Thread report opt-in through preflight and insert**
+- [x] **Step 7: Thread report opt-in through preflight and insert**
 
 In `src-tauri/src/analysis/report.rs`, add a small backend-owned resolver:
 
@@ -2494,7 +2494,7 @@ include_migrated_history,
 
 Pass `telegram_history_scope` to duplicate lookup and run insert.
 
-- [ ] **Step 8: Add store/report tests**
+- [x] **Step 8: Add store/report tests**
 
 In `src-tauri/src/analysis/store.rs`, add a test that inserts two active runs with identical fields except `telegram_history_scope` and proves duplicate lookup only matches the same scope.
 
@@ -2547,7 +2547,7 @@ fn report_start_request_carries_migrated_history_opt_in_to_corpus_request_shape(
 }
 ```
 
-- [ ] **Step 9: Include scope in follow-up chat context**
+- [x] **Step 9: Include scope in follow-up chat context**
 
 In `src-tauri/src/analysis/chat.rs`, update `format_chat_context_messages`:
 
@@ -2579,7 +2579,7 @@ fn history_scope_label_from_metadata(metadata_zstd: &[u8]) -> Option<&'static st
 }
 ```
 
-- [ ] **Step 10: Run backend analysis tests**
+- [x] **Step 10: Run backend analysis tests**
 
 Run:
 
@@ -2596,7 +2596,7 @@ cargo test --manifest-path src-tauri\Cargo.toml duplicate
 
 Expected: all targeted tests pass. The broad `duplicate` filter may run unrelated duplicate tests; failures there must be investigated before committing.
 
-- [ ] **Step 11: Commit Task 5**
+- [x] **Step 11: Commit Task 5**
 
 Run:
 

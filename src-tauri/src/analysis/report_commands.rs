@@ -33,6 +33,7 @@ pub async fn start_analysis_report(
     model_override: Option<String>,
     profile_id: Option<String>,
     youtube_corpus_mode: Option<String>,
+    include_migrated_history: bool,
 ) -> AppResult<i64> {
     report::start_analysis_report_run(
         handle,
@@ -47,6 +48,7 @@ pub async fn start_analysis_report(
             model_override,
             profile_id,
             youtube_corpus_mode,
+            include_migrated_history,
         },
     )
     .await

@@ -161,6 +161,7 @@ pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
         provider: row.provider,
         model: row.model,
         youtube_corpus_mode: row.youtube_corpus_mode,
+        telegram_history_scope: row.telegram_history_scope,
         status: row.status,
         error: row.error,
         has_trace_data: row.trace_data_zstd.is_some(),
@@ -195,6 +196,7 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         provider: row.provider,
         model: row.model,
         youtube_corpus_mode: row.youtube_corpus_mode,
+        telegram_history_scope: row.telegram_history_scope,
         status: row.status,
         result_markdown: row.result_markdown,
         error: row.error,
@@ -233,6 +235,7 @@ pub(crate) async fn fetch_run_row(
             runs.provider,
             runs.model,
             runs.youtube_corpus_mode,
+            COALESCE(runs.telegram_history_scope, 'current') AS telegram_history_scope,
             runs.status,
             runs.result_markdown,
             runs.trace_data_zstd,
@@ -356,6 +359,7 @@ pub(crate) struct DuplicateRunLookup<'a> {
     pub(crate) provider_profile: &'a str,
     pub(crate) model: &'a str,
     pub(crate) youtube_corpus_mode: YoutubeCorpusMode,
+    pub(crate) telegram_history_scope: &'a str,
 }
 
 pub(crate) async fn find_active_duplicate_run(
@@ -377,6 +381,7 @@ pub(crate) async fn find_active_duplicate_run(
           AND provider_profile = ?
           AND model = ?
           AND youtube_corpus_mode = ?
+          AND COALESCE(telegram_history_scope, 'current') = ?
           AND status IN (?, ?)
         ORDER BY created_at DESC
         LIMIT 1
@@ -395,6 +400,7 @@ pub(crate) async fn find_active_duplicate_run(
     .bind(lookup.provider_profile)
     .bind(lookup.model)
     .bind(lookup.youtube_corpus_mode.as_wire())
+    .bind(lookup.telegram_history_scope)
     .bind(ANALYSIS_STATUS_QUEUED)
     .bind(ANALYSIS_STATUS_RUNNING)
     .fetch_optional(pool)
@@ -414,6 +420,7 @@ pub(crate) struct AnalysisRunInsert<'a> {
     pub(crate) provider: &'a str,
     pub(crate) model: &'a str,
     pub(crate) youtube_corpus_mode: YoutubeCorpusMode,
+    pub(crate) telegram_history_scope: &'a str,
 }
 
 pub(crate) async fn insert_analysis_run(
@@ -437,11 +444,12 @@ pub(crate) async fn insert_analysis_run(
             provider,
             model,
             youtube_corpus_mode,
+            telegram_history_scope,
             status,
             scope_label_snapshot,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
         RETURNING id
         "#,
     )
@@ -458,6 +466,7 @@ pub(crate) async fn insert_analysis_run(
     .bind(insert.provider)
     .bind(insert.model)
     .bind(insert.youtube_corpus_mode.as_wire())
+    .bind(insert.telegram_history_scope)
     .bind(ANALYSIS_STATUS_QUEUED)
     .bind(created_at)
     .fetch_one(pool)
@@ -833,6 +842,8 @@ mod tests {
             provider: "gemini".to_string(),
             model: "gemini-2.5-flash".to_string(),
             youtube_corpus_mode: "transcript_description_comments".to_string(),
+            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT
+                .to_string(),
             status: "completed".to_string(),
             result_markdown: Some("Saved report".to_string()),
             trace_data_zstd: Some(vec![1, 2, 3]),
@@ -1319,6 +1330,7 @@ mod tests {
                 provider TEXT NOT NULL,
                 model TEXT NOT NULL,
                 youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
+                telegram_history_scope TEXT,
                 status TEXT NOT NULL,
                 result_markdown TEXT,
                 trace_data_zstd BLOB,
@@ -1360,6 +1372,7 @@ mod tests {
                 provider: "gemini",
                 model: "gemini-2.5-flash",
                 youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescriptionComments,
+                telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
             },
         )
         .await
@@ -1374,6 +1387,143 @@ mod tests {
         .expect("load mode");
 
         assert_eq!(mode, "transcript_description_comments");
+    }
+
+    #[tokio::test]
+    async fn duplicate_lookup_matches_telegram_history_scope() {
+        use super::{
+            find_active_duplicate_run, insert_analysis_run, AnalysisRunInsert, DuplicateRunLookup,
+        };
+        use crate::analysis::corpus::YoutubeCorpusMode;
+
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_type TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                source_id INTEGER,
+                source_group_id INTEGER,
+                period_from INTEGER NOT NULL,
+                period_to INTEGER NOT NULL,
+                output_language TEXT NOT NULL,
+                prompt_template_id INTEGER,
+                prompt_template_version INTEGER NOT NULL,
+                provider_profile TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
+                telegram_history_scope TEXT,
+                status TEXT NOT NULL,
+                result_markdown TEXT,
+                trace_data_zstd BLOB,
+                scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
+                error TEXT,
+                created_at INTEGER NOT NULL,
+                completed_at INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
+
+        let template = AnalysisPromptTemplate {
+            id: 5,
+            name: "Report".to_string(),
+            template_kind: "report".to_string(),
+            body: "Body".to_string(),
+            version: 3,
+            is_builtin: false,
+            created_at: 1,
+            updated_at: 1,
+        };
+
+        let current_run_id = insert_analysis_run(
+            &pool,
+            &AnalysisRunInsert {
+                scope_type: "single_source",
+                source_id: Some(7),
+                source_group_id: None,
+                period_from: 10,
+                period_to: 20,
+                output_language: "English",
+                prompt_template: &template,
+                provider_profile: "default",
+                provider: "gemini",
+                model: "gemini-2.5-flash",
+                youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+                telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+            },
+        )
+        .await
+        .expect("insert current run");
+        sqlx::query("UPDATE analysis_runs SET created_at = 1 WHERE id = ?")
+            .bind(current_run_id)
+            .execute(&pool)
+            .await
+            .expect("stabilize current created_at");
+
+        let migrated_run_id = insert_analysis_run(
+            &pool,
+            &AnalysisRunInsert {
+                scope_type: "single_source",
+                source_id: Some(7),
+                source_group_id: None,
+                period_from: 10,
+                period_to: 20,
+                output_language: "English",
+                prompt_template: &template,
+                provider_profile: "default",
+                provider: "gemini",
+                model: "gemini-2.5-flash",
+                youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+                telegram_history_scope:
+                    crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED,
+            },
+        )
+        .await
+        .expect("insert migrated run");
+        sqlx::query("UPDATE analysis_runs SET created_at = 2 WHERE id = ?")
+            .bind(migrated_run_id)
+            .execute(&pool)
+            .await
+            .expect("stabilize migrated created_at");
+
+        let lookup = |telegram_history_scope| DuplicateRunLookup {
+            scope_type: "single_source",
+            source_id: Some(7),
+            source_group_id: None,
+            period_from: 10,
+            period_to: 20,
+            output_language: "English",
+            prompt_template_id: 5,
+            provider_profile: "default",
+            model: "gemini-2.5-flash",
+            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+            telegram_history_scope,
+        };
+
+        let current_duplicate = find_active_duplicate_run(
+            &pool,
+            &lookup(crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT),
+        )
+        .await
+        .expect("current duplicate lookup");
+        let current_plus_migrated_duplicate = find_active_duplicate_run(
+            &pool,
+            &lookup(crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED),
+        )
+        .await
+        .expect("migrated duplicate lookup");
+
+        assert_eq!(current_duplicate, Some(current_run_id));
+        assert_eq!(current_plus_migrated_duplicate, Some(migrated_run_id));
     }
 
     #[tokio::test]
