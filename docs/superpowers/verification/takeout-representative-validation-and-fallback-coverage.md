@@ -4,7 +4,7 @@
 > `not run` until real Telegram accounts and representative sources are
 > available.
 
-Updated: 2026-05-28
+Updated: 2026-05-29
 
 Current matrix summary: `10 passed`, `1 needs follow-up`, `0 blocked`,
 `0 not run`.
@@ -24,10 +24,13 @@ Covered highlights:
   runs for sources `19` / `21` / `22` / `110`;
 - normal-sync-before-Takeout attempts for source `113`: batches `7`, `8`, and
   `9` were blocked by `TAKEOUT_INIT_DELAY`; batch `14` later completed without
-  `CHANNEL_PRIVATE` fallback evidence, so the fallback row remains open;
+  `CHANNEL_PRIVATE` fallback evidence, so fallback validation moved to source
+  `114`;
 - source `114` Takeout batch `17` completed as partial private history with
   `only_my_messages_fallback`, `only_my_messages = 1`, and
   `history_scope = partial_private_history`;
+- the private/dialog-backed supergroup completion row remains `needs follow-up`
+  because source `110` only produced cancelled partial evidence;
 - source `115` completed migrated small-group-to-supergroup Takeout smoke as
   batch `18`, recording `migrated_history_deferred` without importing old
   `chat` history rows;

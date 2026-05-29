@@ -663,7 +663,7 @@ Update `docs/takeout-source-import.md` after implementation:
 - document `running` as crash-interrupted candidate after restart;
 - document migrated-history detection/deferment.
 
-Update `docs/database-schema-legacy-analysis.md` only if the remaining backlog
+Update `docs/archive/database-schema-legacy-analysis.md` only if the remaining backlog
 wording needs clarification.
 
 ## Follow-Up Work

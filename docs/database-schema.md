@@ -1004,6 +1004,10 @@ post-baseline migration history.
 - Telegram Takeout import persists durable ingest-batch provenance after the
   same-source ingest lock is acquired; failed or cancelled imports can leave
   partial item rows without advancing `sources.last_sync_state`;
+- explicit migrated small-group history import writes migrated rows in the
+  old-chat identity domain and leaves default `analysis_documents` /
+  `archive_read_items` projections current-history-only unless a user opts in
+  through scoped browsing, analysis, or export;
 - Telegram duplicate detection and legacy message-ref resolution use typed
   `telegram_messages` identity where available, keeping `items.external_id` as
   a compatibility value rather than the owner of Telegram message identity;

@@ -1,8 +1,9 @@
 # Telegram Runtime Private Source Validation
 
-> Status: manual validation matrix with live evidence for rows marked `passed`.
+> Status: reusable manual validation matrix with live evidence for rows marked
+> `passed`.
 
-Updated: 2026-05-22
+Updated: 2026-05-29
 
 ## Scope
 
@@ -39,7 +40,8 @@ dialogs, private supergroup from dialogs, and regular small group.
 The stored-peer username fallback probe then validated that a usable stored peer
 identity is sufficient when the cached public username is locally unusable.
 
-Keep migrated dialogs for a follow-up slice.
+Migrated-dialog follow-up validation has since passed and is retained below as
+historical live evidence for the current channel-peer identity boundary.
 
 ## 2026-05-21 Live Run Notes
 

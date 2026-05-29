@@ -582,7 +582,7 @@ Update `docs/database-schema.md`:
 - document document kinds, refs, indexes, and rebuild semantics;
 - state that source browsing and NotebookLM export remain outside v1.
 
-Update `docs/database-schema-legacy-analysis.md` and `docs/backlog.md`:
+Update `docs/archive/database-schema-legacy-analysis.md` and `docs/backlog.md`:
 
 - mark provider-neutral analysis document layer v1 as shipped after
   implementation;

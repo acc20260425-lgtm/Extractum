@@ -131,8 +131,11 @@ Important design choices:
 - It does not download media files or Telegram Desktop export assets.
 - It updates `last_sync_state` only after a successful Takeout finish.
 - Failed and cancelled imports can leave partial rows, and repeat runs rely on duplicate skipping.
-- It does not yet persist durable incomplete-import provenance, ingest batches,
-  or item-to-batch origin rows.
+- It persists durable ingest batches, Telegram Takeout batch details, warning
+  codes, and item observations after the same-source lock is acquired.
+- Normal supergroup Takeout keeps migrated small-group history as a separate
+  historical scope; explicit migrated-history import and downstream
+  browsing/export/analysis opt-ins are separate user choices.
 
 The history pagination is TDesktop-first. The app models the full state machine with `largest_id_plus_one`, page-order normalization, and cursor advancement, then falls back per split to the older descending cursor profile only when the TDesktop profile is visibly unsafe for that split.
 

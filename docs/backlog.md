@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | compare completed small-group Takeout validation against richer future fixtures |
+| High | Takeout source import | close remaining representative validation gaps for private/dialog-backed supergroups and richer small-group fixtures |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
@@ -36,6 +36,11 @@ refresh policy, and migrated-history import/scope behavior are documented in
 current-state docs and reusable verification notes. Keep this section limited
 to validation gaps that still need new evidence.
 
+- [ ] complete representative private/dialog-backed supergroup Takeout
+  validation if a bounded fixture becomes available; current evidence in
+  `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
+  is a cancelled partial source `110` run, while source `114` covers private
+  channel fallback rather than full private/dialog-backed supergroup completion
 - [ ] compare completed small-group Takeout validation against any future
   additional small-group fixtures if they expose richer reply, media, or
   reaction shapes; use
@@ -45,6 +50,9 @@ Acceptance:
 
 - New fixture comparison records whether reply, media, reaction, and duplicate
   semantics still match normal sync expectations.
+- Private/dialog-backed supergroup validation either completes against a
+  bounded fixture or records why available fixtures remain too large or
+  inconclusive.
 - Historical validation evidence remains reusable without expanding this
   backlog file; use
   `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`

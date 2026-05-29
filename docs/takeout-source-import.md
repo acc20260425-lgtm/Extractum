@@ -289,6 +289,7 @@ Current status:
 - explicit migrated small-group history import is implemented as a separate
   historical-scope action with current-history-only defaults for normal
   browsing, analysis, and export;
-- the remaining Takeout backlog item is narrow: compare against future richer
-  small-group fixtures if they expose reply, media, or reaction shapes not
-  covered by the current evidence.
+- remaining Takeout backlog items are narrow: complete a representative
+  private/dialog-backed supergroup Takeout when a bounded fixture is available,
+  and compare against future richer small-group fixtures if they expose reply,
+  media, or reaction shapes not covered by the current evidence.

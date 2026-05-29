@@ -539,7 +539,7 @@ Backlog remains open-work-only. Keep follow-ups such as provider-neutral
 document layer, Takeout provenance, and richer topic/export enhancements where
 still open. Do not add completed implementation notes to `docs/backlog.md`.
 
-`docs/database-schema-legacy-analysis.md` may remain historical. If updated,
+`docs/archive/database-schema-legacy-analysis.md` may remain historical. If updated,
 only adjust it to point at remaining open simplification work; do not turn it
 into a shipped-work changelog.
 

@@ -145,6 +145,11 @@ Current source-kind behavior:
 - `group`: import all selected split ranges;
 - `CHANNEL_PRIVATE` on channel/supergroup history switches to `messages.search(from_id=self)` and records an only-my-messages warning.
 
+Migrated small-group history is imported only through the explicit historical
+scope action after availability is detected. Browsing, NotebookLM export, and
+analysis keep current-history defaults and require separate opt-ins to include
+migrated rows.
+
 Takeout import writes to the same `items` table and does not download media bytes, thumbnails, custom emoji documents, or Telegram Desktop export assets. Failed and cancelled jobs may leave partial rows, but they do not update `last_sync_state`.
 
 Takeout imports also write durable ingest provenance after the same-source lock

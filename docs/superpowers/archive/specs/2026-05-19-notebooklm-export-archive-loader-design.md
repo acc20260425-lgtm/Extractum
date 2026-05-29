@@ -62,7 +62,7 @@ accidentally entering the Telegram export loader.
 5. Treat archive loader failures as archive-model defects after the gate has
    selected the archive path.
 6. Keep reply snippet lookup inside the selected archive read model path.
-7. Update docs/backlog to mark this slice shipped and leave later schema
+7. Update `docs/backlog.md` to mark this slice shipped and leave later schema
    simplification work explicit.
 
 ## Non-Goals

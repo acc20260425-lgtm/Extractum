@@ -1319,7 +1319,7 @@ Update after implementation:
   - explain source identity boundary.
 - `docs/backlog.md`
   - mark this first source identity slice as completed or split follow-ups.
-- `docs/database-schema-legacy-analysis.md`
+- `docs/archive/database-schema-legacy-analysis.md`
   - add a note that the source identity cleanup slice has a design/spec.
 
 ## Follow-Up Refactors Enabled
