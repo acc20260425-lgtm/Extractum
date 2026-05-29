@@ -63,6 +63,8 @@ Known item kinds today:
 - Do not create a universal raw-data viewer for every item row.
 - Do not change the database schema unless implementation proves existing
   typed tables and `raw_data_zstd` cannot serve the selected UI.
+- Do not expose arbitrary `items.raw_data_zstd` payloads in the universal item
+  browser.
 - Do not send media bytes or source content to any external provider.
 - Do not hide YouTube media downloads behind source browsing.
 
@@ -124,14 +126,6 @@ The universal `Items` tab renders normalized source reader items and provides:
 - existing badges for topic, reply, reaction, source ref, history scope, media,
   and raw-data availability when useful.
 
-The first slice is a loaded-page browser. Search, filters, sort order, and item
-kind chips operate only on rows already loaded into the current source view.
-The UI must not imply full-source search. Labels should use wording such as
-`Search loaded items` or an equivalent scoped phrase, and empty states should
-say that no loaded rows match the filters. Backend-backed full-source search
-and sort are a follow-up that would require query parameters such as item kind,
-search text, sort mode, and provider-specific filters.
-
 The tab is a browser and diagnostic surface, not the primary polished view for
 every provider. Provider-aware tabs remain first-class where they exist.
 
@@ -149,11 +143,6 @@ Controls:
 - filters: `Top-level only`, `Replies`, `Pinned`, `Hearted`;
 - `Load more` pagination using live item pagination.
 
-Comments use the same first-slice loaded-page contract as `Items`. Search,
-filters, `Newest`, `Oldest`, and `Most liked` apply only to loaded comments.
-The UI should label the search as loaded-comment search and avoid promising a
-global comments corpus query.
-
 Comment cards show:
 
 - author;
@@ -164,13 +153,33 @@ Comment cards show:
 - pinned and hearted badges when available;
 - comment id or source ref only in compact technical badges/tooltips.
 
-Threading is also local to the loaded set. If a reply is loaded without its
-parent comment, threaded mode renders it as a standalone orphan reply card with
-a `parent not loaded` style badge instead of hiding it or failing the view.
-Backend-backed whole-thread paging is a follow-up, not a requirement for this
-slice.
-
 When comments are not synced, the tab shows an empty state with `Sync comments`.
+
+### Pagination And Filtering Contract
+
+The first slice is a loaded-page browser. `Items` and `Comments` search,
+filters, sort order, and derived chips operate only on rows already loaded into
+the current source view unless a future API explicitly backs those parameters.
+
+Required UI wording:
+
+- search labels must use scoped wording such as `Search loaded items` or
+  `Search loaded comments`;
+- empty states must say whether no rows match the loaded window rather than the
+  full source;
+- item kind chips are derived from loaded rows only and must not imply that
+  missing kinds are absent from the full source;
+- `Most liked` sorts loaded comments only.
+
+Backend-backed full-source search, sort, item-kind filtering, and
+comment-specific filtering are a follow-up. That follow-up would require query
+parameters such as item kind, search text, sort mode, and provider-specific
+filters.
+
+Threaded comments also group only comments available in the loaded window.
+Replies whose parent comment is not loaded are rendered as standalone reply
+cards with a `parent not loaded` indicator instead of being hidden. Backend
+whole-thread paging is a follow-up.
 
 ### Metadata View
 
@@ -217,8 +226,10 @@ Telegram fields should use the same section structure: Summary for title/type,
 Source state for membership/sync/migrated-history/topic readiness, Technical
 for ids, and no Raw JSON unless a future explicit raw metadata contract exists.
 
-Raw JSON must be explicit and collapsed by default. If raw metadata is
-unavailable, the raw control is hidden or disabled with a short explanation.
+Raw JSON must be explicit and collapsed by default. It is exposed only for the
+source-level YouTube metadata payload selected by `get_youtube_video_detail`,
+not for arbitrary item `raw_data_zstd` rows. If raw metadata is unavailable,
+the raw control is hidden or disabled with a short explanation.
 
 ### Activity View
 
@@ -229,6 +240,14 @@ The `Activity` tab consolidates source work status:
 - Takeout import jobs and recovery notices;
 - migrated-history import state;
 - terminal warnings and errors already exposed by existing route state.
+
+Activity is a status-and-actions surface. It may contain source-level actions
+such as sync metadata, sync transcript, sync comments, retry/cancel source jobs,
+start Takeout, or start migrated-history import when those callbacks already
+exist in route state. Provider tabs may still show contextual CTAs in empty or
+stale states, but those buttons must call the same callbacks and use the same
+disabled reasons as Activity. Activity owns the consolidated job/status view;
+provider tabs should not duplicate detailed job cards.
 
 The first slice should reuse existing job/status data. It should not introduce
 new background job APIs only for this tab.
@@ -279,7 +298,7 @@ Add or extend YouTube-specific DTOs where the UI needs provider detail:
   payload: `commentId`, `parentCommentId`, `isReply`, `likeCount`, `isPinned`,
   `isHearted`, `authorChannelUrl`;
 - extend `get_youtube_video_detail` with safe metadata fields and optional raw
-  metadata JSON for the `Metadata` tab.
+  source-level metadata JSON for the `Metadata` tab.
 
 Do not move transcript segments into generic item pagination. The dedicated
 transcript segment API stays because it has timestamp-specific pagination and
@@ -292,11 +311,12 @@ search behavior.
 3. Provider-aware tabs receive existing route state where possible.
 4. `Transcript` loads segments through `list_youtube_transcript_segments`.
 5. `Comments` and `Items` use generic source item rows plus frontend filtering
-   over the currently loaded page.
+   over the currently loaded page; they do not request full-source
+   search/filter/sort semantics in this slice.
 6. `Metadata` combines `currentSource`, provider detail DTOs, and loaded topic
    state when relevant.
 7. `Activity` reads already available source jobs, Takeout recovery state, and
-   source status.
+   source status, and exposes the same route callbacks used by contextual CTAs.
 
 ## Error And Empty States
 
@@ -326,8 +346,9 @@ Frontend tests:
 - YouTube comments threaded/flat grouping, loaded-comment search, local sort,
   filters, and orphan reply rendering;
 - metadata view renders Summary, Source state, Technical, and collapsed Raw JSON
-  sections;
-- Activity tab receives existing source jobs/status.
+  sections, with raw JSON limited to source-level YouTube metadata;
+- Activity tab receives existing source jobs/status and source-level actions
+  without provider tabs duplicating detailed job cards.
 
 Rust/backend tests:
 
@@ -337,6 +358,7 @@ Rust/backend tests:
   enrichment from stored raw payload;
 - unknown or malformed raw comment payloads degrade without command failure when
   the base item row remains valid.
+- item raw-data payloads are not exposed by the generic item browser contract.
 
 Manual verification:
 
@@ -350,6 +372,10 @@ Manual verification:
   parent is not loaded;
 - confirm Metadata is grouped into Summary, Source state, Technical, and Raw
   JSON sections;
+- confirm Raw JSON is limited to source-level YouTube metadata, not arbitrary
+  item rows;
+- confirm Activity shows consolidated status and actions while provider tabs
+  keep only contextual CTAs;
 - confirm `Sync comments` and `Sync metadata` actions are reachable from empty
   or stale states;
 - confirm source groups and saved run snapshots keep their previous readers.
