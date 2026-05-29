@@ -12,6 +12,7 @@
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
+| Medium | Frontend workspace evolution | improve source-reader navigation, topic filters, activity status, and route boundaries |
 | Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
 | Medium | Stabilization and secret safety | add CI, dependency policy, event-flow validation, and secret-leak audit coverage |
 
@@ -124,6 +125,21 @@ Priority: medium.
 - [ ] pin `grammers-*` dependencies to an explicit `rev` or owned release policy
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
 - [ ] audit backend errors, frontend status text, and debug output for accidental credential exposure
+
+### 3.7 Frontend Workspace Evolution
+
+Priority: medium.
+
+Guidance: `docs/frontend-architecture-evolution-analysis.md`.
+
+- [ ] improve source-reader evidence navigation with jump, temporary highlight,
+  return, and load-around-ref behavior
+- [ ] add compact Telegram topic navigation/filtering for source browsing
+- [ ] consolidate source activity/status rendering across sync, Takeout,
+  migrated-history import, YouTube jobs, and recovery notices
+- [ ] finish saved-run filtering and cleanup affordances for large histories
+- [ ] evolve media evidence cards only after media download and preview policy
+  is approved
 
 ## 4. Explicit Non-Goals
 

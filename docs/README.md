@@ -14,6 +14,8 @@ history.
 - `architecture-deep-dive.md`: broader architecture notes.
 - `backend-architecture-simplification-analysis.md`: current backend
   maintainability direction and remaining simplification work.
+- `frontend-architecture-evolution-analysis.md`: current frontend workspace
+  evolution guidance informed by Telegram Desktop reference review.
 - `database-schema.md`: current supported SQLite schema, migration baseline,
   and post-baseline migration authoring requirements.
 - `backlog.md`: open work only. Shipped work should not accumulate here.
