@@ -51,6 +51,23 @@ describe("analysis source readers", () => {
     expect(telegramMediaCardSource).not.toContain("<audio");
   });
 
+  it("surfaces migrated Telegram history labels and scope controls", () => {
+    expect(telegramTimelineSource).toContain("historyScopeLabel");
+    expect(telegramTimelineSource).toContain('class="history-scope-badge"');
+    expect(reportSourceSurfaceSource).toContain("telegramHistoryScopeOptions");
+    expect(reportSourceSurfaceSource).toContain("Current supergroup history");
+    expect(reportSourceSurfaceSource).toContain("Migrated small-group history");
+    expect(reportSourceSurfaceSource).toContain("Merged timeline");
+    expect(reportSourceSurfaceSource).toContain("onChangeTelegramHistoryScope");
+  });
+
+  it("shows migrated Telegram history availability before imported rows are browsable", () => {
+    expect(reportSourceSurfaceSource).toContain('migratedHistoryStatus === "available"');
+    expect(reportSourceSurfaceSource).toContain("migratedHistoryImportCompleted");
+    expect(reportSourceSurfaceSource).toContain("migratedHistoryRowCount === 0");
+    expect(reportSourceSurfaceSource).toContain('tone="info"');
+  });
+
   it("renders Telegram topic filtering only in live single-source mode", () => {
     expect(reportSourceSurfaceSource).toContain('class="topic-filter"');
     expect(reportSourceSurfaceSource).toContain("showTopicSelector");

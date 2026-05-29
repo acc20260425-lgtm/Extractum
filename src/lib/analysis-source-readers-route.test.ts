@@ -38,10 +38,22 @@ describe("analysis source reader route wiring", () => {
 
   it("pages live single-source material without changing the selected topic filter", () => {
     expect(analysisPageSource).toContain("sourceItemsCursor");
+    expect(analysisPageSource).toContain("sourceItemsBeforePublishedAt");
     expect(analysisPageSource).toContain("sourceItemsHasMore");
     expect(analysisPageSource).toContain("async function loadMoreSourceItems");
-    expect(analysisPageSource).toContain("beforePublishedAt: sourceItemsCursor");
+    expect(analysisPageSource).toContain("beforeCursor: isTelegramSource ? sourceItemsCursor : null");
+    expect(analysisPageSource).toContain("beforePublishedAt: isTelegramSource ? null : sourceItemsBeforePublishedAt");
     expect(analysisPageSource).toContain("topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null");
+  });
+
+  it("wires Telegram history scope changes through opaque backend cursors", () => {
+    expect(analysisPageSource).toContain("telegramHistoryScope");
+    expect(analysisPageSource).toContain("function changeTelegramHistoryScope");
+    expect(analysisPageSource).toContain("historyScope: isTelegramSource ? telegramHistoryScope : \"current\"");
+    expect(analysisPageSource).toContain("pageCursor");
+    expect(analysisPageSource).toContain("onChangeTelegramHistoryScope={changeTelegramHistoryScope}");
+    expect(analysisPageSource).not.toContain("JSON.parse(sourceItemsCursor");
+    expect(analysisPageSource).not.toContain("atob(sourceItemsCursor");
   });
 
   it("supports run snapshot source filtering through the snapshot-only API", () => {

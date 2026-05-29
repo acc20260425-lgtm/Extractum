@@ -58,6 +58,7 @@
                   <div class="message-meta">
                     {#if item.author}<span class="message-author">{item.author}</span>{/if}
                     <span class="telegram-message-time">{formatTimestamp(item.publishedAt)}</span>
+                    {#if item.historyScopeLabel}<span class="history-scope-badge">{item.historyScopeLabel}</span>{/if}
                     {#if item.topicLabel}<Badge variant="neutral">{item.topicLabel}</Badge>{/if}
                     {#if item.replyLabel}<Badge variant="info">{item.replyLabel}</Badge>{/if}
                     {#if item.reactionLabel}<Badge variant="neutral">{item.reactionLabel}</Badge>{/if}
@@ -168,6 +169,18 @@
 
   .telegram-message-time {
     color: var(--muted);
+  }
+
+  .history-scope-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.35rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--primary) 13%, var(--panel));
+    color: color-mix(in srgb, var(--primary) 74%, var(--text));
+    font-size: 0.75rem;
+    line-height: 1.2;
   }
 
   .telegram-message-text {

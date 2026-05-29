@@ -24,6 +24,8 @@ function source(overrides: Partial<Source>): Source {
     migratedHistoryStatus: "none",
     migratedHistoryDetectedAt: null,
     migratedHistoryRefreshedAt: null,
+    migratedHistoryRowCount: 0,
+    migratedHistoryImportCompleted: false,
   }, overrides);
 }
 

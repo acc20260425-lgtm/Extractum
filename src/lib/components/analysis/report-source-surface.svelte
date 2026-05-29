@@ -37,6 +37,7 @@
     SourceItem,
     SourceJobRecord,
     TakeoutImportRecoveryState,
+    TelegramHistoryScope,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
@@ -65,6 +66,7 @@
     selectedTopicKey: string;
     showTopicSelector: boolean;
     currentSourceContentLabel: string;
+    telegramHistoryScope: TelegramHistoryScope;
     sourceJobs: SourceJobRecord[];
     youtubeVideoDetail: YoutubeVideoDetail | null;
     youtubePlaylistDetail: YoutubePlaylistReaderProps["playlist"];
@@ -95,6 +97,7 @@
     sourceSyncDisabledReason?: (source: Source) => string | null;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
     onLoadMoreSourceItems?: () => void | Promise<void>;
+    onChangeTelegramHistoryScope: (scope: TelegramHistoryScope) => void;
     onChangeTranscriptSearch?: (value: string) => void;
     onLoadMoreYoutubeTranscriptSegments?: () => void | Promise<void>;
     onLoadLiveGroupSourcePage?: (sourceId: number) => void | Promise<void>;
@@ -122,6 +125,7 @@
     selectedTopicKey,
     showTopicSelector,
     currentSourceContentLabel,
+    telegramHistoryScope,
     sourceJobs,
     youtubeVideoDetail,
     youtubePlaylistDetail,
@@ -152,6 +156,7 @@
     sourceSyncDisabledReason = () => null,
     onLoadMoreRunSnapshotMessages,
     onLoadMoreSourceItems = () => {},
+    onChangeTelegramHistoryScope,
     onChangeTranscriptSearch = () => {},
     onLoadMoreYoutubeTranscriptSegments = () => {},
     onLoadLiveGroupSourcePage = () => {},
@@ -212,6 +217,15 @@
     currentSource?.sourceType === "youtube" ? sourceSyncDisabledReason(currentSource) : null,
   );
   const sortedSourceTopics = $derived([...sourceTopics].sort(compareTopics));
+  const telegramHistoryScopeOptions = $derived.by(() => {
+    if (!currentSource || currentSource.sourceType !== "telegram") return [];
+    if (currentSource.migratedHistoryRowCount <= 0) return [];
+    return [
+      { value: "current" as const, label: "Current supergroup history" },
+      { value: "migrated" as const, label: "Migrated small-group history" },
+      { value: "merged" as const, label: "Merged timeline" },
+    ];
+  });
 
   function fallbackScopeTitle() {
     if (currentRun) return currentRun.scope_label;
@@ -255,6 +269,10 @@
 
   function changeSelectedTopic(event: Event) {
     onChangeSelectedTopicKey((event.currentTarget as HTMLSelectElement).value);
+  }
+
+  function changeTelegramHistoryScope(event: Event) {
+    onChangeTelegramHistoryScope((event.currentTarget as HTMLSelectElement).value as TelegramHistoryScope);
   }
 </script>
 
@@ -409,7 +427,22 @@
           onCancelSourceJob={onCancelSourceJob}
         />
       {:else}
-        {#if showTopicSelector}
+        {#if currentSource.sourceType === "telegram" && currentSource.migratedHistoryStatus === "available" && !currentSource.migratedHistoryImportCompleted}
+          <StatusMessage tone="info">
+            Migrated small-group history is detected but has not been imported for browsing yet.
+          </StatusMessage>
+        {/if}
+        {#if telegramHistoryScopeOptions.length > 0}
+          <label class="history-scope-control">
+            <span>History scope</span>
+            <Select value={telegramHistoryScope} onchange={changeTelegramHistoryScope}>
+              {#each telegramHistoryScopeOptions as option (option.value)}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </Select>
+          </label>
+        {/if}
+        {#if showTopicSelector && telegramHistoryScope === "current"}
           <label class="topic-filter">
             <span>Topic view</span>
             <Select value={selectedTopicKey} disabled={loadingSourceTopics} onchange={changeSelectedTopic}>
@@ -424,14 +457,20 @@
             </Select>
           </label>
         {/if}
-        <TelegramTimelineReader
-          items={liveReaderItems}
-          loading={loadingItems}
-          hasMore={sourceItemsHasMore}
-          contentLabel={currentSourceContentLabel}
-          {formatTimestamp}
-          onLoadMore={onLoadMoreSourceItems}
-        />
+        {#if currentSource.sourceType === "telegram" && currentSource.migratedHistoryImportCompleted && currentSource.migratedHistoryRowCount === 0 && telegramHistoryScope !== "current"}
+          <StatusMessage tone="info">
+            Migrated history import completed with no browsable migrated rows for this source.
+          </StatusMessage>
+        {:else}
+          <TelegramTimelineReader
+            items={liveReaderItems}
+            loading={loadingItems}
+            hasMore={sourceItemsHasMore}
+            contentLabel={currentSourceContentLabel}
+            {formatTimestamp}
+            onLoadMore={onLoadMoreSourceItems}
+          />
+        {/if}
       {/if}
     {/key}
   {:else if analysisScope === "source_group" && currentGroup}
@@ -457,6 +496,7 @@
     min-width: 0;
   }
 
+  .history-scope-control,
   .topic-filter {
     display: flex;
     flex-direction: column;
@@ -469,6 +509,7 @@
     text-transform: uppercase;
   }
 
+  .history-scope-control :global(select),
   .topic-filter :global(select) {
     min-width: 14rem;
     text-transform: none;

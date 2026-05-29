@@ -236,10 +236,12 @@
     NotebookLmExportResult,
     Source,
     SourceForumTopic,
+    SourceItemsCursor,
     SourceItem,
     TakeoutImportEvent,
     TakeoutImportJobRecord,
     TakeoutImportRecoveryState,
+    TelegramHistoryScope,
     YoutubeTranscriptSegment,
     YoutubeTranscriptSegmentCursor,
   } from "$lib/types/sources";
@@ -265,7 +267,9 @@
   let sourceCatalog = $state<Source[]>([]);
   let sourceMetrics = $state<Record<number, AnalysisSourceOption>>({});
   let sourceItems = $state<SourceItem[]>([]);
-  let sourceItemsCursor = $state<number | null>(null);
+  let telegramHistoryScope = $state<TelegramHistoryScope>("current");
+  let sourceItemsCursor = $state<SourceItemsCursor | null>(null);
+  let sourceItemsBeforePublishedAt = $state<number | null>(null);
   let sourceItemsHasMore = $state(false);
   let sourceTopics = $state<SourceForumTopic[]>([]);
   let youtubeTranscriptSegments = $state<YoutubeTranscriptSegment[]>([]);
@@ -732,6 +736,9 @@
   }
 
   function currentTopicFilter(): ForumTopicFilter | null {
+    if (currentSource()?.sourceType === "telegram" && telegramHistoryScope !== "current") {
+      return null;
+    }
     return currentTopicFilterFromState(selectedTopicKey, sourceTopics);
   }
 
@@ -740,6 +747,9 @@
   }
 
   function shouldShowTopicSelector() {
+    if (currentSource()?.sourceType === "telegram" && telegramHistoryScope !== "current") {
+      return false;
+    }
     return shouldShowTopicSelectorFromState(
       currentSource(),
       analysisScope,
@@ -923,13 +933,18 @@
   function resetSourceItemsReader() {
     sourceItems = [];
     sourceItemsCursor = null;
+    sourceItemsBeforePublishedAt = null;
     sourceItemsHasMore = false;
   }
 
   function applySourceItemsPage(items: SourceItem[], append: boolean) {
     const previousCursor = sourceItemsCursor;
+    const previousBeforePublishedAt = sourceItemsBeforePublishedAt;
+    const lastItem = items.at(-1);
     sourceItems = append ? [...sourceItems, ...items] : items;
-    sourceItemsCursor = items.at(-1)?.publishedAt ?? (append ? previousCursor : null);
+    sourceItemsCursor = lastItem?.pageCursor ?? (append ? previousCursor : null);
+    sourceItemsBeforePublishedAt =
+      lastItem?.publishedAt ?? (append ? previousBeforePublishedAt : null);
     sourceItemsHasMore = items.length === SOURCE_ITEMS_PAGE_LIMIT;
   }
 
@@ -1291,11 +1306,14 @@
       }
 
       if (source.sourceType === "telegram") {
+        const isTelegramSource = source.sourceType === "telegram";
         loadingItems = true;
         const items = await listSourceItems({
           sourceId: trace.source_id,
           limit: SOURCE_ITEMS_PAGE_LIMIT,
           beforePublishedAt: null,
+          beforeCursor: null,
+          historyScope: isTelegramSource ? telegramHistoryScope : "current",
           topicFilter: null,
           aroundItemId: focus.aroundItemId,
         });
@@ -1479,11 +1497,14 @@
   async function loadItems(sourceId: number) {
     loadingItems = true;
     const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
+    const isTelegramSource = source?.sourceType === "telegram";
     try {
       const items = await listSourceItems({
         sourceId,
         limit: SOURCE_ITEMS_PAGE_LIMIT,
         beforePublishedAt: null,
+        beforeCursor: null,
+        historyScope: isTelegramSource ? telegramHistoryScope : "current",
         topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null,
       });
       applySourceItemsPage(items, false);
@@ -1497,14 +1518,22 @@
 
   async function loadMoreSourceItems() {
     const source = currentSource();
-    if (!source || loadingItems || !sourceItemsHasMore || sourceItemsCursor === null) return;
+    if (!source || loadingItems || !sourceItemsHasMore) return;
+
+    const isTelegramSource = source.sourceType === "telegram";
+    const canPage = isTelegramSource
+      ? sourceItemsCursor !== null
+      : sourceItemsBeforePublishedAt !== null;
+    if (!canPage) return;
 
     loadingItems = true;
     try {
       const items = await listSourceItems({
         sourceId: source.id,
         limit: SOURCE_ITEMS_PAGE_LIMIT,
-        beforePublishedAt: sourceItemsCursor,
+        beforePublishedAt: isTelegramSource ? null : sourceItemsBeforePublishedAt,
+        beforeCursor: isTelegramSource ? sourceItemsCursor : null,
+        historyScope: isTelegramSource ? telegramHistoryScope : "current",
         topicFilter: source && sourceCapabilities(source).hasTopics ? currentTopicFilter() : null,
       });
       applySourceItemsPage(items, true);
@@ -1647,6 +1676,7 @@
       sourceId,
     });
     historyScope = "current";
+    telegramHistoryScope = "current";
     if (activeChatRequestId !== null) {
       void cancelChat({ silent: true });
     }
@@ -1689,6 +1719,7 @@
       sourceGroupId: groupId,
     });
     historyScope = "current";
+    telegramHistoryScope = "current";
     if (activeChatRequestId !== null) {
       void cancelChat({ silent: true });
     }
@@ -1720,6 +1751,20 @@
     selectedTopicKey = nextKey;
     if (selectedSourceId) {
       await loadItems(Number(selectedSourceId));
+    }
+  }
+
+  function changeTelegramHistoryScope(scope: TelegramHistoryScope) {
+    if (telegramHistoryScope === scope) {
+      return;
+    }
+
+    telegramHistoryScope = scope;
+    selectedTopicKey = ALL_TOPICS_KEY;
+    resetSourceItemsReader();
+    const source = currentSource();
+    if (source?.sourceType === "telegram") {
+      void loadItems(source.id);
     }
   }
 
@@ -2161,7 +2206,9 @@
       if (reset !== null) {
         sourceItems = reset.sourceItems;
         sourceItemsCursor = null;
+        sourceItemsBeforePublishedAt = null;
         sourceItemsHasMore = false;
+        telegramHistoryScope = "current";
         currentRun = reset.currentRun;
         activeRunId = reset.activeRunId;
         traceData = reset.traceData;
@@ -2613,6 +2660,7 @@
     {loadingSourceTopics}
     {selectedTopicKey}
     showTopicSelector={shouldShowTopicSelector()}
+    {telegramHistoryScope}
     {selectedTraceRef}
     traceRefCount={traceData.refs.length}
     {selectedTemplate}
@@ -2651,6 +2699,7 @@
     onLoadMoreRunSnapshotMessages={() => void loadMoreRunSnapshotMessages()}
     onChangeTranscriptSearch={changeYoutubeTranscriptSearch}
     onLoadMoreSourceItems={() => void loadMoreSourceItems()}
+    onChangeTelegramHistoryScope={changeTelegramHistoryScope}
     onLoadMoreYoutubeTranscriptSegments={() => void loadMoreYoutubeTranscriptSegments()}
     onLoadLiveGroupSourcePage={(sourceId) => void loadLiveGroupSourcePage(sourceId)}
     onChangeSelectedGroupSourceId={changeSelectedGroupSourceId}

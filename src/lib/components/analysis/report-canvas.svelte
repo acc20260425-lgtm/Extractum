@@ -39,6 +39,7 @@
     SourceItem,
     SourceJobRecord,
     TakeoutImportRecoveryState,
+    TelegramHistoryScope,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
   import type {
@@ -109,6 +110,7 @@
     loadingSourceTopics,
     selectedTopicKey,
     showTopicSelector,
+    telegramHistoryScope,
     selectedTraceRef,
     traceRefCount,
     selectedTemplate,
@@ -146,6 +148,7 @@
     onBackToRunSnapshot,
     onLoadMoreRunSnapshotMessages,
     onLoadMoreSourceItems,
+    onChangeTelegramHistoryScope,
     onChangeTranscriptSearch,
     onLoadMoreYoutubeTranscriptSegments,
     onLoadLiveGroupSourcePage,
@@ -250,6 +253,7 @@
     loadingSourceTopics: boolean;
     selectedTopicKey: string;
     showTopicSelector: boolean;
+    telegramHistoryScope: TelegramHistoryScope;
     selectedTraceRef: string | null;
     traceRefCount: number;
     selectedTemplate: AnalysisPromptTemplate | null;
@@ -295,6 +299,7 @@
     onBackToRunSnapshot: () => void;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
     onLoadMoreSourceItems: () => void | Promise<void>;
+    onChangeTelegramHistoryScope: (scope: TelegramHistoryScope) => void;
     onChangeTranscriptSearch: (value: string) => void;
     onLoadMoreYoutubeTranscriptSegments: () => void | Promise<void>;
     onLoadLiveGroupSourcePage: (sourceId: number) => void | Promise<void>;
@@ -608,6 +613,7 @@
       {loadingSourceTopics}
       {selectedTopicKey}
       {showTopicSelector}
+      {telegramHistoryScope}
       {currentSourceContentLabel}
       {sourceJobs}
       {youtubeVideoDetail}
@@ -619,6 +625,7 @@
       onBackToRunSnapshot={onBackToRunSnapshot}
       onLoadMoreRunSnapshotMessages={onLoadMoreRunSnapshotMessages}
       onLoadMoreSourceItems={onLoadMoreSourceItems}
+      onChangeTelegramHistoryScope={onChangeTelegramHistoryScope}
       onChangeTranscriptSearch={onChangeTranscriptSearch}
       onLoadMoreYoutubeTranscriptSegments={onLoadMoreYoutubeTranscriptSegments}
       onLoadLiveGroupSourcePage={onLoadLiveGroupSourcePage}

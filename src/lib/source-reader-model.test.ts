@@ -38,6 +38,11 @@ function sourceItem(overrides: Partial<SourceItem> = {}): SourceItem {
     replyToPeerId: null,
     replyToTopMessageId: null,
     reactionCount: null,
+    historyScope: "current",
+    isMigratedHistory: false,
+    migrationDomain: null,
+    historyScopeLabel: "Current supergroup history",
+    pageCursor: "eyJ2ZXJzaW9uIjoxLCJjdXJzb3IiOnt9fQ",
     ...overrides,
   };
 }
@@ -160,6 +165,41 @@ describe("source reader model", () => {
 
     expect(readerItem.ref).toBe("s10-i1");
     expect(readerItem.selected).toBe(true);
+  });
+
+  it("marks migrated live source rows with backend-owned history labels", () => {
+    const readerItem = sourceItemToReaderItem(
+      sourceItem({
+        historyScope: "migrated",
+        isMigratedHistory: true,
+        migrationDomain: "migrated_from_chat",
+        historyScopeLabel: "Migrated small-group history",
+      }),
+      { sourceTitle: "Telegram A" },
+    );
+
+    expect(readerItem.historyScope).toBe("migrated");
+    expect(readerItem.isMigratedHistory).toBe(true);
+    expect(readerItem.historyScopeLabel).toBe("Migrated small-group history");
+  });
+
+  it("marks migrated run snapshot rows from metadata", () => {
+    const readerItem = analysisRunMessageToReaderItem(
+      runMessage({
+        source_type: "telegram",
+        item_kind: "telegram_message",
+        metadata_json: {
+          history_scope: "migrated",
+          is_migrated_history: true,
+          history_scope_label: "Migrated small-group history",
+        },
+      }),
+      { sourceTitle: "Telegram A" },
+    );
+
+    expect(readerItem.historyScope).toBe("migrated");
+    expect(readerItem.isMigratedHistory).toBe(true);
+    expect(readerItem.historyScopeLabel).toBe("Migrated small-group history");
   });
 
   it("exposes timestamped YouTube segment refs for trace selection", () => {

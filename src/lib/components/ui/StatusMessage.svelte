@@ -1,5 +1,5 @@
 <script lang="ts">
-  type StatusTone = "default" | "error" | "muted";
+  type StatusTone = "default" | "error" | "info" | "muted";
   type StatusSize = "sm" | "md";
 
   let {
@@ -47,6 +47,15 @@
 
   .ui-status-message.default {
     color: inherit;
+  }
+
+  .ui-status-message.info.surface {
+    background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+    color: color-mix(in srgb, var(--primary) 70%, var(--text));
+  }
+
+  .ui-status-message.info.plain {
+    color: var(--primary);
   }
 
   .ui-status-message.error.surface {

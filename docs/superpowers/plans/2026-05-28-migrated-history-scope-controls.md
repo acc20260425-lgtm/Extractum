@@ -1356,7 +1356,7 @@ Expected: commit succeeds.
 - Test: `src/lib/analysis-source-readers.test.ts`
 - Test: `src/lib/analysis-source-readers-route.test.ts`
 
-- [ ] **Step 1: Add reader item history labels**
+- [x] **Step 1: Add reader item history labels**
 
 In `src/lib/source-reader-model.ts`, extend `SourceReaderItem`:
 
@@ -1389,7 +1389,7 @@ historyScopeLabel:
 isMigratedHistory: historyScope === "migrated",
 ```
 
-- [ ] **Step 2: Add model tests**
+- [x] **Step 2: Add model tests**
 
 In `src/lib/source-reader-model.test.ts`, extend `sourceItem()` defaults:
 
@@ -1439,7 +1439,7 @@ it("marks migrated run snapshot rows from metadata", () => {
 });
 ```
 
-- [ ] **Step 3: Render timeline badges**
+- [x] **Step 3: Render timeline badges**
 
 In `src/lib/components/analysis/telegram-timeline-reader.svelte`, inside the message metadata/header area, add:
 
@@ -1463,7 +1463,7 @@ Add CSS:
 }
 ```
 
-- [ ] **Step 4: Add source-reader scope props**
+- [x] **Step 4: Add source-reader scope props**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, add props:
 
@@ -1577,7 +1577,7 @@ Add CSS:
 }
 ```
 
-- [ ] **Step 5: Thread props through `ReportCanvas`**
+- [x] **Step 5: Thread props through `ReportCanvas`**
 
 In `src/lib/components/analysis/report-canvas.svelte`, add props and pass them into `ReportSourceSurface`:
 
@@ -1586,7 +1586,7 @@ In `src/lib/components/analysis/report-canvas.svelte`, add props and pass them i
 {onChangeTelegramHistoryScope}
 ```
 
-- [ ] **Step 6: Update page state and pagination**
+- [x] **Step 6: Update page state and pagination**
 
 In `src/routes/analysis/+page.svelte`, add state:
 
@@ -1652,7 +1652,7 @@ sourceItemsCursor = null;
 sourceItemsBeforePublishedAt = null;
 ```
 
-- [ ] **Step 7: Update frontend contract tests**
+- [x] **Step 7: Update frontend contract tests**
 
 In `src/lib/analysis-source-readers.test.ts`, add:
 
@@ -1690,7 +1690,7 @@ it("passes Telegram history scope and cursor through live source item loading", 
 });
 ```
 
-- [ ] **Step 8: Run frontend browsing tests**
+- [x] **Step 8: Run frontend browsing tests**
 
 Run:
 
@@ -1701,7 +1701,7 @@ npm.cmd run check
 
 Expected: all pass.
 
-- [ ] **Step 9: Commit Task 3**
+- [x] **Step 9: Commit Task 3**
 
 Run:
 

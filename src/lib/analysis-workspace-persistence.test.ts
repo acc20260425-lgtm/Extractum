@@ -50,6 +50,8 @@ function source(id: number): Source {
     migratedHistoryStatus: "none",
     migratedHistoryDetectedAt: null,
     migratedHistoryRefreshedAt: null,
+    migratedHistoryRowCount: 0,
+    migratedHistoryImportCompleted: false,
   };
 }
 

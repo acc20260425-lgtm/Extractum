@@ -35,6 +35,9 @@ export interface SourceReaderItem {
   youtubeEndSeconds: number | null;
   youtubeUrl: string | null;
   captionLabel: string | null;
+  historyScope: "current" | "migrated";
+  historyScopeLabel: string | null;
+  isMigratedHistory: boolean;
   selected: boolean;
 }
 
@@ -98,6 +101,9 @@ export function sourceItemToReaderItem(
     youtubeEndSeconds: null,
     youtubeUrl: null,
     captionLabel: null,
+    historyScope: item.historyScope,
+    historyScopeLabel: item.isMigratedHistory ? item.historyScopeLabel : null,
+    isMigratedHistory: item.isMigratedHistory,
     selected: selectedTraceRef !== null && ref === selectedTraceRef,
   };
 }
@@ -115,6 +121,11 @@ export function analysisRunMessageToReaderItem(
   const canonicalUrl = stringValue(metadata.canonical_url);
   const captionLanguage = stringValue(metadata.caption_language);
   const captionTrackKind = stringValue(metadata.caption_track_kind);
+  const historyScope = stringValue(metadata.history_scope) === "migrated" ? "migrated" : "current";
+  const historyScopeLabel =
+    historyScope === "migrated"
+      ? stringValue(metadata.history_scope_label) ?? "Migrated small-group history"
+      : null;
   return {
     id: `snapshot:${message.ref}`,
     sourceId: message.source_id,
@@ -136,6 +147,9 @@ export function analysisRunMessageToReaderItem(
         ? youtubeTimestampUrl(canonicalUrl, startSeconds)
         : safeUrl(canonicalUrl),
     captionLabel: [captionLanguage, captionTrackKind].filter(Boolean).join(" ") || null,
+    historyScope,
+    historyScopeLabel,
+    isMigratedHistory: historyScope === "migrated",
     selected: selectedTraceRef !== null && message.ref === selectedTraceRef,
   };
 }
@@ -169,6 +183,9 @@ export function youtubeSegmentToReaderItem(
     youtubeEndSeconds: endSeconds,
     youtubeUrl: canonicalUrl ? youtubeTimestampUrl(canonicalUrl, startSeconds) : null,
     captionLabel: [segment.captionLanguage, segment.captionTrackKind].filter(Boolean).join(" ") || null,
+    historyScope: "current",
+    historyScopeLabel: null,
+    isMigratedHistory: false,
     selected: selectedTraceRef !== null && ref === selectedTraceRef,
   };
 }
