@@ -7,8 +7,8 @@
 
 ## Goal
 
-Add one documented full-project verification entry point that developers can
-run before committing or merging work.
+Add one documented baseline full-project verification entry point that
+developers can run before committing or merging work.
 
 The command should wrap the verification steps already used manually on this
 project, make the expected gate easy to remember, and reduce drift between
@@ -36,7 +36,7 @@ runtime checks, and secret-safety audits remain separate backlog slices.
 
 ## Chosen Approach
 
-Add a cross-platform Node runner exposed through:
+Add a cross-platform Node runner at `scripts/verify.mjs` exposed through:
 
 ```text
 npm run verify
@@ -48,11 +48,13 @@ The runner executes the known-good manual verification gates in order:
 2. `npm run check`
 3. `cargo check --manifest-path src-tauri/Cargo.toml`
 4. `cargo test --manifest-path src-tauri/Cargo.toml`
-5. `git diff --check`
+5. `git diff HEAD --check`
 
 This keeps the first stabilization slice small and useful. It also gives a
 future CI workflow a single local contract to call instead of duplicating a
-long command list immediately.
+long command list immediately. The whitespace gate compares the full working
+tree against `HEAD` so already staged changes are covered as well as unstaged
+changes.
 
 ## Command Contract
 
@@ -73,9 +75,15 @@ decisions about warnings.
 
 ## Documentation
 
-The implementation should document `npm run verify` in the project docs near
-the existing development or verification guidance, then mark the backlog item
-for a single documented verification command as complete.
+The implementation should add a `verify` script to `package.json`:
+
+```json
+"verify": "node scripts/verify.mjs"
+```
+
+It should document `npm run verify` in the project docs near the existing
+development or verification guidance, then mark the backlog item for a single
+documented verification command as complete.
 
 Documentation should keep platform guidance concise. Historical notes already
 record that Windows PowerShell users may prefer `npm.cmd`; the new npm script
@@ -91,6 +99,7 @@ should hide that detail for the common case.
 - Do not pin `grammers-*` dependencies in this slice.
 - Do not add Playwright, browser runtime checks, Telegram live validation, or
   LLM event-flow verification.
+- Do not claim this baseline command covers all stabilization backlog items.
 - Do not change frontend, backend, database, or product behavior.
 
 ## Validation
