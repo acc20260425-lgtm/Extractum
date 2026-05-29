@@ -10,6 +10,19 @@ This document is the shortest current-state snapshot of the repository.
 - local storage: `SQLite`
 - LLM: reusable Gemini and OpenAI-compatible provider profiles
 
+## Verification
+
+Run baseline full-project verification before committing or merging:
+
+```bash
+npm run verify
+```
+
+This command runs frontend tests, Svelte checks, Rust check/tests, and
+`git diff HEAD --check`. It is a baseline local gate; CI, Rust formatting/lint
+policy, live Telegram/LLM flows, dependency pinning, and secret-safety audit
+coverage remain separate stabilization work.
+
 ## Product slice
 
 The app is a local source ingest and analysis workspace. Telegram and YouTube

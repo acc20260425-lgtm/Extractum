@@ -244,7 +244,7 @@ Acceptance:
 
 Priority: medium.
 
-- [ ] add a single documented full-project verification command or script
+- [x] add a single documented full-project verification command or script
 - [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
 - [ ] pin `grammers-*` dependencies to an explicit `rev` or owned release policy
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
