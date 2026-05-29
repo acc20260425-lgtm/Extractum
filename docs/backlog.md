@@ -15,6 +15,7 @@
 | Medium | Frontend workspace evolution | improve source-reader navigation, topic filters, activity status, and route boundaries |
 | Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
 | Medium | Stabilization and secret safety | add CI, dependency policy, event-flow validation, and secret-leak audit coverage |
+| Medium | Desktop product maturity | add sanitized diagnostics, searchable settings, explicit export profiles, and local privacy/data lifecycle controls |
 
 ## 2. Planning Principles
 
@@ -140,6 +141,40 @@ Guidance: `docs/frontend-architecture-evolution-analysis.md`.
 - [ ] finish saved-run filtering and cleanup affordances for large histories
 - [ ] evolve media evidence cards only after media download and preview policy
   is approved
+
+### 3.8 Desktop Product Maturity
+
+Priority: medium.
+
+Guidance: `docs/desktop-product-evolution-analysis.md`.
+
+- [ ] define a shared redaction policy for logs, diagnostics, debug status text,
+  and future support bundles
+- [ ] add a local diagnostic summary or support bundle that reports app version,
+  schema state, provider health, recent job states, and sanitized logs without
+  source content or secrets
+- [ ] introduce a lightweight settings registry/search layer before settings
+  grow around media, privacy, export, and provider controls
+- [ ] define an explicit export profile contract for NotebookLM, source-group,
+  saved-run, and future archive/media exports
+- [ ] add a small action registry for repeated analysis, source, export,
+  settings, and diagnostics commands before adding shortcuts or command palette
+  UI
+- [ ] add versioned validation/repair for growing settings payloads such as LLM
+  profiles, provider settings, export profiles, media policy, and privacy
+  options
+- [ ] decide on local privacy/data lifecycle controls such as app lock, archive
+  deletion, and diagnostic privacy preview after the higher-value operability
+  foundations are in place
+
+Acceptance:
+
+- Diagnostic output is useful for support and debugging without exposing local
+  archive content, prompts, provider credentials, cookies, or session material.
+- Settings and export behavior remain findable, explicit, and testable as the
+  desktop app gains provider, media, privacy, and export options.
+- Privacy controls describe real local data lifecycle behavior and do not imply
+  stronger protection than the storage model provides.
 
 ## 4. Explicit Non-Goals
 

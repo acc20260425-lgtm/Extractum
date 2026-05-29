@@ -16,6 +16,9 @@ history.
   maintainability direction and remaining simplification work.
 - `frontend-architecture-evolution-analysis.md`: current frontend workspace
   evolution guidance informed by Telegram Desktop reference review.
+- `desktop-product-evolution-analysis.md`: cross-cutting desktop product
+  maturity guidance for diagnostics, settings, exports, privacy, and release
+  health informed by Telegram Desktop reference review.
 - `database-schema.md`: current supported SQLite schema, migration baseline,
   and post-baseline migration authoring requirements.
 - `backlog.md`: open work only. Shipped work should not accumulate here.
