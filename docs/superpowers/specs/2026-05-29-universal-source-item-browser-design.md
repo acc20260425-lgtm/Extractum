@@ -124,6 +124,14 @@ The universal `Items` tab renders normalized source reader items and provides:
 - existing badges for topic, reply, reaction, source ref, history scope, media,
   and raw-data availability when useful.
 
+The first slice is a loaded-page browser. Search, filters, sort order, and item
+kind chips operate only on rows already loaded into the current source view.
+The UI must not imply full-source search. Labels should use wording such as
+`Search loaded items` or an equivalent scoped phrase, and empty states should
+say that no loaded rows match the filters. Backend-backed full-source search
+and sort are a follow-up that would require query parameters such as item kind,
+search text, sort mode, and provider-specific filters.
+
 The tab is a browser and diagnostic surface, not the primary polished view for
 every provider. Provider-aware tabs remain first-class where they exist.
 
@@ -141,6 +149,11 @@ Controls:
 - filters: `Top-level only`, `Replies`, `Pinned`, `Hearted`;
 - `Load more` pagination using live item pagination.
 
+Comments use the same first-slice loaded-page contract as `Items`. Search,
+filters, `Newest`, `Oldest`, and `Most liked` apply only to loaded comments.
+The UI should label the search as loaded-comment search and avoid promising a
+global comments corpus query.
+
 Comment cards show:
 
 - author;
@@ -151,12 +164,23 @@ Comment cards show:
 - pinned and hearted badges when available;
 - comment id or source ref only in compact technical badges/tooltips.
 
+Threading is also local to the loaded set. If a reply is loaded without its
+parent comment, threaded mode renders it as a standalone orphan reply card with
+a `parent not loaded` style badge instead of hiding it or failing the view.
+Backend-backed whole-thread paging is a follow-up, not a requirement for this
+slice.
+
 When comments are not synced, the tab shows an empty state with `Sync comments`.
 
 ### Metadata View
 
-The `Metadata` tab presents readable source metadata first, then technical
-details.
+The `Metadata` tab must be structured, not a dump. It is divided into:
+
+1. Summary: user-readable identity and content facts.
+2. Source state: sync, membership, captions/comments, migrated-history, topic,
+   and job-related state that describes current local coverage.
+3. Technical: ids and provider/runtime fields useful for debugging.
+4. Raw JSON: explicit collapsed payload viewer when available.
 
 For YouTube video:
 
@@ -174,6 +198,9 @@ For YouTube video:
 - technical fields from the typed YouTube metadata table;
 - collapsed `Show raw JSON` for the stored metadata payload when available.
 
+YouTube fields should be grouped into Summary, Source state, Technical, and Raw
+JSON sections rather than one long list.
+
 For Telegram:
 
 - title;
@@ -185,6 +212,10 @@ For Telegram:
 - sync state and last synced timestamp;
 - migrated-history state and row count;
 - topic resolver state when loaded.
+
+Telegram fields should use the same section structure: Summary for title/type,
+Source state for membership/sync/migrated-history/topic readiness, Technical
+for ids, and no Raw JSON unless a future explicit raw metadata contract exists.
 
 Raw JSON must be explicit and collapsed by default. If raw metadata is
 unavailable, the raw control is hidden or disabled with a short explanation.
@@ -260,7 +291,8 @@ search behavior.
 2. `SourceBrowserShell` derives available tabs from the source.
 3. Provider-aware tabs receive existing route state where possible.
 4. `Transcript` loads segments through `list_youtube_transcript_segments`.
-5. `Comments` and `Items` use generic source item rows plus frontend filtering.
+5. `Comments` and `Items` use generic source item rows plus frontend filtering
+   over the currently loaded page.
 6. `Metadata` combines `currentSource`, provider detail DTOs, and loaded topic
    state when relevant.
 7. `Activity` reads already available source jobs, Takeout recovery state, and
@@ -274,7 +306,10 @@ search behavior.
 - Missing YouTube typed metadata: show a metadata error and `Sync metadata`.
 - Missing raw JSON: hide or disable `Show raw JSON`.
 - Unknown item kind: render a generic item card.
-- No rows after filters/search: show empty state with `Clear filters`.
+- No rows after filters/search: show an empty state that says no loaded rows
+  match and offers `Clear filters`.
+- Orphan YouTube replies in threaded mode: render as standalone reply cards with
+  a parent-not-loaded badge.
 - Route-level API failures continue to use the existing formatted app error
   behavior.
 
@@ -286,9 +321,12 @@ Frontend tests:
   types;
 - route contract showing live single-source uses the new shell while source
   groups and snapshots stay on existing readers;
-- universal item kind filter derivation and generic item card fallback;
-- YouTube comments threaded/flat grouping, search, sort, and filters;
-- metadata view renders readable summary and raw JSON collapsed state;
+- universal item kind filter derivation from loaded rows, scoped loaded-item
+  search labels, and generic item card fallback;
+- YouTube comments threaded/flat grouping, loaded-comment search, local sort,
+  filters, and orphan reply rendering;
+- metadata view renders Summary, Source state, Technical, and collapsed Raw JSON
+  sections;
 - Activity tab receives existing source jobs/status.
 
 Rust/backend tests:
@@ -306,6 +344,12 @@ Manual verification:
 - open a YouTube video with synced transcript/comments and confirm
   `Transcript | Comments | Items | Metadata | Activity`;
 - confirm Comments threaded and flat modes;
+- confirm search/filter/sort labels and empty states communicate loaded-row
+  scope;
+- confirm orphan replies render visibly if a loaded page contains a reply whose
+  parent is not loaded;
+- confirm Metadata is grouped into Summary, Source state, Technical, and Raw
+  JSON sections;
 - confirm `Sync comments` and `Sync metadata` actions are reachable from empty
   or stale states;
 - confirm source groups and saved run snapshots keep their previous readers.
