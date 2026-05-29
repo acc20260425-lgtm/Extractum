@@ -40,8 +40,7 @@ pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_CURRENT: &str = "current";
 #[allow(dead_code)]
 pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_MIGRATED: &str = "migrated";
 #[allow(dead_code)]
-pub(crate) const NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP: &str =
-    "current_supergroup_history";
+pub(crate) const NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP: &str = "current_supergroup_history";
 #[allow(dead_code)]
 pub(crate) const NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP: &str =
     "migrated_small_group_history";

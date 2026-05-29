@@ -183,10 +183,7 @@ mod tests {
         assert!(migrations[1]
             .sql
             .contains("CREATE TABLE IF NOT EXISTS telegram_migrated_history_capabilities"));
-        assert_eq!(
-            migrations[2].description,
-            "analysis telegram history scope"
-        );
+        assert_eq!(migrations[2].description, "analysis telegram history scope");
         assert!(migrations[2]
             .sql
             .contains("ADD COLUMN telegram_history_scope TEXT"));
@@ -202,12 +199,11 @@ mod tests {
             .await
             .expect("apply migrations");
 
-        let columns: Vec<String> = sqlx::query_scalar(
-            "SELECT name FROM pragma_table_info('analysis_runs') ORDER BY cid",
-        )
-        .fetch_all(&pool)
-        .await
-        .expect("load columns");
+        let columns: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM pragma_table_info('analysis_runs') ORDER BY cid")
+                .fetch_all(&pool)
+                .await
+                .expect("load columns");
         assert!(columns.contains(&"telegram_history_scope".to_string()));
 
         sqlx::query(

@@ -271,11 +271,8 @@ pub(crate) async fn audit_legacy_telegram_source_metadata(
 ) -> AppResult<LegacyTelegramSourceMetadataCleanupReport> {
     super::identity_repair::require_source_identity_ready(repair_state.inner()).await?;
     let pool = crate::db::get_pool(&handle).await?;
-    run_legacy_telegram_source_metadata_cleanup(
-        &pool,
-        LegacyTelegramMetadataCleanupMode::Audit,
-    )
-    .await
+    run_legacy_telegram_source_metadata_cleanup(&pool, LegacyTelegramMetadataCleanupMode::Audit)
+        .await
 }
 
 #[tauri::command]
@@ -285,11 +282,8 @@ pub(crate) async fn clear_legacy_telegram_source_metadata(
 ) -> AppResult<LegacyTelegramSourceMetadataCleanupReport> {
     super::identity_repair::require_source_identity_ready(repair_state.inner()).await?;
     let pool = crate::db::get_pool(&handle).await?;
-    run_legacy_telegram_source_metadata_cleanup(
-        &pool,
-        LegacyTelegramMetadataCleanupMode::Clear,
-    )
-    .await
+    run_legacy_telegram_source_metadata_cleanup(&pool, LegacyTelegramMetadataCleanupMode::Clear)
+        .await
 }
 
 #[cfg(test)]
@@ -312,11 +306,13 @@ mod tests {
         .execute(pool)
         .await
         .expect("create accounts");
-        sqlx::query("INSERT OR IGNORE INTO accounts (id, label, api_id, api_hash) VALUES (?, 'a', 1, '')")
-            .bind(account_id)
-            .execute(pool)
-            .await
-            .expect("insert account");
+        sqlx::query(
+            "INSERT OR IGNORE INTO accounts (id, label, api_id, api_hash) VALUES (?, 'a', 1, '')",
+        )
+        .bind(account_id)
+        .execute(pool)
+        .await
+        .expect("insert account");
     }
 
     async fn insert_telegram_source(
@@ -611,14 +607,20 @@ mod tests {
             typed_peer_id: Some(12345),
             typed_resolution_strategy: Some("dialog".to_string()),
         };
-        assert_eq!(candidate_skip_reason(&row), Some(SKIP_INVALID_TYPED_IDENTITY));
+        assert_eq!(
+            candidate_skip_reason(&row),
+            Some(SKIP_INVALID_TYPED_IDENTITY)
+        );
 
         let row = LegacyTelegramMetadataCandidateRow {
             typed_peer_kind: Some("channel".to_string()),
             typed_resolution_strategy: Some("invalid_strategy".to_string()),
             ..row
         };
-        assert_eq!(candidate_skip_reason(&row), Some(SKIP_INVALID_TYPED_IDENTITY));
+        assert_eq!(
+            candidate_skip_reason(&row),
+            Some(SKIP_INVALID_TYPED_IDENTITY)
+        );
     }
 
     #[tokio::test]

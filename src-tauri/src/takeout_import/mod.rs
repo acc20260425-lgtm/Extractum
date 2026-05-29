@@ -837,8 +837,15 @@ async fn run_takeout_migrated_history_import(
     .await;
     let fallback_before = fallback_used;
     record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut export_attempts).await?;
-    finish_takeout_session(&client, &alias, takeout_id, true, &mut warnings, &mut fallback_used)
-        .await?;
+    finish_takeout_session(
+        &client,
+        &alias,
+        takeout_id,
+        true,
+        &mut warnings,
+        &mut fallback_used,
+    )
+    .await?;
     record_export_dc_fallback_if_needed(
         &pool,
         batch_id,

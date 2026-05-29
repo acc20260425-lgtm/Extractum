@@ -194,8 +194,7 @@ mod tests {
 
     #[test]
     fn validation_accepts_matching_revalidated_chat_id() {
-        let validation =
-            validate_revalidated_chat_id(Some(777), Some(777)).expect("matching id");
+        let validation = validate_revalidated_chat_id(Some(777), Some(777)).expect("matching id");
 
         assert_eq!(validation.migrated_from_chat_id, 777);
     }

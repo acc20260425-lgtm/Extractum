@@ -14,12 +14,12 @@ use super::items::{
     SourceItemInsert,
 };
 use super::peer_resolution::resolve_and_refresh_peer;
+use super::refresh_forum_topics;
 use super::settings::{
     initial_sync_policy_label, load_sync_settings_from_pool, InitialSyncMode, SyncSettingsRecord,
     SECONDS_PER_DAY,
 };
 use super::store::load_source;
-use super::refresh_forum_topics;
 use super::types::{
     now_secs, SourceSyncTarget, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
     TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,

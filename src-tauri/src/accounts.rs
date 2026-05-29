@@ -181,7 +181,9 @@ async fn delete_account_row_from_pool(pool: &Pool<Sqlite>, account_id: i64) -> A
         .map_err(AppError::database)?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::not_found(format!("Account {account_id} not found")));
+        return Err(AppError::not_found(format!(
+            "Account {account_id} not found"
+        )));
     }
 
     Ok(())

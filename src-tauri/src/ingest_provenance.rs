@@ -12,8 +12,7 @@ pub(crate) const TAKEOUT_HISTORY_SCOPE_CURRENT_WITH_MIGRATED_DEFERRED: &str =
     "current_history_with_migrated_deferred";
 pub(crate) const TAKEOUT_HISTORY_SCOPE_PARTIAL_PRIVATE: &str = "partial_private_history";
 pub(crate) const TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL: &str = "mixed_partial";
-pub(crate) const TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP: &str =
-    "migrated_small_group_history";
+pub(crate) const TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP: &str = "migrated_small_group_history";
 
 pub(crate) struct CreateTelegramTakeoutBatch {
     pub(crate) source_id: i64,
@@ -232,14 +231,13 @@ pub(crate) async fn mark_takeout_migrated_history_deferred(
              END,
              updated_at = CURRENT_TIMESTAMP
          WHERE batch_id = ?",
-        TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL,
-        TAKEOUT_HISTORY_SCOPE_CURRENT_WITH_MIGRATED_DEFERRED
+        TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL, TAKEOUT_HISTORY_SCOPE_CURRENT_WITH_MIGRATED_DEFERRED
     );
     sqlx::query(&query)
-    .bind(batch_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
+        .bind(batch_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
     record_ingest_batch_warning_once(pool, batch_id, "migrated_history_deferred", message).await
 }
 
@@ -300,10 +298,10 @@ pub(crate) async fn mark_takeout_only_my_messages_fallback(
         TAKEOUT_HISTORY_SCOPE_MIXED_PARTIAL, TAKEOUT_HISTORY_SCOPE_PARTIAL_PRIVATE
     );
     sqlx::query(&query)
-    .bind(batch_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
+        .bind(batch_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
     record_ingest_batch_warning(pool, batch_id, "only_my_messages_fallback", message).await
 }
 
@@ -497,10 +495,10 @@ fn classify_completeness(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sources::ITEM_KIND_TELEGRAM_MESSAGE;
     use crate::sources::test_support::{
         create_ingest_provenance_tables, memory_pool_with_source_items_and_topics,
     };
+    use crate::sources::ITEM_KIND_TELEGRAM_MESSAGE;
 
     async fn seed_source(pool: &sqlx::SqlitePool) {
         sqlx::query(
@@ -810,11 +808,7 @@ mod tests {
 
         assert_eq!(
             row,
-            (
-                TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP.to_string(),
-                1,
-                1,
-            )
+            (TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP.to_string(), 1, 1,)
         );
     }
 

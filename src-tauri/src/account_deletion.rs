@@ -52,7 +52,9 @@ pub(crate) async fn check_account_deletion(
     llm_scheduler: &LlmSchedulerState,
 ) -> AppResult<AccountDeletionPlan> {
     if !account_exists(pool, account_id).await? {
-        return Err(AppError::not_found(format!("Account {account_id} not found")));
+        return Err(AppError::not_found(format!(
+            "Account {account_id} not found"
+        )));
     }
     let owned_source_ids = load_owned_source_ids(pool, account_id).await?;
     let blocking_work = collect_account_deletion_blockers(
@@ -95,13 +97,19 @@ async fn collect_account_deletion_blockers(
     {
         blocking_work.push(AccountDeletionBlocker::SourceIngest { source_id });
     }
-    for job in takeout_state.active_jobs_for_sources(owned_source_ids).await {
+    for job in takeout_state
+        .active_jobs_for_sources(owned_source_ids)
+        .await
+    {
         blocking_work.push(AccountDeletionBlocker::TakeoutImport {
             source_id: job.source_id,
             job_id: job.job_id,
         });
     }
-    for job in source_job_state.active_jobs_for_sources(owned_source_ids).await {
+    for job in source_job_state
+        .active_jobs_for_sources(owned_source_ids)
+        .await
+    {
         blocking_work.push(AccountDeletionBlocker::SourceJob {
             source_id: job.source_id,
             related_source_id: job.related_source_id,
@@ -206,9 +214,7 @@ mod tests {
     use crate::analysis::AnalysisState;
     use crate::error::{AppError, AppErrorKind};
     use crate::ingest_provenance::TAKEOUT_HISTORY_SCOPE_CURRENT;
-    use crate::llm::{
-        LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
-    };
+    use crate::llm::{LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState};
     use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
     use crate::takeout_import::TakeoutImportState;
     use crate::youtube::jobs::{SourceJobState, SourceJobType, YoutubeSyncOptions};
@@ -508,13 +514,15 @@ mod tests {
         };
         states
             .source_job_state
-            .create_job(8, SourceJobType::YoutubeVideoFullSync, None, options.clone())
+            .create_job(
+                8,
+                SourceJobType::YoutubeVideoFullSync,
+                None,
+                options.clone(),
+            )
             .await
             .expect("unowned job");
-        states
-            .check(&pool, 11)
-            .await
-            .expect("unowned job ignored");
+        states.check(&pool, 11).await.expect("unowned job ignored");
 
         states
             .source_job_state
@@ -559,7 +567,10 @@ mod tests {
         insert_run(&pool, 90, "running", None, Some(90)).await;
         let states = States::new();
         states.analysis_state.insert_active_report_run(90).await;
-        states.check(&pool, 11).await.expect("unowned group ignored");
+        states
+            .check(&pool, 11)
+            .await
+            .expect("unowned group ignored");
 
         insert_group_member(&pool, 90, 7).await;
 
@@ -577,8 +588,7 @@ mod tests {
         let states = States::new();
 
         let provider_release =
-            start_scheduler_request(Arc::clone(&states.llm_scheduler), "provider-test", None)
-                .await;
+            start_scheduler_request(Arc::clone(&states.llm_scheduler), "provider-test", None).await;
         states
             .check(&pool, 11)
             .await
