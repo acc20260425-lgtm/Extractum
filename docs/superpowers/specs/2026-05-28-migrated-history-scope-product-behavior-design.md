@@ -298,6 +298,7 @@ The implementation plan includes tests proving:
 
 ## Implementation Status
 
-Implemented by `docs/superpowers/plans/2026-05-28-migrated-history-scope-controls.md`.
+Implemented; the completed execution plan was removed from active plans and
+remains available through Git history.
 Default behavior remains current-history-only. Opted-in browsing, export, and
 analysis preserve visible migrated-history labels and saved metadata.

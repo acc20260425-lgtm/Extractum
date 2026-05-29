@@ -236,8 +236,9 @@ Prior Takeout blocker for source `115`:
 | only_my_messages | 0 |
 | takeout_id_present | 0 |
 
-Next plan:
-`docs/superpowers/plans/2026-05-24-migrated-source-115-takeout-smoke.md`.
+Next live retry should use a new active plan if this validation row becomes
+current work again; the previous execution plan was removed from active plans
+and remains available through Git history.
 The row remains `blocked` until a live retry records either the same typed
 blocker or durable migrated-history deferment evidence. Passing evidence
 requires `migrated_history_detected = 1`, `migrated_history_imported = 0`, a
