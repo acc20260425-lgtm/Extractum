@@ -65,8 +65,12 @@ The verification command should:
 - stop at the first failing command;
 - forward the failing command exit code;
 - avoid hiding stdout or stderr from the underlying tools;
-- work on Windows by selecting `npm.cmd` when invoking npm subprocesses;
-- work on non-Windows platforms by selecting `npm`;
+- work on Windows without `shell: true` by invoking nested npm steps through
+  `process.execPath` and the `npm_execpath` environment value provided by
+  `npm run`;
+- work on non-Windows platforms by using the same `npm_execpath` path when it
+  is available and falling back to `npm` only when the runner is launched
+  outside npm;
 - avoid downloading or installing dependencies itself.
 
 The command is an automation wrapper, not a new test framework. It should not

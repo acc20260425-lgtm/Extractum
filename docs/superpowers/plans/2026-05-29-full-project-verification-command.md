@@ -12,7 +12,7 @@
 
 ## File Structure
 
-- Create `scripts/verify.mjs`: thin cross-platform command runner with explicit ordered steps, inherited stdio, fail-fast exit handling, and Windows `npm.cmd` selection.
+- Create `scripts/verify.mjs`: thin cross-platform command runner with explicit ordered steps, inherited stdio, fail-fast exit handling, and nested npm execution through `npm_execpath` when available.
 - Modify `package.json`: add `"verify": "node scripts/verify.mjs"` to the existing scripts block.
 - Modify `docs/project.md`: add concise baseline verification guidance.
 - Modify `docs/backlog.md`: mark only the single documented full-project verification command item complete.
@@ -43,19 +43,33 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+function npmStep(title, scriptName) {
+  if (process.env.npm_execpath) {
+    return {
+      title,
+      command: process.execPath,
+      args: [process.env.npm_execpath, 'run', scriptName]
+    };
+  }
+
+  if (process.platform === 'win32') {
+    console.error(
+      'Unable to locate npm CLI path. Run this command through "npm run verify".'
+    );
+    process.exit(1);
+  }
+
+  return {
+    title,
+    command: 'npm',
+    args: ['run', scriptName]
+  };
+}
 
 const steps = [
-  {
-    title: 'npm run test',
-    command: npmCommand,
-    args: ['run', 'test']
-  },
-  {
-    title: 'npm run check',
-    command: npmCommand,
-    args: ['run', 'check']
-  },
+  npmStep('npm run test', 'test'),
+  npmStep('npm run check', 'check'),
   {
     title: 'cargo check --manifest-path src-tauri/Cargo.toml',
     command: 'cargo',
