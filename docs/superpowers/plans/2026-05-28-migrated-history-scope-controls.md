@@ -2869,7 +2869,7 @@ Expected: commit succeeds.
 - Modify: `docs/superpowers/specs/2026-05-28-migrated-history-scope-product-behavior-design.md`
 - Modify: `docs/superpowers/plans/2026-05-28-migrated-history-scope-controls.md`
 
-- [ ] **Step 1: Update Takeout/source docs**
+- [x] **Step 1: Update Takeout/source docs**
 
 In `docs/takeout-source-import.md`, extend the migrated-history section with:
 
@@ -2887,7 +2887,7 @@ run-level decision in `analysis_runs.telegram_history_scope`; exported
 NotebookLM files render current and migrated history as separate sections.
 ```
 
-- [ ] **Step 2: Update database schema docs**
+- [x] **Step 2: Update database schema docs**
 
 In `docs/database-schema.md`, document:
 
@@ -2911,7 +2911,7 @@ Source records expose sanitized migrated-history availability fields:
 `migrated_history_import_completed`. They do not expose old chat ids.
 ```
 
-- [ ] **Step 3: Update backlog**
+- [x] **Step 3: Update backlog**
 
 In `docs/backlog.md`, mark the item complete:
 
@@ -2928,7 +2928,7 @@ In `docs/backlog.md`, mark the item complete:
     metadata.
 ```
 
-- [ ] **Step 4: Update the spec implementation status**
+- [x] **Step 4: Update the spec implementation status**
 
 Append to `docs/superpowers/specs/2026-05-28-migrated-history-scope-product-behavior-design.md`:
 
@@ -2940,7 +2940,7 @@ Default behavior remains current-history-only. Opted-in browsing, export, and
 analysis preserve visible migrated-history labels and saved metadata.
 ```
 
-- [ ] **Step 5: Run backend verification**
+- [x] **Step 5: Run backend verification**
 
 Run:
 
@@ -2951,7 +2951,7 @@ cargo test --manifest-path src-tauri\Cargo.toml
 
 Expected: both commands exit 0.
 
-- [ ] **Step 6: Run frontend verification**
+- [x] **Step 6: Run frontend verification**
 
 Run:
 
@@ -2962,7 +2962,7 @@ npm.cmd run check
 
 Expected: both commands exit 0.
 
-- [ ] **Step 7: Run whitespace verification**
+- [x] **Step 7: Run whitespace verification**
 
 Run:
 
@@ -2972,7 +2972,7 @@ git diff --check
 
 Expected: no output and exit 0.
 
-- [ ] **Step 8: Commit Task 7**
+- [x] **Step 8: Commit Task 7**
 
 Run:
 
@@ -2987,33 +2987,33 @@ Expected: commit succeeds.
 
 ## Final Acceptance Checklist
 
-- [ ] Direct `list_source_items` calls without `history_scope` return current history only.
-- [ ] Telegram browsing never mixes archive first pages with direct cursor pages; it uses the direct scoped query for every Telegram reader page.
-- [ ] Current Telegram browsing excludes migrated rows through the direct scoped items path.
-- [ ] Migrated browsing returns only `is_migrated_history = 1` rows with backend-owned labels.
-- [ ] Merged browsing returns both current and migrated rows and labels every migrated row.
-- [ ] Merged paging and around-item loading use the full ordering tuple, not only `published_at` or `item_id`.
-- [ ] Frontend source item cursors are opaque strings to application code; frontend code does not parse, render, log, or snapshot-test decoded cursor contents.
-- [ ] Current forum-topic filters are not applied to migrated small-group history.
-- [ ] Source DTOs expose row counts and import-completed state without old chat ids.
-- [ ] Available-but-not-imported and imported-zero-row states render explanatory UI states.
-- [ ] Scope values are translated through explicit layer constants; `merged` is never persisted into analysis run or message metadata.
-- [ ] Default NotebookLM export excludes migrated rows.
-- [ ] Current NotebookLM export rows include `history_scope: current_supergroup_history` and `migration_domain: null` through both archive and items loaders.
-- [ ] Opted-in NotebookLM export writes current and migrated history as separate sections.
-- [ ] Migrated export rows contain `history_scope: migrated_small_group_history` and `migration_domain: migrated_from_chat`.
-- [ ] Migrated export reply lookup stays inside the old-history domain.
-- [ ] Default analysis corpus excludes migrated rows.
-- [ ] Opted-in Telegram analysis includes migrated rows from every selected source that has them.
-- [ ] Source-group analysis opt-in does not fail when only some group members have migrated rows.
-- [ ] Explicit Telegram analysis opt-in with zero migrated rows succeeds and stores `current_plus_migrated`.
-- [ ] Analysis preflight counts include opted-in migrated rows.
-- [ ] `analysis_runs.telegram_history_scope` stores `current` or `current_plus_migrated`; old `NULL` runs map to `current`.
-- [ ] Snapshot rows include message-level historical markers in `analysis_run_messages.metadata_zstd`.
-- [ ] Follow-up chat remains snapshot-backed and can describe migrated evidence scope.
-- [ ] `cargo check --manifest-path src-tauri\Cargo.toml` passes.
-- [ ] `cargo test --manifest-path src-tauri\Cargo.toml` passes.
-- [ ] `npm.cmd test` passes.
-- [ ] `npm.cmd run check` passes.
-- [ ] `docs/database-schema.md` migration table includes version `3`.
-- [ ] `git diff --check` passes.
+- [x] Direct `list_source_items` calls without `history_scope` return current history only.
+- [x] Telegram browsing never mixes archive first pages with direct cursor pages; it uses the direct scoped query for every Telegram reader page.
+- [x] Current Telegram browsing excludes migrated rows through the direct scoped items path.
+- [x] Migrated browsing returns only `is_migrated_history = 1` rows with backend-owned labels.
+- [x] Merged browsing returns both current and migrated rows and labels every migrated row.
+- [x] Merged paging and around-item loading use the full ordering tuple, not only `published_at` or `item_id`.
+- [x] Frontend source item cursors are opaque strings to application code; frontend code does not parse, render, log, or snapshot-test decoded cursor contents.
+- [x] Current forum-topic filters are not applied to migrated small-group history.
+- [x] Source DTOs expose row counts and import-completed state without old chat ids.
+- [x] Available-but-not-imported and imported-zero-row states render explanatory UI states.
+- [x] Scope values are translated through explicit layer constants; `merged` is never persisted into analysis run or message metadata.
+- [x] Default NotebookLM export excludes migrated rows.
+- [x] Current NotebookLM export rows include `history_scope: current_supergroup_history` and `migration_domain: null` through both archive and items loaders.
+- [x] Opted-in NotebookLM export writes current and migrated history as separate sections.
+- [x] Migrated export rows contain `history_scope: migrated_small_group_history` and `migration_domain: migrated_from_chat`.
+- [x] Migrated export reply lookup stays inside the old-history domain.
+- [x] Default analysis corpus excludes migrated rows.
+- [x] Opted-in Telegram analysis includes migrated rows from every selected source that has them.
+- [x] Source-group analysis opt-in does not fail when only some group members have migrated rows.
+- [x] Explicit Telegram analysis opt-in with zero migrated rows succeeds and stores `current_plus_migrated`.
+- [x] Analysis preflight counts include opted-in migrated rows.
+- [x] `analysis_runs.telegram_history_scope` stores `current` or `current_plus_migrated`; old `NULL` runs map to `current`.
+- [x] Snapshot rows include message-level historical markers in `analysis_run_messages.metadata_zstd`.
+- [x] Follow-up chat remains snapshot-backed and can describe migrated evidence scope.
+- [x] `cargo check --manifest-path src-tauri\Cargo.toml` passes.
+- [x] `cargo test --manifest-path src-tauri\Cargo.toml` passes.
+- [x] `npm.cmd test` passes.
+- [x] `npm.cmd run check` passes.
+- [x] `docs/database-schema.md` migration table includes version `3`.
+- [x] `git diff --check` passes.

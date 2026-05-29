@@ -295,3 +295,9 @@ The implementation plan includes tests proving:
   for migrated rows;
 - existing source `115` E2E evidence remains valid: migrated rows have no bad
   migrated-domain flags and default projections contain zero migrated rows.
+
+## Implementation Status
+
+Implemented by `docs/superpowers/plans/2026-05-28-migrated-history-scope-controls.md`.
+Default behavior remains current-history-only. Opted-in browsing, export, and
+analysis preserve visible migrated-history labels and saved metadata.

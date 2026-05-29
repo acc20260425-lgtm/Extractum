@@ -1,13 +1,13 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-28
+> **Updated:** 2026-05-29
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | implement explicit browsing, analysis, and export controls for migrated historical scope |
+| High | Takeout source import | compare completed small-group Takeout validation against richer future fixtures |
 | High | Database schema simplification | decide whether old Telegram metadata blobs can be cleared after typed repair and real-data validation |
 | Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
@@ -128,12 +128,16 @@ Priority: high.
     `docs/superpowers/specs/2026-05-28-migrated-history-scope-product-behavior-design.md`.
     Defaults remain current-history only; browsing, analysis, and export include
     migrated historical scope only after explicit user choice.
-- [ ] implement explicit browsing, analysis, and export controls for migrated
+- [x] implement explicit browsing, analysis, and export controls for migrated
   historical scope
-  - Scope selector: `Current history`, `Migrated small-group history`, and
-    explicit `Merged timeline`.
-  - Analysis/export opt-ins must preserve historical-scope markers in snapshots
-    and output metadata.
+  - Browsing defaults to current history, provides explicit current/migrated/
+    merged scope selection for imported migrated rows, and labels migrated
+    rows.
+  - NotebookLM export defaults to current history and uses an explicit opt-in
+    with separate current and migrated sections.
+  - Analysis defaults to current history and stores opt-in runs as
+    `telegram_history_scope = current_plus_migrated` with row-level snapshot
+    metadata.
 - [x] decide whether Takeout import should refresh the forum-topic catalog after successful finish
   - Policy implemented: completed Takeout imports refresh forum topics for
     eligible supergroup sources, including completed partial imports, while

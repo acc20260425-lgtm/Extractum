@@ -157,6 +157,18 @@ historical rows into `analysis_documents`, `archive_read_items`, or
 `item_topic_memberships`, and default browsing, analysis, reports, and
 NotebookLM export stay current-history-only.
 
+### Historical Scope Usage
+
+Imported migrated small-group history remains outside default browsing,
+analysis, and NotebookLM export. The source reader defaults to
+`Current supergroup history`. Users can explicitly switch to
+`Migrated small-group history` or `Merged timeline` when imported migrated rows
+exist.
+
+Analysis and export use separate explicit opt-ins. Analysis records the
+run-level decision in `analysis_runs.telegram_history_scope`; exported
+NotebookLM files render current and migrated history as separate sections.
+
 ## 7. Pagination Contract
 
 The production path is `TDesktop` first with a per-split `DescendingFallback`.

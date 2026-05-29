@@ -149,8 +149,10 @@ Allowed `unavailable_reason` values are internal diagnostics:
 - `old_chat_input_unavailable`
 - `revalidation_failed`
 
-Frontend source records expose only sanitized availability status and
-timestamps. They do not expose `migrated_from_chat_id`.
+Frontend source records expose sanitized migrated-history availability fields:
+`migrated_history_status`, `migrated_history_row_count`, and
+`migrated_history_import_completed`. They do not expose old chat ids such as
+`migrated_from_chat_id`.
 
 ### 1.3 `telegram_messages`
 
@@ -767,6 +769,7 @@ Important fields:
 - `provider`
 - `model`
 - `youtube_corpus_mode`
+- `telegram_history_scope`
 - `status`
 - `result_markdown`
 - `trace_data_zstd`
@@ -785,6 +788,9 @@ Notes:
 - `snapshot_error` is a bounded sanitized error category for
   capture-preventing failures only. Provider/model/auth/network failures after
   successful capture remain in `error` and do not populate `snapshot_error`.
+- `telegram_history_scope` is nullable for backward compatibility. `NULL`
+  means `current`. New runs store either `current` or
+  `current_plus_migrated`.
 
 ### 2.3 `analysis_source_groups`
 
@@ -970,6 +976,7 @@ post-baseline migration history.
 | --- | --- | --- |
 | 1 | `0001_current_schema_baseline.sql` | Current supported schema baseline |
 | 2 | `0002_migrated_history_opt_in_schema.sql` | Migrated small-group history opt-in schema |
+| 3 | `0003_analysis_telegram_history_scope.sql` | Telegram migrated-history analysis scope marker |
 
 ## 4. Current behavior implications
 
