@@ -1031,3 +1031,51 @@ post-baseline migration history.
 - saved LLM API keys and Telegram `api_hash` values are owned by OS secure storage, not SQLite;
 - old non-empty `llm.profile.*.api_key` and `accounts.api_hash` values are legacy migration inputs and are cleared only after successful secure-store writes;
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`.
+
+## 5. Telegram schema evolution notes
+
+This section is non-contractual design guidance for future migrations. It is
+based on the current Extractum schema shape plus a source-code review of
+Telegram Desktop's local domain boundaries under `reference/tdesktop-dev`.
+Telegram Desktop is a live client cache and UI state machine; Extractum is an
+archive and analysis store. Use the domain split, not the cache layout.
+
+Good future additions should extend typed Telegram side tables rather than
+turning `items` or `telegram_messages` into a wide provider blob.
+
+Candidate directions:
+
+- `telegram_message_forwards` for forward provenance: original message id,
+  original date, original sender peer/name, original post author, PSA type,
+  saved-from peer/message, saved sender/date/outgoing, and imported flag.
+  This supports forward-context rendering without coupling it to text corpus
+  storage.
+- `telegram_message_reply_context` for reply details that do not fit the
+  current `reply_to_*` columns: quote text/entities, quote offset, manual quote
+  flag, external reply sender/post author, external reply media, story replies,
+  todo item id, and poll option. The existing `reply_to_msg_id`,
+  `reply_to_peer_*`, and `reply_to_top_id` columns remain the lightweight join
+  path.
+- `telegram_message_reaction_counts` for reaction breakdowns when analytics or
+  export need more than aggregate `reaction_count`: reaction key/type, count,
+  and whether the current account chose that reaction when the API exposes it.
+  Client-only unread reaction state should remain out of SQLite unless
+  Extractum becomes a live Telegram client.
+- `telegram_media_assets` for typed media metadata that should be queried
+  without inflating `items.media_metadata_zstd`: media type, Telegram media
+  identity, mime type, file name, size, dimensions, duration, thumbnail
+  availability, spoiler/TTL flags, and download-state references. Actual media
+  file downloads remain opt-in and outside SQLite.
+- `telegram_history_coverage_ranges` for explaining archive completeness and
+  gaps: source/history peer, history scope, min/max message ids, observed range,
+  completeness status, and ingest batch provenance. This is useful for Takeout
+  and partial fallback diagnostics, not for ordinary duplicate detection.
+
+Things not to copy from Telegram Desktop:
+
+- unread counts, muted state, notification queues, active subsection/thread,
+  local draft/cache state, or chat-list ordering;
+- raw access hashes, file references, session/auth material, or other
+  credentials without a separate privacy and secure-storage policy;
+- Telegram Desktop's sparse cache structures as-is. If Extractum needs history
+  coverage later, persist a small audit-oriented coverage model instead.
