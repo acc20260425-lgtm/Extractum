@@ -662,7 +662,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/sources/items/query.rs`
 - Test: `src-tauri/src/sources/items/query.rs`
 
-- [ ] **Step 1: Extend item request and response DTOs**
+- [x] **Step 1: Extend item request and response DTOs**
 
 In `src-tauri/src/sources/items.rs`, add the fields to `ItemRecord`:
 
@@ -692,7 +692,7 @@ pub history_scope: Option<TelegramHistoryScope>,
 pub before_cursor: Option<String>,
 ```
 
-- [ ] **Step 2: Add scoped row type**
+- [x] **Step 2: Add scoped row type**
 
 In `src-tauri/src/sources/items/query.rs`, add:
 
@@ -730,7 +730,7 @@ pub(super) struct BrowsableItemRow {
 }
 ```
 
-- [ ] **Step 3: Add backend tests first**
+- [x] **Step 3: Add backend tests first**
 
 In `src-tauri/src/sources/items/query.rs`, add:
 
@@ -926,7 +926,7 @@ async fn seed_telegram_identity(
 }
 ```
 
-- [ ] **Step 4: Run tests and verify failures**
+- [x] **Step 4: Run tests and verify failures**
 
 Run:
 
@@ -939,7 +939,7 @@ cargo test --manifest-path src-tauri\Cargo.toml topic_filters_are_rejected_for_n
 
 Expected: fail until the scoped query API exists.
 
-- [ ] **Step 5: Implement deterministic cursor helpers**
+- [x] **Step 5: Implement deterministic cursor helpers**
 
 In `src-tauri/src/sources/items/query.rs`, add:
 
@@ -1014,7 +1014,7 @@ assert_eq!(decoded, row.cursor());
 
 Do not parse, render, log, or snapshot-test decoded cursor contents in frontend code. Base64 JSON keeps the TypeScript surface small and discourages UI coupling to the tuple; it does not hide values from a user with DevTools or local filesystem access.
 
-- [ ] **Step 6: Implement scoped direct query**
+- [x] **Step 6: Implement scoped direct query**
 
 Replace the existing direct items-path SQL builder with a scoped builder. Use a CTE so cursor predicates can refer to the computed ordering fields:
 
@@ -1113,7 +1113,7 @@ LIMIT ?
 
 For `around_item_id`, resolve the selected row through the same CTE and scope filter into a `SourceItemsCursor`, then call `push_after_cursor_predicate(&mut sql, &cursor, true)`. For normal paging, call `push_after_cursor_predicate(&mut sql, &cursor, false)`.
 
-- [ ] **Step 7: Use direct scoped query for Telegram browsing**
+- [x] **Step 7: Use direct scoped query for Telegram browsing**
 
 Change `load_item_rows_from_pool` so callers pass the source type:
 
@@ -1210,7 +1210,7 @@ fn non_telegram_item_row_from_archive(row: StoredItemRow) -> BrowsableItemRow {
 
 Do not convert archive rows into Telegram `BrowsableItemRow` values. Archive rows do not contain the real `history_peer_kind`, `history_peer_id`, and `telegram_message_id`, so mixing an archive first page with a direct `before_cursor` page would make equal-timestamp paging unstable.
 
-- [ ] **Step 8: Map scoped row to item record**
+- [x] **Step 8: Map scoped row to item record**
 
 In `src-tauri/src/sources/items.rs`, change `item_record_from_row` to accept `BrowsableItemRow` and include:
 
@@ -1222,7 +1222,7 @@ history_scope_label: row.history_scope_label,
 page_cursor: row.cursor().encode_opaque()?,
 ```
 
-- [ ] **Step 9: Validate non-current scope requests**
+- [x] **Step 9: Validate non-current scope requests**
 
 In `list_source_items`, load the source type before dispatch:
 
@@ -1292,7 +1292,7 @@ let rows = load_item_rows_from_pool(
 .await?;
 ```
 
-- [ ] **Step 10: Run focused browsing backend tests**
+- [x] **Step 10: Run focused browsing backend tests**
 
 Run:
 
@@ -1306,7 +1306,13 @@ cargo test --manifest-path src-tauri\Cargo.toml default_source_browsing_does_not
 
 Expected: all pass.
 
-- [ ] **Step 11: Run manual source browsing smoke**
+- [x] **Step 11: Run manual source browsing smoke**
+
+Task 2 used backend/static smoke because the visual scope selector is introduced
+in Task 3. Focused backend tests covered default current rows, migrated-only
+rows, merged cursor paging, and archive-ready current defaults. Static grep found
+no frontend `decode_opaque`, `JSON.parse(sourceItemsCursor`, or
+`atob(sourceItemsCursor` usage.
 
 In a local development build, open the analysis source reader for a Telegram source where `migratedHistoryRowCount > 0`. Do not copy source titles, usernames, message text, or raw peer ids into docs or logs.
 
@@ -1324,7 +1330,7 @@ Manual checks:
 
 Expected: all checks pass before starting Task 3.
 
-- [ ] **Step 12: Commit Task 2**
+- [x] **Step 12: Commit Task 2**
 
 Run:
 

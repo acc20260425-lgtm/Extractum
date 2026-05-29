@@ -11,10 +11,11 @@ use crate::tx::{begin_immediate, finish_manual_transaction};
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::types::{
-    now_secs, StoredItemRow, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
-    ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
+    now_secs, SourceItemsCursor, TelegramHistoryScope, TelegramMessageIdentity,
+    ITEM_KIND_TELEGRAM_MESSAGE, ITEM_KIND_YOUTUBE_COMMENT, ITEM_KIND_YOUTUBE_TRANSCRIPT,
+    TELEGRAM_HISTORY_SCOPE_CURRENT, TELEGRAM_SOURCE_TYPE,
 };
-use query::load_item_rows_from_pool;
+use query::{load_item_rows_from_pool, BrowsableItemRow};
 
 mod query;
 
@@ -42,6 +43,11 @@ pub struct ItemRecord {
     pub reply_to_peer_id: Option<String>,
     pub reply_to_top_id: Option<i64>,
     pub reaction_count: Option<i64>,
+    pub history_scope: String,
+    pub is_migrated_history: bool,
+    pub migration_domain: Option<String>,
+    pub history_scope_label: String,
+    pub page_cursor: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -60,6 +66,8 @@ pub struct ListSourceItemsRequest {
     pub source_id: i64,
     pub limit: i64,
     pub before_published_at: Option<i64>,
+    pub history_scope: Option<TelegramHistoryScope>,
+    pub before_cursor: Option<String>,
     pub topic_filter: Option<ForumTopicFilter>,
     pub around_item_id: Option<i64>,
 }
@@ -635,21 +643,61 @@ pub async fn list_source_items(
     require_source_identity_ready(repair_state.inner()).await?;
     let pool = get_pool(&handle).await?;
     let limit = request.limit.clamp(1, 200);
+    let source_type: String = sqlx::query_scalar("SELECT source_type FROM sources WHERE id = ?")
+        .bind(request.source_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(AppError::database)?
+        .ok_or_else(|| AppError::not_found("Source not found"))?;
+    let is_telegram_source = source_type == TELEGRAM_SOURCE_TYPE;
+    let history_scope = TelegramHistoryScope::from_optional(request.history_scope);
+    if !is_telegram_source && history_scope != TelegramHistoryScope::Current {
+        return Err(AppError::validation(
+            "Telegram history scope applies only to Telegram source browsing",
+        ));
+    }
+    if is_telegram_source
+        && history_scope != TelegramHistoryScope::Current
+        && request.topic_filter.is_some()
+    {
+        return Err(AppError::validation(
+            "Telegram forum topic filters apply only to current supergroup history",
+        ));
+    }
+    let before_cursor = match (is_telegram_source, request.before_cursor.as_deref()) {
+        (true, Some(cursor)) => Some(SourceItemsCursor::decode_opaque(cursor)?),
+        (true, None) => None,
+        (false, Some(_)) => {
+            return Err(AppError::validation(
+                "Opaque source item cursors are only supported for Telegram source browsing",
+            ));
+        }
+        (false, None) => None,
+    };
+    let before_published_at = if is_telegram_source {
+        None
+    } else {
+        request.before_published_at
+    };
     let rows = load_item_rows_from_pool(
         &pool,
         request.source_id,
+        &source_type,
         limit,
-        request.before_published_at,
+        before_published_at,
         request.topic_filter,
         request.around_item_id,
+        Some(history_scope),
+        before_cursor,
     )
     .await?;
 
     rows.into_iter().map(item_record_from_row).collect()
 }
 
-fn item_record_from_row(row: StoredItemRow) -> AppResult<ItemRecord> {
+fn item_record_from_row(row: BrowsableItemRow) -> AppResult<ItemRecord> {
     let media_metadata = decode_media_metadata(row.media_metadata_zstd.as_deref())?;
+    let page_cursor = row.cursor().encode_opaque()?;
     Ok(ItemRecord {
         id: row.id,
         source_id: row.source_id,
@@ -677,6 +725,15 @@ fn item_record_from_row(row: StoredItemRow) -> AppResult<ItemRecord> {
         reply_to_peer_id: row.reply_to_peer_id,
         reply_to_top_id: row.reply_to_top_id,
         reaction_count: row.reaction_count,
+        history_scope: if row.history_scope.is_empty() {
+            TELEGRAM_HISTORY_SCOPE_CURRENT.to_string()
+        } else {
+            row.history_scope
+        },
+        is_migrated_history: row.is_migrated_history,
+        migration_domain: row.migration_domain,
+        history_scope_label: row.history_scope_label,
+        page_cursor,
     })
 }
 
@@ -756,8 +813,7 @@ mod tests {
         insert_telegram_source_item_with_observation,
         insert_telegram_source_item_with_observation_in_context, reply_peer_context, tl,
         upsert_youtube_comment_item, upsert_youtube_transcript_item, ForumTopicFilter,
-        SourceItemInsert, StoredItemRow, TelegramInsertContext, TelegramItemContext,
-        TelegramItemInsertOutcome,
+        SourceItemInsert, TelegramInsertContext, TelegramItemContext, TelegramItemInsertOutcome,
     };
     use crate::compression::{compress_text, decompress_bytes, decompress_text};
     use crate::media::{
@@ -769,7 +825,7 @@ mod tests {
         create_item_identity_indexes, memory_pool_with_source_items_and_topics,
     };
     use crate::sources::types::{
-        TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+        StoredItemRow, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
         TELEGRAM_MIGRATION_DOMAIN_MIGRATED_FROM_CHAT,
     };
 

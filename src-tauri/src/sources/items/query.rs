@@ -1,17 +1,87 @@
 use crate::error::{AppError, AppResult};
-use crate::sources::StoredItemRow;
+use crate::sources::types::{
+    SourceItemsCursor, StoredItemRow, TelegramHistoryScope, TELEGRAM_HISTORY_SCOPE_CURRENT,
+    TELEGRAM_HISTORY_SCOPE_LABEL_CURRENT, TELEGRAM_SOURCE_TYPE,
+};
 
 use super::ForumTopicFilter;
+
+#[derive(Clone, Debug, PartialEq, Eq, sqlx::FromRow)]
+pub(super) struct BrowsableItemRow {
+    pub(super) id: i64,
+    pub(super) source_id: i64,
+    pub(super) external_id: String,
+    pub(super) item_kind: String,
+    pub(super) author: Option<String>,
+    pub(super) published_at: i64,
+    pub(super) content_kind: String,
+    pub(super) has_media: bool,
+    pub(super) media_kind: Option<String>,
+    pub(super) content_zstd: Option<Vec<u8>>,
+    pub(super) media_metadata_zstd: Option<Vec<u8>>,
+    pub(super) has_raw_data: bool,
+    pub(super) forum_topic_id: Option<i64>,
+    pub(super) forum_topic_title: Option<String>,
+    pub(super) forum_topic_top_message_id: Option<i64>,
+    pub(super) reply_to_msg_id: Option<i64>,
+    pub(super) reply_to_peer_kind: Option<String>,
+    pub(super) reply_to_peer_id: Option<String>,
+    pub(super) reply_to_top_id: Option<i64>,
+    pub(super) reaction_count: Option<i64>,
+    pub(super) history_scope: String,
+    pub(super) is_migrated_history: bool,
+    pub(super) migration_domain: Option<String>,
+    pub(super) history_scope_label: String,
+    pub(super) history_scope_order: i64,
+    pub(super) history_peer_kind: String,
+    pub(super) history_peer_id: i64,
+    pub(super) telegram_message_id: i64,
+}
+
+impl BrowsableItemRow {
+    pub(super) fn cursor(&self) -> SourceItemsCursor {
+        SourceItemsCursor {
+            published_at: self.published_at,
+            history_scope_order: self.history_scope_order,
+            history_peer_kind: self.history_peer_kind.clone(),
+            history_peer_id: self.history_peer_id,
+            telegram_message_id: self.telegram_message_id,
+            item_id: self.id,
+        }
+    }
+}
 
 pub(super) async fn load_item_rows_from_pool(
     pool: &sqlx::SqlitePool,
     source_id: i64,
+    source_type: &str,
     limit: i64,
     before_published_at: Option<i64>,
     topic_filter: Option<ForumTopicFilter>,
     around_item_id: Option<i64>,
-) -> AppResult<Vec<StoredItemRow>> {
-    if crate::archive_read_model::source_archive_model_is_ready(pool, source_id).await? {
+    history_scope: Option<TelegramHistoryScope>,
+    before_cursor: Option<SourceItemsCursor>,
+) -> AppResult<Vec<BrowsableItemRow>> {
+    let scope = TelegramHistoryScope::from_optional(history_scope);
+
+    if source_type == TELEGRAM_SOURCE_TYPE {
+        return load_scoped_telegram_item_rows(
+            pool,
+            source_id,
+            limit,
+            topic_filter,
+            around_item_id,
+            scope,
+            before_cursor,
+        )
+        .await;
+    }
+
+    if source_type != TELEGRAM_SOURCE_TYPE
+        && scope == TelegramHistoryScope::Current
+        && before_cursor.is_none()
+        && crate::archive_read_model::source_archive_model_is_ready(pool, source_id).await?
+    {
         return crate::archive_read_model::load_item_rows_from_archive(
             pool,
             source_id,
@@ -20,7 +90,12 @@ pub(super) async fn load_item_rows_from_pool(
             topic_filter,
             around_item_id,
         )
-        .await;
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(non_telegram_item_row_from_archive)
+                .collect()
+        });
     }
 
     load_item_rows_from_items_path(
@@ -41,37 +116,135 @@ pub(crate) async fn load_item_rows_from_items_path(
     before_published_at: Option<i64>,
     topic_filter: Option<ForumTopicFilter>,
     around_item_id: Option<i64>,
-) -> AppResult<Vec<StoredItemRow>> {
-    let around_published_at = if let Some(item_id) = around_item_id {
-        sqlx::query_scalar::<_, i64>(
-            "SELECT items.published_at
-             FROM items
-             WHERE items.source_id = ?
-               AND items.id = ?
-               AND NOT EXISTS (
-                 SELECT 1 FROM telegram_messages tm
-                 WHERE tm.item_id = items.id
-                   AND tm.is_migrated_history = 1
-               )
-             LIMIT 1",
-        )
-        .bind(source_id)
-        .bind(item_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| AppError::internal(e.to_string()))?
-    } else {
-        None
-    };
+) -> AppResult<Vec<BrowsableItemRow>> {
+    load_scoped_item_rows(
+        pool,
+        source_id,
+        limit,
+        before_published_at,
+        topic_filter,
+        around_item_id,
+        TelegramHistoryScope::Current,
+        None,
+    )
+    .await
+}
 
+async fn load_scoped_telegram_item_rows(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+    limit: i64,
+    topic_filter: Option<ForumTopicFilter>,
+    around_item_id: Option<i64>,
+    scope: TelegramHistoryScope,
+    before_cursor: Option<SourceItemsCursor>,
+) -> AppResult<Vec<BrowsableItemRow>> {
+    if scope != TelegramHistoryScope::Current && topic_filter.is_some() {
+        return Err(AppError::validation(
+            "Telegram forum topic filters apply only to current supergroup history",
+        ));
+    }
+
+    load_scoped_item_rows(
+        pool,
+        source_id,
+        limit,
+        None,
+        topic_filter,
+        around_item_id,
+        scope,
+        before_cursor,
+    )
+    .await
+}
+
+async fn load_scoped_item_rows(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+    limit: i64,
+    before_published_at: Option<i64>,
+    topic_filter: Option<ForumTopicFilter>,
+    around_item_id: Option<i64>,
+    scope: TelegramHistoryScope,
+    before_cursor: Option<SourceItemsCursor>,
+) -> AppResult<Vec<BrowsableItemRow>> {
     let state = crate::topic_memberships::load_topic_resolution_state(pool, source_id).await?;
     let is_ready = crate::topic_memberships::is_ready_current_state(state.as_ref());
     if matches!(topic_filter.as_ref(), Some(ForumTopicFilter::Uncategorized)) && !is_ready {
         return Ok(Vec::new());
     }
 
-    let mut sql = String::from(
+    let around_cursor = match around_item_id {
+        Some(item_id) => {
+            load_item_cursor(pool, source_id, item_id, topic_filter.as_ref(), scope).await?
+        }
+        None => None,
+    };
+
+    let mut sql = scoped_items_base_sql();
+
+    match scope {
+        TelegramHistoryScope::Current => {
+            sql.push_str(" AND is_migrated_history = 0");
+        }
+        TelegramHistoryScope::Migrated => {
+            sql.push_str(
+                " AND is_migrated_history = 1
+                  AND migration_domain = 'migrated_from_chat'",
+            );
+        }
+        TelegramHistoryScope::Merged => {}
+    }
+
+    let page_cursor = around_cursor.as_ref().or(before_cursor.as_ref());
+    if let Some(cursor) = page_cursor {
+        push_after_cursor_predicate(&mut sql, cursor, around_cursor.is_some());
+    } else if before_published_at.is_some() {
+        sql.push_str(" AND published_at < ?");
+    }
+
+    match topic_filter.as_ref() {
+        Some(ForumTopicFilter::Topic { .. }) => {
+            sql.push_str(" AND forum_topic_id = ?");
+        }
+        Some(ForumTopicFilter::Uncategorized) => {
+            sql.push_str(" AND forum_topic_id IS NULL");
+        }
+        None => {}
+    }
+
+    sql.push_str(
+        " ORDER BY
+          published_at DESC,
+          history_scope_order ASC,
+          history_peer_kind ASC,
+          history_peer_id ASC,
+          telegram_message_id ASC,
+          id ASC
+          LIMIT ?",
+    );
+
+    let mut query = sqlx::query_as::<_, BrowsableItemRow>(&sql).bind(source_id);
+    if let Some(cursor) = page_cursor {
+        query = bind_after_cursor(query, cursor);
+    } else if let Some(before) = before_published_at {
+        query = query.bind(before);
+    }
+    if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter.as_ref() {
+        query = query.bind(*topic_id);
+    }
+
+    query
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))
+}
+
+fn scoped_items_base_sql() -> String {
+    String::from(
         r#"
+        WITH scoped_items AS (
         SELECT
             items.id,
             items.source_id,
@@ -92,55 +265,165 @@ pub(crate) async fn load_item_rows_from_items_path(
             items.reaction_count,
             forum_topics.topic_id AS forum_topic_id,
             forum_topics.title AS forum_topic_title,
-            forum_topics.top_message_id AS forum_topic_top_message_id
+            forum_topics.top_message_id AS forum_topic_top_message_id,
+            CASE WHEN COALESCE(tm.is_migrated_history, 0) = 1 THEN 'migrated' ELSE 'current' END AS history_scope,
+            COALESCE(tm.is_migrated_history, 0) AS is_migrated_history,
+            tm.migration_domain AS migration_domain,
+            CASE
+              WHEN COALESCE(tm.is_migrated_history, 0) = 1 THEN 'Migrated small-group history'
+              ELSE 'Current supergroup history'
+            END AS history_scope_label,
+            CASE WHEN COALESCE(tm.is_migrated_history, 0) = 1 THEN 1 ELSE 0 END AS history_scope_order,
+            COALESCE(tm.history_peer_kind, '') AS history_peer_kind,
+            COALESCE(tm.history_peer_id, 0) AS history_peer_id,
+            COALESCE(tm.telegram_message_id, 0) AS telegram_message_id
         FROM items
+        LEFT JOIN telegram_messages tm ON tm.item_id = items.id
         LEFT JOIN item_topic_memberships AS memberships
           ON memberships.item_id = items.id
         LEFT JOIN telegram_forum_topics AS forum_topics
           ON forum_topics.source_id = memberships.source_id
          AND forum_topics.topic_id = memberships.topic_id
-        WHERE items.source_id = ?
-          AND NOT EXISTS (
-            SELECT 1 FROM telegram_messages tm
-            WHERE tm.item_id = items.id
-              AND tm.is_migrated_history = 1
-          )
+        )
+        SELECT *
+        FROM scoped_items
+        WHERE source_id = ?
         "#,
-    );
+    )
+}
 
-    if before_published_at.is_some() {
-        sql.push_str(" AND items.published_at < ?");
-    } else if around_published_at.is_some() {
-        sql.push_str(" AND items.published_at <= ?");
+async fn load_item_cursor(
+    pool: &sqlx::SqlitePool,
+    source_id: i64,
+    item_id: i64,
+    topic_filter: Option<&ForumTopicFilter>,
+    scope: TelegramHistoryScope,
+) -> AppResult<Option<SourceItemsCursor>> {
+    let mut sql = scoped_items_base_sql();
+    sql.push_str(" AND id = ?");
+    match scope {
+        TelegramHistoryScope::Current => {
+            sql.push_str(" AND is_migrated_history = 0");
+        }
+        TelegramHistoryScope::Migrated => {
+            sql.push_str(
+                " AND is_migrated_history = 1
+                  AND migration_domain = 'migrated_from_chat'",
+            );
+        }
+        TelegramHistoryScope::Merged => {}
     }
-
-    match topic_filter.as_ref() {
+    match topic_filter {
         Some(ForumTopicFilter::Topic { .. }) => {
-            sql.push_str(" AND memberships.topic_id = ?");
+            sql.push_str(" AND forum_topic_id = ?");
         }
         Some(ForumTopicFilter::Uncategorized) => {
-            sql.push_str(" AND memberships.item_id IS NULL");
+            sql.push_str(" AND forum_topic_id IS NULL");
         }
         None => {}
     }
+    sql.push_str(" LIMIT 1");
 
-    sql.push_str(" ORDER BY items.published_at DESC LIMIT ?");
-
-    let mut query = sqlx::query_as::<_, StoredItemRow>(&sql).bind(source_id);
-    if let Some(before) = before_published_at {
-        query = query.bind(before);
-    } else if let Some(around) = around_published_at {
-        query = query.bind(around);
-    }
-    if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter.as_ref() {
+    let mut query = sqlx::query_as::<_, BrowsableItemRow>(&sql)
+        .bind(source_id)
+        .bind(item_id);
+    if let Some(ForumTopicFilter::Topic { topic_id }) = topic_filter {
         query = query.bind(*topic_id);
     }
 
     query
-        .bind(limit)
-        .fetch_all(pool)
+        .fetch_optional(pool)
         .await
+        .map(|row| row.map(|row| row.cursor()))
         .map_err(|e| AppError::internal(e.to_string()))
+}
+
+fn push_after_cursor_predicate(sql: &mut String, cursor: &SourceItemsCursor, inclusive: bool) {
+    let item_operator = if inclusive { ">=" } else { ">" };
+    let _ = cursor;
+    sql.push_str(&format!(
+        " AND (
+            published_at < ?
+            OR (
+                published_at = ?
+                AND (
+                    history_scope_order > ?
+                    OR (history_scope_order = ? AND history_peer_kind > ?)
+                    OR (history_scope_order = ? AND history_peer_kind = ? AND history_peer_id > ?)
+                    OR (history_scope_order = ? AND history_peer_kind = ? AND history_peer_id = ? AND telegram_message_id > ?)
+                    OR (history_scope_order = ? AND history_peer_kind = ? AND history_peer_id = ? AND telegram_message_id = ? AND id {item_operator} ?)
+                )
+            )
+        )"
+    ));
+}
+
+fn bind_after_cursor<'q>(
+    mut query: sqlx::query::QueryAs<
+        'q,
+        sqlx::Sqlite,
+        BrowsableItemRow,
+        <sqlx::Sqlite as sqlx::Database>::Arguments<'q>,
+    >,
+    cursor: &'q SourceItemsCursor,
+) -> sqlx::query::QueryAs<
+    'q,
+    sqlx::Sqlite,
+    BrowsableItemRow,
+    <sqlx::Sqlite as sqlx::Database>::Arguments<'q>,
+> {
+    query = query
+        .bind(cursor.published_at)
+        .bind(cursor.published_at)
+        .bind(cursor.history_scope_order)
+        .bind(cursor.history_scope_order)
+        .bind(&cursor.history_peer_kind)
+        .bind(cursor.history_scope_order)
+        .bind(&cursor.history_peer_kind)
+        .bind(cursor.history_peer_id)
+        .bind(cursor.history_scope_order)
+        .bind(&cursor.history_peer_kind)
+        .bind(cursor.history_peer_id)
+        .bind(cursor.telegram_message_id)
+        .bind(cursor.history_scope_order)
+        .bind(&cursor.history_peer_kind)
+        .bind(cursor.history_peer_id)
+        .bind(cursor.telegram_message_id)
+        .bind(cursor.item_id);
+    query
+}
+
+fn non_telegram_item_row_from_archive(row: StoredItemRow) -> BrowsableItemRow {
+    BrowsableItemRow {
+        id: row.id,
+        source_id: row.source_id,
+        external_id: row.external_id,
+        item_kind: row.item_kind,
+        author: row.author,
+        published_at: row.published_at,
+        content_kind: row.content_kind,
+        has_media: row.has_media,
+        media_kind: row.media_kind,
+        content_zstd: row.content_zstd,
+        media_metadata_zstd: row.media_metadata_zstd,
+        has_raw_data: row.has_raw_data,
+        forum_topic_id: row.forum_topic_id,
+        forum_topic_title: row.forum_topic_title,
+        forum_topic_top_message_id: row.forum_topic_top_message_id,
+        reply_to_msg_id: row.reply_to_msg_id,
+        reply_to_peer_kind: row.reply_to_peer_kind,
+        reply_to_peer_id: row.reply_to_peer_id,
+        reply_to_top_id: row.reply_to_top_id,
+        reaction_count: row.reaction_count,
+        history_scope: TELEGRAM_HISTORY_SCOPE_CURRENT.to_string(),
+        is_migrated_history: false,
+        migration_domain: None,
+        history_scope_label: TELEGRAM_HISTORY_SCOPE_LABEL_CURRENT.to_string(),
+        history_scope_order: 0,
+        history_peer_kind: String::new(),
+        history_peer_id: 0,
+        telegram_message_id: row.id,
+    }
 }
 
 #[cfg(test)]
@@ -149,6 +432,7 @@ mod tests {
     use crate::compression::compress_text;
     use crate::sources::items::ForumTopicFilter;
     use crate::sources::test_support::memory_pool_with_source_items_and_topics;
+    use crate::sources::types::{SourceItemsCursor, TelegramHistoryScope, TELEGRAM_SOURCE_TYPE};
 
     async fn seed_direct_item(
         pool: &sqlx::SqlitePool,
@@ -182,6 +466,174 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed item");
+    }
+
+    async fn seed_telegram_identity(
+        pool: &sqlx::SqlitePool,
+        item_id: i64,
+        history_peer_kind: &str,
+        history_peer_id: i64,
+        telegram_message_id: i64,
+        migration_domain: Option<&str>,
+        is_migrated_history: bool,
+    ) {
+        sqlx::query(
+            "INSERT INTO telegram_messages (
+                item_id, source_id, history_peer_kind, history_peer_id,
+                telegram_message_id, migration_domain, is_migrated_history
+             ) VALUES (?, 1, ?, ?, ?, ?, ?)",
+        )
+        .bind(item_id)
+        .bind(history_peer_kind)
+        .bind(history_peer_id)
+        .bind(telegram_message_id)
+        .bind(migration_domain)
+        .bind(i64::from(is_migrated_history))
+        .execute(pool)
+        .await
+        .expect("seed telegram identity");
+    }
+
+    #[tokio::test]
+    async fn scoped_browsing_defaults_to_current_rows() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_direct_item(&pool, 1, 10, "10", 1000, "current").await;
+        seed_direct_item(&pool, 1, 11, "11", 900, "migrated").await;
+        seed_telegram_identity(&pool, 10, "channel", 12345, 10, None, false).await;
+        seed_telegram_identity(&pool, 11, "chat", 777, 10, Some("migrated_from_chat"), true).await;
+
+        let rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            20,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("load rows");
+
+        assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), vec![10]);
+        assert_eq!(rows[0].history_scope, "current");
+    }
+
+    #[tokio::test]
+    async fn scoped_browsing_can_load_only_migrated_rows_with_labels() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_direct_item(&pool, 1, 10, "10", 1000, "current").await;
+        seed_direct_item(&pool, 1, 11, "11", 900, "migrated").await;
+        seed_telegram_identity(&pool, 10, "channel", 12345, 10, None, false).await;
+        seed_telegram_identity(&pool, 11, "chat", 777, 10, Some("migrated_from_chat"), true).await;
+
+        let rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            20,
+            None,
+            None,
+            None,
+            Some(TelegramHistoryScope::Migrated),
+            None,
+        )
+        .await
+        .expect("load rows");
+
+        assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), vec![11]);
+        assert_eq!(rows[0].history_scope, "migrated");
+        assert_eq!(rows[0].history_scope_label, "Migrated small-group history");
+        assert_eq!(
+            rows[0].migration_domain.as_deref(),
+            Some("migrated_from_chat")
+        );
+    }
+
+    #[tokio::test]
+    async fn merged_browsing_uses_full_cursor_tuple_for_equal_timestamps() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        for (item_id, external_id, content) in [
+            (10_i64, "40", "current low"),
+            (11_i64, "41", "current high"),
+            (12_i64, "40", "migrated old"),
+        ] {
+            seed_direct_item(&pool, 1, item_id, external_id, 1000, content).await;
+        }
+        seed_telegram_identity(&pool, 10, "channel", 12345, 40, None, false).await;
+        seed_telegram_identity(&pool, 11, "channel", 12345, 41, None, false).await;
+        seed_telegram_identity(&pool, 12, "chat", 777, 40, Some("migrated_from_chat"), true).await;
+
+        let first_page = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            2,
+            None,
+            None,
+            None,
+            Some(TelegramHistoryScope::Merged),
+            None,
+        )
+        .await
+        .expect("first page");
+
+        assert_eq!(
+            first_page.iter().map(|row| row.id).collect::<Vec<_>>(),
+            vec![10, 11]
+        );
+
+        let cursor = first_page[1].cursor();
+        let encoded_cursor = cursor.encode_opaque().expect("encode opaque cursor");
+        assert_ne!(
+            encoded_cursor,
+            serde_json::to_string(&cursor).expect("serialize cursor")
+        );
+        assert_eq!(
+            SourceItemsCursor::decode_opaque(&encoded_cursor).expect("decode opaque cursor"),
+            cursor
+        );
+        let second_page = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            2,
+            None,
+            None,
+            None,
+            Some(TelegramHistoryScope::Merged),
+            Some(cursor),
+        )
+        .await
+        .expect("second page");
+
+        assert_eq!(
+            second_page.iter().map(|row| row.id).collect::<Vec<_>>(),
+            vec![12]
+        );
+    }
+
+    #[tokio::test]
+    async fn topic_filters_are_rejected_for_non_current_history_scope() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        seed_direct_item(&pool, 1, 10, "10", 1000, "current").await;
+
+        let error = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            20,
+            None,
+            Some(ForumTopicFilter::Topic { topic_id: 200 }),
+            None,
+            Some(TelegramHistoryScope::Merged),
+            None,
+        )
+        .await
+        .expect_err("reject topic filter");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
     }
 
     #[tokio::test]
@@ -227,9 +679,19 @@ mod tests {
             .await
             .expect("rebuild archive");
 
-        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
-            .await
-            .expect("load rows");
+        let rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            20,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("load rows");
 
         assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), vec![10]);
     }
@@ -507,7 +969,10 @@ mod tests {
                 .await
                 .expect("load archive path");
 
-        assert_eq!(new_rows, old_rows);
+        assert_eq!(
+            new_rows,
+            old_rows.iter().map(stored_projection).collect::<Vec<_>>()
+        );
     }
 
     #[tokio::test]
@@ -539,7 +1004,10 @@ mod tests {
             .await
             .expect("load archive path");
 
-            assert_eq!(new_rows, old_rows);
+            assert_eq!(
+                new_rows,
+                old_rows.iter().map(stored_projection).collect::<Vec<_>>()
+            );
         }
     }
 
@@ -548,16 +1016,26 @@ mod tests {
         let pool = memory_pool_with_source_items_and_topics().await;
         seed_source_browsing_fixture(&pool).await;
 
-        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
-            .await
-            .expect("load fallback rows");
+        let rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            20,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("load fallback rows");
 
         assert_eq!(rows.len(), 5);
         assert_eq!(rows[0].external_id, "not-numeric-root");
     }
 
     #[tokio::test]
-    async fn load_item_rows_uses_archive_path_when_ready_and_current() {
+    async fn telegram_load_item_rows_uses_items_path_when_archive_model_is_ready() {
         let pool = memory_pool_with_source_items_and_topics().await;
         crate::sources::test_support::create_archive_read_model_tables(&pool).await;
         seed_source_browsing_fixture(&pool).await;
@@ -574,12 +1052,22 @@ mod tests {
         .await
         .expect("mutate canonical row after archive build");
 
-        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
-            .await
-            .expect("load archive rows");
+        let rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            20,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("load direct rows");
 
         assert_eq!(rows.len(), 5);
-        assert_eq!(rows[0].external_id, "not-numeric-root");
+        assert_eq!(rows[0].external_id, "canonical-mutated-after-archive-build");
     }
 
     #[tokio::test]
@@ -599,11 +1087,46 @@ mod tests {
             .await
             .expect("delete archive rows");
 
-        let rows = load_item_rows_from_pool(&pool, 1, 20, None, None, None)
-            .await
-            .expect("load fallback rows");
+        let rows = load_item_rows_from_pool(
+            &pool,
+            1,
+            TELEGRAM_SOURCE_TYPE,
+            20,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("load fallback rows");
 
         assert_eq!(rows.len(), 5);
+    }
+
+    fn stored_projection(row: &BrowsableItemRow) -> StoredItemRow {
+        StoredItemRow {
+            id: row.id,
+            source_id: row.source_id,
+            external_id: row.external_id.clone(),
+            item_kind: row.item_kind.clone(),
+            author: row.author.clone(),
+            published_at: row.published_at,
+            content_kind: row.content_kind.clone(),
+            has_media: row.has_media,
+            media_kind: row.media_kind.clone(),
+            content_zstd: row.content_zstd.clone(),
+            media_metadata_zstd: row.media_metadata_zstd.clone(),
+            has_raw_data: row.has_raw_data,
+            forum_topic_id: row.forum_topic_id,
+            forum_topic_title: row.forum_topic_title.clone(),
+            forum_topic_top_message_id: row.forum_topic_top_message_id,
+            reply_to_msg_id: row.reply_to_msg_id,
+            reply_to_peer_kind: row.reply_to_peer_kind.clone(),
+            reply_to_peer_id: row.reply_to_peer_id.clone(),
+            reply_to_top_id: row.reply_to_top_id,
+            reaction_count: row.reaction_count,
+        }
     }
 
     async fn seed_source_browsing_fixture(pool: &sqlx::SqlitePool) {
