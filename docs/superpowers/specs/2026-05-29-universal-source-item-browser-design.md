@@ -9,7 +9,8 @@
 Replace the live single-source reader split with a shared Source Browser shell
 that can present provider-aware views and a universal item browser over source
 items. The first slice applies only to live single-source browsing. Source
-groups and saved run snapshots keep their current readers.
+groups, saved run snapshots, and YouTube playlist live sources keep their
+current readers.
 
 The browser should preserve the strongest existing experiences:
 
@@ -72,15 +73,50 @@ Known item kinds today:
 
 ### Source Browser Shell
 
-The live single-source Source canvas renders one shell. The shell derives its
-tabs from `sourceType` and `sourceSubtype`, resets to a smart default when the
-selected source changes, and keeps active tab state local to the route.
+The live single-source Source canvas renders the shell only for Telegram live
+sources and YouTube video live sources in this slice. YouTube playlist live
+sources keep `YoutubePlaylistReader`; richer playlist/video nested browsing is
+a follow-up. The shell derives its tabs from `sourceType` and `sourceSubtype`,
+opens a smart default when no compatible active tab exists, and keeps active
+tab state local to the shell.
+
+Canonical tab ids are stable implementation contracts and tests should assert
+ids, not display labels:
+
+```text
+timeline
+transcript
+comments
+items
+metadata
+activity
+```
 
 Smart defaults:
 
 - YouTube video: `Transcript`
 - Telegram: `Timeline`
 - unknown or future source types: `Items`
+
+Tab selection contract:
+
+- `SourceBrowserShell` owns active tab state with local Svelte `$state`;
+- the route does not store or pass `activeSourceBrowserTab`;
+- the shell receives the selected source identity and type fields, including
+  `source.id`, `sourceType`, and `sourceSubtype`;
+- the shell reconciles the active tab whenever the selected source changes or
+  the available tab ids change;
+- first entry into a live source opens the smart default tab for that source;
+- when `source.id` changes, the shell preserves the current active tab if the
+  new source exposes the same tab id;
+- when the new source does not expose the current tab, the shell resets to the
+  smart default for the new source;
+- switching between YouTube videos in the same playlist can therefore preserve
+  `Comments`, `Items`, `Metadata`, or `Activity` instead of always returning to
+  `Transcript`;
+- refreshes of data for the same `source.id`, such as new jobs, metadata, or
+  appended items, preserve the current active tab;
+- persistent remembered tabs remain a follow-up and are not part of this slice.
 
 ### YouTube Video Tabs
 
@@ -121,7 +157,9 @@ The universal `Items` tab renders normalized source reader items and provides:
 - item kind filter chips derived from loaded rows, such as `All`, `Messages`,
   `Transcript`, `Comments`, `Media`, and `Other`;
 - search over visible content and author;
-- sort modes appropriate to loaded rows, starting with newest and oldest;
+- local sort modes over loaded rows: `newest`, `oldest`, and provider-specific
+  loaded-row modes such as `most_liked` only when the loaded DTO exposes the
+  needed field;
 - generic item cards for unknown future item kinds;
 - existing badges for topic, reply, reaction, source ref, history scope, media,
   and raw-data availability when useful.
@@ -153,7 +191,42 @@ Comment cards show:
 - pinned and hearted badges when available;
 - comment id or source ref only in compact technical badges/tooltips.
 
-When comments are not synced, the tab shows an empty state with `Sync comments`.
+The comments tab renders from a small derived coverage state:
+
+```ts
+type CommentsCoverageState =
+  | "unknown"
+  | "not_synced"
+  | "syncing"
+  | "failed"
+  | "synced_empty"
+  | "synced_with_rows";
+```
+
+The state is computed from existing source detail, synced item rows, source
+jobs, metadata/comment availability fields, and route errors. It must not
+require a new database column in this slice.
+The frontend helper should take an object input, such as
+`commentsCoverageState({ items, detail, jobs, routeError, loadingItems })`, so
+future route-owned coverage signals can be added without rewriting positional
+call sites.
+
+Comments coverage behavior:
+
+- `unknown`: metadata/detail coverage is missing or insufficient to decide, or
+  comments support is disabled/unavailable but not represented as a separate
+  state in this slice; show a muted or disabled explanation and show `Sync
+  metadata` or `Sync comments` only when the corresponding route callback is
+  available and meaningful;
+- `not_synced`: comments have never been synced for this source; show `Sync
+  comments`;
+- `syncing`: a comments sync job is running or queued; show a compact pending
+  label and route users to Activity for job details;
+- `failed`: the latest relevant comments sync failed; keep any previously
+  loaded rows readable and show a compact retry CTA plus Activity details;
+- `synced_empty`: comments sync succeeded and produced zero comment rows; show
+  an empty state that says no comments are available locally;
+- `synced_with_rows`: render the loaded comment rows.
 
 ### Pagination And Filtering Contract
 
@@ -176,10 +249,25 @@ comment-specific filtering are a follow-up. That follow-up would require query
 parameters such as item kind, search text, sort mode, and provider-specific
 filters.
 
+Default page sizes:
+
+- `Items` and `Comments` share the existing live source item page size:
+  `SOURCE_ITEMS_PAGE_LIMIT = 120`;
+- each `Load more` request appends another loaded window of up to 120 item rows;
+- YouTube transcript segments keep their existing dedicated page size of 80;
+- source groups and saved run snapshots keep their current page sizes in this
+  slice.
+
 Threaded comments also group only comments available in the loaded window.
 Replies whose parent comment is not loaded are rendered as standalone reply
 cards with a `parent not loaded` indicator instead of being hidden. Backend
 whole-thread paging is a follow-up.
+
+Threaded grouping must stay linear over the currently loaded rows. The frontend
+builds an in-memory map by `commentId` plus parent buckets, then renders parent
+cards with loaded replies beneath them. It must not issue extra requests only to
+resolve missing parents. If a later `Load more` page brings in the parent, the
+loaded-window grouping is recomputed and the reply moves under its parent.
 
 ### Metadata View
 
@@ -231,6 +319,16 @@ source-level YouTube metadata payload selected by `get_youtube_video_detail`,
 not for arbitrary item `raw_data_zstd` rows. If raw metadata is unavailable,
 the raw control is hidden or disabled with a short explanation.
 
+Raw JSON rendering must be bounded:
+
+- pretty-print JSON only after the user expands the section;
+- render the payload in a fixed max-height scroll area;
+- provide a copy button for the full raw payload when available;
+- if the payload is large, show a compact large-payload notice and render a
+  truncated preview instead of inserting the entire pretty-printed string into
+  the visible DOM;
+- never block initial Metadata tab rendering on raw JSON formatting.
+
 ### Activity View
 
 The `Activity` tab consolidates source work status:
@@ -249,6 +347,18 @@ stale states, but those buttons must call the same callbacks and use the same
 disabled reasons as Activity. Activity owns the consolidated job/status view;
 provider tabs should not duplicate detailed job cards.
 
+A contextual CTA is a compact, local control that helps the current tab become
+useful, such as `Sync comments` in an empty Comments tab, `Sync transcript` in
+an empty Transcript tab, `Sync metadata` in an incomplete Metadata tab, or
+`Clear filters` after loaded-row filtering removes every visible row. It may
+show one short disabled reason or pending label, but it does not list jobs,
+progress history, timestamps, warnings, or per-job actions.
+
+A detailed job card is any UI that lists one or more background jobs, progress,
+timestamps, warnings/errors, retry/cancel controls keyed by job id, or multiple
+parallel source tasks. Detailed job cards belong only in Activity for this
+slice.
+
 The first slice should reuse existing job/status data. It should not introduce
 new background job APIs only for this tab.
 
@@ -260,9 +370,10 @@ Add a shared live-source shell:
 
 - `SourceBrowserShell.svelte`
   - owns tab derivation and local active tab state;
-  - receives route-level data and callbacks;
+  - receives route-level data and callbacks through explicit props;
   - renders provider-aware views and the universal `Items` tab;
-  - applies smart default on source changes.
+  - applies the smart default when the current tab is unavailable for the
+    selected source.
 
 Keep provider-aware views small:
 
@@ -275,6 +386,25 @@ Keep provider-aware views small:
 
 Avoid a broad frontend service layer. Existing route state and API modules
 should feed the shell until a later slice proves a clearer boundary is needed.
+The shell must not introduce a new global store for source browsing state.
+
+The route or existing route-owned parent surface remains responsible for data
+fetching and passes a prop bundle equivalent to:
+
+- selected `source`, source metric, selected trace ref, and timestamp formatter;
+- live `sourceItems`, `sourceItemsHasMore`, `loadingItems`, and
+  `onLoadMoreSourceItems`;
+- Telegram topic/history-scope state and callbacks;
+- YouTube transcript segments, transcript loading state, search state, and
+  transcript callbacks;
+- YouTube metadata/detail DTOs and source jobs;
+- Takeout recovery state, source status, disabled reasons, and source-level
+  action callbacks.
+
+The shell may own ephemeral UI state for tabs, loaded-row filters/search/sort,
+and threaded/flat comments mode. Data-fetching API calls stay route-owned for
+this slice; the shell and leaf views trigger loading through props callbacks
+instead of importing Tauri API wrappers directly.
 
 ### Frontend Model
 
@@ -284,6 +414,7 @@ Extend `source-reader-model.ts` or an adjacent source browser model module with:
 - item kind filter derivation;
 - generic card display model;
 - YouTube comment enrichment helpers;
+- YouTube comments coverage state derivation;
 - threaded comment grouping from `commentId` and `parentCommentId`;
 - flat/threaded filter/sort/search helpers.
 
@@ -294,11 +425,34 @@ generic browsing needs common fields.
 
 Add or extend YouTube-specific DTOs where the UI needs provider detail:
 
-- extend YouTube comment rows with fields derived from the stored comment raw
-  payload: `commentId`, `parentCommentId`, `isReply`, `likeCount`, `isPinned`,
-  `isHearted`, `authorChannelUrl`;
+- extend the generic source item DTO with an optional `youtubeComment` object
+  derived from the stored comment raw payload:
+
+  ```ts
+  youtubeComment?: {
+    commentId: string | null;
+    parentCommentId: string | null;
+    isReply: boolean;
+    likeCount: number | null;
+    isPinned: boolean;
+    isHearted: boolean;
+    authorChannelUrl: string | null;
+  };
+  ```
+
 - extend `get_youtube_video_detail` with safe metadata fields and optional raw
   source-level metadata JSON for the `Metadata` tab.
+
+The Tauri command DTO for `list_source_items` keeps the existing snake_case raw
+API convention: backend returns `youtube_comment.comment_id`,
+`parent_comment_id`, `like_count`, `is_pinned`, `is_hearted`, and
+`author_channel_url`; `src/lib/api/sources.ts` maps that payload to camelCase
+`SourceItem.youtubeComment`.
+
+`Comments` and `Items` must use the same `list_source_items` pagination model.
+Do not introduce a separate YouTube-comments pagination endpoint in this slice.
+Unknown or malformed YouTube comment raw payloads should leave `youtubeComment`
+undefined while preserving the base item row.
 
 Do not move transcript segments into generic item pagination. The dedicated
 transcript segment API stays because it has timestamp-specific pagination and
@@ -307,22 +461,36 @@ search behavior.
 ## Data Flow
 
 1. The route selects a live single source.
-2. `SourceBrowserShell` derives available tabs from the source.
-3. Provider-aware tabs receive existing route state where possible.
-4. `Transcript` loads segments through `list_youtube_transcript_segments`.
-5. `Comments` and `Items` use generic source item rows plus frontend filtering
-   over the currently loaded page; they do not request full-source
+2. The route-owned parent passes source data, current loaded windows, status,
+   and callbacks to `SourceBrowserShell` through props.
+3. `SourceBrowserShell` derives available tabs from the source, opens the smart
+   default on first entry, and preserves the active tab across `source.id`
+   changes only when the new source exposes that canonical tab id.
+4. Provider-aware tabs receive existing route state where possible.
+5. `Transcript` loads segments through the existing route/API path for
+   `list_youtube_transcript_segments`.
+6. `Comments` derives comments coverage from existing route/source/job/detail
+   state and item rows.
+7. `Comments` and `Items` use generic source item rows plus frontend filtering
+   over the currently loaded page; YouTube comment data comes from the optional
+   `youtubeComment` enrichment on those rows. They do not request full-source
    search/filter/sort semantics in this slice.
-6. `Metadata` combines `currentSource`, provider detail DTOs, and loaded topic
+8. `Metadata` combines `currentSource`, provider detail DTOs, and loaded topic
    state when relevant.
-7. `Activity` reads already available source jobs, Takeout recovery state, and
+9. `Activity` reads already available source jobs, Takeout recovery state, and
    source status, and exposes the same route callbacks used by contextual CTAs.
 
 ## Error And Empty States
 
-- Missing comments: show an empty state and `Sync comments`.
-- Failed comment sync: show failed job state in Activity and keep the Comments
-  tab readable for any previously synced rows.
+- Unknown comments coverage: show a muted state and avoid claiming comments are
+  absent or unsynced.
+- Comments not synced: show an empty state and `Sync comments`.
+- Comments syncing: show a compact pending state in Comments and detailed job
+  state in Activity.
+- Failed comment sync: show failed job state in Activity, keep the Comments tab
+  readable for any previously synced rows, and expose a compact retry CTA.
+- Synced empty comments: show an empty state that says no comments are available
+  locally after sync.
 - Missing YouTube typed metadata: show a metadata error and `Sync metadata`.
 - Missing raw JSON: hide or disable `Show raw JSON`.
 - Unknown item kind: render a generic item card.
@@ -338,24 +506,46 @@ search behavior.
 Frontend tests:
 
 - tab mapping and smart defaults for YouTube, Telegram, and unknown source
-  types;
-- route contract showing live single-source uses the new shell while source
-  groups and snapshots stay on existing readers;
+  types by canonical tab id, not display label;
+- active tab opens on smart default for first entry, preserves the current tab
+  across `source.id` changes when the new source exposes that tab, falls back
+  to smart default when it does not, and preserves the tab on same-source data
+  refresh;
+- route contract showing Telegram live sources and YouTube video live sources
+  use the new shell while YouTube playlist live sources, source groups, and
+  snapshots stay on existing readers;
+- route contract showing `SourceBrowserShell` receives route-owned data and
+  callbacks through props, owns active tab state locally, and does not require
+  `activeSourceBrowserTab` in `/analysis/+page.svelte` or a new global
+  source-browser store;
 - universal item kind filter derivation from loaded rows, scoped loaded-item
   search labels, and generic item card fallback;
+- source item pagination uses the documented 120-row loaded window for `Items`
+  and `Comments`;
 - YouTube comments threaded/flat grouping, loaded-comment search, local sort,
   filters, and orphan reply rendering;
+- YouTube comments coverage state derivation for `unknown`, `not_synced`,
+  `syncing`, `failed`, `synced_empty`, and `synced_with_rows`;
+- YouTube comments and Items consume the same `SourceItem.youtubeComment`
+  enrichment without a separate comments pagination model;
+- YouTube threaded comments grouping stays linear over loaded rows and does not
+  issue missing-parent fetches;
 - metadata view renders Summary, Source state, Technical, and collapsed Raw JSON
   sections, with raw JSON limited to source-level YouTube metadata;
+- raw JSON rendering stays collapsed by default, uses bounded preview rendering,
+  exposes copy for the full payload when available, and does not block initial
+  Metadata rendering;
 - Activity tab receives existing source jobs/status and source-level actions
   without provider tabs duplicating detailed job cards.
+- contextual CTAs remain compact local controls while detailed job cards render
+  only in Activity.
 
 Rust/backend tests:
 
 - `get_youtube_video_detail` exposes the selected metadata fields and raw JSON
   without regressing existing summary/membership behavior;
-- `list_source_items` or the chosen comment-detail path exposes YouTube comment
-  enrichment from stored raw payload;
+- `list_source_items` exposes optional `youtubeComment` enrichment from stored
+  raw payload for YouTube comment item rows;
 - unknown or malformed raw comment payloads degrade without command failure when
   the base item row remains valid.
 - item raw-data payloads are not exposed by the generic item browser contract.
@@ -366,6 +556,8 @@ Manual verification:
 - open a YouTube video with synced transcript/comments and confirm
   `Transcript | Comments | Items | Metadata | Activity`;
 - confirm Comments threaded and flat modes;
+- confirm Comments distinguishes unknown, not-synced, syncing, failed,
+  synced-empty, and synced-with-rows coverage states;
 - confirm search/filter/sort labels and empty states communicate loaded-row
   scope;
 - confirm orphan replies render visibly if a loaded page contains a reply whose
@@ -374,10 +566,16 @@ Manual verification:
   JSON sections;
 - confirm Raw JSON is limited to source-level YouTube metadata, not arbitrary
   item rows;
+- confirm large Raw JSON payloads stay collapsed, bounded, copyable, and do not
+  inflate the initial Metadata tab;
 - confirm Activity shows consolidated status and actions while provider tabs
   keep only contextual CTAs;
+- confirm contextual CTAs do not render detailed job lists, progress history,
+  warnings, timestamps, or per-job retry/cancel cards outside Activity;
 - confirm `Sync comments` and `Sync metadata` actions are reachable from empty
   or stale states;
+- confirm YouTube playlist live sources still use the existing playlist reader
+  in this slice;
 - confirm source groups and saved run snapshots keep their previous readers.
 
 ## Rollout Notes
