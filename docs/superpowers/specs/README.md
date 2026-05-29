@@ -5,5 +5,7 @@ Keep only active or still-relevant design specs here.
 Specs for shipped or superseded work should move to
 `docs/superpowers/archive/specs/`.
 
-There are no active specs at the moment; this directory intentionally contains
-only this README until the next design slice starts.
+Active specs:
+
+- `2026-05-29-universal-source-item-browser-design.md`: live single-source
+  Source Browser shell with provider-aware tabs and a universal item browser.
