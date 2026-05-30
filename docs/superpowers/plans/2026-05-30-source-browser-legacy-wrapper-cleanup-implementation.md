@@ -484,7 +484,7 @@ Expected: commit includes only documentation and plan checkbox updates.
 - Modify: `docs/superpowers/specs/2026-05-30-source-browser-legacy-wrapper-cleanup-design.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-legacy-wrapper-cleanup-implementation.md`
 
-- [ ] **Step 1: Verify no wrapper references remain in `src`**
+- [x] **Step 1: Verify no wrapper references remain in `src`**
 
 Run:
 
@@ -494,7 +494,7 @@ rg -n "SourceGroupReader|source-group-reader|RunSnapshotMessagesPanel|run-snapsh
 
 Expected: no output. `rg` exits with code `1` when no matches are found.
 
-- [ ] **Step 2: Run focused frontend tests**
+- [x] **Step 2: Run focused frontend tests**
 
 Run:
 
@@ -504,7 +504,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: PASS.
 
-- [ ] **Step 3: Run Svelte/type checks**
+- [x] **Step 3: Run Svelte/type checks**
 
 Run:
 
@@ -514,7 +514,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 4: Run full project verification**
+- [x] **Step 4: Run full project verification**
 
 Run:
 
@@ -524,7 +524,7 @@ npm.cmd run verify
 
 Expected: PASS, including frontend tests, Svelte checks, Rust checks/tests, and `git diff HEAD --check`.
 
-- [ ] **Step 5: Mark cleanup spec implemented**
+- [x] **Step 5: Mark cleanup spec implemented**
 
 In `docs/superpowers/specs/2026-05-30-source-browser-legacy-wrapper-cleanup-design.md`, replace:
 
@@ -538,7 +538,7 @@ with:
 > Status: implemented on 2026-05-30; pending merge
 ```
 
-- [ ] **Step 6: Check whitespace**
+- [x] **Step 6: Check whitespace**
 
 Run:
 
@@ -548,7 +548,7 @@ git diff --check
 
 Expected: no output.
 
-- [ ] **Step 7: Commit final verification status**
+- [x] **Step 7: Commit final verification status**
 
 Run:
 
@@ -563,13 +563,13 @@ Expected: commit includes the cleanup spec status and final plan checkbox update
 
 ## Acceptance Checklist
 
-- [ ] `src/lib/components/analysis/source-group-reader.svelte` is deleted if and only if it had no production source usage.
-- [ ] `src/lib/components/analysis/run-snapshot-messages-panel.svelte` is deleted if and only if it had no production source usage.
-- [ ] `rg -n "SourceGroupReader|source-group-reader|RunSnapshotMessagesPanel|run-snapshot-messages-panel" src` returns no matches after test migration.
-- [ ] `ReportSourceSurface` still routes live source groups and available run snapshots through `SourceBrowserShell`.
-- [ ] `SourceBrowserShell` still renders canonical group and snapshot leaves.
-- [ ] Snapshot leaves remain frozen-only and do not import live APIs.
-- [ ] Live source groups still expose `Sources | Items | Metadata | Activity`.
-- [ ] Available run snapshots still exclude `Activity`.
-- [ ] Current-state docs describe `SourceBrowserShell` as the canonical production render path.
-- [ ] `npm.cmd run verify` passes.
+- [x] `src/lib/components/analysis/source-group-reader.svelte` is deleted if and only if it had no production source usage.
+- [x] `src/lib/components/analysis/run-snapshot-messages-panel.svelte` is deleted if and only if it had no production source usage.
+- [x] `rg -n "SourceGroupReader|source-group-reader|RunSnapshotMessagesPanel|run-snapshot-messages-panel" src` returns no matches after test migration.
+- [x] `ReportSourceSurface` still routes live source groups and available run snapshots through `SourceBrowserShell`.
+- [x] `SourceBrowserShell` still renders canonical group and snapshot leaves.
+- [x] Snapshot leaves remain frozen-only and do not import live APIs.
+- [x] Live source groups still expose `Sources | Items | Metadata | Activity`.
+- [x] Available run snapshots still exclude `Activity`.
+- [x] Current-state docs describe `SourceBrowserShell` as the canonical production render path.
+- [x] `npm.cmd run verify` passes.
