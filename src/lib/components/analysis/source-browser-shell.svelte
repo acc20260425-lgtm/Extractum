@@ -7,6 +7,7 @@
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import UniversalItemsView from "$lib/components/analysis/universal-items-view.svelte";
   import YoutubeCommentsView from "$lib/components/analysis/youtube-comments-view.svelte";
+  import YoutubePlaylistVideosView from "$lib/components/analysis/youtube-playlist-videos-view.svelte";
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import {
     reconcileSourceBrowserTab,
@@ -23,7 +24,7 @@
     TelegramHistoryScope,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
-  import type { YoutubeVideoDetail } from "$lib/types/youtube";
+  import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
 
   type Props = {
     source: Source;
@@ -38,6 +39,7 @@
     selectedTopicKey: string;
     showTopicSelector: boolean;
     youtubeVideoDetail: YoutubeVideoDetail | null;
+    youtubePlaylistDetail: YoutubePlaylistDetail | null;
     youtubeTranscriptSegments: YoutubeTranscriptSegment[];
     youtubeTranscriptSearch: string;
     youtubeTranscriptHasMore: boolean;
@@ -55,9 +57,14 @@
     onChangeTelegramHistoryScope: (scope: TelegramHistoryScope) => void;
     onChangeTranscriptSearch: (value: string) => void;
     onLoadMoreYoutubeTranscriptSegments: () => void | Promise<void>;
+    onOpenSource: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeMetadata: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeTranscript: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeComments: (sourceId: number) => void | Promise<void>;
+    onSyncYoutubePlaylist: (sourceId: number) => void | Promise<void>;
+    onRetryFailedYoutubePlaylistVideos: (sourceId: number) => void | Promise<void>;
+    onSyncYoutubePlaylistVideo: (playlistSourceId: number, videoSourceId: number) => void | Promise<void>;
+    onRetryYoutubePlaylistVideo: (playlistSourceId: number, videoSourceId: number) => void | Promise<void>;
     onStartTakeoutImport: (sourceId: number) => void | Promise<void>;
     onStartMigratedHistoryImport: (sourceId: number) => void | Promise<void>;
     onCancelSourceJob: (jobId: string) => void | Promise<void>;
@@ -76,6 +83,7 @@
     selectedTopicKey,
     showTopicSelector,
     youtubeVideoDetail,
+    youtubePlaylistDetail,
     youtubeTranscriptSegments,
     youtubeTranscriptSearch,
     youtubeTranscriptHasMore,
@@ -93,9 +101,14 @@
     onChangeTelegramHistoryScope,
     onChangeTranscriptSearch,
     onLoadMoreYoutubeTranscriptSegments,
+    onOpenSource,
     onSyncYoutubeMetadata,
     onSyncYoutubeTranscript,
     onSyncYoutubeComments,
+    onSyncYoutubePlaylist,
+    onRetryFailedYoutubePlaylistVideos,
+    onSyncYoutubePlaylistVideo,
+    onRetryYoutubePlaylistVideo,
     onStartTakeoutImport,
     onStartMigratedHistoryImport,
     onCancelSourceJob,
@@ -219,6 +232,18 @@
       onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}
       onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
       onSyncComments={() => onSyncYoutubeComments(source.id)}
+    />
+  {:else if activeTab === "videos"}
+    <YoutubePlaylistVideosView
+      sourceTitle={source.title ?? source.externalId}
+      playlist={youtubePlaylistDetail}
+      loading={loadingYoutubeDetail}
+      {formatTimestamp}
+      onOpenSource={onOpenSource}
+      onSyncPlaylist={() => onSyncYoutubePlaylist(source.id)}
+      onRetryFailedPlaylistVideos={() => onRetryFailedYoutubePlaylistVideos(source.id)}
+      onSyncPlaylistVideo={(videoSourceId) => onSyncYoutubePlaylistVideo(source.id, videoSourceId)}
+      onRetryPlaylistVideo={(videoSourceId) => onRetryYoutubePlaylistVideo(source.id, videoSourceId)}
     />
   {:else if activeTab === "activity"}
     <SourceActivityView

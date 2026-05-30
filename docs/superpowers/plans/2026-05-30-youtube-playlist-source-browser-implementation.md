@@ -749,7 +749,7 @@ Expected: FAIL because shell does not yet accept playlist detail or render `Yout
 **Files:**
 - Modify: `src/lib/components/analysis/source-browser-shell.svelte`
 
-- [ ] **Step 1: Add imports and props**
+- [x] **Step 1: Add imports and props**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, add:
 
@@ -785,7 +785,7 @@ Destructure those props in the `$props()` block:
     onRetryYoutubePlaylistVideo,
 ```
 
-- [ ] **Step 2: Add the `videos` branch**
+- [x] **Step 2: Add the `videos` branch**
 
 Add this branch before `activity`:
 
@@ -804,7 +804,7 @@ Add this branch before `activity`:
     />
 ```
 
-- [ ] **Step 3: Keep Activity wired to playlist source jobs**
+- [x] **Step 3: Keep Activity wired to playlist source jobs**
 
 Do not add playlist jobs to `YoutubePlaylistVideosView`. In this slice, Activity renders detailed playlist job state, cancellation, and the existing generic source sync/YouTube metadata actions only. Playlist-level CTAs (`onSyncYoutubePlaylist` and `onRetryFailedYoutubePlaylistVideos`) remain in `Videos` and are not duplicated in Activity.
 
