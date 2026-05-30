@@ -1012,7 +1012,7 @@ Expected: commit succeeds.
 - Create: `scripts/analysis-smoke-helpers.mjs`
 - Modify: `src/lib/analysis-smoke-helpers.test.ts`
 
-- [ ] **Step 1: Implement pure and bridge helper foundations**
+- [x] **Step 1: Implement pure and bridge helper foundations**
 
 Create `scripts/analysis-smoke-helpers.mjs`:
 
@@ -1522,7 +1522,7 @@ export function killProcessTree(child) {
 }
 ```
 
-- [ ] **Step 2: Run helper unit tests**
+- [x] **Step 2: Run helper unit tests**
 
 Run:
 
@@ -1532,7 +1532,9 @@ npm.cmd run test -- src/lib/analysis-smoke-helpers.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit helper layer**
+Actual result: PASS, 9 helper tests passed.
+
+- [x] **Step 3: Commit helper layer**
 
 Run:
 
