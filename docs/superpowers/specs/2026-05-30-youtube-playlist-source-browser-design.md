@@ -36,7 +36,8 @@ currently owns:
 
 - Route live YouTube playlist sources into `SourceBrowserShell`.
 - Add a playlist-specific `Videos` tab as the smart default for playlists.
-- Reuse the existing playlist membership UI as the `Videos` tab body.
+- Extract playlist membership browsing into a new `YoutubePlaylistVideosView`
+  leaf for the `Videos` tab.
 - Move detailed playlist job cards into the shared `Activity` tab.
 - Keep contextual playlist actions reachable from `Videos`.
 - Preserve `Open video source` behavior so linked videos open the existing
@@ -54,8 +55,7 @@ currently owns:
 - Do not change playlist sync, retry, or job persistence semantics.
 - Do not download YouTube media.
 - Do not add audio/video analysis.
-- Do not create a separate playlist-only source browser shell unless the shared
-  shell cannot remain readable during implementation.
+- Do not create a separate playlist-only source browser shell.
 
 ## UX Contract
 
@@ -77,6 +77,20 @@ Tab behavior:
   falls back to `Videos`.
 - Switching from a playlist `Videos` tab to a YouTube video falls back to the
   video smart default, `Transcript`.
+- Switching from a playlist `Videos` tab to Telegram falls back to the Telegram
+  smart default, `Timeline`.
+
+Implementation must make this behavior explicit in model tests for:
+
+| From | To | Active before | Expected after |
+| --- | --- | --- | --- |
+| YouTube video | YouTube playlist | `metadata` | `metadata` |
+| YouTube video | YouTube playlist | `items` | `items` |
+| YouTube video | YouTube playlist | `activity` | `activity` |
+| YouTube video | YouTube playlist | `transcript` | `videos` |
+| YouTube video | YouTube playlist | `comments` | `videos` |
+| YouTube playlist | YouTube video | `videos` | `transcript` |
+| YouTube playlist | Telegram | `videos` | `timeline` |
 
 ### Videos Tab
 
@@ -107,11 +121,22 @@ loaded window. It keeps the shipped wording and semantics:
 
 This tab may be sparse for playlists because playlist membership rows live in
 the typed playlist detail model, not necessarily in generic source items.
+Playlist context must explain this explicitly when the loaded window is empty:
+
+```text
+Playlist videos live in the Videos tab. This Items tab only shows generic archived items loaded for this playlist source.
+```
+
+This is an empty-state copy change, not a semantics change:
+`UniversalItemsView` still searches, filters, sorts, and derives chips from the
+loaded source-item window only.
 
 ### Metadata Tab
 
-`Metadata` should support YouTube playlists using the existing
-`SourceMetadataView` structure:
+`Metadata` should support YouTube playlists inside the existing
+`SourceMetadataView` structure. The component should receive the already loaded
+playlist detail DTO and render a provider-aware playlist metadata section
+without becoming a second playlist membership browser.
 
 - Summary: title, kind, channel identity, canonical URL when available,
   created/last synced timestamps.
@@ -119,9 +144,8 @@ the typed playlist detail model, not necessarily in generic source items.
   count, unavailable count.
 - Technical: source id, provider type/subtype, playlist id, channel fields, and
   any safe typed playlist metadata already exposed to the frontend.
-- Raw JSON: no playlist raw JSON in this slice unless the existing playlist
-  detail DTO already exposes explicit source-level sanitized raw metadata. Do
-  not read from item raw payloads.
+- Raw JSON: no playlist raw JSON in this slice. Never read from
+  `items.raw_data_zstd` or generic source item raw payloads.
 
 If playlist detail is not loaded, the metadata tab shows the source-level data
 that is already available and a compact loading or unavailable state for the
@@ -158,11 +182,17 @@ Component changes:
 
 - keep `SourceBrowserShell` as the only live single-source browser shell;
 - add a `videos` branch for YouTube playlists;
-- convert `YoutubePlaylistReader` into a job-card-free `Videos` leaf, or split
-  its playlist rows into a new `YoutubePlaylistVideosView` while preserving the
-  current UI contract;
-- route `YoutubePlaylistReader`/playlist view through the shell from
+- create `YoutubePlaylistVideosView` as the job-card-free `Videos` leaf;
+- remove the direct `YoutubePlaylistReader` branch from `ReportSourceSurface`;
+- if `YoutubePlaylistReader` remains after the migration, it is only a
+  compatibility wrapper around `YoutubePlaylistVideosView` and does not render
+  detailed source activity;
+- route `YoutubePlaylistVideosView` through `SourceBrowserShell` from
   `ReportSourceSurface`;
+- pass playlist detail into `SourceMetadataView` so Metadata can render
+  provider-aware playlist summary/state/technical fields;
+- add a playlist-specific empty-state hint to `UniversalItemsView` through an
+  optional `emptyDescription` prop;
 - keep source groups and run snapshots on their existing reader branches.
 
 Data ownership:
@@ -202,14 +232,18 @@ Frontend contract tests should assert:
 
 - playlist sources enter `SourceBrowserShell`;
 - source groups and saved snapshots still use existing readers;
-- `sourceBrowserTabsForSource` returns
+- `sourceBrowserTabsForSource(source)` returns
   `videos`, `items`, `metadata`, `activity` for YouTube playlists;
-- playlist smart default is `videos`;
-- playlist tab reconciliation preserves shared tabs and falls back from
-  unsupported video-only tabs;
-- `SourceBrowserShell` renders the playlist videos leaf for `videos`;
-- `YoutubePlaylistReader` or the new playlist videos leaf no longer renders
-  detailed source activity cards;
+- `smartDefaultSourceBrowserTab(source)` returns `videos` for playlists;
+- `reconcileSourceBrowserTab(previousTab, nextSource)` preserves shared tabs
+  and falls back from unsupported video-only or playlist-only tabs according to
+  the transition matrix above;
+- `SourceBrowserShell` renders `YoutubePlaylistVideosView` for `videos`;
+- `YoutubePlaylistVideosView` does not render detailed source activity cards;
+- `SourceMetadataView` renders playlist metadata from the playlist detail DTO
+  and does not read item raw payloads;
+- `UniversalItemsView` can show playlist-specific empty guidance without
+  changing loaded-window search/filter/sort semantics;
 - `SourceActivityView` remains wired for playlist source jobs;
 - shell still imports no `$lib/api/` modules and does not call `invoke(`.
 
