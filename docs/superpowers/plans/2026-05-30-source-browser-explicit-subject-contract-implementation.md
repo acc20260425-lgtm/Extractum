@@ -363,7 +363,7 @@ Expected: commit succeeds.
 - Modify: `docs/superpowers/specs/2026-05-30-source-browser-explicit-subject-contract-design.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-explicit-subject-contract-implementation.md`
 
-- [ ] **Step 1: Run a final scoped source-browser grep**
+- [x] **Step 1: Run a final scoped source-browser grep**
 
 Run:
 
@@ -380,7 +380,7 @@ Expected classification:
 - Any remaining source={currentSource} match belongs to a non-SourceBrowserShell component such as report-canvas.svelte.
 ```
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -390,7 +390,7 @@ npm.cmd run verify
 
 Expected: PASS for frontend tests, `svelte-check`, Rust tests, and frontend diff check.
 
-- [ ] **Step 3: Mark the design spec implemented**
+- [x] **Step 3: Mark the design spec implemented**
 
 In `docs/superpowers/specs/2026-05-30-source-browser-explicit-subject-contract-design.md`, change:
 
@@ -404,7 +404,7 @@ to:
 > Status: implemented on 2026-05-30; pending merge
 ```
 
-- [ ] **Step 4: Run docs diff check**
+- [x] **Step 4: Run docs diff check**
 
 Run:
 
@@ -414,7 +414,7 @@ git diff -- docs/superpowers/specs/2026-05-30-source-browser-explicit-subject-co
 
 Expected: diff shows the spec status update and checked-off Task 2 steps only.
 
-- [ ] **Step 5: Commit final verification docs**
+- [x] **Step 5: Commit final verification docs**
 
 Run:
 
@@ -429,15 +429,15 @@ Expected: commit succeeds.
 
 ## Acceptance Checklist
 
-- [ ] `SourceBrowserShell` has no top-level `source?: Source | null` prop.
-- [ ] `SourceBrowserShell` does not derive `subject` from a fallback `source` prop.
-- [ ] Every production `SourceBrowserShell` call passes explicit `subject=`.
-- [ ] No production `SourceBrowserShell` call passes `source={currentSource}`.
-- [ ] No production `SourceBrowserShell` call passes `source={null}`.
-- [ ] `report-canvas.svelte` unrelated `source={currentSource}` remains untouched.
-- [ ] `sourceBrowserData`, `groupBrowserData`, and `snapshotBrowserData` names and shapes are unchanged.
-- [ ] Source browser tabs/defaults/reconciliation are unchanged.
-- [ ] `SourceBrowserShell` still imports no `$lib/api/*` modules and calls no `invoke`.
-- [ ] Focused frontend tests pass.
-- [ ] `npm.cmd run check` passes.
-- [ ] `npm.cmd run verify` passes.
+- [x] `SourceBrowserShell` has no top-level `source?: Source | null` prop.
+- [x] `SourceBrowserShell` does not derive `subject` from a fallback `source` prop.
+- [x] Every production `SourceBrowserShell` call passes explicit `subject=`.
+- [x] No production `SourceBrowserShell` call passes `source={currentSource}`.
+- [x] No production `SourceBrowserShell` call passes `source={null}`.
+- [x] `report-canvas.svelte` unrelated `source={currentSource}` remains untouched.
+- [x] `sourceBrowserData`, `groupBrowserData`, and `snapshotBrowserData` names and shapes are unchanged.
+- [x] Source browser tabs/defaults/reconciliation are unchanged.
+- [x] `SourceBrowserShell` still imports no `$lib/api/*` modules and calls no `invoke`.
+- [x] Focused frontend tests pass.
+- [x] `npm.cmd run check` passes.
+- [x] `npm.cmd run verify` passes.

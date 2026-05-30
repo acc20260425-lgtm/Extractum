@@ -1,7 +1,7 @@
 # Source Browser Explicit Subject Contract Design
 
 > Date: 2026-05-30
-> Status: approved design, pending implementation plan
+> Status: implemented on 2026-05-30; pending merge
 > Scope: remove the legacy `source` compatibility prop from `SourceBrowserShell`.
 
 ## Summary
