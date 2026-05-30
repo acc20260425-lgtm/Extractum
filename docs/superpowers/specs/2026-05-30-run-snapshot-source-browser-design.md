@@ -115,6 +115,27 @@ already-known run/source metadata:
 If metadata and loaded rows disagree, prefer the safer `generic_items` fallback
 instead of inventing a partial provider reader.
 
+The implementation plan should introduce one deterministic helper for this
+decision rather than scattering checks through `ReportSourceSurface`:
+
+```ts
+deriveRunSnapshotBrowserKind({
+  scopeType,
+  sourceType,
+  sourceSubtype,
+  snapshotReaderItems,
+}): RunSnapshotBrowserKind
+```
+
+Required behavior:
+
+- `scopeType === "source_group"` -> `source_group`;
+- YouTube metadata plus only transcript rows -> `youtube_transcript`;
+- Telegram metadata plus only Telegram rows -> `telegram_timeline`;
+- mixed or unknown rows -> `generic_items`;
+- metadata says YouTube but rows are Telegram -> `generic_items`;
+- available snapshot with no loaded rows -> `generic_items`.
+
 ## Tabs
 
 Snapshot subjects intentionally do not expose `Activity`, `Comments`, or
@@ -181,6 +202,9 @@ snapshotBrowserData?: {
 }
 ```
 
+The implementation should keep this grouped shape. Do not spread snapshot data
+across many independent `SourceBrowserShell` props.
+
 The shell and snapshot leaf components must not import API wrappers and must not
 call `invoke`.
 
@@ -196,10 +220,17 @@ header continues to show:
 
 The browser tabs appear below that header for available snapshots.
 
+For the first implementation slice this is a hard boundary:
+
+- `SourceReaderHeader` remains route/surface-owned;
+- `SourceBrowserShell` renders only snapshot tabs and tab bodies below the
+  header;
+- route transitions such as `View live source` do not move into the shell.
+
 ### Sources
 
-For group snapshots, `Sources` reuses `SourceGroupSourcesView` or an equivalent
-leaf over `SourceReaderItem[]`.
+For group snapshots, `Sources` should use a dedicated `SnapshotGroupSourcesView`
+over `SourceReaderItem[]`.
 
 Important differences from live groups:
 
@@ -209,6 +240,10 @@ Important differences from live groups:
   options, not live group membership refreshes;
 - selected evidence refs must still highlight or scroll into the matching
   source section.
+
+Do not reuse `SourceGroupSourcesView` directly if it exposes live per-source
+paging semantics to the snapshot UI. It may share small pure helpers, but the
+snapshot leaf should present only the global run-snapshot load-more action.
 
 ### Timeline
 
@@ -226,9 +261,8 @@ live YouTube job state.
 ### Items
 
 Snapshot `Items` is a flat loaded-window view across frozen `SourceReaderItem[]`.
-Do not feed these rows into `UniversalItemsView` unless there is an explicit,
-typed adapter. A focused `SnapshotItemsView` is preferred if the existing
-universal items view remains `SourceItem[]`-oriented.
+Create a dedicated `SnapshotItemsView` in this slice. Do not adapt
+`UniversalItemsView` for `SourceReaderItem[]` in this slice.
 
 The view should support the same user expectations as live loaded-window items:
 
@@ -286,6 +320,9 @@ Do not decode live source metadata blobs or item raw payloads for this tab.
   rows and route callbacks only.
 - Snapshot browser components do not import API wrappers and do not call
   `invoke`.
+- Snapshot browser data enters `SourceBrowserShell` through a grouped
+  `snapshotBrowserData` prop, not many standalone snapshot props.
+- `SourceReaderHeader` stays outside `SourceBrowserShell` in this slice.
 - Evidence navigation stays route-owned and is passed down as `selectedTraceRef`
   or precomputed `SourceReaderItem.selected`.
 - `View live source` changes the source basis/selection through the route; it
@@ -297,6 +334,9 @@ Do not decode live source metadata blobs or item raw payloads for this tab.
 Model tests:
 
 - snapshot subjects get the expected tabs and smart defaults;
+- `deriveRunSnapshotBrowserKind` covers source group, YouTube transcript,
+  Telegram timeline, mixed/unknown rows, metadata/row mismatch, and empty
+  available snapshots;
 - live source/group tab behavior is unchanged;
 - reconciliation preserves `items` and `metadata` across live/snapshot
   transitions;
@@ -316,6 +356,7 @@ Component and route contract tests:
 - snapshot branches do not render `SourceActivityView`;
 - snapshot branches do not pass source job props or sync callbacks into reader
   leaves;
+- `SourceBrowserShell` keeps snapshot data grouped under `snapshotBrowserData`;
 - `selectedTraceRef` reaches group and single-source snapshot readers;
 - snapshot `Items` preserves source attribution for group rows.
 
@@ -335,11 +376,13 @@ Manual Tauri smoke:
 Implement this as one focused slice after this spec is approved:
 
 1. Extend the browser model with snapshot subjects and tests.
-2. Add snapshot-specific `Items` and `Metadata` leaves.
-3. Add snapshot data props to `SourceBrowserShell` without API imports.
-4. Route available snapshot branches in `ReportSourceSurface` through the shell.
-5. Keep unavailable/pending/checking status branches unchanged.
-6. Run focused frontend tests, full verification, and Tauri smoke.
+2. Add `deriveRunSnapshotBrowserKind` and tests.
+3. Add `SnapshotGroupSourcesView`, `SnapshotItemsView`, and snapshot metadata
+   leaves.
+4. Add grouped snapshot data props to `SourceBrowserShell` without API imports.
+5. Route available snapshot branches in `ReportSourceSurface` through the shell.
+6. Keep unavailable/pending/checking status branches unchanged.
+7. Run focused frontend tests, full verification, and Tauri smoke.
 
 This prepares the browser model for frozen run corpus navigation without
 changing live source browsing semantics.
