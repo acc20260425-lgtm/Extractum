@@ -67,7 +67,7 @@ git commit -m "docs: plan source browser archive cleanup"
 - Modify: `docs/superpowers/plans/README.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md`
 
-- [ ] **Step 1: Update active plans guidance**
+- [x] **Step 1: Update active plans guidance**
 
 Replace `docs/superpowers/plans/README.md` with:
 
@@ -80,7 +80,7 @@ Completed plans should move to `docs/superpowers/archive/plans/` when they are
 still useful as execution history. Otherwise, Git history is enough.
 ```
 
-- [ ] **Step 2: Add archived plans README**
+- [x] **Step 2: Add archived plans README**
 
 Create `docs/superpowers/archive/plans/README.md` with:
 
@@ -98,7 +98,7 @@ Current product and architecture state belongs in root docs such as
 Active implementation plans belong in `docs/superpowers/plans/`.
 ```
 
-- [ ] **Step 3: Update archive README**
+- [x] **Step 3: Update archive README**
 
 In `docs/superpowers/archive/README.md`, replace:
 
@@ -123,7 +123,7 @@ with:
   `verification/README.md`.
 ```
 
-- [ ] **Step 4: Verify plan archive guidance**
+- [x] **Step 4: Verify plan archive guidance**
 
 Run:
 
@@ -134,7 +134,7 @@ git diff --check
 
 Expected: new archive guidance is present and no whitespace errors.
 
-- [ ] **Step 5: Commit plan archive guidance**
+- [x] **Step 5: Commit plan archive guidance**
 
 Run:
 
