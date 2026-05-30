@@ -10,6 +10,7 @@
     description = "",
     labelledBy = "desktop-dialog-title",
     width = "46rem",
+    smokeId,
     onClose,
     children,
   }: {
@@ -18,6 +19,7 @@
     description?: string;
     labelledBy?: string;
     width?: string;
+    smokeId?: string;
     onClose: () => void;
     children?: import("svelte").Snippet;
   } = $props();
@@ -53,6 +55,7 @@
           <div
             {...props}
             class="dialog-card"
+            data-smoke-id={smokeId}
             style={`${String(props.style ?? "")}; --dialog-width: ${width};`}
             transition:scale={{ duration: 150, start: 0.985, easing: cubicOut }}
           >

@@ -188,6 +188,7 @@
       ariaLabel="Open source switcher"
       title="Open source switcher"
       ariaExpanded={sourceSwitcherOpen}
+      smokeId="analysis-source-switcher-trigger"
       onclick={() => (sourceSwitcherOpen = !sourceSwitcherOpen)}
     >
       <Search size={16} aria-hidden="true" />
@@ -196,6 +197,7 @@
     <button
       class:active={workspaceSelection.kind !== "none"}
       class="current-context-button"
+      data-smoke-id="analysis-current-context"
       type="button"
       title={currentSource ? sourceButtonLabel(currentSource) : currentGroup ? groupButtonLabel(currentGroup) : "No source selected"}
       aria-label={currentSource ? sourceButtonLabel(currentSource) : currentGroup ? groupButtonLabel(currentGroup) : "No source selected"}

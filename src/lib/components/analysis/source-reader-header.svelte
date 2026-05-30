@@ -11,6 +11,7 @@
   let {
     title,
     subtitle,
+    smokeId = "source-browser-header",
     surfaceLabel = "Source material",
     sourceViewBasis,
     sourceBasisState,
@@ -24,6 +25,7 @@
   }: {
     title: string;
     subtitle: string;
+    smokeId?: string;
     surfaceLabel?: string;
     sourceViewBasis: SourceViewBasis;
     sourceBasisState?: SourceCanvasSurface;
@@ -61,7 +63,7 @@
   });
 </script>
 
-<header class="source-reader-header" aria-label={title}>
+<header class="source-reader-header" aria-label={title} data-smoke-id={smokeId}>
   <div class="reader-title">
     <span class="eyebrow">{surfaceLabel}</span>
     <p>{subtitle}</p>

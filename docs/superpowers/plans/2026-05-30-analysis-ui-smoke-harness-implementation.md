@@ -645,7 +645,7 @@ Expected: commit succeeds with intentionally failing tests.
 - Modify: `src/lib/components/analysis/run-companion-tabs.svelte`
 - Modify: `src/lib/components/analysis/run-companion-runs-tab.svelte`
 
-- [ ] **Step 1: Add a `smokeId` prop to `Button`**
+- [x] **Step 1: Add a `smokeId` prop to `Button`**
 
 In `src/lib/components/ui/Button.svelte`, add `smokeId` to `$props()` and the prop type:
 
@@ -675,7 +675,7 @@ The native button opening should include:
   data-smoke-id={smokeId}
 ```
 
-- [ ] **Step 2: Add a `smokeId` prop to `DesktopDialog`**
+- [x] **Step 2: Add a `smokeId` prop to `DesktopDialog`**
 
 In `src/lib/components/desktop-dialog.svelte`, add:
 
@@ -695,7 +695,7 @@ Render it on `.dialog-card`:
             data-smoke-id={smokeId}
 ```
 
-- [ ] **Step 3: Mark workspace tools and associated disabled reason**
+- [x] **Step 3: Mark workspace tools and associated disabled reason**
 
 In `src/lib/components/analysis/report-workspace-tools.svelte`, change:
 
@@ -725,7 +725,7 @@ Change the disabled reason span to:
 
 Do not change `ariaDescribedby={exportDisabledReason ? exportReasonId : undefined}`.
 
-- [ ] **Step 4: Mark canvas and drawers**
+- [x] **Step 4: Mark canvas and drawers**
 
 In `src/lib/components/analysis/report-canvas.svelte`, change:
 
@@ -773,7 +773,7 @@ Add `smokeId` to the canvas mode buttons so smoke tests never click broad `Repor
         </Button>
 ```
 
-- [ ] **Step 5: Mark report setup and source surface**
+- [x] **Step 5: Mark report setup and source surface**
 
 In `src/lib/components/analysis/report-setup-panel.svelte`, change:
 
@@ -799,7 +799,7 @@ to:
 <section class="report-source-surface" data-surface={canvasSurface} data-smoke-id="analysis-source-surface">
 ```
 
-- [ ] **Step 6: Mark source browser tabs and reader headers**
+- [x] **Step 6: Mark source browser tabs and reader headers**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, change:
 
@@ -854,7 +854,7 @@ In `src/lib/components/analysis/report-source-surface.svelte`, pass explicit hea
       />
 ```
 
-- [ ] **Step 7: Mark NotebookLM dialog**
+- [x] **Step 7: Mark NotebookLM dialog**
 
 In `src/lib/components/analysis/notebooklm-export-dialog.svelte`, add this prop to `DesktopDialog`:
 
@@ -862,7 +862,7 @@ In `src/lib/components/analysis/notebooklm-export-dialog.svelte`, add this prop 
   smokeId="notebooklm-export-dialog"
 ```
 
-- [ ] **Step 8: Mark source and run navigation surfaces**
+- [x] **Step 8: Mark source and run navigation surfaces**
 
 In `src/lib/components/analysis/compact-source-rail.svelte`, add:
 
@@ -910,7 +910,7 @@ and change the search label to:
     <label data-smoke-id="runs-search">
 ```
 
-- [ ] **Step 9: Run selector contract tests**
+- [x] **Step 9: Run selector contract tests**
 
 Run:
 
@@ -920,7 +920,9 @@ npm.cmd run test -- src/lib/analysis-ui-smoke-contract.test.ts
 
 Expected: still FAIL because scripts and helpers are not implemented, but selector-related assertions pass.
 
-- [ ] **Step 10: Commit smoke selectors**
+Actual result: FAIL at import time because `scripts/analysis-smoke.mjs` is not implemented yet. Selector assertions will execute after the runner bootstrap creates the script files.
+
+- [x] **Step 10: Commit smoke selectors**
 
 Run:
 

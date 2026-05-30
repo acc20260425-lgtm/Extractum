@@ -305,10 +305,11 @@
 
 </script>
 
-<section class="report-source-surface" data-surface={canvasSurface}>
+<section class="report-source-surface" data-surface={canvasSurface} data-smoke-id="analysis-source-surface">
   {#if currentRun && sourceViewBasis === "run_snapshot"}
     {#if snapshotAvailability === "available"}
       <SourceReaderHeader
+        smokeId="run-snapshot-header"
         title="Run snapshot"
         surfaceLabel={currentRun.scope_type === "source_group" ? "Group sources" : "Source material"}
         subtitle="Frozen source material captured for the opened run."
@@ -346,6 +347,7 @@
       {/if}
     {:else}
       <SourceReaderHeader
+        smokeId="source-browser-header"
         title={sourceBasisLabel(sourceBasis)}
         surfaceLabel={readerSurfaceLabel}
         subtitle={sourceBasisDescription(sourceBasis)}
@@ -375,6 +377,7 @@
     {/if}
   {:else}
     <SourceReaderHeader
+      smokeId="source-browser-header"
       title={currentRun && sourceViewBasis === "live_source" ? "Live source" : displayScopeTitle}
       surfaceLabel={readerSurfaceLabel}
       subtitle={sourceBasisDescription(sourceBasis)}

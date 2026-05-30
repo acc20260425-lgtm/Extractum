@@ -141,7 +141,7 @@
   const runReportDisabled = $derived(startingReport || reportLaunchDisabledReason !== null);
 </script>
 
-<section class="report-setup-panel" aria-label="Report setup">
+<section class="report-setup-panel" aria-label="Report setup" data-smoke-id="analysis-report-setup">
   <div class="scope-hero">
     <div class="scope-hero-copy">
       <span class="eyebrow">{analysisScope === "source_group" ? "Source group workspace" : "Source workspace"}</span>

@@ -86,9 +86,9 @@
   }
 </script>
 
-<section class="run-companion-runs-tab">
+<section class="run-companion-runs-tab" data-smoke-id="run-companion-runs-panel">
   <div class="runs-toolbar">
-    <label>
+    <label data-smoke-id="runs-search">
       <span>Search runs</span>
       <Input
         type="search"

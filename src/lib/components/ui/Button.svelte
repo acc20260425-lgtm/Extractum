@@ -26,6 +26,7 @@
     ariaControls,
     ariaExpanded,
     ariaDescribedby,
+    smokeId,
     tabIndex,
     className = "",
     onclick,
@@ -46,6 +47,7 @@
     ariaControls?: string;
     ariaExpanded?: boolean;
     ariaDescribedby?: string;
+    smokeId?: string;
     tabIndex?: number;
     className?: string;
     onclick?: (event: MouseEvent) => unknown | Promise<unknown>;
@@ -65,6 +67,7 @@
   aria-controls={ariaControls}
   aria-expanded={ariaExpanded}
   aria-describedby={ariaDescribedby}
+  data-smoke-id={smokeId}
   tabindex={tabIndex}
   class={`ui-button ${variant} ${size} ${selected ? "selected" : ""} ${iconOnly ? "icon-only" : ""} ${className}`.trim()}
   onclick={onclick}

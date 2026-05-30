@@ -211,7 +211,7 @@
 </script>
 
 <section class="source-browser-shell">
-  <nav class="source-browser-tabs" aria-label="Source browser tabs">
+  <nav class="source-browser-tabs" aria-label="Source browser tabs" data-smoke-id="source-browser-tabs">
     {#each tabs as tab (tab.id)}
       <Button
         type="button"

@@ -377,7 +377,7 @@
   const canExportNotebookLm = $derived(currentSource !== null && !exportingNotebookLm);
 </script>
 
-<section class="report-canvas">
+<section class="report-canvas" data-smoke-id="analysis-report-canvas">
   <div class="canvas-toolbar">
     <div class="canvas-title">
       <span class="eyebrow">{currentRun ? "Run workspace" : "Analysis setup"}</span>
@@ -391,6 +391,7 @@
         variant="secondary"
         selected={canvasMode === "report"}
         ariaSelected={canvasMode === "report"}
+        smokeId="report-canvas-mode-report"
         onclick={() => onChangeCanvasMode("report")}
       >
         Report
@@ -401,6 +402,7 @@
         variant="secondary"
         selected={canvasMode === "source"}
         ariaSelected={canvasMode === "source"}
+        smokeId="report-canvas-mode-source"
         onclick={() => onChangeCanvasMode("source")}
       >
         Source
@@ -421,7 +423,7 @@
   />
 
   {#if templateEditorOpen}
-    <div class="workspace-template-editor-drawer" aria-label="Template editor drawer">
+    <div class="workspace-template-editor-drawer" aria-label="Template editor drawer" data-smoke-id="template-editor-drawer">
       <TemplateEditor
         compact={true}
         {selectedTemplate}
@@ -437,7 +439,7 @@
   {/if}
 
   {#if groupEditorOpen}
-    <div class="workspace-group-editor-drawer" aria-label="Source group editor drawer">
+    <div class="workspace-group-editor-drawer" aria-label="Source group editor drawer" data-smoke-id="source-group-editor-drawer">
       <SourceGroupEditor
         compact={true}
         {groups}

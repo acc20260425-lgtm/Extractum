@@ -109,6 +109,7 @@
   title="Export for NotebookLM"
   description={source ? `Prepare Markdown files for ${source.title ?? source.externalId}.` : ""}
   width="44rem"
+  smokeId="notebooklm-export-dialog"
   onClose={onClose}
 >
   <div class="export-form">

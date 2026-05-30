@@ -200,7 +200,7 @@
   }
 </script>
 
-<section class="source-switcher-panel" aria-label="Source switcher panel">
+<section class="source-switcher-panel" aria-label="Source switcher panel" data-smoke-id="source-switcher-panel">
   <div class="panel-head">
     <div>
       <span class="eyebrow">Sources</span>
@@ -215,7 +215,7 @@
     </div>
   </div>
 
-  <label class="search-field">
+  <label class="search-field" data-smoke-id="source-switcher-search">
     <span>Search sources or groups</span>
     <div class="search-shell">
       <Search size={15} aria-hidden="true" />

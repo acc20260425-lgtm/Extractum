@@ -27,7 +27,7 @@
   const exportReasonId = "notebooklm-export-disabled-reason";
 </script>
 
-<section class="report-workspace-tools" aria-label="Workspace tools">
+<section class="report-workspace-tools" aria-label="Workspace tools" data-smoke-id="analysis-workspace-tools">
   <div class="workspace-tools-copy">
     <span class="eyebrow">Workspace tools</span>
   </div>
@@ -41,13 +41,14 @@
           onclick={onOpenNotebookLmExport}
           disabled={!canExportNotebookLm}
           ariaDescribedby={exportDisabledReason ? exportReasonId : undefined}
+          smokeId="notebooklm-export-button"
           title={exportDisabledReason ?? undefined}
         >
           <Download size={15} aria-hidden="true" />
           {exportingNotebookLm ? "Exporting..." : "Export for NotebookLM"}
         </Button>
         {#if exportDisabledReason}
-          <span id="notebooklm-export-disabled-reason" class="workspace-tool-helper">
+          <span id="notebooklm-export-disabled-reason" class="workspace-tool-helper" data-smoke-id="notebooklm-export-disabled-reason">
             {exportDisabledReason}
           </span>
         {/if}

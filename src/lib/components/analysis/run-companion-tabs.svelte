@@ -163,7 +163,7 @@
       >
         {chunkTabLabel()}
       </Button>
-      <Button id={tabId("runs")} role="tab" size="sm" variant="secondary" selected={companionTab === "runs"} ariaSelected={companionTab === "runs"} ariaControls="run-companion-panel" onclick={() => onChangeCompanionTab("runs")}>Runs</Button>
+      <Button id={tabId("runs")} role="tab" size="sm" variant="secondary" selected={companionTab === "runs"} ariaSelected={companionTab === "runs"} ariaControls="run-companion-panel" smokeId="run-companion-runs-tab" onclick={() => onChangeCompanionTab("runs")}>Runs</Button>
     </div>
   </div>
 
