@@ -23,6 +23,8 @@
 - Probe-only safety contract: `--probe-only` must not seed, verify, clean, or navigate fixture data; fixture cleanup runs only after fixture lifecycle has started.
 - UI click contract: mode switches and row actions must be scoped by smoke id or row text. Do not use broad `clickByText("Open")`, `clickByText("Source")`, or `clickByText("Report")` for navigation-critical steps.
 - Cleanup verification contract: fixture cleanup is verified by debug fixture command summaries, not by stale DOM labels after same-route navigation.
+- Source hook contract: run snapshot headers are identified by an explicit `smokeId` prop from `ReportSourceSurface`, not by comparing visible title copy.
+- Raw-source tests should verify semantic hook ownership with stable tokens or regex-style checks; avoid exact-line assertions for formatted Svelte attributes.
 - Fixture cleanup must remain marker-scoped. Any cleanup broad enough to delete non-fixture rows is a blocker.
 - Use deterministic smoke step names such as `source-browser.youtube-video-tabs`; use the same names in console output and artifact paths.
 
@@ -51,11 +53,11 @@
 - Modify: `src/lib/components/analysis/report-setup-panel.svelte`
   - Add `data-smoke-id="analysis-report-setup"`.
 - Modify: `src/lib/components/analysis/report-source-surface.svelte`
-  - Add `data-smoke-id="analysis-source-surface"`.
+  - Add `data-smoke-id="analysis-source-surface"` and pass explicit reader header smoke ids.
 - Modify: `src/lib/components/analysis/source-browser-shell.svelte`
   - Add `data-smoke-id="source-browser-tabs"` to the tab container.
 - Modify: `src/lib/components/analysis/source-reader-header.svelte`
-  - Add `data-smoke-id="source-browser-header"` for live source headers and `data-smoke-id="run-snapshot-header"` for run snapshots.
+  - Add an optional `smokeId` prop that renders `data-smoke-id` on the header.
 - Modify: `src/lib/components/analysis/notebooklm-export-dialog.svelte`
   - Pass `smokeId="notebooklm-export-dialog"` to `DesktopDialog`.
 - Modify: `src/lib/components/analysis/compact-source-rail.svelte`
@@ -135,7 +137,26 @@ external_pattern = format!("{FIXTURE_EXTERNAL_PREFIX}%") is used
 source and source-group cleanup predicates are marker-scoped
 ```
 
-- [ ] **Step 4: Record actual audit result in this plan**
+- [ ] **Step 4: Confirm fixture test insert patterns before writing cleanup tests**
+
+Run:
+
+```powershell
+rg -n "fixture_pool|insert_minimal_clear_fixture|INSERT INTO accounts \\(label, api_id, api_hash, created_at\\)|INSERT INTO sources \\(" src-tauri/src/analysis/fixtures.rs
+```
+
+Expected facts:
+
+```text
+fixture_pool exists
+insert_minimal_clear_fixture exists
+existing tests insert accounts with the current minimal account schema: label, api_id, api_hash, created_at
+existing tests insert sources through current sources columns rather than guessed account/status columns
+```
+
+When adding the cleanup-scope test, reuse these patterns or return ids from inserts. Do not hand-write account/source columns that are not already used by the current fixture test helpers.
+
+- [ ] **Step 5: Record actual audit result in this plan**
 
 Add a short note under this step with the exact bridge crate version and fixture cleanup facts observed. Use this format:
 
@@ -145,9 +166,10 @@ Actual audit result:
 - WebSocket dispatcher supports: execute_js, resize_window, capture_native_screenshot.
 - Backend probe command: invoke_tauri -> plugin:mcp-bridge|get_backend_state.
 - Fixture cleanup uses marker_pattern and external_pattern in clear_analysis_redesign_fixtures_in_pool.
+- Fixture tests use current helper insert patterns from fixture_pool / insert_minimal_clear_fixture.
 ```
 
-- [ ] **Step 5: Commit preflight note**
+- [ ] **Step 6: Commit preflight note**
 
 Run:
 
@@ -266,7 +288,10 @@ describe("analysis UI smoke harness contract", () => {
     expect(reportSetupPanelSource).toContain('data-smoke-id="analysis-report-setup"');
     expect(reportSourceSurfaceSource).toContain('data-smoke-id="analysis-source-surface"');
     expect(sourceBrowserShellSource).toContain('data-smoke-id="source-browser-tabs"');
-    expect(sourceReaderHeaderSource).toContain('data-smoke-id={title === "Run snapshot" ? "run-snapshot-header" : "source-browser-header"}');
+    expect(sourceReaderHeaderSource).toMatch(/smokeId\s*=\s*"source-browser-header"/);
+    expect(sourceReaderHeaderSource).toContain("data-smoke-id={smokeId}");
+    expect(reportSourceSurfaceSource).toContain('smokeId="run-snapshot-header"');
+    expect(reportSourceSurfaceSource).toContain('smokeId="source-browser-header"');
     expect(reportCanvasSource).toContain('data-smoke-id="template-editor-drawer"');
     expect(reportCanvasSource).toContain('data-smoke-id="source-group-editor-drawer"');
     expect(desktopDialogSource).toContain("smokeId");
@@ -486,13 +511,12 @@ Add this test inside the existing `#[cfg(test)] mod tests`:
 async fn clear_preserves_non_fixture_groups_and_members() {
     let pool = fixture_pool().await;
 
-    sqlx::query(
-        "INSERT INTO accounts (
-            source_type, label, api_id, api_hash, phone, status, created_at, updated_at
-         )
-         VALUES ('telegram', 'Personal', 1, '', NULL, 'active', 1, 1)",
+    let real_account_id: i64 = sqlx::query_scalar(
+        "INSERT INTO accounts (label, api_id, api_hash, created_at)
+         VALUES ('Personal', 1, '', 1)
+         RETURNING id",
     )
-    .execute(&pool)
+    .fetch_one(&pool)
     .await
     .expect("insert non-fixture account");
 
@@ -501,9 +525,10 @@ async fn clear_preserves_non_fixture_groups_and_members() {
             source_type, source_subtype, account_id, external_id, title,
             is_active, is_member, created_at
          )
-         VALUES ('telegram', 'channel', 1, 'real-source', 'Real Source', 1, 1, 1)
+         VALUES ('telegram', 'channel', ?, 'real-source', 'Real Source', 1, 1, 1)
          RETURNING id",
     )
+    .bind(real_account_id)
     .fetch_one(&pool)
     .await
     .expect("insert non-fixture source");
@@ -540,7 +565,10 @@ async fn clear_preserves_non_fixture_groups_and_members() {
     assert_eq!(
         count(
             &pool,
-            "SELECT COUNT(*) FROM analysis_source_group_members WHERE group_id = 1 AND source_id = 1",
+            "SELECT COUNT(*) FROM analysis_source_group_members member
+             JOIN analysis_source_groups group_row ON group_row.id = member.group_id
+             JOIN sources source_row ON source_row.id = member.source_id
+             WHERE group_row.name = 'Real Group' AND source_row.title = 'Real Source'",
         )
         .await,
         1
@@ -764,7 +792,19 @@ to:
   <nav class="source-browser-tabs" aria-label="Source browser tabs" data-smoke-id="source-browser-tabs">
 ```
 
-In `src/lib/components/analysis/source-reader-header.svelte`, change:
+In `src/lib/components/analysis/source-reader-header.svelte`, add a `smokeId` prop with a live-source default:
+
+```svelte
+    smokeId = "source-browser-header",
+```
+
+and add it to the props type:
+
+```svelte
+    smokeId?: string;
+```
+
+Then change:
 
 ```svelte
 <header class="source-reader-header" aria-label={title}>
@@ -773,11 +813,24 @@ In `src/lib/components/analysis/source-reader-header.svelte`, change:
 to:
 
 ```svelte
-<header
-  class="source-reader-header"
-  aria-label={title}
-  data-smoke-id={title === "Run snapshot" ? "run-snapshot-header" : "source-browser-header"}
->
+<header class="source-reader-header" aria-label={title} data-smoke-id={smokeId}>
+```
+
+In `src/lib/components/analysis/report-source-surface.svelte`, pass explicit header smoke ids from the owning surface:
+
+```svelte
+      <SourceReaderHeader
+        smokeId="run-snapshot-header"
+        title="Run snapshot"
+        ...
+      />
+```
+
+```svelte
+      <SourceReaderHeader
+        smokeId="source-browser-header"
+        ...
+      />
 ```
 
 - [ ] **Step 7: Mark NotebookLM dialog**
@@ -878,15 +931,15 @@ to:
 const TELEGRAM_GROUP_LABEL: &str = "__analysis_redesign_fixture__ Telegram Source Group";
 ```
 
-- [ ] **Step 2: Make the cleanup test row ids stable**
+- [ ] **Step 2: Keep the cleanup test independent of hard-coded row ids**
 
-In `clear_preserves_non_fixture_groups_and_members`, replace:
+In `clear_preserves_non_fixture_groups_and_members`, confirm the non-fixture account/source/group inserts return their ids or assert through stable labels. Do not assert with assumed ids such as:
 
 ```rust
 "SELECT COUNT(*) FROM analysis_source_group_members WHERE group_id = 1 AND source_id = 1",
 ```
 
-with:
+Use a returned-id assertion:
 
 ```rust
 &format!(
@@ -902,6 +955,8 @@ let member_count_sql = format!(
 );
 assert_eq!(count(&pool, &member_count_sql).await, 1);
 ```
+
+or a join assertion through `Real Group` / `Real Source`, as shown in the Task 1 test snippet. The goal is to test cleanup scope, not SQLite row id allocation.
 
 - [ ] **Step 3: Run Rust fixture tests**
 
