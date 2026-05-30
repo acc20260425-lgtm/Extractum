@@ -1238,7 +1238,7 @@ git commit -m "feat: add playlist browser metadata polish"
 **Files:**
 - No source edits expected.
 
-- [ ] **Step 1: Run focused browser tests**
+- [x] **Step 1: Run focused browser tests**
 
 Run:
 
@@ -1248,7 +1248,7 @@ npm run test -- src/lib/source-browser-model.test.ts src/lib/youtube-source-poli
 
 Expected: PASS.
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
