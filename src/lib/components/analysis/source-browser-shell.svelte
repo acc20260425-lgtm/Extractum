@@ -3,6 +3,7 @@
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
+  import SourceMetadataView from "$lib/components/analysis/source-metadata-view.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import UniversalItemsView from "$lib/components/analysis/universal-items-view.svelte";
   import YoutubeCommentsView from "$lib/components/analysis/youtube-comments-view.svelte";
@@ -253,6 +254,15 @@
       {formatTimestamp}
       onLoadMore={onLoadMoreSourceItems}
       onSyncComments={() => onSyncYoutubeComments(source.id)}
+      onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
+    />
+  {:else if activeTab === "metadata"}
+    <SourceMetadataView
+      source={source}
+      youtubeVideoDetail={youtubeVideoDetail}
+      sourceTopics={sourceTopics}
+      loading={loadingYoutubeDetail}
+      {formatTimestamp}
       onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
     />
   {:else}

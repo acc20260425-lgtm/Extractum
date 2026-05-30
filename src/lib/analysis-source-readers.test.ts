@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import sourceActivityViewSource from "./components/analysis/source-activity-view.svelte?raw";
 import sourceBrowserShellSource from "./components/analysis/source-browser-shell.svelte?raw";
+import sourceMetadataViewSource from "./components/analysis/source-metadata-view.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 import telegramMediaCardSource from "./components/analysis/telegram-media-card.svelte?raw";
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
+import rawJsonPanelSource from "./components/analysis/raw-json-panel.svelte?raw";
 import youtubePlaylistSource from "./components/analysis/youtube-playlist-reader.svelte?raw";
 import youtubeCommentsViewSource from "./components/analysis/youtube-comments-view.svelte?raw";
 import youtubeSourceActivitySource from "./components/analysis/youtube-source-activity.svelte?raw";
@@ -224,6 +226,16 @@ describe("analysis source readers", () => {
     expect(youtubeCommentsViewSource).toContain("Most liked");
     expect(youtubeCommentsViewSource).toContain("parent not loaded");
     expect(youtubeCommentsViewSource).toContain("Sync comments");
+  });
+
+  it("renders source metadata in structured sections with bounded raw JSON", () => {
+    expect(sourceMetadataViewSource).toContain("Summary");
+    expect(sourceMetadataViewSource).toContain("Source state");
+    expect(sourceMetadataViewSource).toContain("Technical");
+    expect(sourceMetadataViewSource).toContain("<RawJsonPanel");
+    expect(rawJsonPanelSource).toContain("Show raw JSON");
+    expect(rawJsonPanelSource).toContain("Copy");
+    expect(rawJsonPanelSource).toContain("Large payload");
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {

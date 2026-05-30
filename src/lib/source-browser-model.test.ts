@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as sourceBrowserModel from "./source-browser-model";
 import {
   commentsCoverageState,
   filterLoadedSourceItems,
@@ -346,4 +347,41 @@ describe("source browser model", () => {
 
     expect(sortLoadedYoutubeComments(items, "most_liked").map((item) => item.id)).toEqual([2, 1, 3]);
   });
+
+  it("formats small raw JSON previews without truncating", () => {
+    const formatter = rawJsonFormatter();
+    const result = formatter({ id: "video01", source: { visible: true } }, 200);
+
+    expect(result).toEqual({
+      preview: '{\n  "id": "video01",\n  "source": {\n    "visible": true\n  }\n}',
+      full: '{\n  "id": "video01",\n  "source": {\n    "visible": true\n  }\n}',
+      truncated: false,
+    });
+  });
+
+  it("truncates large raw JSON previews while keeping the full payload", () => {
+    const formatter = rawJsonFormatter();
+    const result = formatter({ text: "abcdefghijklmnopqrstuvwxyz" }, 18);
+
+    expect(result?.truncated).toBe(true);
+    expect(result?.preview).toBe('{\n  "text": "abcde\n...');
+    expect(result?.full).toContain("abcdefghijklmnopqrstuvwxyz");
+  });
+
+  it("returns null for missing or invalid raw JSON values", () => {
+    const formatter = rawJsonFormatter();
+
+    expect(formatter(null, 100)).toBeNull();
+    expect(formatter(undefined, 100)).toBeNull();
+    expect(formatter({ invalid: BigInt(1) }, 100)).toBeNull();
+  });
 });
+
+function rawJsonFormatter() {
+  const formatter = (sourceBrowserModel as Record<string, unknown>).formatRawJsonPreview;
+  expect(formatter).toBeTypeOf("function");
+  return formatter as (
+    value: unknown,
+    maxChars: number,
+  ) => { preview: string; full: string; truncated: boolean } | null;
+}

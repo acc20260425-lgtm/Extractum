@@ -1177,7 +1177,7 @@ Expected: both commands exit 0.
 - Modify: `src/lib/source-browser-model.test.ts`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Write raw JSON helper tests**
+- [x] **Step 1: Write raw JSON helper tests**
 
 Add tests for:
 
@@ -1185,11 +1185,11 @@ Add tests for:
 - large payloads return `{ preview, truncated: true }`;
 - invalid or missing raw value returns null.
 
-- [ ] **Step 2: Implement raw JSON helpers**
+- [x] **Step 2: Implement raw JSON helpers**
 
 Implement pure helpers in `source-browser-model.ts`. The helpers must not run during initial tab render unless `RawJsonPanel` is expanded.
 
-- [ ] **Step 3: Write component contract tests**
+- [x] **Step 3: Write component contract tests**
 
 Add:
 
@@ -1212,7 +1212,7 @@ it("renders source metadata in structured sections with bounded raw JSON", () =>
 });
 ```
 
-- [ ] **Step 4: Implement components**
+- [x] **Step 4: Implement components**
 
 `SourceMetadataView` receives `source`, `youtubeVideoDetail`, `sourceTopics`, `loadingYoutubeDetail`, `formatTimestamp`, and sync callbacks. It renders:
 
@@ -1223,7 +1223,7 @@ it("renders source metadata in structured sections with bounded raw JSON", () =>
 
 `RawJsonPanel` starts collapsed, formats on expansion, constrains height, shows a copy button, and truncates visible preview for large payloads.
 
-- [ ] **Step 5: Wire Metadata tab**
+- [x] **Step 5: Wire Metadata tab**
 
 Modify `source-browser-shell.svelte`:
 
@@ -1241,7 +1241,7 @@ Modify `source-browser-shell.svelte`:
 
 `sourceTopics` is the same route-owned prop introduced in Slice 1 for Telegram timeline controls; do not add a new metadata-only fetch path in this slice.
 
-- [ ] **Step 6: Run Slice 5 tests**
+- [x] **Step 6: Run Slice 5 tests**
 
 Run:
 
@@ -1253,7 +1253,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube::detail
 
 Expected: all commands exit 0.
 
-- [ ] **Step 7: Commit Slice 5**
+- [x] **Step 7: Commit Slice 5**
 
 ```bash
 git add src-tauri/src/youtube/detail.rs src/lib/types/youtube.ts src/lib/api/youtube-detail.test.ts src/lib/source-browser-model.ts src/lib/source-browser-model.test.ts src/lib/components/analysis/source-metadata-view.svelte src/lib/components/analysis/raw-json-panel.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/analysis-source-readers.test.ts

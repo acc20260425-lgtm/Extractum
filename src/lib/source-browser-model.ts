@@ -56,6 +56,12 @@ export interface LoadedYoutubeCommentThread {
 
 export type LoadedYoutubeCommentSort = LoadedSourceItemSort | "most_liked";
 
+export interface RawJsonPreview {
+  preview: string;
+  full: string;
+  truncated: boolean;
+}
+
 const TAB_LABELS: Record<SourceBrowserTabId, string> = {
   timeline: "Timeline",
   transcript: "Transcript",
@@ -197,6 +203,25 @@ export function sortLoadedYoutubeComments(
     const rightLikes = right.youtubeComment?.likeCount ?? -1;
     return rightLikes - leftLikes || right.publishedAt - left.publishedAt || left.id - right.id;
   });
+}
+
+export function formatRawJsonPreview(value: unknown, maxChars: number): RawJsonPreview | null {
+  if (value === null || value === undefined) return null;
+  try {
+    const full = JSON.stringify(value, null, 2);
+    if (!full) return null;
+    const limit = Math.max(0, maxChars);
+    if (full.length <= limit) {
+      return { preview: full, full, truncated: false };
+    }
+    return {
+      preview: `${full.slice(0, limit)}\n...`,
+      full,
+      truncated: true,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function loadedYoutubeCommentItems(items: SourceItem[]): SourceItem[] {
