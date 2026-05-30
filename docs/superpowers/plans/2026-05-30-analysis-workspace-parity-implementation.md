@@ -1152,7 +1152,7 @@ Expected: commit succeeds.
 **Files:**
 - Entire repository verification
 
-- [ ] **Step 1: Run focused frontend tests**
+- [x] **Step 1: Run focused frontend tests**
 
 Run:
 
@@ -1162,7 +1162,7 @@ npm.cmd run test -- src/lib/analysis-workspace-tools.test.ts src/lib/analysis-re
 
 Expected: PASS.
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
@@ -1172,7 +1172,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors and 0 warnings.
 
-- [ ] **Step 3: Run full verification**
+- [x] **Step 3: Run full verification**
 
 Run:
 
@@ -1182,7 +1182,7 @@ npm.cmd run verify
 
 Expected: PASS for frontend tests, Svelte check, Rust check/tests, and `git diff HEAD --check`.
 
-- [ ] **Step 4: Commit verification note**
+- [x] **Step 4: Commit verification note**
 
 Modify this plan's task checkboxes for completed verification steps, then commit:
 
