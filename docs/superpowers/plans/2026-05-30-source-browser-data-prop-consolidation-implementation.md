@@ -726,7 +726,7 @@ Expected: commit contains route wiring, route contract tests, and plan checkbox 
 - Modify: `docs/superpowers/specs/2026-05-30-source-browser-data-prop-consolidation-design.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-data-prop-consolidation-implementation.md`
 
-- [ ] **Step 1: Verify canonical shell invocation counts**
+- [x] **Step 1: Verify canonical shell invocation counts**
 
 Run:
 
@@ -742,7 +742,7 @@ Exactly one groupBrowserData={{ match.
 Exactly one snapshotBrowserData={{ match.
 ```
 
-- [ ] **Step 2: Verify no source-only dummy props remain in report surface**
+- [x] **Step 2: Verify no source-only dummy props remain in report surface**
 
 Run:
 
@@ -752,7 +752,7 @@ rg -n "sourceJobs=\{\[\]\}|takeoutRecovery=\{null\}|sourceItems=\{\[\]\}|liveRea
 
 Expected: no output. `rg` exits with code `1` when no matches are found.
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 Run:
 
@@ -762,7 +762,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Svelte/type checks**
+- [x] **Step 4: Run Svelte/type checks**
 
 Run:
 
@@ -772,7 +772,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 5: Run full verification**
+- [x] **Step 5: Run full verification**
 
 Run:
 
@@ -782,7 +782,7 @@ npm.cmd run verify
 
 Expected: PASS, including frontend tests, Svelte checks, Rust checks/tests, and `git diff HEAD --check`.
 
-- [ ] **Step 6: Mark design spec implemented**
+- [x] **Step 6: Mark design spec implemented**
 
 In `docs/superpowers/specs/2026-05-30-source-browser-data-prop-consolidation-design.md`, replace:
 
@@ -796,7 +796,7 @@ with:
 > Status: implemented on 2026-05-30; pending merge
 ```
 
-- [ ] **Step 7: Check whitespace**
+- [x] **Step 7: Check whitespace**
 
 Run:
 
@@ -806,7 +806,7 @@ git diff --check
 
 Expected: no output.
 
-- [ ] **Step 8: Commit verification status**
+- [x] **Step 8: Commit verification status**
 
 Run:
 
@@ -821,15 +821,15 @@ Expected: commit includes only spec status and final plan checkbox updates.
 
 ## Acceptance Checklist
 
-- [ ] `SourceBrowserShell` has `sourceBrowserData?: SourceBrowserData | null`.
-- [ ] Live single-source branches in `SourceBrowserShell` read from `sourceData`.
-- [ ] `ReportSourceSurface` passes `sourceBrowserData={{ ... }}` exactly for live single-source browsing.
-- [ ] `ReportSourceSurface` keeps `groupBrowserData={{ ... }}` for live source groups.
-- [ ] `ReportSourceSurface` keeps `snapshotBrowserData={{ ... }}` for run snapshots.
-- [ ] `ReportSourceSurface` no longer passes source-only dummy values to group/snapshot shell calls.
-- [ ] `groupBrowserData` name and shape are unchanged.
-- [ ] `snapshotBrowserData` name and shape are unchanged.
-- [ ] `loadingItems` remains top-level only for live group loading compatibility.
-- [ ] Source browser model tests are unchanged and passing.
-- [ ] `SourceBrowserShell` still imports no `$lib/api/*` modules and calls no `invoke`.
-- [ ] `npm.cmd run verify` passes.
+- [x] `SourceBrowserShell` has `sourceBrowserData?: SourceBrowserData | null`.
+- [x] Live single-source branches in `SourceBrowserShell` read from `sourceData`.
+- [x] `ReportSourceSurface` passes `sourceBrowserData={{ ... }}` exactly for live single-source browsing.
+- [x] `ReportSourceSurface` keeps `groupBrowserData={{ ... }}` for live source groups.
+- [x] `ReportSourceSurface` keeps `snapshotBrowserData={{ ... }}` for run snapshots.
+- [x] `ReportSourceSurface` no longer passes source-only dummy values to group/snapshot shell calls.
+- [x] `groupBrowserData` name and shape are unchanged.
+- [x] `snapshotBrowserData` name and shape are unchanged.
+- [x] `loadingItems` remains top-level only for live group loading compatibility.
+- [x] Source browser model tests are unchanged and passing.
+- [x] `SourceBrowserShell` still imports no `$lib/api/*` modules and calls no `invoke`.
+- [x] `npm.cmd run verify` passes.
