@@ -164,7 +164,7 @@ git commit -m "docs: record source group browser preflight"
 - Modify: `src/lib/source-browser-model.test.ts`
 - Modify: `src/lib/source-browser-model.ts`
 
-- [ ] **Step 1: Add group fixture and subject imports to model tests**
+- [x] **Step 1: Add group fixture and subject imports to model tests**
 
 In `src/lib/source-browser-model.test.ts`, update imports:
 
@@ -207,7 +207,7 @@ function sourceGroup(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSour
 }
 ```
 
-- [ ] **Step 2: Add failing subject model tests**
+- [x] **Step 2: Add failing subject model tests**
 
 Add these tests inside `describe("source browser model", () => { ... })`, after the existing canonical tabs test:
 
@@ -273,7 +273,7 @@ Add these tests inside `describe("source browser model", () => { ... })`, after 
   });
 ```
 
-- [ ] **Step 3: Run model tests and verify they fail**
+- [x] **Step 3: Run model tests and verify they fail**
 
 Run:
 
@@ -283,7 +283,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts
 
 Expected: FAIL because `sourceBrowserTabsForSubject`, `sourceBrowserShellAppliesToSubject`, and tab id `sources` are not implemented yet.
 
-- [ ] **Step 4: Implement subject-aware browser model**
+- [x] **Step 4: Implement subject-aware browser model**
 
 In `src/lib/source-browser-model.ts`, add the group type import:
 
@@ -399,7 +399,7 @@ export function reconcileSourceBrowserTab(
 }
 ```
 
-- [ ] **Step 5: Run model tests and verify they pass**
+- [x] **Step 5: Run model tests and verify they pass**
 
 Run:
 
@@ -409,7 +409,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit model task**
+- [x] **Step 6: Commit model task**
 
 Run:
 

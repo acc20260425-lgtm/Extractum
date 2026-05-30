@@ -8,12 +8,15 @@ import {
   reconcileSourceBrowserTab,
   sortLoadedYoutubeComments,
   sourceBrowserShellAppliesToSource,
+  sourceBrowserShellAppliesToSubject,
+  sourceBrowserTabsForSubject,
   sourceItemKindChips,
   sourceBrowserTabsForSource,
   smartDefaultSourceBrowserTab,
   sortLoadedSourceItems,
   type SourceBrowserTabId,
 } from "./source-browser-model";
+import type { AnalysisSourceGroup } from "./types/analysis";
 import type { Source, SourceItem, SourceJobRecord } from "./types/sources";
 import type { YoutubeVideoDetail } from "./types/youtube";
 
@@ -37,6 +40,21 @@ function source(overrides: Partial<Source>): Source {
     migratedHistoryRefreshedAt: null,
     migratedHistoryRowCount: 0,
     migratedHistoryImportCompleted: false,
+    ...overrides,
+  };
+}
+
+function sourceGroup(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGroup {
+  return {
+    id: 100,
+    name: "Research group",
+    source_type: "telegram",
+    members: [
+      { source_id: 1, source_title: "Alpha", item_count: 12 },
+      { source_id: 2, source_title: "Beta", item_count: 7 },
+    ],
+    created_at: 1710000000,
+    updated_at: 1710000500,
     ...overrides,
   };
 }
@@ -177,6 +195,66 @@ describe("source browser model", () => {
       .toEqual(["videos", "items", "metadata", "activity"]);
     expect(sourceBrowserTabsForSource(source({ sourceType: "rss", sourceSubtype: "feed" })).map((tab) => tab.id))
       .toEqual(["items", "metadata", "activity"]);
+  });
+
+  it("derives canonical tabs for live source group subjects", () => {
+    const groupSubject = { kind: "source_group" as const, group: sourceGroup() };
+
+    expect(sourceBrowserTabsForSubject(groupSubject).map((tab) => tab.id))
+      .toEqual(["sources", "items", "metadata", "activity"]);
+    expect(smartDefaultSourceBrowserTab(groupSubject)).toBe("sources");
+    expect(sourceBrowserShellAppliesToSubject(groupSubject)).toBe(true);
+  });
+
+  it("keeps source helper behavior aligned with subject-aware helpers", () => {
+    const samples = [
+      source({ sourceType: "telegram", sourceSubtype: "supergroup" }),
+      source({ sourceType: "youtube", sourceSubtype: "video" }),
+      source({ sourceType: "youtube", sourceSubtype: "playlist" }),
+      source({ sourceType: "rss", sourceSubtype: "feed" }),
+    ];
+
+    for (const candidate of samples) {
+      const subject = { kind: "source" as const, source: candidate };
+      expect(sourceBrowserTabsForSource(candidate)).toEqual(sourceBrowserTabsForSubject(subject));
+      expect(smartDefaultSourceBrowserTab(candidate)).toBe(smartDefaultSourceBrowserTab(subject));
+      expect(sourceBrowserShellAppliesToSource(candidate)).toBe(sourceBrowserShellAppliesToSubject(subject));
+    }
+  });
+
+  it("reconciles source group tab transitions by subject support", () => {
+    const groupSubject = { kind: "source_group" as const, group: sourceGroup() };
+    const nextGroupSubject = {
+      kind: "source_group" as const,
+      group: sourceGroup({ id: 101, name: "Next group" }),
+    };
+    const telegramSubject = {
+      kind: "source" as const,
+      source: source({ id: 3, sourceType: "telegram", sourceSubtype: "supergroup" }),
+    };
+    const youtubeVideoSubject = {
+      kind: "source" as const,
+      source: source({ id: 4, sourceType: "youtube", sourceSubtype: "video" }),
+    };
+    const youtubePlaylistSubject = {
+      kind: "source" as const,
+      source: source({ id: 5, sourceType: "youtube", sourceSubtype: "playlist" }),
+    };
+
+    expect(reconcileSourceBrowserTab("items", groupSubject)).toBe("items");
+    expect(reconcileSourceBrowserTab("metadata", groupSubject)).toBe("metadata");
+    expect(reconcileSourceBrowserTab("activity", groupSubject)).toBe("activity");
+    expect(reconcileSourceBrowserTab("timeline", groupSubject)).toBe("sources");
+    expect(reconcileSourceBrowserTab("transcript", groupSubject)).toBe("sources");
+    expect(reconcileSourceBrowserTab("comments", groupSubject)).toBe("sources");
+    expect(reconcileSourceBrowserTab("videos", groupSubject)).toBe("sources");
+    expect(reconcileSourceBrowserTab("sources", telegramSubject)).toBe("timeline");
+    expect(reconcileSourceBrowserTab("sources", youtubeVideoSubject)).toBe("transcript");
+    expect(reconcileSourceBrowserTab("sources", youtubePlaylistSubject)).toBe("videos");
+    expect(reconcileSourceBrowserTab("sources", nextGroupSubject)).toBe("sources");
+    expect(reconcileSourceBrowserTab("items", nextGroupSubject)).toBe("items");
+    expect(reconcileSourceBrowserTab("metadata", nextGroupSubject)).toBe("metadata");
+    expect(reconcileSourceBrowserTab("activity", nextGroupSubject)).toBe("activity");
   });
 
   it("selects smart defaults by canonical tab id", () => {

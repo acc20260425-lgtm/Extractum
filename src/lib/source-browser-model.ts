@@ -1,3 +1,4 @@
+import type { AnalysisSourceGroup } from "$lib/types/analysis";
 import type { Source, SourceItem, SourceJobRecord } from "$lib/types/sources";
 import type { YoutubeVideoDetail } from "$lib/types/youtube";
 
@@ -6,6 +7,7 @@ export type SourceBrowserTabId =
   | "transcript"
   | "comments"
   | "videos"
+  | "sources"
   | "items"
   | "metadata"
   | "activity";
@@ -14,6 +16,13 @@ export interface SourceBrowserTab {
   id: SourceBrowserTabId;
   label: string;
 }
+
+export type SourceBrowserSubject =
+  | { kind: "source"; source: Source }
+  | { kind: "source_group"; group: AnalysisSourceGroup };
+
+type SourceBrowserSourceLike = Pick<Source, "sourceType" | "sourceSubtype">;
+type SourceBrowserModelInput = SourceBrowserSubject | SourceBrowserSourceLike;
 
 export interface SourceItemKindChip {
   kind: string;
@@ -68,30 +77,58 @@ const TAB_LABELS: Record<SourceBrowserTabId, string> = {
   transcript: "Transcript",
   comments: "Comments",
   videos: "Videos",
+  sources: "Sources",
   items: "Items",
   metadata: "Metadata",
   activity: "Activity",
 };
 
-export function sourceBrowserTabsForSource(source: Pick<Source, "sourceType" | "sourceSubtype">): SourceBrowserTab[] {
-  const ids: SourceBrowserTabId[] =
-    source.sourceType === "youtube" && source.sourceSubtype === "video"
-      ? ["transcript", "comments", "items", "metadata", "activity"]
-      : source.sourceType === "youtube" && source.sourceSubtype === "playlist"
-        ? ["videos", "items", "metadata", "activity"]
-        : source.sourceType === "telegram"
-          ? ["timeline", "items", "metadata", "activity"]
-          : ["items", "metadata", "activity"];
+function isSourceBrowserSubject(input: SourceBrowserModelInput): input is SourceBrowserSubject {
+  return "kind" in input && (input.kind === "source" || input.kind === "source_group");
+}
 
+function tabRecords(ids: SourceBrowserTabId[]): SourceBrowserTab[] {
   return ids.map((id) => ({ id, label: TAB_LABELS[id] }));
 }
 
-export function sourceBrowserShellAppliesToSource(source: Pick<Source, "sourceType" | "sourceSubtype">): boolean {
+function sourceTabIds(source: SourceBrowserSourceLike): SourceBrowserTabId[] {
+  if (source.sourceType === "youtube" && source.sourceSubtype === "video") {
+    return ["transcript", "comments", "items", "metadata", "activity"];
+  }
+  if (source.sourceType === "youtube" && source.sourceSubtype === "playlist") {
+    return ["videos", "items", "metadata", "activity"];
+  }
+  if (source.sourceType === "telegram") {
+    return ["timeline", "items", "metadata", "activity"];
+  }
+  return ["items", "metadata", "activity"];
+}
+
+export function sourceBrowserTabsForSubject(subject: SourceBrowserSubject): SourceBrowserTab[] {
+  const ids: SourceBrowserTabId[] = subject.kind === "source_group"
+    ? ["sources", "items", "metadata", "activity"]
+    : sourceTabIds(subject.source);
+
+  return tabRecords(ids);
+}
+
+export function sourceBrowserTabsForSource(source: SourceBrowserSourceLike): SourceBrowserTab[] {
+  return tabRecords(sourceTabIds(source));
+}
+
+export function sourceBrowserShellAppliesToSubject(subject: SourceBrowserSubject): boolean {
+  if (subject.kind === "source_group") return true;
+  return sourceBrowserShellAppliesToSource(subject.source);
+}
+
+export function sourceBrowserShellAppliesToSource(source: SourceBrowserSourceLike): boolean {
   return source.sourceType === "telegram"
     || (source.sourceType === "youtube" && (source.sourceSubtype === "video" || source.sourceSubtype === "playlist"));
 }
 
-export function smartDefaultSourceBrowserTab(source: Pick<Source, "sourceType" | "sourceSubtype">): SourceBrowserTabId {
+export function smartDefaultSourceBrowserTab(input: SourceBrowserModelInput): SourceBrowserTabId {
+  if (isSourceBrowserSubject(input) && input.kind === "source_group") return "sources";
+  const source = isSourceBrowserSubject(input) ? input.source : input;
   if (source.sourceType === "youtube" && source.sourceSubtype === "video") return "transcript";
   if (source.sourceType === "youtube" && source.sourceSubtype === "playlist") return "videos";
   if (source.sourceType === "telegram") return "timeline";
@@ -100,12 +137,14 @@ export function smartDefaultSourceBrowserTab(source: Pick<Source, "sourceType" |
 
 export function reconcileSourceBrowserTab(
   activeTab: SourceBrowserTabId | null,
-  source: Pick<Source, "sourceType" | "sourceSubtype">,
+  input: SourceBrowserModelInput,
 ): SourceBrowserTabId {
-  const tabs = sourceBrowserTabsForSource(source);
+  const tabs = isSourceBrowserSubject(input)
+    ? sourceBrowserTabsForSubject(input)
+    : sourceBrowserTabsForSource(input);
   return activeTab && tabs.some((tab) => tab.id === activeTab)
     ? activeTab
-    : smartDefaultSourceBrowserTab(source);
+    : smartDefaultSourceBrowserTab(input);
 }
 
 export function sourceItemKindChips(items: SourceItem[]): SourceItemKindChip[] {
