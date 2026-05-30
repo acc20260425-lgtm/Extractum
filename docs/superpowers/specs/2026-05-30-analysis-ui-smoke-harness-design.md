@@ -49,6 +49,8 @@ npm.cmd run smoke:analysis -- --attach
 
 Attach mode connects to an already-running debug Tauri app and does not stop the app at the end. Attach mode is optional for MVP implementation. The default command path must launch and clean up the app itself.
 
+MVP treats attach mode as deferred unless the implementation plan explicitly includes it. Deferred attach mode must not weaken the default launch-and-cleanup command path.
+
 ## MCP Bridge Connection
 
 The debug Tauri app already installs `tauri_plugin_mcp_bridge` under `debug_assertions`. The harness connects directly to the plugin WebSocket rather than using Playwright.
@@ -199,7 +201,7 @@ The harness uses the existing debug fixture commands.
 
 Setup:
 
-1. Launch or attach to the debug Tauri app.
+1. Launch the debug Tauri app. If attach mode is included in the implementation plan, attach to an existing debug app instead.
 2. Resize the main window to a deterministic desktop size, such as `1280x860`.
 3. Clear existing analysis redesign fixtures.
 4. Seed analysis redesign fixtures.
@@ -222,10 +224,13 @@ The implementation may validate the full fixture summary counts if they remain d
 
 Teardown:
 
-- Always attempt `clear_analysis_redesign_fixtures`, even after partial failure.
-- Report fixture cleanup failure separately and return nonzero.
-- Preserve failure artifacts before teardown when possible.
-- Stop the spawned Tauri process tree unless running in attach mode.
+1. Preserve failure artifacts first, while the failed DOM state is still available.
+2. Attempt `clear_analysis_redesign_fixtures`, even after partial scenario failure.
+3. If the app is still reachable, verify fixture rows are gone.
+4. Stop the spawned Tauri process tree. If attach mode is included and active, leave the attached app running.
+5. Exit nonzero if fixture cleanup, cleanup verification, or process cleanup fails, even if all scenario assertions passed.
+
+Fixture cleanup must be marker-scoped. The debug commands must delete only rows owned by the analysis redesign fixture marker or prefix, never arbitrary user data in the real SQLite database. The smoke harness should treat any broader cleanup behavior as a blocker.
 
 ## Smoke Scenarios
 
@@ -241,6 +246,7 @@ Single-source setup:
 - Confirm `Edit templates` opens the template drawer below workspace tools.
 - Confirm `Edit groups` opens the source-group drawer below workspace tools.
 - Confirm setup still exposes `Run report` and `Sync source`.
+- Close any open dialog or drawer before leaving the scenario.
 
 Source-group setup:
 
@@ -248,6 +254,7 @@ Source-group setup:
 - Confirm NotebookLM export is visible but disabled.
 - Confirm the visible helper reason is present and associated with the disabled button.
 - Confirm template and group drawers remain available.
+- Close any open drawer before leaving the scenario.
 
 Opened single-source run:
 
@@ -308,14 +315,19 @@ The harness prints grouped step output with explicit pass/fail status. On failur
 tmp/analysis-smoke/
 ```
 
-Artifacts should include the most useful data available:
+Required MVP artifacts:
 
 - failed step name;
 - current path or URL;
 - visible text summary;
 - relevant DOM summary;
+- JavaScript error or exception text.
+
+Best-effort artifacts:
+
+- native screenshot through MCP bridge screenshot support;
 - webview console logs if the bridge exposes them or the script can collect them;
-- native screenshot through MCP bridge screenshot support.
+- backend state snapshot.
 
 `tmp/analysis-smoke/` must be ignored by git.
 
@@ -338,6 +350,7 @@ Implementation should still include lightweight automated safeguards:
 - Fail if required fixtures are missing after seeding.
 - Time out waits with actionable messages that name the expected surface or text.
 - Always attempt fixture cleanup and process cleanup.
+- A failed assertion must not skip teardown.
 - Exit nonzero if scenario assertions fail, fixture cleanup fails, or process cleanup fails.
 
 ## Risks
@@ -351,11 +364,16 @@ Implementation should still include lightweight automated safeguards:
 
 - `npm.cmd run smoke:analysis` exists and is documented as opt-in.
 - The default command launches the real debug Tauri app and connects through the MCP bridge.
-- If attach mode is implemented, it connects to an existing app without stopping it during teardown.
+- Attach mode is either explicitly deferred for MVP or, if implemented, connects to an existing app without stopping it during teardown.
+- Smoke steps have deterministic names used in console output and artifact folder/file names.
+- Every scenario starts from a known `/analysis` route and UI state; dialogs, drawers, and overlays are closed before the next scenario.
 - The command seeds and clears analysis redesign fixtures through existing debug commands.
+- Fixture cleanup is marker-scoped and verifies fixture rows are gone when the app remains reachable.
+- A failed assertion does not skip fixture cleanup or spawned process cleanup.
 - The smoke helper layer centralizes WebSocket requests, `execute_js`, waits, clicks, tab assertions, disabled-state assertions, and artifact capture.
+- Smoke-only selector contract tests fail if `data-smoke-id` hooks appear outside the intended `/analysis` surfaces.
 - Workspace Parity surfaces are checked in setup, opened-run, and source-mode states.
 - Source Browser tab contracts are checked for Telegram source, YouTube video, YouTube playlist, live source group, and run snapshot.
 - Source-group NotebookLM export is verified as disabled with visible reason.
-- Failure artifacts are written under a gitignored `tmp/analysis-smoke/` directory.
+- Required failure artifacts are written under a gitignored `tmp/analysis-smoke/` directory; screenshot, console logs, and backend state are best-effort.
 - `npm.cmd run verify` does not run the smoke harness.
