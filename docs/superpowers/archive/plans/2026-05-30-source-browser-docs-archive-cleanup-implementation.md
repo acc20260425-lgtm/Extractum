@@ -329,7 +329,7 @@ git commit -m "docs: archive source browser smoke note"
 **Files:**
 - Move: `docs/superpowers/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md` to `docs/superpowers/archive/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md`
 
-- [ ] **Step 1: Verify active folders before archiving this plan**
+- [x] **Step 1: Verify active folders before archiving this plan**
 
 Run:
 
@@ -341,7 +341,7 @@ git diff --check
 
 Expected: active plans contain README and this plan only; active specs contain README only; active verification no longer contains the Source Browser smoke note; `rg` only finds this plan before it is moved.
 
-- [ ] **Step 2: Move this plan to the archive**
+- [x] **Step 2: Move this plan to the archive**
 
 Run:
 
@@ -349,7 +349,7 @@ Run:
 git mv docs/superpowers/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md docs/superpowers/archive/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md
 ```
 
-- [ ] **Step 3: Verify active folders after archiving this plan**
+- [x] **Step 3: Verify active folders after archiving this plan**
 
 Run:
 
@@ -362,7 +362,7 @@ git status --short --branch
 
 Expected: active plans/specs contain only README files; active verification contains no Source Browser smoke note; `rg` returns no matches in active folders; only this move is staged or modified before the final commit.
 
-- [ ] **Step 4: Commit final archive cleanup**
+- [x] **Step 4: Commit final archive cleanup**
 
 Run:
 
