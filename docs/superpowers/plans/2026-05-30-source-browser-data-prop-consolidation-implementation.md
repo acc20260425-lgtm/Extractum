@@ -46,7 +46,7 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-data-prop-consolidation-implementation.md`
 
-- [ ] **Step 1: Create the feature branch**
+- [x] **Step 1: Create the feature branch**
 
 Run:
 
@@ -56,7 +56,7 @@ git switch -c source-browser-data-prop-consolidation
 
 Expected: branch changes from `main` to `source-browser-data-prop-consolidation`.
 
-- [ ] **Step 2: Confirm current type names and callback signatures**
+- [x] **Step 2: Confirm current type names and callback signatures**
 
 Run:
 
@@ -85,7 +85,7 @@ src/lib/types/sources.ts:
 
 Do not change any of those type names or callback signatures in this slice.
 
-- [ ] **Step 3: Confirm the current source-only dummy props in non-source invocations**
+- [x] **Step 3: Confirm the current source-only dummy props in non-source invocations**
 
 Run:
 
@@ -100,7 +100,7 @@ The run snapshot and live source-group SourceBrowserShell calls pass source-only
 These should disappear after sourceBrowserData is introduced.
 ```
 
-- [ ] **Step 4: Record the actual audit result**
+- [x] **Step 4: Record the actual audit result**
 
 Add this note under Task 0 while executing:
 
@@ -113,7 +113,14 @@ Actual preflight on 2026-05-30:
 - `groupBrowserData` and `snapshotBrowserData` shapes stay unchanged.
 ```
 
-- [ ] **Step 5: Commit preflight plan state**
+Actual preflight on 2026-05-30:
+- `onCancelSourceJob` uses `string`; no type change.
+- Real type names are `SourceForumTopic`, `SourceJobRecord`, and `TakeoutImportRecoveryState`.
+- Keep the existing `subject` derived fallback from `explicitSubject` and `source`.
+- `groupBrowserData` has no loading field; keep optional top-level `loadingItems` for live group loading.
+- `groupBrowserData` and `snapshotBrowserData` shapes stay unchanged.
+
+- [x] **Step 5: Commit preflight plan state**
 
 Run:
 
