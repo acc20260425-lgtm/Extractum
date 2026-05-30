@@ -267,7 +267,7 @@ git commit -m "docs: clean active source browser specs index"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-closure-implementation.md`
 
-- [ ] **Step 1: Verify shipped Source Browser docs are consistent**
+- [x] **Step 1: Verify shipped Source Browser docs are consistent**
 
 Run:
 
@@ -287,7 +287,7 @@ The specs README says None currently.
 Only this plan file is modified before the final commit.
 ```
 
-- [ ] **Step 2: Commit final plan checkbox updates**
+- [x] **Step 2: Commit final plan checkbox updates**
 
 Run:
 
