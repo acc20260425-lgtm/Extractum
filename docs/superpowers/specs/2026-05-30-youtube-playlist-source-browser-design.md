@@ -1,7 +1,7 @@
 # YouTube Playlist Source Browser Design
 
 > Date: 2026-05-30
-> Status: approved design, pending implementation plan
+> Status: implemented on 2026-05-30; pending merge
 > Scope: live YouTube playlist browsing in the `/analysis` Source canvas.
 
 ## Summary

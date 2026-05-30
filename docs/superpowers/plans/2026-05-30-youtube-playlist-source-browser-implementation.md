@@ -1318,7 +1318,7 @@ Stop the Tauri dev process and confirm no `cargo`, `rustc`, or `extractum` dev p
 **Files:**
 - Modify: `docs/superpowers/specs/2026-05-30-youtube-playlist-source-browser-design.md`
 
-- [ ] **Step 1: Update the spec status**
+- [x] **Step 1: Update the spec status**
 
 Change the header status from:
 
@@ -1332,7 +1332,7 @@ to:
 > Status: implemented on 2026-05-30; pending merge
 ```
 
-- [ ] **Step 2: Run final clean checks**
+- [x] **Step 2: Run final clean checks**
 
 Run:
 
@@ -1343,7 +1343,7 @@ git status --short --branch
 
 Expected: no whitespace errors; only the spec status change is unstaged.
 
-- [ ] **Step 3: Commit final verification marker**
+- [x] **Step 3: Commit final verification marker**
 
 Run:
 
