@@ -129,6 +129,12 @@ group-level status or empty state, but it must not render source-scoped job CTAs
 or detailed source job cards. `SourceActivityView` must not render for source
 groups until there is an explicit group-scoped activity/job contract.
 
+The empty state copy should say:
+
+```text
+Group activity is not available yet. Source jobs are still tracked per source.
+```
+
 ## Tab Reconciliation
 
 Shared tabs preserve across subject changes:
@@ -148,6 +154,11 @@ Shared tabs preserve across subject changes:
 | source_group | source | `items` | `items` |
 | source_group | source | `metadata` | `metadata` |
 | source_group | source | `activity` | `activity` |
+| source_group | source_group | `sources` | `sources` |
+| source_group | source_group | `items` | `items` |
+| source_group | source_group | `metadata` | `metadata` |
+| source_group | source_group | `activity` | `activity` |
+| source_group | source_group | unsupported tab | `sources` |
 
 Unsupported tab ids always fall back to the target subject's smart default.
 
@@ -162,8 +173,12 @@ The shell owns only local tab state and tab reconciliation. It receives
 route-owned data and callbacks through props. It does not import `$lib/api/*`
 and does not call `invoke`.
 
-The group `Sources` leaf reuses the existing grouped reader behavior. It does
-not own tab state, route selection, source data loading, or evidence navigation.
+The group `Sources` leaf reuses the existing grouped reader behavior. If
+`SourceGroupReader` currently owns route or surface responsibilities that do not
+belong inside a tab body, extract a `SourceGroupSourcesView` tab leaf and leave
+`SourceGroupReader` only as a compatibility wrapper for snapshot or legacy
+paths if needed. The tab leaf does not own tab state, route selection, source
+data loading, or evidence navigation.
 
 `ReportSourceSurface` routes live source groups through `SourceBrowserShell`.
 Saved run snapshots and saved group snapshots do not enter `SourceBrowserShell`
@@ -191,8 +206,8 @@ in this slice.
   contract.
 - Per-source paging errors remain route-owned and continue to surface through
   the route status channel used today.
-- Activity without a group-scoped job contract shows a muted "No group activity
-  is available for this source group" state.
+- Activity without a group-scoped job contract shows a muted "Group activity is
+  not available yet. Source jobs are still tracked per source." state.
 
 ## Testing
 
@@ -202,7 +217,11 @@ Frontend contract and model tests should assert:
   `sources`, `items`, `metadata`, `activity`;
 - `smartDefaultSourceBrowserTab(groupSubject)` returns `sources`;
 - source-only wrappers still return the existing source tab sets;
+- source-only wrappers delegate to subject-aware helpers rather than carrying
+  parallel tab logic;
 - reconciliation follows the table above;
+- group-to-group reconciliation preserves `sources`, `items`, `metadata`, and
+  `activity`;
 - `sourceBrowserShellAppliesToSubject(groupSubject)` is true;
 - live source groups route into `SourceBrowserShell`;
 - saved run snapshots and saved group snapshots do not enter
@@ -211,7 +230,8 @@ Frontend contract and model tests should assert:
 - the group leaf and shell import no `$lib/api/*` modules and call no `invoke`;
 - group `Items` uses loaded-window copy and does not claim global group search;
 - group `Items` preserves member source attribution for each row;
-- group `Activity` does not render `SourceActivityView`;
+- group `Activity` does not render `SourceActivityView` and uses the source-job
+  per-source explanatory empty state;
 - existing Telegram, YouTube video, and YouTube playlist live source browser
   contracts still pass.
 
