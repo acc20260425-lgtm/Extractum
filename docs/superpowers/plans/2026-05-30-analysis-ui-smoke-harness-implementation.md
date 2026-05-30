@@ -1555,7 +1555,7 @@ Expected: commit succeeds.
 - Modify: `.gitignore`
 - Modify: `src/lib/analysis-ui-smoke-contract.test.ts`
 
-- [ ] **Step 1: Add package script and artifact ignore**
+- [x] **Step 1: Add package script and artifact ignore**
 
 In `package.json`, add:
 
@@ -1571,7 +1571,7 @@ In `.gitignore`, add:
 /tmp/analysis-smoke/
 ```
 
-- [ ] **Step 2: Add smoke runner bootstrap**
+- [x] **Step 2: Add smoke runner bootstrap**
 
 Create `scripts/analysis-smoke.mjs`:
 
@@ -1782,7 +1782,7 @@ export {
 };
 ```
 
-- [ ] **Step 3: Run contract and probe-focused tests**
+- [x] **Step 3: Run contract and probe-focused tests**
 
 Run:
 
@@ -1792,7 +1792,9 @@ npm.cmd run test -- src/lib/analysis-ui-smoke-contract.test.ts src/lib/analysis-
 
 Expected: `analysis-smoke-helpers.test.ts` PASS. `analysis-ui-smoke-contract.test.ts` may still FAIL because scenario names are not added yet.
 
-- [ ] **Step 4: Run the opt-in bridge probe manually**
+Actual result: `analysis-smoke-helpers.test.ts` PASS. `analysis-ui-smoke-contract.test.ts` has the expected remaining failure for scenario names that Task 6/7 add.
+
+- [x] **Step 4: Run the opt-in bridge probe manually**
 
 Run:
 
@@ -1817,7 +1819,9 @@ WARN bridge.capture_native_screenshot best-effort failed
 
 Stop if `get_backend_state`, `resize_window`, or `execute_js` fails. Confirm this mode does not seed, navigate for fixture verification, or call `clear_analysis_redesign_fixtures`; `fixturesTouched` must remain `false`.
 
-- [ ] **Step 5: Commit runner bootstrap**
+Actual result: `npm.cmd run smoke:analysis -- --probe-only` PASS with `PASS bridge.get_backend_state`, `PASS bridge.resize_window`, `PASS bridge.execute_js`, and `PASS bridge.capture_native_screenshot`. Probe-only returned before fixture lifecycle (`fixturesTouched` remains `false`).
+
+- [x] **Step 5: Commit runner bootstrap**
 
 Run:
 

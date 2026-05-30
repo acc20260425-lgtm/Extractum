@@ -48,7 +48,7 @@
           {exportingNotebookLm ? "Exporting..." : "Export for NotebookLM"}
         </Button>
         {#if exportDisabledReason}
-          <span id="notebooklm-export-disabled-reason" class="workspace-tool-helper" data-smoke-id="notebooklm-export-disabled-reason">
+          <span id={exportReasonId} class="workspace-tool-helper" data-smoke-id="notebooklm-export-disabled-reason">
             {exportDisabledReason}
           </span>
         {/if}

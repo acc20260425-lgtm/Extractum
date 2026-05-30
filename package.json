@@ -12,6 +12,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "verify": "node scripts/verify.mjs",
+    "smoke:analysis": "node scripts/analysis-smoke.mjs",
     "tauri": "tauri"
   },
   "license": "MIT",
