@@ -272,7 +272,7 @@ git commit -m "docs: archive shipped source browser specs"
 - Modify: `docs/superpowers/archive/verification/README.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md`
 
-- [ ] **Step 1: Move the smoke note**
+- [x] **Step 1: Move the smoke note**
 
 Run:
 
@@ -280,7 +280,7 @@ Run:
 git mv docs/superpowers/verification/2026-05-30-source-browser-smoke.md docs/superpowers/archive/verification/2026-05-30-source-browser-smoke.md
 ```
 
-- [ ] **Step 2: Update active verification README**
+- [x] **Step 2: Update active verification README**
 
 Replace `docs/superpowers/verification/README.md` with:
 
@@ -293,7 +293,7 @@ Historical verification records for shipped work should move to
 `docs/superpowers/archive/verification/`.
 ```
 
-- [ ] **Step 3: Update archive verification README**
+- [x] **Step 3: Update archive verification README**
 
 Append this paragraph to `docs/superpowers/archive/verification/README.md`:
 
@@ -302,7 +302,7 @@ Source Browser smoke notes in this directory are historical acceptance records.
 Run a fresh Tauri smoke before using them as release evidence.
 ```
 
-- [ ] **Step 4: Verify smoke note location**
+- [x] **Step 4: Verify smoke note location**
 
 Run:
 
@@ -315,7 +315,7 @@ git diff --check
 
 Expected: first `Test-Path` is `False`, second is `True`, and archive verification guidance mentions Source Browser smoke notes.
 
-- [ ] **Step 5: Commit archived smoke note**
+- [x] **Step 5: Commit archived smoke note**
 
 Run:
 
