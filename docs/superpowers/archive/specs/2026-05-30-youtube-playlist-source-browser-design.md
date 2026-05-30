@@ -1,7 +1,7 @@
 # YouTube Playlist Source Browser Design
 
 > Date: 2026-05-30
-> Status: implemented on 2026-05-30; pending merge
+> Status: implemented and merged on 2026-05-30
 > Scope: live YouTube playlist browsing in the `/analysis` Source canvas.
 
 ## Summary
@@ -14,17 +14,17 @@ preserving playlist-specific video membership browsing.
 The first slice keeps source groups and saved run snapshots on their existing
 readers. It also avoids changing backend storage or playlist sync semantics.
 
-## Current Context
+## Pre-Implementation Context
 
-The shipped live single-source Source Browser currently handles:
+At design time, the shipped live single-source Source Browser handled:
 
 - Telegram live sources with `Timeline | Items | Metadata | Activity`;
 - YouTube video live sources with
   `Transcript | Comments | Items | Metadata | Activity`.
 
-YouTube playlist live sources still bypass `SourceBrowserShell` and render
+YouTube playlist live sources still bypassed `SourceBrowserShell` and rendered
 `YoutubePlaylistReader` directly from `ReportSourceSurface`. That reader
-currently owns:
+owned:
 
 - playlist summary header;
 - playlist video membership rows;
