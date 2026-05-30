@@ -62,7 +62,7 @@ Commands in this plan use `npm.cmd` because the current execution environment is
 - Validate: `src/lib/components/analysis/report-source-surface.svelte`
 - Modify: `docs/superpowers/plans/2026-05-30-source-group-source-browser-implementation.md` after marking checklist steps during execution
 
-- [ ] **Step 1: Confirm group and item DTO shapes**
+- [x] **Step 1: Confirm group and item DTO shapes**
 
 Run:
 
@@ -85,7 +85,7 @@ Confirm these facts before continuing:
 - `groupLiveItemsBySource` is `Record<number, SourceItem[]>`, so the group `Items` tab can feed `UniversalItemsView` directly from route-owned `SourceItem[]`.
 - `SourceReaderItem` is a separate display model and must remain the input for the group `Sources` leaf.
 
-- [ ] **Step 2: Confirm evidence and YouTube detail behavior in the existing group reader path**
+- [x] **Step 2: Confirm evidence and YouTube detail behavior in the existing group reader path**
 
 Run:
 
@@ -109,7 +109,7 @@ Confirm these facts before continuing:
 - `SourceGroupReader` currently drops YouTube transcript `selectedTraceRef` by passing `null`; the new `SourceGroupSourcesView` must accept `selectedTraceRef` and pass it to `YoutubeTranscriptReader`.
 - Current group routes pass `youtubeDetailsBySource={{}}`; keep that route-owned default in this slice unless a real route-owned detail map is already present.
 
-- [ ] **Step 3: Confirm snapshot chrome is not being removed accidentally**
+- [x] **Step 3: Confirm snapshot chrome is not being removed accidentally**
 
 Run:
 
@@ -127,7 +127,7 @@ src/lib/components/analysis/report-source-surface.svelte:<line>:    <SourceGroup
 
 If this command prints `Source focus` inside `source-group-reader.svelte`, stop and preserve that chrome in `SourceGroupReader` instead of replacing the file with the simple wrapper in Task 2. In the current codebase, `Source focus` should not be part of `SourceGroupReader`, so the wrapper extraction is safe.
 
-- [ ] **Step 4: Record implementation decisions from the preflight**
+- [x] **Step 4: Record implementation decisions from the preflight**
 
 Use these decisions for the rest of the plan:
 
@@ -139,7 +139,7 @@ Use these decisions for the rest of the plan:
 - `SourceGroupReader` remains the snapshot/legacy compatibility component.
 - Group YouTube detail data remains `youtubeDetailsBySource={{}}` in this slice unless the route already owns a real detail map.
 
-- [ ] **Step 5: Confirm the working tree is ready**
+- [x] **Step 5: Confirm the working tree is ready**
 
 Run:
 
@@ -149,7 +149,7 @@ git status --short
 
 Expected: no unrelated working tree changes. If only this plan file changes because checklist boxes were marked, continue.
 
-- [ ] **Step 6: Commit preflight checklist**
+- [x] **Step 6: Commit preflight checklist**
 
 Run:
 
