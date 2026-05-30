@@ -5,6 +5,7 @@ import sourceBrowserShellSource from "./components/analysis/source-browser-shell
 import sourceMetadataViewSource from "./components/analysis/source-metadata-view.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
+import sourceGroupSourcesViewSource from "./components/analysis/source-group-sources-view.svelte?raw";
 import telegramMediaCardSource from "./components/analysis/telegram-media-card.svelte?raw";
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
@@ -185,7 +186,7 @@ describe("analysis source readers", () => {
 
   it("keeps YouTube live sync actions out of readonly snapshot transcript readers", () => {
     expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
-    expect(sourceGroupReaderSource).toContain("showSyncActions={false}");
+    expect(sourceGroupSourcesViewSource).toContain("showSyncActions={false}");
     expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}");
   });
 
@@ -334,6 +335,27 @@ describe("analysis source readers", () => {
     expect(youtubePlaylistVideosViewSource).not.toContain("invoke(");
   });
 
+  it("renders source group sources as a route-free tab leaf", () => {
+    expect(sourceGroupSourcesViewSource).toContain('aria-label="Source group sources"');
+    expect(sourceGroupSourcesViewSource).toContain("groupReaderItemsBySource");
+    expect(sourceGroupSourcesViewSource).toContain("onLoadMoreSource");
+    expect(sourceGroupSourcesViewSource).toContain("selectedGroupSourceId");
+    expect(sourceGroupSourcesViewSource).toContain("selectedTraceRef");
+    expect(sourceGroupSourcesViewSource).toContain("youtubeItems");
+    expect(sourceGroupSourcesViewSource).toContain("telegramItems");
+    expect(sourceGroupSourcesViewSource).not.toContain("$lib/api/");
+    expect(sourceGroupSourcesViewSource).not.toContain("invoke(");
+    expect(sourceGroupSourcesViewSource).not.toContain("SourceBrowserShell");
+    expect(sourceGroupSourcesViewSource).not.toContain("SourceActivityView");
+    expect(sourceGroupSourcesViewSource).not.toContain("<span>Source focus</span>");
+  });
+
+  it("keeps SourceGroupReader as a compatibility wrapper", () => {
+    expect(sourceGroupReaderSource).toContain("<SourceGroupSourcesView");
+    expect(sourceGroupReaderSource).not.toContain("$lib/api/");
+    expect(sourceGroupReaderSource).not.toContain("invoke(");
+  });
+
   it("keeps playlist video opening as source selection instead of nested browsing", () => {
     expect(youtubePlaylistVideosViewSource).toContain("onOpenSource");
     expect(youtubePlaylistVideosViewSource).toContain("videoSourceId");
@@ -344,21 +366,21 @@ describe("analysis source readers", () => {
   });
 
   it("groups source group material by source", () => {
-    expect(sourceGroupReaderSource).toContain('class="source-group-reader"');
-    expect(sourceGroupReaderSource).toContain("groupReaderItemsBySource");
-    expect(sourceGroupReaderSource).toContain("youtubeItems");
-    expect(sourceGroupReaderSource).toContain("telegramItems");
-    expect(sourceGroupReaderSource).toContain('item.kind === "youtube_transcript"');
-    expect(sourceGroupReaderSource).not.toContain("snapshotItems={group.items}");
-    expect(sourceGroupReaderSource).toContain("source-heading");
-    expect(sourceGroupReaderSource).toContain("selectedGroupSourceId");
+    expect(sourceGroupSourcesViewSource).toContain('class="source-group-sources-view"');
+    expect(sourceGroupSourcesViewSource).toContain("groupReaderItemsBySource");
+    expect(sourceGroupSourcesViewSource).toContain("youtubeItems");
+    expect(sourceGroupSourcesViewSource).toContain("telegramItems");
+    expect(sourceGroupSourcesViewSource).toContain('item.kind === "youtube_transcript"');
+    expect(sourceGroupSourcesViewSource).not.toContain("snapshotItems={group.items}");
+    expect(sourceGroupSourcesViewSource).toContain("source-heading");
+    expect(sourceGroupSourcesViewSource).toContain("selectedGroupSourceId");
     expect(reportSourceSurfaceSource).toContain("onChangeSelectedSourceId={onChangeSelectedGroupSourceId}");
   });
 
   it("uses a neutral timeline label for mixed source-group material", () => {
     expect(telegramTimelineSource).toContain("ariaLabel = \"Telegram source timeline\"");
     expect(telegramTimelineSource).toContain("aria-label={ariaLabel}");
-    expect(sourceGroupReaderSource).toContain('ariaLabel="Source material timeline"');
+    expect(sourceGroupSourcesViewSource).toContain('ariaLabel="Source material timeline"');
   });
 
   it("builds live source-group focus options from every group member", () => {

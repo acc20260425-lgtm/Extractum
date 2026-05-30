@@ -425,7 +425,7 @@ git commit -m "feat: add source group browser subject model"
 - Modify: `src/lib/components/analysis/source-group-reader.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add raw contract tests for the extracted group leaf**
+- [x] **Step 1: Add raw contract tests for the extracted group leaf**
 
 In `src/lib/analysis-source-readers.test.ts`, add this import near the other raw component imports:
 
@@ -458,7 +458,7 @@ Add this test near the existing source-group reader tests:
   });
 ```
 
-- [ ] **Step 2: Run reader tests and verify they fail**
+- [x] **Step 2: Run reader tests and verify they fail**
 
 Run:
 
@@ -468,7 +468,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: FAIL because `source-group-sources-view.svelte` does not exist and `SourceGroupReader` is not yet a wrapper.
 
-- [ ] **Step 3: Create `SourceGroupSourcesView`**
+- [x] **Step 3: Create `SourceGroupSourcesView`**
 
 Create `src/lib/components/analysis/source-group-sources-view.svelte` with this content:
 
@@ -621,7 +621,7 @@ Create `src/lib/components/analysis/source-group-sources-view.svelte` with this 
 </style>
 ```
 
-- [ ] **Step 4: Preserve `SourceGroupReader` as a compatibility wrapper**
+- [x] **Step 4: Preserve `SourceGroupReader` as a compatibility wrapper**
 
 Task 0 should have confirmed that `SourceGroupReader` does not own snapshot-only chrome such as `Source focus`. Keep `SourceGroupReader` as the snapshot/legacy entry point and replace its inner grouped-reader body with this wrapper:
 
@@ -673,7 +673,7 @@ Task 0 should have confirmed that `SourceGroupReader` does not own snapshot-only
 />
 ```
 
-- [ ] **Step 5: Run reader tests and verify they pass**
+- [x] **Step 5: Run reader tests and verify they pass**
 
 Run:
 
@@ -683,7 +683,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit group sources leaf task**
+- [x] **Step 6: Commit group sources leaf task**
 
 Run:
 
