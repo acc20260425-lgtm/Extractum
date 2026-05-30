@@ -3,6 +3,9 @@
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
+  import SourceGroupActivityView from "$lib/components/analysis/source-group-activity-view.svelte";
+  import SourceGroupMetadataView from "$lib/components/analysis/source-group-metadata-view.svelte";
+  import SourceGroupSourcesView from "$lib/components/analysis/source-group-sources-view.svelte";
   import SourceMetadataView from "$lib/components/analysis/source-metadata-view.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import UniversalItemsView from "$lib/components/analysis/universal-items-view.svelte";
@@ -11,7 +14,8 @@
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import {
     reconcileSourceBrowserTab,
-    sourceBrowserTabsForSource,
+    sourceBrowserTabsForSubject,
+    type SourceBrowserSubject,
     type SourceBrowserTabId,
   } from "$lib/source-browser-model";
   import type { SourceReaderItem } from "$lib/source-reader-model";
@@ -26,8 +30,20 @@
   } from "$lib/types/sources";
   import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
 
+  type SourceGroupBrowserData = {
+    liveReaderItems: SourceReaderItem[];
+    sourceItems: SourceItem[];
+    selectedSourceId: number | null;
+    hasMoreBySource: Record<number, boolean>;
+    sourceLabelForItem: (item: SourceItem) => string | null;
+    onLoadSourcePage: (sourceId: number) => void | Promise<void>;
+    youtubeDetailsBySource: Record<number, YoutubeVideoDetail | null>;
+  };
+
   type Props = {
-    source: Source;
+    subject?: SourceBrowserSubject | null;
+    source: Source | null;
+    groupBrowserData?: SourceGroupBrowserData | null;
     liveReaderItems: SourceReaderItem[];
     takeoutRecovery: TakeoutImportRecoveryState | null;
     sourceItems: SourceItem[];
@@ -71,7 +87,9 @@
   };
 
   let {
+    subject: explicitSubject = null,
     source,
+    groupBrowserData = null,
     liveReaderItems,
     takeoutRecovery,
     sourceItems,
@@ -115,12 +133,31 @@
   }: Props = $props();
 
   let activeTab = $state<SourceBrowserTabId | null>(null);
-  let lastSourceId = $state<number | null>(null);
-  const tabs = $derived(sourceBrowserTabsForSource(source));
-  const sortedSourceTopics = $derived([...sourceTopics].sort(compareTopics));
+  let lastSubjectKey = $state<string | null>(null);
+  const subject = $derived(explicitSubject ?? (source ? { kind: "source" as const, source } : null));
+  const tabs = $derived(subject ? sourceBrowserTabsForSubject(subject) : []);
+  const sourceSubject = $derived(subject && subject.kind === "source" ? subject.source : null);
+  const groupSubject = $derived(subject && subject.kind === "source_group" ? subject.group : null);
+  const groupData = $derived(subject && subject.kind === "source_group" ? groupBrowserData : null);
+  const subjectKey = $derived(
+    subject
+      ? subject.kind === "source"
+        ? `source:${subject.source.id}`
+        : `source_group:${subject.group.id}`
+      : null,
+  );
+  const itemsForActiveSubject = $derived(groupData?.sourceItems ?? sourceItems);
+  const itemsEmptyDescription = $derived(
+    subject && subject.kind === "source_group"
+      ? "Group items are limited to the source rows loaded in this browser session. Use Sources to load more rows for each member source."
+      : sourceSubject?.sourceType === "youtube" && sourceSubject.sourceSubtype === "playlist"
+        ? "Playlist videos live in the Videos tab. This Items tab only shows generic archived items loaded for this playlist source."
+        : "No loaded items are available for this source window.",
+  );
+  const sortedSourceTopics = $derived(sourceSubject ? [...sourceTopics].sort(compareTopics) : []);
   const telegramHistoryScopeOptions = $derived.by(() => {
-    if (source.sourceType !== "telegram") return [];
-    if (source.migratedHistoryRowCount <= 0) return [];
+    if (!sourceSubject || sourceSubject.sourceType !== "telegram") return [];
+    if (sourceSubject.migratedHistoryRowCount <= 0) return [];
     return [
       { value: "current" as const, label: "Current supergroup history" },
       { value: "migrated" as const, label: "Migrated small-group history" },
@@ -129,9 +166,10 @@
   });
 
   $effect(() => {
-    if (lastSourceId !== source.id || !activeTab || !tabs.some((tab) => tab.id === activeTab)) {
-      activeTab = reconcileSourceBrowserTab(activeTab, source);
-      lastSourceId = source.id;
+    if (!subject) return;
+    if (lastSubjectKey !== subjectKey || !activeTab || !tabs.some((tab) => tab.id === activeTab)) {
+      activeTab = reconcileSourceBrowserTab(activeTab, subject);
+      lastSubjectKey = subjectKey;
     }
   });
 
@@ -155,6 +193,14 @@
   function changeTelegramHistoryScope(event: Event) {
     onChangeTelegramHistoryScope((event.currentTarget as HTMLSelectElement).value as TelegramHistoryScope);
   }
+
+  function loadMoreGroupItems() {
+    return undefined;
+  }
+
+  function loadMoreGroupSourcePage(sourceId: number) {
+    return groupData?.onLoadSourcePage(sourceId);
+  }
 </script>
 
 <section class="source-browser-shell">
@@ -171,8 +217,19 @@
     {/each}
   </nav>
 
-  {#if activeTab === "timeline"}
-    {#if source.sourceType === "telegram" && source.migratedHistoryStatus === "available" && !source.migratedHistoryImportCompleted}
+  {#if activeTab === "sources" && groupSubject}
+    <SourceGroupSourcesView
+      items={groupData?.liveReaderItems ?? []}
+      selectedGroupSourceId={groupData?.selectedSourceId ?? null}
+      loading={loadingItems}
+      hasMoreBySource={groupData?.hasMoreBySource ?? {}}
+      youtubeDetailsBySource={groupData?.youtubeDetailsBySource ?? {}}
+      {selectedTraceRef}
+      {formatTimestamp}
+      onLoadMoreSource={loadMoreGroupSourcePage}
+    />
+  {:else if activeTab === "timeline" && sourceSubject}
+    {#if sourceSubject.sourceType === "telegram" && sourceSubject.migratedHistoryStatus === "available" && !sourceSubject.migratedHistoryImportCompleted}
       <StatusMessage tone="info">
         Migrated small-group history is detected but has not been imported for browsing yet.
       </StatusMessage>
@@ -202,7 +259,7 @@
         </Select>
       </label>
     {/if}
-    {#if source.sourceType === "telegram" && source.migratedHistoryImportCompleted && source.migratedHistoryRowCount === 0 && telegramHistoryScope !== "current"}
+    {#if sourceSubject.sourceType === "telegram" && sourceSubject.migratedHistoryImportCompleted && sourceSubject.migratedHistoryRowCount === 0 && telegramHistoryScope !== "current"}
       <StatusMessage tone="info">
         Migrated history import completed with no browsable migrated rows for this source.
       </StatusMessage>
@@ -216,7 +273,7 @@
         onLoadMore={onLoadMoreSourceItems}
       />
     {/if}
-  {:else if activeTab === "transcript"}
+  {:else if activeTab === "transcript" && sourceSubject}
     <YoutubeTranscriptReader
       detail={youtubeVideoDetail}
       segments={youtubeTranscriptSegments}
@@ -224,54 +281,55 @@
       loading={loadingYoutubeTranscriptSegments || loadingYoutubeDetail}
       hasMore={youtubeTranscriptHasMore}
       transcriptSearch={youtubeTranscriptSearch}
-      sourceTitle={source.title ?? source.externalId}
+      sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
       {selectedTraceRef}
       {formatTimestamp}
       onChangeTranscriptSearch={onChangeTranscriptSearch}
       onLoadMore={onLoadMoreYoutubeTranscriptSegments}
-      onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}
-      onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
-      onSyncComments={() => onSyncYoutubeComments(source.id)}
+      onSyncTranscript={() => onSyncYoutubeTranscript(sourceSubject.id)}
+      onSyncMetadata={() => onSyncYoutubeMetadata(sourceSubject.id)}
+      onSyncComments={() => onSyncYoutubeComments(sourceSubject.id)}
     />
-  {:else if activeTab === "videos"}
+  {:else if activeTab === "videos" && sourceSubject}
     <YoutubePlaylistVideosView
-      sourceTitle={source.title ?? source.externalId}
+      sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
       playlist={youtubePlaylistDetail}
       loading={loadingYoutubeDetail}
       {formatTimestamp}
       onOpenSource={onOpenSource}
-      onSyncPlaylist={() => onSyncYoutubePlaylist(source.id)}
-      onRetryFailedPlaylistVideos={() => onRetryFailedYoutubePlaylistVideos(source.id)}
-      onSyncPlaylistVideo={(videoSourceId) => onSyncYoutubePlaylistVideo(source.id, videoSourceId)}
-      onRetryPlaylistVideo={(videoSourceId) => onRetryYoutubePlaylistVideo(source.id, videoSourceId)}
+      onSyncPlaylist={() => onSyncYoutubePlaylist(sourceSubject.id)}
+      onRetryFailedPlaylistVideos={() => onRetryFailedYoutubePlaylistVideos(sourceSubject.id)}
+      onSyncPlaylistVideo={(videoSourceId) => onSyncYoutubePlaylistVideo(sourceSubject.id, videoSourceId)}
+      onRetryPlaylistVideo={(videoSourceId) => onRetryYoutubePlaylistVideo(sourceSubject.id, videoSourceId)}
     />
-  {:else if activeTab === "activity"}
+  {:else if activeTab === "activity" && groupSubject}
+    <SourceGroupActivityView />
+  {:else if activeTab === "activity" && sourceSubject}
     <SourceActivityView
-      source={source}
+      source={sourceSubject}
       jobs={sourceJobs}
       takeoutRecovery={takeoutRecovery}
       sourceSyncDisabledReason={sourceSyncDisabledReason}
       {formatTimestamp}
-      onSyncSource={() => onSyncSource(source.id)}
-      onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
-      onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}
-      onSyncComments={() => onSyncYoutubeComments(source.id)}
-      onStartTakeoutImport={() => onStartTakeoutImport(source.id)}
-      onStartMigratedHistoryImport={() => onStartMigratedHistoryImport(source.id)}
+      onSyncSource={() => onSyncSource(sourceSubject.id)}
+      onSyncMetadata={() => onSyncYoutubeMetadata(sourceSubject.id)}
+      onSyncTranscript={() => onSyncYoutubeTranscript(sourceSubject.id)}
+      onSyncComments={() => onSyncYoutubeComments(sourceSubject.id)}
+      onStartTakeoutImport={() => onStartTakeoutImport(sourceSubject.id)}
+      onStartMigratedHistoryImport={() => onStartMigratedHistoryImport(sourceSubject.id)}
       onCancelSourceJob={onCancelSourceJob}
     />
   {:else if activeTab === "items"}
     <UniversalItemsView
-      items={sourceItems}
+      items={itemsForActiveSubject}
       loading={loadingItems}
-      hasMore={sourceItemsHasMore}
-      emptyDescription={source.sourceType === "youtube" && source.sourceSubtype === "playlist"
-        ? "Playlist videos live in the Videos tab. This Items tab only shows generic archived items loaded for this playlist source."
-        : "No loaded items are available for this source window."}
+      hasMore={subject && subject.kind === "source_group" ? false : sourceItemsHasMore}
+      emptyDescription={itemsEmptyDescription}
+      sourceLabelForItem={subject && subject.kind === "source_group" ? groupData?.sourceLabelForItem ?? null : null}
       {formatTimestamp}
-      onLoadMore={onLoadMoreSourceItems}
+      onLoadMore={subject && subject.kind === "source_group" ? loadMoreGroupItems : onLoadMoreSourceItems}
     />
-  {:else if activeTab === "comments"}
+  {:else if activeTab === "comments" && sourceSubject}
     <YoutubeCommentsView
       items={sourceItems}
       detail={youtubeVideoDetail}
@@ -281,22 +339,24 @@
       hasMore={sourceItemsHasMore}
       {formatTimestamp}
       onLoadMore={onLoadMoreSourceItems}
-      onSyncComments={() => onSyncYoutubeComments(source.id)}
-      onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
+      onSyncComments={() => onSyncYoutubeComments(sourceSubject.id)}
+      onSyncMetadata={() => onSyncYoutubeMetadata(sourceSubject.id)}
     />
-  {:else if activeTab === "metadata"}
+  {:else if activeTab === "metadata" && groupSubject}
+    <SourceGroupMetadataView group={groupSubject} {formatTimestamp} />
+  {:else if activeTab === "metadata" && sourceSubject}
     <SourceMetadataView
-      source={source}
+      source={sourceSubject}
       youtubeVideoDetail={youtubeVideoDetail}
       youtubePlaylistDetail={youtubePlaylistDetail}
       sourceTopics={sourceTopics}
       loading={loadingYoutubeDetail}
       {formatTimestamp}
-      onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
+      onSyncMetadata={() => onSyncYoutubeMetadata(sourceSubject.id)}
     />
   {:else}
     <StatusMessage tone="muted">
-      {activeTab} source browser tab is disabled in this review slice. Loaded rows: {sourceItems.length}.
+      {activeTab} source browser tab is disabled in this review slice. Loaded rows: {itemsForActiveSubject.length}.
     </StatusMessage>
   {/if}
 </section>

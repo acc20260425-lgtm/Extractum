@@ -63,6 +63,10 @@
     if (!KNOWN_ITEM_KINDS.has(item.itemKind)) return "Unknown item kind";
     return item.itemKind.replaceAll("_", " ");
   }
+
+  function itemSourceLabel(item: SourceItem) {
+    return sourceLabelForItem?.(item) ?? `Source #${item.sourceId}`;
+  }
 </script>
 
 <section class="universal-items-view" aria-label="Universal source items">
@@ -125,8 +129,7 @@
             </div>
             <div class="item-meta">
               {#if item.author}<Badge variant="neutral">{item.author}</Badge>{/if}
-              {@const sourceLabel = sourceLabelForItem?.(item) ?? `Source #${item.sourceId}`}
-              <Badge variant="neutral">{sourceLabel}</Badge>
+              <Badge variant="neutral">{itemSourceLabel(item)}</Badge>
               <Badge variant="neutral">{item.externalId}</Badge>
               {#if item.hasMedia}<Badge variant="info">{item.mediaKind ?? "media"}</Badge>{/if}
             </div>

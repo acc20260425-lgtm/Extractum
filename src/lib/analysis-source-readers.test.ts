@@ -189,14 +189,14 @@ describe("analysis source readers", () => {
   it("keeps YouTube live sync actions out of readonly snapshot transcript readers", () => {
     expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
     expect(sourceGroupSourcesViewSource).toContain("showSyncActions={false}");
-    expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}");
+    expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(sourceSubject.id)}");
   });
 
   it("keeps run snapshot YouTube readers detached from live video detail", () => {
     expect(reportSourceSurfaceSource).toContain("detail={null}");
     expect(reportSourceSurfaceSource).not.toContain("detail={youtubeVideoDetail}");
     expect(sourceBrowserShellSource).toContain("detail={youtubeVideoDetail}");
-    expect(sourceBrowserShellSource).toContain('sourceTitle={source.title ?? source.externalId}');
+    expect(sourceBrowserShellSource).toContain('sourceTitle={sourceSubject.title ?? sourceSubject.externalId}');
   });
 
   it("keeps live YouTube video comments sync status and CTAs in transcript reader", () => {
@@ -274,7 +274,7 @@ describe("analysis source readers", () => {
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {
     expect(reportSourceSurfaceSource).toContain("{sourceJobs}");
-    expect(sourceBrowserShellSource).toContain("onSyncComments={() => onSyncYoutubeComments(source.id)}");
+    expect(sourceBrowserShellSource).toContain("onSyncComments={() => onSyncYoutubeComments(sourceSubject.id)}");
     expect(sourceBrowserShellSource).toContain("onCancelSourceJob={onCancelSourceJob}");
     expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
     expect(reportSourceSurfaceSource).not.toContain("onSyncComments={() => {}}");
@@ -380,6 +380,16 @@ describe("analysis source readers", () => {
     expect(sourceGroupActivityViewSource).not.toContain("onCancelSourceJob");
     expect(sourceGroupActivityViewSource).not.toContain("$lib/api/");
     expect(sourceGroupActivityViewSource).not.toContain("invoke(");
+  });
+
+  it("keeps source group activity out of SourceActivityView", () => {
+    expect(sourceBrowserShellSource).toContain("<SourceGroupActivityView");
+    expect(sourceBrowserShellSource).toContain("<SourceActivityView");
+    expect(sourceBrowserShellSource).toContain('activeTab === "activity" && groupSubject');
+    expect(sourceBrowserShellSource).toContain('activeTab === "activity" && sourceSubject');
+    expect(sourceBrowserShellSource).toContain('subject.kind === "source_group"');
+    expect(sourceBrowserShellSource).toContain('subject.kind === "source"');
+    expect(sourceBrowserShellSource).toContain("sourceSubject");
   });
 
   it("keeps playlist video opening as source selection instead of nested browsing", () => {

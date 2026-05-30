@@ -1040,7 +1040,7 @@ git commit -m "feat: add source group browser leaves"
 - Modify: `src/lib/components/analysis/source-browser-shell.test.ts`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add shell contract tests for subjects and group tabs**
+- [x] **Step 1: Add shell contract tests for subjects and group tabs**
 
 In `src/lib/components/analysis/source-browser-shell.test.ts`, update the first test:
 
@@ -1084,7 +1084,7 @@ In `src/lib/analysis-source-readers.test.ts`, add:
   });
 ```
 
-- [ ] **Step 2: Run shell tests and verify they fail**
+- [x] **Step 2: Run shell tests and verify they fail**
 
 Run:
 
@@ -1094,7 +1094,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts src
 
 Expected: FAIL because the shell still uses source-only props and does not render group leaves.
 
-- [ ] **Step 3: Add group imports and props to `SourceBrowserShell`**
+- [x] **Step 3: Add group imports and props to `SourceBrowserShell`**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, add imports:
 
@@ -1147,7 +1147,7 @@ Add these defaults to destructuring:
 
 Keep all existing single-source props unchanged.
 
-- [ ] **Step 4: Derive subject-aware shell state**
+- [x] **Step 4: Derive subject-aware shell state**
 
 Replace the source-only derived state block that starts with:
 
@@ -1212,7 +1212,7 @@ Add a no-op load more helper:
   }
 ```
 
-- [ ] **Step 5: Render the group `Sources` tab**
+- [x] **Step 5: Render the group `Sources` tab**
 
 Before the timeline branch in markup, add:
 
@@ -1239,7 +1239,7 @@ Then change the existing first branch from:
 
 to the `{:else if activeTab === "timeline" && sourceSubject}` branch expression shown above. Keep the existing timeline body inside that branch.
 
-- [ ] **Step 6: Guard single-source branches and add group Items/Metadata/Activity**
+- [x] **Step 6: Guard single-source branches and add group Items/Metadata/Activity**
 
 Keep every source-scoped diagnostic and action behind `sourceSubject` checks. Topic controls, Takeout recovery, source job status, source sync actions, and `SourceActivityView` must render only when `subject.kind === "source"`.
 
@@ -1315,7 +1315,7 @@ Within guarded source branches, replace `source.id`, `source.title`, `source.ext
 
 In the final disabled-tab fallback, replace `Loaded rows: {sourceItems.length}` with `Loaded rows: {itemsForActiveSubject.length}`.
 
-- [ ] **Step 7: Run shell tests and verify they pass**
+- [x] **Step 7: Run shell tests and verify they pass**
 
 Run:
 
@@ -1325,7 +1325,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts src
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte/TypeScript check for shell wiring**
+- [x] **Step 8: Run Svelte/TypeScript check for shell wiring**
 
 Run:
 
@@ -1335,7 +1335,7 @@ npm.cmd run check
 
 Expected: PASS. This catches nullable `source`, grouped data typing, and guarded branch mistakes that raw component tests cannot catch.
 
-- [ ] **Step 9: Commit shell task**
+- [x] **Step 9: Commit shell task**
 
 Run:
 
