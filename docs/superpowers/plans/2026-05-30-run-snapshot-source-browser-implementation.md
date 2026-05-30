@@ -48,7 +48,7 @@ git switch -c run-snapshot-source-browser
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Confirm the branch and clean tree**
+- [x] **Step 1: Confirm the branch and clean tree**
 
 Run:
 
@@ -58,7 +58,7 @@ git status --short --branch
 
 Expected: branch is `run-snapshot-source-browser`; no modified files except this plan after checkboxes are edited.
 
-- [ ] **Step 2: Inspect current source and snapshot model types**
+- [x] **Step 2: Inspect current source and snapshot model types**
 
 Run:
 
@@ -74,7 +74,7 @@ src/lib/types/analysis.ts: AnalysisRunDetail and AnalysisRunMessage exist.
 src/lib/source-reader-model.ts: SourceReaderItem and SourceFilterOption exist.
 ```
 
-- [ ] **Step 3: Inspect current snapshot branch and live shell props**
+- [x] **Step 3: Inspect current snapshot branch and live shell props**
 
 Run:
 
@@ -90,7 +90,7 @@ report-source-surface.svelte contains runSnapshotMessages, allSnapshotReaderItem
 source-browser-shell.svelte contains live source/group props and SourceActivityView only for live source subjects.
 ```
 
-- [ ] **Step 4: Inspect design status and UI component APIs**
+- [x] **Step 4: Inspect design status and UI component APIs**
 
 Run:
 
@@ -108,7 +108,7 @@ Input.svelte supports ariaLabel and oninput props.
 Select.svelte supports value and onchange props.
 ```
 
-- [ ] **Step 5: Record preflight decisions**
+- [x] **Step 5: Record preflight decisions**
 
 Add this under the Task 0 step list after running the commands:
 
@@ -125,7 +125,18 @@ Preflight decisions:
 - Snapshot leaf controls use the existing UI component APIs: `Button selected` plus `ariaPressed`, `Input ariaLabel/oninput`, and `Select value/onchange`.
 ```
 
-- [ ] **Step 6: Run whitespace and status checks**
+Preflight decisions:
+
+- `RunSnapshotBrowserSubject.sourceType` will use `SourceType | null`.
+- `RunSnapshotBrowserSubject.sourceSubtype` will use `SourceSubtype | null`.
+- `deriveRunSnapshotBrowserKind` will accept string-compatible route inputs so raw `AnalysisRunMessage.source_type` can be used without backend DTO changes.
+- `runSnapshotMessages` is the unfiltered loaded snapshot message window; `allSnapshotReaderItems` is the unfiltered reader-row projection; `snapshotReaderItems` is source-focus filtered.
+- Snapshot available branches will use `allSnapshotReaderItems` for reader-kind derivation, not the source-filtered `snapshotReaderItems`.
+- `SourceReaderHeader` remains outside `SourceBrowserShell`.
+- The design spec status is `approved design, pending implementation plan`; Task 5 Step 4 will replace that exact line.
+- Snapshot leaf controls use the existing UI component APIs: `Button selected` plus `ariaPressed`, `Input ariaLabel/oninput`, and `Select value/onchange`.
+
+- [x] **Step 6: Run whitespace and status checks**
 
 Run:
 
@@ -136,7 +147,7 @@ git status --short --branch
 
 Expected: no whitespace errors; only this plan file is modified.
 
-- [ ] **Step 7: Commit preflight**
+- [x] **Step 7: Commit preflight**
 
 Run:
 
