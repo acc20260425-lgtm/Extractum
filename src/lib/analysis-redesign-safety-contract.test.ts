@@ -7,6 +7,7 @@ import telegramTimelineSource from "./components/analysis/telegram-timeline-read
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
 import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
+import sourceGroupSourcesViewSource from "./components/analysis/source-group-sources-view.svelte?raw";
 import evidenceTabSource from "./components/analysis/run-evidence-tab.svelte?raw";
 import chatTabSource from "./components/analysis/run-chat-tab.svelte?raw";
 import runsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
@@ -108,14 +109,15 @@ describe("analysis redesign final safety contract", () => {
   });
 
   it("keeps source groups grouped by source instead of merged into one pseudo-chat", () => {
-    expect(sourceGroupReaderSource).toContain('class="source-group-reader"');
-    expect(sourceGroupReaderSource).toContain("groupReaderItemsBySource");
-    expect(sourceGroupReaderSource).toContain("youtubeItems");
-    expect(sourceGroupReaderSource).toContain("telegramItems");
-    expect(sourceGroupReaderSource).toContain("source-heading");
-    expect(sourceGroupReaderSource).toContain("selectedGroupSourceId");
-    expect(sourceGroupReaderSource).not.toContain("mergedTimeline");
-    expect(sourceGroupReaderSource).not.toContain("pseudoChat");
+    expect(sourceGroupReaderSource).toContain("SourceGroupSourcesView");
+    expect(sourceGroupSourcesViewSource).toContain('class="source-group-sources-view"');
+    expect(sourceGroupSourcesViewSource).toContain("groupReaderItemsBySource");
+    expect(sourceGroupSourcesViewSource).toContain("youtubeItems");
+    expect(sourceGroupSourcesViewSource).toContain("telegramItems");
+    expect(sourceGroupSourcesViewSource).toContain("source-heading");
+    expect(sourceGroupSourcesViewSource).toContain("selectedGroupSourceId");
+    expect(sourceGroupSourcesViewSource).not.toContain("mergedTimeline");
+    expect(sourceGroupSourcesViewSource).not.toContain("pseudoChat");
   });
 
   it("keeps missing or deleted run scope labeling visible in the run header", () => {

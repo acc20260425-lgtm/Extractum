@@ -28,6 +28,7 @@ describe("source browser shell component contract", () => {
     expect(shellSource).toContain("groupBrowserData");
     expect(shellSource).toContain("liveReaderItems");
     expect(shellSource).toContain("sourceItems");
+    expect(shellSource).toContain("helpDescription");
     expect(shellSource).toContain("sourceLabelForItem");
     expect(shellSource).toContain("Group items are limited to the source rows loaded in this browser session");
   });

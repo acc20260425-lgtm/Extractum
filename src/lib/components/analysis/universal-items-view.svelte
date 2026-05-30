@@ -24,6 +24,7 @@
     loading,
     hasMore,
     emptyDescription = "No loaded items are available for this source window.",
+    helpDescription = null,
     sourceLabelForItem = null,
     formatTimestamp,
     onLoadMore,
@@ -32,6 +33,7 @@
     loading: boolean;
     hasMore: boolean;
     emptyDescription?: string;
+    helpDescription?: string | null;
     sourceLabelForItem?: ((item: SourceItem) => string | null) | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
@@ -113,6 +115,10 @@
       </Button>
     {/each}
   </div>
+
+  {#if helpDescription && items.length > 0}
+    <p class="items-help">{helpDescription}</p>
+  {/if}
 
   {#if !loading && items.length === 0}
     <EmptyState description={emptyDescription} />
@@ -216,8 +222,13 @@
   }
 
   .item-heading span,
+  .items-help,
   p {
     color: var(--muted);
+  }
+
+  .items-help {
+    font-size: 0.82rem;
   }
 
   p {

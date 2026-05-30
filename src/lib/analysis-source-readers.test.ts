@@ -252,6 +252,7 @@ describe("analysis source readers", () => {
     expect(universalItemsViewSource).toContain("Load more items");
     expect(universalItemsViewSource).toContain("Unknown item kind");
     expect(universalItemsViewSource).toContain("emptyDescription");
+    expect(universalItemsViewSource).toContain("helpDescription");
     expect(universalItemsViewSource).toContain("sourceLabelForItem");
     expect(universalItemsViewSource).toContain("Source #${item.sourceId}");
   });

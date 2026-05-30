@@ -325,6 +325,7 @@
       loading={loadingItems}
       hasMore={subject && subject.kind === "source_group" ? false : sourceItemsHasMore}
       emptyDescription={itemsEmptyDescription}
+      helpDescription={subject && subject.kind === "source_group" ? itemsEmptyDescription : null}
       sourceLabelForItem={subject && subject.kind === "source_group" ? groupData?.sourceLabelForItem ?? null : null}
       {formatTimestamp}
       onLoadMore={subject && subject.kind === "source_group" ? loadMoreGroupItems : onLoadMoreSourceItems}
