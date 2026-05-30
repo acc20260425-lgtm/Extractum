@@ -105,6 +105,10 @@ No files change in this task. Do not commit.
 
 ## Task 1: Add Failing Workspace Tools Component Contract Test
 
+Task 1 is intentionally not committed until Task 2 makes the new component test
+green. This preserves the red/green TDD evidence without leaving a red commit
+in history.
+
 **Files:**
 - Create: `src/lib/analysis-workspace-tools.test.ts`
 
@@ -146,6 +150,10 @@ describe("analysis workspace tools component contract", () => {
     expect(reportWorkspaceToolsSource).toContain("ariaDescribedby={exportDisabledReason ? exportReasonId : undefined}");
     expect(reportWorkspaceToolsSource).toContain("{exportDisabledReason}");
     expect(reportWorkspaceToolsSource).toContain('class="workspace-tool-helper"');
+  });
+
+  it("uses explicit button types for workspace actions", () => {
+    expect(reportWorkspaceToolsSource.match(/type="button"/g)?.length ?? 0).toBe(3);
   });
 });
 ```
@@ -267,6 +275,7 @@ Create the file with:
     {#if showNotebookLmExport}
       <div class="workspace-tool-action">
         <Button
+          type="button"
           variant="secondary"
           onclick={onOpenNotebookLmExport}
           disabled={!canExportNotebookLm}
@@ -364,6 +373,10 @@ Create the file with:
 </style>
 ```
 
+The single-source exporting state is intentionally disabled without helper
+text. `exportDisabledReason` is only for unsupported scope reasons, such as
+source-group export not being implemented yet.
+
 - [ ] **Step 3: Run focused component contract test**
 
 Run:
@@ -419,6 +432,8 @@ Replace the full `it("keeps management actions reachable while a run is open", .
     expect(reportCanvasSource).not.toContain('class="opened-run-management"');
     expect(reportCanvasSource).toContain("<TemplateEditor");
     expect(reportCanvasSource).toContain("<SourceGroupEditor");
+    expect(reportCanvasSource.match(/<TemplateEditor/g)?.length ?? 0).toBe(1);
+    expect(reportCanvasSource.match(/<SourceGroupEditor/g)?.length ?? 0).toBe(1);
     expect(reportCanvasSource).toContain("templateEditorOpen");
     expect(reportCanvasSource).toContain("groupEditorOpen");
     expect(reportWorkspaceToolsSource).toContain("Export for NotebookLM");
@@ -433,8 +448,10 @@ Add this test inside the same `describe` block:
 
 ```ts
   it("derives NotebookLM export availability from live canvas source or group", () => {
-    expect(reportCanvasSource).toContain("const showNotebookLmExport = $derived(currentSource !== null || currentGroup !== null);");
-    expect(reportCanvasSource).toContain("const canExportNotebookLm = $derived(currentSource !== null && !exportingNotebookLm);");
+    expect(reportCanvasSource).toContain("showNotebookLmExport");
+    expect(reportCanvasSource).toContain("currentSource !== null || currentGroup !== null");
+    expect(reportCanvasSource).toContain("canExportNotebookLm");
+    expect(reportCanvasSource).toContain("currentSource !== null && !exportingNotebookLm");
     expect(reportCanvasSource).toContain("currentGroup && !currentSource ? sourceGroupNotebookLmExportReason : null");
     expect(reportCanvasSource).toContain("Source-group NotebookLM export is not implemented yet.");
     expect(reportCanvasSource).toContain("<ReportWorkspaceTools");
@@ -997,7 +1014,7 @@ Expected: commit succeeds.
 - Test: `src/lib/analysis-report-canvas.test.ts`
 - Test: `src/lib/analysis-workspace-tools.test.ts`
 - Test: `src/lib/analysis-report-workspace-selection-props.test.ts`
-- Test: `src/routes/analysis/+page.svelte`
+- Inspect: `src/routes/analysis/+page.svelte`
 
 - [ ] **Step 1: Inspect no duplicate export dialog**
 
@@ -1206,9 +1223,23 @@ Move-Item -LiteralPath 'docs/superpowers/specs/2026-05-30-analysis-workspace-par
 
 Expected: file exists only under `docs/superpowers/archive/specs/`.
 
-- [ ] **Step 3: Update specs READMEs**
+- [ ] **Step 3: Inspect active spec index**
 
-In `docs/superpowers/specs/README.md`, replace the active entry with:
+Run:
+
+```powershell
+Get-Content -Path 'docs/superpowers/specs/README.md'
+```
+
+Expected: the active specs list includes
+`2026-05-30-analysis-workspace-parity-design.md`. If other active specs are
+present, keep them.
+
+- [ ] **Step 4: Update specs READMEs**
+
+In `docs/superpowers/specs/README.md`, remove only the
+`2026-05-30-analysis-workspace-parity-design.md` active entry. If no active
+spec entries remain, make the active list:
 
 ```md
 - None currently.
@@ -1221,7 +1252,7 @@ Analysis workspace parity specs record shipped canvas-level workspace tool
 contracts for setup and opened-run states.
 ```
 
-- [ ] **Step 4: Commit spec archive**
+- [ ] **Step 5: Commit spec archive**
 
 Run:
 
@@ -1233,7 +1264,7 @@ git commit -m "docs: archive analysis workspace parity spec"
 
 Expected: commit succeeds.
 
-- [ ] **Step 5: Move this plan**
+- [ ] **Step 6: Move this plan**
 
 Run:
 
@@ -1243,7 +1274,7 @@ Move-Item -LiteralPath 'docs/superpowers/plans/2026-05-30-analysis-workspace-par
 
 Expected: file exists only under `docs/superpowers/archive/plans/`.
 
-- [ ] **Step 6: Update plan READMEs**
+- [ ] **Step 7: Update plan READMEs**
 
 In `docs/superpowers/plans/README.md`, keep the active-plan guidance and no explicit active plan entry.
 
@@ -1254,7 +1285,7 @@ Analysis workspace parity plans record the shipped canvas-level workspace tool
 cleanup that unified setup and opened-run actions.
 ```
 
-- [ ] **Step 7: Commit plan archive**
+- [ ] **Step 8: Commit plan archive**
 
 Run:
 
