@@ -1,7 +1,7 @@
 # Analysis Workspace Parity Design
 
 > Date: 2026-05-30
-> Status: active design
+> Status: approved design, pending implementation plan
 > Scope: `/analysis` report canvas workspace tools for setup and opened runs.
 
 ## Summary
