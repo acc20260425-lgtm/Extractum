@@ -9,7 +9,7 @@ import telegramMediaCardSource from "./components/analysis/telegram-media-card.s
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import rawJsonPanelSource from "./components/analysis/raw-json-panel.svelte?raw";
-import youtubePlaylistSource from "./components/analysis/youtube-playlist-reader.svelte?raw";
+import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
 import youtubeCommentsViewSource from "./components/analysis/youtube-comments-view.svelte?raw";
 import youtubeSourceActivitySource from "./components/analysis/youtube-source-activity.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
@@ -297,20 +297,31 @@ describe("analysis source readers", () => {
     expect(youtubeTranscriptSource).toContain("data-trace-ref={visibleRef}");
   });
 
-  it("keeps YouTube playlist reading playlist-first", () => {
-    expect(youtubePlaylistSource).toContain('class="youtube-playlist-reader"');
-    expect(youtubePlaylistSource).toContain("playlist.items");
-    expect(youtubePlaylistSource).toContain("onOpenSource");
-    expect(youtubePlaylistSource).toContain("onSyncPlaylistVideo");
-    expect(youtubePlaylistSource).toContain("onRetryPlaylistVideo");
+  it("renders YouTube playlist videos as a job-free leaf view", () => {
+    expect(youtubePlaylistVideosViewSource).toContain('aria-label="YouTube playlist videos"');
+    expect(youtubePlaylistVideosViewSource).toContain("playlist.items");
+    expect(youtubePlaylistVideosViewSource).toContain("onOpenSource");
+    expect(youtubePlaylistVideosViewSource).toContain("onSyncPlaylist");
+    expect(youtubePlaylistVideosViewSource).toContain("onRetryFailedPlaylistVideos");
+    expect(youtubePlaylistVideosViewSource).toContain("onSyncPlaylistVideo");
+    expect(youtubePlaylistVideosViewSource).toContain("onRetryPlaylistVideo");
+    expect(youtubePlaylistVideosViewSource).toContain("isRetryableYoutubeAvailabilityStatus");
+    expect(youtubePlaylistVideosViewSource).not.toContain("retryableStatuses");
+    expect(youtubePlaylistVideosViewSource).not.toContain("SourceActivityView");
+    expect(youtubePlaylistVideosViewSource).not.toContain("YoutubeSourceActivity");
+    expect(youtubePlaylistVideosViewSource).not.toContain("sourceJobs");
+    expect(youtubePlaylistVideosViewSource).not.toContain("onCancelSourceJob");
+    expect(youtubePlaylistVideosViewSource).not.toContain("$lib/api/");
+    expect(youtubePlaylistVideosViewSource).not.toContain("invoke(");
   });
 
-  it("renders YouTube playlist source activity and cancellation", () => {
-    expect(youtubePlaylistSource).toContain("sourceJobs");
-    expect(youtubePlaylistSource).toContain("<YoutubeSourceActivity");
-    expect(youtubePlaylistSource).toContain("onCancelSourceJob");
-    expect(reportSourceSurfaceSource).toContain("sourceJobs={sourceJobs}");
-    expect(reportSourceSurfaceSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+  it("keeps playlist video opening as source selection instead of nested browsing", () => {
+    expect(youtubePlaylistVideosViewSource).toContain("onOpenSource");
+    expect(youtubePlaylistVideosViewSource).toContain("videoSourceId");
+    expect(youtubePlaylistVideosViewSource).not.toContain("<YoutubeTranscriptReader");
+    expect(youtubePlaylistVideosViewSource).not.toContain("<SourceBrowserShell");
+    expect(youtubePlaylistVideosViewSource).not.toContain("SourceActivityView");
+    expect(youtubePlaylistVideosViewSource).not.toContain("$lib/api/");
   });
 
   it("groups source group material by source", () => {

@@ -240,7 +240,7 @@ Expected: output includes those names in the legacy reader. The new `YoutubePlay
 - Create: `src/lib/youtube-source-policy.test.ts`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add retryability helper tests**
+- [x] **Step 1: Add retryability helper tests**
 
 Create `src/lib/youtube-source-policy.test.ts`:
 
@@ -261,7 +261,7 @@ describe("youtube source policy", () => {
 });
 ```
 
-- [ ] **Step 2: Replace the legacy playlist reader raw import**
+- [x] **Step 2: Replace the legacy playlist reader raw import**
 
 In `src/lib/analysis-source-readers.test.ts`, replace:
 
@@ -275,7 +275,7 @@ with:
 import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
 ```
 
-- [ ] **Step 3: Replace legacy playlist reader tests with leaf contract tests**
+- [x] **Step 3: Replace legacy playlist reader tests with leaf contract tests**
 
 Replace the two tests named `"keeps YouTube playlist reading playlist-first"` and `"renders YouTube playlist source activity and cancellation"` with:
 
@@ -308,7 +308,7 @@ Replace the two tests named `"keeps YouTube playlist reading playlist-first"` an
   });
 ```
 
-- [ ] **Step 4: Run the failing reader contract test**
+- [x] **Step 4: Run the failing reader contract test**
 
 Run:
 
