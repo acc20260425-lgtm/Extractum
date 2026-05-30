@@ -1534,6 +1534,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn clear_preserves_non_fixture_groups_and_members() {
+        let pool = fixture_pool().await;
+
+        let real_account_id: i64 = sqlx::query_scalar(
+            "INSERT INTO accounts (label, api_id, api_hash, created_at)
+             VALUES ('Personal', 1, '', 1)
+             RETURNING id",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("insert non-fixture account");
+
+        let real_source_id: i64 = sqlx::query_scalar(
+            "INSERT INTO sources (
+                source_type, source_subtype, account_id, external_id, title,
+                is_active, is_member, created_at
+             )
+             VALUES ('telegram', 'channel', ?, 'real-source', 'Real Source', 1, 1, 1)
+             RETURNING id",
+        )
+        .bind(real_account_id)
+        .fetch_one(&pool)
+        .await
+        .expect("insert non-fixture source");
+
+        let real_group_id: i64 = sqlx::query_scalar(
+            "INSERT INTO analysis_source_groups (name, source_type, created_at, updated_at)
+             VALUES ('Real Group', 'telegram', 1, 1)
+             RETURNING id",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("insert non-fixture group");
+
+        sqlx::query(
+            "INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+             VALUES (?, ?, 1)",
+        )
+        .bind(real_group_id)
+        .bind(real_source_id)
+        .execute(&pool)
+        .await
+        .expect("insert non-fixture group member");
+
+        insert_minimal_clear_fixture(&pool).await;
+
+        clear_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("clear fixtures");
+
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_source_groups WHERE name = 'Real Group'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_source_group_members member
+                 JOIN analysis_source_groups group_row ON group_row.id = member.group_id
+                 JOIN sources source_row ON source_row.id = member.source_id
+                 WHERE group_row.name = 'Real Group' AND source_row.title = 'Real Source'",
+            )
+            .await,
+            1
+        );
+    }
+
+    #[tokio::test]
     async fn clear_deletes_child_rows_through_fixture_parent_ids() {
         let pool = fixture_pool().await;
         insert_minimal_clear_fixture(&pool).await;
@@ -1623,7 +1695,7 @@ mod tests {
         assert_eq!(
             count(
                 &pool,
-                "SELECT COUNT(*) FROM analysis_source_groups WHERE name = '__analysis_redesign_fixture__ Telegram Group'"
+                "SELECT COUNT(*) FROM analysis_source_groups WHERE name = '__analysis_redesign_fixture__ Telegram Source Group'"
             )
             .await,
             1

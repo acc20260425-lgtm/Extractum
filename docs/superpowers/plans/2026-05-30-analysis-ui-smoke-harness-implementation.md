@@ -203,7 +203,7 @@ Expected: commit succeeds.
 - Create: `src/lib/analysis-smoke-helpers.test.ts`
 - Modify: `src-tauri/src/analysis/fixtures.rs`
 
-- [ ] **Step 1: Add raw/source UI smoke contract tests**
+- [x] **Step 1: Add raw/source UI smoke contract tests**
 
 Create `src/lib/analysis-ui-smoke-contract.test.ts`:
 
@@ -366,7 +366,7 @@ describe("analysis UI smoke harness contract", () => {
 });
 ```
 
-- [ ] **Step 2: Add helper unit tests**
+- [x] **Step 2: Add helper unit tests**
 
 Create `src/lib/analysis-smoke-helpers.test.ts`:
 
@@ -506,7 +506,7 @@ function fakeSocketResponse(response: Record<string, unknown>) {
 }
 ```
 
-- [ ] **Step 3: Add a failing Rust cleanup contract test and fixture label expectation**
+- [x] **Step 3: Add a failing Rust cleanup contract test and fixture label expectation**
 
 In `src-tauri/src/analysis/fixtures.rs`, update the source-group label expectation in `seed_creates_safe_account_prompt_profile_sources_and_group` from:
 
@@ -592,7 +592,7 @@ async fn clear_preserves_non_fixture_groups_and_members() {
 }
 ```
 
-- [ ] **Step 4: Run the new failing tests**
+- [x] **Step 4: Run the new failing tests**
 
 Run:
 
@@ -610,7 +610,12 @@ cargo test --manifest-path src-tauri/Cargo.toml clear_preserves_non_fixture_grou
 
 Expected: FAIL because the fixture label has not been renamed and the new cleanup test may expose row-id assumptions.
 
-- [ ] **Step 5: Commit failing tests**
+Actual red result:
+- `npm.cmd run test -- src/lib/analysis-ui-smoke-contract.test.ts src/lib/analysis-smoke-helpers.test.ts` failed because `scripts/analysis-smoke.mjs` and `scripts/analysis-smoke-helpers.mjs` do not exist yet.
+- `cargo test --manifest-path src-tauri/Cargo.toml clear_preserves_non_fixture_groups_and_members` passed; cleanup already preserves non-fixture group membership.
+- `cargo test --manifest-path src-tauri/Cargo.toml seed_creates_safe_account_prompt_profile_sources_and_group` failed because the expected `Telegram Source Group` fixture label has not been renamed yet.
+
+- [x] **Step 5: Commit failing tests**
 
 Run:
 
