@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
+import sourceBrowserShellSource from "./components/analysis/source-browser-shell.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 import telegramMediaCardSource from "./components/analysis/telegram-media-card.svelte?raw";
@@ -10,6 +11,7 @@ import youtubeTranscriptSource from "./components/analysis/youtube-transcript-re
 
 describe("analysis source readers", () => {
   it("replaces transitional source panels in ReportSourceSurface", () => {
+    expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).toContain("<TelegramTimelineReader");
     expect(reportSourceSurfaceSource).toContain("<YoutubeTranscriptReader");
     expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
@@ -18,6 +20,22 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).not.toContain("<YoutubeSourceDetail");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistDetail");
     expect(reportSourceSurfaceSource).not.toContain("<RunCompanionTabs");
+  });
+
+  it("routes only Telegram and YouTube video live sources through SourceBrowserShell", () => {
+    expect(reportSourceSurfaceSource).toContain("sourceBrowserShellAppliesToSource(currentSource)");
+    expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
+    expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
+    expect(reportSourceSurfaceSource).toContain('sourceSubtype === "playlist"');
+  });
+
+  it("preserves the existing Telegram timeline controls through the shell", () => {
+    expect(sourceBrowserShellSource).toContain("telegramHistoryScopeOptions");
+    expect(sourceBrowserShellSource).toContain("onChangeTelegramHistoryScope");
+    expect(sourceBrowserShellSource).toContain("showTopicSelector");
+    expect(sourceBrowserShellSource).toContain("onChangeSelectedTopicKey");
+    expect(sourceBrowserShellSource).toContain("<TelegramTimelineReader");
+    expect(sourceBrowserShellSource).toContain("liveReaderItems");
   });
 
   it("keeps live source and run snapshot basis visible", () => {
@@ -54,28 +72,28 @@ describe("analysis source readers", () => {
   it("surfaces migrated Telegram history labels and scope controls", () => {
     expect(telegramTimelineSource).toContain("historyScopeLabel");
     expect(telegramTimelineSource).toContain('class="history-scope-badge"');
-    expect(reportSourceSurfaceSource).toContain("telegramHistoryScopeOptions");
-    expect(reportSourceSurfaceSource).toContain("Current supergroup history");
-    expect(reportSourceSurfaceSource).toContain("Migrated small-group history");
-    expect(reportSourceSurfaceSource).toContain("Merged timeline");
-    expect(reportSourceSurfaceSource).toContain("onChangeTelegramHistoryScope");
+    expect(sourceBrowserShellSource).toContain("telegramHistoryScopeOptions");
+    expect(sourceBrowserShellSource).toContain("Current supergroup history");
+    expect(sourceBrowserShellSource).toContain("Migrated small-group history");
+    expect(sourceBrowserShellSource).toContain("Merged timeline");
+    expect(sourceBrowserShellSource).toContain("onChangeTelegramHistoryScope");
   });
 
   it("shows migrated Telegram history availability before imported rows are browsable", () => {
-    expect(reportSourceSurfaceSource).toContain('migratedHistoryStatus === "available"');
-    expect(reportSourceSurfaceSource).toContain("migratedHistoryImportCompleted");
-    expect(reportSourceSurfaceSource).toContain("migratedHistoryRowCount === 0");
-    expect(reportSourceSurfaceSource).toContain('tone="info"');
+    expect(sourceBrowserShellSource).toContain('migratedHistoryStatus === "available"');
+    expect(sourceBrowserShellSource).toContain("migratedHistoryImportCompleted");
+    expect(sourceBrowserShellSource).toContain("migratedHistoryRowCount === 0");
+    expect(sourceBrowserShellSource).toContain('tone="info"');
   });
 
   it("renders Telegram topic filtering only in live single-source mode", () => {
-    expect(reportSourceSurfaceSource).toContain('class="topic-filter"');
-    expect(reportSourceSurfaceSource).toContain("showTopicSelector");
-    expect(reportSourceSurfaceSource).toContain("sourceTopics");
-    expect(reportSourceSurfaceSource).toContain("loadingSourceTopics");
-    expect(reportSourceSurfaceSource).toContain("selectedTopicKey");
-    expect(reportSourceSurfaceSource).toContain("onChangeSelectedTopicKey");
-    expect(reportSourceSurfaceSource).toContain("__all_topics__");
+    expect(sourceBrowserShellSource).toContain('class="topic-filter"');
+    expect(sourceBrowserShellSource).toContain("showTopicSelector");
+    expect(sourceBrowserShellSource).toContain("sourceTopics");
+    expect(sourceBrowserShellSource).toContain("loadingSourceTopics");
+    expect(sourceBrowserShellSource).toContain("selectedTopicKey");
+    expect(sourceBrowserShellSource).toContain("onChangeSelectedTopicKey");
+    expect(sourceBrowserShellSource).toContain("__all_topics__");
     expect(sourceGroupReaderSource).not.toContain("topic-filter");
   });
 
@@ -85,10 +103,10 @@ describe("analysis source readers", () => {
   });
 
   it("keeps live single-source timeline readers pageable", () => {
-    expect(reportSourceSurfaceSource).toContain("sourceItemsHasMore");
-    expect(reportSourceSurfaceSource).toContain("onLoadMoreSourceItems");
-    expect(reportSourceSurfaceSource).toContain("hasMore={sourceItemsHasMore}");
-    expect(reportSourceSurfaceSource).toContain("onLoadMore={onLoadMoreSourceItems}");
+    expect(sourceBrowserShellSource).toContain("sourceItemsHasMore");
+    expect(sourceBrowserShellSource).toContain("onLoadMoreSourceItems");
+    expect(sourceBrowserShellSource).toContain("hasMore={sourceItemsHasMore}");
+    expect(sourceBrowserShellSource).toContain("onLoadMore={onLoadMoreSourceItems}");
   });
 
   it("keeps sticky date labels below overlay source switching UI", () => {
@@ -145,15 +163,14 @@ describe("analysis source readers", () => {
   it("keeps YouTube live sync actions out of readonly snapshot transcript readers", () => {
     expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
     expect(sourceGroupReaderSource).toContain("showSyncActions={false}");
-    expect(reportSourceSurfaceSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(currentSource.id)}");
+    expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}");
   });
 
   it("keeps run snapshot YouTube readers detached from live video detail", () => {
     expect(reportSourceSurfaceSource).toContain("detail={null}");
-    expect(reportSourceSurfaceSource.match(/detail=\{youtubeVideoDetail\}/g)).toHaveLength(1);
-    expect(reportSourceSurfaceSource).toContain(
-      'sourceTitle={currentSource.title ?? currentSource.externalId}',
-    );
+    expect(reportSourceSurfaceSource).not.toContain("detail={youtubeVideoDetail}");
+    expect(sourceBrowserShellSource).toContain("detail={youtubeVideoDetail}");
+    expect(sourceBrowserShellSource).toContain('sourceTitle={source.title ?? source.externalId}');
   });
 
   it("restores live YouTube video comments sync status and activity in transcript reader", () => {
@@ -167,9 +184,9 @@ describe("analysis source readers", () => {
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {
-    expect(reportSourceSurfaceSource).toContain("sourceJobs={sourceJobs}");
-    expect(reportSourceSurfaceSource).toContain("onSyncComments={() => onSyncYoutubeComments(currentSource.id)}");
-    expect(reportSourceSurfaceSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+    expect(reportSourceSurfaceSource).toContain("{sourceJobs}");
+    expect(sourceBrowserShellSource).toContain("onSyncComments={() => onSyncYoutubeComments(source.id)}");
+    expect(sourceBrowserShellSource).toContain("onCancelSourceJob={onCancelSourceJob}");
     expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
     expect(reportSourceSurfaceSource).not.toContain("onSyncComments={() => {}}");
   });

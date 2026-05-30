@@ -241,7 +241,7 @@ git commit -m "feat: add source browser tab model"
 - Modify: `src/lib/analysis-source-readers.test.ts`
 - Modify: `src/lib/analysis-source-readers-route.test.ts`
 
-- [ ] **Step 1: Write shell and route contract tests**
+- [x] **Step 1: Write shell and route contract tests**
 
 Add `src/lib/components/analysis/source-browser-shell.test.ts`:
 
@@ -300,7 +300,7 @@ it("preserves the existing Telegram timeline controls through the shell", () => 
 });
 ```
 
-- [ ] **Step 2: Run the failing tests**
+- [x] **Step 2: Run the failing tests**
 
 Run:
 
@@ -310,7 +310,7 @@ npm run test -- src/lib/components/analysis/source-browser-shell.test.ts src/lib
 
 Expected: FAIL because the shell does not exist and `ReportSourceSurface` still renders readers directly.
 
-- [ ] **Step 3: Copy the current Telegram live-reader contract before simplifying**
+- [x] **Step 3: Copy the current Telegram live-reader contract before simplifying**
 
 Before writing the shell, inspect the current live single-source Telegram branch in `src/lib/components/analysis/report-source-surface.svelte` and copy its behavior into `SourceBrowserShell`:
 
@@ -322,7 +322,7 @@ Before writing the shell, inspect the current live single-source Telegram branch
 
 Acceptance for Slice 1: `TelegramTimelineReader` receives every prop it currently needs for topic filters, history-scope controls, selected trace ref scrolling, and media/reply/reaction display. Shell integration must not reduce the existing Telegram timeline feature set.
 
-- [ ] **Step 4: Implement the shell**
+- [x] **Step 4: Implement the shell**
 
 Create `src/lib/components/analysis/source-browser-shell.svelte` with a typed prop surface copied from the current live single-source branch of `ReportSourceSurface`. The first version should render only `timeline` and `transcript` with the existing readers, and render muted disabled states for `comments`, `items`, `metadata`, and `activity`:
 
@@ -538,7 +538,7 @@ Create `src/lib/components/analysis/source-browser-shell.svelte` with a typed pr
 
 The disabled-state text exists only inside Slice 1. Slice 2 replaces `activity`; Slices 3-5 replace the remaining disabled tab states.
 
-- [ ] **Step 5: Wire shell into `ReportSourceSurface` live single-source branch**
+- [x] **Step 5: Wire shell into `ReportSourceSurface` live single-source branch**
 
 Modify `src/lib/components/analysis/report-source-surface.svelte`:
 
@@ -551,7 +551,7 @@ Modify `src/lib/components/analysis/report-source-surface.svelte`:
   `currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"`;
 - pass the current `liveReaderItems`, `sourceItems`, Telegram topic/history props, transcript props, job props, and callbacks.
 
-- [ ] **Step 6: Run shell tests**
+- [x] **Step 6: Run shell tests**
 
 Run:
 
@@ -562,7 +562,7 @@ npm run check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 7: Commit Slice 1 shell**
+- [x] **Step 7: Commit Slice 1 shell**
 
 ```bash
 git add src/lib/source-browser-model.ts src/lib/source-browser-model.test.ts src/lib/components/analysis/source-browser-shell.svelte src/lib/components/analysis/source-browser-shell.test.ts src/lib/components/analysis/report-source-surface.svelte src/lib/analysis-source-readers.test.ts src/lib/analysis-source-readers-route.test.ts

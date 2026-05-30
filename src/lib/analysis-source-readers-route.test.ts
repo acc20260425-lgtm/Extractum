@@ -12,6 +12,10 @@ describe("analysis source reader route wiring", () => {
     expect(analysisPageSource).not.toContain("clearCurrentRunForWorkspaceSwitch(sourceId");
   });
 
+  it("keeps source browser tab state out of the analysis route", () => {
+    expect(analysisPageSource).not.toContain("activeSourceBrowserTab");
+  });
+
   it("loads YouTube transcript segments through a paged API", () => {
     expect(analysisPageSource).toContain("listYoutubeTranscriptSegments");
     expect(analysisPageSource).toContain("youtubeTranscriptSegments");

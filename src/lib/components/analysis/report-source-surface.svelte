@@ -1,7 +1,7 @@
 <script lang="ts">
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
-  import Select from "$lib/components/ui/Select.svelte";
   import TakeoutRecoveryNotice from "$lib/components/analysis/takeout-recovery-notice.svelte";
+  import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";
   import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
   import SourceGroupReader from "$lib/components/analysis/source-group-reader.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
@@ -25,6 +25,7 @@
     sourceFilterOptionsFromReaderItems,
     sourceItemToReaderItem,
   } from "$lib/source-reader-model";
+  import { sourceBrowserShellAppliesToSource } from "$lib/source-browser-model";
   import type {
     AnalysisRunDetail,
     AnalysisRunMessage,
@@ -216,16 +217,6 @@
   const youtubeRuntimeDiagnostic = $derived(
     currentSource?.sourceType === "youtube" ? sourceSyncDisabledReason(currentSource) : null,
   );
-  const sortedSourceTopics = $derived([...sourceTopics].sort(compareTopics));
-  const telegramHistoryScopeOptions = $derived.by(() => {
-    if (!currentSource || currentSource.sourceType !== "telegram") return [];
-    if (currentSource.migratedHistoryRowCount <= 0) return [];
-    return [
-      { value: "current" as const, label: "Current supergroup history" },
-      { value: "migrated" as const, label: "Migrated small-group history" },
-      { value: "merged" as const, label: "Merged timeline" },
-    ];
-  });
 
   function fallbackScopeTitle() {
     if (currentRun) return currentRun.scope_label;
@@ -244,36 +235,6 @@
     return currentGroup?.members.find((member) => member.source_id === sourceId) ?? null;
   }
 
-  function compareTopics(left: SourceForumTopic, right: SourceForumTopic) {
-    if (left.kind !== right.kind) {
-      return left.kind === "topic" ? -1 : 1;
-    }
-
-    if (left.isDeleted !== right.isDeleted) {
-      return left.isDeleted ? 1 : -1;
-    }
-
-    const titleOrder = left.title.localeCompare(right.title, undefined, {
-      sensitivity: "base",
-      numeric: true,
-    });
-    if (titleOrder !== 0) {
-      return titleOrder;
-    }
-
-    return left.key.localeCompare(right.key, undefined, {
-      sensitivity: "base",
-      numeric: true,
-    });
-  }
-
-  function changeSelectedTopic(event: Event) {
-    onChangeSelectedTopicKey((event.currentTarget as HTMLSelectElement).value);
-  }
-
-  function changeTelegramHistoryScope(event: Event) {
-    onChangeTelegramHistoryScope((event.currentTarget as HTMLSelectElement).value as TelegramHistoryScope);
-  }
 </script>
 
 <section class="report-source-surface" data-surface={canvasSurface}>
@@ -387,26 +348,39 @@
 {#snippet liveSourceSurface()}
   {#if analysisScope === "single_source" && currentSource}
     {#key `${analysisScope}:${currentSource.id}:${currentRun?.id ?? "idle"}:live`}
-      {#if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "video"}
+      {#if sourceBrowserShellAppliesToSource(currentSource)}
         {#if youtubeRuntimeDiagnostic}
           <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
         {/if}
-        <YoutubeTranscriptReader
-          detail={youtubeVideoDetail}
-          segments={youtubeTranscriptSegments}
-          snapshotItems={[]}
-          loading={loadingYoutubeTranscriptSegments || loadingYoutubeDetail}
-          hasMore={youtubeTranscriptHasMore}
-          transcriptSearch={youtubeTranscriptSearch}
-          sourceTitle={currentSource.title ?? currentSource.externalId}
+        <SourceBrowserShell
+          source={currentSource}
+          {liveReaderItems}
+          {sourceItems}
+          {sourceItemsHasMore}
+          {loadingItems}
+          {sourceTopics}
+          {loadingSourceTopics}
+          {selectedTopicKey}
+          {showTopicSelector}
+          {youtubeVideoDetail}
+          {youtubeTranscriptSegments}
+          {youtubeTranscriptSearch}
+          {youtubeTranscriptHasMore}
+          {loadingYoutubeTranscriptSegments}
+          {loadingYoutubeDetail}
+          {sourceJobs}
           {selectedTraceRef}
+          {telegramHistoryScope}
+          {currentSourceContentLabel}
           {formatTimestamp}
-          onChangeTranscriptSearch={onChangeTranscriptSearch}
-          onLoadMore={onLoadMoreYoutubeTranscriptSegments}
-          onSyncTranscript={() => onSyncYoutubeTranscript(currentSource.id)}
-          onSyncMetadata={() => onSyncYoutubeMetadata(currentSource.id)}
-          sourceJobs={sourceJobs}
-          onSyncComments={() => onSyncYoutubeComments(currentSource.id)}
+          {onLoadMoreSourceItems}
+          {onChangeSelectedTopicKey}
+          {onChangeTelegramHistoryScope}
+          {onChangeTranscriptSearch}
+          {onLoadMoreYoutubeTranscriptSegments}
+          {onSyncYoutubeMetadata}
+          {onSyncYoutubeTranscript}
+          {onSyncYoutubeComments}
           onCancelSourceJob={onCancelSourceJob}
         />
       {:else if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}
@@ -427,50 +401,7 @@
           onCancelSourceJob={onCancelSourceJob}
         />
       {:else}
-        {#if currentSource.sourceType === "telegram" && currentSource.migratedHistoryStatus === "available" && !currentSource.migratedHistoryImportCompleted}
-          <StatusMessage tone="info">
-            Migrated small-group history is detected but has not been imported for browsing yet.
-          </StatusMessage>
-        {/if}
-        {#if telegramHistoryScopeOptions.length > 0}
-          <label class="history-scope-control">
-            <span>History scope</span>
-            <Select value={telegramHistoryScope} onchange={changeTelegramHistoryScope}>
-              {#each telegramHistoryScopeOptions as option (option.value)}
-                <option value={option.value}>{option.label}</option>
-              {/each}
-            </Select>
-          </label>
-        {/if}
-        {#if showTopicSelector && telegramHistoryScope === "current"}
-          <label class="topic-filter">
-            <span>Topic view</span>
-            <Select value={selectedTopicKey} disabled={loadingSourceTopics} onchange={changeSelectedTopic}>
-              <option value="__all_topics__">All topics</option>
-              {#if loadingSourceTopics && sourceTopics.length === 0}
-                <option value="__loading_topics__" disabled>Loading topics...</option>
-              {:else}
-                {#each sortedSourceTopics as topic (topic.key)}
-                  <option value={topic.key}>{topic.title} ({topic.messageCount})</option>
-                {/each}
-              {/if}
-            </Select>
-          </label>
-        {/if}
-        {#if currentSource.sourceType === "telegram" && currentSource.migratedHistoryImportCompleted && currentSource.migratedHistoryRowCount === 0 && telegramHistoryScope !== "current"}
-          <StatusMessage tone="info">
-            Migrated history import completed with no browsable migrated rows for this source.
-          </StatusMessage>
-        {:else}
-          <TelegramTimelineReader
-            items={liveReaderItems}
-            loading={loadingItems}
-            hasMore={sourceItemsHasMore}
-            contentLabel={currentSourceContentLabel}
-            {formatTimestamp}
-            onLoadMore={onLoadMoreSourceItems}
-          />
-        {/if}
+        <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
       {/if}
     {/key}
   {:else if analysisScope === "source_group" && currentGroup}
@@ -496,25 +427,4 @@
     min-width: 0;
   }
 
-  .history-scope-control,
-  .topic-filter {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    align-self: flex-start;
-    min-width: min(18rem, 100%);
-    color: var(--muted);
-    font-size: 0.74rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .history-scope-control :global(select),
-  .topic-filter :global(select) {
-    min-width: 14rem;
-    text-transform: none;
-    letter-spacing: 0;
-    font-size: 0.9rem;
-    color: var(--text);
-  }
 </style>
