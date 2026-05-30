@@ -19,19 +19,27 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).toContain("<TelegramTimelineReader");
     expect(reportSourceSurfaceSource).toContain("<YoutubeTranscriptReader");
-    expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
     expect(reportSourceSurfaceSource).toContain("<SourceGroupReader");
+    expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
     expect(reportSourceSurfaceSource).not.toContain("<SourceContextPanel");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubeSourceDetail");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistDetail");
     expect(reportSourceSurfaceSource).not.toContain("<RunCompanionTabs");
   });
 
-  it("routes only Telegram and YouTube video live sources through SourceBrowserShell", () => {
+  it("routes Telegram YouTube video and YouTube playlist live sources through SourceBrowserShell", () => {
     expect(reportSourceSurfaceSource).toContain("sourceBrowserShellAppliesToSource(currentSource)");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
-    expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
-    expect(reportSourceSurfaceSource).toContain('sourceSubtype === "playlist"');
+    expect(reportSourceSurfaceSource).toContain("{youtubePlaylistDetail}");
+    expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
+  });
+
+  it("renders YouTube playlist videos through SourceBrowserShell", () => {
+    expect(sourceBrowserShellSource).toContain("<YoutubePlaylistVideosView");
+    expect(sourceBrowserShellSource).toContain('activeTab === "videos"');
+    expect(sourceBrowserShellSource).toContain("youtubePlaylistDetail");
+    expect(sourceBrowserShellSource).toContain("onRetryFailedPlaylistVideos");
+    expect(sourceBrowserShellSource).toContain("onRetryPlaylistVideo");
   });
 
   it("keeps SourceBrowserShell mounted across supported live source switches", () => {

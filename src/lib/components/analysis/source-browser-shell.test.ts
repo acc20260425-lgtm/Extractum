@@ -9,10 +9,13 @@ describe("source browser shell component contract", () => {
     expect(shellSource).not.toContain("invoke(");
   });
 
-  it("renders existing provider readers as first-slice wrappers", () => {
+  it("renders provider readers and playlist videos through route-owned props", () => {
     expect(shellSource).toContain("<TelegramTimelineReader");
     expect(shellSource).toContain("<YoutubeTranscriptReader");
+    expect(shellSource).toContain("<YoutubePlaylistVideosView");
     expect(shellSource).toContain("timeline");
     expect(shellSource).toContain("transcript");
+    expect(shellSource).toContain("videos");
+    expect(shellSource).toContain("youtubePlaylistDetail");
   });
 });

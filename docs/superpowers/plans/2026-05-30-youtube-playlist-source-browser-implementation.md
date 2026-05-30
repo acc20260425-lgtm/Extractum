@@ -681,7 +681,7 @@ Expected: PASS for the new leaf tests. Other playlist routing tests may still fa
 - Modify: `src/lib/analysis-source-readers.test.ts`
 - Modify: `src/lib/components/analysis/source-browser-shell.test.ts`
 
-- [ ] **Step 1: Update route contract tests**
+- [x] **Step 1: Update route contract tests**
 
 In `src/lib/analysis-source-readers.test.ts`, update the first two route tests:
 
@@ -718,7 +718,7 @@ Add a shell playlist test:
   });
 ```
 
-- [ ] **Step 2: Update shell architecture test**
+- [x] **Step 2: Update shell architecture test**
 
 In `src/lib/components/analysis/source-browser-shell.test.ts`, update the second test:
 
@@ -734,7 +734,7 @@ In `src/lib/components/analysis/source-browser-shell.test.ts`, update the second
   });
 ```
 
-- [ ] **Step 3: Run failing route/shell tests**
+- [x] **Step 3: Run failing route/shell tests**
 
 Run:
 
