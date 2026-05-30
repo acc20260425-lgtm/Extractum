@@ -173,6 +173,8 @@ describe("source browser model", () => {
       .toEqual(["timeline", "items", "metadata", "activity"]);
     expect(sourceBrowserTabsForSource(source({ sourceType: "youtube", sourceSubtype: "video" })).map((tab) => tab.id))
       .toEqual(["transcript", "comments", "items", "metadata", "activity"]);
+    expect(sourceBrowserTabsForSource(source({ sourceType: "youtube", sourceSubtype: "playlist" })).map((tab) => tab.id))
+      .toEqual(["videos", "items", "metadata", "activity"]);
     expect(sourceBrowserTabsForSource(source({ sourceType: "rss", sourceSubtype: "feed" })).map((tab) => tab.id))
       .toEqual(["items", "metadata", "activity"]);
   });
@@ -180,6 +182,7 @@ describe("source browser model", () => {
   it("selects smart defaults by canonical tab id", () => {
     expect(smartDefaultSourceBrowserTab(source({ sourceType: "telegram" }))).toBe("timeline");
     expect(smartDefaultSourceBrowserTab(source({ sourceType: "youtube", sourceSubtype: "video" }))).toBe("transcript");
+    expect(smartDefaultSourceBrowserTab(source({ sourceType: "youtube", sourceSubtype: "playlist" }))).toBe("videos");
     expect(smartDefaultSourceBrowserTab(source({ sourceType: "forum", sourceSubtype: "thread" }))).toBe("items");
   });
 
@@ -193,11 +196,25 @@ describe("source browser model", () => {
     expect(reconcileSourceBrowserTab("metadata", telegram)).toBe("metadata");
   });
 
-  it("routes only Telegram and YouTube video live sources into the shell in this slice", () => {
+  it("routes Telegram YouTube video and YouTube playlist live sources into the shell", () => {
     expect(sourceBrowserShellAppliesToSource(source({ sourceType: "telegram", sourceSubtype: "supergroup" }))).toBe(true);
     expect(sourceBrowserShellAppliesToSource(source({ sourceType: "youtube", sourceSubtype: "video" }))).toBe(true);
-    expect(sourceBrowserShellAppliesToSource(source({ sourceType: "youtube", sourceSubtype: "playlist" }))).toBe(false);
+    expect(sourceBrowserShellAppliesToSource(source({ sourceType: "youtube", sourceSubtype: "playlist" }))).toBe(true);
     expect(sourceBrowserShellAppliesToSource(source({ sourceType: "rss", sourceSubtype: "feed" }))).toBe(false);
+  });
+
+  it("reconciles playlist tab transitions by canonical tab support", () => {
+    const youtubeVideo = source({ id: 2, sourceType: "youtube", sourceSubtype: "video" });
+    const youtubePlaylist = source({ id: 3, sourceType: "youtube", sourceSubtype: "playlist" });
+    const telegram = source({ id: 4, sourceType: "telegram", sourceSubtype: "supergroup" });
+
+    expect(reconcileSourceBrowserTab("metadata", youtubePlaylist)).toBe("metadata");
+    expect(reconcileSourceBrowserTab("items", youtubePlaylist)).toBe("items");
+    expect(reconcileSourceBrowserTab("activity", youtubePlaylist)).toBe("activity");
+    expect(reconcileSourceBrowserTab("transcript", youtubePlaylist)).toBe("videos");
+    expect(reconcileSourceBrowserTab("comments", youtubePlaylist)).toBe("videos");
+    expect(reconcileSourceBrowserTab("videos", youtubeVideo)).toBe("transcript");
+    expect(reconcileSourceBrowserTab("videos", telegram)).toBe("timeline");
   });
 
   it("derives item kind chips only from loaded rows", () => {

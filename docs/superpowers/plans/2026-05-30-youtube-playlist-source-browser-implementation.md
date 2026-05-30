@@ -67,7 +67,7 @@ state changed.
 **Files:**
 - Modify: `src/lib/source-browser-model.test.ts`
 
-- [ ] **Step 1: Write failing playlist model tests**
+- [x] **Step 1: Write failing playlist model tests**
 
 In `src/lib/source-browser-model.test.ts`, update the existing tab/default/applicability tests and add a transition matrix test:
 
@@ -112,7 +112,7 @@ In `src/lib/source-browser-model.test.ts`, update the existing tab/default/appli
   });
 ```
 
-- [ ] **Step 2: Run the failing model test**
+- [x] **Step 2: Run the failing model test**
 
 Run:
 
