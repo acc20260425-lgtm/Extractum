@@ -217,7 +217,7 @@ git commit -m "docs: mark source browser specs merged"
 - Modify: `docs/superpowers/specs/README.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-closure-implementation.md`
 
-- [ ] **Step 1: Replace the active Source Browser spec list**
+- [x] **Step 1: Replace the active Source Browser spec list**
 
 Replace the `Active specs:` section in `docs/superpowers/specs/README.md` with:
 
@@ -242,7 +242,7 @@ Shipped Source Browser specs that remain here as architecture references:
 
 Leave the surrounding archive guidance intact.
 
-- [ ] **Step 2: Verify active README no longer presents shipped work as active**
+- [x] **Step 2: Verify active README no longer presents shipped work as active**
 
 Run:
 
@@ -253,7 +253,7 @@ git diff --check
 
 Expected: README says `None currently`, lists shipped Source Browser specs as architecture references, and contains no `pending merge`.
 
-- [ ] **Step 3: Commit the README cleanup**
+- [x] **Step 3: Commit the README cleanup**
 
 Run:
 
