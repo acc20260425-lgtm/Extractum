@@ -1,4 +1,4 @@
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, QueryBuilder, Sqlite};
 
 use super::corpus::YoutubeCorpusMode;
 use super::models::{
@@ -14,6 +14,7 @@ use super::{
 };
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{internal_error, AppError, AppResult};
+use crate::time::ymd_to_unix_midnight;
 
 async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> AppResult<bool> {
     sqlx::query_scalar::<_, i64>(
@@ -209,6 +210,217 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         scope_label_snapshot: row.scope_label_snapshot,
         snapshot_message_count: row.snapshot_message_count,
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AnalysisRunListFilters {
+    pub(crate) source_id: Option<i64>,
+    pub(crate) source_group_id: Option<i64>,
+    pub(crate) limit: i64,
+    pub(crate) query: Option<String>,
+    pub(crate) status: Option<String>,
+    pub(crate) provider: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) template: Option<String>,
+    pub(crate) date_from: Option<String>,
+    pub(crate) date_to: Option<String>,
+}
+
+const ANALYSIS_RUN_LIST_SELECT: &str = r#"
+    SELECT
+        runs.id,
+        runs.run_type,
+        runs.scope_type,
+        runs.source_id,
+        sources.title AS source_title,
+        runs.source_group_id,
+        groups.name AS source_group_name,
+        runs.period_from,
+        runs.period_to,
+        runs.output_language,
+        runs.prompt_template_id,
+        templates.name AS prompt_template_name,
+        runs.prompt_template_version,
+        runs.provider_profile,
+        runs.provider,
+        runs.model,
+        runs.youtube_corpus_mode,
+        COALESCE(runs.telegram_history_scope, 'current') AS telegram_history_scope,
+        runs.status,
+        runs.result_markdown,
+        runs.trace_data_zstd,
+        runs.scope_label_snapshot,
+        runs.snapshot_captured_at,
+        runs.snapshot_error,
+        COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
+        runs.error,
+        runs.created_at,
+        runs.completed_at
+    FROM analysis_runs runs
+    LEFT JOIN sources ON sources.id = runs.source_id
+    LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
+    LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
+    LEFT JOIN (
+        SELECT run_id, COUNT(*) AS snapshot_message_count
+        FROM analysis_run_messages
+        GROUP BY run_id
+    ) snapshot_counts ON snapshot_counts.run_id = runs.id
+    WHERE 1 = 1
+"#;
+
+const RUN_QUERY_FIELDS: [&str; 8] = [
+    "lower(coalesce(runs.scope_label_snapshot, ''))",
+    "lower(coalesce(sources.title, ''))",
+    "lower(coalesce(groups.name, ''))",
+    "lower(coalesce(templates.name, ''))",
+    "lower(coalesce(runs.provider_profile, ''))",
+    "lower(coalesce(runs.provider, ''))",
+    "lower(coalesce(runs.model, ''))",
+    "lower(coalesce(runs.error, ''))",
+];
+
+fn trimmed_filter(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn escaped_like_contains(value: &str) -> String {
+    format!(
+        "%{}%",
+        value
+            .trim()
+            .to_lowercase()
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    )
+}
+
+fn parse_yyyy_mm_dd_midnight(value: &str) -> Option<i64> {
+    let value = value.trim();
+    let bytes = value.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit())
+    {
+        return None;
+    }
+
+    ymd_to_unix_midnight(value)
+}
+
+fn parse_yyyy_mm_dd_day_end(value: &str) -> Option<i64> {
+    parse_yyyy_mm_dd_midnight(value).map(|start| start + 86_399)
+}
+
+fn push_like_predicate(query: &mut QueryBuilder<'_, Sqlite>, expression: &str, value: &str) {
+    query.push(" AND ");
+    query.push(expression);
+    query.push(" LIKE ");
+    query.push_bind(escaped_like_contains(value));
+    query.push(" ESCAPE '\\'");
+}
+
+fn push_search_term_predicate(query: &mut QueryBuilder<'_, Sqlite>, term: &str) {
+    query.push(" AND (");
+    for (index, field) in RUN_QUERY_FIELDS.iter().enumerate() {
+        if index > 0 {
+            query.push(" OR ");
+        }
+        query.push(*field);
+        query.push(" LIKE ");
+        query.push_bind(escaped_like_contains(term));
+        query.push(" ESCAPE '\\'");
+    }
+    query.push(")");
+}
+
+pub(crate) async fn list_analysis_run_summaries(
+    pool: &Pool<Sqlite>,
+    filters: AnalysisRunListFilters,
+) -> AppResult<Vec<AnalysisRunSummary>> {
+    if filters.source_id.is_some() && filters.source_group_id.is_some() {
+        return Err(AppError::validation(
+            "Pass either source_id or source_group_id, not both",
+        ));
+    }
+
+    let mut query = QueryBuilder::<Sqlite>::new(ANALYSIS_RUN_LIST_SELECT);
+
+    if let Some(source_id) = filters.source_id {
+        query.push(" AND runs.source_id = ");
+        query.push_bind(source_id);
+    }
+
+    if let Some(source_group_id) = filters.source_group_id {
+        query.push(" AND runs.source_group_id = ");
+        query.push_bind(source_group_id);
+    }
+
+    match trimmed_filter(filters.status).as_deref() {
+        Some("queued_running") => {
+            query.push(" AND runs.status IN (");
+            let mut separated = query.separated(", ");
+            separated.push_bind(ANALYSIS_STATUS_QUEUED);
+            separated.push_bind(ANALYSIS_STATUS_RUNNING);
+            separated.push_unseparated(")");
+        }
+        Some("all") | None => {}
+        Some(status) => {
+            query.push(" AND runs.status = ");
+            query.push_bind(status.to_string());
+        }
+    }
+
+    if let Some(date_from) = trimmed_filter(filters.date_from)
+        .as_deref()
+        .and_then(parse_yyyy_mm_dd_midnight)
+    {
+        query.push(" AND runs.created_at >= ");
+        query.push_bind(date_from);
+    }
+
+    if let Some(date_to) = trimmed_filter(filters.date_to)
+        .as_deref()
+        .and_then(parse_yyyy_mm_dd_day_end)
+    {
+        query.push(" AND runs.created_at <= ");
+        query.push_bind(date_to);
+    }
+
+    if let Some(provider) = trimmed_filter(filters.provider) {
+        push_like_predicate(&mut query, "lower(coalesce(runs.provider, ''))", &provider);
+    }
+
+    if let Some(model) = trimmed_filter(filters.model) {
+        push_like_predicate(&mut query, "lower(coalesce(runs.model, ''))", &model);
+    }
+
+    if let Some(template) = trimmed_filter(filters.template) {
+        push_like_predicate(&mut query, "lower(coalesce(templates.name, ''))", &template);
+    }
+
+    if let Some(search) = trimmed_filter(filters.query) {
+        for term in search.split_whitespace() {
+            push_search_term_predicate(&mut query, term);
+        }
+    }
+
+    query.push(" ORDER BY runs.created_at DESC LIMIT ");
+    query.push_bind(filters.limit.clamp(1, 100));
+
+    let rows = query
+        .build_query_as::<AnalysisRunRow>()
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)?;
+
+    Ok(rows.into_iter().map(map_run_summary).collect())
 }
 
 pub(crate) async fn fetch_run_row(
@@ -815,8 +1027,8 @@ pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> AppRes
 mod tests {
     use super::{
         capture_run_snapshot, delete_saved_run, ensure_sources_exist, fetch_prompt_template,
-        map_run_detail, map_run_summary, mark_run_capture_failed, resolve_run_scope_label,
-        sanitize_snapshot_error, set_run_status,
+        list_analysis_run_summaries, map_run_detail, map_run_summary, mark_run_capture_failed,
+        resolve_run_scope_label, sanitize_snapshot_error, set_run_status, AnalysisRunListFilters,
     };
     use crate::analysis::models::{
         AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, CorpusMessage,
@@ -859,6 +1071,491 @@ mod tests {
 
     fn sample_run() -> AnalysisRunDetail {
         map_run_detail(sample_run_row())
+    }
+
+    #[derive(Clone)]
+    struct RunListFixture {
+        id: i64,
+        source_id: Option<i64>,
+        source_group_id: Option<i64>,
+        scope_label_snapshot: &'static str,
+        prompt_template_id: Option<i64>,
+        provider_profile: &'static str,
+        provider: &'static str,
+        model: &'static str,
+        status: &'static str,
+        error: Option<&'static str>,
+        created_at: i64,
+    }
+
+    impl RunListFixture {
+        fn completed(id: i64, created_at: i64, label: &'static str) -> Self {
+            Self {
+                id,
+                source_id: Some(1),
+                source_group_id: None,
+                scope_label_snapshot: label,
+                prompt_template_id: Some(1),
+                provider_profile: "default",
+                provider: "gemini",
+                model: "gemini-2.5-flash",
+                status: "completed",
+                error: None,
+                created_at,
+            }
+        }
+    }
+
+    async fn run_list_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create sources");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_source_groups (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create groups");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_prompt_templates (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                template_kind TEXT NOT NULL,
+                body TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                is_builtin BOOLEAN NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create templates");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY,
+                run_type TEXT NOT NULL DEFAULT 'report',
+                scope_type TEXT NOT NULL DEFAULT 'single_source',
+                source_id INTEGER,
+                source_group_id INTEGER,
+                period_from INTEGER NOT NULL DEFAULT 0,
+                period_to INTEGER NOT NULL DEFAULT 0,
+                output_language TEXT NOT NULL DEFAULT 'English',
+                prompt_template_id INTEGER,
+                prompt_template_version INTEGER NOT NULL DEFAULT 1,
+                provider_profile TEXT NOT NULL DEFAULT 'default',
+                provider TEXT NOT NULL DEFAULT 'gemini',
+                model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
+                telegram_history_scope TEXT NOT NULL DEFAULT 'current',
+                status TEXT NOT NULL DEFAULT 'completed',
+                result_markdown TEXT,
+                trace_data_zstd BLOB,
+                scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
+                error TEXT,
+                created_at INTEGER NOT NULL,
+                completed_at INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_run_messages (
+                run_id INTEGER NOT NULL,
+                ref TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create run messages");
+
+        sqlx::query(
+            "INSERT INTO sources (id, title) VALUES (1, 'Alpha Source'), (2, 'Beta Source')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert sources");
+        sqlx::query("INSERT INTO analysis_source_groups (id, name) VALUES (10, 'Research Group')")
+            .execute(&pool)
+            .await
+            .expect("insert group");
+        sqlx::query(
+            "INSERT INTO analysis_prompt_templates (id, name, template_kind, body, version, is_builtin, created_at, updated_at) VALUES (1, 'Weekly Digest', 'report', 'body', 1, 0, 1, 1), (2, 'Incident Review', 'report', 'body', 1, 0, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert templates");
+
+        pool
+    }
+
+    async fn insert_run_list_fixture(pool: &sqlx::SqlitePool, fixture: RunListFixture) {
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_runs (
+                id,
+                run_type,
+                scope_type,
+                source_id,
+                source_group_id,
+                period_from,
+                period_to,
+                output_language,
+                prompt_template_id,
+                prompt_template_version,
+                provider_profile,
+                provider,
+                model,
+                youtube_corpus_mode,
+                telegram_history_scope,
+                status,
+                result_markdown,
+                trace_data_zstd,
+                scope_label_snapshot,
+                snapshot_captured_at,
+                snapshot_error,
+                error,
+                created_at,
+                completed_at
+            )
+            VALUES (?, 'report', ?, ?, ?, 0, 0, 'English', ?, 1, ?, ?, ?, 'transcript_description', 'current', ?, 'Report', NULL, ?, NULL, NULL, ?, ?, ?)
+            "#,
+        )
+        .bind(fixture.id)
+        .bind(if fixture.source_group_id.is_some() {
+            "source_group"
+        } else {
+            "single_source"
+        })
+        .bind(fixture.source_id)
+        .bind(fixture.source_group_id)
+        .bind(fixture.prompt_template_id)
+        .bind(fixture.provider_profile)
+        .bind(fixture.provider)
+        .bind(fixture.model)
+        .bind(fixture.status)
+        .bind(fixture.scope_label_snapshot)
+        .bind(fixture.error)
+        .bind(fixture.created_at)
+        .bind(if fixture.status == "completed" {
+            Some(fixture.created_at + 10)
+        } else {
+            None
+        })
+        .execute(pool)
+        .await
+        .expect("insert run fixture");
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_applies_query_before_limit() {
+        let pool = run_list_pool().await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture::completed(1, 300, "Newest irrelevant"),
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture::completed(2, 200, "Older target nebula"),
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture::completed(3, 100, "Oldest target nebula"),
+        )
+        .await;
+
+        let runs = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                source_id: None,
+                source_group_id: None,
+                limit: 1,
+                query: Some("nebula".to_string()),
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list runs");
+
+        assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_combines_scope_and_field_filters() {
+        let pool = run_list_pool().await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 1,
+                source_id: Some(1),
+                provider: "gemini",
+                model: "gemini-2.5-pro",
+                created_at: 300,
+                ..RunListFixture::completed(1, 300, "Source match")
+            },
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 2,
+                source_id: Some(2),
+                provider: "openai",
+                model: "gpt-5",
+                created_at: 200,
+                ..RunListFixture::completed(2, 200, "Other source")
+            },
+        )
+        .await;
+
+        let runs = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                source_id: Some(1),
+                source_group_id: None,
+                limit: 50,
+                provider: Some("GEM".to_string()),
+                model: Some("pro".to_string()),
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list runs");
+
+        assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_filters_source_groups_and_template_names() {
+        let pool = run_list_pool().await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 1,
+                source_id: None,
+                source_group_id: Some(10),
+                scope_label_snapshot: "Research Group",
+                prompt_template_id: Some(2),
+                created_at: 300,
+                ..RunListFixture::completed(1, 300, "Research Group")
+            },
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 2,
+                source_id: Some(1),
+                source_group_id: None,
+                prompt_template_id: Some(1),
+                created_at: 200,
+                ..RunListFixture::completed(2, 200, "Single source")
+            },
+        )
+        .await;
+
+        let runs = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                source_id: None,
+                source_group_id: Some(10),
+                limit: 50,
+                template: Some("incident".to_string()),
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list runs");
+
+        assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
+        assert_eq!(runs[0].source_group_name.as_deref(), Some("Research Group"));
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_rejects_both_scope_ids() {
+        let pool = run_list_pool().await;
+
+        let error = match list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                source_id: Some(1),
+                source_group_id: Some(10),
+                limit: 50,
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        {
+            Ok(_) => panic!("both scope ids should fail"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_filters_status_and_dates() {
+        let pool = run_list_pool().await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 1,
+                status: "completed",
+                created_at: 1_704_153_600,
+                ..RunListFixture::completed(1, 1_704_153_600, "Jan 2")
+            },
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 2,
+                status: "failed",
+                created_at: 1_704_240_000,
+                ..RunListFixture::completed(2, 1_704_240_000, "Jan 3")
+            },
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 3,
+                status: "running",
+                created_at: 1_704_326_400,
+                ..RunListFixture::completed(3, 1_704_326_400, "Jan 4")
+            },
+        )
+        .await;
+
+        let completed = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                limit: 50,
+                status: Some("completed".to_string()),
+                date_from: Some("2024-01-02".to_string()),
+                date_to: Some("2024-01-02".to_string()),
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list completed");
+        assert_eq!(
+            completed.iter().map(|run| run.id).collect::<Vec<_>>(),
+            vec![1],
+        );
+
+        let active = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                limit: 50,
+                status: Some("queued_running".to_string()),
+                date_from: Some("invalid".to_string()),
+                date_to: Some("2024-01-04".to_string()),
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list active");
+        assert_eq!(active.iter().map(|run| run.id).collect::<Vec<_>>(), vec![3]);
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_escapes_literal_like_characters() {
+        let pool = run_list_pool().await;
+        insert_run_list_fixture(&pool, RunListFixture::completed(1, 300, "100%_literal")).await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture::completed(2, 200, "100 percent literal"),
+        )
+        .await;
+
+        let runs = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                limit: 50,
+                query: Some("100%_literal".to_string()),
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list literal percent underscore");
+
+        assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_matches_all_query_terms_across_any_field() {
+        let pool = run_list_pool().await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 1,
+                source_id: Some(1),
+                source_group_id: None,
+                provider_profile: "research-profile",
+                error: Some("quota exhausted"),
+                created_at: 300,
+                ..RunListFixture::completed(1, 300, "Plain label")
+            },
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 2,
+                source_id: Some(2),
+                provider_profile: "research-profile",
+                error: Some("different failure"),
+                created_at: 200,
+                ..RunListFixture::completed(2, 200, "Plain label")
+            },
+        )
+        .await;
+
+        let runs = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                limit: 50,
+                query: Some("alpha quota".to_string()),
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list terms");
+
+        assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
     }
 
     async fn snapshot_store_pool() -> sqlx::SqlitePool {

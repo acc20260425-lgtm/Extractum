@@ -19,10 +19,13 @@ use self::corpus::{
 };
 use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent,
-    AnalysisRunMessageCursor, AnalysisRunMessagesPage, AnalysisRunRow, AnalysisRunSummary,
-    AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
+    AnalysisRunMessageCursor, AnalysisRunMessagesPage, AnalysisRunSummary, AnalysisSourceOption,
+    AnalysisTraceData, AnalysisTraceRef,
 };
-use self::store::{delete_saved_run, fetch_run_row, map_run_detail, map_run_summary};
+use self::store::{
+    delete_saved_run, fetch_run_row, list_analysis_run_summaries, map_run_detail, map_run_summary,
+    AnalysisRunListFilters,
+};
 use self::trace::{decode_trace_data, normalize_ref, try_build_trace_refs};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -184,170 +187,33 @@ pub async fn list_analysis_runs(
     source_id: Option<i64>,
     source_group_id: Option<i64>,
     limit: Option<i64>,
+    query: Option<String>,
+    status: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
+    template: Option<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
 ) -> AppResult<Vec<AnalysisRunSummary>> {
     let pool = get_pool(&handle).await?;
     let limit = limit.unwrap_or(20).clamp(1, 100);
 
-    if source_id.is_some() && source_group_id.is_some() {
-        return Err(AppError::validation(
-            "Pass either source_id or source_group_id, not both",
-        ));
-    }
-
-    let rows: Vec<AnalysisRunRow> = if let Some(source_id) = source_id {
-        sqlx::query_as(
-            r#"
-            SELECT
-                runs.id,
-                runs.run_type,
-                runs.scope_type,
-                runs.source_id,
-                sources.title AS source_title,
-                runs.source_group_id,
-                groups.name AS source_group_name,
-                runs.period_from,
-                runs.period_to,
-                runs.output_language,
-                runs.prompt_template_id,
-                templates.name AS prompt_template_name,
-                runs.prompt_template_version,
-                runs.provider_profile,
-                runs.provider,
-                runs.model,
-                runs.youtube_corpus_mode,
-                COALESCE(runs.telegram_history_scope, 'current') AS telegram_history_scope,
-                runs.status,
-                runs.result_markdown,
-                runs.trace_data_zstd,
-                runs.scope_label_snapshot,
-                runs.snapshot_captured_at,
-                runs.snapshot_error,
-                COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
-                runs.error,
-                runs.created_at,
-                runs.completed_at
-            FROM analysis_runs runs
-            LEFT JOIN sources ON sources.id = runs.source_id
-            LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
-            LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
-            LEFT JOIN (
-                SELECT run_id, COUNT(*) AS snapshot_message_count
-                FROM analysis_run_messages
-                GROUP BY run_id
-            ) snapshot_counts ON snapshot_counts.run_id = runs.id
-            WHERE runs.source_id = ?
-            ORDER BY runs.created_at DESC
-            LIMIT ?
-            "#,
-        )
-        .bind(source_id)
-        .bind(limit)
-        .fetch_all(&pool)
-        .await
-        .map_err(AppError::database)?
-    } else if let Some(source_group_id) = source_group_id {
-        sqlx::query_as(
-            r#"
-            SELECT
-                runs.id,
-                runs.run_type,
-                runs.scope_type,
-                runs.source_id,
-                sources.title AS source_title,
-                runs.source_group_id,
-                groups.name AS source_group_name,
-                runs.period_from,
-                runs.period_to,
-                runs.output_language,
-                runs.prompt_template_id,
-                templates.name AS prompt_template_name,
-                runs.prompt_template_version,
-                runs.provider_profile,
-                runs.provider,
-                runs.model,
-                runs.youtube_corpus_mode,
-                COALESCE(runs.telegram_history_scope, 'current') AS telegram_history_scope,
-                runs.status,
-                runs.result_markdown,
-                runs.trace_data_zstd,
-                runs.scope_label_snapshot,
-                runs.snapshot_captured_at,
-                runs.snapshot_error,
-                COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
-                runs.error,
-                runs.created_at,
-                runs.completed_at
-            FROM analysis_runs runs
-            LEFT JOIN sources ON sources.id = runs.source_id
-            LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
-            LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
-            LEFT JOIN (
-                SELECT run_id, COUNT(*) AS snapshot_message_count
-                FROM analysis_run_messages
-                GROUP BY run_id
-            ) snapshot_counts ON snapshot_counts.run_id = runs.id
-            WHERE runs.source_group_id = ?
-            ORDER BY runs.created_at DESC
-            LIMIT ?
-            "#,
-        )
-        .bind(source_group_id)
-        .bind(limit)
-        .fetch_all(&pool)
-        .await
-        .map_err(AppError::database)?
-    } else {
-        sqlx::query_as(
-            r#"
-            SELECT
-                runs.id,
-                runs.run_type,
-                runs.scope_type,
-                runs.source_id,
-                sources.title AS source_title,
-                runs.source_group_id,
-                groups.name AS source_group_name,
-                runs.period_from,
-                runs.period_to,
-                runs.output_language,
-                runs.prompt_template_id,
-                templates.name AS prompt_template_name,
-                runs.prompt_template_version,
-                runs.provider_profile,
-                runs.provider,
-                runs.model,
-                runs.youtube_corpus_mode,
-                COALESCE(runs.telegram_history_scope, 'current') AS telegram_history_scope,
-                runs.status,
-                runs.result_markdown,
-                runs.trace_data_zstd,
-                runs.scope_label_snapshot,
-                runs.snapshot_captured_at,
-                runs.snapshot_error,
-                COALESCE(snapshot_counts.snapshot_message_count, 0) AS snapshot_message_count,
-                runs.error,
-                runs.created_at,
-                runs.completed_at
-            FROM analysis_runs runs
-            LEFT JOIN sources ON sources.id = runs.source_id
-            LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
-            LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
-            LEFT JOIN (
-                SELECT run_id, COUNT(*) AS snapshot_message_count
-                FROM analysis_run_messages
-                GROUP BY run_id
-            ) snapshot_counts ON snapshot_counts.run_id = runs.id
-            ORDER BY runs.created_at DESC
-            LIMIT ?
-            "#,
-        )
-        .bind(limit)
-        .fetch_all(&pool)
-        .await
-        .map_err(AppError::database)?
-    };
-
-    Ok(rows.into_iter().map(map_run_summary).collect())
+    list_analysis_run_summaries(
+        &pool,
+        AnalysisRunListFilters {
+            source_id,
+            source_group_id,
+            limit,
+            query,
+            status,
+            provider,
+            model,
+            template,
+            date_from,
+            date_to,
+        },
+    )
+    .await
 }
 
 #[tauri::command]
