@@ -106,6 +106,7 @@
     focusedStreamedOutput,
     canCancelCurrentRun,
     sourceItems,
+    sourceItemsError,
     sourceItemsHasMore,
     loadingItems,
     sourceTopics,
@@ -254,6 +255,7 @@
     focusedStreamedOutput: string;
     canCancelCurrentRun: boolean;
     sourceItems: SourceItem[];
+    sourceItemsError: string | null;
     sourceItemsHasMore: boolean;
     loadingItems: boolean;
     sourceTopics: SourceForumTopic[];
@@ -612,6 +614,7 @@
       {currentGroup}
       {currentSourceMetric}
       {sourceItems}
+      {sourceItemsError}
       {sourceItemsHasMore}
       {loadingItems}
       {youtubeTranscriptSegments}

@@ -8,6 +8,7 @@ import telegramMediaCardSource from "./components/analysis/telegram-media-card.s
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import youtubePlaylistSource from "./components/analysis/youtube-playlist-reader.svelte?raw";
+import youtubeCommentsViewSource from "./components/analysis/youtube-comments-view.svelte?raw";
 import youtubeSourceActivitySource from "./components/analysis/youtube-source-activity.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
 
@@ -214,6 +215,15 @@ describe("analysis source readers", () => {
     expect(universalItemsViewSource).toContain("All");
     expect(universalItemsViewSource).toContain("Load more items");
     expect(universalItemsViewSource).toContain("Unknown item kind");
+  });
+
+  it("renders YouTube comments as a loaded-window browser", () => {
+    expect(youtubeCommentsViewSource).toContain("Search loaded comments");
+    expect(youtubeCommentsViewSource).toContain("Threaded");
+    expect(youtubeCommentsViewSource).toContain("Flat");
+    expect(youtubeCommentsViewSource).toContain("Most liked");
+    expect(youtubeCommentsViewSource).toContain("parent not loaded");
+    expect(youtubeCommentsViewSource).toContain("Sync comments");
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {

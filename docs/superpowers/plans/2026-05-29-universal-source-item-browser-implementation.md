@@ -1046,7 +1046,7 @@ Expected: PASS.
 - Modify: `src/lib/components/analysis/source-browser-shell.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Write failing component contract tests**
+- [x] **Step 1: Write failing component contract tests**
 
 Add:
 
@@ -1067,17 +1067,17 @@ it("renders YouTube comments as a loaded-window browser", () => {
 });
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run: `npm run test -- src/lib/analysis-source-readers.test.ts`
 
 Expected: FAIL because the component does not exist.
 
-- [ ] **Step 3: Implement `YoutubeCommentsView`**
+- [x] **Step 3: Implement `YoutubeCommentsView`**
 
 The component receives `items`, `detail`, `sourceJobs`, `routeError`, `loading`, `hasMore`, `formatTimestamp`, `onLoadMore`, `onSyncComments`, and `onSyncMetadata`. It calls `commentsCoverageState({ items, detail, jobs: sourceJobs, routeError, loadingItems: loading })`, uses `Search loaded comments`, and keeps detailed job information out of the tab.
 
-- [ ] **Step 4: Wire Comments tab**
+- [x] **Step 4: Wire Comments tab**
 
 Add a route-owned `sourceItemsError: string | null` or equivalent scoped error
 for source item loading in `/analysis/+page.svelte`, pass it through
@@ -1103,7 +1103,7 @@ Modify `source-browser-shell.svelte`:
   />
 ```
 
-- [ ] **Step 5: Run Slice 4b tests**
+- [x] **Step 5: Run Slice 4b tests**
 
 Run:
 
@@ -1114,7 +1114,7 @@ npm run check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 6: Commit Slice 4b**
+- [x] **Step 6: Commit Slice 4b**
 
 ```bash
 git add src/routes/analysis/+page.svelte src/lib/components/analysis/report-canvas.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/source-browser-model.ts src/lib/source-browser-model.test.ts src/lib/components/analysis/youtube-comments-view.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/analysis-source-readers.test.ts

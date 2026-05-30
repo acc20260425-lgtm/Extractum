@@ -60,6 +60,7 @@
     currentGroup: AnalysisSourceGroup | null;
     currentSourceMetric: AnalysisSourceOption | null;
     sourceItems: SourceItem[];
+    sourceItemsError: string | null;
     sourceItemsHasMore: boolean;
     loadingItems: boolean;
     sourceTopics: SourceForumTopic[];
@@ -122,6 +123,7 @@
     takeoutRecovery = null,
     currentGroup,
     sourceItems,
+    sourceItemsError,
     sourceItemsHasMore,
     loadingItems,
     sourceTopics,
@@ -363,6 +365,7 @@
           {liveReaderItems}
           {takeoutRecovery}
           {sourceItems}
+          sourceRouteError={sourceItemsError}
           {sourceItemsHasMore}
           {loadingItems}
           {sourceTopics}

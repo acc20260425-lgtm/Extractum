@@ -268,6 +268,7 @@
   let sourceCatalog = $state<Source[]>([]);
   let sourceMetrics = $state<Record<number, AnalysisSourceOption>>({});
   let sourceItems = $state<SourceItem[]>([]);
+  let sourceItemsError = $state<string | null>(null);
   let telegramHistoryScope = $state<TelegramHistoryScope>("current");
   let sourceItemsCursor = $state<SourceItemsCursor | null>(null);
   let sourceItemsBeforePublishedAt = $state<number | null>(null);
@@ -946,6 +947,7 @@
 
   function resetSourceItemsReader() {
     sourceItems = [];
+    sourceItemsError = null;
     sourceItemsCursor = null;
     sourceItemsBeforePublishedAt = null;
     sourceItemsHasMore = false;
@@ -956,6 +958,7 @@
     const previousBeforePublishedAt = sourceItemsBeforePublishedAt;
     const lastItem = items.at(-1);
     sourceItems = append ? [...sourceItems, ...items] : items;
+    sourceItemsError = null;
     sourceItemsCursor = lastItem?.pageCursor ?? (append ? previousCursor : null);
     sourceItemsBeforePublishedAt =
       lastItem?.publishedAt ?? (append ? previousBeforePublishedAt : null);
@@ -1510,6 +1513,7 @@
 
   async function loadItems(sourceId: number) {
     loadingItems = true;
+    sourceItemsError = null;
     const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
     const isTelegramSource = source?.sourceType === "telegram";
     try {
@@ -1524,7 +1528,8 @@
       applySourceItemsPage(items, false);
     } catch (error) {
       resetSourceItemsReader();
-      status = formatAppError("loading source messages", error);
+      sourceItemsError = formatAppError("loading source messages", error);
+      status = sourceItemsError;
     } finally {
       loadingItems = false;
     }
@@ -1541,6 +1546,7 @@
     if (!canPage) return;
 
     loadingItems = true;
+    sourceItemsError = null;
     try {
       const items = await listSourceItems({
         sourceId: source.id,
@@ -1552,7 +1558,8 @@
       });
       applySourceItemsPage(items, true);
     } catch (error) {
-      status = formatAppError("loading more source messages", error);
+      sourceItemsError = formatAppError("loading more source messages", error);
+      status = sourceItemsError;
     } finally {
       loadingItems = false;
     }
@@ -2672,6 +2679,7 @@
     {focusedStreamedOutput}
     {canCancelCurrentRun}
     {sourceItems}
+    {sourceItemsError}
     {sourceItemsHasMore}
     {loadingItems}
     {sourceTopics}

@@ -5,6 +5,7 @@
   import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import UniversalItemsView from "$lib/components/analysis/universal-items-view.svelte";
+  import YoutubeCommentsView from "$lib/components/analysis/youtube-comments-view.svelte";
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import {
     reconcileSourceBrowserTab,
@@ -28,6 +29,7 @@
     liveReaderItems: SourceReaderItem[];
     takeoutRecovery: TakeoutImportRecoveryState | null;
     sourceItems: SourceItem[];
+    sourceRouteError: string | null;
     sourceItemsHasMore: boolean;
     loadingItems: boolean;
     sourceTopics: SourceForumTopic[];
@@ -65,6 +67,7 @@
     liveReaderItems,
     takeoutRecovery,
     sourceItems,
+    sourceRouteError,
     sourceItemsHasMore,
     loadingItems,
     sourceTopics,
@@ -238,6 +241,19 @@
       hasMore={sourceItemsHasMore}
       {formatTimestamp}
       onLoadMore={onLoadMoreSourceItems}
+    />
+  {:else if activeTab === "comments"}
+    <YoutubeCommentsView
+      items={sourceItems}
+      detail={youtubeVideoDetail}
+      {sourceJobs}
+      routeError={sourceRouteError}
+      loading={loadingItems}
+      hasMore={sourceItemsHasMore}
+      {formatTimestamp}
+      onLoadMore={onLoadMoreSourceItems}
+      onSyncComments={() => onSyncYoutubeComments(source.id)}
+      onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
     />
   {:else}
     <StatusMessage tone="muted">
