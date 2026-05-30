@@ -23,9 +23,9 @@ import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.s
 describe("analysis source readers", () => {
   it("replaces transitional source panels in ReportSourceSurface", () => {
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
-    expect(reportSourceSurfaceSource).toContain("<TelegramTimelineReader");
-    expect(reportSourceSurfaceSource).toContain("<YoutubeTranscriptReader");
-    expect(reportSourceSurfaceSource).toContain("<SourceGroupReader");
+    expect(reportSourceSurfaceSource).not.toContain("<TelegramTimelineReader");
+    expect(reportSourceSurfaceSource).not.toContain("<YoutubeTranscriptReader");
+    expect(reportSourceSurfaceSource).not.toContain("<SourceGroupReader");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
     expect(reportSourceSurfaceSource).not.toContain("<SourceContextPanel");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubeSourceDetail");
@@ -45,12 +45,23 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
   });
 
-  it("keeps saved snapshots outside SourceBrowserShell", () => {
+  it("routes available run snapshots through SourceBrowserShell while keeping the header route-owned", () => {
     expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "run_snapshot"');
-    expect(reportSourceSurfaceSource).toContain("<SourceGroupReader");
-    expect(reportSourceSurfaceSource).toContain('analysisScope === "source_group" && currentGroup');
-    expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
-    expect(reportSourceSurfaceSource).not.toContain('sourceViewBasis === "run_snapshot" && sourceBrowserShellAppliesToSubject');
+    expect(reportSourceSurfaceSource).toContain("<SourceReaderHeader");
+    expect(reportSourceSurfaceSource).toContain("runSnapshotSubject");
+    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData");
+    expect(reportSourceSurfaceSource).toContain("subject={runSnapshotSubject}");
+    expect(reportSourceSurfaceSource).toContain("{onViewLiveSource}");
+    expect(reportSourceSurfaceSource).not.toContain("<SourceGroupReader");
+  });
+
+  it("keeps snapshot shell data frozen-only and live props empty", () => {
+    expect(reportSourceSurfaceSource).toContain("deriveRunSnapshotBrowserKind");
+    expect(reportSourceSurfaceSource).toContain("allSnapshotReaderItems");
+    expect(reportSourceSurfaceSource).toContain("sourceJobs={[]}");
+    expect(reportSourceSurfaceSource).toContain("takeoutRecovery={null}");
+    expect(reportSourceSurfaceSource).toContain("sourceSyncDisabledReason={() => null}");
+    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData={{");
   });
 
   it("renders YouTube playlist videos through SourceBrowserShell", () => {
@@ -203,13 +214,14 @@ describe("analysis source readers", () => {
   });
 
   it("keeps YouTube live sync actions out of readonly snapshot transcript readers", () => {
-    expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
+    expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
     expect(sourceGroupSourcesViewSource).toContain("showSyncActions={false}");
+    expect(snapshotGroupSourcesViewSource).toContain("showSyncActions={false}");
     expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(sourceSubject.id)}");
   });
 
   it("keeps run snapshot YouTube readers detached from live video detail", () => {
-    expect(reportSourceSurfaceSource).toContain("detail={null}");
+    expect(sourceBrowserShellSource).toContain("detail={null}");
     expect(reportSourceSurfaceSource).not.toContain("detail={youtubeVideoDetail}");
     expect(sourceBrowserShellSource).toContain("detail={youtubeVideoDetail}");
     expect(sourceBrowserShellSource).toContain('sourceTitle={sourceSubject.title ?? sourceSubject.externalId}');
@@ -321,7 +333,7 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("{sourceJobs}");
     expect(sourceBrowserShellSource).toContain("onSyncComments={() => onSyncYoutubeComments(sourceSubject.id)}");
     expect(sourceBrowserShellSource).toContain("onCancelSourceJob={onCancelSourceJob}");
-    expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
+    expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
     expect(reportSourceSurfaceSource).not.toContain("onSyncComments={() => {}}");
   });
 

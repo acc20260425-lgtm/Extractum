@@ -1415,7 +1415,7 @@ git commit -m "feat: add run snapshot branches to source browser shell"
 - Modify: `src/lib/analysis-report-canvas.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Update route/source reader raw tests**
+- [x] **Step 1: Update route/source reader raw tests**
 
 In `src/lib/analysis-source-readers.test.ts`, replace the `"keeps saved snapshots outside SourceBrowserShell"` test with:
 
@@ -1487,7 +1487,7 @@ with:
     expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
 ```
 
-- [ ] **Step 2: Update report canvas snapshot contract tests**
+- [x] **Step 2: Update report canvas snapshot contract tests**
 
 In `src/lib/analysis-report-canvas.test.ts`, replace the `"keeps source-group run snapshots pageable through the grouped reader"` test with:
 
@@ -1521,7 +1521,7 @@ Remove the unused raw import:
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 ```
 
-- [ ] **Step 3: Run route contract tests and verify they fail**
+- [x] **Step 3: Run route contract tests and verify they fail**
 
 Run:
 
@@ -1531,7 +1531,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: FAIL because `ReportSourceSurface` still renders direct snapshot readers.
 
-- [ ] **Step 4: Update `ReportSourceSurface` imports**
+- [x] **Step 4: Update `ReportSourceSurface` imports**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, remove these imports:
 
@@ -1551,7 +1551,7 @@ Change the source browser model import to:
   } from "$lib/source-browser-model";
 ```
 
-- [ ] **Step 5: Add snapshot source metadata derivations**
+- [x] **Step 5: Add snapshot source metadata derivations**
 
 Below `snapshotSourceOptions`, add:
 
@@ -1603,7 +1603,7 @@ Below `snapshotSourceOptions`, add:
   );
 ```
 
-- [ ] **Step 6: Replace available snapshot direct readers with shell**
+- [x] **Step 6: Replace available snapshot direct readers with shell**
 
 Inside the `snapshotAvailability === "available"` branch, keep the existing `SourceReaderHeader` unchanged.
 
@@ -1683,7 +1683,7 @@ with:
 
 Do not change the pending/unavailable/checking snapshot status branches.
 
-- [ ] **Step 7: Run route tests and Svelte check**
+- [x] **Step 7: Run route tests and Svelte check**
 
 Run:
 
@@ -1694,7 +1694,7 @@ npm.cmd run check
 
 Expected: both PASS.
 
-- [ ] **Step 8: Commit route task**
+- [x] **Step 8: Commit route task**
 
 Run:
 

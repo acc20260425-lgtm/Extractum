@@ -5,7 +5,7 @@ import reportSetupPanelSource from "./components/analysis/report-setup-panel.sve
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import reportViewerSource from "./components/analysis/report-viewer.svelte?raw";
-import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
+import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group-sources-view.svelte?raw";
 import runSnapshotMessagesPanelSource from "./components/analysis/run-snapshot-messages-panel.svelte?raw";
 
 const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
@@ -74,8 +74,7 @@ describe("report canvas component contract", () => {
     expect(reportSourceSurfaceSource).toContain("Snapshot pending");
     expect(reportSourceSurfaceSource).toContain("Snapshot unavailable");
     expect(reportSourceSurfaceSource).toContain("<SourceReaderHeader");
-    expect(reportSourceSurfaceSource).toContain("<TelegramTimelineReader");
-    expect(reportSourceSurfaceSource).toContain("<YoutubeTranscriptReader");
+    expect(reportSourceSurfaceSource).toContain("runSnapshotSubject");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
   });
@@ -110,9 +109,11 @@ describe("report canvas component contract", () => {
     expect(runSnapshotMessagesPanelSource).not.toContain("SourceMessagesPanel");
   });
 
-  it("keeps source-group run snapshots pageable through the grouped reader", () => {
-    expect(sourceGroupReaderSource).toContain("hasMoreAll");
-    expect(reportSourceSurfaceSource).toContain("hasMoreAll={hasMoreRunSnapshotMessages}");
+  it("keeps source-group run snapshots pageable through the snapshot browser", () => {
+    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData");
+    expect(reportSourceSurfaceSource).toContain("hasMoreRunSnapshotMessages");
+    expect(reportSourceSurfaceSource).toContain("onLoadMoreRunSnapshotMessages");
+    expect(snapshotGroupSourcesViewSource).toContain("Load older snapshot messages");
     expect(reportSourceSurfaceSource).not.toContain("hasMoreBySource={{}}");
   });
 
