@@ -32,10 +32,11 @@ families behind the shared source model.
 Implemented:
 
 - result-first `/analysis` workspace with compact source rail, central report/source canvas, and evidence/chat/chunks/runs companion panel
-- live single-source Source Browser for Telegram sources, YouTube videos, and
-  YouTube playlists, with provider-aware default tabs, playlist `Videos`,
+- Source Browser for live Telegram sources, YouTube videos, YouTube playlists,
+  live source groups, and available saved run snapshots, with provider-aware
+  default tabs, playlist `Videos`, group `Sources`, frozen snapshot browsing,
   universal loaded item browsing, YouTube comments, structured metadata, and
-  consolidated source Activity
+  consolidated live source Activity
 - typed event-driven `/analysis` workspace UI state transitions, ready for a future state-machine library if the workflow outgrows the local reducer
 - collapsible desktop app sidebar and mobile off-canvas navigation drawer
 - Telegram account management and sign-in flow

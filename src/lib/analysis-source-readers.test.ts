@@ -6,7 +6,6 @@ import sourceGroupActivityViewSource from "./components/analysis/source-group-ac
 import sourceGroupMetadataViewSource from "./components/analysis/source-group-metadata-view.svelte?raw";
 import sourceMetadataViewSource from "./components/analysis/source-metadata-view.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
-import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 import sourceGroupSourcesViewSource from "./components/analysis/source-group-sources-view.svelte?raw";
 import telegramMediaCardSource from "./components/analysis/telegram-media-card.svelte?raw";
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
@@ -20,12 +19,14 @@ import youtubeTranscriptSource from "./components/analysis/youtube-transcript-re
 import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group-sources-view.svelte?raw";
 import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
 
+const sourceGroupReaderTag = "<" + "Source" + "Group" + "Reader";
+
 describe("analysis source readers", () => {
   it("replaces transitional source panels in ReportSourceSurface", () => {
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).not.toContain("<TelegramTimelineReader");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubeTranscriptReader");
-    expect(reportSourceSurfaceSource).not.toContain("<SourceGroupReader");
+    expect(reportSourceSurfaceSource).not.toContain(sourceGroupReaderTag);
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
     expect(reportSourceSurfaceSource).not.toContain("<SourceContextPanel");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubeSourceDetail");
@@ -52,7 +53,7 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("snapshotBrowserData");
     expect(reportSourceSurfaceSource).toContain("subject={runSnapshotSubject}");
     expect(reportSourceSurfaceSource).toContain("{onViewLiveSource}");
-    expect(reportSourceSurfaceSource).not.toContain("<SourceGroupReader");
+    expect(reportSourceSurfaceSource).not.toContain(sourceGroupReaderTag);
   });
 
   it("keeps snapshot shell data frozen-only and live props empty", () => {
@@ -147,7 +148,7 @@ describe("analysis source readers", () => {
     expect(sourceBrowserShellSource).toContain("selectedTopicKey");
     expect(sourceBrowserShellSource).toContain("onChangeSelectedTopicKey");
     expect(sourceBrowserShellSource).toContain("__all_topics__");
-    expect(sourceGroupReaderSource).not.toContain("topic-filter");
+    expect(sourceGroupSourcesViewSource).not.toContain("topic-filter");
   });
 
   it("uses the shared takeout recovery notice in the selected source surface", () => {
@@ -411,10 +412,21 @@ describe("analysis source readers", () => {
     expect(sourceGroupSourcesViewSource).not.toContain("<span>Source focus</span>");
   });
 
-  it("keeps SourceGroupReader as a compatibility wrapper", () => {
-    expect(sourceGroupReaderSource).toContain("<SourceGroupSourcesView");
-    expect(sourceGroupReaderSource).not.toContain("$lib/api/");
-    expect(sourceGroupReaderSource).not.toContain("invoke(");
+  it("keeps migrated source browser contracts on canonical shell and leaves", () => {
+    expect(reportSourceSurfaceSource).not.toContain(sourceGroupReaderTag);
+    expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
+    expect(sourceBrowserShellSource).toContain("<SourceGroupSourcesView");
+    expect(sourceBrowserShellSource).toContain("<SnapshotGroupSourcesView");
+    expect(sourceBrowserShellSource).toContain("<SnapshotItemsView");
+    expect(sourceBrowserShellSource).toContain("<RunSnapshotMetadataView");
+    expect(sourceGroupSourcesViewSource).not.toContain("$lib/api/");
+    expect(sourceGroupSourcesViewSource).not.toContain("invoke(");
+    expect(snapshotGroupSourcesViewSource).not.toContain("$lib/api/");
+    expect(snapshotGroupSourcesViewSource).not.toContain("invoke(");
+    expect(snapshotItemsViewSource).not.toContain("$lib/api/");
+    expect(snapshotItemsViewSource).not.toContain("invoke(");
+    expect(runSnapshotMetadataViewSource).not.toContain("$lib/api/");
+    expect(runSnapshotMetadataViewSource).not.toContain("invoke(");
   });
 
   it("renders source group metadata from route-owned group fields", () => {
@@ -491,7 +503,7 @@ describe("analysis source readers", () => {
 
   it("keeps source focus controls in one reader header location", () => {
     expect(sourceReaderHeaderSource).toContain("<span>Source focus</span>");
-    expect(sourceGroupReaderSource).not.toContain("<span>Source focus</span>");
-    expect(sourceGroupReaderSource).not.toContain("group-filter");
+    expect(sourceGroupSourcesViewSource).not.toContain("<span>Source focus</span>");
+    expect(sourceGroupSourcesViewSource).not.toContain("group-filter");
   });
 });

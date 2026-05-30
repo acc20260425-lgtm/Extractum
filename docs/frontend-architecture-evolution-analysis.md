@@ -11,11 +11,11 @@ result-first analysis workspace is the right shape: compact source rail,
 central report/source canvas, and companion tabs for evidence, chat, chunks,
 and runs.
 
-The live single-source Source Browser slice has shipped for Telegram sources,
-YouTube videos, and YouTube playlists. It confirms the preferred frontend
-direction: keep route data ownership in `/analysis`, add small focused
-components for provider-aware surfaces, and keep browser tab state local to the
-shell.
+The Source Browser slices have shipped for live Telegram sources, YouTube
+videos, YouTube playlists, live source groups, and available run snapshots.
+They confirm the preferred frontend direction: keep route data ownership in
+`/analysis`, add small focused components for provider-aware surfaces, and keep
+browser tab state local to the shell.
 
 The useful Telegram Desktop lesson is interaction design for dense archive
 navigation, not its Qt widget hierarchy or live-client state model. Extractum
@@ -29,8 +29,8 @@ The frontend is a Svelte 5 app with a large `/analysis` route orchestrating:
 
 - workspace selection and persisted UI state;
 - source catalog and compact source rail;
-- live source browser tabs, legacy group readers, and saved run snapshot
-  readers;
+- live and snapshot Source Browser tabs for single sources, source groups, and
+  available run snapshots;
 - report setup/output canvas;
 - trace evidence, follow-up chat, chunk, and runs companion tabs;
 - source jobs, Takeout jobs, NotebookLM export, and provider runtime status.

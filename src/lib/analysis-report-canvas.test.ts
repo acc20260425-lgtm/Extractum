@@ -6,7 +6,7 @@ import sourceReaderHeaderSource from "./components/analysis/source-reader-header
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import reportViewerSource from "./components/analysis/report-viewer.svelte?raw";
 import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group-sources-view.svelte?raw";
-import runSnapshotMessagesPanelSource from "./components/analysis/run-snapshot-messages-panel.svelte?raw";
+import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
 
 const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
 
@@ -102,11 +102,16 @@ describe("report canvas component contract", () => {
   });
 
   it("keeps run snapshot reading bounded and snapshot-only", () => {
-    expect(runSnapshotMessagesPanelSource).toContain("AnalysisRunMessage");
-    expect(runSnapshotMessagesPanelSource).toContain("Load older snapshot messages");
-    expect(runSnapshotMessagesPanelSource).toContain("hasMoreRunSnapshotMessages");
-    expect(runSnapshotMessagesPanelSource).not.toContain("listSourceItems");
-    expect(runSnapshotMessagesPanelSource).not.toContain("SourceMessagesPanel");
+    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData");
+    expect(reportSourceSurfaceSource).toContain("hasMoreRunSnapshotMessages");
+    expect(reportSourceSurfaceSource).toContain("onLoadMoreRunSnapshotMessages");
+    expect(snapshotItemsViewSource).toContain("SourceReaderItem");
+    expect(snapshotItemsViewSource).toContain("Load older snapshot messages");
+    expect(snapshotItemsViewSource).toContain("Snapshot items are limited to frozen rows loaded for this run");
+    expect(snapshotItemsViewSource).not.toContain("SourceItem");
+    expect(snapshotItemsViewSource).not.toContain("listSourceItems");
+    expect(snapshotGroupSourcesViewSource).toContain("Load older snapshot messages");
+    expect(snapshotGroupSourcesViewSource).not.toContain("hasMoreBySource");
   });
 
   it("keeps source-group run snapshots pageable through the snapshot browser", () => {
