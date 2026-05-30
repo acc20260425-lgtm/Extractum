@@ -50,6 +50,114 @@ git checkout -b source-group-source-browser
 
 After each task, mark completed steps in this file, then commit the task. Do not migrate saved run snapshots or saved group snapshots into `SourceBrowserShell`.
 
+Commands in this plan use `npm.cmd` because the current execution environment is Windows. Use `npm run ...` instead of `npm.cmd run ...` if executing the same plan from macOS/Linux.
+
+## Task 0: Type And Behavior Preflight
+
+**Files:**
+- Validate: `src/lib/types/analysis.ts`
+- Validate: `src/lib/types/sources.ts`
+- Validate: `src/lib/source-reader-model.ts`
+- Validate: `src/lib/components/analysis/source-group-reader.svelte`
+- Validate: `src/lib/components/analysis/report-source-surface.svelte`
+- Modify: `docs/superpowers/plans/2026-05-30-source-group-source-browser-implementation.md` after marking checklist steps during execution
+
+- [ ] **Step 1: Confirm group and item DTO shapes**
+
+Run:
+
+```bash
+rg -n "export interface AnalysisSourceGroup|export interface SourceItem|export interface SourceReaderItem|groupLiveItemsBySource" src/lib/types/analysis.ts src/lib/types/sources.ts src/lib/source-reader-model.ts src/routes/analysis/+page.svelte src/lib/components/analysis/report-source-surface.svelte
+```
+
+Expected:
+
+```text
+src/lib/types/analysis.ts:32:export interface AnalysisSourceGroup {
+src/lib/types/sources.ts:75:export interface SourceItem {
+src/lib/source-reader-model.ts:20:export interface SourceReaderItem {
+src/routes/analysis/+page.svelte:<line>:  let groupLiveItemsBySource = $state<Record<number, SourceItem[]>>({});
+```
+
+Confirm these facts before continuing:
+
+- `AnalysisSourceGroup` already exposes `id`, `name`, `source_type`, `members`, `created_at`, and `updated_at`; no backend or DTO expansion is needed for group metadata.
+- `groupLiveItemsBySource` is `Record<number, SourceItem[]>`, so the group `Items` tab can feed `UniversalItemsView` directly from route-owned `SourceItem[]`.
+- `SourceReaderItem` is a separate display model and must remain the input for the group `Sources` leaf.
+
+- [ ] **Step 2: Confirm evidence and YouTube detail behavior in the existing group reader path**
+
+Run:
+
+```bash
+rg -n "selectedTraceRef|youtubeDetailsBySource|SourceGroupReader|groupLiveReaderItems|sourceItemToReaderItem" src/lib/components/analysis/source-group-reader.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/source-reader-model.ts
+```
+
+Expected:
+
+```text
+src/lib/components/analysis/source-group-reader.svelte:<line>:            selectedTraceRef={null}
+src/lib/components/analysis/report-source-surface.svelte:<line>:  const groupLiveReaderItems = $derived.by(() =>
+src/lib/components/analysis/report-source-surface.svelte:<line>:      return items.map((item) => sourceItemToReaderItem(item, { sourceTitle, selectedTraceRef }));
+src/lib/components/analysis/report-source-surface.svelte:<line>:          youtubeDetailsBySource={{}}
+src/lib/components/analysis/report-source-surface.svelte:<line>:      youtubeDetailsBySource={{}}
+```
+
+Confirm these facts before continuing:
+
+- Existing live group reader items already preserve evidence selection through `sourceItemToReaderItem(..., selectedTraceRef)`.
+- `SourceGroupReader` currently drops YouTube transcript `selectedTraceRef` by passing `null`; the new `SourceGroupSourcesView` must accept `selectedTraceRef` and pass it to `YoutubeTranscriptReader`.
+- Current group routes pass `youtubeDetailsBySource={{}}`; keep that route-owned default in this slice unless a real route-owned detail map is already present.
+
+- [ ] **Step 3: Confirm snapshot chrome is not being removed accidentally**
+
+Run:
+
+```bash
+rg -n "Source focus|sourceViewBasis === \"run_snapshot\"|<SourceGroupReader|source-group-reader" src/lib/components/analysis/source-group-reader.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/analysis-source-readers.test.ts src/lib/analysis-report-canvas.test.ts
+```
+
+Expected:
+
+```text
+src/lib/components/analysis/report-source-surface.svelte:<line>:  {#if sourceViewBasis === "run_snapshot" ...}
+src/lib/components/analysis/report-source-surface.svelte:<line>:        <SourceGroupReader
+src/lib/components/analysis/report-source-surface.svelte:<line>:    <SourceGroupReader
+```
+
+If this command prints `Source focus` inside `source-group-reader.svelte`, stop and preserve that chrome in `SourceGroupReader` instead of replacing the file with the simple wrapper in Task 2. In the current codebase, `Source focus` should not be part of `SourceGroupReader`, so the wrapper extraction is safe.
+
+- [ ] **Step 4: Record implementation decisions from the preflight**
+
+Use these decisions for the rest of the plan:
+
+- `SourceBrowserSubject` passed to `SourceBrowserShell` uses full `Source` and full `AnalysisSourceGroup` objects.
+- The model helpers may use internal narrow `Pick<Source, "sourceType" | "sourceSubtype">` inputs where they only need source type/subtype.
+- Group `Sources` uses `SourceReaderItem[]`.
+- Group `Items` uses `SourceItem[]` from `groupLiveItemsBySource`, with no `SourceReaderItem -> SourceItem` mapper.
+- `SourceGroupSourcesView` accepts `selectedTraceRef: string | null`.
+- `SourceGroupReader` remains the snapshot/legacy compatibility component.
+- Group YouTube detail data remains `youtubeDetailsBySource={{}}` in this slice unless the route already owns a real detail map.
+
+- [ ] **Step 5: Confirm the working tree is ready**
+
+Run:
+
+```bash
+git status --short
+```
+
+Expected: no unrelated working tree changes. If only this plan file changes because checklist boxes were marked, continue.
+
+- [ ] **Step 6: Commit preflight checklist**
+
+Run:
+
+```bash
+git add docs/superpowers/plans/2026-05-30-source-group-source-browser-implementation.md
+git commit -m "docs: record source group browser preflight"
+```
+
 ## Task 1: Add Subject-Aware Browser Model
 
 **Files:**
@@ -201,8 +309,11 @@ Add the subject type after `SourceBrowserTab`:
 
 ```ts
 export type SourceBrowserSubject =
-  | { kind: "source"; source: Pick<Source, "sourceType" | "sourceSubtype"> }
-  | { kind: "source_group"; group: Pick<AnalysisSourceGroup, "id" | "name" | "source_type"> };
+  | { kind: "source"; source: Source }
+  | { kind: "source_group"; group: AnalysisSourceGroup };
+
+type SourceBrowserSourceLike = Pick<Source, "sourceType" | "sourceSubtype">;
+type SourceBrowserModelInput = SourceBrowserSubject | SourceBrowserSourceLike;
 ```
 
 Add the `Sources` label:
@@ -223,19 +334,15 @@ const TAB_LABELS: Record<SourceBrowserTabId, string> = {
 Replace the current tab/default/applicability helpers with subject-aware helpers and wrappers:
 
 ```ts
-function isSourceBrowserSubject(
-  input: SourceBrowserSubject | Pick<Source, "sourceType" | "sourceSubtype">,
-): input is SourceBrowserSubject {
+function isSourceBrowserSubject(input: SourceBrowserModelInput): input is SourceBrowserSubject {
   return "kind" in input && (input.kind === "source" || input.kind === "source_group");
 }
 
-function normalizeSourceBrowserSubject(
-  input: SourceBrowserSubject | Pick<Source, "sourceType" | "sourceSubtype">,
-): SourceBrowserSubject {
-  return isSourceBrowserSubject(input) ? input : { kind: "source", source: input };
+function tabRecords(ids: SourceBrowserTabId[]): SourceBrowserTab[] {
+  return ids.map((id) => ({ id, label: TAB_LABELS[id] }));
 }
 
-function sourceTabIds(source: Pick<Source, "sourceType" | "sourceSubtype">): SourceBrowserTabId[] {
+function sourceTabIds(source: SourceBrowserSourceLike): SourceBrowserTabId[] {
   if (source.sourceType === "youtube" && source.sourceSubtype === "video") {
     return ["transcript", "comments", "items", "metadata", "activity"];
   }
@@ -253,11 +360,11 @@ export function sourceBrowserTabsForSubject(subject: SourceBrowserSubject): Sour
     ? ["sources", "items", "metadata", "activity"]
     : sourceTabIds(subject.source);
 
-  return ids.map((id) => ({ id, label: TAB_LABELS[id] }));
+  return tabRecords(ids);
 }
 
-export function sourceBrowserTabsForSource(source: Pick<Source, "sourceType" | "sourceSubtype">): SourceBrowserTab[] {
-  return sourceBrowserTabsForSubject({ kind: "source", source });
+export function sourceBrowserTabsForSource(source: SourceBrowserSourceLike): SourceBrowserTab[] {
+  return tabRecords(sourceTabIds(source));
 }
 
 export function sourceBrowserShellAppliesToSubject(subject: SourceBrowserSubject): boolean {
@@ -265,31 +372,30 @@ export function sourceBrowserShellAppliesToSubject(subject: SourceBrowserSubject
   return sourceBrowserShellAppliesToSource(subject.source);
 }
 
-export function sourceBrowserShellAppliesToSource(source: Pick<Source, "sourceType" | "sourceSubtype">): boolean {
+export function sourceBrowserShellAppliesToSource(source: SourceBrowserSourceLike): boolean {
   return source.sourceType === "telegram"
     || (source.sourceType === "youtube" && (source.sourceSubtype === "video" || source.sourceSubtype === "playlist"));
 }
 
-export function smartDefaultSourceBrowserTab(
-  input: SourceBrowserSubject | Pick<Source, "sourceType" | "sourceSubtype">,
-): SourceBrowserTabId {
-  const subject = normalizeSourceBrowserSubject(input);
-  if (subject.kind === "source_group") return "sources";
-  if (subject.source.sourceType === "youtube" && subject.source.sourceSubtype === "video") return "transcript";
-  if (subject.source.sourceType === "youtube" && subject.source.sourceSubtype === "playlist") return "videos";
-  if (subject.source.sourceType === "telegram") return "timeline";
+export function smartDefaultSourceBrowserTab(input: SourceBrowserModelInput): SourceBrowserTabId {
+  if (isSourceBrowserSubject(input) && input.kind === "source_group") return "sources";
+  const source = isSourceBrowserSubject(input) ? input.source : input;
+  if (source.sourceType === "youtube" && source.sourceSubtype === "video") return "transcript";
+  if (source.sourceType === "youtube" && source.sourceSubtype === "playlist") return "videos";
+  if (source.sourceType === "telegram") return "timeline";
   return "items";
 }
 
 export function reconcileSourceBrowserTab(
   activeTab: SourceBrowserTabId | null,
-  input: SourceBrowserSubject | Pick<Source, "sourceType" | "sourceSubtype">,
+  input: SourceBrowserModelInput,
 ): SourceBrowserTabId {
-  const subject = normalizeSourceBrowserSubject(input);
-  const tabs = sourceBrowserTabsForSubject(subject);
+  const tabs = isSourceBrowserSubject(input)
+    ? sourceBrowserTabsForSubject(input)
+    : sourceBrowserTabsForSource(input);
   return activeTab && tabs.some((tab) => tab.id === activeTab)
     ? activeTab
-    : smartDefaultSourceBrowserTab(subject);
+    : smartDefaultSourceBrowserTab(input);
 }
 ```
 
@@ -335,6 +441,7 @@ Add this test near the existing source-group reader tests:
     expect(sourceGroupSourcesViewSource).toContain("groupReaderItemsBySource");
     expect(sourceGroupSourcesViewSource).toContain("onLoadMoreSource");
     expect(sourceGroupSourcesViewSource).toContain("selectedGroupSourceId");
+    expect(sourceGroupSourcesViewSource).toContain("selectedTraceRef");
     expect(sourceGroupSourcesViewSource).toContain("youtubeItems");
     expect(sourceGroupSourcesViewSource).toContain("telegramItems");
     expect(sourceGroupSourcesViewSource).not.toContain("$lib/api/");
@@ -382,6 +489,7 @@ Create `src/lib/components/analysis/source-group-sources-view.svelte` with this 
     hasMoreAll = false,
     loadMoreAllLabel = "Load more source material",
     youtubeDetailsBySource,
+    selectedTraceRef = null,
     formatTimestamp,
     onLoadMoreSource,
     onLoadMoreAll = () => {},
@@ -393,6 +501,7 @@ Create `src/lib/components/analysis/source-group-sources-view.svelte` with this 
     hasMoreAll?: boolean;
     loadMoreAllLabel?: string;
     youtubeDetailsBySource: Record<number, YoutubeVideoDetail | null>;
+    selectedTraceRef?: string | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMoreSource: (sourceId: number) => void | Promise<void>;
     onLoadMoreAll?: () => void | Promise<void>;
@@ -430,7 +539,7 @@ Create `src/lib/components/analysis/source-group-sources-view.svelte` with this 
             transcriptSearch=""
             showSyncActions={false}
             sourceTitle={group.sourceTitle}
-            selectedTraceRef={null}
+            {selectedTraceRef}
             {formatTimestamp}
             onChangeTranscriptSearch={() => {}}
             onLoadMore={() => onLoadMoreSource(group.sourceId)}
@@ -512,9 +621,9 @@ Create `src/lib/components/analysis/source-group-sources-view.svelte` with this 
 </style>
 ```
 
-- [ ] **Step 4: Replace `SourceGroupReader` with a compatibility wrapper**
+- [ ] **Step 4: Preserve `SourceGroupReader` as a compatibility wrapper**
 
-Replace `src/lib/components/analysis/source-group-reader.svelte` with:
+Task 0 should have confirmed that `SourceGroupReader` does not own snapshot-only chrome such as `Source focus`. Keep `SourceGroupReader` as the snapshot/legacy entry point and replace its inner grouped-reader body with this wrapper:
 
 ```svelte
 <script lang="ts">
@@ -530,6 +639,7 @@ Replace `src/lib/components/analysis/source-group-reader.svelte` with:
     hasMoreAll = false,
     loadMoreAllLabel = "Load more source material",
     youtubeDetailsBySource,
+    selectedTraceRef = null,
     formatTimestamp,
     onLoadMoreSource,
     onLoadMoreAll = () => {},
@@ -541,6 +651,7 @@ Replace `src/lib/components/analysis/source-group-reader.svelte` with:
     hasMoreAll?: boolean;
     loadMoreAllLabel?: string;
     youtubeDetailsBySource: Record<number, YoutubeVideoDetail | null>;
+    selectedTraceRef?: string | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMoreSource: (sourceId: number) => void | Promise<void>;
     onLoadMoreAll?: () => void | Promise<void>;
@@ -555,6 +666,7 @@ Replace `src/lib/components/analysis/source-group-reader.svelte` with:
   {hasMoreAll}
   {loadMoreAllLabel}
   {youtubeDetailsBySource}
+  {selectedTraceRef}
   {formatTimestamp}
   {onLoadMoreSource}
   {onLoadMoreAll}
@@ -714,6 +826,8 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 Expected: FAIL because the new group metadata and activity components do not exist.
 
 - [ ] **Step 3: Create `SourceGroupMetadataView`**
+
+Task 0 should have confirmed that `AnalysisSourceGroup` already exposes `created_at` and `updated_at`. If that preflight fails in a future branch, omit the Created/Updated rows instead of expanding backend DTOs in this slice.
 
 Create `src/lib/components/analysis/source-group-metadata-view.svelte`:
 
@@ -948,9 +1062,10 @@ Add this test:
     expect(shellSource).toContain("<SourceGroupMetadataView");
     expect(shellSource).toContain("<SourceGroupActivityView");
     expect(shellSource).toContain('activeTab === "sources"');
-    expect(shellSource).toContain("groupLiveReaderItems");
-    expect(shellSource).toContain("groupSourceItems");
-    expect(shellSource).toContain("sourceLabelForGroupItem");
+    expect(shellSource).toContain("groupBrowserData");
+    expect(shellSource).toContain("liveReaderItems");
+    expect(shellSource).toContain("sourceItems");
+    expect(shellSource).toContain("sourceLabelForItem");
     expect(shellSource).toContain("Group items are limited to the source rows loaded in this browser session");
   });
 ```
@@ -959,13 +1074,13 @@ In `src/lib/analysis-source-readers.test.ts`, add:
 
 ```ts
   it("keeps source group activity out of SourceActivityView", () => {
-    const groupActivityIndex = sourceBrowserShellSource.indexOf("<SourceGroupActivityView");
-    const sourceActivityIndex = sourceBrowserShellSource.indexOf("<SourceActivityView");
-
-    expect(groupActivityIndex).toBeGreaterThan(0);
-    expect(sourceActivityIndex).toBeGreaterThan(0);
-    expect(groupActivityIndex).toBeLessThan(sourceActivityIndex);
+    expect(sourceBrowserShellSource).toContain("<SourceGroupActivityView");
+    expect(sourceBrowserShellSource).toContain("<SourceActivityView");
+    expect(sourceBrowserShellSource).toContain('activeTab === "activity" && groupSubject');
+    expect(sourceBrowserShellSource).toContain('activeTab === "activity" && sourceSubject');
     expect(sourceBrowserShellSource).toContain('subject.kind === "source_group"');
+    expect(sourceBrowserShellSource).toContain('subject.kind === "source"');
+    expect(sourceBrowserShellSource).toContain("sourceSubject");
   });
 ```
 
@@ -1000,10 +1115,18 @@ Update model imports:
   } from "$lib/source-browser-model";
 ```
 
-Add `AnalysisSourceGroup` import:
+Add the grouped browser data type above `Props`:
 
 ```ts
-  import type { AnalysisSourceGroup } from "$lib/types/analysis";
+  type SourceGroupBrowserData = {
+    liveReaderItems: SourceReaderItem[];
+    sourceItems: SourceItem[];
+    selectedSourceId: number | null;
+    hasMoreBySource: Record<number, boolean>;
+    sourceLabelForItem: (item: SourceItem) => string | null;
+    onLoadSourcePage: (sourceId: number) => void | Promise<void>;
+    youtubeDetailsBySource: Record<number, YoutubeVideoDetail | null>;
+  };
 ```
 
 Update `Props` so `source` can be absent for group subjects and group data is route-owned:
@@ -1011,12 +1134,7 @@ Update `Props` so `source` can be absent for group subjects and group data is ro
 ```ts
     subject: SourceBrowserSubject;
     source: Source | null;
-    groupLiveReaderItems: SourceReaderItem[];
-    groupSourceItems: SourceItem[];
-    selectedGroupSourceId: number | null;
-    groupLiveHasMoreBySource: Record<number, boolean>;
-    sourceLabelForGroupItem: (item: SourceItem) => string | null;
-    onLoadLiveGroupSourcePage: (sourceId: number) => void | Promise<void>;
+    groupBrowserData?: SourceGroupBrowserData | null;
 ```
 
 Add these defaults to destructuring:
@@ -1024,45 +1142,51 @@ Add these defaults to destructuring:
 ```ts
     subject,
     source,
-    groupLiveReaderItems = [],
-    groupSourceItems = [],
-    selectedGroupSourceId = null,
-    groupLiveHasMoreBySource = {},
-    sourceLabelForGroupItem = () => null,
-    onLoadLiveGroupSourcePage = () => {},
+    groupBrowserData = null,
 ```
 
 Keep all existing single-source props unchanged.
 
 - [ ] **Step 4: Derive subject-aware shell state**
 
-Replace:
+Replace the source-only derived state block that starts with:
 
 ```ts
   let lastSourceId = $state<number | null>(null);
   const tabs = $derived(sourceBrowserTabsForSource(source));
 ```
 
-with:
+and includes `sortedSourceTopics` / `telegramHistoryScopeOptions` with:
 
 ```ts
   let lastSubjectKey = $state<string | null>(null);
   const tabs = $derived(sourceBrowserTabsForSubject(subject));
   const sourceSubject = $derived(subject.kind === "source" ? subject.source : null);
-  const groupSubject = $derived(subject.kind === "source_group" ? subject.group as AnalysisSourceGroup : null);
+  const groupSubject = $derived(subject.kind === "source_group" ? subject.group : null);
+  const groupData = $derived(subject.kind === "source_group" ? groupBrowserData : null);
   const subjectKey = $derived(
     subject.kind === "source"
-      ? `source:${"id" in subject.source ? subject.source.id : `${subject.source.sourceType}:${subject.source.sourceSubtype}`}`
+      ? `source:${subject.source.id}`
       : `source_group:${subject.group.id}`,
   );
-  const itemsForActiveSubject = $derived(subject.kind === "source_group" ? groupSourceItems : sourceItems);
+  const itemsForActiveSubject = $derived(groupData?.sourceItems ?? sourceItems);
   const itemsEmptyDescription = $derived(
     subject.kind === "source_group"
       ? "Group items are limited to the source rows loaded in this browser session. Use Sources to load more rows for each member source."
-      : source?.sourceType === "youtube" && source.sourceSubtype === "playlist"
+      : sourceSubject?.sourceType === "youtube" && sourceSubject.sourceSubtype === "playlist"
         ? "Playlist videos live in the Videos tab. This Items tab only shows generic archived items loaded for this playlist source."
         : "No loaded items are available for this source window.",
   );
+  const sortedSourceTopics = $derived(sourceSubject ? [...sourceTopics].sort(compareTopics) : []);
+  const telegramHistoryScopeOptions = $derived.by(() => {
+    if (!sourceSubject || sourceSubject.sourceType !== "telegram") return [];
+    if (sourceSubject.migratedHistoryRowCount <= 0) return [];
+    return [
+      { value: "current" as const, label: "Current supergroup history" },
+      { value: "migrated" as const, label: "Migrated small-group history" },
+      { value: "merged" as const, label: "Merged timeline" },
+    ];
+  });
 ```
 
 Replace the tab reconciliation effect:
@@ -1082,6 +1206,10 @@ Add a no-op load more helper:
   function loadMoreGroupItems() {
     return undefined;
   }
+
+  function loadMoreGroupSourcePage(sourceId: number) {
+    return groupData?.onLoadSourcePage(sourceId);
+  }
 ```
 
 - [ ] **Step 5: Render the group `Sources` tab**
@@ -1091,13 +1219,14 @@ Before the timeline branch in markup, add:
 ```svelte
   {#if activeTab === "sources" && groupSubject}
     <SourceGroupSourcesView
-      items={groupLiveReaderItems}
-      {selectedGroupSourceId}
+      items={groupData?.liveReaderItems ?? []}
+      selectedGroupSourceId={groupData?.selectedSourceId ?? null}
       loading={loadingItems}
-      hasMoreBySource={groupLiveHasMoreBySource}
-      youtubeDetailsBySource={{}}
+      hasMoreBySource={groupData?.hasMoreBySource ?? {}}
+      youtubeDetailsBySource={groupData?.youtubeDetailsBySource ?? {}}
+      {selectedTraceRef}
       {formatTimestamp}
-      onLoadMoreSource={onLoadLiveGroupSourcePage}
+      onLoadMoreSource={loadMoreGroupSourcePage}
     />
   {:else if activeTab === "timeline" && sourceSubject}
 ```
@@ -1111,6 +1240,8 @@ Then change the existing first branch from:
 to the `{:else if activeTab === "timeline" && sourceSubject}` branch expression shown above. Keep the existing timeline body inside that branch.
 
 - [ ] **Step 6: Guard single-source branches and add group Items/Metadata/Activity**
+
+Keep every source-scoped diagnostic and action behind `sourceSubject` checks. Topic controls, Takeout recovery, source job status, source sync actions, and `SourceActivityView` must render only when `subject.kind === "source"`.
 
 Change transcript/videos/comments branches to require `sourceSubject`:
 
@@ -1157,7 +1288,7 @@ Replace the `Items` branch with:
       loading={loadingItems}
       hasMore={subject.kind === "source_group" ? false : sourceItemsHasMore}
       emptyDescription={itemsEmptyDescription}
-      sourceLabelForItem={subject.kind === "source_group" ? sourceLabelForGroupItem : null}
+      sourceLabelForItem={subject.kind === "source_group" ? groupData?.sourceLabelForItem ?? null : null}
       {formatTimestamp}
       onLoadMore={subject.kind === "source_group" ? loadMoreGroupItems : onLoadMoreSourceItems}
     />
@@ -1182,6 +1313,8 @@ Replace the metadata branch with:
 
 Within guarded source branches, replace `source.id`, `source.title`, `source.externalId`, `source.sourceType`, and `source.sourceSubtype` with `sourceSubject.id`, `sourceSubject.title`, `sourceSubject.externalId`, `sourceSubject.sourceType`, and `sourceSubject.sourceSubtype`.
 
+In the final disabled-tab fallback, replace `Loaded rows: {sourceItems.length}` with `Loaded rows: {itemsForActiveSubject.length}`.
+
 - [ ] **Step 7: Run shell tests and verify they pass**
 
 Run:
@@ -1192,7 +1325,17 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts src
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit shell task**
+- [ ] **Step 8: Run Svelte/TypeScript check for shell wiring**
+
+Run:
+
+```bash
+npm.cmd run check
+```
+
+Expected: PASS. This catches nullable `source`, grouped data typing, and guarded branch mistakes that raw component tests cannot catch.
+
+- [ ] **Step 9: Commit shell task**
 
 Run:
 
@@ -1219,6 +1362,7 @@ In `src/lib/analysis-source-readers.test.ts`, update the first test name and exp
     expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source", source: currentSource }}');
     expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
     expect(reportSourceSurfaceSource).toContain("groupLiveSourceItems");
+    expect(reportSourceSurfaceSource).toContain("groupBrowserData");
     expect(reportSourceSurfaceSource).toContain("sourceLabelForGroupItem");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
@@ -1229,12 +1373,11 @@ Add this test:
 
 ```ts
   it("keeps saved snapshots outside SourceBrowserShell", () => {
-    const snapshotBranchStart = reportSourceSurfaceSource.indexOf('sourceViewBasis === "run_snapshot"');
-    const liveGroupShellStart = reportSourceSurfaceSource.indexOf('subject={{ kind: "source_group", group: currentGroup }}');
-    const snapshotBranch = reportSourceSurfaceSource.slice(snapshotBranchStart, liveGroupShellStart);
-
-    expect(snapshotBranch).toContain("<SourceGroupReader");
-    expect(snapshotBranch).not.toContain("<SourceBrowserShell");
+    expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "run_snapshot"');
+    expect(reportSourceSurfaceSource).toContain("<SourceGroupReader");
+    expect(reportSourceSurfaceSource).toContain('analysisScope === "source_group" && currentGroup');
+    expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
+    expect(reportSourceSurfaceSource).not.toContain('sourceViewBasis === "run_snapshot" && sourceBrowserShellAppliesToSubject');
   });
 ```
 
@@ -1263,13 +1406,15 @@ In `src/lib/components/analysis/report-source-surface.svelte`, update the model 
 
 - [ ] **Step 4: Derive group source item rows and labels**
 
-Below `groupLiveReaderItems`, add:
+Task 0 should have confirmed that `groupLiveItemsBySource` is `Record<number, SourceItem[]>`. Below `groupLiveReaderItems`, add:
 
 ```ts
   const groupLiveSourceItems = $derived.by(() =>
     Object.values(groupLiveItemsBySource).flat(),
   );
 ```
+
+This feeds `UniversalItemsView` with the existing `SourceItem[]` route state. Do not derive group `Items` from `SourceReaderItem[]`.
 
 Add a label helper near `groupMemberSource`:
 
@@ -1286,12 +1431,7 @@ Inside the existing single-source `SourceBrowserShell` component invocation, add
 
 ```svelte
         subject={{ kind: "source", source: currentSource }}
-        groupLiveReaderItems={[]}
-        groupSourceItems={[]}
-        selectedGroupSourceId={null}
-        groupLiveHasMoreBySource={{}}
-        sourceLabelForGroupItem={() => null}
-        onLoadLiveGroupSourcePage={() => {}}
+        groupBrowserData={null}
 ```
 
 - [ ] **Step 6: Route live source groups through `SourceBrowserShell`**
@@ -1320,9 +1460,9 @@ with:
         subject={{ kind: "source_group", group: currentGroup }}
         source={null}
         liveReaderItems={[]}
-        {takeoutRecovery}
+        takeoutRecovery={null}
         sourceItems={[]}
-        sourceRouteError={sourceItemsError}
+        sourceRouteError={null}
         sourceItemsHasMore={false}
         {loadingItems}
         sourceTopics={[]}
@@ -1340,13 +1480,17 @@ with:
         {selectedTraceRef}
         {telegramHistoryScope}
         currentSourceContentLabel="Source group material"
-        {sourceSyncDisabledReason}
+        sourceSyncDisabledReason={() => null}
         {formatTimestamp}
-        {groupLiveReaderItems}
-        groupSourceItems={groupLiveSourceItems}
-        {selectedGroupSourceId}
-        {groupLiveHasMoreBySource}
-        {sourceLabelForGroupItem}
+        groupBrowserData={{
+          liveReaderItems: groupLiveReaderItems,
+          sourceItems: groupLiveSourceItems,
+          selectedSourceId: selectedGroupSourceId,
+          hasMoreBySource: groupLiveHasMoreBySource,
+          sourceLabelForItem: sourceLabelForGroupItem,
+          onLoadSourcePage: onLoadLiveGroupSourcePage,
+          youtubeDetailsBySource: {},
+        }}
         {onSyncSource}
         {onLoadMoreSourceItems}
         {onChangeSelectedTopicKey}
@@ -1364,7 +1508,6 @@ with:
         {onStartTakeoutImport}
         {onStartMigratedHistoryImport}
         onCancelSourceJob={onCancelSourceJob}
-        {onLoadLiveGroupSourcePage}
       />
     {/if}
 ```
@@ -1381,7 +1524,17 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit route wiring task**
+- [ ] **Step 8: Run Svelte/TypeScript check for route wiring**
+
+Run:
+
+```bash
+npm.cmd run check
+```
+
+Expected: PASS. This catches `SourceBrowserShell` prop mismatches from `ReportSourceSurface`.
+
+- [ ] **Step 9: Commit route wiring task**
 
 Run:
 
@@ -1421,7 +1574,7 @@ Expected: PASS, including Vitest, `svelte-check`, Rust checks/tests, and `git di
 Start the app:
 
 ```bash
-npm run tauri dev
+npm.cmd run tauri dev
 ```
 
 Use the MCP bridge console to seed fixtures:
@@ -1485,6 +1638,7 @@ git commit -m "test: verify source group browser"
 ## Final Acceptance
 
 - Live source groups enter `SourceBrowserShell`.
+- `SourceBrowserShell` receives full `SourceBrowserSubject` objects, not narrow casts.
 - Live source group tabs are `Sources | Items | Metadata | Activity`.
 - `Sources` is the smart default for source groups.
 - Source-only tab behavior remains unchanged.
@@ -1492,6 +1646,7 @@ git commit -m "test: verify source group browser"
 - Group-to-group tab reconciliation preserves supported group tabs.
 - Unsupported source-only tabs fall back to `Sources` for source groups.
 - `Sources` uses a route-free group leaf and route-owned paging callbacks.
+- `Sources` preserves route-owned evidence selection by passing `selectedTraceRef` into the group leaf.
 - Group `Items` uses loaded-window semantics and preserves member source attribution.
 - Group `Metadata` uses route-owned group/member fields without backend expansion.
 - Group `Activity` does not render `SourceActivityView`, source job cards, or source-scoped CTAs.
