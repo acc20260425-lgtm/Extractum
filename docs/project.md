@@ -31,7 +31,7 @@ families behind the shared source model.
 
 Implemented:
 
-- result-first `/analysis` workspace with compact source rail, central report/source canvas, and evidence/chat/chunks/runs companion panel
+- result-first `/analysis` workspace with compact source rail, central report/source canvas, shared workspace tools for setup and opened runs, and evidence/chat/chunks/runs companion panel
 - Source Browser for live Telegram sources, YouTube videos, YouTube playlists,
   live source groups, and available saved run snapshots, with provider-aware
   default tabs, playlist `Videos`, group `Sources`, frozen snapshot browsing,
@@ -116,6 +116,8 @@ Not implemented yet:
   - configure YouTube cookies and runtime settings
 - `/analysis`
   - use the result-first research workspace layout
+  - keep NotebookLM export, template editing, and group editing reachable from
+    shared canvas-level workspace tools in setup and opened-run states
   - switch between report output/setup and source material in the central canvas
   - switch source context through the compact analysis rail
   - inspect evidence, follow-up chat, live chunk summaries, and saved runs in the companion panel

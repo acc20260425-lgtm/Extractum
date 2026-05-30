@@ -40,11 +40,12 @@ Svelte owns:
 - forms and filters
 - workflow composition
 
-The current frontend workflow is result-first: `/analysis` keeps the opened
-report or source material in the central canvas, while source switching,
-evidence, follow-up chat, live chunk summaries, and saved runs stay nearby. The
-legacy `/sources` route remains only as a compatibility redirect to
-`/analysis`.
+The current frontend workflow is result-first: `/analysis` keeps setup,
+opened reports, or source material in the central canvas, while source
+switching, evidence, follow-up chat, live chunk summaries, and saved runs stay
+nearby. Shared canvas-level workspace tools keep NotebookLM export, template editing,
+and group editing reachable in both setup and opened-run states. The legacy
+`/sources` route remains only as a compatibility redirect to `/analysis`.
 
 Live source browsing now uses `SourceBrowserShell` for Telegram sources,
 YouTube videos, YouTube playlists, live source groups, and available run
