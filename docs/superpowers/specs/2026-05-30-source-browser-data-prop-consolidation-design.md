@@ -1,7 +1,7 @@
 # Source Browser Data Prop Consolidation Design
 
 > Date: 2026-05-30
-> Status: implemented on 2026-05-30; pending merge
+> Status: merged into main on 2026-05-30
 > Scope: live single-source data prop consolidation in `SourceBrowserShell`.
 
 ## Summary

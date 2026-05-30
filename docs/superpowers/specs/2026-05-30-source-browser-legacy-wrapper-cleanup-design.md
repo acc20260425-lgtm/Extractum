@@ -1,7 +1,7 @@
 # Source Browser Legacy Wrapper Cleanup Design
 
 > Date: 2026-05-30
-> Status: implemented on 2026-05-30; pending merge
+> Status: merged into main on 2026-05-30
 > Scope: cleanup after live source group and run snapshot migration to `SourceBrowserShell`.
 
 ## Summary

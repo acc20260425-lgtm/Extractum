@@ -169,7 +169,7 @@ git commit -m "docs: record source browser smoke"
 - Modify: `docs/superpowers/specs/2026-05-30-source-browser-explicit-subject-contract-design.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-closure-implementation.md`
 
-- [ ] **Step 1: Update shipped spec statuses**
+- [x] **Step 1: Update shipped spec statuses**
 
 In each of these specs:
 
@@ -191,7 +191,7 @@ with:
 > Status: merged into main on 2026-05-30
 ```
 
-- [ ] **Step 2: Verify no active spec status still says pending merge**
+- [x] **Step 2: Verify no active spec status still says pending merge**
 
 Run:
 
@@ -202,7 +202,7 @@ git diff --check
 
 Expected: `rg` returns no matches; `git diff --check` has no whitespace errors.
 
-- [ ] **Step 3: Commit the status update**
+- [x] **Step 3: Commit the status update**
 
 Run:
 
