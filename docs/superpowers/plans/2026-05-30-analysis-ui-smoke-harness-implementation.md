@@ -92,7 +92,7 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-analysis-ui-smoke-harness-implementation.md`
 
-- [ ] **Step 1: Confirm branch and cleanliness**
+- [x] **Step 1: Confirm branch and cleanliness**
 
 Run:
 
@@ -108,7 +108,7 @@ Expected:
 
 Stop if there are unrelated uncommitted changes.
 
-- [ ] **Step 2: Confirm bridge command availability in the local crate source**
+- [x] **Step 2: Confirm bridge command availability in the local crate source**
 
 Run:
 
@@ -127,7 +127,7 @@ websocket.rs proxies plugin:mcp-bridge|get_backend_state through invoke_tauri
 
 Stop if the installed crate version is different or one of these commands is missing. Update the plan before implementation if the protocol differs.
 
-- [ ] **Step 3: Confirm current fixture cleanup already uses marker/prefix patterns**
+- [x] **Step 3: Confirm current fixture cleanup already uses marker/prefix patterns**
 
 Run:
 
@@ -144,7 +144,7 @@ external_pattern = format!("{FIXTURE_EXTERNAL_PREFIX}%") is used
 source and source-group cleanup predicates are marker-scoped
 ```
 
-- [ ] **Step 4: Confirm fixture test insert patterns before writing cleanup tests**
+- [x] **Step 4: Confirm fixture test insert patterns before writing cleanup tests**
 
 Run:
 
@@ -163,7 +163,7 @@ existing tests insert sources through current sources columns rather than guesse
 
 When adding the cleanup-scope test, reuse these patterns or return ids from inserts. Do not hand-write account/source columns that are not already used by the current fixture test helpers.
 
-- [ ] **Step 5: Record actual audit result in this plan**
+- [x] **Step 5: Record actual audit result in this plan**
 
 Add a short note under this step with the exact bridge crate version and fixture cleanup facts observed. Use this format:
 
@@ -176,7 +176,14 @@ Actual audit result:
 - Fixture tests use current helper insert patterns from fixture_pool / insert_minimal_clear_fixture.
 ```
 
-- [ ] **Step 6: Commit preflight note**
+Actual audit result:
+- Bridge crate: tauri-plugin-mcp-bridge 0.11.0.
+- WebSocket dispatcher supports: execute_js, resize_window, capture_native_screenshot.
+- Backend probe command: invoke_tauri -> plugin:mcp-bridge|get_backend_state.
+- Fixture cleanup uses marker_pattern and external_pattern in clear_analysis_redesign_fixtures_in_pool.
+- Fixture tests use current helper insert patterns from fixture_pool / insert_minimal_clear_fixture.
+
+- [x] **Step 6: Commit preflight note**
 
 Run:
 
