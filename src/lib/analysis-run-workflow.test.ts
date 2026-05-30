@@ -4,6 +4,7 @@ import {
   type AnalysisRunWorkflowPatch,
   type AnalysisRunWorkflowState,
 } from "./analysis-run-workflow";
+import { runsFilterDefaults, type CompanionRunsFilterState } from "./analysis-run-companion-state";
 import type { AnalysisHistoryScopeParams } from "./analysis-scope-state";
 import type {
   AnalysisRunDetail,
@@ -70,6 +71,7 @@ function runEvent(overrides: Partial<AnalysisRunEvent> = {}): AnalysisRunEvent {
 }
 
 type AnalysisRunWorkflowHarnessState = AnalysisRunWorkflowState & {
+  runsFilter: CompanionRunsFilterState;
   runs: AnalysisRunSummary[];
   activeRuns: AnalysisRunSummary[];
   loadingRuns: boolean;
@@ -84,6 +86,7 @@ type AnalysisRunWorkflowHarnessState = AnalysisRunWorkflowState & {
 function createHarness(initial: Partial<AnalysisRunWorkflowHarnessState> = {}) {
   const state: AnalysisRunWorkflowHarnessState = {
     historyScopeParams: { sourceId: null, sourceGroupId: null },
+    runsFilter: runsFilterDefaults(),
     activeRunId: null,
     currentRun: null,
     activeChatRequestId: null,
@@ -144,7 +147,7 @@ describe("analysis-run-workflow", () => {
     });
     deps.getState = getState as typeof deps.getState;
 
-    await workflow.loadRunsForScope(null);
+    await workflow.loadRunsForScope(null, runsFilterDefaults());
 
     expect(state.runs).toEqual([]);
     expect(deps.listRuns).not.toHaveBeenCalled();
@@ -166,13 +169,30 @@ describe("analysis-run-workflow", () => {
       runSummary({ id: 2, status: "running" }),
       runSummary({ id: 3, status: "failed" }),
     ]);
+    const filter: CompanionRunsFilterState = {
+      ...runsFilterDefaults(),
+      query: "older target",
+      status: "completed",
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-30",
+      provider: "gemini",
+      model: "flash",
+      template: "digest",
+    };
 
-    await workflow.loadRunsForScope(params);
+    await workflow.loadRunsForScope(params, filter);
 
     expect(deps.listRuns).toHaveBeenCalledWith({
       sourceId: 7,
       sourceGroupId: null,
       limit: 50,
+      query: "older target",
+      status: "completed",
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-30",
+      provider: "gemini",
+      model: "flash",
+      template: "digest",
     });
     expect(state.runs.map((run) => run.id)).toEqual([1, 3]);
     expect(getState).not.toHaveBeenCalled();
@@ -209,6 +229,13 @@ describe("analysis-run-workflow", () => {
       sourceId: 7,
       sourceGroupId: null,
       limit: 50,
+      query: "",
+      status: "all",
+      dateFrom: "",
+      dateTo: "",
+      provider: "",
+      model: "",
+      template: "",
     });
     expect(state.runs.map((run) => run.id)).toEqual([1, 4]);
     expect(state.loadingRuns).toBe(false);
@@ -221,6 +248,39 @@ describe("analysis-run-workflow", () => {
     await workflow.loadRuns();
 
     expect(state.status).toBe("Error loading analysis runs: db down");
+    expect(state.loadingRuns).toBe(false);
+  });
+
+  it("ignores stale saved run responses when a newer load finishes first", async () => {
+    const params: AnalysisHistoryScopeParams = { sourceId: 7, sourceGroupId: null };
+    const { state, deps, workflow } = createHarness({ historyScopeParams: params });
+    let resolveFirst: (runs: AnalysisRunSummary[]) => void = () => {};
+    let resolveSecond: (runs: AnalysisRunSummary[]) => void = () => {};
+    deps.listRuns
+      .mockReturnValueOnce(new Promise<AnalysisRunSummary[]>((resolve) => {
+        resolveFirst = resolve;
+      }))
+      .mockReturnValueOnce(new Promise<AnalysisRunSummary[]>((resolve) => {
+        resolveSecond = resolve;
+      }));
+
+    const first = workflow.loadRunsForScope(params, {
+      ...runsFilterDefaults(),
+      query: "first",
+    });
+    const second = workflow.loadRunsForScope(params, {
+      ...runsFilterDefaults(),
+      query: "second",
+    });
+
+    resolveSecond([runSummary({ id: 2, scope_label: "Second" })]);
+    await second;
+    expect(state.runs.map((run) => run.id)).toEqual([2]);
+    expect(state.loadingRuns).toBe(false);
+
+    resolveFirst([runSummary({ id: 1, scope_label: "First" })]);
+    await first;
+    expect(state.runs.map((run) => run.id)).toEqual([2]);
     expect(state.loadingRuns).toBe(false);
   });
 

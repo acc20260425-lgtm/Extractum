@@ -67,14 +67,17 @@ describe("analysis route effects", () => {
     return analysisPageSource.slice(functionStart, nextFunctionStart);
   }
 
-  it("keeps saved run history loading out of effect dependency tracking", () => {
+  it("schedules saved run history loading from explicit scope params and runs filters", () => {
     const effect = historyScopeEffect();
 
     expect(effect, "history-scope effect should read only the explicit scope params").toContain(
       "const params = historyScopeParams;",
     );
-    expect(effect, "history-scope effect should call the explicit-scope loader").toContain(
-      "void runWorkflow.loadRunsForScope(params);",
+    expect(effect, "history-scope effect should read the canonical companion runs filter").toContain(
+      "const filter = runsFilter;",
+    );
+    expect(effect, "history-scope effect should schedule the explicit-scope loader").toContain(
+      "scheduleSavedRunsLoad(params, filter);",
     );
     expect(effect, "history-scope effect must not call the broad wrapper directly").not.toContain(
       "loadRuns();",
@@ -82,6 +85,14 @@ describe("analysis route effects", () => {
     expect(effect, "history-scope effect should not need untrack after explicit params").not.toContain(
       "untrack(",
     );
+  });
+
+  it("debounces saved run reloads and clears pending timers on teardown", () => {
+    expect(analysisPageSource).toContain("let savedRunsLoadTimer: ReturnType<typeof setTimeout> | null = null;");
+    expect(analysisPageSource).toContain("const savedRunsLoadDelayMs = 250;");
+    expect(analysisPageSource).toContain("function scheduleSavedRunsLoad(");
+    expect(analysisPageSource).toContain("clearSavedRunsLoadTimer();");
+    expect(analysisPageSource).toContain("void runWorkflow.loadRunsForScope(params, filter);");
   });
 
   it("includes YouTube comments when syncing a video source from the main sync action", () => {

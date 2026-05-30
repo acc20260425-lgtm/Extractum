@@ -176,6 +176,7 @@
     currentAnalysisScopeTitle,
     currentAnalysisSource,
     currentAnalysisSourceMetric,
+    type AnalysisHistoryScopeParams,
   } from "$lib/analysis-scope-state";
   import {
     runSnapshotAvailabilityFromPage,
@@ -403,6 +404,8 @@
     overwriteExisting: false,
   });
   let statusTimer: ReturnType<typeof setTimeout> | null = null;
+  let savedRunsLoadTimer: ReturnType<typeof setTimeout> | null = null;
+  const savedRunsLoadDelayMs = 250;
   let llmModelsRequestKey = "";
 
   function isErrorStatus(value: string) {
@@ -1153,6 +1156,7 @@
   const runWorkflow = createAnalysisRunWorkflow({
     getState: () => ({
       historyScopeParams,
+      runsFilter,
       activeRunId,
       currentRun,
       activeChatRequestId,
@@ -1862,6 +1866,30 @@
     await runWorkflow.loadRuns();
   }
 
+  function clearSavedRunsLoadTimer() {
+    if (savedRunsLoadTimer) {
+      clearTimeout(savedRunsLoadTimer);
+      savedRunsLoadTimer = null;
+    }
+  }
+
+  function scheduleSavedRunsLoad(
+    params: AnalysisHistoryScopeParams | null,
+    filter: CompanionRunsFilterState,
+  ) {
+    clearSavedRunsLoadTimer();
+
+    if (params === null) {
+      void runWorkflow.loadRunsForScope(null, filter);
+      return;
+    }
+
+    savedRunsLoadTimer = setTimeout(() => {
+      savedRunsLoadTimer = null;
+      void runWorkflow.loadRunsForScope(params, filter);
+    }, savedRunsLoadDelayMs);
+  }
+
   async function loadSourceJobs() {
     try {
       for (const job of await listSourceJobs({ limit: 100 })) {
@@ -2408,12 +2436,9 @@
 
   $effect(() => {
     const params = historyScopeParams;
-    if (params === null) {
-      runs = [];
-      return;
-    }
+    const filter = runsFilter;
 
-    void runWorkflow.loadRunsForScope(params);
+    scheduleSavedRunsLoad(params, filter);
   });
 
   $effect(() => {
@@ -2564,6 +2589,7 @@
         clearTimeout(statusTimer);
         statusTimer = null;
       }
+      clearSavedRunsLoadTimer();
       if (detachAnalysisListener !== null) {
         detachAnalysisListener();
       }

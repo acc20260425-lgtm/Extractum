@@ -7,6 +7,7 @@ import {
   type AnalysisReportStartState,
   type RunDeletionDialog,
 } from "$lib/analysis-state";
+import type { CompanionRunsFilterState } from "$lib/analysis-run-companion-state";
 import type { AnalysisHistoryScopeParams } from "$lib/analysis-scope-state";
 import type {
   AnalysisReportStartCommand,
@@ -20,6 +21,7 @@ export type AnalysisRunInspectorMode = "active" | "history" | "trace" | "chunks"
 
 export interface AnalysisRunWorkflowState {
   historyScopeParams: AnalysisHistoryScopeParams | null;
+  runsFilter: CompanionRunsFilterState;
   activeRunId: number | null;
   currentRun: AnalysisRunDetail | null;
   activeChatRequestId: string | null;
@@ -71,8 +73,24 @@ export interface AnalysisRunWorkflowDeps {
   formatError(action: string, error: unknown): string;
 }
 
+export function analysisRunsBackendFilters(filter: CompanionRunsFilterState): Pick<
+  ListAnalysisRunsInput,
+  "query" | "status" | "dateFrom" | "dateTo" | "provider" | "model" | "template"
+> {
+  return {
+    query: filter.query,
+    status: filter.status,
+    dateFrom: filter.dateFrom,
+    dateTo: filter.dateTo,
+    provider: filter.provider,
+    model: filter.model,
+    template: filter.template,
+  };
+}
+
 export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
   let openRunRequestToken = 0;
+  let savedRunsRequestToken = 0;
 
   function createGuard(token: number): AnalysisRunRequestGuard {
     return {
@@ -80,7 +98,12 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
     };
   }
 
-  async function loadRunsForScope(params: AnalysisHistoryScopeParams | null) {
+  async function loadRunsForScope(
+    params: AnalysisHistoryScopeParams | null,
+    filter: CompanionRunsFilterState,
+  ) {
+    const requestToken = ++savedRunsRequestToken;
+
     if (params === null) {
       deps.patch({ runs: [], loadingRuns: false });
       return;
@@ -92,17 +115,27 @@ export function createAnalysisRunWorkflow(deps: AnalysisRunWorkflowDeps) {
         sourceId: params.sourceId,
         sourceGroupId: params.sourceGroupId,
         limit: 50,
+        ...analysisRunsBackendFilters(filter),
       });
+      if (requestToken !== savedRunsRequestToken) {
+        return;
+      }
       deps.patch({ runs: summaries.filter((run) => !isActiveRunStatus(run.status)) });
     } catch (error) {
+      if (requestToken !== savedRunsRequestToken) {
+        return;
+      }
       deps.patch({ status: deps.formatError("loading analysis runs", error) });
     } finally {
-      deps.patch({ loadingRuns: false });
+      if (requestToken === savedRunsRequestToken) {
+        deps.patch({ loadingRuns: false });
+      }
     }
   }
 
   async function loadRuns() {
-    await loadRunsForScope(deps.getState().historyScopeParams);
+    const state = deps.getState();
+    await loadRunsForScope(state.historyScopeParams, state.runsFilter);
   }
 
   function syncActiveRunState(summaries: AnalysisRunSummary[]) {
