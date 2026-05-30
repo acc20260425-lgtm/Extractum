@@ -833,7 +833,7 @@ The existing Activity branch must still pass:
 - Modify: `src/lib/components/analysis/report-source-surface.svelte`
 - Delete: `src/lib/components/analysis/youtube-playlist-reader.svelte`
 
-- [ ] **Step 1: Remove the old playlist reader import and type alias**
+- [x] **Step 1: Remove the old playlist reader import and type alias**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, delete:
 
@@ -865,7 +865,7 @@ Change the prop type:
     youtubePlaylistDetail: YoutubePlaylistDetail | null;
 ```
 
-- [ ] **Step 2: Pass playlist props into `SourceBrowserShell`**
+- [x] **Step 2: Pass playlist props into `SourceBrowserShell`**
 
 Inside the `<SourceBrowserShell ... />` call, add:
 
@@ -886,7 +886,7 @@ Keep the existing playlist-level retry callback named:
 
 Do not introduce a second alias named `onRetryFailed`; row-level retry stays on `onRetryYoutubePlaylistVideo`.
 
-- [ ] **Step 3: Remove the direct playlist branch**
+- [x] **Step 3: Remove the direct playlist branch**
 
 In the `{:else}` branch under `analysisScope === "single_source"`, remove the entire direct playlist reader block:
 
@@ -907,7 +907,7 @@ Replace it with:
 
 Because `sourceBrowserShellAppliesToSource(currentSource)` now handles playlists, this fallback remains for unsupported future source types only.
 
-- [ ] **Step 4: Delete the legacy reader file**
+- [x] **Step 4: Delete the legacy reader file**
 
 Delete:
 
@@ -923,7 +923,7 @@ rg -n "youtube-playlist-reader|YoutubePlaylistReader" src
 
 Remove those references before retrying the delete.
 
-- [ ] **Step 5: Run shell and reader contract tests**
+- [x] **Step 5: Run shell and reader contract tests**
 
 Run:
 
@@ -933,7 +933,7 @@ npm run test -- src/lib/source-browser-model.test.ts src/lib/youtube-source-poli
 
 Expected: PASS.
 
-- [ ] **Step 6: Run Svelte check**
+- [x] **Step 6: Run Svelte check**
 
 Run:
 
@@ -943,7 +943,7 @@ npm run check
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Slices 2 and 3**
+- [x] **Step 7: Commit Slices 2 and 3**
 
 Run:
 

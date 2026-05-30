@@ -5,7 +5,7 @@ import sourceReaderHeaderSource from "./components/analysis/source-reader-header
 import telegramMediaCardSource from "./components/analysis/telegram-media-card.svelte?raw";
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
-import youtubePlaylistSource from "./components/analysis/youtube-playlist-reader.svelte?raw";
+import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 import evidenceTabSource from "./components/analysis/run-evidence-tab.svelte?raw";
 import chatTabSource from "./components/analysis/run-chat-tab.svelte?raw";
@@ -100,11 +100,11 @@ describe("analysis redesign final safety contract", () => {
     expect(youtubeTranscriptSource).toContain('rel="noopener noreferrer"');
     expect(youtubeTranscriptSource).not.toContain("<iframe");
     expect(youtubeTranscriptSource).not.toContain("<video");
-    expect(youtubePlaylistSource).toContain('class="youtube-playlist-reader"');
-    expect(youtubePlaylistSource).toContain("playlist.items");
-    expect(youtubePlaylistSource).toContain("onOpenSource");
-    expect(youtubePlaylistSource).toContain("<YoutubeSourceActivity");
-    expect(youtubePlaylistSource).toContain("onCancelSourceJob");
+    expect(youtubePlaylistVideosViewSource).toContain('aria-label="YouTube playlist videos"');
+    expect(youtubePlaylistVideosViewSource).toContain("playlist.items");
+    expect(youtubePlaylistVideosViewSource).toContain("onOpenSource");
+    expect(youtubePlaylistVideosViewSource).not.toContain("<YoutubeSourceActivity");
+    expect(youtubePlaylistVideosViewSource).not.toContain("onCancelSourceJob");
   });
 
   it("keeps source groups grouped by source instead of merged into one pseudo-chat", () => {

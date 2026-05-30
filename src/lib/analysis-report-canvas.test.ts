@@ -76,7 +76,8 @@ describe("report canvas component contract", () => {
     expect(reportSourceSurfaceSource).toContain("<SourceReaderHeader");
     expect(reportSourceSurfaceSource).toContain("<TelegramTimelineReader");
     expect(reportSourceSurfaceSource).toContain("<YoutubeTranscriptReader");
-    expect(reportSourceSurfaceSource).toContain("<YoutubePlaylistReader");
+    expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
+    expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
   });
 
   it("passes YouTube comments and source activity callbacks through the report canvas", () => {

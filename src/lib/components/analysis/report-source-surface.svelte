@@ -5,7 +5,6 @@
   import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
   import SourceGroupReader from "$lib/components/analysis/source-group-reader.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
-  import YoutubePlaylistReader from "$lib/components/analysis/youtube-playlist-reader.svelte";
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import {
     canReturnToRunSnapshot,
@@ -41,10 +40,7 @@
     TelegramHistoryScope,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
-  import type { YoutubeVideoDetail } from "$lib/types/youtube";
-  import type { ComponentProps } from "svelte";
-
-  type YoutubePlaylistReaderProps = ComponentProps<typeof YoutubePlaylistReader>;
+  import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
 
   type Props = {
     currentRun: AnalysisRunDetail | null;
@@ -71,7 +67,7 @@
     telegramHistoryScope: TelegramHistoryScope;
     sourceJobs: SourceJobRecord[];
     youtubeVideoDetail: YoutubeVideoDetail | null;
-    youtubePlaylistDetail: YoutubePlaylistReaderProps["playlist"];
+    youtubePlaylistDetail: YoutubePlaylistDetail | null;
     loadingYoutubeDetail: boolean;
     selectedTraceRef?: string | null;
     currentScopeTitle?: string;
@@ -372,6 +368,7 @@
         {selectedTopicKey}
         {showTopicSelector}
         {youtubeVideoDetail}
+        {youtubePlaylistDetail}
         {youtubeTranscriptSegments}
         {youtubeTranscriptSearch}
         {youtubeTranscriptHasMore}
@@ -389,36 +386,20 @@
         {onChangeTelegramHistoryScope}
         {onChangeTranscriptSearch}
         {onLoadMoreYoutubeTranscriptSegments}
+        {onOpenSource}
         {onSyncYoutubeMetadata}
         {onSyncYoutubeTranscript}
         {onSyncYoutubeComments}
+        {onSyncYoutubePlaylist}
+        onRetryFailedYoutubePlaylistVideos={onRetryFailedYoutubePlaylistVideos}
+        {onSyncYoutubePlaylistVideo}
+        {onRetryYoutubePlaylistVideo}
         {onStartTakeoutImport}
         {onStartMigratedHistoryImport}
         onCancelSourceJob={onCancelSourceJob}
       />
     {:else}
-      {#key `${analysisScope}:${currentSource.id}:${currentRun?.id ?? "idle"}:live`}
-        {#if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}
-          {#if youtubeRuntimeDiagnostic}
-            <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
-          {/if}
-          <YoutubePlaylistReader
-            sourceTitle={currentSource.title ?? currentSource.externalId}
-            playlist={youtubePlaylistDetail}
-            loading={loadingYoutubeDetail}
-            {formatTimestamp}
-            onOpenSource={onOpenSource}
-            onSyncPlaylist={() => onSyncYoutubePlaylist(currentSource.id)}
-            onRetryFailed={() => onRetryFailedYoutubePlaylistVideos(currentSource.id)}
-            onSyncPlaylistVideo={(videoSourceId) => onSyncYoutubePlaylistVideo(currentSource.id, videoSourceId)}
-            onRetryPlaylistVideo={(videoSourceId) => onRetryYoutubePlaylistVideo(currentSource.id, videoSourceId)}
-            sourceJobs={sourceJobs}
-            onCancelSourceJob={onCancelSourceJob}
-          />
-        {:else}
-          <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
-        {/if}
-      {/key}
+      <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
     {/if}
   {:else if analysisScope === "source_group" && currentGroup}
     <SourceGroupReader
