@@ -134,7 +134,7 @@ Expected: commit succeeds with only this plan file staged.
 - Modify: `src/lib/components/analysis/report-source-surface.svelte`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-explicit-subject-contract-implementation.md`
 
-- [ ] **Step 1: Add shell contract assertions**
+- [x] **Step 1: Add shell contract assertions**
 
 In `src/lib/components/analysis/source-browser-shell.test.ts`, add this test inside the `describe("source browser shell component contract", () => {` block after the existing `"uses the subject-aware source browser model and keeps data fetching outside the shell"` test:
 
@@ -152,7 +152,7 @@ In `src/lib/components/analysis/source-browser-shell.test.ts`, add this test ins
   });
 ```
 
-- [ ] **Step 2: Add call-block scoped route assertions**
+- [x] **Step 2: Add call-block scoped route assertions**
 
 In `src/lib/analysis-source-readers.test.ts`, add this helper after the existing `sourceBrowserShellCall(marker: string)` helper:
 
@@ -209,7 +209,7 @@ Then add this test inside the `describe("analysis source readers", () => {` bloc
 
 This test intentionally checks only `SourceBrowserShell` call blocks. It must not assert that unrelated files lack `source={currentSource}`.
 
-- [ ] **Step 3: Run focused tests to verify the new assertions fail**
+- [x] **Step 3: Run focused tests to verify the new assertions fail**
 
 Run:
 
@@ -219,7 +219,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts src
 
 Expected: FAIL because `source-browser-shell.svelte` still contains `source?: Source | null`, still derives from `explicitSubject ?? source`, and `ReportSourceSurface` still passes `source={currentSource}` to the live single-source shell call.
 
-- [ ] **Step 4: Remove the legacy source prop from `SourceBrowserShell`**
+- [x] **Step 4: Remove the legacy source prop from `SourceBrowserShell`**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, change the props block from:
 
@@ -293,7 +293,7 @@ to:
 
 Keep the `Source` type import if `SourceBrowserData` still references it.
 
-- [ ] **Step 5: Remove the redundant live-source shell prop from `ReportSourceSurface`**
+- [x] **Step 5: Remove the redundant live-source shell prop from `ReportSourceSurface`**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, change the live single-source shell invocation from:
 
@@ -314,7 +314,7 @@ to:
 
 Do not change `sourceBrowserData`, `groupBrowserData`, or `snapshotBrowserData`.
 
-- [ ] **Step 6: Run focused tests to verify the contract passes**
+- [x] **Step 6: Run focused tests to verify the contract passes**
 
 Run:
 
@@ -324,7 +324,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts src
 
 Expected: PASS.
 
-- [ ] **Step 7: Run Svelte type checking**
+- [x] **Step 7: Run Svelte type checking**
 
 Run:
 
@@ -334,7 +334,7 @@ npm.cmd run check
 
 Expected: PASS with `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 8: Run focused source browser regression tests**
+- [x] **Step 8: Run focused source browser regression tests**
 
 Run:
 
@@ -344,7 +344,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit implementation**
+- [x] **Step 9: Commit implementation**
 
 Run:
 

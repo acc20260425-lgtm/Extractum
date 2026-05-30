@@ -41,6 +41,24 @@ function sourceBrowserShellCall(marker: string) {
   return sourceBetween(reportSourceSurfaceSource.slice(openIndex), "<SourceBrowserShell", "/>");
 }
 
+function sourceBrowserShellCalls() {
+  const calls: string[] = [];
+  let searchIndex = 0;
+
+  while (true) {
+    const openIndex = reportSourceSurfaceSource.indexOf("<SourceBrowserShell", searchIndex);
+    if (openIndex === -1) {
+      break;
+    }
+    const closeIndex = reportSourceSurfaceSource.indexOf("/>", openIndex);
+    expect(closeIndex).toBeGreaterThan(openIndex);
+    calls.push(reportSourceSurfaceSource.slice(openIndex, closeIndex + 2));
+    searchIndex = closeIndex + 2;
+  }
+
+  return calls;
+}
+
 describe("analysis source readers", () => {
   it("replaces transitional source panels in ReportSourceSurface", () => {
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
@@ -80,6 +98,33 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("sourceLabelForGroupItem");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
+  });
+
+  it("passes explicit subjects to every SourceBrowserShell call without legacy source props", () => {
+    const shellCalls = sourceBrowserShellCalls();
+    const liveSourceShellCall = sourceBrowserShellCall('subject={{ kind: "source", source: currentSource }}');
+    const liveGroupShellCall = sourceBrowserShellCall('subject={{ kind: "source_group", group: currentGroup }}');
+    const snapshotShellCall = sourceBrowserShellCall("subject={runSnapshotSubject}");
+
+    expect(shellCalls).toHaveLength(3);
+    for (const shellCall of shellCalls) {
+      expect(shellCall).toContain("subject=");
+      expect(shellCall).not.toContain("source={");
+    }
+
+    expect(liveSourceShellCall).toContain('subject={{ kind: "source", source: currentSource }}');
+    expect(liveSourceShellCall).toContain("sourceBrowserData={{");
+    expect(liveSourceShellCall).not.toContain("source={currentSource}");
+
+    expect(liveGroupShellCall).toContain('subject={{ kind: "source_group", group: currentGroup }}');
+    expect(liveGroupShellCall).toContain("groupBrowserData={{");
+    expect(liveGroupShellCall).not.toContain("source={null}");
+    expect(liveGroupShellCall).not.toContain("sourceBrowserData={{");
+
+    expect(snapshotShellCall).toContain("subject={runSnapshotSubject}");
+    expect(snapshotShellCall).toContain("snapshotBrowserData={{");
+    expect(snapshotShellCall).not.toContain("source={null}");
+    expect(snapshotShellCall).not.toContain("sourceBrowserData={{");
   });
 
   it("routes available run snapshots through SourceBrowserShell while keeping the header route-owned", () => {

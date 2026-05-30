@@ -22,6 +22,18 @@ describe("source browser shell component contract", () => {
     expect(shellSource).not.toContain("invoke(");
   });
 
+  it("requires explicit browser subjects instead of source prop fallback", () => {
+    const propsBlock = sourcePropsBlock();
+
+    expect(propsBlock).toContain("subject?: SourceBrowserSubject | null");
+    expect(propsBlock).not.toContain("source?: Source | null");
+    expect(shellSource).toContain("subject: explicitSubject = null");
+    expect(shellSource).toContain("const subject = $derived(explicitSubject);");
+    expect(shellSource).not.toContain("explicitSubject ??");
+    expect(shellSource).not.toContain('{ kind: "source" as const, source }');
+    expect(shellSource).toContain('subject && subject.kind === "source" ? sourceBrowserData : null');
+  });
+
   it("renders provider readers and playlist videos through route-owned props", () => {
     expect(shellSource).toContain("<TelegramTimelineReader");
     expect(shellSource).toContain("<YoutubeTranscriptReader");

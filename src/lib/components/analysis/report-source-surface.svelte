@@ -403,7 +403,6 @@
       {/if}
       <SourceBrowserShell
         subject={{ kind: "source", source: currentSource }}
-        source={currentSource}
         sourceBrowserData={{
           liveReaderItems,
           takeoutRecovery,

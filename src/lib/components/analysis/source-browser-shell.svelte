@@ -101,7 +101,6 @@
 
   type Props = {
     subject?: SourceBrowserSubject | null;
-    source?: Source | null;
     sourceBrowserData?: SourceBrowserData | null;
     groupBrowserData?: SourceGroupBrowserData | null;
     snapshotBrowserData?: SnapshotBrowserData | null;
@@ -112,7 +111,6 @@
 
   let {
     subject: explicitSubject = null,
-    source = null,
     sourceBrowserData = null,
     groupBrowserData = null,
     snapshotBrowserData = null,
@@ -123,7 +121,7 @@
 
   let activeTab = $state<SourceBrowserTabId | null>(null);
   let lastSubjectKey = $state<string | null>(null);
-  const subject = $derived(explicitSubject ?? (source ? { kind: "source" as const, source } : null));
+  const subject = $derived(explicitSubject);
   const tabs = $derived(subject ? sourceBrowserTabsForSubject(subject) : []);
   const sourceSubject = $derived(subject && subject.kind === "source" ? subject.source : null);
   const groupSubject = $derived(subject && subject.kind === "source_group" ? subject.group : null);
