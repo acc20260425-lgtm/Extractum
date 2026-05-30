@@ -154,7 +154,7 @@ git commit -m "docs: add archived plans guidance"
 - Move: `docs/superpowers/plans/2026-05-30-source-browser-docs-closure-implementation.md` to `docs/superpowers/archive/plans/2026-05-30-source-browser-docs-closure-implementation.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md`
 
-- [ ] **Step 1: Move completed plans**
+- [x] **Step 1: Move completed plans**
 
 Run:
 
@@ -167,7 +167,7 @@ git mv docs/superpowers/plans/2026-05-30-source-browser-explicit-subject-contrac
 git mv docs/superpowers/plans/2026-05-30-source-browser-docs-closure-implementation.md docs/superpowers/archive/plans/2026-05-30-source-browser-docs-closure-implementation.md
 ```
 
-- [ ] **Step 2: Verify active plans are reduced to README plus this plan**
+- [x] **Step 2: Verify active plans are reduced to README plus this plan**
 
 Run:
 
@@ -179,7 +179,7 @@ git diff --check
 
 Expected: active plans contain `README.md` and this archive cleanup plan only; archived plans contain the six completed Source Browser plans plus `README.md`.
 
-- [ ] **Step 3: Commit archived completed plans**
+- [x] **Step 3: Commit archived completed plans**
 
 Run:
 
