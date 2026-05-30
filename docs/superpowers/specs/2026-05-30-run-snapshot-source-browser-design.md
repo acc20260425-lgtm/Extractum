@@ -337,6 +337,9 @@ Model tests:
 - `deriveRunSnapshotBrowserKind` covers source group, YouTube transcript,
   Telegram timeline, mixed/unknown rows, metadata/row mismatch, and empty
   available snapshots;
+- `deriveRunSnapshotBrowserKind` falls back to `generic_items` when rows and
+  metadata disagree;
+- available zero-row snapshots use `Items | Metadata` and do not crash;
 - live source/group tab behavior is unchanged;
 - reconciliation preserves `items` and `metadata` across live/snapshot
   transitions;
@@ -353,10 +356,17 @@ Component and route contract tests:
 - saved Telegram snapshots use `Timeline | Items | Metadata`;
 - saved YouTube transcript snapshots use `Transcript | Items | Metadata`;
 - generic snapshots use `Items | Metadata`;
+- saved group snapshot `Sources` uses global run-snapshot paging copy, not
+  per-source live paging copy;
 - snapshot branches do not render `SourceActivityView`;
 - snapshot branches do not pass source job props or sync callbacks into reader
   leaves;
+- `SourceReaderHeader` remains outside `SourceBrowserShell` and still owns
+  `View live source`;
 - `SourceBrowserShell` keeps snapshot data grouped under `snapshotBrowserData`;
+- `SourceBrowserShell` does not pass `sourceJobs`, `takeoutRecovery`, or
+  `sourceSyncDisabledReason` to snapshot leaves;
+- `SnapshotItemsView` imports no live `SourceItem` type;
 - `selectedTraceRef` reaches group and single-source snapshot readers;
 - snapshot `Items` preserves source attribution for group rows.
 
