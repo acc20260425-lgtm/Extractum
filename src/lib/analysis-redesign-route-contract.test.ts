@@ -95,8 +95,9 @@ describe("analysis redesign final route contract", () => {
     expect(reportCanvasSource).toContain("{:else}");
     expect(reportSetupSource).toContain("template");
     expect(reportSetupSource).toContain("Run report");
-    expect(reportSetupSource).toContain("template-editor-drawer");
-    expect(reportSetupSource).toContain("group-editor-drawer");
+    expect(reportSetupSource).not.toContain("template-editor-drawer");
+    expect(reportSetupSource).not.toContain("group-editor-drawer");
+    expect(reportCanvasSource).toContain("<ReportWorkspaceTools");
     expect(reportRunHeaderSource).toContain("prompt_template_name");
     expect(reportRunHeaderSource).toContain("prompt_template_version");
     expect(reportRunHeaderSource).toContain("provider_profile");

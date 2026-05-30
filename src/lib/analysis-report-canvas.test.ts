@@ -32,11 +32,12 @@ describe("report canvas component contract", () => {
     expect(reportSetupPanelSource).toContain("reportLaunchDisabledReason");
     expect(reportCanvasSource).not.toContain('class="temporary-follow-up"');
     expect(reportCanvasSource).not.toContain("<ChatPanel");
-    expect(reportSetupPanelSource).toContain("TemplateEditor");
-    expect(reportSetupPanelSource).toContain("SourceGroupEditor");
+    expect(reportCanvasSource).toContain("<ReportWorkspaceTools");
+    expect(reportSetupPanelSource).not.toContain("TemplateEditor");
+    expect(reportSetupPanelSource).not.toContain("SourceGroupEditor");
     expect(reportSetupPanelSource).toContain("{#if !startingReport && !selectedRunIsActive}");
-    expect(reportSetupPanelSource).toContain('class="template-editor-drawer"');
-    expect(reportSetupPanelSource).toContain('class="group-editor-drawer"');
+    expect(reportSetupPanelSource).not.toContain('class="template-editor-drawer"');
+    expect(reportSetupPanelSource).not.toContain('class="group-editor-drawer"');
   });
 
   it("renders required opened-run header metadata", () => {

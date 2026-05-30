@@ -523,26 +523,12 @@
         {loadingLlmProviderModels}
         {llmModelStatus}
         {startingReport}
-        {selectedGroupEditorId}
         {currentScopeHasSavedRuns}
         {selectedRunIsActive}
         {activeProgress}
         {activePhase}
         {selectedTemplate}
-        {templateName}
-        {templateBody}
-        {savingTemplate}
-        {deletingTemplate}
-        {groups}
-        {groupName}
-        {groupSourceType}
-        {groupMemberSourceIds}
-        {selectedGroup}
-        {savingGroup}
-        {deletingGroup}
-        {sourceMetricsList}
         {syncingIds}
-        {exportingNotebookLm}
         {formatTimestamp}
         {formatPeriod}
         {phaseLabel}
@@ -551,7 +537,6 @@
         {reportLaunchDisabledReason}
         {startOfDayUnix}
         {endOfDayUnix}
-        {isGroupSourceSelected}
         onChangePeriodFrom={onChangePeriodFrom}
         onChangePeriodTo={onChangePeriodTo}
         onChangeSelectedTemplateId={onChangeSelectedTemplateId}
@@ -563,18 +548,6 @@
         onChangeCustomModelOverride={onChangeCustomModelOverride}
         onRunReport={onRunReport}
         onSyncCurrentSource={onSyncCurrentSource}
-        onOpenNotebookLmExport={onOpenNotebookLmExport}
-        onSaveTemplateCopy={onSaveTemplateCopy}
-        onSaveTemplateChanges={onSaveTemplateChanges}
-        onDeleteTemplate={onDeleteTemplate}
-        onChangeSelectedGroupId={onChangeSelectedGroupId}
-        onChangeGroupName={onChangeGroupName}
-        onChangeGroupSourceType={onChangeGroupSourceType}
-        onToggleGroupSource={onToggleGroupSource}
-        onStartNewGroup={onStartNewGroup}
-        onSaveGroupCopy={onSaveGroupCopy}
-        onSaveGroupChanges={onSaveGroupChanges}
-        onDeleteGroup={onDeleteGroup}
       />
     {/if}
   {:else}

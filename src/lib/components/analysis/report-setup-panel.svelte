@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { Download, Play, RefreshCw } from "@lucide/svelte";
-  import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
-  import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
+  import { Play, RefreshCw } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import CheckboxRow from "$lib/components/ui/CheckboxRow.svelte";
@@ -14,7 +12,6 @@
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
   import type {
-    AnalysisGroupSourceType,
     AnalysisPromptTemplate,
     AnalysisSourceGroup,
     AnalysisSourceOption,
@@ -48,26 +45,12 @@
     loadingLlmProviderModels,
     llmModelStatus,
     startingReport,
-    selectedGroupEditorId,
     currentScopeHasSavedRuns,
     selectedRunIsActive,
     activeProgress,
     activePhase,
     selectedTemplate,
-    templateName,
-    templateBody,
-    savingTemplate,
-    deletingTemplate,
-    groups,
-    groupName,
-    groupSourceType,
-    groupMemberSourceIds,
-    selectedGroup,
-    savingGroup,
-    deletingGroup,
-    sourceMetricsList,
     syncingIds,
-    exportingNotebookLm,
     formatTimestamp,
     formatPeriod,
     phaseLabel,
@@ -76,7 +59,6 @@
     reportLaunchDisabledReason,
     startOfDayUnix,
     endOfDayUnix,
-    isGroupSourceSelected,
     onChangePeriodFrom,
     onChangePeriodTo,
     onChangeSelectedTemplateId,
@@ -88,18 +70,6 @@
     onChangeCustomModelOverride,
     onRunReport,
     onSyncCurrentSource,
-    onOpenNotebookLmExport,
-    onSaveTemplateCopy,
-    onSaveTemplateChanges,
-    onDeleteTemplate,
-    onChangeSelectedGroupId,
-    onChangeGroupName,
-    onChangeGroupSourceType,
-    onToggleGroupSource,
-    onStartNewGroup,
-    onSaveGroupCopy,
-    onSaveGroupChanges,
-    onDeleteGroup,
   }: {
     workspaceSelection: WorkspaceSelection;
     currentSource: Source | null;
@@ -125,26 +95,12 @@
     loadingLlmProviderModels: boolean;
     llmModelStatus: string;
     startingReport: boolean;
-    selectedGroupEditorId: string;
     currentScopeHasSavedRuns: boolean;
     selectedRunIsActive: boolean;
     activeProgress: string;
     activePhase: string;
     selectedTemplate: AnalysisPromptTemplate | null;
-    templateName: string;
-    templateBody: string;
-    savingTemplate: boolean;
-    deletingTemplate: boolean;
-    groups: AnalysisSourceGroup[];
-    groupName: string;
-    groupSourceType: AnalysisGroupSourceType;
-    groupMemberSourceIds: number[];
-    selectedGroup: AnalysisSourceGroup | null;
-    savingGroup: boolean;
-    deletingGroup: boolean;
-    sourceMetricsList: AnalysisSourceOption[];
     syncingIds: Record<number, boolean>;
-    exportingNotebookLm: boolean;
     formatTimestamp: (value: number | null) => string;
     formatPeriod: (from: number, to: number) => string;
     phaseLabel: (value: string) => string;
@@ -153,7 +109,6 @@
     reportLaunchDisabledReason: string | null;
     startOfDayUnix: (value: string) => number;
     endOfDayUnix: (value: string) => number;
-    isGroupSourceSelected: (sourceId: number) => boolean;
     onChangePeriodFrom: (value: string) => void;
     onChangePeriodTo: (value: string) => void;
     onChangeSelectedTemplateId: (value: string) => void;
@@ -165,25 +120,10 @@
     onChangeCustomModelOverride: (value: string) => void;
     onRunReport: () => void | Promise<void>;
     onSyncCurrentSource: (sourceId: number) => void | Promise<void>;
-    onOpenNotebookLmExport: () => void;
-    onSaveTemplateCopy: (name: string, body: string) => void | Promise<void>;
-    onSaveTemplateChanges: (name: string, body: string) => void | Promise<void>;
-    onDeleteTemplate: () => void | Promise<void>;
-    onChangeSelectedGroupId: (value: string) => void;
-    onChangeGroupName: (value: string) => void;
-    onChangeGroupSourceType: (value: AnalysisGroupSourceType) => void;
-    onToggleGroupSource: (sourceId: number) => void;
-    onStartNewGroup: () => void;
-    onSaveGroupCopy: () => void | Promise<void>;
-    onSaveGroupChanges: () => void | Promise<void>;
-    onDeleteGroup: () => void | Promise<void>;
   } = $props();
 
   const PROFILE_DEFAULT_MODEL_OPTION = "__profile_default__";
   const CUSTOM_MODEL_OPTION = "__custom_model__";
-
-  let templateEditorOpen = $state(false);
-  let groupEditorOpen = $state(false);
 
   const legacyWorkspaceSelection = $derived(
     legacyScopeFromWorkspaceSelection(workspaceSelection),
@@ -374,14 +314,6 @@
         {#if analysisScope === "single_source" && currentSource}
           <Button
             variant="secondary"
-            onclick={onOpenNotebookLmExport}
-            disabled={exportingNotebookLm}
-          >
-            <Download size={15} aria-hidden="true" />
-            {exportingNotebookLm ? "Exporting..." : "Export for NotebookLM"}
-          </Button>
-          <Button
-            variant="secondary"
             onclick={() => onSyncCurrentSource(currentSource.id)}
             disabled={!!syncingIds[currentSource.id] || sourceSyncDisabledReason(currentSource) !== null}
             title={sourceSyncDisabledReason(currentSource) ?? undefined}
@@ -434,58 +366,6 @@
       </div>
     </div>
   {/if}
-
-  <div class="setup-secondary-actions">
-    <Button type="button" variant="secondary" onclick={() => (templateEditorOpen = !templateEditorOpen)}>
-      {templateEditorOpen ? "Hide template editor" : "Edit templates"}
-    </Button>
-    <Button type="button" variant="secondary" onclick={() => (groupEditorOpen = !groupEditorOpen)}>
-      {groupEditorOpen ? "Hide group editor" : "Edit groups"}
-    </Button>
-  </div>
-
-  {#if templateEditorOpen}
-    <div class="template-editor-drawer" aria-label="Template editor drawer">
-      <TemplateEditor
-        compact={true}
-        {selectedTemplate}
-        {templateName}
-        {templateBody}
-        {savingTemplate}
-        {deletingTemplate}
-        onSaveTemplateCopy={onSaveTemplateCopy}
-        onSaveTemplateChanges={onSaveTemplateChanges}
-        onDeleteTemplate={onDeleteTemplate}
-      />
-    </div>
-  {/if}
-
-  {#if groupEditorOpen}
-    <div class="group-editor-drawer" aria-label="Source group editor drawer">
-      <SourceGroupEditor
-        compact={true}
-        {groups}
-        selectedGroupId={selectedGroupEditorId}
-        {selectedGroup}
-        {groupName}
-        {groupSourceType}
-        {groupMemberSourceIds}
-        sources={sourceMetricsList}
-        {savingGroup}
-        {deletingGroup}
-        {formatTimestamp}
-        {isGroupSourceSelected}
-        onChangeSelectedGroupId={onChangeSelectedGroupId}
-        onChangeGroupName={onChangeGroupName}
-        onChangeGroupSourceType={onChangeGroupSourceType}
-        onToggleSource={onToggleGroupSource}
-        onStartNewGroup={onStartNewGroup}
-        onSaveGroupCopy={onSaveGroupCopy}
-        onSaveGroupChanges={onSaveGroupChanges}
-        onDeleteGroup={onDeleteGroup}
-      />
-    </div>
-  {/if}
 </section>
 
 <style>
@@ -498,9 +378,7 @@
 
   .scope-hero,
   .controls-panel,
-  .preflight-panel,
-  .template-editor-drawer,
-  .group-editor-drawer {
+  .preflight-panel {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--panel);
@@ -531,8 +409,7 @@
     line-height: 1.45;
   }
 
-  .scope-hero-meta,
-  .setup-secondary-actions {
+  .scope-hero-meta {
     display: flex;
     align-items: flex-start;
     justify-content: flex-end;
@@ -654,11 +531,6 @@
     background: var(--panel-strong);
   }
 
-  .template-editor-drawer,
-  .group-editor-drawer {
-    padding: 0.85rem;
-  }
-
   @media (max-width: 1100px) {
     .scope-facts,
     .controls-grid,
@@ -674,8 +546,7 @@
     }
 
     .controls-actions,
-    .scope-hero-meta,
-    .setup-secondary-actions {
+    .scope-hero-meta {
       justify-content: flex-start;
     }
   }
