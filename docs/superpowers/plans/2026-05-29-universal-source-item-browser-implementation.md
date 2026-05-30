@@ -1139,7 +1139,7 @@ git commit -m "feat: add youtube comments browser tab"
 - Modify: `src/lib/types/youtube.ts`
 - Modify: `src/lib/api/youtube-detail.test.ts`
 
-- [ ] **Step 1: Write backend tests for safe raw metadata**
+- [x] **Step 1: Write backend tests for safe raw metadata**
 
 In `src-tauri/src/youtube/detail.rs`, add tests that assert `get_youtube_video_detail_from_pool` includes:
 
@@ -1148,15 +1148,15 @@ In `src-tauri/src/youtube/detail.rs`, add tests that assert `get_youtube_video_d
 - sanitized raw metadata JSON when available;
 - no item-level `raw_data_zstd` payloads.
 
-- [ ] **Step 2: Implement backend detail extension**
+- [x] **Step 2: Implement backend detail extension**
 
 Add optional fields to `YoutubeVideoDetailDto` using existing typed metadata rows. Reuse already-sanitized `raw_metadata_zstd` from `youtube_video_sources`; do not read from `items.raw_data_zstd`.
 
-- [ ] **Step 3: Update frontend type and API test**
+- [x] **Step 3: Update frontend type and API test**
 
 In `src/lib/types/youtube.ts`, extend `YoutubeVideoDetail` with a nested source-level metadata object. In `src/lib/api/youtube-detail.test.ts`, assert `getYoutubeVideoDetail` passes through the new object.
 
-- [ ] **Step 4: Run detail tests**
+- [x] **Step 4: Run detail tests**
 
 Run:
 

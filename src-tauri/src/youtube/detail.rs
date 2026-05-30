@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
+use serde_json::Value;
 use sqlx::{QueryBuilder, Row};
 use tauri::AppHandle;
 
@@ -66,8 +67,36 @@ pub struct YoutubePlaylistMembershipDto {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct YoutubeVideoSourceMetadataDto {
+    pub source_id: i64,
+    pub video_id: String,
+    pub canonical_url: String,
+    pub title: Option<String>,
+    pub channel_title: Option<String>,
+    pub channel_id: Option<String>,
+    pub channel_handle: Option<String>,
+    pub channel_url: Option<String>,
+    pub author_display: Option<String>,
+    pub published_at: Option<i64>,
+    pub duration_seconds: Option<i64>,
+    pub description: Option<String>,
+    pub thumbnail_url: Option<String>,
+    pub view_count: Option<i64>,
+    pub like_count: Option<i64>,
+    pub comment_count: Option<i64>,
+    pub category: Option<String>,
+    pub video_form: String,
+    pub availability_status: String,
+    pub caption_language_override: Option<String>,
+    pub raw_metadata_version: Option<i64>,
+    pub raw_metadata_json: Option<Value>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct YoutubeVideoDetailDto {
     pub summary: YoutubeSourceSummaryDto,
+    pub source_metadata: YoutubeVideoSourceMetadataDto,
     pub playlist_memberships: Vec<YoutubePlaylistMembershipDto>,
 }
 
@@ -197,12 +226,14 @@ pub(crate) async fn get_youtube_video_detail_from_pool(
             "Source {source_id} is not a YouTube video source"
         )));
     }
-    let typed = load_video_source_metadata_map(pool, &[source_id]).await?;
-    if !typed.contains_key(&source_id) {
-        return Err(AppError::validation(format!(
-            "Source {source_id} has missing or invalid typed YouTube video metadata"
-        )));
-    }
+    let source_metadata = load_video_source_metadata_map(pool, &[source_id])
+        .await?
+        .remove(&source_id)
+        .ok_or_else(|| {
+            AppError::validation(format!(
+                "Source {source_id} has missing or invalid typed YouTube video metadata"
+            ))
+        })?;
 
     let playlist_memberships = sqlx::query_as::<_, PlaylistMembershipRow>(
         r#"
@@ -234,6 +265,7 @@ pub(crate) async fn get_youtube_video_detail_from_pool(
 
     Ok(YoutubeVideoDetailDto {
         summary,
+        source_metadata: video_source_metadata_dto(&source_metadata),
         playlist_memberships,
     })
 }
@@ -652,6 +684,43 @@ fn summary_from_row(
     }
 }
 
+fn video_source_metadata_dto(
+    metadata: &YoutubeVideoSourceMetadata,
+) -> YoutubeVideoSourceMetadataDto {
+    YoutubeVideoSourceMetadataDto {
+        source_id: metadata.source_id,
+        video_id: metadata.video_id.clone(),
+        canonical_url: metadata.canonical_url.clone(),
+        title: metadata.title.clone(),
+        channel_title: metadata.channel_title.clone(),
+        channel_id: metadata.channel_id.clone(),
+        channel_handle: metadata.channel_handle.clone(),
+        channel_url: metadata.channel_url.clone(),
+        author_display: metadata.author_display.clone(),
+        published_at: metadata
+            .published_at
+            .as_deref()
+            .and_then(ymd_to_unix_midnight),
+        duration_seconds: metadata.duration_seconds,
+        description: metadata.description.clone(),
+        thumbnail_url: metadata.thumbnail_url.clone(),
+        view_count: metadata.view_count,
+        like_count: metadata.like_count,
+        comment_count: metadata.comment_count,
+        category: metadata.category.clone(),
+        video_form: metadata.video_form.clone(),
+        availability_status: metadata.availability_status.clone(),
+        caption_language_override: metadata.caption_language_override.clone(),
+        raw_metadata_version: metadata.raw_metadata_version,
+        raw_metadata_json: decode_raw_metadata_json(metadata.raw_metadata_zstd.as_deref()),
+    }
+}
+
+fn decode_raw_metadata_json(raw_metadata_zstd: Option<&[u8]>) -> Option<Value> {
+    let bytes = crate::compression::decompress_bytes(raw_metadata_zstd?).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
 fn caption_status(
     counts: ContentCounts,
     availability_status: Option<&str>,
@@ -726,6 +795,7 @@ mod tests {
         list_youtube_source_summaries_from_pool, YoutubeContentSyncState,
     };
     use crate::error::AppErrorKind;
+    use crate::youtube::dto::{YoutubeAvailabilityStatus, YoutubeVideoForm, YoutubeVideoMetadata};
 
     #[tokio::test]
     async fn video_detail_reports_synced_transcript_comments_and_playlist_memberships() {
@@ -756,6 +826,44 @@ mod tests {
         assert_eq!(detail.playlist_memberships.len(), 1);
         assert_eq!(detail.playlist_memberships[0].playlist_source_id, 20);
         assert_eq!(detail.playlist_memberships[0].position, Some(3));
+    }
+
+    #[tokio::test]
+    async fn video_detail_includes_safe_source_metadata_without_item_raw_payloads() {
+        let pool = youtube_detail_pool().await;
+        seed_video(&pool, 10, "video42", "Generic Video").await;
+        upsert_rich_video_metadata(&pool, 10, "video42").await;
+        seed_comment_with_raw_payload(&pool, 10, "comment-with-raw", 1_800_000_200).await;
+
+        let detail = get_youtube_video_detail_from_pool(&pool, 10)
+            .await
+            .expect("load video detail");
+        let detail_json = serde_json::to_value(&detail).expect("serialize detail");
+        let metadata = detail_json
+            .get("sourceMetadata")
+            .expect("source metadata should be present");
+
+        assert_eq!(metadata["sourceId"], 10);
+        assert_eq!(metadata["videoId"], "video42");
+        assert_eq!(
+            metadata["canonicalUrl"],
+            "https://www.youtube.com/watch?v=video42"
+        );
+        assert_eq!(metadata["channelId"], "UCdetail");
+        assert_eq!(metadata["channelUrl"], "https://www.youtube.com/@detail");
+        assert_eq!(metadata["videoForm"], "short");
+        assert_eq!(metadata["availabilityStatus"], "available");
+        assert_eq!(metadata["durationSeconds"], 321);
+        assert_eq!(metadata["captionLanguageOverride"], "en");
+        assert_eq!(metadata["rawMetadataVersion"], 1);
+        assert_eq!(metadata["rawMetadataJson"]["id"], "video42");
+        assert_eq!(metadata["rawMetadataJson"]["visible"], "source raw");
+        assert!(metadata["rawMetadataJson"].get("headers").is_none());
+        assert!(metadata["rawMetadataJson"].get("command_args").is_none());
+        assert!(metadata["rawMetadataJson"]["nested"]
+            .get("stdout")
+            .is_none());
+        assert!(metadata["rawMetadataJson"].get("itemSecret").is_none());
     }
 
     #[tokio::test]
@@ -1284,6 +1392,75 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed comment");
+    }
+
+    async fn seed_comment_with_raw_payload(
+        pool: &sqlx::SqlitePool,
+        source_id: i64,
+        comment_id: &str,
+        ingested_at: i64,
+    ) {
+        let raw_data_zstd =
+            crate::compression::compress_json_bytes(br#"{"itemSecret":true,"id":"item-raw"}"#)
+                .expect("compress item raw");
+        sqlx::query(
+            r#"
+            INSERT INTO items (
+                source_id, external_id, item_kind, author, published_at, ingested_at,
+                raw_data_zstd, content_kind, has_media
+            )
+            VALUES (?, ?, 'youtube_comment', 'Alice', 1, ?, ?, 'text_only', 0)
+            "#,
+        )
+        .bind(source_id)
+        .bind(comment_id)
+        .bind(ingested_at)
+        .bind(raw_data_zstd)
+        .execute(pool)
+        .await
+        .expect("seed comment raw");
+    }
+
+    async fn upsert_rich_video_metadata(pool: &sqlx::SqlitePool, source_id: i64, video_id: &str) {
+        let metadata = YoutubeVideoMetadata {
+            video_id: video_id.to_string(),
+            canonical_url: format!("https://www.youtube.com/watch?v={video_id}"),
+            title: Some("Typed detail title".to_string()),
+            channel_title: Some("Detail Channel".to_string()),
+            channel_id: Some("UCdetail".to_string()),
+            channel_handle: Some("@detail".to_string()),
+            channel_url: Some("https://www.youtube.com/@detail".to_string()),
+            author_display: Some("Detail Channel".to_string()),
+            published_at: Some("2026-05-17".to_string()),
+            duration_seconds: Some(321),
+            description: Some("Detailed source description".to_string()),
+            thumbnail_url: Some(format!(
+                "https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+            )),
+            tags: vec!["analysis".to_string()],
+            chapters: Vec::new(),
+            view_count: Some(1234),
+            like_count: Some(56),
+            comment_count: Some(7),
+            category: Some("Education".to_string()),
+            video_form: YoutubeVideoForm::Short,
+            availability_status: YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: serde_json::json!({
+                "id": video_id,
+                "visible": "source raw",
+                "caption_language_override": "en",
+                "headers": { "cookie": "secret" },
+                "command_args": ["--cookies", "secret.txt"],
+                "nested": {
+                    "safe": true,
+                    "stdout": "hidden"
+                }
+            }),
+        };
+        crate::youtube::source_metadata::insert_video_source_metadata_for_pool_test(
+            pool, source_id, &metadata,
+        )
+        .await;
     }
 
     fn youtube_video_metadata_zstd(video_id: &str, title: &str, availability: &str) -> Vec<u8> {

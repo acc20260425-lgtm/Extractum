@@ -62,8 +62,34 @@ export interface YoutubePlaylistMembership {
   availabilityStatus: string;
 }
 
+export interface YoutubeVideoSourceMetadata {
+  sourceId: number;
+  videoId: string;
+  canonicalUrl: string;
+  title: string | null;
+  channelTitle: string | null;
+  channelId: string | null;
+  channelHandle: string | null;
+  channelUrl: string | null;
+  authorDisplay: string | null;
+  publishedAt: number | null;
+  durationSeconds: number | null;
+  description: string | null;
+  thumbnailUrl: string | null;
+  viewCount: number | null;
+  likeCount: number | null;
+  commentCount: number | null;
+  category: string | null;
+  videoForm: string;
+  availabilityStatus: string;
+  captionLanguageOverride: string | null;
+  rawMetadataVersion: number | null;
+  rawMetadataJson: unknown | null;
+}
+
 export interface YoutubeVideoDetail {
   summary: YoutubeSourceSummary;
+  sourceMetadata: YoutubeVideoSourceMetadata;
   playlistMemberships: YoutubePlaylistMembership[];
 }
 

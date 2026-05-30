@@ -65,15 +65,23 @@ pub(crate) struct YoutubeVideoSourceMetadata {
     pub(crate) canonical_url: String,
     pub(crate) title: Option<String>,
     pub(crate) channel_title: Option<String>,
+    pub(crate) channel_id: Option<String>,
     pub(crate) channel_handle: Option<String>,
+    pub(crate) channel_url: Option<String>,
     pub(crate) author_display: Option<String>,
     pub(crate) published_at: Option<String>,
     pub(crate) duration_seconds: Option<i64>,
     pub(crate) description: Option<String>,
     pub(crate) thumbnail_url: Option<String>,
+    pub(crate) view_count: Option<i64>,
+    pub(crate) like_count: Option<i64>,
+    pub(crate) comment_count: Option<i64>,
+    pub(crate) category: Option<String>,
     pub(crate) video_form: String,
     pub(crate) availability_status: String,
     pub(crate) caption_language_override: Option<String>,
+    pub(crate) raw_metadata_version: Option<i64>,
+    pub(crate) raw_metadata_zstd: Option<Vec<u8>>,
 }
 
 #[allow(dead_code)]
@@ -119,9 +127,9 @@ impl YoutubeVideoSourceMetadata {
             canonical_url: self.canonical_url.clone(),
             title: self.title.clone(),
             channel_title: self.channel_title.clone(),
-            channel_id: None,
+            channel_id: self.channel_id.clone(),
             channel_handle: self.channel_handle.clone(),
-            channel_url: None,
+            channel_url: self.channel_url.clone(),
             author_display: self.author_display.clone(),
             published_at: self.published_at.clone(),
             duration_seconds: self.duration_seconds,
@@ -129,10 +137,10 @@ impl YoutubeVideoSourceMetadata {
             thumbnail_url: self.thumbnail_url.clone(),
             tags: Vec::new(),
             chapters: Vec::new(),
-            view_count: None,
-            like_count: None,
-            comment_count: None,
-            category: None,
+            view_count: self.view_count,
+            like_count: self.like_count,
+            comment_count: self.comment_count,
+            category: self.category.clone(),
             video_form: self
                 .video_form_for_provider()
                 .unwrap_or(YoutubeVideoForm::Regular),
@@ -289,15 +297,23 @@ pub(crate) async fn load_video_source_metadata_map(
             yvs.canonical_url,
             yvs.title,
             yvs.channel_title,
+            yvs.channel_id,
             yvs.channel_handle,
+            yvs.channel_url,
             yvs.author_display,
             yvs.published_at,
             yvs.duration_seconds,
             yvs.description,
             yvs.thumbnail_url,
+            yvs.view_count,
+            yvs.like_count,
+            yvs.comment_count,
+            yvs.category,
             yvs.video_form,
             yvs.availability_status,
-            yvs.caption_language_override
+            yvs.caption_language_override,
+            yvs.raw_metadata_version,
+            yvs.raw_metadata_zstd
         FROM sources s
         JOIN youtube_video_sources yvs ON yvs.source_id = s.id
         WHERE s.source_type = 'youtube'
@@ -440,7 +456,9 @@ fn video_metadata_rows_to_map(
                 canonical_url,
                 title: row.try_get("title").map_err(AppError::database)?,
                 channel_title: row.try_get("channel_title").map_err(AppError::database)?,
+                channel_id: row.try_get("channel_id").map_err(AppError::database)?,
                 channel_handle: row.try_get("channel_handle").map_err(AppError::database)?,
+                channel_url: row.try_get("channel_url").map_err(AppError::database)?,
                 author_display: row.try_get("author_display").map_err(AppError::database)?,
                 published_at: row.try_get("published_at").map_err(AppError::database)?,
                 duration_seconds: row
@@ -448,10 +466,20 @@ fn video_metadata_rows_to_map(
                     .map_err(AppError::database)?,
                 description: row.try_get("description").map_err(AppError::database)?,
                 thumbnail_url: row.try_get("thumbnail_url").map_err(AppError::database)?,
+                view_count: row.try_get("view_count").map_err(AppError::database)?,
+                like_count: row.try_get("like_count").map_err(AppError::database)?,
+                comment_count: row.try_get("comment_count").map_err(AppError::database)?,
+                category: row.try_get("category").map_err(AppError::database)?,
                 video_form,
                 availability_status,
                 caption_language_override: row
                     .try_get("caption_language_override")
+                    .map_err(AppError::database)?,
+                raw_metadata_version: row
+                    .try_get("raw_metadata_version")
+                    .map_err(AppError::database)?,
+                raw_metadata_zstd: row
+                    .try_get("raw_metadata_zstd")
                     .map_err(AppError::database)?,
             },
         );
