@@ -21,6 +21,26 @@ import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.s
 
 const sourceGroupReaderTag = "<" + "Source" + "Group" + "Reader";
 
+function matchCount(source: string, pattern: RegExp) {
+  return source.match(pattern)?.length ?? 0;
+}
+
+function sourceBetween(source: string, start: string, end: string) {
+  const startIndex = source.indexOf(start);
+  expect(startIndex).toBeGreaterThanOrEqual(0);
+  const endIndex = source.indexOf(end, startIndex);
+  expect(endIndex).toBeGreaterThan(startIndex);
+  return source.slice(startIndex, endIndex + end.length);
+}
+
+function sourceBrowserShellCall(marker: string) {
+  const markerIndex = reportSourceSurfaceSource.indexOf(marker);
+  expect(markerIndex).toBeGreaterThanOrEqual(0);
+  const openIndex = reportSourceSurfaceSource.lastIndexOf("<SourceBrowserShell", markerIndex);
+  expect(openIndex).toBeGreaterThanOrEqual(0);
+  return sourceBetween(reportSourceSurfaceSource.slice(openIndex), "<SourceBrowserShell", "/>");
+}
+
 describe("analysis source readers", () => {
   it("replaces transitional source panels in ReportSourceSurface", () => {
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
@@ -35,34 +55,62 @@ describe("analysis source readers", () => {
   });
 
   it("routes live browsable sources and source groups through SourceBrowserShell", () => {
+    const liveSourceShellCall = sourceBrowserShellCall('subject={{ kind: "source", source: currentSource }}');
+    const liveGroupShellCall = sourceBrowserShellCall('subject={{ kind: "source_group", group: currentGroup }}');
+
     expect(reportSourceSurfaceSource).toContain("sourceBrowserShellAppliesToSource(currentSource)");
     expect(reportSourceSurfaceSource).toContain("sourceBrowserShellAppliesToSubject");
     expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source", source: currentSource }}');
     expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
     expect(reportSourceSurfaceSource).toContain("groupLiveSourceItems");
-    expect(reportSourceSurfaceSource).toContain("groupBrowserData");
+    expect(reportSourceSurfaceSource).toContain("sourceBrowserData={{");
+    expect(reportSourceSurfaceSource).toContain("groupBrowserData={{");
+    expect(matchCount(reportSourceSurfaceSource, /sourceBrowserData=\{\{/g)).toBe(1);
+    expect(matchCount(reportSourceSurfaceSource, /groupBrowserData=\{\{/g)).toBe(1);
+    expect(liveSourceShellCall).toContain("sourceBrowserData={{");
+    expect(liveGroupShellCall).toContain("groupBrowserData={{");
+    expect(liveGroupShellCall).not.toContain("sourceBrowserData={{");
+    expect(liveGroupShellCall).not.toContain("liveReaderItems={[]}");
+    expect(liveGroupShellCall).not.toContain("sourceItems={[]}");
+    expect(liveGroupShellCall).not.toContain("sourceJobs={[]}");
+    expect(liveGroupShellCall).not.toContain("sourceTopics={[]}");
+    expect(liveGroupShellCall).not.toContain("youtubeVideoDetail={null}");
+    expect(liveGroupShellCall).not.toContain("youtubePlaylistDetail={null}");
+    expect(liveGroupShellCall).not.toContain("sourceSyncDisabledReason={() => null}");
     expect(reportSourceSurfaceSource).toContain("sourceLabelForGroupItem");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
   });
 
   it("routes available run snapshots through SourceBrowserShell while keeping the header route-owned", () => {
+    const snapshotShellCall = sourceBrowserShellCall("subject={runSnapshotSubject}");
+
     expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "run_snapshot"');
     expect(reportSourceSurfaceSource).toContain("<SourceReaderHeader");
     expect(reportSourceSurfaceSource).toContain("runSnapshotSubject");
-    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData");
+    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData={{");
+    expect(matchCount(reportSourceSurfaceSource, /snapshotBrowserData=\{\{/g)).toBe(1);
+    expect(snapshotShellCall).toContain("snapshotBrowserData={{");
+    expect(snapshotShellCall).not.toContain("sourceBrowserData={{");
     expect(reportSourceSurfaceSource).toContain("subject={runSnapshotSubject}");
     expect(reportSourceSurfaceSource).toContain("{onViewLiveSource}");
     expect(reportSourceSurfaceSource).not.toContain(sourceGroupReaderTag);
   });
 
   it("keeps snapshot shell data frozen-only and live props empty", () => {
+    const snapshotShellCall = sourceBrowserShellCall("subject={runSnapshotSubject}");
+
     expect(reportSourceSurfaceSource).toContain("deriveRunSnapshotBrowserKind");
     expect(reportSourceSurfaceSource).toContain("allSnapshotReaderItems");
-    expect(reportSourceSurfaceSource).toContain("sourceJobs={[]}");
-    expect(reportSourceSurfaceSource).toContain("takeoutRecovery={null}");
-    expect(reportSourceSurfaceSource).toContain("sourceSyncDisabledReason={() => null}");
-    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData={{");
+    expect(snapshotShellCall).toContain("snapshotBrowserData={{");
+    expect(snapshotShellCall).not.toContain("sourceJobs={[]}");
+    expect(snapshotShellCall).not.toContain("takeoutRecovery={null}");
+    expect(snapshotShellCall).not.toContain("sourceSyncDisabledReason={() => null}");
+    expect(snapshotShellCall).not.toContain("liveReaderItems={[]}");
+    expect(snapshotShellCall).not.toContain("sourceItems={[]}");
+    expect(snapshotShellCall).not.toContain("sourceTopics={[]}");
+    expect(snapshotShellCall).not.toContain("youtubeVideoDetail={null}");
+    expect(snapshotShellCall).not.toContain("youtubePlaylistDetail={null}");
   });
 
   it("renders YouTube playlist videos through SourceBrowserShell", () => {
@@ -159,8 +207,8 @@ describe("analysis source readers", () => {
   it("keeps live single-source timeline readers pageable", () => {
     expect(sourceBrowserShellSource).toContain("sourceItemsHasMore");
     expect(sourceBrowserShellSource).toContain("onLoadMoreSourceItems");
-    expect(sourceBrowserShellSource).toContain("hasMore={sourceItemsHasMore}");
-    expect(sourceBrowserShellSource).toContain("onLoadMore={onLoadMoreSourceItems}");
+    expect(sourceBrowserShellSource).toContain("hasMore={sourceData.sourceItemsHasMore}");
+    expect(sourceBrowserShellSource).toContain("onLoadMore={sourceData.onLoadMoreSourceItems}");
   });
 
   it("keeps sticky date labels below overlay source switching UI", () => {
@@ -218,13 +266,13 @@ describe("analysis source readers", () => {
     expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
     expect(sourceGroupSourcesViewSource).toContain("showSyncActions={false}");
     expect(snapshotGroupSourcesViewSource).toContain("showSyncActions={false}");
-    expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(sourceSubject.id)}");
+    expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => sourceData.onSyncYoutubeTranscript(sourceSubject.id)}");
   });
 
   it("keeps run snapshot YouTube readers detached from live video detail", () => {
     expect(sourceBrowserShellSource).toContain("detail={null}");
     expect(reportSourceSurfaceSource).not.toContain("detail={youtubeVideoDetail}");
-    expect(sourceBrowserShellSource).toContain("detail={youtubeVideoDetail}");
+    expect(sourceBrowserShellSource).toContain("detail={sourceData.youtubeVideoDetail}");
     expect(sourceBrowserShellSource).toContain('sourceTitle={sourceSubject.title ?? sourceSubject.externalId}');
   });
 
@@ -325,15 +373,16 @@ describe("analysis source readers", () => {
   });
 
   it("passes playlist detail into metadata and playlist-specific empty copy into Items", () => {
-    expect(sourceBrowserShellSource).toContain("youtubePlaylistDetail={youtubePlaylistDetail}");
+    expect(sourceBrowserShellSource).toContain("youtubePlaylistDetail={sourceData.youtubePlaylistDetail}");
     expect(sourceBrowserShellSource).toContain("Playlist videos live in the Videos tab");
     expect(sourceBrowserShellSource).toContain("emptyDescription=");
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {
-    expect(reportSourceSurfaceSource).toContain("{sourceJobs}");
-    expect(sourceBrowserShellSource).toContain("onSyncComments={() => onSyncYoutubeComments(sourceSubject.id)}");
-    expect(sourceBrowserShellSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+    expect(reportSourceSurfaceSource).toContain("sourceBrowserData={{");
+    expect(reportSourceSurfaceSource).toContain("sourceJobs,");
+    expect(sourceBrowserShellSource).toContain("onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}");
+    expect(sourceBrowserShellSource).toContain("onCancelSourceJob={sourceData.onCancelSourceJob}");
     expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
     expect(reportSourceSurfaceSource).not.toContain("onSyncComments={() => {}}");
   });

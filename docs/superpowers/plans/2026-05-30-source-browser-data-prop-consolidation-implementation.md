@@ -140,7 +140,9 @@ Expected: commit contains only this plan file.
 - Modify: `src/lib/components/analysis/source-browser-shell.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-data-prop-consolidation-implementation.md`
 
-- [ ] **Step 1: Add raw helpers to `source-browser-shell.test.ts`**
+Execution note: Task 1 and Task 2 were committed as one green checkpoint because `SourceBrowserShell` prop narrowing makes existing `ReportSourceSurface` invocations fail `svelte-check` until route wiring is updated.
+
+- [x] **Step 1: Add raw helpers to `source-browser-shell.test.ts`**
 
 Add these helpers after the `shellSource` import:
 
@@ -158,7 +160,7 @@ function sourcePropsBlock() {
 }
 ```
 
-- [ ] **Step 2: Add grouped source data shell contract**
+- [x] **Step 2: Add grouped source data shell contract**
 
 Add this test to `src/lib/components/analysis/source-browser-shell.test.ts`:
 
@@ -181,7 +183,7 @@ it("groups live single-source data behind sourceBrowserData", () => {
 
 This test expects `loadingItems` to remain as an optional top-level prop for live group loading only.
 
-- [ ] **Step 3: Run the shell contract and confirm it fails**
+- [x] **Step 3: Run the shell contract and confirm it fails**
 
 Run:
 
@@ -191,7 +193,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts
 
 Expected: FAIL because `sourceBrowserData` has not been implemented yet.
 
-- [ ] **Step 4: Add local `SourceBrowserData` and simplify `Props`**
+- [x] **Step 4: Add local `SourceBrowserData` and simplify `Props`**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, add `SourceBrowserData` after `SnapshotBrowserData`:
 
@@ -255,7 +257,7 @@ Replace `type Props` with:
 
 `loadingItems` remains top-level because live source groups use it and `groupBrowserData` shape is intentionally unchanged.
 
-- [ ] **Step 5: Replace `$props()` destructuring**
+- [x] **Step 5: Replace `$props()` destructuring**
 
 Replace the existing destructuring block with:
 
@@ -272,7 +274,7 @@ Replace the existing destructuring block with:
   }: Props = $props();
 ```
 
-- [ ] **Step 6: Preserve the existing subject fallback**
+- [x] **Step 6: Preserve the existing subject fallback**
 
 Keep the existing `subject` derived value immediately after `let activeTab` and `let lastSubjectKey`.
 
@@ -284,7 +286,7 @@ The required code is:
 
 This preserves compatibility for any caller that still passes `source` instead of an explicit subject. Group and snapshot calls should pass explicit subjects and do not need `source={null}`.
 
-- [ ] **Step 7: Add subject-scoped derived data**
+- [x] **Step 7: Add subject-scoped derived data**
 
 Replace the old `groupData` and `snapshotData` derived declarations with:
 
@@ -295,7 +297,7 @@ Replace the old `groupData` and `snapshotData` derived declarations with:
   const groupLoading = $derived(subject && subject.kind === "source_group" ? loadingItems : false);
 ```
 
-- [ ] **Step 8: Update shared derived state**
+- [x] **Step 8: Update shared derived state**
 
 Replace `itemsForActiveSubject`, `itemsEmptyDescription`, and `sortedSourceTopics` with:
 
@@ -319,7 +321,7 @@ Replace `itemsForActiveSubject`, `itemsEmptyDescription`, and `sortedSourceTopic
     : []);
 ```
 
-- [ ] **Step 9: Update shell event helpers**
+- [x] **Step 9: Update shell event helpers**
 
 Replace `changeSelectedTopic`, `changeTelegramHistoryScope`, and add `loadMoreSourceItems`:
 
@@ -341,7 +343,7 @@ Replace `changeSelectedTopic`, `changeTelegramHistoryScope`, and add `loadMoreSo
 
 Keep `loadMoreGroupItems` and `loadMoreGroupSourcePage`.
 
-- [ ] **Step 10: Update source-only branches to read from `sourceData`**
+- [x] **Step 10: Update source-only branches to read from `sourceData`**
 
 Require `sourceData` in each live source branch condition:
 
@@ -410,7 +412,7 @@ onStartMigratedHistoryImport -> sourceData.onStartMigratedHistoryImport
 onCancelSourceJob -> sourceData.onCancelSourceJob
 ```
 
-- [ ] **Step 11: Update group branch loading and `UniversalItemsView`**
+- [x] **Step 11: Update group branch loading and `UniversalItemsView`**
 
 In the source group `Sources` branch, replace:
 
@@ -439,7 +441,7 @@ Replace the current `UniversalItemsView` props with:
 />
 ```
 
-- [ ] **Step 12: Run shell tests**
+- [x] **Step 12: Run shell tests**
 
 Run:
 
@@ -449,7 +451,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 13: Run Svelte/type checks**
+- [x] **Step 13: Run Svelte/type checks**
 
 Run:
 
@@ -459,7 +461,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 14: Commit shell migration**
+- [x] **Step 14: Commit shell migration**
 
 Run:
 
@@ -479,7 +481,7 @@ Expected: commit contains shell migration, shell contract tests, and plan checkb
 - Modify: `src/lib/analysis-source-readers.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-data-prop-consolidation-implementation.md`
 
-- [ ] **Step 1: Add route raw helper**
+- [x] **Step 1: Add route raw helper**
 
 Add these helpers near the existing top-level raw constants in `src/lib/analysis-source-readers.test.ts`:
 
@@ -505,7 +507,7 @@ function sourceBrowserShellCall(marker: string) {
 }
 ```
 
-- [ ] **Step 2: Update live route contract**
+- [x] **Step 2: Update live route contract**
 
 In the test named `"routes live browsable sources and source groups through SourceBrowserShell"`, add these expectations:
 
@@ -529,7 +531,7 @@ expect(liveGroupShellCall).not.toContain("youtubePlaylistDetail={null}");
 expect(liveGroupShellCall).not.toContain("sourceSyncDisabledReason={() => null}");
 ```
 
-- [ ] **Step 3: Update run snapshot route contract**
+- [x] **Step 3: Update run snapshot route contract**
 
 In the test named `"routes available run snapshots through SourceBrowserShell while keeping the header route-owned"`, add:
 
@@ -560,7 +562,7 @@ expect(snapshotShellCall).not.toContain("youtubeVideoDetail={null}");
 expect(snapshotShellCall).not.toContain("youtubePlaylistDetail={null}");
 ```
 
-- [ ] **Step 4: Run route contracts and confirm they fail**
+- [x] **Step 4: Run route contracts and confirm they fail**
 
 Run:
 
@@ -570,7 +572,9 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: FAIL because `ReportSourceSurface` has not been wired to `sourceBrowserData` yet.
 
-- [ ] **Step 5: Update run snapshot shell invocation**
+Actual execution note: this isolated red run was skipped after Task 1 `npm.cmd run check` proved the shell prop change cannot be checkpointed before route wiring. The route contracts were verified after Step 9 with the focused test command.
+
+- [x] **Step 5: Update run snapshot shell invocation**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, reduce the run snapshot shell call to:
 
@@ -596,7 +600,7 @@ In `src/lib/components/analysis/report-source-surface.svelte`, reduce the run sn
 
 Do not pass source-only dummy values such as `sourceItems={[]}`, `sourceJobs={[]}`, `youtubeVideoDetail={null}`, or `sourceSyncDisabledReason={() => null}`.
 
-- [ ] **Step 6: Update live single-source shell invocation**
+- [x] **Step 6: Update live single-source shell invocation**
 
 In the live single-source branch, pass `sourceBrowserData={{ ... }}`:
 
@@ -649,7 +653,7 @@ In the live single-source branch, pass `sourceBrowserData={{ ... }}`:
 />
 ```
 
-- [ ] **Step 7: Update live source-group shell invocation**
+- [x] **Step 7: Update live source-group shell invocation**
 
 In the live source-group branch, keep `groupBrowserData` unchanged and pass only group-loading/shared props:
 
@@ -673,7 +677,7 @@ In the live source-group branch, keep `groupBrowserData` unchanged and pass only
 
 Do not pass source-only dummy values or source-only callbacks in this branch.
 
-- [ ] **Step 8: Verify dummy source props are gone**
+- [x] **Step 8: Verify dummy source props are gone**
 
 Run:
 
@@ -683,7 +687,7 @@ rg -n "sourceJobs=\{\[\]\}|takeoutRecovery=\{null\}|sourceItems=\{\[\]\}|liveRea
 
 Expected: no output. `rg` exits with code `1` when no matches are found.
 
-- [ ] **Step 9: Run focused route/shell tests**
+- [x] **Step 9: Run focused route/shell tests**
 
 Run:
 
@@ -693,7 +697,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts src
 
 Expected: PASS.
 
-- [ ] **Step 10: Run Svelte/type checks**
+- [x] **Step 10: Run Svelte/type checks**
 
 Run:
 
@@ -703,7 +707,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 11: Commit route wiring**
+- [x] **Step 11: Commit route wiring**
 
 Run:
 

@@ -326,8 +326,6 @@
       {#if runSnapshotSubject && sourceBrowserShellAppliesToSubject(runSnapshotSubject)}
         <SourceBrowserShell
           subject={runSnapshotSubject}
-          source={null}
-          groupBrowserData={null}
           snapshotBrowserData={{
             run: currentRun,
             readerItems: snapshotReaderItems,
@@ -340,46 +338,8 @@
             selectedTraceRef,
             onLoadMore: onLoadMoreRunSnapshotMessages,
           }}
-          liveReaderItems={[]}
-          takeoutRecovery={null}
-          sourceItems={[]}
-          sourceRouteError={null}
-          sourceItemsHasMore={false}
-          loadingItems={loadingRunSnapshotMessages}
-          sourceTopics={[]}
-          loadingSourceTopics={false}
-          selectedTopicKey="__all_topics__"
-          showTopicSelector={false}
-          youtubeVideoDetail={null}
-          youtubePlaylistDetail={null}
-          youtubeTranscriptSegments={[]}
-          youtubeTranscriptSearch=""
-          youtubeTranscriptHasMore={false}
-          loadingYoutubeTranscriptSegments={false}
-          loadingYoutubeDetail={false}
-          sourceJobs={[]}
           {selectedTraceRef}
-          {telegramHistoryScope}
-          currentSourceContentLabel="Run snapshot material"
-          sourceSyncDisabledReason={() => null}
           {formatTimestamp}
-          {onSyncSource}
-          onLoadMoreSourceItems={onLoadMoreRunSnapshotMessages}
-          {onChangeSelectedTopicKey}
-          {onChangeTelegramHistoryScope}
-          {onChangeTranscriptSearch}
-          {onLoadMoreYoutubeTranscriptSegments}
-          {onOpenSource}
-          {onSyncYoutubeMetadata}
-          {onSyncYoutubeTranscript}
-          {onSyncYoutubeComments}
-          {onSyncYoutubePlaylist}
-          onRetryFailedYoutubePlaylistVideos={onRetryFailedYoutubePlaylistVideos}
-          {onSyncYoutubePlaylistVideo}
-          {onRetryYoutubePlaylistVideo}
-          {onStartTakeoutImport}
-          {onStartMigratedHistoryImport}
-          onCancelSourceJob={onCancelSourceJob}
         />
       {:else}
         <StatusMessage tone="muted">This run snapshot is not browsable yet.</StatusMessage>
@@ -444,47 +404,48 @@
       <SourceBrowserShell
         subject={{ kind: "source", source: currentSource }}
         source={currentSource}
-        groupBrowserData={null}
-        {liveReaderItems}
-        {takeoutRecovery}
-        {sourceItems}
-        sourceRouteError={sourceItemsError}
-        {sourceItemsHasMore}
-        {loadingItems}
-        {sourceTopics}
-        {loadingSourceTopics}
-        {selectedTopicKey}
-        {showTopicSelector}
-        {youtubeVideoDetail}
-        {youtubePlaylistDetail}
-        {youtubeTranscriptSegments}
-        {youtubeTranscriptSearch}
-        {youtubeTranscriptHasMore}
-        {loadingYoutubeTranscriptSegments}
-        {loadingYoutubeDetail}
-        {sourceJobs}
+        sourceBrowserData={{
+          liveReaderItems,
+          takeoutRecovery,
+          sourceItems,
+          sourceRouteError: sourceItemsError,
+          sourceItemsHasMore,
+          loadingItems,
+          sourceTopics,
+          loadingSourceTopics,
+          selectedTopicKey,
+          showTopicSelector,
+          youtubeVideoDetail,
+          youtubePlaylistDetail,
+          youtubeTranscriptSegments,
+          youtubeTranscriptSearch,
+          youtubeTranscriptHasMore,
+          loadingYoutubeTranscriptSegments,
+          loadingYoutubeDetail,
+          sourceJobs,
+          telegramHistoryScope,
+          currentSourceContentLabel,
+          sourceSyncDisabledReason,
+          onSyncSource,
+          onLoadMoreSourceItems,
+          onChangeSelectedTopicKey,
+          onChangeTelegramHistoryScope,
+          onChangeTranscriptSearch,
+          onLoadMoreYoutubeTranscriptSegments,
+          onOpenSource,
+          onSyncYoutubeMetadata,
+          onSyncYoutubeTranscript,
+          onSyncYoutubeComments,
+          onSyncYoutubePlaylist,
+          onRetryFailedYoutubePlaylistVideos,
+          onSyncYoutubePlaylistVideo,
+          onRetryYoutubePlaylistVideo,
+          onStartTakeoutImport,
+          onStartMigratedHistoryImport,
+          onCancelSourceJob,
+        }}
         {selectedTraceRef}
-        {telegramHistoryScope}
-        {currentSourceContentLabel}
-        {sourceSyncDisabledReason}
         {formatTimestamp}
-        {onSyncSource}
-        {onLoadMoreSourceItems}
-        {onChangeSelectedTopicKey}
-        {onChangeTelegramHistoryScope}
-        {onChangeTranscriptSearch}
-        {onLoadMoreYoutubeTranscriptSegments}
-        {onOpenSource}
-        {onSyncYoutubeMetadata}
-        {onSyncYoutubeTranscript}
-        {onSyncYoutubeComments}
-        {onSyncYoutubePlaylist}
-        onRetryFailedYoutubePlaylistVideos={onRetryFailedYoutubePlaylistVideos}
-        {onSyncYoutubePlaylistVideo}
-        {onRetryYoutubePlaylistVideo}
-        {onStartTakeoutImport}
-        {onStartMigratedHistoryImport}
-        onCancelSourceJob={onCancelSourceJob}
       />
     {:else}
       <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
@@ -493,29 +454,8 @@
     {#if sourceBrowserShellAppliesToSubject({ kind: "source_group", group: currentGroup })}
       <SourceBrowserShell
         subject={{ kind: "source_group", group: currentGroup }}
-        source={null}
-        liveReaderItems={[]}
-        takeoutRecovery={null}
-        sourceItems={[]}
-        sourceRouteError={null}
-        sourceItemsHasMore={false}
         {loadingItems}
-        sourceTopics={[]}
-        loadingSourceTopics={false}
-        selectedTopicKey="__all_topics__"
-        showTopicSelector={false}
-        youtubeVideoDetail={null}
-        youtubePlaylistDetail={null}
-        youtubeTranscriptSegments={[]}
-        youtubeTranscriptSearch=""
-        youtubeTranscriptHasMore={false}
-        loadingYoutubeTranscriptSegments={false}
-        loadingYoutubeDetail={false}
-        sourceJobs={[]}
         {selectedTraceRef}
-        {telegramHistoryScope}
-        currentSourceContentLabel="Source group material"
-        sourceSyncDisabledReason={() => null}
         {formatTimestamp}
         groupBrowserData={{
           liveReaderItems: groupLiveReaderItems,
@@ -526,23 +466,6 @@
           onLoadSourcePage: onLoadLiveGroupSourcePage,
           youtubeDetailsBySource: {},
         }}
-        {onSyncSource}
-        {onLoadMoreSourceItems}
-        {onChangeSelectedTopicKey}
-        {onChangeTelegramHistoryScope}
-        {onChangeTranscriptSearch}
-        {onLoadMoreYoutubeTranscriptSegments}
-        {onOpenSource}
-        {onSyncYoutubeMetadata}
-        {onSyncYoutubeTranscript}
-        {onSyncYoutubeComments}
-        {onSyncYoutubePlaylist}
-        onRetryFailedYoutubePlaylistVideos={onRetryFailedYoutubePlaylistVideos}
-        {onSyncYoutubePlaylistVideo}
-        {onRetryYoutubePlaylistVideo}
-        {onStartTakeoutImport}
-        {onStartMigratedHistoryImport}
-        onCancelSourceJob={onCancelSourceJob}
       />
     {/if}
   {:else}

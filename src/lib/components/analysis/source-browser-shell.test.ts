@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import shellSource from "./source-browser-shell.svelte?raw";
 
+function sourceBetween(source: string, start: string, end: string) {
+  const startIndex = source.indexOf(start);
+  expect(startIndex).toBeGreaterThanOrEqual(0);
+  const endIndex = source.indexOf(end, startIndex);
+  expect(endIndex).toBeGreaterThan(startIndex);
+  return source.slice(startIndex, endIndex);
+}
+
+function sourcePropsBlock() {
+  return sourceBetween(shellSource, "type Props = {", "  };");
+}
+
 describe("source browser shell component contract", () => {
   it("uses the subject-aware source browser model and keeps data fetching outside the shell", () => {
     expect(shellSource).toContain("sourceBrowserTabsForSubject");
@@ -42,5 +54,20 @@ describe("source browser shell component contract", () => {
     expect(shellSource).toContain('activeTab === "transcript"');
     expect(shellSource).toContain("showSyncActions={false}");
     expect(shellSource).not.toContain("SourceReaderHeader");
+  });
+
+  it("groups live single-source data behind sourceBrowserData", () => {
+    const propsBlock = sourcePropsBlock();
+
+    expect(shellSource).toContain("type SourceBrowserData =");
+    expect(propsBlock).toContain("sourceBrowserData?: SourceBrowserData | null");
+    expect(propsBlock).toContain("groupBrowserData?: SourceGroupBrowserData | null");
+    expect(propsBlock).toContain("snapshotBrowserData?: SnapshotBrowserData | null");
+    expect(propsBlock).toContain("loadingItems?: boolean");
+    expect(propsBlock).not.toContain("sourceItems: SourceItem[]");
+    expect(propsBlock).not.toContain("sourceJobs: SourceJobRecord[]");
+    expect(propsBlock).not.toContain("youtubeVideoDetail: YoutubeVideoDetail | null");
+    expect(propsBlock).not.toContain("onSyncYoutubeTranscript");
+    expect(shellSource).toContain('subject && subject.kind === "source" ? sourceBrowserData : null');
   });
 });

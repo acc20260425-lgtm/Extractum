@@ -69,7 +69,8 @@ describe("analysis redesign final safety contract", () => {
     expect(reportSourceSurfaceSource).toContain("onSyncYoutubePlaylist");
     expect(reportSourceSurfaceSource).toContain("onSyncYoutubeComments");
     expect(reportSourceSurfaceSource).toContain("onCancelSourceJob");
-    expect(reportSourceSurfaceSource).toContain("onCancelSourceJob={onCancelSourceJob}");
+    expect(reportSourceSurfaceSource).toContain("sourceBrowserData={{");
+    expect(reportSourceSurfaceSource).toContain("onCancelSourceJob,");
     expect(youtubeTranscriptSource).toContain("showSyncActions");
     expect(youtubeTranscriptSource).toContain("Sync comments");
   });
