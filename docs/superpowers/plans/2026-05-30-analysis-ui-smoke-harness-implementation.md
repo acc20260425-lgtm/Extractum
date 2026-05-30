@@ -940,7 +940,7 @@ Expected: commit succeeds.
 **Files:**
 - Modify: `src-tauri/src/analysis/fixtures.rs`
 
-- [ ] **Step 1: Rename the analysis source-group fixture label**
+- [x] **Step 1: Rename the analysis source-group fixture label**
 
 In `src-tauri/src/analysis/fixtures.rs`, change:
 
@@ -954,7 +954,7 @@ to:
 const TELEGRAM_GROUP_LABEL: &str = "__analysis_redesign_fixture__ Telegram Source Group";
 ```
 
-- [ ] **Step 2: Keep the cleanup test independent of hard-coded row ids**
+- [x] **Step 2: Keep the cleanup test independent of hard-coded row ids**
 
 In `clear_preserves_non_fixture_groups_and_members`, confirm the non-fixture account/source/group inserts return their ids or assert through stable labels. Do not assert with assumed ids such as:
 
@@ -981,7 +981,7 @@ assert_eq!(count(&pool, &member_count_sql).await, 1);
 
 or a join assertion through `Real Group` / `Real Source`, as shown in the Task 1 test snippet. The goal is to test cleanup scope, not SQLite row id allocation.
 
-- [ ] **Step 3: Run Rust fixture tests**
+- [x] **Step 3: Run Rust fixture tests**
 
 Run:
 
@@ -991,7 +991,9 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit fixture cleanup contract**
+Actual result: PASS, 16 fixture tests passed.
+
+- [x] **Step 4: Commit fixture cleanup contract**
 
 Run:
 
