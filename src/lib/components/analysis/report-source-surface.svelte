@@ -355,69 +355,71 @@
 
 {#snippet liveSourceSurface()}
   {#if analysisScope === "single_source" && currentSource}
-    {#key `${analysisScope}:${currentSource.id}:${currentRun?.id ?? "idle"}:live`}
-      {#if sourceBrowserShellAppliesToSource(currentSource)}
-        {#if youtubeRuntimeDiagnostic}
-          <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
-        {/if}
-        <SourceBrowserShell
-          source={currentSource}
-          {liveReaderItems}
-          {takeoutRecovery}
-          {sourceItems}
-          sourceRouteError={sourceItemsError}
-          {sourceItemsHasMore}
-          {loadingItems}
-          {sourceTopics}
-          {loadingSourceTopics}
-          {selectedTopicKey}
-          {showTopicSelector}
-          {youtubeVideoDetail}
-          {youtubeTranscriptSegments}
-          {youtubeTranscriptSearch}
-          {youtubeTranscriptHasMore}
-          {loadingYoutubeTranscriptSegments}
-          {loadingYoutubeDetail}
-          {sourceJobs}
-          {selectedTraceRef}
-          {telegramHistoryScope}
-          {currentSourceContentLabel}
-          {sourceSyncDisabledReason}
-          {formatTimestamp}
-          {onSyncSource}
-          {onLoadMoreSourceItems}
-          {onChangeSelectedTopicKey}
-          {onChangeTelegramHistoryScope}
-          {onChangeTranscriptSearch}
-          {onLoadMoreYoutubeTranscriptSegments}
-          {onSyncYoutubeMetadata}
-          {onSyncYoutubeTranscript}
-          {onSyncYoutubeComments}
-          {onStartTakeoutImport}
-          {onStartMigratedHistoryImport}
-          onCancelSourceJob={onCancelSourceJob}
-        />
-      {:else if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}
-        {#if youtubeRuntimeDiagnostic}
-          <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
-        {/if}
-        <YoutubePlaylistReader
-          sourceTitle={currentSource.title ?? currentSource.externalId}
-          playlist={youtubePlaylistDetail}
-          loading={loadingYoutubeDetail}
-          {formatTimestamp}
-          onOpenSource={onOpenSource}
-          onSyncPlaylist={() => onSyncYoutubePlaylist(currentSource.id)}
-          onRetryFailed={() => onRetryFailedYoutubePlaylistVideos(currentSource.id)}
-          onSyncPlaylistVideo={(videoSourceId) => onSyncYoutubePlaylistVideo(currentSource.id, videoSourceId)}
-          onRetryPlaylistVideo={(videoSourceId) => onRetryYoutubePlaylistVideo(currentSource.id, videoSourceId)}
-          sourceJobs={sourceJobs}
-          onCancelSourceJob={onCancelSourceJob}
-        />
-      {:else}
-        <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
+    {#if sourceBrowserShellAppliesToSource(currentSource)}
+      {#if youtubeRuntimeDiagnostic}
+        <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
       {/if}
-    {/key}
+      <SourceBrowserShell
+        source={currentSource}
+        {liveReaderItems}
+        {takeoutRecovery}
+        {sourceItems}
+        sourceRouteError={sourceItemsError}
+        {sourceItemsHasMore}
+        {loadingItems}
+        {sourceTopics}
+        {loadingSourceTopics}
+        {selectedTopicKey}
+        {showTopicSelector}
+        {youtubeVideoDetail}
+        {youtubeTranscriptSegments}
+        {youtubeTranscriptSearch}
+        {youtubeTranscriptHasMore}
+        {loadingYoutubeTranscriptSegments}
+        {loadingYoutubeDetail}
+        {sourceJobs}
+        {selectedTraceRef}
+        {telegramHistoryScope}
+        {currentSourceContentLabel}
+        {sourceSyncDisabledReason}
+        {formatTimestamp}
+        {onSyncSource}
+        {onLoadMoreSourceItems}
+        {onChangeSelectedTopicKey}
+        {onChangeTelegramHistoryScope}
+        {onChangeTranscriptSearch}
+        {onLoadMoreYoutubeTranscriptSegments}
+        {onSyncYoutubeMetadata}
+        {onSyncYoutubeTranscript}
+        {onSyncYoutubeComments}
+        {onStartTakeoutImport}
+        {onStartMigratedHistoryImport}
+        onCancelSourceJob={onCancelSourceJob}
+      />
+    {:else}
+      {#key `${analysisScope}:${currentSource.id}:${currentRun?.id ?? "idle"}:live`}
+        {#if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}
+          {#if youtubeRuntimeDiagnostic}
+            <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
+          {/if}
+          <YoutubePlaylistReader
+            sourceTitle={currentSource.title ?? currentSource.externalId}
+            playlist={youtubePlaylistDetail}
+            loading={loadingYoutubeDetail}
+            {formatTimestamp}
+            onOpenSource={onOpenSource}
+            onSyncPlaylist={() => onSyncYoutubePlaylist(currentSource.id)}
+            onRetryFailed={() => onRetryFailedYoutubePlaylistVideos(currentSource.id)}
+            onSyncPlaylistVideo={(videoSourceId) => onSyncYoutubePlaylistVideo(currentSource.id, videoSourceId)}
+            onRetryPlaylistVideo={(videoSourceId) => onRetryYoutubePlaylistVideo(currentSource.id, videoSourceId)}
+            sourceJobs={sourceJobs}
+            onCancelSourceJob={onCancelSourceJob}
+          />
+        {:else}
+          <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
+        {/if}
+      {/key}
+    {/if}
   {:else if analysisScope === "source_group" && currentGroup}
     <SourceGroupReader
       items={groupLiveReaderItems}

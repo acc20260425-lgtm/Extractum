@@ -1272,7 +1272,7 @@ git commit -m "feat: add source metadata browser tab"
 
 ## Final Verification
 
-- [ ] **Step 1: Run final shell architecture boundary test**
+- [x] **Step 1: Run final shell architecture boundary test**
 
 Run: `npm run test -- src/lib/components/analysis/source-browser-shell.test.ts`
 
@@ -1283,13 +1283,13 @@ expect(shellSource).not.toContain("$lib/api/");
 expect(shellSource).not.toContain("invoke(");
 ```
 
-- [ ] **Step 2: Run full project verification**
+- [x] **Step 2: Run full project verification**
 
 Run: `npm run verify`
 
 Expected: exit 0.
 
-- [ ] **Step 3: Run focused manual smoke in the app**
+- [x] **Step 3: Run focused manual smoke in the app**
 
 Start the app using the normal dev workflow, open `/analysis`, and verify:
 
@@ -1303,6 +1303,6 @@ Start the app using the normal dev workflow, open `/analysis`, and verify:
 - Activity owns detailed job cards;
 - Metadata raw JSON stays collapsed and bounded.
 
-- [ ] **Step 4: Update docs/backlog if this feature closes an item**
+- [x] **Step 4: Update docs/backlog if this feature closes an item**
 
 Only update `docs/backlog.md` if a matching open backlog item exists. Do not edit unrelated documentation.

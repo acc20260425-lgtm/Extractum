@@ -34,6 +34,16 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain('sourceSubtype === "playlist"');
   });
 
+  it("keeps SourceBrowserShell mounted across supported live source switches", () => {
+    const shellIndex = reportSourceSurfaceSource.indexOf("<SourceBrowserShell");
+    expect(shellIndex).toBeGreaterThan(0);
+
+    const shellPrelude = reportSourceSurfaceSource.slice(Math.max(0, shellIndex - 420), shellIndex);
+
+    expect(shellPrelude).not.toContain("{#key");
+    expect(shellPrelude).not.toContain("currentSource.id");
+  });
+
   it("preserves the existing Telegram timeline controls through the shell", () => {
     expect(sourceBrowserShellSource).toContain("telegramHistoryScopeOptions");
     expect(sourceBrowserShellSource).toContain("onChangeTelegramHistoryScope");

@@ -5,6 +5,9 @@ use tauri::{AppHandle, State};
 use super::AnalysisState;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::youtube::dto::{
+    YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
+};
 
 const FIXTURE_MARKER: &str = "__analysis_redesign_fixture__";
 const FIXTURE_EXTERNAL_PREFIX: &str = "__analysis_redesign_fixture__:";
@@ -17,6 +20,10 @@ const TELEGRAM_CHANNEL_LABEL: &str = "__analysis_redesign_fixture__ Telegram Cha
 const TELEGRAM_SUPERGROUP_LABEL: &str = "__analysis_redesign_fixture__ Telegram Supergroup";
 const YOUTUBE_VIDEO_LABEL: &str = "__analysis_redesign_fixture__ YouTube Video";
 const YOUTUBE_PLAYLIST_LABEL: &str = "__analysis_redesign_fixture__ YouTube Playlist";
+const YOUTUBE_FIXTURE_VIDEO_ID: &str = "analysis_fixture_video";
+const YOUTUBE_FIXTURE_PLAYLIST_ID: &str = "PLanalysisfixture";
+const TELEGRAM_FIXTURE_CHANNEL_PEER_ID: i64 = 10_000_001;
+const TELEGRAM_FIXTURE_SUPERGROUP_PEER_ID: i64 = 10_000_002;
 const TELEGRAM_GROUP_LABEL: &str = "__analysis_redesign_fixture__ Telegram Group";
 const COMPLETED_SNAPSHOT_RUN_LABEL: &str = "__analysis_redesign_fixture__ Completed Snapshot Run";
 const MISSING_SNAPSHOT_RUN_LABEL: &str = "__analysis_redesign_fixture__ Missing Snapshot Run";
@@ -173,6 +180,7 @@ async fn insert_telegram_source(
     account_id: i64,
     label: &str,
     kind: &str,
+    peer_id: i64,
     external_suffix: &str,
     last_sync_state: i64,
 ) -> AppResult<i64> {
@@ -186,7 +194,7 @@ async fn insert_telegram_source(
     )
     .bind(kind)
     .bind(account_id)
-    .bind(format!("{FIXTURE_EXTERNAL_PREFIX}{external_suffix}"))
+    .bind(peer_id.to_string())
     .bind(label)
     .bind(json_zstd(serde_json::json!({
         "analysis_redesign_fixture": true,
@@ -205,8 +213,8 @@ async fn insert_telegram_source(
 }
 
 async fn insert_youtube_video_source(tx: &mut sqlx::Transaction<'_, Sqlite>) -> AppResult<i64> {
-    let video_id = format!("{FIXTURE_EXTERNAL_PREFIX}youtube-video");
-    sqlx::query_scalar(
+    let video_id = YOUTUBE_FIXTURE_VIDEO_ID;
+    let source_id = sqlx::query_scalar(
         "INSERT INTO sources (
             source_type, source_subtype, account_id, external_id, title,
             metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
@@ -214,7 +222,7 @@ async fn insert_youtube_video_source(tx: &mut sqlx::Transaction<'_, Sqlite>) -> 
          VALUES ('youtube', 'video', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
          RETURNING id",
     )
-    .bind(&video_id)
+    .bind(video_id)
     .bind(YOUTUBE_VIDEO_LABEL)
     .bind(json_zstd(serde_json::json!({
         "analysis_redesign_fixture": true,
@@ -244,12 +252,45 @@ async fn insert_youtube_video_source(tx: &mut sqlx::Transaction<'_, Sqlite>) -> 
     .bind(FIXTURE_NOW)
     .fetch_one(&mut **tx)
     .await
-    .map_err(AppError::database)
+    .map_err(AppError::database)?;
+
+    crate::youtube::source_metadata::upsert_video_source_metadata(
+        tx,
+        source_id,
+        &YoutubeVideoMetadata {
+            video_id: video_id.to_string(),
+            canonical_url: format!("https://www.youtube.com/watch?v={video_id}"),
+            title: Some(YOUTUBE_VIDEO_LABEL.to_string()),
+            channel_title: Some("Fixture Channel".to_string()),
+            channel_id: Some("UCfixture".to_string()),
+            channel_handle: Some("@analysisfixture".to_string()),
+            channel_url: Some("https://www.youtube.com/@analysisfixture".to_string()),
+            author_display: Some("Fixture Channel".to_string()),
+            published_at: Some("2026-05-01".to_string()),
+            duration_seconds: Some(920),
+            description: Some(
+                "Fixture video description for analysis report verification.".to_string(),
+            ),
+            thumbnail_url: None,
+            tags: vec!["fixture".to_string(), "analysis".to_string()],
+            chapters: Vec::new(),
+            view_count: Some(1250),
+            like_count: Some(86),
+            comment_count: Some(2),
+            category: Some("Education".to_string()),
+            video_form: YoutubeVideoForm::Regular,
+            availability_status: YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: serde_json::json!({ "fixture": true }),
+        },
+    )
+    .await?;
+
+    Ok(source_id)
 }
 
 async fn insert_youtube_playlist_source(tx: &mut sqlx::Transaction<'_, Sqlite>) -> AppResult<i64> {
-    let playlist_id = format!("{FIXTURE_EXTERNAL_PREFIX}youtube-playlist");
-    sqlx::query_scalar(
+    let playlist_id = YOUTUBE_FIXTURE_PLAYLIST_ID;
+    let source_id = sqlx::query_scalar(
         "INSERT INTO sources (
             source_type, source_subtype, account_id, external_id, title,
             metadata_zstd, last_sync_state, last_synced_at, is_active, is_member, created_at
@@ -257,12 +298,12 @@ async fn insert_youtube_playlist_source(tx: &mut sqlx::Transaction<'_, Sqlite>) 
          VALUES ('youtube', 'playlist', NULL, ?, ?, ?, NULL, ?, 1, 0, ?)
          RETURNING id",
     )
-    .bind(&playlist_id)
+    .bind(playlist_id)
     .bind(YOUTUBE_PLAYLIST_LABEL)
     .bind(json_zstd(serde_json::json!({
         "analysis_redesign_fixture": true,
         "playlist_id": playlist_id,
-        "canonical_url": "https://www.youtube.com/playlist?list=analysis_fixture_playlist",
+        "canonical_url": "https://www.youtube.com/playlist?list=PLanalysisfixture",
         "title": YOUTUBE_PLAYLIST_LABEL,
         "channel_title": "Fixture Channel",
         "channel_id": "UCfixture",
@@ -278,7 +319,29 @@ async fn insert_youtube_playlist_source(tx: &mut sqlx::Transaction<'_, Sqlite>) 
     .bind(FIXTURE_NOW)
     .fetch_one(&mut **tx)
     .await
-    .map_err(AppError::database)
+    .map_err(AppError::database)?;
+
+    crate::youtube::source_metadata::upsert_playlist_source_metadata(
+        tx,
+        source_id,
+        &YoutubePlaylistMetadata {
+            playlist_id: playlist_id.to_string(),
+            canonical_url: format!("https://www.youtube.com/playlist?list={playlist_id}"),
+            title: Some(YOUTUBE_PLAYLIST_LABEL.to_string()),
+            channel_title: Some("Fixture Channel".to_string()),
+            channel_id: Some("UCfixture".to_string()),
+            channel_handle: Some("@analysisfixture".to_string()),
+            channel_url: Some("https://www.youtube.com/@analysisfixture".to_string()),
+            thumbnail_url: None,
+            video_count: Some(2),
+            items: Vec::new(),
+            availability_status: YoutubeAvailabilityStatus::Available,
+            raw_metadata_json: serde_json::json!({ "fixture": true }),
+        },
+    )
+    .await?;
+
+    Ok(source_id)
 }
 
 async fn insert_fixture_source_group(
@@ -552,7 +615,7 @@ async fn insert_youtube_content(
     )
     .bind(youtube_playlist_id)
     .bind(youtube_video_id)
-    .bind(format!("{FIXTURE_EXTERNAL_PREFIX}youtube-video"))
+    .bind(YOUTUBE_FIXTURE_VIDEO_ID)
     .bind(YOUTUBE_VIDEO_LABEL)
     .bind(FIXTURE_NOW - 360)
     .bind(json_zstd(serde_json::json!({
@@ -562,7 +625,7 @@ async fn insert_youtube_content(
     .bind(FIXTURE_NOW)
     .bind(FIXTURE_NOW)
     .bind(youtube_playlist_id)
-    .bind(format!("{FIXTURE_EXTERNAL_PREFIX}youtube-missing"))
+    .bind("analysis_fixture_missing")
     .bind(format!("{FIXTURE_MARKER} Unavailable Playlist Item"))
     .bind(FIXTURE_NOW - 360)
     .bind(json_zstd(serde_json::json!({
@@ -941,6 +1004,7 @@ async fn seed_analysis_redesign_fixtures_in_pool(
         account_id,
         TELEGRAM_CHANNEL_LABEL,
         "channel",
+        TELEGRAM_FIXTURE_CHANNEL_PEER_ID,
         "telegram-channel",
         9001,
     )
@@ -950,6 +1014,7 @@ async fn seed_analysis_redesign_fixtures_in_pool(
         account_id,
         TELEGRAM_SUPERGROUP_LABEL,
         "supergroup",
+        TELEGRAM_FIXTURE_SUPERGROUP_PEER_ID,
         "telegram-supergroup",
         9101,
     )
@@ -1667,6 +1732,85 @@ mod tests {
             )
             .await,
             4
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_creates_valid_typed_youtube_detail_metadata() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        let video_source_id: i64 = sqlx::query_scalar("SELECT id FROM sources WHERE title = ?")
+            .bind(YOUTUBE_VIDEO_LABEL)
+            .fetch_one(&pool)
+            .await
+            .expect("load fixture video source");
+        let video_detail =
+            crate::youtube::detail::get_youtube_video_detail_from_pool(&pool, video_source_id)
+                .await
+                .expect("load fixture video detail");
+
+        assert_eq!(
+            video_detail.source_metadata.video_id,
+            "analysis_fixture_video"
+        );
+        assert_eq!(
+            video_detail.source_metadata.raw_metadata_json,
+            Some(serde_json::json!({ "fixture": true }))
+        );
+
+        let playlist_source_id: i64 = sqlx::query_scalar("SELECT id FROM sources WHERE title = ?")
+            .bind(YOUTUBE_PLAYLIST_LABEL)
+            .fetch_one(&pool)
+            .await
+            .expect("load fixture playlist source");
+        let playlist_detail = crate::youtube::detail::get_youtube_playlist_detail_from_pool(
+            &pool,
+            playlist_source_id,
+        )
+        .await
+        .expect("load fixture playlist detail");
+
+        assert_eq!(playlist_detail.items.len(), 2);
+        assert_eq!(playlist_detail.items[0].video_id, "analysis_fixture_video");
+    }
+
+    #[tokio::test]
+    async fn seed_creates_sources_that_pass_identity_repair() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        let report = crate::sources::identity_repair::repair_source_identity(
+            &pool,
+            crate::sources::identity_repair::SourceIdentityRepairMode::Apply,
+        )
+        .await
+        .expect("repair seeded fixture identities");
+
+        assert!(report.fatal_errors.is_empty());
+        assert_eq!(
+            count(&pool, "SELECT COUNT(*) FROM telegram_sources").await,
+            2
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM telegram_sources WHERE source_subtype = 'channel' AND peer_kind = 'channel'"
+            )
+            .await,
+            1
+        );
+        assert_eq!(
+            count(
+                &pool,
+                "SELECT COUNT(*) FROM telegram_sources WHERE source_subtype = 'supergroup' AND peer_kind = 'channel'"
+            )
+            .await,
+            1
         );
     }
 
