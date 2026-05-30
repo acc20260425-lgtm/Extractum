@@ -214,7 +214,7 @@ git commit -m "feat: add playlist source browser tabs"
 - Inspect: `src/lib/components/ui/Button.svelte`
 - Inspect: `src/lib/components/analysis/youtube-playlist-reader.svelte`
 
-- [ ] **Step 1: Verify the DTO and UI fields used by the leaf**
+- [x] **Step 1: Verify the DTO and UI fields used by the leaf**
 
 Run:
 
@@ -224,7 +224,7 @@ rg -n "linkedVideoCount|unavailableCount|durationSeconds|captions: YoutubeConten
 
 Expected: output includes `linkedVideoCount`, `unavailableCount`, `durationSeconds`, `captions`, `comments`, the `YoutubeAvailabilityStatus` union, `ariaLabel`, and typed `Badge` / `Button` variants. If this command fails, stop and update the code snippets in this plan to the current field and prop names before continuing.
 
-- [ ] **Step 2: Verify the old reader owns activity state that the new leaf must not carry**
+- [x] **Step 2: Verify the old reader owns activity state that the new leaf must not carry**
 
 Run:
 
