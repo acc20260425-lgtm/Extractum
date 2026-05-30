@@ -24,6 +24,7 @@
     loading,
     hasMore,
     emptyDescription = "No loaded items are available for this source window.",
+    sourceLabelForItem = null,
     formatTimestamp,
     onLoadMore,
   }: {
@@ -31,6 +32,7 @@
     loading: boolean;
     hasMore: boolean;
     emptyDescription?: string;
+    sourceLabelForItem?: ((item: SourceItem) => string | null) | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
   } = $props();
@@ -123,7 +125,8 @@
             </div>
             <div class="item-meta">
               {#if item.author}<Badge variant="neutral">{item.author}</Badge>{/if}
-              <Badge variant="neutral">Source #{item.sourceId}</Badge>
+              {@const sourceLabel = sourceLabelForItem?.(item) ?? `Source #${item.sourceId}`}
+              <Badge variant="neutral">{sourceLabel}</Badge>
               <Badge variant="neutral">{item.externalId}</Badge>
               {#if item.hasMedia}<Badge variant="info">{item.mediaKind ?? "media"}</Badge>{/if}
             </div>

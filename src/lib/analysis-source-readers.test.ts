@@ -237,6 +237,8 @@ describe("analysis source readers", () => {
     expect(universalItemsViewSource).toContain("Load more items");
     expect(universalItemsViewSource).toContain("Unknown item kind");
     expect(universalItemsViewSource).toContain("emptyDescription");
+    expect(universalItemsViewSource).toContain("sourceLabelForItem");
+    expect(universalItemsViewSource).toContain("Source #${item.sourceId}");
   });
 
   it("renders YouTube comments as a loaded-window browser", () => {

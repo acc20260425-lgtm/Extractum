@@ -698,7 +698,7 @@ git commit -m "feat: extract source group sources view"
 - Modify: `src/lib/components/analysis/universal-items-view.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add raw contract test for optional source labels**
+- [x] **Step 1: Add raw contract test for optional source labels**
 
 In the existing `"renders universal Items as a loaded-window browser"` test in `src/lib/analysis-source-readers.test.ts`, add:
 
@@ -707,7 +707,7 @@ In the existing `"renders universal Items as a loaded-window browser"` test in `
     expect(universalItemsViewSource).toContain("Source #${item.sourceId}");
 ```
 
-- [ ] **Step 2: Run reader tests and verify they fail**
+- [x] **Step 2: Run reader tests and verify they fail**
 
 Run:
 
@@ -717,7 +717,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: FAIL because `UniversalItemsView` does not accept `sourceLabelForItem`.
 
-- [ ] **Step 3: Add optional `sourceLabelForItem` prop**
+- [x] **Step 3: Add optional `sourceLabelForItem` prop**
 
 In `src/lib/components/analysis/universal-items-view.svelte`, update the props destructuring:
 
@@ -754,7 +754,7 @@ with:
               <Badge variant="neutral">{sourceLabel}</Badge>
 ```
 
-- [ ] **Step 4: Run reader tests and verify they pass**
+- [x] **Step 4: Run reader tests and verify they pass**
 
 Run:
 
@@ -764,7 +764,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit universal items task**
+- [x] **Step 5: Commit universal items task**
 
 Run:
 
