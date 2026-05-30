@@ -163,7 +163,7 @@ git commit -m "docs: record run snapshot browser preflight"
 - Modify: `src/lib/source-browser-model.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Add snapshot model test imports**
+- [x] **Step 1: Add snapshot model test imports**
 
 In `src/lib/source-browser-model.test.ts`, add `deriveRunSnapshotBrowserKind` to the existing named import from `./source-browser-model`:
 
@@ -177,7 +177,7 @@ Add this type import near the existing type imports:
 import type { SourceReaderItem } from "./source-reader-model";
 ```
 
-- [ ] **Step 2: Add snapshot fixtures to model tests**
+- [x] **Step 2: Add snapshot fixtures to model tests**
 
 Below the existing `sourceGroup` fixture, add:
 
@@ -233,7 +233,7 @@ function snapshotReaderItem(overrides: Partial<SourceReaderItem> = {}): SourceRe
 }
 ```
 
-- [ ] **Step 3: Add failing snapshot tab/default/applicability tests**
+- [x] **Step 3: Add failing snapshot tab/default/applicability tests**
 
 Inside `describe("source browser model", () => {`, after the live source group tabs test, add:
 
@@ -256,7 +256,7 @@ Inside `describe("source browser model", () => {`, after the live source group t
   });
 ```
 
-- [ ] **Step 4: Add failing reader-kind derivation tests**
+- [x] **Step 4: Add failing reader-kind derivation tests**
 
 After the snapshot tab/default test, add:
 
@@ -309,7 +309,7 @@ After the snapshot tab/default test, add:
   });
 ```
 
-- [ ] **Step 5: Add failing snapshot reconciliation tests**
+- [x] **Step 5: Add failing snapshot reconciliation tests**
 
 After the existing source group reconciliation test, add:
 
@@ -336,7 +336,7 @@ After the existing source group reconciliation test, add:
   });
 ```
 
-- [ ] **Step 6: Run model tests and verify they fail**
+- [x] **Step 6: Run model tests and verify they fail**
 
 Run:
 
@@ -346,7 +346,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts
 
 Expected: FAIL because `run_snapshot` subject types and `deriveRunSnapshotBrowserKind` are not implemented.
 
-- [ ] **Step 7: Implement snapshot model types and helpers**
+- [x] **Step 7: Implement snapshot model types and helpers**
 
 In `src/lib/source-browser-model.ts`, change the imports to include `SourceReaderItem`, `SourceType`, and `SourceSubtype`:
 
@@ -469,7 +469,7 @@ export function deriveRunSnapshotBrowserKind(input: RunSnapshotBrowserKindInput)
 }
 ```
 
-- [ ] **Step 8: Run model tests and verify they pass**
+- [x] **Step 8: Run model tests and verify they pass**
 
 Run:
 
@@ -479,7 +479,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit model task**
+- [x] **Step 9: Commit model task**
 
 Run:
 

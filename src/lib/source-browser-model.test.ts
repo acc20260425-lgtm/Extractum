@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as sourceBrowserModel from "./source-browser-model";
 import {
   commentsCoverageState,
+  deriveRunSnapshotBrowserKind,
   filterLoadedSourceItems,
   filterLoadedYoutubeComments,
   groupLoadedYoutubeComments,
@@ -16,6 +17,7 @@ import {
   sortLoadedSourceItems,
   type SourceBrowserTabId,
 } from "./source-browser-model";
+import type { SourceReaderItem } from "./source-reader-model";
 import type { AnalysisSourceGroup } from "./types/analysis";
 import type { Source, SourceItem, SourceJobRecord } from "./types/sources";
 import type { YoutubeVideoDetail } from "./types/youtube";
@@ -55,6 +57,56 @@ function sourceGroup(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSour
     ],
     created_at: 1710000000,
     updated_at: 1710000500,
+    ...overrides,
+  };
+}
+
+function snapshotSubject(
+  readerKind: "source_group" | "telegram_timeline" | "youtube_transcript" | "generic_items",
+  overrides: Partial<{
+    runId: number;
+    scopeType: "source" | "source_group";
+    scopeLabel: string;
+    sourceType: Source["sourceType"] | null;
+    sourceSubtype: Source["sourceSubtype"] | null;
+  }> = {},
+) {
+  return {
+    kind: "run_snapshot" as const,
+    snapshot: {
+      runId: overrides.runId ?? 500,
+      scopeType: overrides.scopeType ?? (readerKind === "source_group" ? "source_group" : "source"),
+      scopeLabel: overrides.scopeLabel ?? "Snapshot run",
+      readerKind,
+      sourceType: overrides.sourceType ?? null,
+      sourceSubtype: overrides.sourceSubtype ?? null,
+    },
+  };
+}
+
+function snapshotReaderItem(overrides: Partial<SourceReaderItem> = {}): SourceReaderItem {
+  return {
+    id: "snapshot:s1-i1",
+    sourceId: 1,
+    sourceTitle: "Snapshot source",
+    externalId: "external-1",
+    ref: "s1-i1",
+    kind: "telegram_message",
+    author: "Alice",
+    publishedAt: 1710000000,
+    content: "Snapshot row",
+    topicLabel: null,
+    replyLabel: null,
+    reactionLabel: null,
+    mediaCards: [],
+    youtubeStartSeconds: null,
+    youtubeEndSeconds: null,
+    youtubeUrl: null,
+    captionLabel: null,
+    historyScope: "current",
+    historyScopeLabel: null,
+    isMigratedHistory: false,
+    selected: false,
     ...overrides,
   };
 }
@@ -206,6 +258,70 @@ describe("source browser model", () => {
     expect(sourceBrowserShellAppliesToSubject(groupSubject)).toBe(true);
   });
 
+  it("derives canonical tabs for run snapshot subjects", () => {
+    expect(sourceBrowserTabsForSubject(snapshotSubject("source_group")).map((tab) => tab.id))
+      .toEqual(["sources", "items", "metadata"]);
+    expect(sourceBrowserTabsForSubject(snapshotSubject("telegram_timeline")).map((tab) => tab.id))
+      .toEqual(["timeline", "items", "metadata"]);
+    expect(sourceBrowserTabsForSubject(snapshotSubject("youtube_transcript")).map((tab) => tab.id))
+      .toEqual(["transcript", "items", "metadata"]);
+    expect(sourceBrowserTabsForSubject(snapshotSubject("generic_items")).map((tab) => tab.id))
+      .toEqual(["items", "metadata"]);
+
+    expect(smartDefaultSourceBrowserTab(snapshotSubject("source_group"))).toBe("sources");
+    expect(smartDefaultSourceBrowserTab(snapshotSubject("telegram_timeline"))).toBe("timeline");
+    expect(smartDefaultSourceBrowserTab(snapshotSubject("youtube_transcript"))).toBe("transcript");
+    expect(smartDefaultSourceBrowserTab(snapshotSubject("generic_items"))).toBe("items");
+    expect(sourceBrowserShellAppliesToSubject(snapshotSubject("generic_items"))).toBe(true);
+  });
+
+  it("derives run snapshot reader kinds deterministically", () => {
+    expect(deriveRunSnapshotBrowserKind({
+      scopeType: "source_group",
+      sourceType: "telegram",
+      sourceSubtype: null,
+      snapshotReaderItems: [],
+    })).toBe("source_group");
+
+    expect(deriveRunSnapshotBrowserKind({
+      scopeType: "source",
+      sourceType: "youtube",
+      sourceSubtype: "video",
+      snapshotReaderItems: [snapshotReaderItem({ kind: "youtube_transcript" })],
+    })).toBe("youtube_transcript");
+
+    expect(deriveRunSnapshotBrowserKind({
+      scopeType: "source",
+      sourceType: "telegram",
+      sourceSubtype: "supergroup",
+      snapshotReaderItems: [snapshotReaderItem({ kind: "telegram_message" })],
+    })).toBe("telegram_timeline");
+
+    expect(deriveRunSnapshotBrowserKind({
+      scopeType: "source",
+      sourceType: "youtube",
+      sourceSubtype: "video",
+      snapshotReaderItems: [
+        snapshotReaderItem({ kind: "youtube_transcript" }),
+        snapshotReaderItem({ id: "snapshot:s1-c1", kind: "youtube_comment" }),
+      ],
+    })).toBe("generic_items");
+
+    expect(deriveRunSnapshotBrowserKind({
+      scopeType: "source",
+      sourceType: "youtube",
+      sourceSubtype: "video",
+      snapshotReaderItems: [snapshotReaderItem({ kind: "telegram_message" })],
+    })).toBe("generic_items");
+
+    expect(deriveRunSnapshotBrowserKind({
+      scopeType: "source",
+      sourceType: "telegram",
+      sourceSubtype: "supergroup",
+      snapshotReaderItems: [],
+    })).toBe("generic_items");
+  });
+
   it("keeps source helper behavior aligned with subject-aware helpers", () => {
     const samples = [
       source({ sourceType: "telegram", sourceSubtype: "supergroup" }),
@@ -255,6 +371,27 @@ describe("source browser model", () => {
     expect(reconcileSourceBrowserTab("items", nextGroupSubject)).toBe("items");
     expect(reconcileSourceBrowserTab("metadata", nextGroupSubject)).toBe("metadata");
     expect(reconcileSourceBrowserTab("activity", nextGroupSubject)).toBe("activity");
+  });
+
+  it("reconciles run snapshot tab transitions without leaking live-only tabs", () => {
+    const groupSnapshot = snapshotSubject("source_group");
+    const telegramSnapshot = snapshotSubject("telegram_timeline");
+    const youtubeSnapshot = snapshotSubject("youtube_transcript");
+    const genericSnapshot = snapshotSubject("generic_items");
+    const telegramSubject = {
+      kind: "source" as const,
+      source: source({ id: 3, sourceType: "telegram", sourceSubtype: "supergroup" }),
+    };
+
+    expect(reconcileSourceBrowserTab("items", groupSnapshot)).toBe("items");
+    expect(reconcileSourceBrowserTab("metadata", groupSnapshot)).toBe("metadata");
+    expect(reconcileSourceBrowserTab("activity", groupSnapshot)).toBe("sources");
+    expect(reconcileSourceBrowserTab("comments", youtubeSnapshot)).toBe("transcript");
+    expect(reconcileSourceBrowserTab("videos", telegramSnapshot)).toBe("timeline");
+    expect(reconcileSourceBrowserTab("transcript", genericSnapshot)).toBe("items");
+    expect(reconcileSourceBrowserTab("sources", telegramSnapshot)).toBe("timeline");
+    expect(reconcileSourceBrowserTab("timeline", telegramSubject)).toBe("timeline");
+    expect(reconcileSourceBrowserTab("metadata", telegramSubject)).toBe("metadata");
   });
 
   it("selects smart defaults by canonical tab id", () => {
