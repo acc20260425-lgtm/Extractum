@@ -91,8 +91,9 @@ smartDefaultSourceBrowserTab(source)
 sourceBrowserShellAppliesToSource(source)
 ```
 
-The wrappers should delegate to the subject-aware model instead of carrying a
-parallel source-only tab implementation.
+The wrappers should stay behavior-aligned with subject-aware source calls and
+share the same source tab/default/applicability logic instead of carrying a
+parallel source-only branch that can drift.
 
 ## UX Contract
 
@@ -230,7 +231,7 @@ Frontend contract and model tests should assert:
 - `smartDefaultSourceBrowserTab(groupSubject)` returns `sources`;
 - source-only wrappers return the same results as subject-aware calls for
   `{ kind: "source", source }`;
-- if a structural guard is added for wrapper delegation, it should avoid
+- if a structural guard is added for wrapper/source parity, it should avoid
   depending on exact function text and only prevent a second large source-only
   branch from drifting away from the subject-aware model;
 - reconciliation follows the table above;
