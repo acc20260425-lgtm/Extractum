@@ -6,7 +6,6 @@ import telegramMediaCardSource from "./components/analysis/telegram-media-card.s
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
 import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
-import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 import sourceGroupSourcesViewSource from "./components/analysis/source-group-sources-view.svelte?raw";
 import evidenceTabSource from "./components/analysis/run-evidence-tab.svelte?raw";
 import chatTabSource from "./components/analysis/run-chat-tab.svelte?raw";
@@ -109,7 +108,8 @@ describe("analysis redesign final safety contract", () => {
   });
 
   it("keeps source groups grouped by source instead of merged into one pseudo-chat", () => {
-    expect(sourceGroupReaderSource).toContain("SourceGroupSourcesView");
+    expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
+    expect(reportSourceSurfaceSource).toContain("groupBrowserData");
     expect(sourceGroupSourcesViewSource).toContain('class="source-group-sources-view"');
     expect(sourceGroupSourcesViewSource).toContain("groupReaderItemsBySource");
     expect(sourceGroupSourcesViewSource).toContain("youtubeItems");

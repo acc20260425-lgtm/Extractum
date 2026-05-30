@@ -188,7 +188,7 @@ Expected: commit succeeds with only this plan file changed.
 - Modify: `src/lib/analysis-redesign-safety-contract.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-legacy-wrapper-cleanup-implementation.md`
 
-- [ ] **Step 1: Migrate `analysis-source-readers.test.ts` away from `SourceGroupReader`**
+- [x] **Step 1: Migrate `analysis-source-readers.test.ts` away from `SourceGroupReader`**
 
 Remove this import:
 
@@ -231,7 +231,7 @@ expect(sourceGroupSourcesViewSource).not.toContain("<span>Source focus</span>");
 expect(sourceGroupSourcesViewSource).not.toContain("group-filter");
 ```
 
-- [ ] **Step 2: Migrate `analysis-report-canvas.test.ts` away from `RunSnapshotMessagesPanel`**
+- [x] **Step 2: Migrate `analysis-report-canvas.test.ts` away from `RunSnapshotMessagesPanel`**
 
 Remove this import:
 
@@ -262,7 +262,7 @@ it("keeps run snapshot reading bounded and snapshot-only", () => {
 });
 ```
 
-- [ ] **Step 3: Migrate `analysis-redesign-safety-contract.test.ts` away from `SourceGroupReader`**
+- [x] **Step 3: Migrate `analysis-redesign-safety-contract.test.ts` away from `SourceGroupReader`**
 
 Remove this import:
 
@@ -290,7 +290,7 @@ expect(sourceGroupSourcesViewSource).not.toContain("mergedTimeline");
 expect(sourceGroupSourcesViewSource).not.toContain("pseudoChat");
 ```
 
-- [ ] **Step 4: Run focused tests before deletion**
+- [x] **Step 4: Run focused tests before deletion**
 
 Run:
 
@@ -300,7 +300,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: PASS. These tests should no longer import the wrapper raw files.
 
-- [ ] **Step 5: Delete wrapper files that passed the Task 0 gate**
+- [x] **Step 5: Delete wrapper files that passed the Task 0 gate**
 
 If both candidates passed the Task 0 production usage gate, run:
 
@@ -312,7 +312,7 @@ If only one candidate passed the gate, delete only that candidate with `git rm` 
 
 Expected for the current repository state: both files are removed.
 
-- [ ] **Step 6: Verify `src` has no wrapper references**
+- [x] **Step 6: Verify `src` has no wrapper references**
 
 Run:
 
@@ -322,7 +322,7 @@ rg -n "SourceGroupReader|source-group-reader|RunSnapshotMessagesPanel|run-snapsh
 
 Expected: no output. `rg` exits with code `1` when no matches are found.
 
-- [ ] **Step 7: Run focused tests after deletion**
+- [x] **Step 7: Run focused tests after deletion**
 
 Run:
 
@@ -332,7 +332,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte/type check after deleting components**
+- [x] **Step 8: Run Svelte/type check after deleting components**
 
 Run:
 
@@ -342,7 +342,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 9: Commit wrapper deletion and test migration**
+- [x] **Step 9: Commit wrapper deletion and test migration**
 
 Run:
 
