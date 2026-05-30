@@ -90,7 +90,25 @@ report-source-surface.svelte contains runSnapshotMessages, allSnapshotReaderItem
 source-browser-shell.svelte contains live source/group props and SourceActivityView only for live source subjects.
 ```
 
-- [ ] **Step 4: Record preflight decisions**
+- [ ] **Step 4: Inspect design status and UI component APIs**
+
+Run:
+
+```bash
+rg -n "^> Status:" docs/superpowers/specs/2026-05-30-run-snapshot-source-browser-design.md
+rg -n "selected =|ariaPressed|ariaLabel|oninput|onchange|value =" src/lib/components/ui/Button.svelte src/lib/components/ui/Input.svelte src/lib/components/ui/Select.svelte
+```
+
+Expected findings:
+
+```text
+2026-05-30-run-snapshot-source-browser-design.md has status: approved design, pending implementation plan.
+Button.svelte supports selected, ariaPressed, and ariaLabel props.
+Input.svelte supports ariaLabel and oninput props.
+Select.svelte supports value and onchange props.
+```
+
+- [ ] **Step 5: Record preflight decisions**
 
 Add this under the Task 0 step list after running the commands:
 
@@ -103,9 +121,11 @@ Preflight decisions:
 - `runSnapshotMessages` is the unfiltered loaded snapshot message window; `allSnapshotReaderItems` is the unfiltered reader-row projection; `snapshotReaderItems` is source-focus filtered.
 - Snapshot available branches will use `allSnapshotReaderItems` for reader-kind derivation, not the source-filtered `snapshotReaderItems`.
 - `SourceReaderHeader` remains outside `SourceBrowserShell`.
+- The design spec status is `approved design, pending implementation plan`; Task 5 Step 4 will replace that exact line.
+- Snapshot leaf controls use the existing UI component APIs: `Button selected` plus `ariaPressed`, `Input ariaLabel/oninput`, and `Select value/onchange`.
 ```
 
-- [ ] **Step 5: Run whitespace and status checks**
+- [ ] **Step 6: Run whitespace and status checks**
 
 Run:
 
@@ -116,7 +136,7 @@ git status --short --branch
 
 Expected: no whitespace errors; only this plan file is modified.
 
-- [ ] **Step 6: Commit preflight**
+- [ ] **Step 7: Commit preflight**
 
 Run:
 
@@ -488,6 +508,7 @@ After the `"renders universal Items as a loaded-window browser"` test, add:
     expect(snapshotItemsViewSource).toContain("Snapshot items are limited to frozen rows loaded for this run");
     expect(snapshotItemsViewSource).toContain("Load older snapshot messages");
     expect(snapshotItemsViewSource).toContain("selectedTraceRef");
+    expect(snapshotItemsViewSource).toContain("ariaPressed");
   });
 
   it("renders snapshot group Sources with global snapshot paging only", () => {
@@ -627,6 +648,7 @@ Create `src/lib/components/analysis/snapshot-items-view.svelte` with:
       size="sm"
       variant={selectedKind === ALL_KINDS ? "secondary" : "ghost"}
       selected={selectedKind === ALL_KINDS}
+      ariaPressed={selectedKind === ALL_KINDS}
       onclick={() => (selectedKind = ALL_KINDS)}
     >
       All
@@ -637,6 +659,7 @@ Create `src/lib/components/analysis/snapshot-items-view.svelte` with:
         size="sm"
         variant={selectedKind === chip.kind ? "secondary" : "ghost"}
         selected={selectedKind === chip.kind}
+        ariaPressed={selectedKind === chip.kind}
         onclick={() => (selectedKind = chip.kind)}
       >
         {chip.label} ({chip.count})
