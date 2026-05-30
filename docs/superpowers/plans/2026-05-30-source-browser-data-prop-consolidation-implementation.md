@@ -61,7 +61,7 @@ Expected: branch changes from `main` to `source-browser-data-prop-consolidation`
 Run:
 
 ```bash
-rg -n "onCancelSourceJob|SourceJobRecord|TakeoutImportRecoveryState|SourceForumTopic|type Props =|type SourceGroupBrowserData|type SnapshotBrowserData" src/lib/components/analysis/source-browser-shell.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/types/sources.ts
+rg -n "onCancelSourceJob|SourceJobRecord|TakeoutImportRecoveryState|SourceForumTopic|type Props =|type SourceGroupBrowserData|type SnapshotBrowserData|explicitSubject|const subject =" src/lib/components/analysis/source-browser-shell.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/types/sources.ts
 ```
 
 Expected current facts:
@@ -72,6 +72,7 @@ SourceBrowserShell:
 - has local SourceGroupBrowserData
 - has local SnapshotBrowserData
 - has onCancelSourceJob: (jobId: string) => void | Promise<void>
+- has existing subject fallback: explicitSubject ?? (source ? { kind: "source" as const, source } : null)
 
 ReportSourceSurface:
 - has onCancelSourceJob: (jobId: string) => void | Promise<void>
@@ -107,6 +108,7 @@ Add this note under Task 0 while executing:
 Actual preflight on 2026-05-30:
 - `onCancelSourceJob` uses `string`; no type change.
 - Real type names are `SourceForumTopic`, `SourceJobRecord`, and `TakeoutImportRecoveryState`.
+- Keep the existing `subject` derived fallback from `explicitSubject` and `source`.
 - `groupBrowserData` has no loading field; keep optional top-level `loadingItems` for live group loading.
 - `groupBrowserData` and `snapshotBrowserData` shapes stay unchanged.
 ```
@@ -263,7 +265,19 @@ Replace the existing destructuring block with:
   }: Props = $props();
 ```
 
-- [ ] **Step 6: Add subject-scoped derived data**
+- [ ] **Step 6: Preserve the existing subject fallback**
+
+Keep the existing `subject` derived value immediately after `let activeTab` and `let lastSubjectKey`.
+
+The required code is:
+
+```ts
+  const subject = $derived(explicitSubject ?? (source ? { kind: "source" as const, source } : null));
+```
+
+This preserves compatibility for any caller that still passes `source` instead of an explicit subject. Group and snapshot calls should pass explicit subjects and do not need `source={null}`.
+
+- [ ] **Step 7: Add subject-scoped derived data**
 
 Replace the old `groupData` and `snapshotData` derived declarations with:
 
@@ -274,7 +288,7 @@ Replace the old `groupData` and `snapshotData` derived declarations with:
   const groupLoading = $derived(subject && subject.kind === "source_group" ? loadingItems : false);
 ```
 
-- [ ] **Step 7: Update shared derived state**
+- [ ] **Step 8: Update shared derived state**
 
 Replace `itemsForActiveSubject`, `itemsEmptyDescription`, and `sortedSourceTopics` with:
 
@@ -298,7 +312,7 @@ Replace `itemsForActiveSubject`, `itemsEmptyDescription`, and `sortedSourceTopic
     : []);
 ```
 
-- [ ] **Step 8: Update shell event helpers**
+- [ ] **Step 9: Update shell event helpers**
 
 Replace `changeSelectedTopic`, `changeTelegramHistoryScope`, and add `loadMoreSourceItems`:
 
@@ -320,7 +334,7 @@ Replace `changeSelectedTopic`, `changeTelegramHistoryScope`, and add `loadMoreSo
 
 Keep `loadMoreGroupItems` and `loadMoreGroupSourcePage`.
 
-- [ ] **Step 9: Update source-only branches to read from `sourceData`**
+- [ ] **Step 10: Update source-only branches to read from `sourceData`**
 
 Require `sourceData` in each live source branch condition:
 
@@ -389,7 +403,7 @@ onStartMigratedHistoryImport -> sourceData.onStartMigratedHistoryImport
 onCancelSourceJob -> sourceData.onCancelSourceJob
 ```
 
-- [ ] **Step 10: Update group branch loading and `UniversalItemsView`**
+- [ ] **Step 11: Update group branch loading and `UniversalItemsView`**
 
 In the source group `Sources` branch, replace:
 
@@ -418,7 +432,7 @@ Replace the current `UniversalItemsView` props with:
 />
 ```
 
-- [ ] **Step 11: Run shell tests**
+- [ ] **Step 12: Run shell tests**
 
 Run:
 
@@ -428,7 +442,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 12: Run Svelte/type checks**
+- [ ] **Step 13: Run Svelte/type checks**
 
 Run:
 
@@ -438,7 +452,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 13: Commit shell migration**
+- [ ] **Step 14: Commit shell migration**
 
 Run:
 
@@ -460,11 +474,27 @@ Expected: commit contains shell migration, shell contract tests, and plan checkb
 
 - [ ] **Step 1: Add route raw helper**
 
-Add this helper near the existing top-level raw constants in `src/lib/analysis-source-readers.test.ts`:
+Add these helpers near the existing top-level raw constants in `src/lib/analysis-source-readers.test.ts`:
 
 ```ts
 function matchCount(source: string, pattern: RegExp) {
   return source.match(pattern)?.length ?? 0;
+}
+
+function sourceBetween(source: string, start: string, end: string) {
+  const startIndex = source.indexOf(start);
+  expect(startIndex).toBeGreaterThanOrEqual(0);
+  const endIndex = source.indexOf(end, startIndex);
+  expect(endIndex).toBeGreaterThan(startIndex);
+  return source.slice(startIndex, endIndex + end.length);
+}
+
+function sourceBrowserShellCall(marker: string) {
+  const markerIndex = reportSourceSurfaceSource.indexOf(marker);
+  expect(markerIndex).toBeGreaterThanOrEqual(0);
+  const openIndex = reportSourceSurfaceSource.lastIndexOf("<SourceBrowserShell", markerIndex);
+  expect(openIndex).toBeGreaterThanOrEqual(0);
+  return sourceBetween(reportSourceSurfaceSource.slice(openIndex), "<SourceBrowserShell", "/>");
 }
 ```
 
@@ -473,17 +503,23 @@ function matchCount(source: string, pattern: RegExp) {
 In the test named `"routes live browsable sources and source groups through SourceBrowserShell"`, add these expectations:
 
 ```ts
+const liveSourceShellCall = sourceBrowserShellCall('subject={{ kind: "source", source: currentSource }}');
+const liveGroupShellCall = sourceBrowserShellCall('subject={{ kind: "source_group", group: currentGroup }}');
+
 expect(reportSourceSurfaceSource).toContain("sourceBrowserData={{");
 expect(reportSourceSurfaceSource).toContain("groupBrowserData={{");
 expect(matchCount(reportSourceSurfaceSource, /sourceBrowserData=\{\{/g)).toBe(1);
 expect(matchCount(reportSourceSurfaceSource, /groupBrowserData=\{\{/g)).toBe(1);
-expect(reportSourceSurfaceSource).not.toContain("liveReaderItems={[]}");
-expect(reportSourceSurfaceSource).not.toContain("sourceItems={[]}");
-expect(reportSourceSurfaceSource).not.toContain("sourceJobs={[]}");
-expect(reportSourceSurfaceSource).not.toContain("sourceTopics={[]}");
-expect(reportSourceSurfaceSource).not.toContain("youtubeVideoDetail={null}");
-expect(reportSourceSurfaceSource).not.toContain("youtubePlaylistDetail={null}");
-expect(reportSourceSurfaceSource).not.toContain("sourceSyncDisabledReason={() => null}");
+expect(liveSourceShellCall).toContain("sourceBrowserData={{");
+expect(liveGroupShellCall).toContain("groupBrowserData={{");
+expect(liveGroupShellCall).not.toContain("sourceBrowserData={{");
+expect(liveGroupShellCall).not.toContain("liveReaderItems={[]}");
+expect(liveGroupShellCall).not.toContain("sourceItems={[]}");
+expect(liveGroupShellCall).not.toContain("sourceJobs={[]}");
+expect(liveGroupShellCall).not.toContain("sourceTopics={[]}");
+expect(liveGroupShellCall).not.toContain("youtubeVideoDetail={null}");
+expect(liveGroupShellCall).not.toContain("youtubePlaylistDetail={null}");
+expect(liveGroupShellCall).not.toContain("sourceSyncDisabledReason={() => null}");
 ```
 
 - [ ] **Step 3: Update run snapshot route contract**
@@ -491,24 +527,30 @@ expect(reportSourceSurfaceSource).not.toContain("sourceSyncDisabledReason={() =>
 In the test named `"routes available run snapshots through SourceBrowserShell while keeping the header route-owned"`, add:
 
 ```ts
+const snapshotShellCall = sourceBrowserShellCall("subject={runSnapshotSubject}");
+
 expect(reportSourceSurfaceSource).toContain("snapshotBrowserData={{");
 expect(matchCount(reportSourceSurfaceSource, /snapshotBrowserData=\{\{/g)).toBe(1);
+expect(snapshotShellCall).toContain("snapshotBrowserData={{");
+expect(snapshotShellCall).not.toContain("sourceBrowserData={{");
 ```
 
 Replace the body of the test named `"keeps snapshot shell data frozen-only and live props empty"` with:
 
 ```ts
+const snapshotShellCall = sourceBrowserShellCall("subject={runSnapshotSubject}");
+
 expect(reportSourceSurfaceSource).toContain("deriveRunSnapshotBrowserKind");
 expect(reportSourceSurfaceSource).toContain("allSnapshotReaderItems");
-expect(reportSourceSurfaceSource).toContain("snapshotBrowserData={{");
-expect(reportSourceSurfaceSource).not.toContain("sourceJobs={[]}");
-expect(reportSourceSurfaceSource).not.toContain("takeoutRecovery={null}");
-expect(reportSourceSurfaceSource).not.toContain("sourceSyncDisabledReason={() => null}");
-expect(reportSourceSurfaceSource).not.toContain("liveReaderItems={[]}");
-expect(reportSourceSurfaceSource).not.toContain("sourceItems={[]}");
-expect(reportSourceSurfaceSource).not.toContain("sourceTopics={[]}");
-expect(reportSourceSurfaceSource).not.toContain("youtubeVideoDetail={null}");
-expect(reportSourceSurfaceSource).not.toContain("youtubePlaylistDetail={null}");
+expect(snapshotShellCall).toContain("snapshotBrowserData={{");
+expect(snapshotShellCall).not.toContain("sourceJobs={[]}");
+expect(snapshotShellCall).not.toContain("takeoutRecovery={null}");
+expect(snapshotShellCall).not.toContain("sourceSyncDisabledReason={() => null}");
+expect(snapshotShellCall).not.toContain("liveReaderItems={[]}");
+expect(snapshotShellCall).not.toContain("sourceItems={[]}");
+expect(snapshotShellCall).not.toContain("sourceTopics={[]}");
+expect(snapshotShellCall).not.toContain("youtubeVideoDetail={null}");
+expect(snapshotShellCall).not.toContain("youtubePlaylistDetail={null}");
 ```
 
 - [ ] **Step 4: Run route contracts and confirm they fail**
