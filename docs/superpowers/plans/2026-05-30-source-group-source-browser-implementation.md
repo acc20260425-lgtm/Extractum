@@ -1351,7 +1351,7 @@ git commit -m "feat: support source group subjects in source browser shell"
 - Modify: `src/lib/analysis-source-readers.test.ts`
 - Modify: `src/lib/analysis-report-canvas.test.ts`
 
-- [ ] **Step 1: Add route contract tests for live groups and snapshots**
+- [x] **Step 1: Add route contract tests for live groups and snapshots**
 
 In `src/lib/analysis-source-readers.test.ts`, update the first test name and expectations:
 
@@ -1383,7 +1383,7 @@ Add this test:
 
 In `src/lib/analysis-report-canvas.test.ts`, update `"keeps snapshot and live source basis explicit"` so it still expects `<SourceBrowserShell` and does not require live groups to render `SourceGroupReader` outside snapshots. Keep the existing snapshot-specific test `"keeps source-group run snapshots pageable through the grouped reader"` unchanged.
 
-- [ ] **Step 2: Run route contract tests and verify they fail**
+- [x] **Step 2: Run route contract tests and verify they fail**
 
 Run:
 
@@ -1393,7 +1393,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: FAIL because live source groups still render `SourceGroupReader` directly.
 
-- [ ] **Step 3: Import subject applicability in `ReportSourceSurface`**
+- [x] **Step 3: Import subject applicability in `ReportSourceSurface`**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, update the model import:
 
@@ -1404,7 +1404,7 @@ In `src/lib/components/analysis/report-source-surface.svelte`, update the model 
   } from "$lib/source-browser-model";
 ```
 
-- [ ] **Step 4: Derive group source item rows and labels**
+- [x] **Step 4: Derive group source item rows and labels**
 
 Task 0 should have confirmed that `groupLiveItemsBySource` is `Record<number, SourceItem[]>`. Below `groupLiveReaderItems`, add:
 
@@ -1425,7 +1425,7 @@ Add a label helper near `groupMemberSource`:
   }
 ```
 
-- [ ] **Step 5: Pass `subject` and new group defaults to the existing single-source shell**
+- [x] **Step 5: Pass `subject` and new group defaults to the existing single-source shell**
 
 Inside the existing single-source `SourceBrowserShell` component invocation, add:
 
@@ -1434,7 +1434,7 @@ Inside the existing single-source `SourceBrowserShell` component invocation, add
         groupBrowserData={null}
 ```
 
-- [ ] **Step 6: Route live source groups through `SourceBrowserShell`**
+- [x] **Step 6: Route live source groups through `SourceBrowserShell`**
 
 Replace the live `source_group` branch:
 
@@ -1514,7 +1514,7 @@ with:
 
 Do not change the snapshot branch that renders `SourceGroupReader` under `sourceViewBasis === "run_snapshot"`.
 
-- [ ] **Step 7: Run route contract tests and verify they pass**
+- [x] **Step 7: Run route contract tests and verify they pass**
 
 Run:
 
@@ -1524,7 +1524,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte/TypeScript check for route wiring**
+- [x] **Step 8: Run Svelte/TypeScript check for route wiring**
 
 Run:
 
@@ -1534,7 +1534,7 @@ npm.cmd run check
 
 Expected: PASS. This catches `SourceBrowserShell` prop mismatches from `ReportSourceSurface`.
 
-- [ ] **Step 9: Commit route wiring task**
+- [x] **Step 9: Commit route wiring task**
 
 Run:
 

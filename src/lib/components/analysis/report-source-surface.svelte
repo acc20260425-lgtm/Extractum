@@ -24,7 +24,10 @@
     sourceFilterOptionsFromReaderItems,
     sourceItemToReaderItem,
   } from "$lib/source-reader-model";
-  import { sourceBrowserShellAppliesToSource } from "$lib/source-browser-model";
+  import {
+    sourceBrowserShellAppliesToSource,
+    sourceBrowserShellAppliesToSubject,
+  } from "$lib/source-browser-model";
   import type {
     AnalysisRunDetail,
     AnalysisRunMessage,
@@ -208,6 +211,9 @@
       return items.map((item) => sourceItemToReaderItem(item, { sourceTitle, selectedTraceRef }));
     }),
   );
+  const groupLiveSourceItems = $derived.by(() =>
+    Object.values(groupLiveItemsBySource).flat(),
+  );
   const snapshotSourceOptions = $derived.by(() =>
     sourceFilterOptionsFromReaderItems(allSnapshotReaderItems),
   );
@@ -237,6 +243,11 @@
 
   function groupMemberSource(sourceId: number) {
     return currentGroup?.members.find((member) => member.source_id === sourceId) ?? null;
+  }
+
+  function sourceLabelForGroupItem(item: SourceItem) {
+    const member = groupMemberSource(item.sourceId);
+    return member?.source_title ?? `Source ${item.sourceId}`;
   }
 
 </script>
@@ -356,7 +367,9 @@
         <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
       {/if}
       <SourceBrowserShell
+        subject={{ kind: "source", source: currentSource }}
         source={currentSource}
+        groupBrowserData={null}
         {liveReaderItems}
         {takeoutRecovery}
         {sourceItems}
@@ -402,15 +415,61 @@
       <StatusMessage tone="muted" surface={false}>This source type is not browsable yet.</StatusMessage>
     {/if}
   {:else if analysisScope === "source_group" && currentGroup}
-    <SourceGroupReader
-      items={groupLiveReaderItems}
-      {selectedGroupSourceId}
-      loading={loadingItems}
-      hasMoreBySource={groupLiveHasMoreBySource}
-      youtubeDetailsBySource={{}}
-      {formatTimestamp}
-      onLoadMoreSource={onLoadLiveGroupSourcePage}
-    />
+    {#if sourceBrowserShellAppliesToSubject({ kind: "source_group", group: currentGroup })}
+      <SourceBrowserShell
+        subject={{ kind: "source_group", group: currentGroup }}
+        source={null}
+        liveReaderItems={[]}
+        takeoutRecovery={null}
+        sourceItems={[]}
+        sourceRouteError={null}
+        sourceItemsHasMore={false}
+        {loadingItems}
+        sourceTopics={[]}
+        loadingSourceTopics={false}
+        selectedTopicKey="__all_topics__"
+        showTopicSelector={false}
+        youtubeVideoDetail={null}
+        youtubePlaylistDetail={null}
+        youtubeTranscriptSegments={[]}
+        youtubeTranscriptSearch=""
+        youtubeTranscriptHasMore={false}
+        loadingYoutubeTranscriptSegments={false}
+        loadingYoutubeDetail={false}
+        sourceJobs={[]}
+        {selectedTraceRef}
+        {telegramHistoryScope}
+        currentSourceContentLabel="Source group material"
+        sourceSyncDisabledReason={() => null}
+        {formatTimestamp}
+        groupBrowserData={{
+          liveReaderItems: groupLiveReaderItems,
+          sourceItems: groupLiveSourceItems,
+          selectedSourceId: selectedGroupSourceId,
+          hasMoreBySource: groupLiveHasMoreBySource,
+          sourceLabelForItem: sourceLabelForGroupItem,
+          onLoadSourcePage: onLoadLiveGroupSourcePage,
+          youtubeDetailsBySource: {},
+        }}
+        {onSyncSource}
+        {onLoadMoreSourceItems}
+        {onChangeSelectedTopicKey}
+        {onChangeTelegramHistoryScope}
+        {onChangeTranscriptSearch}
+        {onLoadMoreYoutubeTranscriptSegments}
+        {onOpenSource}
+        {onSyncYoutubeMetadata}
+        {onSyncYoutubeTranscript}
+        {onSyncYoutubeComments}
+        {onSyncYoutubePlaylist}
+        onRetryFailedYoutubePlaylistVideos={onRetryFailedYoutubePlaylistVideos}
+        {onSyncYoutubePlaylistVideo}
+        {onRetryYoutubePlaylistVideo}
+        {onStartTakeoutImport}
+        {onStartMigratedHistoryImport}
+        onCancelSourceJob={onCancelSourceJob}
+      />
+    {/if}
   {:else}
     <StatusMessage tone="muted" surface={false}>Select a source or source group to browse source material.</StatusMessage>
   {/if}

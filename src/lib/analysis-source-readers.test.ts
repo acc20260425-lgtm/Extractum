@@ -30,11 +30,24 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).not.toContain("<RunCompanionTabs");
   });
 
-  it("routes Telegram YouTube video and YouTube playlist live sources through SourceBrowserShell", () => {
+  it("routes live browsable sources and source groups through SourceBrowserShell", () => {
     expect(reportSourceSurfaceSource).toContain("sourceBrowserShellAppliesToSource(currentSource)");
+    expect(reportSourceSurfaceSource).toContain("sourceBrowserShellAppliesToSubject");
+    expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source", source: currentSource }}');
+    expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
+    expect(reportSourceSurfaceSource).toContain("groupLiveSourceItems");
+    expect(reportSourceSurfaceSource).toContain("groupBrowserData");
+    expect(reportSourceSurfaceSource).toContain("sourceLabelForGroupItem");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
-    expect(reportSourceSurfaceSource).toContain("{youtubePlaylistDetail}");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
+  });
+
+  it("keeps saved snapshots outside SourceBrowserShell", () => {
+    expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "run_snapshot"');
+    expect(reportSourceSurfaceSource).toContain("<SourceGroupReader");
+    expect(reportSourceSurfaceSource).toContain('analysisScope === "source_group" && currentGroup');
+    expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
+    expect(reportSourceSurfaceSource).not.toContain('sourceViewBasis === "run_snapshot" && sourceBrowserShellAppliesToSubject');
   });
 
   it("renders YouTube playlist videos through SourceBrowserShell", () => {
