@@ -1,8 +1,13 @@
 # Run Snapshot Source Browser Design
 
 > Date: 2026-05-30
-> Status: implemented on 2026-05-30; pending merge
+> Status: merged into main on 2026-05-30
 > Scope: saved run snapshot source browsing in the `/analysis` Source canvas.
+
+> Post-implementation note: available run snapshots now route through
+> `SourceBrowserShell`; legacy wrapper components are cleanup candidates in
+> `2026-05-30-source-browser-legacy-wrapper-cleanup-design.md`. Historical
+> context below describes the pre-slice state.
 
 ## Summary
 

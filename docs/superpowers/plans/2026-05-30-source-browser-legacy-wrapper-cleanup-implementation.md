@@ -365,7 +365,7 @@ Expected: commit includes deleted wrapper files and migrated tests.
 - Modify: `docs/superpowers/specs/2026-05-30-run-snapshot-source-browser-design.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-legacy-wrapper-cleanup-implementation.md`
 
-- [ ] **Step 1: Update `docs/design-document.md`**
+- [x] **Step 1: Update `docs/design-document.md`**
 
 Replace the paragraph that starts with `Live single-source browsing now uses` with:
 
@@ -381,7 +381,7 @@ structured `Metadata`, and consolidated `Activity`; available run snapshots
 preserve frozen snapshot semantics and do not expose live source actions.
 ```
 
-- [ ] **Step 2: Update `docs/project.md`**
+- [x] **Step 2: Update `docs/project.md`**
 
 Replace the implemented bullet that starts with `live single-source Source Browser` with:
 
@@ -393,7 +393,7 @@ Replace the implemented bullet that starts with `live single-source Source Brows
   consolidated live source Activity
 ```
 
-- [ ] **Step 3: Update `docs/frontend-architecture-evolution-analysis.md`**
+- [x] **Step 3: Update `docs/frontend-architecture-evolution-analysis.md`**
 
 Replace this paragraph:
 
@@ -429,7 +429,7 @@ with:
   available run snapshots;
 ```
 
-- [ ] **Step 4: Add post-implementation notes to active browser specs**
+- [x] **Step 4: Add post-implementation notes to active browser specs**
 
 In `docs/superpowers/specs/2026-05-30-source-group-source-browser-design.md`, add this note after the header block:
 
@@ -455,7 +455,7 @@ Then add this note after the header block:
 > context below describes the pre-slice state.
 ```
 
-- [ ] **Step 5: Verify current docs no longer describe wrappers as active paths**
+- [x] **Step 5: Verify current docs no longer describe wrappers as active paths**
 
 Run:
 
@@ -465,7 +465,7 @@ rg -n 'specialized readers|legacy group readers|saved run snapshot readers|keep 
 
 Expected: no matches in `docs/design-document.md`, `docs/project.md`, or `docs/frontend-architecture-evolution-analysis.md`. Matches inside the two active specs are acceptable only if the post-implementation note clearly marks the following section as historical pre-slice context. If `rg` exits `0` only because of those acceptable historical spec matches, continue and do not treat that command as a failure.
 
-- [ ] **Step 6: Commit documentation cleanup**
+- [x] **Step 6: Commit documentation cleanup**
 
 Run:
 

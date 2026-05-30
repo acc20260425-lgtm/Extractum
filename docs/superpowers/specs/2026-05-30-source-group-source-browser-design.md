@@ -4,6 +4,11 @@
 > Status: merged into main on 2026-05-30
 > Scope: live source group browsing in the `/analysis` Source canvas.
 
+> Post-implementation note: live source groups now route through
+> `SourceBrowserShell`; available run snapshots were migrated into the same
+> shell in a later slice. Historical context below describes the pre-slice
+> state.
+
 ## Summary
 
 Move live source group browsing into the shared `SourceBrowserShell` without
