@@ -1,8 +1,12 @@
 # Universal Source Item Browser Design
 
 > Date: 2026-05-29
-> Status: approved design, pending implementation plan
+> Status: shipped on 2026-05-30; archived for rationale and regression context
 > Scope: live single-source browsing in the `/analysis` Source canvas.
+
+Implementation shipped on `main` in commits `16d4e09` through `d13ccc0`.
+Current behavior is summarized in `docs/project.md` and
+`docs/design-document.md`; use this spec as historical design context.
 
 ## Summary
 

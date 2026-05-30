@@ -32,6 +32,9 @@ families behind the shared source model.
 Implemented:
 
 - result-first `/analysis` workspace with compact source rail, central report/source canvas, and evidence/chat/chunks/runs companion panel
+- live single-source Source Browser for Telegram sources and YouTube videos,
+  with provider-aware default tabs, universal loaded item browsing, YouTube
+  comments, structured metadata, and consolidated source Activity
 - typed event-driven `/analysis` workspace UI state transitions, ready for a future state-machine library if the workflow outgrows the local reducer
 - collapsible desktop app sidebar and mobile off-canvas navigation drawer
 - Telegram account management and sign-in flow
@@ -68,6 +71,10 @@ Implemented:
 - immutable saved run corpus snapshots
 - provider-neutral analysis refs for new live corpus rows
 - YouTube timestamp evidence refs for transcript segments
+- optional YouTube comment enrichment on generic source item rows for direct
+  comment browsing without a separate comments pagination endpoint
+- source-level YouTube metadata detail, including bounded raw metadata JSON for
+  the live Metadata tab
 - typed app errors across Tauri commands
 - guarded audit and clear commands for eligible legacy Telegram source metadata
   blobs
@@ -110,7 +117,12 @@ Not implemented yet:
   - switch between report output/setup and source material in the central canvas
   - switch source context through the compact analysis rail
   - inspect evidence, follow-up chat, live chunk summaries, and saved runs in the companion panel
-  - browse sources and inspect synced items
+  - browse live Telegram sources through Timeline, Items, Metadata, and
+    Activity tabs
+  - browse live YouTube videos through Transcript, Comments, Items, Metadata,
+    and Activity tabs
+  - keep YouTube playlists, source groups, and saved run snapshots on their
+    existing specialized readers
   - add Telegram sources manually or from dialogs
   - add YouTube videos and playlists by URL
   - sync Telegram source history
@@ -156,7 +168,7 @@ Not implemented yet:
 - `start_takeout_migrated_history_import`
 - `cancel_takeout_source_import`
 - `list_takeout_source_import_jobs`
-- `get_items`
+- `list_source_items`
 - `get_sync_settings`
 - `save_sync_settings`
 - `audit_legacy_telegram_source_metadata`

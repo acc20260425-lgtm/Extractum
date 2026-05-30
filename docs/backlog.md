@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-29
+> **Updated:** 2026-05-30
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -12,7 +12,7 @@
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
-| Medium | Frontend workspace evolution | improve source-reader navigation, topic filters, activity status, and route boundaries |
+| Medium | Frontend workspace evolution | improve evidence navigation, topic filters, saved-run history, and remaining source-surface consistency |
 | Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
 | Medium | Stabilization and secret safety | add CI, dependency policy, event-flow validation, and secret-leak audit coverage |
 | Medium | Desktop product maturity | add sanitized diagnostics, searchable settings, explicit export profiles, and local privacy/data lifecycle controls |
@@ -136,8 +136,9 @@ Guidance: `docs/frontend-architecture-evolution-analysis.md`.
 - [ ] improve source-reader evidence navigation with jump, temporary highlight,
   return, and load-around-ref behavior
 - [ ] add compact Telegram topic navigation/filtering for source browsing
-- [ ] consolidate source activity/status rendering across sync, Takeout,
-  migrated-history import, YouTube jobs, and recovery notices
+- [ ] extend the shipped `SourceActivityView` pattern across remaining
+  non-shell source surfaces when they gain sync, Takeout, migrated-history, or
+  recovery controls
 - [ ] finish saved-run filtering and cleanup affordances for large histories
 - [ ] evolve media evidence cards only after media download and preview policy
   is approved

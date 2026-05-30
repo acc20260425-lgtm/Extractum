@@ -46,6 +46,14 @@ evidence, follow-up chat, live chunk summaries, and saved runs stay nearby. The
 legacy `/sources` route remains only as a compatibility redirect to
 `/analysis`.
 
+Live single-source browsing now uses `SourceBrowserShell` for Telegram sources
+and YouTube videos. The shell owns only local tab state and receives route-owned
+data/callbacks through props. Telegram defaults to `Timeline`; YouTube videos
+default to `Transcript`; both expose loaded-window `Items`, structured
+`Metadata`, and consolidated `Activity`, while YouTube videos also expose
+loaded-window `Comments`. YouTube playlists, source groups, and saved run
+snapshots keep their specialized readers.
+
 The `/analysis` workspace mode state is centralized in a small typed
 state-machine module. `AnalysisWorkspaceEvent` values describe route-level user
 and system actions, `transitionAnalysisWorkspaceState` computes the next pure
@@ -156,6 +164,10 @@ YouTube videos and playlists are registered as `sources` rows:
 The analysis workspace can run YouTube reports over synced transcript text,
 optional synthetic description text, and optional comments. Playlist analysis
 expands linked playlist video sources and excludes unlinked/unavailable rows.
+Live YouTube video browsing exposes transcript segments through the existing
+transcript reader, comments through generic source item rows enriched with
+optional YouTube comment fields, source-level metadata through
+`get_youtube_video_detail`, and background work through the shared Activity tab.
 
 YouTube source jobs are in-memory runtime state. They are not resumed after app
 restart; completed SQLite writes remain visible and the user can start a fresh
@@ -195,6 +207,10 @@ and old ref handling.
 YouTube transcript text is stored as a `youtube_transcript` item. Timestamped
 segments are stored separately in `youtube_transcript_segments` so trace refs
 can resolve to YouTube timestamp links.
+YouTube comments are stored as `youtube_comment` item rows. The generic source
+item listing can enrich those rows with comment ids, parent ids, like counts,
+pinned/hearted flags, and author channel URLs when the stored raw payload is
+valid; malformed raw payloads leave the base item row readable.
 
 ## 4. Current analysis design
 

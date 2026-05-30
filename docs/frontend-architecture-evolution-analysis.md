@@ -1,6 +1,6 @@
 # Frontend Architecture Evolution Analysis
 
-> Date: 2026-05-29
+> Date: 2026-05-30
 > Scope: SvelteKit/Svelte frontend under `src`, analysis workspace UI, and
 > Telegram Desktop reference review under `reference/tdesktop-dev`.
 
@@ -10,6 +10,11 @@ The frontend does not need a large architectural rewrite. The current
 result-first analysis workspace is the right shape: compact source rail,
 central report/source canvas, and companion tabs for evidence, chat, chunks,
 and runs.
+
+The live single-source Source Browser slice has shipped for Telegram sources
+and YouTube videos. It confirms the preferred frontend direction: keep route
+data ownership in `/analysis`, add small focused components for provider-aware
+surfaces, and keep browser tab state local to the shell.
 
 The useful Telegram Desktop lesson is interaction design for dense archive
 navigation, not its Qt widget hierarchy or live-client state model. Extractum
@@ -23,16 +28,19 @@ The frontend is a Svelte 5 app with a large `/analysis` route orchestrating:
 
 - workspace selection and persisted UI state;
 - source catalog and compact source rail;
-- live source and saved run snapshot readers;
+- live source browser tabs, legacy playlist/group readers, and saved run
+  snapshot readers;
 - report setup/output canvas;
 - trace evidence, follow-up chat, chunk, and runs companion tabs;
 - source jobs, Takeout jobs, NotebookLM export, and provider runtime status.
 
 The main pressure point is `src/routes/analysis/+page.svelte`. It already uses
 smaller state/workflow modules, but the route still coordinates many
-independent concerns. Future work should extract small, clear units only when a
-backlog slice benefits from the boundary. A broad service-heavy frontend layer
-would add indirection without matching the current Svelte app.
+independent concerns. The shipped `SourceBrowserShell` is the pattern to
+prefer: route-owned loading and callbacks, component-local interaction state,
+and narrow leaf components. Future work should extract small, clear units only
+when a backlog slice benefits from the boundary. A broad service-heavy frontend
+layer would add indirection without matching the current Svelte app.
 
 ## Telegram Desktop-Informed Frontend Patterns
 
@@ -112,10 +120,17 @@ terminal cleanup to visible UI state. Extractum already has this pattern split
 across Takeout jobs, source jobs, YouTube runtime state, analysis runs, and LLM
 chat requests.
 
+Shipped baseline:
+
+- live Telegram sources and YouTube videos now expose source status and jobs
+  through `SourceActivityView` inside `SourceBrowserShell`;
+- provider tabs keep contextual CTAs while detailed job cards live in
+  Activity.
+
 Recommended direction:
 
-- consolidate repeated source activity rendering into a reusable component or
-  small state formatter;
+- extend the shipped activity/status pattern to any remaining non-shell source
+  surfaces when a concrete workflow needs it;
 - show active, terminal, warning, cancel-requested, retryable, and recovery
   states consistently across Telegram, Takeout, migrated-history import, and
   YouTube jobs;
@@ -153,8 +168,8 @@ Recommended direction:
 1. Improve source-reader evidence navigation: jump, highlight, return, and
    load-around-ref behavior.
 2. Add a compact Telegram topic navigation/filter surface for source browsing.
-3. Consolidate source activity/status rendering for sync, Takeout,
-   migrated-history import, YouTube jobs, and recovery notices.
+3. Extend the shipped source Activity pattern across remaining source surfaces
+   when they gain new sync, Takeout, migrated-history, or recovery controls.
 4. Finish saved-run filtering and cleanup affordances for large histories.
 5. Evolve media evidence cards after the media download and preview policy is
    approved.
@@ -171,4 +186,3 @@ work without changing the product's architecture:
 - fewer duplicated status/action patterns across providers;
 - saved-run history that remains useful as it grows;
 - media UX that is ready for future opt-in downloads without surprising users.
-

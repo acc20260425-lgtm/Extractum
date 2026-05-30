@@ -7,5 +7,6 @@ Specs for shipped or superseded work should move to
 
 Active specs:
 
-- `2026-05-29-universal-source-item-browser-design.md`: live single-source
-  Source Browser shell with provider-aware tabs and a universal item browser.
+No active specs.
+
+Recently shipped specs are archived under `docs/superpowers/archive/specs/`.
