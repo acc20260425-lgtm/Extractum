@@ -1,7 +1,7 @@
 # Run Snapshot Source Browser Design
 
 > Date: 2026-05-30
-> Status: draft design, pending review
+> Status: approved design, pending implementation plan
 > Scope: saved run snapshot source browsing in the `/analysis` Source canvas.
 
 ## Summary
