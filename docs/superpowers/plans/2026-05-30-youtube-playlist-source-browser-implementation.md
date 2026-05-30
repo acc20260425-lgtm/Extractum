@@ -26,6 +26,8 @@
 Create:
 
 - `src/lib/components/analysis/youtube-playlist-videos-view.svelte`: playlist-specific `Videos` tab leaf. It renders already-loaded playlist detail and contextual playlist/video callbacks. It does not own tab state, route state, source jobs, source activity, or data loading.
+- `src/lib/youtube-source-policy.ts`: tiny provider-policy helper for retryable YouTube availability statuses, typed against the existing `YoutubeAvailabilityStatus` union.
+- `src/lib/youtube-source-policy.test.ts`: focused unit coverage for the YouTube retryability helper.
 
 Modify:
 
@@ -203,12 +205,63 @@ git commit -m "feat: add playlist source browser tabs"
 
 ## Slice 2: Playlist Videos Leaf
 
+### Task 2.0: Preflight existing YouTube and UI contracts
+
+**Files:**
+- Inspect: `src/lib/types/youtube.ts`
+- Inspect: `src/lib/types/sources.ts`
+- Inspect: `src/lib/components/ui/Badge.svelte`
+- Inspect: `src/lib/components/ui/Button.svelte`
+- Inspect: `src/lib/components/analysis/youtube-playlist-reader.svelte`
+
+- [ ] **Step 1: Verify the DTO and UI fields used by the leaf**
+
+Run:
+
+```bash
+rg -n "linkedVideoCount|unavailableCount|durationSeconds|captions: YoutubeContentStatus|comments: YoutubeContentStatus|YoutubeAvailabilityStatus|ariaLabel|variant\\?: BadgeVariant|variant\\?: ButtonVariant" src/lib/types/youtube.ts src/lib/types/sources.ts src/lib/components/ui/Badge.svelte src/lib/components/ui/Button.svelte
+```
+
+Expected: output includes `linkedVideoCount`, `unavailableCount`, `durationSeconds`, `captions`, `comments`, the `YoutubeAvailabilityStatus` union, `ariaLabel`, and typed `Badge` / `Button` variants. If this command fails, stop and update the code snippets in this plan to the current field and prop names before continuing.
+
+- [ ] **Step 2: Verify the old reader owns activity state that the new leaf must not carry**
+
+Run:
+
+```bash
+rg -n "YoutubeSourceActivity|sourceJobs|onCancelSourceJob|onRetryFailed" src/lib/components/analysis/youtube-playlist-reader.svelte
+```
+
+Expected: output includes those names in the legacy reader. The new `YoutubePlaylistVideosView` must keep playlist CTAs and row actions, but must not import activity components, accept `sourceJobs`, or accept `onCancelSourceJob`.
+
 ### Task 2.1: Add playlist videos contract tests
 
 **Files:**
+- Create: `src/lib/youtube-source-policy.test.ts`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Replace the legacy playlist reader raw import**
+- [ ] **Step 1: Add retryability helper tests**
+
+Create `src/lib/youtube-source-policy.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { isRetryableYoutubeAvailabilityStatus } from "./youtube-source-policy";
+
+describe("youtube source policy", () => {
+  it("classifies retryable YouTube availability statuses", () => {
+    expect(isRetryableYoutubeAvailabilityStatus("live_ended_transcript_pending")).toBe(true);
+    expect(isRetryableYoutubeAvailabilityStatus("no_captions")).toBe(true);
+    expect(isRetryableYoutubeAvailabilityStatus("unavailable_unknown")).toBe(true);
+    expect(isRetryableYoutubeAvailabilityStatus("available")).toBe(false);
+    expect(isRetryableYoutubeAvailabilityStatus("private_or_auth_required")).toBe(false);
+    expect(isRetryableYoutubeAvailabilityStatus(null)).toBe(false);
+    expect(isRetryableYoutubeAvailabilityStatus(undefined)).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 2: Replace the legacy playlist reader raw import**
 
 In `src/lib/analysis-source-readers.test.ts`, replace:
 
@@ -222,7 +275,7 @@ with:
 import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
 ```
 
-- [ ] **Step 2: Replace legacy playlist reader tests with leaf contract tests**
+- [ ] **Step 3: Replace legacy playlist reader tests with leaf contract tests**
 
 Replace the two tests named `"keeps YouTube playlist reading playlist-first"` and `"renders YouTube playlist source activity and cancellation"` with:
 
@@ -235,6 +288,8 @@ Replace the two tests named `"keeps YouTube playlist reading playlist-first"` an
     expect(youtubePlaylistVideosViewSource).toContain("onRetryFailedPlaylistVideos");
     expect(youtubePlaylistVideosViewSource).toContain("onSyncPlaylistVideo");
     expect(youtubePlaylistVideosViewSource).toContain("onRetryPlaylistVideo");
+    expect(youtubePlaylistVideosViewSource).toContain("isRetryableYoutubeAvailabilityStatus");
+    expect(youtubePlaylistVideosViewSource).not.toContain("retryableStatuses");
     expect(youtubePlaylistVideosViewSource).not.toContain("SourceActivityView");
     expect(youtubePlaylistVideosViewSource).not.toContain("YoutubeSourceActivity");
     expect(youtubePlaylistVideosViewSource).not.toContain("sourceJobs");
@@ -244,28 +299,50 @@ Replace the two tests named `"keeps YouTube playlist reading playlist-first"` an
   });
 
   it("keeps playlist video opening as source selection instead of nested browsing", () => {
-    expect(youtubePlaylistVideosViewSource).toContain("onOpenSource(item.videoSourceId)");
+    expect(youtubePlaylistVideosViewSource).toContain("onOpenSource");
+    expect(youtubePlaylistVideosViewSource).toContain("videoSourceId");
     expect(youtubePlaylistVideosViewSource).not.toContain("<YoutubeTranscriptReader");
     expect(youtubePlaylistVideosViewSource).not.toContain("<SourceBrowserShell");
+    expect(youtubePlaylistVideosViewSource).not.toContain("SourceActivityView");
+    expect(youtubePlaylistVideosViewSource).not.toContain("$lib/api/");
   });
 ```
 
-- [ ] **Step 3: Run the failing reader contract test**
+- [ ] **Step 4: Run the failing reader contract test**
 
 Run:
 
 ```bash
-npm run test -- src/lib/analysis-source-readers.test.ts
+npm run test -- src/lib/youtube-source-policy.test.ts src/lib/analysis-source-readers.test.ts
 ```
 
-Expected: FAIL because `youtube-playlist-videos-view.svelte` does not exist and the legacy tests no longer match.
+Expected: FAIL because `youtube-source-policy.ts` and `youtube-playlist-videos-view.svelte` do not exist and the legacy reader tests no longer match.
 
 ### Task 2.2: Create `YoutubePlaylistVideosView`
 
 **Files:**
+- Create: `src/lib/youtube-source-policy.ts`
 - Create: `src/lib/components/analysis/youtube-playlist-videos-view.svelte`
 
-- [ ] **Step 1: Add the playlist videos leaf component**
+- [ ] **Step 1: Add a typed YouTube retry policy helper**
+
+Create `src/lib/youtube-source-policy.ts`:
+
+```ts
+import type { YoutubeAvailabilityStatus } from "$lib/types/sources";
+
+const retryableYoutubeAvailabilityStatuses = new Set<string>([
+  "live_ended_transcript_pending",
+  "no_captions",
+  "unavailable_unknown",
+] satisfies YoutubeAvailabilityStatus[]);
+
+export function isRetryableYoutubeAvailabilityStatus(status: string | null | undefined): boolean {
+  return status !== null && status !== undefined && retryableYoutubeAvailabilityStatuses.has(status);
+}
+```
+
+- [ ] **Step 2: Add the playlist videos leaf component**
 
 Create `src/lib/components/analysis/youtube-playlist-videos-view.svelte`:
 
@@ -275,13 +352,8 @@ Create `src/lib/components/analysis/youtube-playlist-videos-view.svelte`:
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import { isRetryableYoutubeAvailabilityStatus } from "$lib/youtube-source-policy";
   import type { YoutubePlaylistDetail, YoutubePlaylistItemDetail } from "$lib/types/youtube";
-
-  const retryableStatuses = new Set([
-    "live_ended_transcript_pending",
-    "no_captions",
-    "unavailable_unknown",
-  ]);
 
   let {
     sourceTitle,
@@ -324,7 +396,7 @@ Create `src/lib/components/analysis/youtube-playlist-videos-view.svelte`:
   }
 
   function canRetryItem(item: YoutubePlaylistItemDetail) {
-    return canSyncItem(item) && retryableStatuses.has(item.availabilityStatus);
+    return canSyncItem(item) && isRetryableYoutubeAvailabilityStatus(item.availabilityStatus);
   }
 </script>
 
@@ -589,15 +661,15 @@ Create `src/lib/components/analysis/youtube-playlist-videos-view.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Run the reader contract test**
+- [ ] **Step 3: Run the reader contract test**
 
 Run:
 
 ```bash
-npm run test -- src/lib/analysis-source-readers.test.ts
+npm run test -- src/lib/youtube-source-policy.test.ts src/lib/analysis-source-readers.test.ts
 ```
 
-Expected: PASS for the new leaf tests. Other playlist routing tests may still fail until Slice 3; if only the route tests fail, continue to Slice 3 before committing. If the leaf tests fail, fix `YoutubePlaylistVideosView` first.
+Expected: PASS for the new leaf tests. Other playlist routing tests may still fail until Slice 3; if only the route tests fail, continue to Slice 3 before committing. If the leaf tests fail, fix `YoutubePlaylistVideosView` or `src/lib/youtube-source-policy.ts` first.
 
 ---
 
@@ -630,7 +702,6 @@ In `src/lib/analysis-source-readers.test.ts`, update the first two route tests:
     expect(reportSourceSurfaceSource).toContain("sourceBrowserShellAppliesToSource(currentSource)");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
     expect(reportSourceSurfaceSource).toContain("{youtubePlaylistDetail}");
-    expect(reportSourceSurfaceSource).not.toContain('sourceSubtype === "playlist"');
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
   });
 ```
@@ -735,7 +806,9 @@ Add this branch before `activity`:
 
 - [ ] **Step 3: Keep Activity wired to playlist source jobs**
 
-Do not add playlist jobs to `YoutubePlaylistVideosView`. The existing Activity branch must still pass:
+Do not add playlist jobs to `YoutubePlaylistVideosView`. In this slice, Activity renders detailed playlist job state, cancellation, and the existing generic source sync/YouTube metadata actions only. Playlist-level CTAs (`onSyncYoutubePlaylist` and `onRetryFailedYoutubePlaylistVideos`) remain in `Videos` and are not duplicated in Activity.
+
+The existing Activity branch must still pass:
 
 ```svelte
     <SourceActivityView
@@ -855,7 +928,7 @@ Remove those references before retrying the delete.
 Run:
 
 ```bash
-npm run test -- src/lib/source-browser-model.test.ts src/lib/components/analysis/source-browser-shell.test.ts src/lib/analysis-source-readers.test.ts
+npm run test -- src/lib/source-browser-model.test.ts src/lib/youtube-source-policy.test.ts src/lib/components/analysis/source-browser-shell.test.ts src/lib/analysis-source-readers.test.ts
 ```
 
 Expected: PASS.
@@ -876,7 +949,7 @@ Run:
 
 ```bash
 git diff --check
-git add -A src/lib/components/analysis/youtube-playlist-videos-view.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/analysis-source-readers.test.ts src/lib/components/analysis/source-browser-shell.test.ts src/lib/components/analysis/youtube-playlist-reader.svelte
+git add -A src/lib/youtube-source-policy.ts src/lib/youtube-source-policy.test.ts src/lib/components/analysis/youtube-playlist-videos-view.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/analysis-source-readers.test.ts src/lib/components/analysis/source-browser-shell.test.ts src/lib/components/analysis/youtube-playlist-reader.svelte
 git commit -m "feat: route playlists through source browser"
 ```
 
@@ -1106,12 +1179,12 @@ Inside the Technical `<dl>`, add this branch before `{#if youtubeMetadata}`:
 
 Close the branch by changing the existing `{/if}` after video metadata fields so it still matches the new `{:else if youtubeMetadata}` block.
 
-- [ ] **Step 5: Hide Raw JSON for playlists**
+- [ ] **Step 5: Hide Raw JSON for playlists only**
 
-Change the raw JSON section condition:
+Change the raw JSON section condition so existing non-playlist YouTube raw JSON behavior is preserved while playlist metadata never exposes raw playlist JSON or item payloads:
 
 ```svelte
-  {#if source.sourceType === "youtube" && source.sourceSubtype === "video"}
+  {#if source.sourceType === "youtube" && source.sourceSubtype !== "playlist"}
     <section class="metadata-section" aria-labelledby="metadata-raw-title">
       <h4 id="metadata-raw-title">Raw JSON</h4>
       <RawJsonPanel value={rawJson} />
@@ -1170,7 +1243,7 @@ git commit -m "feat: add playlist browser metadata polish"
 Run:
 
 ```bash
-npm run test -- src/lib/source-browser-model.test.ts src/lib/components/analysis/source-browser-shell.test.ts src/lib/analysis-source-readers.test.ts
+npm run test -- src/lib/source-browser-model.test.ts src/lib/youtube-source-policy.test.ts src/lib/components/analysis/source-browser-shell.test.ts src/lib/analysis-source-readers.test.ts
 ```
 
 Expected: PASS.
@@ -1221,7 +1294,7 @@ Expected:
 - `Videos` is selected by default.
 - `Videos` shows playlist rows and contextual `Sync all` / `Retry failed`.
 - Detailed source jobs are not visible in `Videos`.
-- `Activity` shows source job/status area.
+- `Activity` shows source job/status/cancellation area and does not duplicate playlist `Sync all` / `Retry failed` CTAs.
 - `Items` shows `Search loaded items`; if empty, the copy says:
   `Playlist videos live in the Videos tab. This Items tab only shows generic archived items loaded for this playlist source.`
 - `Metadata` shows Summary, Source state, Technical, playlist id, linked videos, and no Raw JSON panel for playlist.
@@ -1289,6 +1362,7 @@ git commit -m "test: verify playlist source browser"
 - `Open video source` changes selected source and does not nest video browsing.
 - `Items` keeps loaded-window semantics and has playlist-specific empty copy.
 - `Metadata` uses optional-safe playlist detail/source fields and does not expose playlist raw JSON or item raw payloads.
-- Detailed playlist jobs render in `Activity`, not in `Videos`.
+- Detailed playlist jobs and cancellation render in `Activity`, not in `Videos`.
+- Playlist-level CTAs render in `Videos` and are not duplicated in `Activity` in this slice.
 - Source groups and saved snapshots remain on their existing readers.
 - Focused tests and `npm run verify` pass.
