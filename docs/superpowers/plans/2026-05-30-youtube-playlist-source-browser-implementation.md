@@ -1263,7 +1263,7 @@ Expected: PASS.
 **Files:**
 - No source edits expected unless smoke finds a regression.
 
-- [ ] **Step 1: Start the dev app**
+- [x] **Step 1: Start the dev app**
 
 Run:
 
@@ -1273,7 +1273,7 @@ npm run tauri dev
 
 Expected: Tauri app opens and Vite serves `/analysis`.
 
-- [ ] **Step 2: Seed analysis redesign fixtures**
+- [x] **Step 2: Seed analysis redesign fixtures**
 
 Use the existing Tauri fixture command path from prior smoke:
 
@@ -1284,7 +1284,7 @@ await window.__TAURI__.core.invoke("seed_analysis_redesign_fixtures");
 
 Expected: fixture Telegram sources, YouTube video, YouTube playlist, and saved snapshot runs are available.
 
-- [ ] **Step 3: Verify playlist live browser behavior**
+- [x] **Step 3: Verify playlist live browser behavior**
 
 In `/analysis`, select `__analysis_redesign_fixture__ YouTube Playlist`.
 
@@ -1300,7 +1300,7 @@ Expected:
 - `Metadata` shows Summary, Source state, Technical, playlist id, linked videos, and no Raw JSON panel for playlist.
 - `Open video source` opens the linked YouTube video source, not a nested view.
 
-- [ ] **Step 4: Verify preserved old paths**
+- [x] **Step 4: Verify preserved old paths**
 
 Expected:
 
@@ -1309,7 +1309,7 @@ Expected:
 - Source group still renders the existing group reader.
 - Saved run snapshot still renders the existing snapshot reader.
 
-- [ ] **Step 5: Stop the dev app**
+- [x] **Step 5: Stop the dev app**
 
 Stop the Tauri dev process and confirm no `cargo`, `rustc`, or `extractum` dev process is left running.
 
