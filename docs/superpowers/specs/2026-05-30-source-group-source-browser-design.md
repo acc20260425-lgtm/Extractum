@@ -68,6 +68,12 @@ export type SourceBrowserSubject =
   | { kind: "source_group"; group: AnalysisSourceGroup };
 ```
 
+The subject is an identity and routing object, not a container for every group
+browser field. The implementation plan should verify that `AnalysisSourceGroup`
+has enough data for tabs, defaults, and applicability. Additional `Sources`,
+`Items`, `Metadata`, and paging data should stay as route-owned shell props
+rather than being stuffed into the subject.
+
 New subject-aware functions are the primary contract:
 
 ```ts
@@ -114,6 +120,11 @@ label derived from route-owned group metadata. If `UniversalItemsView` needs a
 new display hook for this, add it as optional group-mode rendering rather than
 changing the semantics of single-source item browsing.
 
+Prefer reusing `UniversalItemsView` with an optional source-label hook such as
+`sourceLabelForItem` or `getSourceLabel` if that remains a small additive
+change. If `UniversalItemsView` is too single-source-oriented, introduce a
+focused `SourceGroupItemsView` instead of complicating the universal view.
+
 `Metadata` shows group-level structure from route-owned data:
 
 - group name;
@@ -124,10 +135,11 @@ changing the semantics of single-source item browsing.
   group DTO; otherwise show the available group/member fields without backend
   or DTO expansion in this slice.
 
-`Activity` is intentionally lightweight for this slice. It may show a muted
-group-level status or empty state, but it must not render source-scoped job CTAs
-or detailed source job cards. `SourceActivityView` must not render for source
-groups until there is an explicit group-scoped activity/job contract.
+`Activity` is intentionally lightweight for this slice. It can be a simple
+branch in `SourceBrowserShell` or a small `SourceGroupActivityView` with no job
+props. It must not render source-scoped job CTAs or detailed source job cards.
+`SourceActivityView` must not render for source groups until there is an
+explicit group-scoped activity/job contract.
 
 The empty state copy should say:
 
@@ -216,9 +228,11 @@ Frontend contract and model tests should assert:
 - `sourceBrowserTabsForSubject({ kind: "source_group", group })` returns
   `sources`, `items`, `metadata`, `activity`;
 - `smartDefaultSourceBrowserTab(groupSubject)` returns `sources`;
-- source-only wrappers still return the existing source tab sets;
-- source-only wrappers delegate to subject-aware helpers rather than carrying
-  parallel tab logic;
+- source-only wrappers return the same results as subject-aware calls for
+  `{ kind: "source", source }`;
+- if a structural guard is added for wrapper delegation, it should avoid
+  depending on exact function text and only prevent a second large source-only
+  branch from drifting away from the subject-aware model;
 - reconciliation follows the table above;
 - group-to-group reconciliation preserves `sources`, `items`, `metadata`, and
   `activity`;
