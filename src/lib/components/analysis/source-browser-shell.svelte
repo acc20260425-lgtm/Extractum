@@ -288,6 +288,7 @@
     <SourceMetadataView
       source={source}
       youtubeVideoDetail={youtubeVideoDetail}
+      youtubePlaylistDetail={youtubePlaylistDetail}
       sourceTopics={sourceTopics}
       loading={loadingYoutubeDetail}
       {formatTimestamp}

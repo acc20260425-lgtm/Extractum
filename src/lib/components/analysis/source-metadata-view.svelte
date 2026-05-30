@@ -6,11 +6,12 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import RawJsonPanel from "$lib/components/analysis/raw-json-panel.svelte";
   import type { Source, SourceForumTopic } from "$lib/types/sources";
-  import type { YoutubeVideoDetail } from "$lib/types/youtube";
+  import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
 
   let {
     source,
     youtubeVideoDetail,
+    youtubePlaylistDetail = null,
     sourceTopics,
     loading,
     formatTimestamp,
@@ -18,6 +19,7 @@
   }: {
     source: Source;
     youtubeVideoDetail: YoutubeVideoDetail | null;
+    youtubePlaylistDetail?: YoutubePlaylistDetail | null;
     sourceTopics: SourceForumTopic[];
     loading: boolean;
     formatTimestamp: (value: number | null) => string;
@@ -26,8 +28,10 @@
 
   const youtubeMetadata = $derived(youtubeVideoDetail?.sourceMetadata ?? null);
   const summary = $derived(youtubeVideoDetail?.summary ?? null);
+  const playlistSummary = $derived(youtubePlaylistDetail?.summary ?? null);
+  const youtubeSummary = $derived(summary ?? playlistSummary);
   const rawJson = $derived(youtubeMetadata?.rawMetadataJson ?? null);
-  const sourceTitle = $derived(source.title ?? source.externalId);
+  const sourceTitle = $derived(youtubeSummary?.title ?? source.title ?? source.externalId);
   const sourceKind = $derived([source.sourceType, source.sourceSubtype].filter(Boolean).join(" / "));
   const visibleTopicCount = $derived(sourceTopics.filter((topic) => !topic.isDeleted).length);
 
@@ -64,7 +68,7 @@
     <dl class="metadata-grid">
       <div>
         <dt>Title</dt>
-        <dd>{textValue(summary?.title ?? source.title)}</dd>
+        <dd>{textValue(youtubeSummary?.title ?? source.title)}</dd>
       </div>
       <div>
         <dt>Kind</dt>
@@ -77,9 +81,9 @@
       <div>
         <dt>Canonical URL</dt>
         <dd>
-          {#if summary?.canonicalUrl ?? youtubeMetadata?.canonicalUrl}
-            <a href={summary?.canonicalUrl ?? youtubeMetadata?.canonicalUrl} target="_blank" rel="noreferrer">
-              {summary?.canonicalUrl ?? youtubeMetadata?.canonicalUrl}
+          {#if youtubeSummary?.canonicalUrl ?? youtubeMetadata?.canonicalUrl}
+            <a href={youtubeSummary?.canonicalUrl ?? youtubeMetadata?.canonicalUrl} target="_blank" rel="noreferrer">
+              {youtubeSummary?.canonicalUrl ?? youtubeMetadata?.canonicalUrl}
             </a>
           {:else}
             Not available
@@ -102,14 +106,14 @@
     <div class="badge-row">
       <Badge variant={source.isActive ? "success" : "warning"}>{source.isActive ? "Active" : "Inactive"}</Badge>
       <Badge variant={source.isMember ? "success" : "neutral"}>{source.isMember ? "Member" : "Not member"}</Badge>
-      {#if summary?.captions}
-        <Badge variant={summary.captions.state === "synced" ? "success" : summary.captions.state === "unavailable" ? "warning" : "neutral"}>
-          {summary.captions.label}
+      {#if youtubeSummary?.captions}
+        <Badge variant={youtubeSummary.captions.state === "synced" ? "success" : youtubeSummary.captions.state === "unavailable" ? "warning" : "neutral"}>
+          {youtubeSummary.captions.label}
         </Badge>
       {/if}
-      {#if summary?.comments}
-        <Badge variant={summary.comments.state === "synced" ? "success" : "neutral"}>
-          {summary.comments.label}
+      {#if youtubeSummary?.comments}
+        <Badge variant={youtubeSummary.comments.state === "synced" ? "success" : "neutral"}>
+          {youtubeSummary.comments.label}
         </Badge>
       {/if}
     </div>
@@ -130,6 +134,31 @@
         <div>
           <dt>Migrated import complete</dt>
           <dd>{yesNo(source.migratedHistoryImportCompleted)}</dd>
+        </div>
+      {:else if source.sourceType === "youtube" && source.sourceSubtype === "playlist" && playlistSummary}
+        <div>
+          <dt>Captions</dt>
+          <dd>{playlistSummary.captions.label}</dd>
+        </div>
+        <div>
+          <dt>Comments</dt>
+          <dd>{playlistSummary.comments.label}</dd>
+        </div>
+        <div>
+          <dt>Videos</dt>
+          <dd>{textValue(playlistSummary.videoCount)}</dd>
+        </div>
+        <div>
+          <dt>Linked videos</dt>
+          <dd>{textValue(playlistSummary.linkedVideoCount)}</dd>
+        </div>
+        <div>
+          <dt>Unavailable videos</dt>
+          <dd>{textValue(playlistSummary.unavailableCount)}</dd>
+        </div>
+        <div>
+          <dt>Availability</dt>
+          <dd>{textValue(playlistSummary.availabilityStatus)}</dd>
         </div>
       {:else if summary}
         <div>
@@ -172,7 +201,24 @@
         <dt>Provider subtype</dt>
         <dd>{textValue(source.sourceSubtype)}</dd>
       </div>
-      {#if youtubeMetadata}
+      {#if source.sourceType === "youtube" && source.sourceSubtype === "playlist"}
+        <div>
+          <dt>Playlist ID</dt>
+          <dd>{source.externalId}</dd>
+        </div>
+        <div>
+          <dt>Channel title</dt>
+          <dd>{textValue(playlistSummary?.channelTitle)}</dd>
+        </div>
+        <div>
+          <dt>Channel handle</dt>
+          <dd>{textValue(playlistSummary?.channelHandle)}</dd>
+        </div>
+        <div>
+          <dt>Canonical URL</dt>
+          <dd>{textValue(playlistSummary?.canonicalUrl)}</dd>
+        </div>
+      {:else if youtubeMetadata}
         <div>
           <dt>Video ID</dt>
           <dd>{youtubeMetadata.videoId}</dd>
@@ -223,12 +269,12 @@
         </div>
       {/if}
     </dl>
-    {#if source.sourceType === "youtube" && !loading && !youtubeMetadata}
+    {#if source.sourceType === "youtube" && !loading && !youtubeMetadata && !(source.sourceSubtype === "playlist" && playlistSummary)}
       <EmptyState description="No typed YouTube metadata is loaded for this source." />
     {/if}
   </section>
 
-  {#if source.sourceType === "youtube"}
+  {#if source.sourceType === "youtube" && source.sourceSubtype !== "playlist"}
     <section class="metadata-section" aria-labelledby="metadata-raw-title">
       <h4 id="metadata-raw-title">Raw JSON</h4>
       <RawJsonPanel value={rawJson} />

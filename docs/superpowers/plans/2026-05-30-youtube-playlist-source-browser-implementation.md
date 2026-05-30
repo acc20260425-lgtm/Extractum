@@ -1071,7 +1071,7 @@ In `src/lib/components/analysis/source-browser-shell.svelte`, update the `items`
 - Modify: `src/lib/components/analysis/source-metadata-view.svelte`
 - Modify: `src/lib/components/analysis/source-browser-shell.svelte`
 
-- [ ] **Step 1: Add playlist detail prop**
+- [x] **Step 1: Add playlist detail prop**
 
 In `src/lib/components/analysis/source-metadata-view.svelte`, change the YouTube type import:
 
@@ -1098,7 +1098,7 @@ Add derived helpers:
   const youtubeSummary = $derived(summary ?? playlistSummary);
 ```
 
-- [ ] **Step 2: Use video or playlist summary in Summary and Source state**
+- [x] **Step 2: Use video or playlist summary in Summary and Source state**
 
 Replace summary title/canonical URL reads with `youtubeSummary` where source-level YouTube summary is appropriate:
 
@@ -1120,7 +1120,7 @@ For canonical URL:
 
 Use `youtubeSummary?.captions` and `youtubeSummary?.comments` for badges.
 
-- [ ] **Step 3: Render playlist Source state fields without item raw payloads**
+- [x] **Step 3: Render playlist Source state fields without item raw payloads**
 
 Inside the Source state `<dl>`, add a playlist branch before the existing generic YouTube summary branch:
 
@@ -1152,7 +1152,7 @@ Inside the Source state `<dl>`, add a playlist branch before the existing generi
         </div>
 ```
 
-- [ ] **Step 4: Render playlist Technical fields**
+- [x] **Step 4: Render playlist Technical fields**
 
 Inside the Technical `<dl>`, add this branch before `{#if youtubeMetadata}`:
 
@@ -1179,7 +1179,7 @@ Inside the Technical `<dl>`, add this branch before `{#if youtubeMetadata}`:
 
 Close the branch by changing the existing `{/if}` after video metadata fields so it still matches the new `{:else if youtubeMetadata}` block.
 
-- [ ] **Step 5: Hide Raw JSON for playlists only**
+- [x] **Step 5: Hide Raw JSON for playlists only**
 
 Change the raw JSON section condition so existing non-playlist YouTube raw JSON behavior is preserved while playlist metadata never exposes raw playlist JSON or item payloads:
 
@@ -1192,7 +1192,7 @@ Change the raw JSON section condition so existing non-playlist YouTube raw JSON 
   {/if}
 ```
 
-- [ ] **Step 6: Pass playlist detail into metadata from shell**
+- [x] **Step 6: Pass playlist detail into metadata from shell**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, update the metadata branch:
 
@@ -1208,7 +1208,7 @@ In `src/lib/components/analysis/source-browser-shell.svelte`, update the metadat
     />
 ```
 
-- [ ] **Step 7: Run focused frontend tests and Svelte check**
+- [x] **Step 7: Run focused frontend tests and Svelte check**
 
 Run:
 
@@ -1219,7 +1219,7 @@ npm run check
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Slice 4**
+- [x] **Step 8: Commit Slice 4**
 
 Run:
 
