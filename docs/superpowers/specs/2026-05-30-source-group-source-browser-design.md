@@ -108,13 +108,21 @@ and help copy should say:
 Group items are limited to the source rows loaded in this browser session. Use Sources to load more rows for each member source.
 ```
 
+Group `Items` must preserve member source attribution for each row, either
+through an existing source title field or through an optional member-source
+label derived from route-owned group metadata. If `UniversalItemsView` needs a
+new display hook for this, add it as optional group-mode rendering rather than
+changing the semantics of single-source item browsing.
+
 `Metadata` shows group-level structure from route-owned data:
 
 - group name;
 - group provider/source type;
 - member count;
 - member list with loaded item counts from existing group member metadata;
-- `created_at` and `updated_at` timestamps from `AnalysisSourceGroup`.
+- `created_at` and `updated_at` when they are already exposed on the frontend
+  group DTO; otherwise show the available group/member fields without backend
+  or DTO expansion in this slice.
 
 `Activity` is intentionally lightweight for this slice. It may show a muted
 group-level status or empty state, but it must not render source-scoped job CTAs
@@ -170,7 +178,8 @@ in this slice.
    into `SourceBrowserShell`.
 4. `SourceBrowserShell` derives group tabs and opens `Sources`.
 5. `Sources` renders grouped loaded rows and calls route-owned paging callbacks.
-6. `Items` renders the already-loaded group item window across member sources.
+6. `Items` renders the already-loaded group item window across member sources
+   and preserves source attribution on each row.
 7. `Metadata` renders route-owned group/member fields.
 8. `Activity` renders only the group-level lightweight empty/status state.
 
@@ -201,6 +210,7 @@ Frontend contract and model tests should assert:
 - `SourceBrowserShell` renders the group `Sources` leaf for `sources`;
 - the group leaf and shell import no `$lib/api/*` modules and call no `invoke`;
 - group `Items` uses loaded-window copy and does not claim global group search;
+- group `Items` preserves member source attribution for each row;
 - group `Activity` does not render `SourceActivityView`;
 - existing Telegram, YouTube video, and YouTube playlist live source browser
   contracts still pass.
@@ -209,7 +219,8 @@ Manual smoke should verify:
 
 - selecting a fixture source group opens the Source Browser on `Sources`;
 - `Sources` shows member sections and per-source load-more controls;
-- `Items` shows only loaded group rows and its loaded-window copy;
+- `Items` shows only loaded group rows, its loaded-window copy, and source
+  attribution for each row;
 - `Metadata` shows group name, type, member count, and member list;
 - `Activity` shows no source-job CTAs or detailed source job cards;
 - saved run snapshots still render through the existing snapshot path.
