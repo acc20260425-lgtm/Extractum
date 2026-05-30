@@ -7,7 +7,8 @@ Specs for shipped or superseded work should move to
 
 Active specs:
 
-- None currently.
+- `2026-05-30-analysis-workspace-parity-design.md`: unify analysis workspace
+  tools across setup and opened-run states.
 
 Recently shipped or superseded specs are archived under
 `docs/superpowers/archive/specs/`.
