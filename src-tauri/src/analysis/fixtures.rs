@@ -73,6 +73,17 @@ pub async fn clear_analysis_redesign_fixtures(
     clear_analysis_redesign_fixtures_in_pool(&pool).await
 }
 
+#[tauri::command]
+pub async fn clear_analysis_redesign_fixture_active_runs(
+    handle: AppHandle,
+    state: State<'_, AnalysisState>,
+) -> AppResult<()> {
+    let pool = get_pool(&handle).await?;
+    let run_ids = fixture_run_ids(&pool).await?;
+    remove_fixture_active_runs(state.inner(), &run_ids).await;
+    Ok(())
+}
+
 async fn fixture_run_ids(pool: &Pool<Sqlite>) -> AppResult<Vec<i64>> {
     let marker_pattern = format!("{FIXTURE_MARKER}%");
     sqlx::query_scalar(

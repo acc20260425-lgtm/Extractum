@@ -94,7 +94,10 @@ use analysis::{
     update_analysis_source_group, AnalysisState,
 };
 #[cfg(debug_assertions)]
-use analysis::{clear_analysis_redesign_fixtures, seed_analysis_redesign_fixtures};
+use analysis::{
+    clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
+    seed_analysis_redesign_fixtures,
+};
 
 #[tauri::command]
 fn ping_db() -> String {
@@ -203,6 +206,8 @@ pub fn run() {
             cancel_analysis_run,
             #[cfg(debug_assertions)]
             seed_analysis_redesign_fixtures,
+            #[cfg(debug_assertions)]
+            clear_analysis_redesign_fixture_active_runs,
             #[cfg(debug_assertions)]
             clear_analysis_redesign_fixtures,
             preview_youtube_source,

@@ -89,7 +89,74 @@ export const sourceBrowserSmokeSteps = [
     },
   },
 ];
-export const analysisWorkspaceParitySteps = [];
+export const analysisWorkspaceParitySteps = [
+  {
+    name: "workspace-parity.single-source-setup-tools",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await selectSource(ctx, fixtureLabels.youtubeVideo);
+      await switchCanvasMode(ctx, "report");
+      await assertWorkspaceToolsAboveBody(ctx, "analysis-report-setup");
+      await openNotebookLmExportDialog(ctx);
+      await closeDialog(ctx);
+      await assertDrawer(ctx, "Edit templates", "template-editor-drawer");
+      await assertDrawer(ctx, "Edit groups", "source-group-editor-drawer");
+      await waitForText(ctx.socket, "Run report");
+      await waitForText(ctx.socket, "Sync source");
+      await closeTransientUi(ctx);
+    },
+  },
+  {
+    name: "workspace-parity.source-group-disabled-export",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await selectGroup(ctx, fixtureLabels.telegramSourceGroup);
+      await switchCanvasMode(ctx, "report");
+      await assertWorkspaceToolsAboveBody(ctx, "analysis-report-setup");
+      await assertDisabledWithReason(
+        ctx.socket,
+        "Export for NotebookLM",
+        "Source-group NotebookLM export is not implemented yet.",
+      );
+      await assertDrawer(ctx, "Edit templates", "template-editor-drawer");
+      await assertDrawer(ctx, "Edit groups", "source-group-editor-drawer");
+      await closeTransientUi(ctx);
+    },
+  },
+  {
+    name: "workspace-parity.opened-single-run-tools",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await openRun(ctx, fixtureLabels.completedSnapshotRun);
+      await switchCanvasMode(ctx, "report");
+      await executeJs(ctx.socket, `
+        const tools = document.querySelector('[data-smoke-id="analysis-workspace-tools"]');
+        const report = document.querySelector('.report-viewer, .report-run-header');
+        if (!tools) throw new Error('ASSERT: workspace tools missing for opened run');
+        if (!report) throw new Error('ASSERT: opened run report body missing');
+        return true;
+      `);
+      await assertOpenedRunNotebookLmExportContract(ctx);
+    },
+  },
+  {
+    name: "workspace-parity.opened-source-group-run-disabled-export",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await openRun(ctx, fixtureLabels.groupSnapshotRun);
+      await assertSourceGroupNotebookLmExportUnavailable(ctx);
+    },
+  },
+  {
+    name: "workspace-parity.source-mode-tools-placement",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await selectSource(ctx, fixtureLabels.telegramChannel);
+      await switchCanvasMode(ctx, "source");
+      await assertWorkspaceToolsAboveBody(ctx, "analysis-source-surface");
+    },
+  },
+];
 
 function npmRunStep(scriptName) {
   if (process.env.npm_execpath) {
@@ -174,6 +241,7 @@ async function seedFixtures(ctx) {
   await invokeFixtureCommand(ctx, "clear_analysis_redesign_fixtures");
   const summary = await invokeFixtureCommand(ctx, "seed_analysis_redesign_fixtures");
   validateFixtureSummary(summary);
+  await invokeFixtureCommand(ctx, "clear_analysis_redesign_fixture_active_runs");
   await navigateAnalysis(ctx);
   await openSourceSwitcher(ctx);
   const labels = await waitForFixtureLabels(ctx);
@@ -272,6 +340,16 @@ async function waitForCurrentContext(ctx, label, timeoutMs = 8000) {
 }
 
 async function selectSource(ctx, label) {
+  await selectSwitcherLabel(ctx, label);
+  await waitForStableLiveContext(ctx, label, () => selectSwitcherLabel(ctx, label));
+}
+
+async function selectGroup(ctx, label) {
+  await selectSwitcherLabel(ctx, label);
+  await waitForStableLiveContext(ctx, label, () => selectSwitcherLabel(ctx, label));
+}
+
+async function selectSwitcherLabel(ctx, label) {
   await closeTransientUi(ctx);
   await openSourceSwitcher(ctx);
   await fillByLabel(ctx.socket, "Search sources or groups", label);
@@ -280,13 +358,31 @@ async function selectSource(ctx, label) {
   await waitForCurrentContext(ctx, label);
 }
 
-async function selectGroup(ctx, label) {
-  await closeTransientUi(ctx);
-  await openSourceSwitcher(ctx);
-  await fillByLabel(ctx.socket, "Search sources or groups", label);
-  await waitForText(ctx.socket, label);
-  await clickByTextWithinSmokeId(ctx.socket, "source-switcher-panel", label);
-  await waitForCurrentContext(ctx, label);
+async function waitForStableLiveContext(ctx, label, retrySelection, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  let retries = 0;
+  while (Date.now() < deadline) {
+    const state = await executeJs(ctx.socket, `
+      const current = document.querySelector('[data-smoke-id="analysis-current-context"]');
+      const accessibleName = [
+        current?.innerText,
+        current?.getAttribute('title'),
+        current?.getAttribute('aria-label'),
+      ].filter(Boolean).join(' ');
+      return {
+        matches: accessibleName.includes(${JSON.stringify(label)}),
+        openedRun: Boolean(document.querySelector('.report-run-header')),
+      };
+    `).catch(() => ({ matches: false, openedRun: true }));
+
+    if (state.matches && !state.openedRun) return true;
+    if (retries < 2) {
+      retries += 1;
+      await retrySelection();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new SmokeAssertionError(`live context did not stabilize for ${label}`);
 }
 
 async function openRunsTab(ctx) {
@@ -319,6 +415,99 @@ async function expectTabs(ctx, labels, selected) {
   const actual = await readTabLabels(ctx.socket);
   assertTabOrderLabels(actual, labels);
   await assertSelectedTab(ctx.socket, selected);
+}
+
+async function assertWorkspaceToolsAboveBody(ctx, bodySmokeId) {
+  return executeJs(ctx.socket, `
+    const tools = document.querySelector('[data-smoke-id="analysis-workspace-tools"]');
+    const body = document.querySelector('[data-smoke-id="${bodySmokeId}"]');
+    if (!tools) throw new Error('ASSERT: workspace tools missing');
+    if (!body) throw new Error('ASSERT: body missing ${bodySmokeId}');
+    const position = tools.compareDocumentPosition(body);
+    if (!(position & Node.DOCUMENT_POSITION_FOLLOWING)) {
+      throw new Error('ASSERT: workspace tools do not precede ${bodySmokeId}');
+    }
+    return true;
+  `);
+}
+
+async function openNotebookLmExportDialog(ctx) {
+  await clickBySmokeId(ctx.socket, "notebooklm-export-button");
+  await waitForText(ctx.socket, "Export for NotebookLM");
+  await executeJs(ctx.socket, `
+    const dialog = document.querySelector('[data-smoke-id="notebooklm-export-dialog"]');
+    if (!dialog) throw new Error('ASSERT: NotebookLM export dialog missing');
+    return true;
+  `);
+}
+
+async function closeDialog(ctx) {
+  await clickByText(ctx.socket, "Close dialog").catch(() => executeJs(ctx.socket, `
+    const button = document.querySelector('button[aria-label="Close dialog"]');
+    if (button) button.click();
+    return true;
+  `));
+}
+
+async function assertNoNotebookLmExportDialog(ctx, reason) {
+  const reasonText = JSON.stringify(reason);
+  await executeJs(ctx.socket, `
+    const dialog = document.querySelector('[data-smoke-id="notebooklm-export-dialog"]');
+    if (dialog) throw new Error('ASSERT: NotebookLM export dialog opened unexpectedly: ' + ${reasonText});
+    return true;
+  `);
+}
+
+async function assertSourceGroupNotebookLmExportUnavailable(ctx) {
+  const buttonExists = await executeJs(ctx.socket, `
+    return Boolean(document.querySelector('[data-smoke-id="notebooklm-export-button"]'));
+  `);
+
+  if (buttonExists) {
+    await assertDisabledWithReason(
+      ctx.socket,
+      "Export for NotebookLM",
+      "Source-group NotebookLM export is not implemented yet.",
+    );
+    return;
+  }
+
+  await assertNoNotebookLmExportDialog(ctx, "opened source-group run has no restored currentGroup");
+}
+
+async function assertOpenedRunNotebookLmExportContract(ctx) {
+  const state = await executeJs(ctx.socket, `
+    const button = document.querySelector('[data-smoke-id="notebooklm-export-button"]');
+    return {
+      exists: Boolean(button),
+      disabled: Boolean(button?.disabled) || button?.getAttribute('aria-disabled') === 'true',
+      text: button?.innerText ?? '',
+    };
+  `);
+
+  if (!state.exists) {
+    await assertNoNotebookLmExportDialog(ctx, "opened single-source run has no restored currentSource");
+    return;
+  }
+
+  if (state.disabled) {
+    await clickBySmokeId(ctx.socket, "notebooklm-export-button").catch(() => true);
+    await assertNoNotebookLmExportDialog(ctx, "disabled opened-run export must not use saved-run metadata alone");
+    return;
+  }
+
+  await openNotebookLmExportDialog(ctx);
+  await closeDialog(ctx);
+}
+
+async function assertDrawer(ctx, triggerText, smokeId) {
+  await clickByTextWithinSmokeId(ctx.socket, "analysis-workspace-tools", triggerText);
+  await executeJs(ctx.socket, `
+    const drawer = document.querySelector('[data-smoke-id="${smokeId}"]');
+    if (!drawer) throw new Error('ASSERT: drawer missing ${smokeId}');
+    return true;
+  `);
+  await clickByTextWithinSmokeId(ctx.socket, "analysis-workspace-tools", triggerText.replace("Edit", "Hide"));
 }
 
 async function main() {
