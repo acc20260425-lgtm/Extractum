@@ -74,7 +74,7 @@ git commit -m "docs: plan source browser docs closure"
 - Create: `docs/superpowers/verification/2026-05-30-source-browser-smoke.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-closure-implementation.md`
 
-- [ ] **Step 1: Add the smoke verification note**
+- [x] **Step 1: Add the smoke verification note**
 
 Create `docs/superpowers/verification/2026-05-30-source-browser-smoke.md` with this content:
 
@@ -141,7 +141,7 @@ Transcript | Comments | Items | Metadata | Activity
 ```
 ```
 
-- [ ] **Step 2: Run note verification**
+- [x] **Step 2: Run note verification**
 
 Run:
 
@@ -152,7 +152,7 @@ git diff --check
 
 Expected: the smoke note contains the verified tab order and snapshot header/action checks; no whitespace errors.
 
-- [ ] **Step 3: Commit the smoke note**
+- [x] **Step 3: Commit the smoke note**
 
 Run:
 
