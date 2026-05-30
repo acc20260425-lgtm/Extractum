@@ -999,7 +999,7 @@ git commit -m "feat: expose youtube comment item enrichment"
 - Modify: `src/lib/source-browser-model.ts`
 - Modify: `src/lib/source-browser-model.test.ts`
 
-- [ ] **Step 1: Write failing comment helper tests**
+- [x] **Step 1: Write failing comment helper tests**
 
 Add tests for:
 
@@ -1008,13 +1008,13 @@ Add tests for:
 - `filterLoadedYoutubeComments(...)` searches loaded text and author;
 - `sortLoadedYoutubeComments(..., "most_liked")` sorts loaded comments by `youtubeComment.likeCount`.
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run: `npm run test -- src/lib/source-browser-model.test.ts`
 
 Expected: FAIL because helpers do not exist.
 
-- [ ] **Step 3: Implement pure comment helpers**
+- [x] **Step 3: Implement pure comment helpers**
 
 Use an object input so later route state can be added without changing every call site:
 
@@ -1030,7 +1030,7 @@ export interface CommentsCoverageInput {
 
 Derive coverage from loaded `SourceItem[]`, `detail?.summary.comments`, relevant `SourceJobRecord[]`, `routeError`, and `loadingItems`. Do not add a comments API wrapper.
 
-- [ ] **Step 4: Run helper tests**
+- [x] **Step 4: Run helper tests**
 
 Run: `npm run test -- src/lib/source-browser-model.test.ts`
 

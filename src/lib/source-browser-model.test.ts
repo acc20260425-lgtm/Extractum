@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  commentsCoverageState,
   filterLoadedSourceItems,
+  filterLoadedYoutubeComments,
+  groupLoadedYoutubeComments,
   reconcileSourceBrowserTab,
+  sortLoadedYoutubeComments,
   sourceBrowserShellAppliesToSource,
   sourceItemKindChips,
   sourceBrowserTabsForSource,
@@ -9,7 +13,8 @@ import {
   sortLoadedSourceItems,
   type SourceBrowserTabId,
 } from "./source-browser-model";
-import type { Source, SourceItem } from "./types/sources";
+import type { Source, SourceItem, SourceJobRecord } from "./types/sources";
+import type { YoutubeVideoDetail } from "./types/youtube";
 
 function source(overrides: Partial<Source>): Source {
   return {
@@ -64,6 +69,75 @@ function sourceItem(overrides: Partial<SourceItem> = {}): SourceItem {
     migrationDomain: null,
     historyScopeLabel: "Current supergroup history",
     pageCursor: "cursor",
+    ...overrides,
+  };
+}
+
+function youtubeCommentItem(overrides: Partial<SourceItem> = {}): SourceItem {
+  return sourceItem({
+    itemKind: "youtube_comment",
+    youtubeComment: {
+      commentId: "c1",
+      parentCommentId: null,
+      isReply: false,
+      likeCount: 0,
+      isPinned: false,
+      isHearted: false,
+      authorChannelUrl: null,
+    },
+    ...overrides,
+  });
+}
+
+function youtubeDetail(commentState: YoutubeVideoDetail["summary"]["comments"]["state"], itemCount = 0): YoutubeVideoDetail {
+  return {
+    summary: {
+      sourceId: 20,
+      sourceSubtype: "video",
+      title: "Demo video",
+      channelTitle: null,
+      channelHandle: null,
+      canonicalUrl: "https://www.youtube.com/watch?v=demo",
+      thumbnailUrl: null,
+      durationSeconds: null,
+      publishedAt: null,
+      availabilityStatus: "available",
+      videoCount: null,
+      linkedVideoCount: null,
+      unavailableCount: null,
+      captions: {
+        state: "unknown",
+        itemCount: 0,
+        segmentCount: 0,
+        lastSyncedAt: null,
+        label: "Unknown",
+      },
+      comments: {
+        state: commentState,
+        itemCount,
+        segmentCount: 0,
+        lastSyncedAt: null,
+        label: commentState,
+      },
+    },
+    playlistMemberships: [],
+  };
+}
+
+function sourceJob(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
+  return {
+    job_id: "job-1",
+    source_id: 20,
+    related_source_id: null,
+    job_type: "youtube_video_comments_sync",
+    status: "running",
+    message: null,
+    progress_current: null,
+    progress_total: null,
+    started_at: 1,
+    finished_at: null,
+    warnings: [],
+    error: null,
     ...overrides,
   };
 }
@@ -136,5 +210,116 @@ describe("source browser model", () => {
     expect(sortLoadedSourceItems(items, "newest").map((item) => item.id)).toEqual([1, 3, 2]);
     expect(sortLoadedSourceItems(items, "oldest").map((item) => item.id)).toEqual([2, 3, 1]);
     expect(items.map((item) => item.id)).toEqual([1, 2, 3]);
+  });
+
+  it("derives comments coverage states from loaded rows detail jobs and route errors", () => {
+    expect(commentsCoverageState({
+      items: [],
+      detail: null,
+      jobs: [],
+      routeError: null,
+      loadingItems: false,
+    })).toBe("unknown");
+    expect(commentsCoverageState({
+      items: [],
+      detail: youtubeDetail("not_synced"),
+      jobs: [],
+      routeError: null,
+      loadingItems: false,
+    })).toBe("not_synced");
+    expect(commentsCoverageState({
+      items: [],
+      detail: youtubeDetail("not_synced"),
+      jobs: [sourceJob()],
+      routeError: null,
+      loadingItems: false,
+    })).toBe("syncing");
+    expect(commentsCoverageState({
+      items: [],
+      detail: youtubeDetail("synced"),
+      jobs: [],
+      routeError: "failed to load items",
+      loadingItems: false,
+    })).toBe("failed");
+    expect(commentsCoverageState({
+      items: [],
+      detail: youtubeDetail("synced", 0),
+      jobs: [],
+      routeError: null,
+      loadingItems: false,
+    })).toBe("synced_empty");
+    expect(commentsCoverageState({
+      items: [youtubeCommentItem()],
+      detail: youtubeDetail("synced", 1),
+      jobs: [],
+      routeError: null,
+      loadingItems: false,
+    })).toBe("synced_with_rows");
+  });
+
+  it("groups loaded YouTube comments while keeping orphan replies visible", () => {
+    const parent = youtubeCommentItem({
+      id: 1,
+      youtubeComment: {
+        commentId: "parent",
+        parentCommentId: null,
+        isReply: false,
+        likeCount: 5,
+        isPinned: false,
+        isHearted: false,
+        authorChannelUrl: null,
+      },
+    });
+    const loadedReply = youtubeCommentItem({
+      id: 2,
+      youtubeComment: {
+        commentId: "reply",
+        parentCommentId: "parent",
+        isReply: true,
+        likeCount: 1,
+        isPinned: false,
+        isHearted: false,
+        authorChannelUrl: null,
+      },
+    });
+    const orphanReply = youtubeCommentItem({
+      id: 3,
+      youtubeComment: {
+        commentId: "orphan",
+        parentCommentId: "missing",
+        isReply: true,
+        likeCount: 2,
+        isPinned: false,
+        isHearted: false,
+        authorChannelUrl: null,
+      },
+    });
+
+    expect(groupLoadedYoutubeComments([loadedReply, orphanReply, parent])).toEqual([
+      { item: parent, replies: [{ item: loadedReply, parentLoaded: true }], parentLoaded: true },
+      { item: orphanReply, replies: [], parentLoaded: false },
+    ]);
+  });
+
+  it("filters loaded YouTube comments by loaded text and author", () => {
+    const items = [
+      youtubeCommentItem({ id: 1, author: "Alice", content: "First comment", externalId: "hidden-match" }),
+      youtubeCommentItem({ id: 2, author: "Bob", content: "Second note" }),
+      sourceItem({ id: 3, itemKind: "telegram_message", author: "Alice", content: "Not a comment" }),
+    ];
+
+    expect(filterLoadedYoutubeComments(items, "alice").map((item) => item.id)).toEqual([1]);
+    expect(filterLoadedYoutubeComments(items, "second").map((item) => item.id)).toEqual([2]);
+    expect(filterLoadedYoutubeComments(items, "hidden-match")).toEqual([]);
+  });
+
+  it("sorts loaded YouTube comments by most liked loaded rows", () => {
+    const items = [
+      youtubeCommentItem({ id: 1, publishedAt: 30, youtubeComment: { commentId: "a", parentCommentId: null, isReply: false, likeCount: 1, isPinned: false, isHearted: false, authorChannelUrl: null } }),
+      youtubeCommentItem({ id: 2, publishedAt: 20, youtubeComment: { commentId: "b", parentCommentId: null, isReply: false, likeCount: 10, isPinned: false, isHearted: false, authorChannelUrl: null } }),
+      youtubeCommentItem({ id: 3, publishedAt: 10, youtubeComment: { commentId: "c", parentCommentId: null, isReply: false, likeCount: null, isPinned: false, isHearted: false, authorChannelUrl: null } }),
+    ];
+
+    expect(sortLoadedYoutubeComments(items, "most_liked").map((item) => item.id)).toEqual([2, 1, 3]);
   });
 });

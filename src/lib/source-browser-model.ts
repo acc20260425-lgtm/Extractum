@@ -1,4 +1,5 @@
-import type { Source, SourceItem } from "$lib/types/sources";
+import type { Source, SourceItem, SourceJobRecord } from "$lib/types/sources";
+import type { YoutubeVideoDetail } from "$lib/types/youtube";
 
 export type SourceBrowserTabId =
   | "timeline"
@@ -25,6 +26,35 @@ export interface LoadedSourceItemFilter {
 }
 
 export type LoadedSourceItemSort = "newest" | "oldest";
+
+export type CommentsCoverageState =
+  | "unknown"
+  | "not_synced"
+  | "syncing"
+  | "failed"
+  | "synced_empty"
+  | "synced_with_rows";
+
+export interface CommentsCoverageInput {
+  items: SourceItem[];
+  detail: YoutubeVideoDetail | null;
+  jobs: SourceJobRecord[];
+  routeError: string | null;
+  loadingItems: boolean;
+}
+
+export interface LoadedYoutubeCommentReply {
+  item: SourceItem;
+  parentLoaded: boolean;
+}
+
+export interface LoadedYoutubeCommentThread {
+  item: SourceItem;
+  replies: LoadedYoutubeCommentReply[];
+  parentLoaded: boolean;
+}
+
+export type LoadedYoutubeCommentSort = LoadedSourceItemSort | "most_liked";
 
 const TAB_LABELS: Record<SourceBrowserTabId, string> = {
   timeline: "Timeline",
@@ -95,6 +125,91 @@ export function sortLoadedSourceItems(items: SourceItem[], sort: LoadedSourceIte
     const timestampOrder = (left.publishedAt - right.publishedAt) * direction;
     return timestampOrder || left.id - right.id;
   });
+}
+
+export function commentsCoverageState(input: CommentsCoverageInput): CommentsCoverageState {
+  if (input.routeError) return "failed";
+  if (input.jobs.some(isActiveYoutubeCommentJob)) return "syncing";
+  if (loadedYoutubeCommentItems(input.items).length > 0) return "synced_with_rows";
+  if (input.loadingItems) return "unknown";
+
+  const commentStatus = input.detail?.summary.comments.state ?? "unknown";
+  if (commentStatus === "failed") return "failed";
+  if (commentStatus === "not_synced") return "not_synced";
+  if (commentStatus === "synced") {
+    return input.detail?.summary.comments.itemCount === 0 ? "synced_empty" : "unknown";
+  }
+  return "unknown";
+}
+
+export function groupLoadedYoutubeComments(items: SourceItem[]): LoadedYoutubeCommentThread[] {
+  const comments = loadedYoutubeCommentItems(items);
+  const byCommentId = new Map<string, SourceItem>();
+  for (const item of comments) {
+    const commentId = item.youtubeComment?.commentId;
+    if (commentId) byCommentId.set(commentId, item);
+  }
+
+  const repliesByParentId = new Map<string, LoadedYoutubeCommentReply[]>();
+  const orphans: LoadedYoutubeCommentThread[] = [];
+
+  for (const item of comments) {
+    const comment = item.youtubeComment;
+    if (!comment?.isReply) continue;
+    const parentId = comment.parentCommentId;
+    if (parentId && byCommentId.has(parentId)) {
+      const replies = repliesByParentId.get(parentId) ?? [];
+      replies.push({ item, parentLoaded: true });
+      repliesByParentId.set(parentId, replies);
+    } else {
+      orphans.push({ item, replies: [], parentLoaded: false });
+    }
+  }
+
+  const roots = comments
+    .filter((item) => !item.youtubeComment?.isReply)
+    .map((item) => ({
+      item,
+      replies: repliesByParentId.get(item.youtubeComment?.commentId ?? "") ?? [],
+      parentLoaded: true,
+    }));
+
+  return [...roots, ...orphans];
+}
+
+export function filterLoadedYoutubeComments(items: SourceItem[], search: string): SourceItem[] {
+  const query = search.trim().toLocaleLowerCase();
+  return loadedYoutubeCommentItems(items).filter((item) => {
+    if (!query) return true;
+    return [item.content, item.author]
+      .some((value) => value?.toLocaleLowerCase().includes(query));
+  });
+}
+
+export function sortLoadedYoutubeComments(
+  items: SourceItem[],
+  sort: LoadedYoutubeCommentSort,
+): SourceItem[] {
+  const comments = loadedYoutubeCommentItems(items);
+  if (sort !== "most_liked") return sortLoadedSourceItems(comments, sort);
+  return [...comments].sort((left, right) => {
+    const leftLikes = left.youtubeComment?.likeCount ?? -1;
+    const rightLikes = right.youtubeComment?.likeCount ?? -1;
+    return rightLikes - leftLikes || right.publishedAt - left.publishedAt || left.id - right.id;
+  });
+}
+
+function loadedYoutubeCommentItems(items: SourceItem[]): SourceItem[] {
+  return items.filter((item) => item.youtubeComment);
+}
+
+function isActiveYoutubeCommentJob(job: SourceJobRecord) {
+  const isCommentJob = job.job_type === "youtube_video_comments_sync"
+    || job.job_type === "youtube_video_full_sync";
+  const isActive = job.status === "queued"
+    || job.status === "running"
+    || job.status === "cancel_requested";
+  return isCommentJob && isActive;
 }
 
 function sourceItemKindLabel(kind: string) {
