@@ -18,7 +18,9 @@
 - Keep `npm.cmd run verify` free of the smoke command.
 - Associated disabled reason contract: the NotebookLM export button must have `aria-describedby={exportReasonId}` when disabled by a source-group reason, and the helper text must use the same `id` plus `data-smoke-id="notebooklm-export-disabled-reason"`.
 - Run snapshot Source Browser tab contract is exact order `Sources | Items | Metadata`. `Activity` is not allowed on run snapshots.
+- Bridge discovery contract: wait up to 90 seconds for the debug bridge by repeating short scans across ports `9223..9322`; report `app-identifier-mismatch` separately from `bridge-unavailable`.
 - Bridge probe contract: before running UI scenarios, probe `get_backend_state`, `resize_window`, `execute_js`, and screenshot command dispatch. Screenshot capture is best-effort after dispatch is proven.
+- Probe-only safety contract: `--probe-only` must not seed, verify, clean, or navigate fixture data; fixture cleanup runs only after fixture lifecycle has started.
 - Fixture cleanup must remain marker-scoped. Any cleanup broad enough to delete non-fixture rows is a blocker.
 - Use deterministic smoke step names such as `source-browser.youtube-video-tabs`; use the same names in console output and artifact paths.
 
@@ -219,6 +221,8 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("workspace-parity.source-group-disabled-export");
     expect(smokeScriptSource).toContain("runSmokeSteps");
     expect(smokeScriptSource).toContain("finally");
+    expect(smokeScriptSource).toContain("fixturesTouched");
+    expect(smokeScriptSource).toContain("if (fixturesTouched && ctx?.socket)");
     expect(smokeScriptSource).toContain("cleanupFixtures");
   });
 
@@ -234,6 +238,8 @@ describe("analysis UI smoke harness contract", () => {
     expect(helperSource).toContain("captureArtifacts");
     expect(helperSource).toContain("capture_native_screenshot");
     expect(helperSource).toContain("resize_window");
+    expect(helperSource).toContain("startupTimeoutMs = 90000");
+    expect(helperSource).toContain("app-identifier-mismatch");
   });
 
   it("associates source-group NotebookLM disabled reason through aria-describedby", () => {
@@ -317,6 +323,7 @@ import {
   assertTabOrderLabels,
   bridgePortCandidates,
   classifyBridgeFailure,
+  executeJs,
   expectedFixtureLabels,
   sanitizeArtifactName,
   validateFixtureLabels,
@@ -380,7 +387,42 @@ describe("analysis smoke helper contracts", () => {
     expect(classifyBridgeFailure(new Error("ASSERT: missing tab")).kind).toBe("assertion");
     expect(classifyBridgeFailure(new Error("Script execution timeout")).kind).toBe("script-timeout");
   });
+
+  it("keeps executeJs assertion failures typed as smoke assertions", async () => {
+    await expect(executeJs(fakeSocketResponse({
+      id: "execute_js-1",
+      success: false,
+      error: "ASSERT: missing source-browser-tabs",
+    }), "return true;")).rejects.toThrow(SmokeAssertionError);
+  });
+
+  it("classifies app identifier mismatch separately from unavailable bridge", () => {
+    expect(classifyBridgeFailure(new SmokeBridgeError("unexpected app identifier", "app-identifier-mismatch")).kind)
+      .toBe("app-identifier-mismatch");
+  });
 });
+
+function fakeSocketResponse(response: Record<string, unknown>) {
+  const listeners = new Map<string, Set<(event: { data?: string }) => void>>();
+  const socket = {
+    addEventListener(type: string, listener: (event: { data?: string }) => void) {
+      const set = listeners.get(type) ?? new Set();
+      set.add(listener);
+      listeners.set(type, set);
+    },
+    removeEventListener(type: string, listener: (event: { data?: string }) => void) {
+      listeners.get(type)?.delete(listener);
+    },
+    send(message: string) {
+      const request = JSON.parse(message);
+      queueMicrotask(() => {
+        const next = { ...response, id: request.id };
+        listeners.get("message")?.forEach((listener) => listener({ data: JSON.stringify(next) }));
+      });
+    },
+  };
+  return socket;
+}
 ```
 
 - [ ] **Step 3: Add a failing Rust cleanup contract test and fixture label expectation**
@@ -991,7 +1033,11 @@ export async function bridgeRequest(socket, command, args = {}, timeoutMs = 5000
 export async function executeJs(socket, script, timeoutMs = 5000) {
   const response = await bridgeRequest(socket, "execute_js", { script, windowLabel: "main" }, timeoutMs);
   if (!response.success) {
-    throw new SmokeBridgeError(response.error ?? "execute_js failed", "script-failure", { response });
+    const message = response.error ?? "execute_js failed";
+    if (message.startsWith("ASSERT:")) {
+      throw new SmokeAssertionError(message, { response });
+    }
+    throw new SmokeBridgeError(message, "script-failure", { response });
   }
   return response.data;
 }
@@ -1020,31 +1066,56 @@ export function waitForSocketOpen(socket, timeoutMs = 1500) {
   });
 }
 
-export async function discoverBridge({ WebSocketCtor = globalThis.WebSocket, ports = bridgePortCandidates() } = {}) {
+export async function discoverBridge({
+  WebSocketCtor = globalThis.WebSocket,
+  ports = bridgePortCandidates(),
+  startupTimeoutMs = 90000,
+} = {}) {
   if (typeof WebSocketCtor !== "function") {
     throw new SmokeBridgeError("Node runtime does not provide globalThis.WebSocket", "missing-websocket");
   }
 
-  for (const port of ports) {
-    const socket = new WebSocketCtor(`ws://127.0.0.1:${port}`);
-    try {
-      await waitForSocketOpen(socket);
-      const backend = await bridgeRequest(socket, "invoke_tauri", {
-        command: "plugin:mcp-bridge|get_backend_state",
-        args: { windowLabel: "main" },
-      });
-      if (backend.success && backend.data?.app?.identifier === expectedAppIdentifier) {
-        return { socket, port, backendState: backend.data };
-      }
-      socket.close();
-    } catch {
+  const deadline = Date.now() + startupTimeoutMs;
+  let lastIdentifierMismatch = null;
+
+  while (Date.now() < deadline) {
+    for (const port of ports) {
+      const socket = new WebSocketCtor(`ws://127.0.0.1:${port}`);
       try {
+        await waitForSocketOpen(socket);
+        const backend = await bridgeRequest(socket, "invoke_tauri", {
+          command: "plugin:mcp-bridge|get_backend_state",
+          args: { windowLabel: "main" },
+        });
+        if (backend.success && backend.data?.app?.identifier === expectedAppIdentifier) {
+          return { socket, port, backendState: backend.data };
+        }
+        if (backend.success && backend.data?.app?.identifier) {
+          lastIdentifierMismatch = {
+            port,
+            identifier: backend.data.app.identifier,
+          };
+        }
         socket.close();
       } catch {
-        // Ignore failed close while probing unavailable ports.
+        try {
+          socket.close();
+        } catch {
+          // Ignore failed close while probing unavailable ports.
+        }
       }
     }
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
+
+  if (lastIdentifierMismatch) {
+    throw new SmokeBridgeError(
+      `MCP bridge app identifier mismatch on port ${lastIdentifierMismatch.port}: ${lastIdentifierMismatch.identifier}`,
+      "app-identifier-mismatch",
+      lastIdentifierMismatch,
+    );
+  }
+
   throw new SmokeBridgeError(`No ${expectedAppIdentifier} MCP bridge found on ports ${ports[0]}-${ports.at(-1)}`, "bridge-unavailable");
 }
 
@@ -1432,6 +1503,7 @@ async function main() {
   let ctx = null;
   let failed = null;
   let cleanupFailed = null;
+  let fixturesTouched = false;
 
   try {
     child = await launchApp();
@@ -1442,12 +1514,13 @@ async function main() {
     }
     await probeBridgeCapabilities(ctx);
     if (probeOnly) return;
+    fixturesTouched = true;
     await seedFixtures(ctx);
     await runSmokeSteps(ctx, [...sourceBrowserSmokeSteps, ...analysisWorkspaceParitySteps]);
   } catch (error) {
     failed = error;
   } finally {
-    if (ctx?.socket) {
+    if (fixturesTouched && ctx?.socket) {
       try {
         await cleanupFixtures(ctx);
       } catch (error) {
@@ -1457,6 +1530,9 @@ async function main() {
         await writeFile(path.join(dir, "cleanup-error.txt"), error instanceof Error ? error.stack ?? error.message : String(error));
         console.error(`Cleanup failed. Artifacts: ${dir}`);
       }
+    }
+
+    if (ctx?.socket) {
       try {
         ctx.socket.close();
       } catch {
@@ -1521,7 +1597,7 @@ Acceptable alternate screenshot line:
 WARN bridge.capture_native_screenshot best-effort failed
 ```
 
-Stop if `get_backend_state`, `resize_window`, or `execute_js` fails.
+Stop if `get_backend_state`, `resize_window`, or `execute_js` fails. Confirm this mode does not seed, navigate for fixture verification, or call `clear_analysis_redesign_fixtures`; `fixturesTouched` must remain `false`.
 
 - [ ] **Step 5: Commit runner bootstrap**
 
