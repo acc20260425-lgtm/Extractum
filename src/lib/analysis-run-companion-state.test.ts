@@ -228,6 +228,42 @@ describe("analysis run companion state", () => {
     expect(result.map((entry) => entry.run.id)).toEqual([20]);
   });
 
+  it("keeps local saved-run filtering as a final consistency guard", () => {
+    const filter = {
+      ...runsFilterDefaults(),
+      query: "needle",
+      status: "completed",
+      provider: "gemini",
+      model: "flash",
+      template: "digest",
+    };
+    const entries = filterCompanionRuns({
+      activeRuns: [],
+      savedRuns: [
+        summary({
+          id: 30,
+          scope_label: "Needle report",
+          status: "completed",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          prompt_template_name: "Daily digest",
+        }),
+        summary({
+          id: 31,
+          scope_label: "Needle report",
+          status: "failed",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          prompt_template_name: "Daily digest",
+        }),
+      ],
+      filter,
+      workspaceSelection: { kind: "none" },
+    });
+
+    expect(entries.map((entry) => entry.run.id)).toEqual([30]);
+  });
+
   it("detects active companion run filters beyond the defaults", () => {
     expect(hasActiveCompanionRunsFilter(runsFilterDefaults())).toBe(false);
     expect(hasActiveCompanionRunsFilter({
