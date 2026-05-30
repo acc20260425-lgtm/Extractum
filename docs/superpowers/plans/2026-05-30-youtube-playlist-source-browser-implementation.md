@@ -1018,7 +1018,7 @@ Expected: FAIL because `UniversalItemsView` has no `emptyDescription` prop and `
 - Modify: `src/lib/components/analysis/universal-items-view.svelte`
 - Modify: `src/lib/components/analysis/source-browser-shell.svelte`
 
-- [ ] **Step 1: Add optional `emptyDescription` prop**
+- [x] **Step 1: Add optional `emptyDescription` prop**
 
 In `src/lib/components/analysis/universal-items-view.svelte`, add `emptyDescription` to props:
 
@@ -1047,7 +1047,7 @@ Change the empty state:
     <EmptyState description={emptyDescription} />
 ```
 
-- [ ] **Step 2: Pass playlist-specific copy from shell**
+- [x] **Step 2: Pass playlist-specific copy from shell**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, update the `items` branch:
 

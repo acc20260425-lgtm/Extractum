@@ -265,6 +265,9 @@
       items={sourceItems}
       loading={loadingItems}
       hasMore={sourceItemsHasMore}
+      emptyDescription={source.sourceType === "youtube" && source.sourceSubtype === "playlist"
+        ? "Playlist videos live in the Videos tab. This Items tab only shows generic archived items loaded for this playlist source."
+        : "No loaded items are available for this source window."}
       {formatTimestamp}
       onLoadMore={onLoadMoreSourceItems}
     />

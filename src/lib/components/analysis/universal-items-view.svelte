@@ -23,12 +23,14 @@
     items,
     loading,
     hasMore,
+    emptyDescription = "No loaded items are available for this source window.",
     formatTimestamp,
     onLoadMore,
   }: {
     items: SourceItem[];
     loading: boolean;
     hasMore: boolean;
+    emptyDescription?: string;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
   } = $props();
@@ -107,7 +109,7 @@
   </div>
 
   {#if !loading && items.length === 0}
-    <EmptyState description="No loaded items are available for this source window." />
+    <EmptyState description={emptyDescription} />
   {:else if !loading && visibleItems.length === 0}
     <EmptyState description="No loaded items match the current filters." />
   {:else}
