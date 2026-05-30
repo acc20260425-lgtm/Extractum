@@ -200,7 +200,7 @@ git commit -m "docs: archive completed source browser plans"
 - Modify: `docs/superpowers/archive/specs/README.md`
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-docs-archive-cleanup-implementation.md`
 
-- [ ] **Step 1: Move shipped specs**
+- [x] **Step 1: Move shipped specs**
 
 Run:
 
@@ -212,7 +212,7 @@ git mv docs/superpowers/specs/2026-05-30-source-browser-data-prop-consolidation-
 git mv docs/superpowers/specs/2026-05-30-source-browser-explicit-subject-contract-design.md docs/superpowers/archive/specs/2026-05-30-source-browser-explicit-subject-contract-design.md
 ```
 
-- [ ] **Step 2: Simplify active specs README**
+- [x] **Step 2: Simplify active specs README**
 
 Replace `docs/superpowers/specs/README.md` with:
 
@@ -232,7 +232,7 @@ Recently shipped or superseded specs are archived under
 `docs/superpowers/archive/specs/`.
 ```
 
-- [ ] **Step 3: Update archive specs README**
+- [x] **Step 3: Update archive specs README**
 
 Append this paragraph to `docs/superpowers/archive/specs/README.md`:
 
@@ -243,7 +243,7 @@ the shipped Source Browser architecture. Current behavior is summarized in
 `docs/frontend-architecture-evolution-analysis.md`.
 ```
 
-- [ ] **Step 4: Verify active specs are reduced to README**
+- [x] **Step 4: Verify active specs are reduced to README**
 
 Run:
 
@@ -255,7 +255,7 @@ git diff --check
 
 Expected: active specs contain `README.md` only; archived specs contain the moved Source Browser specs; active README no longer lists Source Browser references.
 
-- [ ] **Step 5: Commit archived specs**
+- [x] **Step 5: Commit archived specs**
 
 Run:
 

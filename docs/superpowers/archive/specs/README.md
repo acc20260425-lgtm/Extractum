@@ -9,3 +9,8 @@ behavior described here, confirm the current state in root docs such as
 or `docs/backlog.md`.
 
 Active or still-relevant specs belong in `docs/superpowers/specs/`.
+
+The 2026-05-29 and 2026-05-30 Source Browser specs are historical rationale for
+the shipped Source Browser architecture. Current behavior is summarized in
+`docs/project.md`, `docs/design-document.md`, and
+`docs/frontend-architecture-evolution-analysis.md`.
