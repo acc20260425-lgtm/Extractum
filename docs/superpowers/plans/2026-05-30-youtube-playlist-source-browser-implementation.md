@@ -127,7 +127,7 @@ Expected: FAIL because `SourceBrowserTabId` does not include `videos`, playlist 
 **Files:**
 - Modify: `src/lib/source-browser-model.ts`
 
-- [ ] **Step 1: Add the `videos` tab id, label, playlist tabs, default, and applicability**
+- [x] **Step 1: Add the `videos` tab id, label, playlist tabs, default, and applicability**
 
 Modify `src/lib/source-browser-model.ts` so the top tab model section reads:
 
@@ -181,7 +181,7 @@ export function smartDefaultSourceBrowserTab(source: Pick<Source, "sourceType" |
 }
 ```
 
-- [ ] **Step 2: Run the model test**
+- [x] **Step 2: Run the model test**
 
 Run:
 
@@ -191,7 +191,7 @@ npm run test -- src/lib/source-browser-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit Slice 1**
+- [x] **Step 3: Commit Slice 1**
 
 Run:
 
