@@ -114,6 +114,9 @@ The `Videos` tab must not render detailed job cards. Those belong in
 leaf does not initiate data loading on mount and does not import source APIs.
 It can only request work through callback props.
 
+`YoutubePlaylistVideosView` is a leaf view. It owns no tab reconciliation, no
+route selection state, and no source job state.
+
 Playlist-level retry and row-level retry are separate actions:
 
 - `Retry failed` calls the playlist-level failed-video retry callback.
@@ -150,6 +153,23 @@ loaded source-item window only.
 `SourceMetadataView` structure. The component should receive the already loaded
 playlist detail DTO and render a provider-aware playlist metadata section
 without becoming a second playlist membership browser.
+
+The implementation should use optional-safe fields from the already-loaded
+playlist detail DTO and source record, including:
+
+- `playlistId`;
+- `canonicalUrl`;
+- `title`;
+- `channelTitle`;
+- `channelId`;
+- `channelHandle`;
+- `availabilityStatus`;
+- `videoCount`;
+- `linkedCount`;
+- `unavailableCount`;
+- existing captions/comments summary fields.
+
+Do not extend the backend DTO only to make Metadata richer in this slice.
 
 - Summary: title, kind, channel identity, canonical URL when available,
   created/last synced timestamps.
@@ -267,6 +287,9 @@ Frontend contract tests should assert:
 - `YoutubePlaylistVideosView` does not render detailed source activity cards;
 - `YoutubePlaylistVideosView` consumes playlist detail only through props and
   imports no `$lib/api/` modules;
+- structural tests should check that `YoutubePlaylistVideosView` does not
+  import or render `SourceActivityView` and does not accept activity-specific
+  props such as `sourceJobs` or `onCancelSourceJob`;
 - playlist-level retry and row-level retry use distinct callback props;
 - `Open video source` is wired to the existing route source-selection callback
   and no nested video detail view is introduced;
@@ -289,5 +312,6 @@ Manual smoke should verify:
 ## Rollout Notes
 
 This slice intentionally migrates only live YouTube playlists. It prepares the
-browser model for richer nested playlist/video browsing without forcing source
-groups or frozen snapshots into the same contract.
+browser model for richer playlist/video navigation without introducing nested
+video browsing in this slice or forcing source groups and frozen snapshots into
+the same contract.
