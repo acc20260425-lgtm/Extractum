@@ -12,10 +12,13 @@ import telegramMediaCardSource from "./components/analysis/telegram-media-card.s
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import rawJsonPanelSource from "./components/analysis/raw-json-panel.svelte?raw";
+import runSnapshotMetadataViewSource from "./components/analysis/run-snapshot-metadata-view.svelte?raw";
 import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
 import youtubeCommentsViewSource from "./components/analysis/youtube-comments-view.svelte?raw";
 import youtubeSourceActivitySource from "./components/analysis/youtube-source-activity.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
+import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group-sources-view.svelte?raw";
+import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
 
 describe("analysis source readers", () => {
   it("replaces transitional source panels in ReportSourceSurface", () => {
@@ -255,6 +258,34 @@ describe("analysis source readers", () => {
     expect(universalItemsViewSource).toContain("helpDescription");
     expect(universalItemsViewSource).toContain("sourceLabelForItem");
     expect(universalItemsViewSource).toContain("Source #${item.sourceId}");
+  });
+
+  it("renders snapshot Items as a frozen SourceReaderItem browser", () => {
+    expect(snapshotItemsViewSource).toContain("SourceReaderItem");
+    expect(snapshotItemsViewSource).not.toContain("SourceItem");
+    expect(snapshotItemsViewSource).toContain("Search snapshot items");
+    expect(snapshotItemsViewSource).toContain("Snapshot items are limited to frozen rows loaded for this run");
+    expect(snapshotItemsViewSource).toContain("Load older snapshot messages");
+    expect(snapshotItemsViewSource).toContain("selectedTraceRef");
+    expect(snapshotItemsViewSource).toContain("ariaPressed");
+  });
+
+  it("renders snapshot group Sources with global snapshot paging only", () => {
+    expect(snapshotGroupSourcesViewSource).toContain("groupReaderItemsBySource");
+    expect(snapshotGroupSourcesViewSource).toContain("Load older snapshot messages");
+    expect(snapshotGroupSourcesViewSource).toContain("showSyncActions={false}");
+    expect(snapshotGroupSourcesViewSource).toContain("otherItems");
+    expect(snapshotGroupSourcesViewSource).toContain("other-item-list");
+    expect(snapshotGroupSourcesViewSource).not.toContain("hasMoreBySource");
+    expect(snapshotGroupSourcesViewSource).not.toContain("onLoadMoreSource");
+  });
+
+  it("renders run snapshot metadata from route-owned fields", () => {
+    expect(runSnapshotMetadataViewSource).toContain("AnalysisRunDetail");
+    expect(runSnapshotMetadataViewSource).toContain("Run snapshot");
+    expect(runSnapshotMetadataViewSource).toContain("snapshot.readerKind");
+    expect(runSnapshotMetadataViewSource).toContain("sourceOptions");
+    expect(runSnapshotMetadataViewSource).not.toContain("RawJsonPanel");
   });
 
   it("renders YouTube comments as a loaded-window browser", () => {

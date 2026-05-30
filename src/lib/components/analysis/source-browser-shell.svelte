@@ -143,7 +143,9 @@
     subject
       ? subject.kind === "source"
         ? `source:${subject.source.id}`
-        : `source_group:${subject.group.id}`
+        : subject.kind === "source_group"
+          ? `source_group:${subject.group.id}`
+          : `run_snapshot:${subject.snapshot.runId}:${subject.snapshot.readerKind}`
       : null,
   );
   const itemsForActiveSubject = $derived(groupData?.sourceItems ?? sourceItems);

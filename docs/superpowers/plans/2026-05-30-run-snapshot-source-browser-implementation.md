@@ -494,10 +494,11 @@ git commit -m "feat: add run snapshot browser model"
 - Create: `src/lib/components/analysis/snapshot-items-view.svelte`
 - Create: `src/lib/components/analysis/snapshot-group-sources-view.svelte`
 - Create: `src/lib/components/analysis/run-snapshot-metadata-view.svelte`
+- Modify: `src/lib/components/analysis/source-browser-shell.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Add raw imports for snapshot leaves**
+- [x] **Step 1: Add raw imports for snapshot leaves**
 
 In `src/lib/analysis-source-readers.test.ts`, add these imports near the other raw component imports:
 
@@ -507,7 +508,7 @@ import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group
 import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
 ```
 
-- [ ] **Step 2: Add failing snapshot leaf contract tests**
+- [x] **Step 2: Add failing snapshot leaf contract tests**
 
 After the `"renders universal Items as a loaded-window browser"` test, add:
 
@@ -541,7 +542,7 @@ After the `"renders universal Items as a loaded-window browser"` test, add:
   });
 ```
 
-- [ ] **Step 3: Run reader tests and verify they fail**
+- [x] **Step 3: Run reader tests and verify they fail**
 
 Run:
 
@@ -551,7 +552,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: FAIL because the snapshot leaf files do not exist yet.
 
-- [ ] **Step 4: Create `SnapshotItemsView`**
+- [x] **Step 4: Create `SnapshotItemsView`**
 
 Create `src/lib/components/analysis/snapshot-items-view.svelte` with:
 
@@ -809,7 +810,7 @@ Create `src/lib/components/analysis/snapshot-items-view.svelte` with:
 </style>
 ```
 
-- [ ] **Step 5: Create `SnapshotGroupSourcesView`**
+- [x] **Step 5: Create `SnapshotGroupSourcesView`**
 
 Create `src/lib/components/analysis/snapshot-group-sources-view.svelte` with:
 
@@ -1005,7 +1006,7 @@ Create `src/lib/components/analysis/snapshot-group-sources-view.svelte` with:
 </style>
 ```
 
-- [ ] **Step 6: Create `RunSnapshotMetadataView`**
+- [x] **Step 6: Create `RunSnapshotMetadataView`**
 
 Create `src/lib/components/analysis/run-snapshot-metadata-view.svelte` with:
 
@@ -1171,7 +1172,7 @@ Create `src/lib/components/analysis/run-snapshot-metadata-view.svelte` with:
 </style>
 ```
 
-- [ ] **Step 7: Run reader tests and Svelte check**
+- [x] **Step 7: Run reader tests and Svelte check**
 
 Run:
 
@@ -1182,12 +1183,12 @@ npm.cmd run check
 
 Expected: both PASS.
 
-- [ ] **Step 8: Commit snapshot leaves**
+- [x] **Step 8: Commit snapshot leaves**
 
 Run:
 
 ```bash
-git add src/lib/components/analysis/snapshot-items-view.svelte src/lib/components/analysis/snapshot-group-sources-view.svelte src/lib/components/analysis/run-snapshot-metadata-view.svelte src/lib/analysis-source-readers.test.ts docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md
+git add src/lib/components/analysis/snapshot-items-view.svelte src/lib/components/analysis/snapshot-group-sources-view.svelte src/lib/components/analysis/run-snapshot-metadata-view.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/analysis-source-readers.test.ts docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md
 git commit -m "feat: add run snapshot browser leaves"
 ```
 
