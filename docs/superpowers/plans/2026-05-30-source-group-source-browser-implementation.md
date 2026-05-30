@@ -780,7 +780,7 @@ git commit -m "feat: add source labels to universal items"
 - Create: `src/lib/components/analysis/source-group-activity-view.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add raw imports and tests for group metadata/activity leaves**
+- [x] **Step 1: Add raw imports and tests for group metadata/activity leaves**
 
 In `src/lib/analysis-source-readers.test.ts`, add imports:
 
@@ -815,7 +815,7 @@ Add these tests near the source-group tests:
   });
 ```
 
-- [ ] **Step 2: Run reader tests and verify they fail**
+- [x] **Step 2: Run reader tests and verify they fail**
 
 Run:
 
@@ -825,7 +825,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: FAIL because the new group metadata and activity components do not exist.
 
-- [ ] **Step 3: Create `SourceGroupMetadataView`**
+- [x] **Step 3: Create `SourceGroupMetadataView`**
 
 Task 0 should have confirmed that `AnalysisSourceGroup` already exposes `created_at` and `updated_at`. If that preflight fails in a future branch, omit the Created/Updated rows instead of expanding backend DTOs in this slice.
 
@@ -991,7 +991,7 @@ Create `src/lib/components/analysis/source-group-metadata-view.svelte`:
 </style>
 ```
 
-- [ ] **Step 4: Create `SourceGroupActivityView`**
+- [x] **Step 4: Create `SourceGroupActivityView`**
 
 Create `src/lib/components/analysis/source-group-activity-view.svelte`:
 
@@ -1014,7 +1014,7 @@ Create `src/lib/components/analysis/source-group-activity-view.svelte`:
 </style>
 ```
 
-- [ ] **Step 5: Run reader tests and verify they pass**
+- [x] **Step 5: Run reader tests and verify they pass**
 
 Run:
 
@@ -1024,7 +1024,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit group metadata/activity task**
+- [x] **Step 6: Commit group metadata/activity task**
 
 Run:
 

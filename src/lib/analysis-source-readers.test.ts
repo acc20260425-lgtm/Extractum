@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import sourceActivityViewSource from "./components/analysis/source-activity-view.svelte?raw";
 import sourceBrowserShellSource from "./components/analysis/source-browser-shell.svelte?raw";
+import sourceGroupActivityViewSource from "./components/analysis/source-group-activity-view.svelte?raw";
+import sourceGroupMetadataViewSource from "./components/analysis/source-group-metadata-view.svelte?raw";
 import sourceMetadataViewSource from "./components/analysis/source-metadata-view.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
@@ -356,6 +358,28 @@ describe("analysis source readers", () => {
     expect(sourceGroupReaderSource).toContain("<SourceGroupSourcesView");
     expect(sourceGroupReaderSource).not.toContain("$lib/api/");
     expect(sourceGroupReaderSource).not.toContain("invoke(");
+  });
+
+  it("renders source group metadata from route-owned group fields", () => {
+    expect(sourceGroupMetadataViewSource).toContain('aria-label="Source group metadata"');
+    expect(sourceGroupMetadataViewSource).toContain("group.name");
+    expect(sourceGroupMetadataViewSource).toContain("group.source_type");
+    expect(sourceGroupMetadataViewSource).toContain("group.members.length");
+    expect(sourceGroupMetadataViewSource).toContain("member.item_count");
+    expect(sourceGroupMetadataViewSource).toContain("formatTimestamp(group.created_at)");
+    expect(sourceGroupMetadataViewSource).toContain("formatTimestamp(group.updated_at)");
+    expect(sourceGroupMetadataViewSource).not.toContain("$lib/api/");
+    expect(sourceGroupMetadataViewSource).not.toContain("invoke(");
+  });
+
+  it("renders source group activity without source job cards", () => {
+    expect(sourceGroupActivityViewSource).toContain('aria-label="Source group activity"');
+    expect(sourceGroupActivityViewSource).toContain("Group activity is not available yet. Source jobs are still tracked per source.");
+    expect(sourceGroupActivityViewSource).not.toContain("SourceActivityView");
+    expect(sourceGroupActivityViewSource).not.toContain("SourceJobRecord");
+    expect(sourceGroupActivityViewSource).not.toContain("onCancelSourceJob");
+    expect(sourceGroupActivityViewSource).not.toContain("$lib/api/");
+    expect(sourceGroupActivityViewSource).not.toContain("invoke(");
   });
 
   it("keeps playlist video opening as source selection instead of nested browsing", () => {
