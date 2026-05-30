@@ -1199,7 +1199,7 @@ git commit -m "feat: add run snapshot browser leaves"
 - Modify: `src/lib/components/analysis/source-browser-shell.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Add shell raw-contract tests**
+- [x] **Step 1: Add shell raw-contract tests**
 
 In `src/lib/components/analysis/source-browser-shell.test.ts`, add this test:
 
@@ -1216,7 +1216,7 @@ In `src/lib/components/analysis/source-browser-shell.test.ts`, add this test:
   });
 ```
 
-- [ ] **Step 2: Run shell tests and verify they fail**
+- [x] **Step 2: Run shell tests and verify they fail**
 
 Run:
 
@@ -1226,7 +1226,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts
 
 Expected: FAIL because shell has no snapshot branches or snapshot data prop.
 
-- [ ] **Step 3: Add snapshot imports and grouped data type**
+- [x] **Step 3: Add snapshot imports and grouped data type**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, add imports:
 
@@ -1268,7 +1268,7 @@ In the `$props()` destructuring, add:
     snapshotBrowserData = null,
 ```
 
-- [ ] **Step 4: Derive snapshot subject state**
+- [x] **Step 4: Derive snapshot subject state**
 
 Below `groupSubject`, add:
 
@@ -1303,7 +1303,7 @@ with:
 Loaded rows: {snapshotData?.readerItems.length ?? itemsForActiveSubject.length}.
 ```
 
-- [ ] **Step 5: Add snapshot tab bodies before live branches**
+- [x] **Step 5: Add snapshot tab bodies before live branches**
 
 Inside the shell markup, place these branches before the existing live `sources` branch:
 
@@ -1377,7 +1377,7 @@ to:
   {:else if activeTab === "sources" && groupSubject}
 ```
 
-- [ ] **Step 6: Ensure live-only activity remains live-only**
+- [x] **Step 6: Ensure live-only activity remains live-only**
 
 Confirm the only `SourceActivityView` branch still begins with:
 
@@ -1387,7 +1387,7 @@ Confirm the only `SourceActivityView` branch still begins with:
 
 Do not add an Activity branch for `snapshotSubject`.
 
-- [ ] **Step 7: Run shell tests and Svelte check**
+- [x] **Step 7: Run shell tests and Svelte check**
 
 Run:
 
@@ -1398,7 +1398,7 @@ npm.cmd run check
 
 Expected: both PASS.
 
-- [ ] **Step 8: Commit shell task**
+- [x] **Step 8: Commit shell task**
 
 Run:
 
