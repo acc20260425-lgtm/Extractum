@@ -1,6 +1,6 @@
 # Analysis UI Smoke Harness Design
 
-Status: active design
+Status: implemented
 
 ## Summary
 
@@ -36,7 +36,7 @@ The command launches the debug Tauri app, connects to the debug MCP bridge, seed
 Add a package script:
 
 ```json
-"smoke:analysis": "node scripts/smoke-analysis.mjs"
+"smoke:analysis": "node scripts/analysis-smoke.mjs"
 ```
 
 The script starts `npm.cmd run tauri dev` by default. It owns the spawned process and must terminate the full process tree during teardown. On Windows, the implementation should use a process-tree-aware cleanup such as `taskkill /PID <pid> /T /F` for spawned runs.

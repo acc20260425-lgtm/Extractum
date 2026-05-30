@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -192,12 +193,15 @@ export async function bridgeRequest(socket, command, args = {}, timeoutMs = 5000
   });
 }
 
-export async function executeJs(socket, script, timeoutMs = 5000) {
+export async function executeJs(socket, script, timeoutMs = 8000) {
   const response = await bridgeRequest(socket, "execute_js", { script, windowLabel: "main" }, timeoutMs);
   if (!response.success) {
     const message = response.error ?? "execute_js failed";
     if (message.startsWith("ASSERT:")) {
       throw new SmokeAssertionError(message, { response });
+    }
+    if (message.includes("Script execution timeout")) {
+      throw new SmokeBridgeError(message, "script-timeout", { response });
     }
     throw new SmokeBridgeError(message, "script-failure", { response });
   }

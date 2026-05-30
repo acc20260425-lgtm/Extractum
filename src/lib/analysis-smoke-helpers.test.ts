@@ -104,6 +104,14 @@ describe("analysis smoke helper contracts", () => {
     }), "return true;")).rejects.toThrow(SmokeAssertionError);
   });
 
+  it("keeps executeJs script timeouts typed for bootstrap retry", async () => {
+    await expect(executeJs(fakeSocketResponse({
+      id: "execute_js-1",
+      success: false,
+      error: "Script execution timeout",
+    }), "return true;")).rejects.toMatchObject({ kind: "script-timeout" });
+  });
+
   it("classifies app identifier mismatch separately from unavailable bridge", () => {
     expect(classifyBridgeFailure(new SmokeBridgeError("unexpected app identifier", "app-identifier-mismatch")).kind)
       .toBe("app-identifier-mismatch");

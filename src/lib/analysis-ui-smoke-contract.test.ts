@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +61,12 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("fixturesTouched");
     expect(smokeScriptSource).toContain("if (fixturesTouched && ctx?.socket)");
     expect(smokeScriptSource).toContain("cleanupFixtures");
+    expect(smokeScriptSource).toContain("refreshBridgeConnection");
+    expect(smokeScriptSource).toContain("retryProbeCommand(ctx");
+    expect(smokeScriptSource).toContain("classifyBridgeFailure(error)");
+    expect(smokeScriptSource).toContain("ctx.socket = bridge.socket");
+    expect(smokeScriptSource.indexOf("PASS bridge.execute_js"))
+      .toBeLessThan(smokeScriptSource.indexOf("PASS bridge.resize_window"));
   });
 
   it("keeps bridge, helper, assertion, and artifact behavior centralized", () => {

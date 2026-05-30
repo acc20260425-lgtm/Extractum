@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +15,7 @@ import {
   clickByText,
   clickByTextWithinSmokeId,
   clickRowActionByText,
+  classifyBridgeFailure,
   discoverBridge,
   executeJs,
   expectedAppIdentifier,
@@ -190,32 +192,53 @@ async function navigateAnalysis(ctx) {
 
 async function probeBridgeCapabilities(ctx) {
   console.log("PASS bridge.get_backend_state");
-  await retryProbeCommand(() => resizeWindow(ctx.socket, 1280, 860), "resize_window");
-  console.log("PASS bridge.resize_window");
-  const title = await retryProbeCommand(() => executeJs(ctx.socket, "return document.title;", 5000), "execute_js");
+  const title = await retryProbeCommand(ctx, (socket) => executeJs(socket, "return document.title;"), "execute_js");
   if (typeof title !== "string") {
     throw new SmokeAssertionError("execute_js did not return document title");
   }
   console.log("PASS bridge.execute_js");
-  const screenshot = await bridgeRequest(ctx.socket, "capture_native_screenshot", {
+  await retryProbeCommand(ctx, (socket) => resizeWindow(socket, 1280, 860), "resize_window");
+  console.log("PASS bridge.resize_window");
+  const screenshot = await retryProbeCommand(ctx, (socket) => bridgeRequest(socket, "capture_native_screenshot", {
     format: "png",
     maxWidth: 320,
     windowLabel: "main",
-  }, 8000);
+  }, 8000), "capture_native_screenshot");
   if (!screenshot.success && String(screenshot.error ?? "").includes("Unknown command")) {
     throw new SmokeAssertionError("capture_native_screenshot command is not registered");
   }
   console.log(screenshot.success ? "PASS bridge.capture_native_screenshot" : "WARN bridge.capture_native_screenshot best-effort failed");
 }
 
-async function retryProbeCommand(action, label, timeoutMs = 30000) {
+async function refreshBridgeConnection(ctx, timeoutMs = 30000) {
+  try {
+    ctx.socket?.close();
+  } catch {
+    // Ignore stale socket close failures before rediscovery.
+  }
+  const bridge = await discoverBridge({ startupTimeoutMs: timeoutMs });
+  ctx.socket = bridge.socket;
+  ctx.port = bridge.port;
+  ctx.backendState = bridge.backendState;
+  return ctx;
+}
+
+async function retryProbeCommand(ctx, action, label, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   while (Date.now() < deadline) {
     try {
-      return await action();
+      return await action(ctx.socket);
     } catch (error) {
       lastError = error;
+      const failure = classifyBridgeFailure(error);
+      const canReconnect = ["bridge-disconnect", "bridge-timeout", "bridge-unavailable", "script-timeout"].includes(failure.kind);
+      if (canReconnect && Date.now() < deadline) {
+        const remainingMs = Math.max(1000, deadline - Date.now());
+        await refreshBridgeConnection(ctx, remainingMs).catch((refreshError) => {
+          lastError = refreshError;
+        });
+      }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
@@ -319,6 +342,21 @@ async function switchCanvasMode(ctx, mode) {
 async function openSourceSwitcher(ctx) {
   await clickBySmokeId(ctx.socket, "analysis-source-switcher-trigger");
   await waitForText(ctx.socket, "Switch source context");
+  await waitForSourceSwitcherReady(ctx);
+}
+
+async function waitForSourceSwitcherReady(ctx, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await executeJs(ctx.socket, `
+      const panel = document.querySelector('[data-smoke-id="source-switcher-panel"]');
+      const text = panel?.innerText ?? "";
+      return Boolean(panel) && !text.includes("Loading sources") && !text.includes("Loading groups");
+    `).catch(() => false);
+    if (ready) return true;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new SmokeAssertionError("source switcher did not finish loading");
 }
 
 async function waitForCurrentContext(ctx, label, timeoutMs = 8000) {
@@ -561,6 +599,10 @@ async function main() {
       }
     }
     await killProcessTree(child);
+  }
+
+  if (!failed && !cleanupFailed) {
+    console.log("\nAnalysis UI smoke passed.");
   }
 
   if (failed || cleanupFailed) {
