@@ -64,7 +64,6 @@ Acceptance:
 
 Priority: medium.
 
-- [ ] add historical search/filtering by source, source group, provider, profile, model, template, and date
 - [ ] consider UI affordances for missing legacy/capture failed saved-run states
 
 Acceptance:

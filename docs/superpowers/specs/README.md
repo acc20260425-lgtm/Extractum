@@ -7,7 +7,7 @@ Specs for shipped or superseded work should move to
 
 Active specs:
 
-- `2026-05-30-saved-runs-backend-narrowing-design.md`: make existing saved-run filters narrow backend history before limit.
+- None currently.
 
 Recently shipped or superseded specs are archived under
 `docs/superpowers/archive/specs/`.
