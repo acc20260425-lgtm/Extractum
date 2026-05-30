@@ -78,7 +78,7 @@ Modify:
 - Create: `src/lib/source-browser-model.ts`
 - Create: `src/lib/source-browser-model.test.ts`
 
-- [ ] **Step 1: Write the failing tab-model tests**
+- [x] **Step 1: Write the failing tab-model tests**
 
 Add `src/lib/source-browser-model.test.ts`:
 
@@ -152,13 +152,13 @@ describe("source browser model", () => {
 });
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run: `npm run test -- src/lib/source-browser-model.test.ts`
 
 Expected: FAIL because `src/lib/source-browser-model.ts` does not exist.
 
-- [ ] **Step 3: Implement the minimal tab model**
+- [x] **Step 3: Implement the minimal tab model**
 
 Create `src/lib/source-browser-model.ts`:
 
@@ -219,13 +219,13 @@ export function reconcileSourceBrowserTab(
 }
 ```
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
 Run: `npm run test -- src/lib/source-browser-model.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Slice 1 model**
+- [x] **Step 5: Commit Slice 1 model**
 
 ```bash
 git add src/lib/source-browser-model.ts src/lib/source-browser-model.test.ts
