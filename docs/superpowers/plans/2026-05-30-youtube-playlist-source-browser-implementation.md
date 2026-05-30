@@ -964,7 +964,7 @@ If `youtube-playlist-reader.svelte` was deleted with `git rm`, the `git add` com
 **Files:**
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add contract expectations for playlist metadata and empty copy**
+- [x] **Step 1: Add contract expectations for playlist metadata and empty copy**
 
 In `src/lib/analysis-source-readers.test.ts`, extend the metadata and items tests:
 
@@ -1002,7 +1002,7 @@ Add shell expectations:
   });
 ```
 
-- [ ] **Step 2: Run failing contract tests**
+- [x] **Step 2: Run failing contract tests**
 
 Run:
 

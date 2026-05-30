@@ -235,6 +235,7 @@ describe("analysis source readers", () => {
     expect(universalItemsViewSource).toContain("All");
     expect(universalItemsViewSource).toContain("Load more items");
     expect(universalItemsViewSource).toContain("Unknown item kind");
+    expect(universalItemsViewSource).toContain("emptyDescription");
   });
 
   it("renders YouTube comments as a loaded-window browser", () => {
@@ -251,9 +252,19 @@ describe("analysis source readers", () => {
     expect(sourceMetadataViewSource).toContain("Source state");
     expect(sourceMetadataViewSource).toContain("Technical");
     expect(sourceMetadataViewSource).toContain("<RawJsonPanel");
+    expect(sourceMetadataViewSource).toContain("youtubePlaylistDetail");
+    expect(sourceMetadataViewSource).toContain("Playlist ID");
+    expect(sourceMetadataViewSource).toContain("Linked videos");
+    expect(sourceMetadataViewSource).not.toContain("items.raw_data_zstd");
     expect(rawJsonPanelSource).toContain("Show raw JSON");
     expect(rawJsonPanelSource).toContain("Copy");
     expect(rawJsonPanelSource).toContain("Large payload");
+  });
+
+  it("passes playlist detail into metadata and playlist-specific empty copy into Items", () => {
+    expect(sourceBrowserShellSource).toContain("youtubePlaylistDetail={youtubePlaylistDetail}");
+    expect(sourceBrowserShellSource).toContain("Playlist videos live in the Videos tab");
+    expect(sourceBrowserShellSource).toContain("emptyDescription=");
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {
