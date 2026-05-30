@@ -324,7 +324,7 @@ Expected: FAIL because `youtube-source-policy.ts` and `youtube-playlist-videos-v
 - Create: `src/lib/youtube-source-policy.ts`
 - Create: `src/lib/components/analysis/youtube-playlist-videos-view.svelte`
 
-- [ ] **Step 1: Add a typed YouTube retry policy helper**
+- [x] **Step 1: Add a typed YouTube retry policy helper**
 
 Create `src/lib/youtube-source-policy.ts`:
 
@@ -342,7 +342,7 @@ export function isRetryableYoutubeAvailabilityStatus(status: string | null | und
 }
 ```
 
-- [ ] **Step 2: Add the playlist videos leaf component**
+- [x] **Step 2: Add the playlist videos leaf component**
 
 Create `src/lib/components/analysis/youtube-playlist-videos-view.svelte`:
 
@@ -661,7 +661,7 @@ Create `src/lib/components/analysis/youtube-playlist-videos-view.svelte`:
 </style>
 ```
 
-- [ ] **Step 3: Run the reader contract test**
+- [x] **Step 3: Run the reader contract test**
 
 Run:
 
