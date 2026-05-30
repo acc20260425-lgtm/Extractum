@@ -110,6 +110,19 @@ Implementation must make this behavior explicit in model tests for:
 The `Videos` tab must not render detailed job cards. Those belong in
 `Activity`.
 
+`Videos` consumes only already-loaded playlist detail from route state. The
+leaf does not initiate data loading on mount and does not import source APIs.
+It can only request work through callback props.
+
+Playlist-level retry and row-level retry are separate actions:
+
+- `Retry failed` calls the playlist-level failed-video retry callback.
+- row `Retry this video` calls the linked-video retry callback with that row's
+  video source id.
+
+`Open video source` changes the selected source through the route callback. It
+must not open a nested video browser inside the playlist browser.
+
 ### Items Tab
 
 `Items` uses `UniversalItemsView` and the route-owned `list_source_items`
@@ -202,6 +215,15 @@ Data ownership:
 - shell and leaf views trigger work through existing callbacks;
 - no leaf view imports Tauri API wrappers or calls `invoke`.
 
+Callback naming in the implementation plan should keep playlist and linked
+video operations distinct:
+
+- playlist-level sync: `onSyncPlaylist`;
+- playlist-level retry failed: `onRetryFailedPlaylistVideos`;
+- row-level linked-video sync: `onSyncPlaylistVideo`;
+- row-level linked-video retry: `onRetryPlaylistVideo`;
+- open linked video source: `onOpenSource`.
+
 ## Data Flow
 
 1. The user selects a live single YouTube playlist source.
@@ -213,6 +235,9 @@ Data ownership:
 6. `Activity` renders the same source jobs through `SourceActivityView`.
 7. Opening a linked video source changes the selected source and enters the
    already shipped YouTube video browser.
+
+The playlist browser never nests the YouTube video browser. Video browsing is a
+source selection transition, not an in-place child view.
 
 ## Error And Empty States
 
@@ -240,6 +265,11 @@ Frontend contract tests should assert:
   the transition matrix above;
 - `SourceBrowserShell` renders `YoutubePlaylistVideosView` for `videos`;
 - `YoutubePlaylistVideosView` does not render detailed source activity cards;
+- `YoutubePlaylistVideosView` consumes playlist detail only through props and
+  imports no `$lib/api/` modules;
+- playlist-level retry and row-level retry use distinct callback props;
+- `Open video source` is wired to the existing route source-selection callback
+  and no nested video detail view is introduced;
 - `SourceMetadataView` renders playlist metadata from the playlist detail DTO
   and does not read item raw payloads;
 - `UniversalItemsView` can show playlist-specific empty guidance without
