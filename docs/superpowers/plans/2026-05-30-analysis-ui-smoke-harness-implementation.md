@@ -22,6 +22,8 @@
 - Bridge probe contract: before running UI scenarios, probe `get_backend_state`, `resize_window`, `execute_js`, and screenshot command dispatch. Screenshot capture is best-effort after dispatch is proven.
 - Probe-only safety contract: `--probe-only` must not seed, verify, clean, or navigate fixture data; fixture cleanup runs only after fixture lifecycle has started.
 - UI click contract: mode switches and row actions must be scoped by smoke id or row text. Do not use broad `clickByText("Open")`, `clickByText("Source")`, or `clickByText("Report")` for navigation-critical steps.
+- Source/group selection contract: after clicking a switcher result, wait for `data-smoke-id="analysis-current-context"` to contain the selected label; do not treat a label that is still visible inside the switcher as completed navigation.
+- Fixture DOM presence contract: seed verification checks the known expected fixture labels against body text; do not parse fixture labels from `innerText` with a broad regex.
 - Cleanup verification contract: fixture cleanup is verified by debug fixture command summaries, not by stale DOM labels after same-route navigation.
 - Source hook contract: run snapshot headers are identified by an explicit `smokeId` prop from `ReportSourceSurface`, not by comparing visible title copy.
 - Raw-source tests should verify semantic hook ownership with stable tokens or regex-style checks; avoid exact-line assertions for formatted Svelte attributes.
@@ -247,6 +249,9 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("assertOpenedRunNotebookLmExportContract");
     expect(smokeScriptSource).toContain('clickRowActionByText(ctx.socket, "run-companion-runs-panel"');
     expect(smokeScriptSource).toContain("assertEmptyFixtureSummary(verificationSummary)");
+    expect(smokeScriptSource).toContain("expected.filter((label) => text.includes(label))");
+    expect(smokeScriptSource).toContain("waitForCurrentContext");
+    expect(smokeScriptSource).toContain("analysis-current-context");
     expect(smokeScriptSource).toContain("runSmokeSteps");
     expect(smokeScriptSource).toContain("finally");
     expect(smokeScriptSource).toContain("fixturesTouched");
@@ -1620,10 +1625,11 @@ async function invokeFixtureCommand(ctx, command) {
 }
 
 async function fixtureLabelsFromDom(ctx) {
+  const expected = Object.values(fixtureLabels);
   return executeJs(ctx.socket, `
-    return Array.from(document.body.innerText.matchAll(/__analysis_redesign_fixture__[^\\n]*/g))
-      .map((match) => match[0].trim())
-      .filter((value, index, all) => all.indexOf(value) === index);
+    const text = document.body.innerText;
+    const expected = ${JSON.stringify(expected)};
+    return expected.filter((label) => text.includes(label));
   `, 5000);
 }
 
@@ -1807,13 +1813,26 @@ async function openSourceSwitcher(ctx) {
   await waitForText(ctx.socket, "Switch source context");
 }
 
+async function waitForCurrentContext(ctx, label, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const selected = await executeJs(ctx.socket, `
+      const current = document.querySelector('[data-smoke-id="analysis-current-context"]');
+      return Boolean(current?.innerText.includes(${JSON.stringify(label)}));
+    `).catch(() => false);
+    if (selected) return true;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new SmokeAssertionError(`current context did not switch to ${label}`);
+}
+
 async function selectSource(ctx, label) {
   await closeTransientUi(ctx);
   await openSourceSwitcher(ctx);
   await fillByLabel(ctx.socket, "Search sources or groups", label);
   await waitForText(ctx.socket, label);
   await clickByTextWithinSmokeId(ctx.socket, "source-switcher-panel", label);
-  await waitForText(ctx.socket, label);
+  await waitForCurrentContext(ctx, label);
 }
 
 async function selectGroup(ctx, label) {
@@ -1822,7 +1841,7 @@ async function selectGroup(ctx, label) {
   await fillByLabel(ctx.socket, "Search sources or groups", label);
   await waitForText(ctx.socket, label);
   await clickByTextWithinSmokeId(ctx.socket, "source-switcher-panel", label);
-  await waitForText(ctx.socket, label);
+  await waitForCurrentContext(ctx, label);
 }
 
 async function openRunsTab(ctx) {
