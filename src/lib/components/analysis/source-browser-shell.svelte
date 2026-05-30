@@ -4,6 +4,7 @@
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
+  import UniversalItemsView from "$lib/components/analysis/universal-items-view.svelte";
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import {
     reconcileSourceBrowserTab,
@@ -229,6 +230,14 @@
       onStartTakeoutImport={() => onStartTakeoutImport(source.id)}
       onStartMigratedHistoryImport={() => onStartMigratedHistoryImport(source.id)}
       onCancelSourceJob={onCancelSourceJob}
+    />
+  {:else if activeTab === "items"}
+    <UniversalItemsView
+      items={sourceItems}
+      loading={loadingItems}
+      hasMore={sourceItemsHasMore}
+      {formatTimestamp}
+      onLoadMore={onLoadMoreSourceItems}
     />
   {:else}
     <StatusMessage tone="muted">

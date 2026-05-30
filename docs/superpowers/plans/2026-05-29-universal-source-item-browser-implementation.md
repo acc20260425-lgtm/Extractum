@@ -771,7 +771,7 @@ Expected: PASS.
 - Modify: `src/lib/components/analysis/source-browser-shell.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Write failing component contract tests**
+- [x] **Step 1: Write failing component contract tests**
 
 Add to `src/lib/analysis-source-readers.test.ts`:
 
@@ -790,13 +790,13 @@ it("renders universal Items as a loaded-window browser", () => {
 });
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run: `npm run test -- src/lib/analysis-source-readers.test.ts`
 
 Expected: FAIL because the view does not exist.
 
-- [ ] **Step 3: Implement `UniversalItemsView`**
+- [x] **Step 3: Implement `UniversalItemsView`**
 
 The component receives:
 
@@ -810,7 +810,7 @@ onLoadMore: () => void | Promise<void>;
 
 It owns local loaded-window UI state: search string, selected kind chip, sort mode. It must label the input `Search loaded items`, derive chips from `items`, render a generic card for unknown kinds, and call `onLoadMore` for pagination.
 
-- [ ] **Step 4: Wire Items tab**
+- [x] **Step 4: Wire Items tab**
 
 Modify `source-browser-shell.svelte`:
 
@@ -825,7 +825,7 @@ Modify `source-browser-shell.svelte`:
   />
 ```
 
-- [ ] **Step 5: Run Slice 3 tests**
+- [x] **Step 5: Run Slice 3 tests**
 
 Run:
 
@@ -836,7 +836,7 @@ npm run check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 6: Commit Slice 3**
+- [x] **Step 6: Commit Slice 3**
 
 ```bash
 git add src/lib/source-browser-model.ts src/lib/source-browser-model.test.ts src/lib/components/analysis/universal-items-view.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/analysis-source-readers.test.ts

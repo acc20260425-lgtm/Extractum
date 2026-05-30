@@ -6,6 +6,7 @@ import sourceReaderHeaderSource from "./components/analysis/source-reader-header
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 import telegramMediaCardSource from "./components/analysis/telegram-media-card.svelte?raw";
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
+import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import youtubePlaylistSource from "./components/analysis/youtube-playlist-reader.svelte?raw";
 import youtubeSourceActivitySource from "./components/analysis/youtube-source-activity.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
@@ -206,6 +207,13 @@ describe("analysis source readers", () => {
     expect(sourceActivityViewSource).toContain("onStartMigratedHistoryImport");
     expect(sourceActivityViewSource).toContain("Migrated history");
     expect(sourceActivityViewSource).toContain("Takeout");
+  });
+
+  it("renders universal Items as a loaded-window browser", () => {
+    expect(universalItemsViewSource).toContain("Search loaded items");
+    expect(universalItemsViewSource).toContain("All");
+    expect(universalItemsViewSource).toContain("Load more items");
+    expect(universalItemsViewSource).toContain("Unknown item kind");
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {
