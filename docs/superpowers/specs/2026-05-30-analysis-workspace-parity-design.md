@@ -66,8 +66,11 @@ contract is split across setup and opened-run paths.
 
 ## UX Contract
 
-`ReportCanvas` renders a compact `Workspace tools` area near the canvas header.
-The tools area is shown for both setup and opened-run states.
+`ReportCanvas` renders a compact `Workspace tools` area below the canvas
+header and `Report` / `Source` mode tabs, and above the setup, report, or
+source body. The tools area is shown for both setup and opened-run states.
+Editor drawers render immediately below `Workspace tools` so setup and
+opened-run states do not get different visual placement.
 
 `Edit templates`:
 
@@ -87,14 +90,20 @@ The tools area is shown for both setup and opened-run states.
 
 - is enabled for a selected single source when the existing export dialog can
   receive a non-null `currentSource`;
+- is enabled only when `currentSource` is non-null at the canvas level;
+- does not become enabled from opened saved-run metadata alone;
 - uses the existing `onOpenNotebookLmExport` callback and dialog state;
 - reflects the existing `exportingNotebookLm` pending state;
 - is visible but disabled for a selected source group;
 - uses a clear disabled reason for source groups:
   `Source-group NotebookLM export is not implemented yet.`
 
-When there is no eligible source or source-group workspace selection, the
-export button is hidden to avoid inactive noise.
+When an opened saved run does not restore a live `currentSource`, such as after
+source deletion or missing source context, the export action stays hidden unless
+`currentGroup` is present. If `currentGroup` is present, the source-group
+disabled affordance is shown instead. When there is no eligible source or
+source-group workspace selection, the export button is hidden to avoid inactive
+noise.
 
 ## Component Design
 
@@ -106,6 +115,25 @@ Responsibilities:
 - receive explicit availability state and disabled reasons;
 - emit callbacks for opening export, templates, and groups;
 - stay presentational and avoid importing API modules.
+
+The component contract should be explicit and route-state agnostic:
+
+```ts
+type ReportWorkspaceToolsProps = {
+  showNotebookLmExport: boolean;
+  canExportNotebookLm: boolean;
+  exportDisabledReason: string | null;
+  exportingNotebookLm: boolean;
+  templateEditorOpen: boolean;
+  groupEditorOpen: boolean;
+  onOpenNotebookLmExport: () => void;
+  onToggleTemplateEditor: () => void;
+  onToggleGroupEditor: () => void;
+};
+```
+
+The component must not inspect `currentSource`, `currentGroup`, `currentRun`,
+`workspaceSelection`, or export dialog state directly.
 
 `ReportCanvas` remains the owner of drawer open state:
 
@@ -122,6 +150,23 @@ showing setup, an opened report, or source material.
 - `TemplateEditor`;
 - `SourceGroupEditor`;
 - setup secondary action buttons for editor drawers.
+
+Remove only editor drawer state and editor-only callbacks from
+`ReportSetupPanel`. Keep setup controls, `Run report`, `Sync source`, and all
+report configuration props. `selectedTemplate` remains because setup preflight
+copy uses it.
+
+Props and callbacks that should leave `ReportSetupPanel`:
+
+- `templateName`, `templateBody`, `savingTemplate`, `deletingTemplate`;
+- `selectedGroupEditorId`, `groups`, `groupName`, `groupSourceType`,
+  `groupMemberSourceIds`, `selectedGroup`, `savingGroup`, `deletingGroup`,
+  `sourceMetricsList`;
+- `isGroupSourceSelected`;
+- `onSaveTemplateCopy`, `onSaveTemplateChanges`, `onDeleteTemplate`;
+- `onChangeSelectedGroupId`, `onChangeGroupName`, `onChangeGroupSourceType`,
+  `onToggleGroupSource`, `onStartNewGroup`, `onSaveGroupCopy`,
+  `onSaveGroupChanges`, `onDeleteGroup`.
 
 `ReportSetupPanel` keeps:
 
@@ -141,7 +186,7 @@ same props it receives today.
 
 `ReportCanvas` derives workspace-tool availability from existing props:
 
-- single-source export enabled when `currentSource` is non-null;
+- single-source export enabled only when `currentSource` is non-null;
 - source-group export disabled when `currentSource` is null and `currentGroup`
   is non-null;
 - export hidden when neither a source nor a group is selected;
@@ -150,6 +195,7 @@ same props it receives today.
 `NotebookLmExportDialog` stays in `ReportCanvas` and continues receiving
 `source={currentSource}`. Because source-group export is disabled, the dialog is
 not opened for groups and does not need a new source-group contract.
+`NotebookLmExportDialog` remains rendered once at canvas level.
 
 ## Disabled And Error States
 
@@ -157,6 +203,10 @@ not opened for groups and does not need a new source-group contract.
   disabled and shows the existing exporting label.
 - For source groups, the export button is disabled with the source-group
   not-implemented reason.
+- The source-group disabled reason is visible as muted helper text in
+  `ReportWorkspaceTools` and connected to the disabled export button with
+  `aria-describedby`. A `title` attribute may duplicate the same reason, but
+  visible text is the testable and accessible source of truth.
 - Template and group editor save/delete errors continue to flow through the
   existing route status behavior.
 - If no valid workspace selection exists, template and group tools remain
@@ -179,7 +229,11 @@ Frontend contract tests should cover:
   opened-run states;
 - `ReportSetupPanel` no longer imports `TemplateEditor` or
   `SourceGroupEditor`;
-- `ReportSetupPanel` still renders `Run report` and setup controls.
+- `ReportWorkspaceTools` imports no API modules and does not call Tauri
+  `invoke`;
+- `NotebookLmExportDialog` remains rendered once at `ReportCanvas` level;
+- `ReportSetupPanel` still renders `Run report` and setup controls;
+- `ReportSetupPanel` still exposes `Sync source` for single-source setup.
 
 Manual smoke should cover:
 
