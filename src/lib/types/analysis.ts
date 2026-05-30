@@ -80,6 +80,13 @@ export interface ListAnalysisRunsInput {
   sourceId: number | null;
   sourceGroupId: number | null;
   limit: number;
+  query?: string;
+  status?: "all" | "completed" | "failed" | "cancelled" | "queued_running";
+  provider?: string;
+  model?: string;
+  template?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface AnalysisRunMessageCursor {

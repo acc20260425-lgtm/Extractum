@@ -35,11 +35,25 @@ describe("analysis run api wrappers", () => {
       sourceId: 7,
       sourceGroupId: null,
       limit: 50,
+      query: "older run",
+      status: "completed",
+      provider: "gemini",
+      model: "flash",
+      template: "digest",
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-30",
     })).resolves.toEqual([]);
     expect(invokeMock).toHaveBeenLastCalledWith("list_analysis_runs", {
       sourceId: 7,
       sourceGroupId: null,
       limit: 50,
+      query: "older run",
+      status: "completed",
+      provider: "gemini",
+      model: "flash",
+      template: "digest",
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-30",
     });
 
     invokeMock.mockResolvedValueOnce([]);
