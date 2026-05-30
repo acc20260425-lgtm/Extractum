@@ -48,7 +48,7 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-explicit-subject-contract-implementation.md`
 
-- [ ] **Step 1: Create the feature branch**
+- [x] **Step 1: Create the feature branch**
 
 Run:
 
@@ -58,7 +58,7 @@ git switch -c source-browser-explicit-subject-contract
 
 Expected: branch changes from `main` to `source-browser-explicit-subject-contract`.
 
-- [ ] **Step 2: Audit `SourceBrowserShell` call sites and unrelated `source` props**
+- [x] **Step 2: Audit `SourceBrowserShell` call sites and unrelated `source` props**
 
 Run:
 
@@ -80,7 +80,7 @@ Unrelated source props:
 
 Stop condition: if any production `SourceBrowserShell` call lacks `subject=`, stop and update the plan before deleting the fallback.
 
-- [ ] **Step 3: Audit current shell fallback and `Source` type usage**
+- [x] **Step 3: Audit current shell fallback and `Source` type usage**
 
 Run:
 
@@ -99,9 +99,9 @@ Expected current facts:
 
 Do not delete the `Source` import just because the top-level `source` prop is removed. `npm.cmd run check` is the authority for whether the import is still needed.
 
-- [ ] **Step 4: Record the actual audit result in this plan**
+- [x] **Step 4: Record the actual audit result in this plan**
 
-Edit this section after running Steps 2 and 3:
+Recorded after running Steps 2 and 3:
 
 ```text
 Actual audit result:
@@ -112,7 +112,7 @@ Actual audit result:
 - Source import after cleanup: expected to remain because SourceBrowserData uses Source.
 ```
 
-- [ ] **Step 5: Commit preflight**
+- [x] **Step 5: Commit preflight**
 
 Run:
 
