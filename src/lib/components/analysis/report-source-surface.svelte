@@ -3,9 +3,6 @@
   import TakeoutRecoveryNotice from "$lib/components/analysis/takeout-recovery-notice.svelte";
   import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";
   import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
-  import SourceGroupReader from "$lib/components/analysis/source-group-reader.svelte";
-  import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
-  import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import {
     canReturnToRunSnapshot,
     sourceBasisDescription,
@@ -25,6 +22,7 @@
     sourceItemToReaderItem,
   } from "$lib/source-reader-model";
   import {
+    deriveRunSnapshotBrowserKind,
     sourceBrowserShellAppliesToSource,
     sourceBrowserShellAppliesToSubject,
   } from "$lib/source-browser-model";
@@ -217,6 +215,39 @@
   const snapshotSourceOptions = $derived.by(() =>
     sourceFilterOptionsFromReaderItems(allSnapshotReaderItems),
   );
+  const snapshotSourceType = $derived.by(() => {
+    if (currentSource) return currentSource.sourceType;
+    const values = new Set(runSnapshotMessages.map((message) => message.source_type).filter(Boolean));
+    return values.size === 1 ? Array.from(values)[0] ?? null : null;
+  });
+  const snapshotSourceSubtype = $derived.by(() => {
+    if (currentSource) return currentSource.sourceSubtype;
+    const values = new Set(runSnapshotMessages.map((message) => message.source_subtype).filter(Boolean));
+    return values.size === 1 ? Array.from(values)[0] ?? null : null;
+  });
+  const runSnapshotBrowserKind = $derived(
+    deriveRunSnapshotBrowserKind({
+      scopeType: currentRun?.scope_type ?? null,
+      sourceType: snapshotSourceType,
+      sourceSubtype: snapshotSourceSubtype,
+      snapshotReaderItems: allSnapshotReaderItems,
+    }),
+  );
+  const runSnapshotSubject = $derived(
+    currentRun && snapshotAvailability === "available"
+      ? {
+          kind: "run_snapshot" as const,
+          snapshot: {
+            runId: currentRun.id,
+            scopeType: currentRun.scope_type === "source_group" ? "source_group" as const : "source" as const,
+            scopeLabel: currentRun.scope_label,
+            readerKind: runSnapshotBrowserKind,
+            sourceType: snapshotBrowserSourceType(snapshotSourceType),
+            sourceSubtype: snapshotBrowserSourceSubtype(snapshotSourceSubtype),
+          },
+        }
+      : null,
+  );
   const liveGroupSourceOptions = $derived.by(() =>
     currentGroup
       ? sourceFilterOptionsFromGroupMembers(currentGroup.members)
@@ -250,6 +281,28 @@
     return member?.source_title ?? `Source ${item.sourceId}`;
   }
 
+  function snapshotBrowserSourceType(value: string | null): Source["sourceType"] | null {
+    if (value === "telegram" || value === "youtube" || value === "rss" || value === "forum") return value;
+    return null;
+  }
+
+  function snapshotBrowserSourceSubtype(value: string | null): Source["sourceSubtype"] | null {
+    if (
+      value === "channel"
+      || value === "supergroup"
+      || value === "group"
+      || value === "video"
+      || value === "playlist"
+      || value === "feed"
+      || value === "thread"
+      || value === "board"
+      || value === "site"
+    ) {
+      return value;
+    }
+    return null;
+  }
+
 </script>
 
 <section class="report-source-surface" data-surface={canvasSurface}>
@@ -270,44 +323,66 @@
         onChangeSelectedSourceId={onChangeSelectedSnapshotSourceId}
       />
 
-      {#if currentRun?.scope_type === "source_group"}
-        <SourceGroupReader
-          items={snapshotReaderItems}
-          selectedGroupSourceId={selectedSnapshotSourceId}
-          loading={loadingRunSnapshotMessages}
-          hasMoreAll={hasMoreRunSnapshotMessages}
-          loadMoreAllLabel="Load older snapshot messages"
-          youtubeDetailsBySource={{}}
-          {formatTimestamp}
-          onLoadMoreSource={() => onLoadMoreRunSnapshotMessages()}
-          onLoadMoreAll={onLoadMoreRunSnapshotMessages}
-        />
-      {:else if snapshotReaderItems.some((item) => item.kind === "youtube_transcript")}
-        <YoutubeTranscriptReader
-          detail={null}
-          segments={[]}
-          snapshotItems={snapshotReaderItems}
-          loading={loadingRunSnapshotMessages}
-          hasMore={hasMoreRunSnapshotMessages}
-          transcriptSearch=""
-          showSyncActions={false}
-          sourceTitle={displayScopeTitle}
+      {#if runSnapshotSubject && sourceBrowserShellAppliesToSubject(runSnapshotSubject)}
+        <SourceBrowserShell
+          subject={runSnapshotSubject}
+          source={null}
+          groupBrowserData={null}
+          snapshotBrowserData={{
+            run: currentRun,
+            readerItems: snapshotReaderItems,
+            selectedSourceId: selectedSnapshotSourceId,
+            sourceOptions: snapshotSourceOptions,
+            loading: loadingRunSnapshotMessages,
+            hasMore: hasMoreRunSnapshotMessages,
+            availability: snapshotAvailability,
+            error: runSnapshotError,
+            selectedTraceRef,
+            onLoadMore: onLoadMoreRunSnapshotMessages,
+          }}
+          liveReaderItems={[]}
+          takeoutRecovery={null}
+          sourceItems={[]}
+          sourceRouteError={null}
+          sourceItemsHasMore={false}
+          loadingItems={loadingRunSnapshotMessages}
+          sourceTopics={[]}
+          loadingSourceTopics={false}
+          selectedTopicKey="__all_topics__"
+          showTopicSelector={false}
+          youtubeVideoDetail={null}
+          youtubePlaylistDetail={null}
+          youtubeTranscriptSegments={[]}
+          youtubeTranscriptSearch=""
+          youtubeTranscriptHasMore={false}
+          loadingYoutubeTranscriptSegments={false}
+          loadingYoutubeDetail={false}
+          sourceJobs={[]}
           {selectedTraceRef}
+          {telegramHistoryScope}
+          currentSourceContentLabel="Run snapshot material"
+          sourceSyncDisabledReason={() => null}
           {formatTimestamp}
-          onChangeTranscriptSearch={() => {}}
-          onLoadMore={onLoadMoreRunSnapshotMessages}
-          onSyncTranscript={() => {}}
-          onSyncMetadata={() => {}}
+          {onSyncSource}
+          onLoadMoreSourceItems={onLoadMoreRunSnapshotMessages}
+          {onChangeSelectedTopicKey}
+          {onChangeTelegramHistoryScope}
+          {onChangeTranscriptSearch}
+          {onLoadMoreYoutubeTranscriptSegments}
+          {onOpenSource}
+          {onSyncYoutubeMetadata}
+          {onSyncYoutubeTranscript}
+          {onSyncYoutubeComments}
+          {onSyncYoutubePlaylist}
+          onRetryFailedYoutubePlaylistVideos={onRetryFailedYoutubePlaylistVideos}
+          {onSyncYoutubePlaylistVideo}
+          {onRetryYoutubePlaylistVideo}
+          {onStartTakeoutImport}
+          {onStartMigratedHistoryImport}
+          onCancelSourceJob={onCancelSourceJob}
         />
       {:else}
-        <TelegramTimelineReader
-          items={snapshotReaderItems}
-          loading={loadingRunSnapshotMessages}
-          hasMore={hasMoreRunSnapshotMessages}
-          ariaLabel={currentSource?.sourceType === "telegram" ? "Telegram source timeline" : "Source material timeline"}
-          {formatTimestamp}
-          onLoadMore={onLoadMoreRunSnapshotMessages}
-        />
+        <StatusMessage tone="muted">This run snapshot is not browsable yet.</StatusMessage>
       {/if}
     {:else}
       <SourceReaderHeader

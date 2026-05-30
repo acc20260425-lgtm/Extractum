@@ -6,6 +6,9 @@
   import SourceGroupActivityView from "$lib/components/analysis/source-group-activity-view.svelte";
   import SourceGroupMetadataView from "$lib/components/analysis/source-group-metadata-view.svelte";
   import SourceGroupSourcesView from "$lib/components/analysis/source-group-sources-view.svelte";
+  import RunSnapshotMetadataView from "$lib/components/analysis/run-snapshot-metadata-view.svelte";
+  import SnapshotGroupSourcesView from "$lib/components/analysis/snapshot-group-sources-view.svelte";
+  import SnapshotItemsView from "$lib/components/analysis/snapshot-items-view.svelte";
   import SourceMetadataView from "$lib/components/analysis/source-metadata-view.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import UniversalItemsView from "$lib/components/analysis/universal-items-view.svelte";
@@ -18,7 +21,9 @@
     type SourceBrowserSubject,
     type SourceBrowserTabId,
   } from "$lib/source-browser-model";
-  import type { SourceReaderItem } from "$lib/source-reader-model";
+  import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
+  import type { SourceFilterOption, SourceReaderItem } from "$lib/source-reader-model";
+  import type { AnalysisRunDetail } from "$lib/types/analysis";
   import type {
     Source,
     SourceForumTopic,
@@ -40,10 +45,24 @@
     youtubeDetailsBySource: Record<number, YoutubeVideoDetail | null>;
   };
 
+  type SnapshotBrowserData = {
+    run: AnalysisRunDetail;
+    readerItems: SourceReaderItem[];
+    selectedSourceId: number | null;
+    sourceOptions: SourceFilterOption[];
+    loading: boolean;
+    hasMore: boolean;
+    availability: RunSnapshotAvailability;
+    error: string;
+    selectedTraceRef: string | null;
+    onLoadMore: () => void | Promise<void>;
+  };
+
   type Props = {
     subject?: SourceBrowserSubject | null;
     source: Source | null;
     groupBrowserData?: SourceGroupBrowserData | null;
+    snapshotBrowserData?: SnapshotBrowserData | null;
     liveReaderItems: SourceReaderItem[];
     takeoutRecovery: TakeoutImportRecoveryState | null;
     sourceItems: SourceItem[];
@@ -90,6 +109,7 @@
     subject: explicitSubject = null,
     source,
     groupBrowserData = null,
+    snapshotBrowserData = null,
     liveReaderItems,
     takeoutRecovery,
     sourceItems,
@@ -138,12 +158,16 @@
   const tabs = $derived(subject ? sourceBrowserTabsForSubject(subject) : []);
   const sourceSubject = $derived(subject && subject.kind === "source" ? subject.source : null);
   const groupSubject = $derived(subject && subject.kind === "source_group" ? subject.group : null);
+  const snapshotSubject = $derived(subject && subject.kind === "run_snapshot" ? subject.snapshot : null);
   const groupData = $derived(subject && subject.kind === "source_group" ? groupBrowserData : null);
+  const snapshotData = $derived(subject && subject.kind === "run_snapshot" ? snapshotBrowserData : null);
   const subjectKey = $derived(
     subject
       ? subject.kind === "source"
         ? `source:${subject.source.id}`
-        : `source_group:${subject.group.id}`
+        : subject.kind === "source_group"
+          ? `source_group:${subject.group.id}`
+          : `run_snapshot:${subject.snapshot.runId}:${subject.snapshot.readerKind}`
       : null,
   );
   const itemsForActiveSubject = $derived(groupData?.sourceItems ?? sourceItems);
@@ -217,7 +241,62 @@
     {/each}
   </nav>
 
-  {#if activeTab === "sources" && groupSubject}
+  {#if activeTab === "sources" && snapshotSubject?.readerKind === "source_group"}
+    <SnapshotGroupSourcesView
+      items={snapshotData?.readerItems ?? []}
+      selectedGroupSourceId={snapshotData?.selectedSourceId ?? null}
+      loading={snapshotData?.loading ?? false}
+      hasMore={snapshotData?.hasMore ?? false}
+      selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+      {formatTimestamp}
+      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+    />
+  {:else if activeTab === "items" && subject?.kind === "run_snapshot"}
+    <SnapshotItemsView
+      items={snapshotData?.readerItems ?? []}
+      loading={snapshotData?.loading ?? false}
+      hasMore={snapshotData?.hasMore ?? false}
+      selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+      {formatTimestamp}
+      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+    />
+  {:else if activeTab === "metadata" && snapshotSubject && snapshotData}
+    <RunSnapshotMetadataView
+      run={snapshotData.run}
+      snapshot={snapshotSubject}
+      readerItems={snapshotData.readerItems}
+      sourceOptions={snapshotData.sourceOptions}
+      snapshotAvailability={snapshotData.availability}
+      snapshotError={snapshotData.error}
+      {formatTimestamp}
+    />
+  {:else if activeTab === "timeline" && snapshotSubject?.readerKind === "telegram_timeline"}
+    <TelegramTimelineReader
+      items={snapshotData?.readerItems ?? []}
+      loading={snapshotData?.loading ?? false}
+      hasMore={snapshotData?.hasMore ?? false}
+      ariaLabel="Run snapshot source material timeline"
+      {formatTimestamp}
+      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+    />
+  {:else if activeTab === "transcript" && snapshotSubject?.readerKind === "youtube_transcript"}
+    <YoutubeTranscriptReader
+      detail={null}
+      segments={[]}
+      snapshotItems={snapshotData?.readerItems ?? []}
+      loading={snapshotData?.loading ?? false}
+      hasMore={snapshotData?.hasMore ?? false}
+      transcriptSearch=""
+      showSyncActions={false}
+      sourceTitle={snapshotSubject.scopeLabel}
+      selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+      {formatTimestamp}
+      onChangeTranscriptSearch={() => {}}
+      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+      onSyncTranscript={() => {}}
+      onSyncMetadata={() => {}}
+    />
+  {:else if activeTab === "sources" && groupSubject}
     <SourceGroupSourcesView
       items={groupData?.liveReaderItems ?? []}
       selectedGroupSourceId={groupData?.selectedSourceId ?? null}
@@ -357,7 +436,7 @@
     />
   {:else}
     <StatusMessage tone="muted">
-      {activeTab} source browser tab is disabled in this review slice. Loaded rows: {itemsForActiveSubject.length}.
+      {activeTab} source browser tab is disabled in this review slice. Loaded rows: {snapshotData?.readerItems.length ?? itemsForActiveSubject.length}.
     </StatusMessage>
   {/if}
 </section>

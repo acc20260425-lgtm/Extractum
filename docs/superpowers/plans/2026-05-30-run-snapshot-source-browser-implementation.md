@@ -48,7 +48,7 @@ git switch -c run-snapshot-source-browser
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Confirm the branch and clean tree**
+- [x] **Step 1: Confirm the branch and clean tree**
 
 Run:
 
@@ -58,7 +58,7 @@ git status --short --branch
 
 Expected: branch is `run-snapshot-source-browser`; no modified files except this plan after checkboxes are edited.
 
-- [ ] **Step 2: Inspect current source and snapshot model types**
+- [x] **Step 2: Inspect current source and snapshot model types**
 
 Run:
 
@@ -74,7 +74,7 @@ src/lib/types/analysis.ts: AnalysisRunDetail and AnalysisRunMessage exist.
 src/lib/source-reader-model.ts: SourceReaderItem and SourceFilterOption exist.
 ```
 
-- [ ] **Step 3: Inspect current snapshot branch and live shell props**
+- [x] **Step 3: Inspect current snapshot branch and live shell props**
 
 Run:
 
@@ -90,7 +90,7 @@ report-source-surface.svelte contains runSnapshotMessages, allSnapshotReaderItem
 source-browser-shell.svelte contains live source/group props and SourceActivityView only for live source subjects.
 ```
 
-- [ ] **Step 4: Inspect design status and UI component APIs**
+- [x] **Step 4: Inspect design status and UI component APIs**
 
 Run:
 
@@ -108,7 +108,7 @@ Input.svelte supports ariaLabel and oninput props.
 Select.svelte supports value and onchange props.
 ```
 
-- [ ] **Step 5: Record preflight decisions**
+- [x] **Step 5: Record preflight decisions**
 
 Add this under the Task 0 step list after running the commands:
 
@@ -125,7 +125,18 @@ Preflight decisions:
 - Snapshot leaf controls use the existing UI component APIs: `Button selected` plus `ariaPressed`, `Input ariaLabel/oninput`, and `Select value/onchange`.
 ```
 
-- [ ] **Step 6: Run whitespace and status checks**
+Preflight decisions:
+
+- `RunSnapshotBrowserSubject.sourceType` will use `SourceType | null`.
+- `RunSnapshotBrowserSubject.sourceSubtype` will use `SourceSubtype | null`.
+- `deriveRunSnapshotBrowserKind` will accept string-compatible route inputs so raw `AnalysisRunMessage.source_type` can be used without backend DTO changes.
+- `runSnapshotMessages` is the unfiltered loaded snapshot message window; `allSnapshotReaderItems` is the unfiltered reader-row projection; `snapshotReaderItems` is source-focus filtered.
+- Snapshot available branches will use `allSnapshotReaderItems` for reader-kind derivation, not the source-filtered `snapshotReaderItems`.
+- `SourceReaderHeader` remains outside `SourceBrowserShell`.
+- The design spec status is `approved design, pending implementation plan`; Task 5 Step 4 will replace that exact line.
+- Snapshot leaf controls use the existing UI component APIs: `Button selected` plus `ariaPressed`, `Input ariaLabel/oninput`, and `Select value/onchange`.
+
+- [x] **Step 6: Run whitespace and status checks**
 
 Run:
 
@@ -136,7 +147,7 @@ git status --short --branch
 
 Expected: no whitespace errors; only this plan file is modified.
 
-- [ ] **Step 7: Commit preflight**
+- [x] **Step 7: Commit preflight**
 
 Run:
 
@@ -152,7 +163,7 @@ git commit -m "docs: record run snapshot browser preflight"
 - Modify: `src/lib/source-browser-model.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Add snapshot model test imports**
+- [x] **Step 1: Add snapshot model test imports**
 
 In `src/lib/source-browser-model.test.ts`, add `deriveRunSnapshotBrowserKind` to the existing named import from `./source-browser-model`:
 
@@ -166,7 +177,7 @@ Add this type import near the existing type imports:
 import type { SourceReaderItem } from "./source-reader-model";
 ```
 
-- [ ] **Step 2: Add snapshot fixtures to model tests**
+- [x] **Step 2: Add snapshot fixtures to model tests**
 
 Below the existing `sourceGroup` fixture, add:
 
@@ -222,7 +233,7 @@ function snapshotReaderItem(overrides: Partial<SourceReaderItem> = {}): SourceRe
 }
 ```
 
-- [ ] **Step 3: Add failing snapshot tab/default/applicability tests**
+- [x] **Step 3: Add failing snapshot tab/default/applicability tests**
 
 Inside `describe("source browser model", () => {`, after the live source group tabs test, add:
 
@@ -245,7 +256,7 @@ Inside `describe("source browser model", () => {`, after the live source group t
   });
 ```
 
-- [ ] **Step 4: Add failing reader-kind derivation tests**
+- [x] **Step 4: Add failing reader-kind derivation tests**
 
 After the snapshot tab/default test, add:
 
@@ -298,7 +309,7 @@ After the snapshot tab/default test, add:
   });
 ```
 
-- [ ] **Step 5: Add failing snapshot reconciliation tests**
+- [x] **Step 5: Add failing snapshot reconciliation tests**
 
 After the existing source group reconciliation test, add:
 
@@ -325,7 +336,7 @@ After the existing source group reconciliation test, add:
   });
 ```
 
-- [ ] **Step 6: Run model tests and verify they fail**
+- [x] **Step 6: Run model tests and verify they fail**
 
 Run:
 
@@ -335,7 +346,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts
 
 Expected: FAIL because `run_snapshot` subject types and `deriveRunSnapshotBrowserKind` are not implemented.
 
-- [ ] **Step 7: Implement snapshot model types and helpers**
+- [x] **Step 7: Implement snapshot model types and helpers**
 
 In `src/lib/source-browser-model.ts`, change the imports to include `SourceReaderItem`, `SourceType`, and `SourceSubtype`:
 
@@ -458,7 +469,7 @@ export function deriveRunSnapshotBrowserKind(input: RunSnapshotBrowserKindInput)
 }
 ```
 
-- [ ] **Step 8: Run model tests and verify they pass**
+- [x] **Step 8: Run model tests and verify they pass**
 
 Run:
 
@@ -468,7 +479,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit model task**
+- [x] **Step 9: Commit model task**
 
 Run:
 
@@ -483,10 +494,11 @@ git commit -m "feat: add run snapshot browser model"
 - Create: `src/lib/components/analysis/snapshot-items-view.svelte`
 - Create: `src/lib/components/analysis/snapshot-group-sources-view.svelte`
 - Create: `src/lib/components/analysis/run-snapshot-metadata-view.svelte`
+- Modify: `src/lib/components/analysis/source-browser-shell.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Add raw imports for snapshot leaves**
+- [x] **Step 1: Add raw imports for snapshot leaves**
 
 In `src/lib/analysis-source-readers.test.ts`, add these imports near the other raw component imports:
 
@@ -496,7 +508,7 @@ import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group
 import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
 ```
 
-- [ ] **Step 2: Add failing snapshot leaf contract tests**
+- [x] **Step 2: Add failing snapshot leaf contract tests**
 
 After the `"renders universal Items as a loaded-window browser"` test, add:
 
@@ -530,7 +542,7 @@ After the `"renders universal Items as a loaded-window browser"` test, add:
   });
 ```
 
-- [ ] **Step 3: Run reader tests and verify they fail**
+- [x] **Step 3: Run reader tests and verify they fail**
 
 Run:
 
@@ -540,7 +552,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: FAIL because the snapshot leaf files do not exist yet.
 
-- [ ] **Step 4: Create `SnapshotItemsView`**
+- [x] **Step 4: Create `SnapshotItemsView`**
 
 Create `src/lib/components/analysis/snapshot-items-view.svelte` with:
 
@@ -798,7 +810,7 @@ Create `src/lib/components/analysis/snapshot-items-view.svelte` with:
 </style>
 ```
 
-- [ ] **Step 5: Create `SnapshotGroupSourcesView`**
+- [x] **Step 5: Create `SnapshotGroupSourcesView`**
 
 Create `src/lib/components/analysis/snapshot-group-sources-view.svelte` with:
 
@@ -994,7 +1006,7 @@ Create `src/lib/components/analysis/snapshot-group-sources-view.svelte` with:
 </style>
 ```
 
-- [ ] **Step 6: Create `RunSnapshotMetadataView`**
+- [x] **Step 6: Create `RunSnapshotMetadataView`**
 
 Create `src/lib/components/analysis/run-snapshot-metadata-view.svelte` with:
 
@@ -1160,7 +1172,7 @@ Create `src/lib/components/analysis/run-snapshot-metadata-view.svelte` with:
 </style>
 ```
 
-- [ ] **Step 7: Run reader tests and Svelte check**
+- [x] **Step 7: Run reader tests and Svelte check**
 
 Run:
 
@@ -1171,12 +1183,12 @@ npm.cmd run check
 
 Expected: both PASS.
 
-- [ ] **Step 8: Commit snapshot leaves**
+- [x] **Step 8: Commit snapshot leaves**
 
 Run:
 
 ```bash
-git add src/lib/components/analysis/snapshot-items-view.svelte src/lib/components/analysis/snapshot-group-sources-view.svelte src/lib/components/analysis/run-snapshot-metadata-view.svelte src/lib/analysis-source-readers.test.ts docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md
+git add src/lib/components/analysis/snapshot-items-view.svelte src/lib/components/analysis/snapshot-group-sources-view.svelte src/lib/components/analysis/run-snapshot-metadata-view.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/analysis-source-readers.test.ts docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md
 git commit -m "feat: add run snapshot browser leaves"
 ```
 
@@ -1187,7 +1199,7 @@ git commit -m "feat: add run snapshot browser leaves"
 - Modify: `src/lib/components/analysis/source-browser-shell.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Add shell raw-contract tests**
+- [x] **Step 1: Add shell raw-contract tests**
 
 In `src/lib/components/analysis/source-browser-shell.test.ts`, add this test:
 
@@ -1204,7 +1216,7 @@ In `src/lib/components/analysis/source-browser-shell.test.ts`, add this test:
   });
 ```
 
-- [ ] **Step 2: Run shell tests and verify they fail**
+- [x] **Step 2: Run shell tests and verify they fail**
 
 Run:
 
@@ -1214,7 +1226,7 @@ npm.cmd run test -- src/lib/components/analysis/source-browser-shell.test.ts
 
 Expected: FAIL because shell has no snapshot branches or snapshot data prop.
 
-- [ ] **Step 3: Add snapshot imports and grouped data type**
+- [x] **Step 3: Add snapshot imports and grouped data type**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, add imports:
 
@@ -1256,7 +1268,7 @@ In the `$props()` destructuring, add:
     snapshotBrowserData = null,
 ```
 
-- [ ] **Step 4: Derive snapshot subject state**
+- [x] **Step 4: Derive snapshot subject state**
 
 Below `groupSubject`, add:
 
@@ -1291,7 +1303,7 @@ with:
 Loaded rows: {snapshotData?.readerItems.length ?? itemsForActiveSubject.length}.
 ```
 
-- [ ] **Step 5: Add snapshot tab bodies before live branches**
+- [x] **Step 5: Add snapshot tab bodies before live branches**
 
 Inside the shell markup, place these branches before the existing live `sources` branch:
 
@@ -1365,7 +1377,7 @@ to:
   {:else if activeTab === "sources" && groupSubject}
 ```
 
-- [ ] **Step 6: Ensure live-only activity remains live-only**
+- [x] **Step 6: Ensure live-only activity remains live-only**
 
 Confirm the only `SourceActivityView` branch still begins with:
 
@@ -1375,7 +1387,7 @@ Confirm the only `SourceActivityView` branch still begins with:
 
 Do not add an Activity branch for `snapshotSubject`.
 
-- [ ] **Step 7: Run shell tests and Svelte check**
+- [x] **Step 7: Run shell tests and Svelte check**
 
 Run:
 
@@ -1386,7 +1398,7 @@ npm.cmd run check
 
 Expected: both PASS.
 
-- [ ] **Step 8: Commit shell task**
+- [x] **Step 8: Commit shell task**
 
 Run:
 
@@ -1403,7 +1415,7 @@ git commit -m "feat: add run snapshot branches to source browser shell"
 - Modify: `src/lib/analysis-report-canvas.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Update route/source reader raw tests**
+- [x] **Step 1: Update route/source reader raw tests**
 
 In `src/lib/analysis-source-readers.test.ts`, replace the `"keeps saved snapshots outside SourceBrowserShell"` test with:
 
@@ -1475,7 +1487,7 @@ with:
     expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
 ```
 
-- [ ] **Step 2: Update report canvas snapshot contract tests**
+- [x] **Step 2: Update report canvas snapshot contract tests**
 
 In `src/lib/analysis-report-canvas.test.ts`, replace the `"keeps source-group run snapshots pageable through the grouped reader"` test with:
 
@@ -1509,7 +1521,7 @@ Remove the unused raw import:
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
 ```
 
-- [ ] **Step 3: Run route contract tests and verify they fail**
+- [x] **Step 3: Run route contract tests and verify they fail**
 
 Run:
 
@@ -1519,7 +1531,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts src/lib/analysis-rep
 
 Expected: FAIL because `ReportSourceSurface` still renders direct snapshot readers.
 
-- [ ] **Step 4: Update `ReportSourceSurface` imports**
+- [x] **Step 4: Update `ReportSourceSurface` imports**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, remove these imports:
 
@@ -1539,7 +1551,7 @@ Change the source browser model import to:
   } from "$lib/source-browser-model";
 ```
 
-- [ ] **Step 5: Add snapshot source metadata derivations**
+- [x] **Step 5: Add snapshot source metadata derivations**
 
 Below `snapshotSourceOptions`, add:
 
@@ -1591,7 +1603,7 @@ Below `snapshotSourceOptions`, add:
   );
 ```
 
-- [ ] **Step 6: Replace available snapshot direct readers with shell**
+- [x] **Step 6: Replace available snapshot direct readers with shell**
 
 Inside the `snapshotAvailability === "available"` branch, keep the existing `SourceReaderHeader` unchanged.
 
@@ -1671,7 +1683,7 @@ with:
 
 Do not change the pending/unavailable/checking snapshot status branches.
 
-- [ ] **Step 7: Run route tests and Svelte check**
+- [x] **Step 7: Run route tests and Svelte check**
 
 Run:
 
@@ -1682,7 +1694,7 @@ npm.cmd run check
 
 Expected: both PASS.
 
-- [ ] **Step 8: Commit route task**
+- [x] **Step 8: Commit route task**
 
 Run:
 
@@ -1697,7 +1709,7 @@ git commit -m "feat: route run snapshots through source browser"
 - Modify: `docs/superpowers/specs/2026-05-30-run-snapshot-source-browser-design.md`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Run focused frontend tests**
+- [x] **Step 1: Run focused frontend tests**
 
 Run:
 
@@ -1707,7 +1719,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts src/lib/components/anal
 
 Expected: PASS.
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -1717,7 +1729,7 @@ npm.cmd run verify
 
 Expected: PASS, including Vitest, `svelte-check`, Rust checks/tests, and `git diff HEAD --check`.
 
-- [ ] **Step 3: Run Tauri acceptance smoke**
+- [x] **Step 3: Run Tauri acceptance smoke**
 
 Start the app:
 
@@ -1750,7 +1762,7 @@ In `/analysis`, verify:
 
 Stop the Tauri dev process after the smoke.
 
-- [ ] **Step 4: Update spec status**
+- [x] **Step 4: Update spec status**
 
 In `docs/superpowers/specs/2026-05-30-run-snapshot-source-browser-design.md`, change:
 
@@ -1764,7 +1776,7 @@ to:
 > Status: implemented on 2026-05-30; pending merge
 ```
 
-- [ ] **Step 5: Run final clean checks**
+- [x] **Step 5: Run final clean checks**
 
 Run:
 
@@ -1775,7 +1787,7 @@ git status --short --branch
 
 Expected: no whitespace errors; only the spec and this plan file have unstaged checkbox/status changes.
 
-- [ ] **Step 6: Commit verification task**
+- [x] **Step 6: Commit verification task**
 
 Run:
 

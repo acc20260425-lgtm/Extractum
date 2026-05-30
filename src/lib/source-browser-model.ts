@@ -1,5 +1,6 @@
+import type { SourceReaderItem } from "$lib/source-reader-model";
 import type { AnalysisSourceGroup } from "$lib/types/analysis";
-import type { Source, SourceItem, SourceJobRecord } from "$lib/types/sources";
+import type { Source, SourceItem, SourceJobRecord, SourceSubtype, SourceType } from "$lib/types/sources";
 import type { YoutubeVideoDetail } from "$lib/types/youtube";
 
 export type SourceBrowserTabId =
@@ -17,9 +18,32 @@ export interface SourceBrowserTab {
   label: string;
 }
 
+export type RunSnapshotBrowserKind =
+  | "source_group"
+  | "telegram_timeline"
+  | "youtube_transcript"
+  | "generic_items";
+
+export interface RunSnapshotBrowserSubject {
+  runId: number;
+  scopeType: "source" | "source_group";
+  scopeLabel: string;
+  readerKind: RunSnapshotBrowserKind;
+  sourceType: SourceType | null;
+  sourceSubtype: SourceSubtype | null;
+}
+
+export interface RunSnapshotBrowserKindInput {
+  scopeType: string | null;
+  sourceType: string | null;
+  sourceSubtype: string | null;
+  snapshotReaderItems: Pick<SourceReaderItem, "kind">[];
+}
+
 export type SourceBrowserSubject =
   | { kind: "source"; source: Source }
-  | { kind: "source_group"; group: AnalysisSourceGroup };
+  | { kind: "source_group"; group: AnalysisSourceGroup }
+  | { kind: "run_snapshot"; snapshot: RunSnapshotBrowserSubject };
 
 type SourceBrowserSourceLike = Pick<Source, "sourceType" | "sourceSubtype">;
 type SourceBrowserModelInput = SourceBrowserSubject | SourceBrowserSourceLike;
@@ -84,7 +108,8 @@ const TAB_LABELS: Record<SourceBrowserTabId, string> = {
 };
 
 function isSourceBrowserSubject(input: SourceBrowserModelInput): input is SourceBrowserSubject {
-  return "kind" in input && (input.kind === "source" || input.kind === "source_group");
+  return "kind" in input
+    && (input.kind === "source" || input.kind === "source_group" || input.kind === "run_snapshot");
 }
 
 function tabRecords(ids: SourceBrowserTabId[]): SourceBrowserTab[] {
@@ -104,9 +129,18 @@ function sourceTabIds(source: SourceBrowserSourceLike): SourceBrowserTabId[] {
   return ["items", "metadata", "activity"];
 }
 
+function snapshotTabIds(readerKind: RunSnapshotBrowserKind): SourceBrowserTabId[] {
+  if (readerKind === "source_group") return ["sources", "items", "metadata"];
+  if (readerKind === "telegram_timeline") return ["timeline", "items", "metadata"];
+  if (readerKind === "youtube_transcript") return ["transcript", "items", "metadata"];
+  return ["items", "metadata"];
+}
+
 export function sourceBrowserTabsForSubject(subject: SourceBrowserSubject): SourceBrowserTab[] {
   const ids: SourceBrowserTabId[] = subject.kind === "source_group"
     ? ["sources", "items", "metadata", "activity"]
+    : subject.kind === "run_snapshot"
+      ? snapshotTabIds(subject.snapshot.readerKind)
     : sourceTabIds(subject.source);
 
   return tabRecords(ids);
@@ -117,7 +151,7 @@ export function sourceBrowserTabsForSource(source: SourceBrowserSourceLike): Sou
 }
 
 export function sourceBrowserShellAppliesToSubject(subject: SourceBrowserSubject): boolean {
-  if (subject.kind === "source_group") return true;
+  if (subject.kind === "source_group" || subject.kind === "run_snapshot") return true;
   return sourceBrowserShellAppliesToSource(subject.source);
 }
 
@@ -128,6 +162,9 @@ export function sourceBrowserShellAppliesToSource(source: SourceBrowserSourceLik
 
 export function smartDefaultSourceBrowserTab(input: SourceBrowserModelInput): SourceBrowserTabId {
   if (isSourceBrowserSubject(input) && input.kind === "source_group") return "sources";
+  if (isSourceBrowserSubject(input) && input.kind === "run_snapshot") {
+    return snapshotTabIds(input.snapshot.readerKind)[0] ?? "items";
+  }
   const source = isSourceBrowserSubject(input) ? input.source : input;
   if (source.sourceType === "youtube" && source.sourceSubtype === "video") return "transcript";
   if (source.sourceType === "youtube" && source.sourceSubtype === "playlist") return "videos";
@@ -145,6 +182,29 @@ export function reconcileSourceBrowserTab(
   return activeTab && tabs.some((tab) => tab.id === activeTab)
     ? activeTab
     : smartDefaultSourceBrowserTab(input);
+}
+
+export function deriveRunSnapshotBrowserKind(input: RunSnapshotBrowserKindInput): RunSnapshotBrowserKind {
+  if (input.scopeType === "source_group") return "source_group";
+  if (input.snapshotReaderItems.length === 0) return "generic_items";
+
+  const kinds = new Set(input.snapshotReaderItems.map((item) => item.kind));
+  if (
+    input.sourceType === "youtube"
+    && input.sourceSubtype === "video"
+    && kinds.size === 1
+    && kinds.has("youtube_transcript")
+  ) {
+    return "youtube_transcript";
+  }
+  if (
+    input.sourceType === "telegram"
+    && kinds.size === 1
+    && kinds.has("telegram_message")
+  ) {
+    return "telegram_timeline";
+  }
+  return "generic_items";
 }
 
 export function sourceItemKindChips(items: SourceItem[]): SourceItemKindChip[] {

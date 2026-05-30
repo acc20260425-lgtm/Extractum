@@ -12,17 +12,20 @@ import telegramMediaCardSource from "./components/analysis/telegram-media-card.s
 import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import rawJsonPanelSource from "./components/analysis/raw-json-panel.svelte?raw";
+import runSnapshotMetadataViewSource from "./components/analysis/run-snapshot-metadata-view.svelte?raw";
 import youtubePlaylistVideosViewSource from "./components/analysis/youtube-playlist-videos-view.svelte?raw";
 import youtubeCommentsViewSource from "./components/analysis/youtube-comments-view.svelte?raw";
 import youtubeSourceActivitySource from "./components/analysis/youtube-source-activity.svelte?raw";
 import youtubeTranscriptSource from "./components/analysis/youtube-transcript-reader.svelte?raw";
+import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group-sources-view.svelte?raw";
+import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
 
 describe("analysis source readers", () => {
   it("replaces transitional source panels in ReportSourceSurface", () => {
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");
-    expect(reportSourceSurfaceSource).toContain("<TelegramTimelineReader");
-    expect(reportSourceSurfaceSource).toContain("<YoutubeTranscriptReader");
-    expect(reportSourceSurfaceSource).toContain("<SourceGroupReader");
+    expect(reportSourceSurfaceSource).not.toContain("<TelegramTimelineReader");
+    expect(reportSourceSurfaceSource).not.toContain("<YoutubeTranscriptReader");
+    expect(reportSourceSurfaceSource).not.toContain("<SourceGroupReader");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
     expect(reportSourceSurfaceSource).not.toContain("<SourceContextPanel");
     expect(reportSourceSurfaceSource).not.toContain("<YoutubeSourceDetail");
@@ -42,12 +45,23 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).not.toContain("<YoutubePlaylistReader");
   });
 
-  it("keeps saved snapshots outside SourceBrowserShell", () => {
+  it("routes available run snapshots through SourceBrowserShell while keeping the header route-owned", () => {
     expect(reportSourceSurfaceSource).toContain('sourceViewBasis === "run_snapshot"');
-    expect(reportSourceSurfaceSource).toContain("<SourceGroupReader");
-    expect(reportSourceSurfaceSource).toContain('analysisScope === "source_group" && currentGroup');
-    expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
-    expect(reportSourceSurfaceSource).not.toContain('sourceViewBasis === "run_snapshot" && sourceBrowserShellAppliesToSubject');
+    expect(reportSourceSurfaceSource).toContain("<SourceReaderHeader");
+    expect(reportSourceSurfaceSource).toContain("runSnapshotSubject");
+    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData");
+    expect(reportSourceSurfaceSource).toContain("subject={runSnapshotSubject}");
+    expect(reportSourceSurfaceSource).toContain("{onViewLiveSource}");
+    expect(reportSourceSurfaceSource).not.toContain("<SourceGroupReader");
+  });
+
+  it("keeps snapshot shell data frozen-only and live props empty", () => {
+    expect(reportSourceSurfaceSource).toContain("deriveRunSnapshotBrowserKind");
+    expect(reportSourceSurfaceSource).toContain("allSnapshotReaderItems");
+    expect(reportSourceSurfaceSource).toContain("sourceJobs={[]}");
+    expect(reportSourceSurfaceSource).toContain("takeoutRecovery={null}");
+    expect(reportSourceSurfaceSource).toContain("sourceSyncDisabledReason={() => null}");
+    expect(reportSourceSurfaceSource).toContain("snapshotBrowserData={{");
   });
 
   it("renders YouTube playlist videos through SourceBrowserShell", () => {
@@ -200,13 +214,14 @@ describe("analysis source readers", () => {
   });
 
   it("keeps YouTube live sync actions out of readonly snapshot transcript readers", () => {
-    expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
+    expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
     expect(sourceGroupSourcesViewSource).toContain("showSyncActions={false}");
+    expect(snapshotGroupSourcesViewSource).toContain("showSyncActions={false}");
     expect(sourceBrowserShellSource).toContain("onSyncTranscript={() => onSyncYoutubeTranscript(sourceSubject.id)}");
   });
 
   it("keeps run snapshot YouTube readers detached from live video detail", () => {
-    expect(reportSourceSurfaceSource).toContain("detail={null}");
+    expect(sourceBrowserShellSource).toContain("detail={null}");
     expect(reportSourceSurfaceSource).not.toContain("detail={youtubeVideoDetail}");
     expect(sourceBrowserShellSource).toContain("detail={youtubeVideoDetail}");
     expect(sourceBrowserShellSource).toContain('sourceTitle={sourceSubject.title ?? sourceSubject.externalId}');
@@ -257,6 +272,34 @@ describe("analysis source readers", () => {
     expect(universalItemsViewSource).toContain("Source #${item.sourceId}");
   });
 
+  it("renders snapshot Items as a frozen SourceReaderItem browser", () => {
+    expect(snapshotItemsViewSource).toContain("SourceReaderItem");
+    expect(snapshotItemsViewSource).not.toContain("SourceItem");
+    expect(snapshotItemsViewSource).toContain("Search snapshot items");
+    expect(snapshotItemsViewSource).toContain("Snapshot items are limited to frozen rows loaded for this run");
+    expect(snapshotItemsViewSource).toContain("Load older snapshot messages");
+    expect(snapshotItemsViewSource).toContain("selectedTraceRef");
+    expect(snapshotItemsViewSource).toContain("ariaPressed");
+  });
+
+  it("renders snapshot group Sources with global snapshot paging only", () => {
+    expect(snapshotGroupSourcesViewSource).toContain("groupReaderItemsBySource");
+    expect(snapshotGroupSourcesViewSource).toContain("Load older snapshot messages");
+    expect(snapshotGroupSourcesViewSource).toContain("showSyncActions={false}");
+    expect(snapshotGroupSourcesViewSource).toContain("otherItems");
+    expect(snapshotGroupSourcesViewSource).toContain("other-item-list");
+    expect(snapshotGroupSourcesViewSource).not.toContain("hasMoreBySource");
+    expect(snapshotGroupSourcesViewSource).not.toContain("onLoadMoreSource");
+  });
+
+  it("renders run snapshot metadata from route-owned fields", () => {
+    expect(runSnapshotMetadataViewSource).toContain("AnalysisRunDetail");
+    expect(runSnapshotMetadataViewSource).toContain("Run snapshot");
+    expect(runSnapshotMetadataViewSource).toContain("snapshot.readerKind");
+    expect(runSnapshotMetadataViewSource).toContain("sourceOptions");
+    expect(runSnapshotMetadataViewSource).not.toContain("RawJsonPanel");
+  });
+
   it("renders YouTube comments as a loaded-window browser", () => {
     expect(youtubeCommentsViewSource).toContain("Search loaded comments");
     expect(youtubeCommentsViewSource).toContain("Threaded");
@@ -290,7 +333,7 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain("{sourceJobs}");
     expect(sourceBrowserShellSource).toContain("onSyncComments={() => onSyncYoutubeComments(sourceSubject.id)}");
     expect(sourceBrowserShellSource).toContain("onCancelSourceJob={onCancelSourceJob}");
-    expect(reportSourceSurfaceSource).toContain("showSyncActions={false}");
+    expect(sourceBrowserShellSource).toContain("showSyncActions={false}");
     expect(reportSourceSurfaceSource).not.toContain("onSyncComments={() => {}}");
   });
 

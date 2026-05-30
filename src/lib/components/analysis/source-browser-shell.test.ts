@@ -32,4 +32,15 @@ describe("source browser shell component contract", () => {
     expect(shellSource).toContain("sourceLabelForItem");
     expect(shellSource).toContain("Group items are limited to the source rows loaded in this browser session");
   });
+
+  it("renders run snapshot tabs through grouped snapshot data without live activity props", () => {
+    expect(shellSource).toContain("<SnapshotGroupSourcesView");
+    expect(shellSource).toContain("<SnapshotItemsView");
+    expect(shellSource).toContain("<RunSnapshotMetadataView");
+    expect(shellSource).toContain("snapshotBrowserData");
+    expect(shellSource).toContain('subject.kind === "run_snapshot"');
+    expect(shellSource).toContain('activeTab === "transcript"');
+    expect(shellSource).toContain("showSyncActions={false}");
+    expect(shellSource).not.toContain("SourceReaderHeader");
+  });
 });
