@@ -25,6 +25,7 @@
     ariaSelected,
     ariaControls,
     ariaExpanded,
+    ariaDescribedby,
     tabIndex,
     className = "",
     onclick,
@@ -44,6 +45,7 @@
     ariaSelected?: boolean;
     ariaControls?: string;
     ariaExpanded?: boolean;
+    ariaDescribedby?: string;
     tabIndex?: number;
     className?: string;
     onclick?: (event: MouseEvent) => unknown | Promise<unknown>;
@@ -62,6 +64,7 @@
   aria-selected={ariaSelected}
   aria-controls={ariaControls}
   aria-expanded={ariaExpanded}
+  aria-describedby={ariaDescribedby}
   tabindex={tabIndex}
   class={`ui-button ${variant} ${size} ${selected ? "selected" : ""} ${iconOnly ? "icon-only" : ""} ${className}`.trim()}
   onclick={onclick}
