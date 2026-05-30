@@ -1840,7 +1840,7 @@ Expected: commit succeeds.
 - Modify: `scripts/analysis-smoke.mjs`
 - Modify: `src/lib/analysis-ui-smoke-contract.test.ts`
 
-- [ ] **Step 1: Add reusable UI workflow helpers to `scripts/analysis-smoke.mjs`**
+- [x] **Step 1: Add reusable UI workflow helpers to `scripts/analysis-smoke.mjs`**
 
 Add these functions above `sourceBrowserSmokeSteps`:
 
@@ -1928,7 +1928,7 @@ async function expectTabs(ctx, labels, selected) {
 }
 ```
 
-- [ ] **Step 2: Add Source Browser smoke steps**
+- [x] **Step 2: Add Source Browser smoke steps**
 
 Replace:
 
@@ -1980,7 +1980,7 @@ export const sourceBrowserSmokeSteps = [
     name: "source-browser.run-snapshot-tabs",
     async run(ctx) {
       await navigateAnalysis(ctx);
-      await openRun(ctx, fixtureLabels.completedSnapshotRun);
+      await openRun(ctx, fixtureLabels.groupSnapshotRun);
       await switchCanvasMode(ctx, "source");
       await waitForText(ctx.socket, "View live source");
       await executeJs(ctx.socket, `
@@ -1996,7 +1996,7 @@ export const sourceBrowserSmokeSteps = [
 ];
 ```
 
-- [ ] **Step 3: Run Source Browser model and contract tests**
+- [x] **Step 3: Run Source Browser model and contract tests**
 
 Run:
 
@@ -2006,7 +2006,9 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts src/lib/analysis-smoke-
 
 Expected: PASS for tab contracts and helper behavior. The full `analysis-ui-smoke-contract.test.ts` remains red until Workspace Parity smoke names are added in Task 7.
 
-- [ ] **Step 4: Run opt-in smoke before Workspace Parity scenarios**
+Actual result: PASS, 2 files / 30 tests (`source-browser-model.test.ts`, `analysis-smoke-helpers.test.ts`).
+
+- [x] **Step 4: Run opt-in smoke before Workspace Parity scenarios**
 
 Run:
 
@@ -2018,7 +2020,9 @@ Expected in a GUI-capable local environment: Source Browser steps PASS. If a Sou
 
 If the current environment is not GUI-capable, do not treat this as a smoke failure. Record the exact reason as `not run in this environment`, continue with non-GUI tests, and make sure the final verification archive uses `Result: not run in this environment` rather than `passed`.
 
-- [ ] **Step 5: Commit Source Browser smoke scenarios**
+Actual result: `npm.cmd run smoke:analysis` PASS for `source-browser.telegram-live-tabs`, `source-browser.youtube-video-tabs`, `source-browser.youtube-playlist-tabs`, `source-browser.live-source-group-tabs`, and `source-browser.run-snapshot-tabs`. The run snapshot scenario uses `fixtureLabels.groupSnapshotRun` so the exact snapshot tab order is `Sources | Items | Metadata`.
+
+- [x] **Step 5: Commit Source Browser smoke scenarios**
 
 Run:
 
