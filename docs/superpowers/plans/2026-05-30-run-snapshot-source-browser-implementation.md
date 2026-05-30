@@ -1709,7 +1709,7 @@ git commit -m "feat: route run snapshots through source browser"
 - Modify: `docs/superpowers/specs/2026-05-30-run-snapshot-source-browser-design.md`
 - Modify: `docs/superpowers/plans/2026-05-30-run-snapshot-source-browser-implementation.md`
 
-- [ ] **Step 1: Run focused frontend tests**
+- [x] **Step 1: Run focused frontend tests**
 
 Run:
 
@@ -1719,7 +1719,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts src/lib/components/anal
 
 Expected: PASS.
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -1729,7 +1729,7 @@ npm.cmd run verify
 
 Expected: PASS, including Vitest, `svelte-check`, Rust checks/tests, and `git diff HEAD --check`.
 
-- [ ] **Step 3: Run Tauri acceptance smoke**
+- [x] **Step 3: Run Tauri acceptance smoke**
 
 Start the app:
 
@@ -1762,7 +1762,7 @@ In `/analysis`, verify:
 
 Stop the Tauri dev process after the smoke.
 
-- [ ] **Step 4: Update spec status**
+- [x] **Step 4: Update spec status**
 
 In `docs/superpowers/specs/2026-05-30-run-snapshot-source-browser-design.md`, change:
 
@@ -1776,7 +1776,7 @@ to:
 > Status: implemented on 2026-05-30; pending merge
 ```
 
-- [ ] **Step 5: Run final clean checks**
+- [x] **Step 5: Run final clean checks**
 
 Run:
 
@@ -1787,7 +1787,7 @@ git status --short --branch
 
 Expected: no whitespace errors; only the spec and this plan file have unstaged checkbox/status changes.
 
-- [ ] **Step 6: Commit verification task**
+- [x] **Step 6: Commit verification task**
 
 Run:
 
