@@ -4,6 +4,7 @@ import reportRunHeaderSource from "./components/analysis/report-run-header.svelt
 import reportSetupPanelSource from "./components/analysis/report-setup-panel.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
+import reportWorkspaceToolsSource from "./components/analysis/report-workspace-tools.svelte?raw";
 import reportViewerSource from "./components/analysis/report-viewer.svelte?raw";
 import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group-sources-view.svelte?raw";
 import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
@@ -128,20 +129,41 @@ describe("report canvas component contract", () => {
     expect(reportViewerSource).not.toContain('currentRun?.status === "completed" ? "Chat ready"');
   });
 
-  it("keeps management actions reachable while a run is open", () => {
-    const managementStart = reportCanvasSource.indexOf('class="opened-run-management"');
-    const modeStart = reportCanvasSource.indexOf('{#if canvasMode === "report"}');
+  it("keeps workspace tools reachable before setup report and source bodies", () => {
+    const toolsStart = reportCanvasSource.indexOf("<ReportWorkspaceTools");
+    const reportBodyStart = reportCanvasSource.indexOf('{#if canvasMode === "report"}');
+    const sourceBodyStart = reportCanvasSource.indexOf("<ReportSourceSurface");
 
-    expect(managementStart).toBeGreaterThan(0);
-    expect(modeStart).toBeGreaterThan(0);
-    expect(managementStart).toBeLessThan(modeStart);
-    expect(reportCanvasSource).toContain("{#if currentRun}");
-    expect(reportCanvasSource).toContain("Export for NotebookLM");
-    expect(reportCanvasSource).toContain("Edit templates");
-    expect(reportCanvasSource).toContain("Edit groups");
-    expect(reportCanvasSource).toContain("opened-run-template-editor-drawer");
-    expect(reportCanvasSource).toContain("opened-run-group-editor-drawer");
+    expect(toolsStart).toBeGreaterThan(0);
+    expect(reportBodyStart).toBeGreaterThan(0);
+    expect(sourceBodyStart).toBeGreaterThan(0);
+    expect(toolsStart).toBeLessThan(reportBodyStart);
+    expect(toolsStart).toBeLessThan(sourceBodyStart);
+    expect(reportCanvasSource).not.toContain('class="opened-run-management"');
     expect(reportCanvasSource).toContain("<TemplateEditor");
     expect(reportCanvasSource).toContain("<SourceGroupEditor");
+    expect(reportCanvasSource.match(/<TemplateEditor/g)?.length ?? 0).toBe(1);
+    expect(reportCanvasSource.match(/<SourceGroupEditor/g)?.length ?? 0).toBe(1);
+    expect(reportCanvasSource).toContain("templateEditorOpen");
+    expect(reportCanvasSource).toContain("groupEditorOpen");
+    expect(reportWorkspaceToolsSource).toContain("Export for NotebookLM");
+    expect(reportWorkspaceToolsSource).toContain("Edit templates");
+    expect(reportWorkspaceToolsSource).toContain("Edit groups");
+  });
+
+  it("derives NotebookLM export availability from live canvas source or group", () => {
+    expect(reportCanvasSource).toContain("showNotebookLmExport");
+    expect(reportCanvasSource).toContain("currentSource !== null || currentGroup !== null");
+    expect(reportCanvasSource).toContain("canExportNotebookLm");
+    expect(reportCanvasSource).toContain("currentSource !== null && !exportingNotebookLm");
+    expect(reportCanvasSource).toContain("currentGroup && !currentSource ? sourceGroupNotebookLmExportReason : null");
+    expect(reportCanvasSource).toContain("Source-group NotebookLM export is not implemented yet.");
+    expect(reportCanvasSource).toContain("<ReportWorkspaceTools");
+    expect(reportCanvasSource).toContain("{showNotebookLmExport}");
+    expect(reportCanvasSource).toContain("{canExportNotebookLm}");
+    expect(reportCanvasSource).toContain("exportDisabledReason={notebookLmExportDisabledReason}");
+    expect(reportCanvasSource).toContain("<NotebookLmExportDialog");
+    expect(reportCanvasSource.match(/<NotebookLmExportDialog/g)?.length ?? 0).toBe(1);
+    expect(reportCanvasSource).toContain("source={currentSource}");
   });
 });

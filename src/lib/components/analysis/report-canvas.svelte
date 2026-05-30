@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Download, Folder, SquarePen } from "@lucide/svelte";
   import NotebookLmExportDialog, {
     type NotebookLmExportForm,
   } from "$lib/components/analysis/notebooklm-export-dialog.svelte";
@@ -7,6 +6,7 @@
   import ReportSetupPanel from "$lib/components/analysis/report-setup-panel.svelte";
   import ReportSourceSurface from "$lib/components/analysis/report-source-surface.svelte";
   import ReportViewer from "$lib/components/analysis/report-viewer.svelte";
+  import ReportWorkspaceTools from "$lib/components/analysis/report-workspace-tools.svelte";
   import SourceGroupEditor from "$lib/components/analysis/source-group-editor.svelte";
   import TemplateEditor from "$lib/components/analysis/template-editor.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -363,12 +363,18 @@
     [key: string]: unknown;
   } = $props();
 
-  let openedRunTemplateEditorOpen = $state(false);
-  let openedRunGroupEditorOpen = $state(false);
+  let templateEditorOpen = $state(false);
+  let groupEditorOpen = $state(false);
 
   const currentSourceContentLabel = $derived(
     currentSource ? sourceCapabilities(currentSource).contentLabel : "items",
   );
+  const showNotebookLmExport = $derived(currentSource !== null || currentGroup !== null);
+  const sourceGroupNotebookLmExportReason = "Source-group NotebookLM export is not implemented yet.";
+  const notebookLmExportDisabledReason = $derived(
+    currentGroup && !currentSource ? sourceGroupNotebookLmExportReason : null,
+  );
+  const canExportNotebookLm = $derived(currentSource !== null && !exportingNotebookLm);
 </script>
 
 <section class="report-canvas">
@@ -402,85 +408,59 @@
     </div>
   </div>
 
-  {#if currentRun}
-    <div class="opened-run-management" aria-label="Opened run management">
-      <div class="opened-run-management-copy">
-        <span class="eyebrow">Workspace tools</span>
-      </div>
-      <div class="opened-run-management-actions">
-        {#if currentSource}
-          <Button
-            variant="secondary"
-            onclick={onOpenNotebookLmExport}
-            disabled={exportingNotebookLm}
-          >
-            <Download size={15} aria-hidden="true" />
-            {exportingNotebookLm ? "Exporting..." : "Export for NotebookLM"}
-          </Button>
-        {/if}
-        <Button
-          type="button"
-          variant="secondary"
-          ariaExpanded={openedRunTemplateEditorOpen}
-          onclick={() => (openedRunTemplateEditorOpen = !openedRunTemplateEditorOpen)}
-        >
-          <SquarePen size={15} aria-hidden="true" />
-          {openedRunTemplateEditorOpen ? "Hide templates" : "Edit templates"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          ariaExpanded={openedRunGroupEditorOpen}
-          onclick={() => (openedRunGroupEditorOpen = !openedRunGroupEditorOpen)}
-        >
-          <Folder size={15} aria-hidden="true" />
-          {openedRunGroupEditorOpen ? "Hide groups" : "Edit groups"}
-        </Button>
-      </div>
+  <ReportWorkspaceTools
+    {showNotebookLmExport}
+    {canExportNotebookLm}
+    exportDisabledReason={notebookLmExportDisabledReason}
+    {exportingNotebookLm}
+    {templateEditorOpen}
+    {groupEditorOpen}
+    onOpenNotebookLmExport={onOpenNotebookLmExport}
+    onToggleTemplateEditor={() => (templateEditorOpen = !templateEditorOpen)}
+    onToggleGroupEditor={() => (groupEditorOpen = !groupEditorOpen)}
+  />
+
+  {#if templateEditorOpen}
+    <div class="workspace-template-editor-drawer" aria-label="Template editor drawer">
+      <TemplateEditor
+        compact={true}
+        {selectedTemplate}
+        {templateName}
+        {templateBody}
+        {savingTemplate}
+        {deletingTemplate}
+        onSaveTemplateCopy={onSaveTemplateCopy}
+        onSaveTemplateChanges={onSaveTemplateChanges}
+        onDeleteTemplate={onDeleteTemplate}
+      />
     </div>
+  {/if}
 
-    {#if openedRunTemplateEditorOpen}
-      <div class="opened-run-template-editor-drawer" aria-label="Template editor drawer">
-        <TemplateEditor
-          compact={true}
-          {selectedTemplate}
-          {templateName}
-          {templateBody}
-          {savingTemplate}
-          {deletingTemplate}
-          onSaveTemplateCopy={onSaveTemplateCopy}
-          onSaveTemplateChanges={onSaveTemplateChanges}
-          onDeleteTemplate={onDeleteTemplate}
-        />
-      </div>
-    {/if}
-
-    {#if openedRunGroupEditorOpen}
-      <div class="opened-run-group-editor-drawer" aria-label="Source group editor drawer">
-        <SourceGroupEditor
-          compact={true}
-          {groups}
-          selectedGroupId={selectedGroupEditorId}
-          {selectedGroup}
-          {groupName}
-          {groupSourceType}
-          {groupMemberSourceIds}
-          sources={sourceMetricsList}
-          {savingGroup}
-          {deletingGroup}
-          {formatTimestamp}
-          {isGroupSourceSelected}
-          onChangeSelectedGroupId={onChangeSelectedGroupId}
-          onChangeGroupName={onChangeGroupName}
-          onChangeGroupSourceType={onChangeGroupSourceType}
-          onToggleSource={onToggleGroupSource}
-          onStartNewGroup={onStartNewGroup}
-          onSaveGroupCopy={onSaveGroupCopy}
-          onSaveGroupChanges={onSaveGroupChanges}
-          onDeleteGroup={onDeleteGroup}
-        />
-      </div>
-    {/if}
+  {#if groupEditorOpen}
+    <div class="workspace-group-editor-drawer" aria-label="Source group editor drawer">
+      <SourceGroupEditor
+        compact={true}
+        {groups}
+        selectedGroupId={selectedGroupEditorId}
+        {selectedGroup}
+        {groupName}
+        {groupSourceType}
+        {groupMemberSourceIds}
+        sources={sourceMetricsList}
+        {savingGroup}
+        {deletingGroup}
+        {formatTimestamp}
+        {isGroupSourceSelected}
+        onChangeSelectedGroupId={onChangeSelectedGroupId}
+        onChangeGroupName={onChangeGroupName}
+        onChangeGroupSourceType={onChangeGroupSourceType}
+        onToggleSource={onToggleGroupSource}
+        onStartNewGroup={onStartNewGroup}
+        onSaveGroupCopy={onSaveGroupCopy}
+        onSaveGroupChanges={onSaveGroupChanges}
+        onDeleteGroup={onDeleteGroup}
+      />
+    </div>
   {/if}
 
   {#if canvasMode === "report"}
@@ -721,37 +701,13 @@
     background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
   }
 
-  .opened-run-management,
-  .opened-run-template-editor-drawer,
-  .opened-run-group-editor-drawer {
+  .workspace-template-editor-drawer,
+  .workspace-group-editor-drawer {
+    padding: 0.85rem;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--panel);
     box-shadow: var(--shadow-soft);
-  }
-
-  .opened-run-management {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.8rem;
-    align-items: center;
-    padding: 0.85rem 1rem;
-  }
-
-  .opened-run-management-copy {
-    min-width: 0;
-  }
-
-  .opened-run-management-actions {
-    display: flex;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-  }
-
-  .opened-run-template-editor-drawer,
-  .opened-run-group-editor-drawer {
-    padding: 0.85rem;
   }
 
   .eyebrow {
@@ -764,14 +720,9 @@
   }
 
   @media (max-width: 720px) {
-    .canvas-toolbar,
-    .opened-run-management {
+    .canvas-toolbar {
       flex-direction: column;
       align-items: stretch;
-    }
-
-    .opened-run-management-actions {
-      justify-content: flex-start;
     }
   }
 </style>
