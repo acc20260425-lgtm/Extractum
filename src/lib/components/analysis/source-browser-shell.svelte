@@ -2,6 +2,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import {
@@ -15,6 +16,7 @@
     SourceForumTopic,
     SourceItem,
     SourceJobRecord,
+    TakeoutImportRecoveryState,
     TelegramHistoryScope,
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
@@ -23,6 +25,7 @@
   type Props = {
     source: Source;
     liveReaderItems: SourceReaderItem[];
+    takeoutRecovery: TakeoutImportRecoveryState | null;
     sourceItems: SourceItem[];
     sourceItemsHasMore: boolean;
     loadingItems: boolean;
@@ -40,7 +43,9 @@
     selectedTraceRef: string | null;
     telegramHistoryScope: TelegramHistoryScope;
     currentSourceContentLabel: string;
+    sourceSyncDisabledReason: (source: Source) => string | null;
     formatTimestamp: (value: number | null) => string;
+    onSyncSource: (sourceId: number) => void | Promise<void>;
     onLoadMoreSourceItems: () => void | Promise<void>;
     onChangeSelectedTopicKey: (value: string) => void | Promise<void>;
     onChangeTelegramHistoryScope: (scope: TelegramHistoryScope) => void;
@@ -49,12 +54,15 @@
     onSyncYoutubeMetadata: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeTranscript: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeComments: (sourceId: number) => void | Promise<void>;
+    onStartTakeoutImport: (sourceId: number) => void | Promise<void>;
+    onStartMigratedHistoryImport: (sourceId: number) => void | Promise<void>;
     onCancelSourceJob: (jobId: string) => void | Promise<void>;
   };
 
   let {
     source,
     liveReaderItems,
+    takeoutRecovery,
     sourceItems,
     sourceItemsHasMore,
     loadingItems,
@@ -72,7 +80,9 @@
     selectedTraceRef,
     telegramHistoryScope,
     currentSourceContentLabel,
+    sourceSyncDisabledReason,
     formatTimestamp,
+    onSyncSource,
     onLoadMoreSourceItems,
     onChangeSelectedTopicKey,
     onChangeTelegramHistoryScope,
@@ -81,6 +91,8 @@
     onSyncYoutubeMetadata,
     onSyncYoutubeTranscript,
     onSyncYoutubeComments,
+    onStartTakeoutImport,
+    onStartMigratedHistoryImport,
     onCancelSourceJob,
   }: Props = $props();
 
@@ -201,8 +213,21 @@
       onLoadMore={onLoadMoreYoutubeTranscriptSegments}
       onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}
       onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
-      {sourceJobs}
       onSyncComments={() => onSyncYoutubeComments(source.id)}
+    />
+  {:else if activeTab === "activity"}
+    <SourceActivityView
+      source={source}
+      jobs={sourceJobs}
+      takeoutRecovery={takeoutRecovery}
+      sourceSyncDisabledReason={sourceSyncDisabledReason}
+      {formatTimestamp}
+      onSyncSource={() => onSyncSource(source.id)}
+      onSyncMetadata={() => onSyncYoutubeMetadata(source.id)}
+      onSyncTranscript={() => onSyncYoutubeTranscript(source.id)}
+      onSyncComments={() => onSyncYoutubeComments(source.id)}
+      onStartTakeoutImport={() => onStartTakeoutImport(source.id)}
+      onStartMigratedHistoryImport={() => onStartMigratedHistoryImport(source.id)}
       onCancelSourceJob={onCancelSourceJob}
     />
   {:else}

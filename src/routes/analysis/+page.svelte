@@ -2734,6 +2734,8 @@
     onChangeCustomModelOverride={(value) => (customModelOverride = value)}
     onRunReport={() => void runReport()}
     onSyncCurrentSource={(sourceId) => void syncSelectedSource(sourceId)}
+    onStartTakeoutImport={(sourceId) => void startTakeoutImport(sourceId)}
+    onStartMigratedHistoryImport={(sourceId) => void startMigratedHistoryImport(sourceId)}
     onSyncYoutubeMetadata={(sourceId) => void syncYoutubeMetadata(sourceId)}
     onSyncYoutubeTranscript={(sourceId) => void syncYoutubeTranscript(sourceId)}
     onSyncYoutubeComments={(sourceId) => void syncYoutubeComments(sourceId)}

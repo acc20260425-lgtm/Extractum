@@ -85,9 +85,12 @@
     formatTimestamp: (value: number | null) => string;
     onChangeSelectedTopicKey: (value: string) => void | Promise<void>;
     onOpenSource: (sourceId: number) => void | Promise<void>;
+    onSyncSource: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeMetadata: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeTranscript: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeComments: (sourceId: number) => void | Promise<void>;
+    onStartTakeoutImport: (sourceId: number) => void | Promise<void>;
+    onStartMigratedHistoryImport: (sourceId: number) => void | Promise<void>;
     onSyncYoutubePlaylist: (sourceId: number) => void | Promise<void>;
     onRetryFailedYoutubePlaylistVideos: (sourceId: number) => void | Promise<void>;
     onSyncYoutubePlaylistVideo: (playlistSourceId: number, videoSourceId: number) => void | Promise<void>;
@@ -144,9 +147,12 @@
     formatTimestamp,
     onOpenSource,
     onChangeSelectedTopicKey,
+    onSyncSource,
     onSyncYoutubeMetadata,
     onSyncYoutubeTranscript,
     onSyncYoutubeComments,
+    onStartTakeoutImport,
+    onStartMigratedHistoryImport,
     onSyncYoutubePlaylist,
     onRetryFailedYoutubePlaylistVideos,
     onSyncYoutubePlaylistVideo,
@@ -355,6 +361,7 @@
         <SourceBrowserShell
           source={currentSource}
           {liveReaderItems}
+          {takeoutRecovery}
           {sourceItems}
           {sourceItemsHasMore}
           {loadingItems}
@@ -372,7 +379,9 @@
           {selectedTraceRef}
           {telegramHistoryScope}
           {currentSourceContentLabel}
+          {sourceSyncDisabledReason}
           {formatTimestamp}
+          {onSyncSource}
           {onLoadMoreSourceItems}
           {onChangeSelectedTopicKey}
           {onChangeTelegramHistoryScope}
@@ -381,6 +390,8 @@
           {onSyncYoutubeMetadata}
           {onSyncYoutubeTranscript}
           {onSyncYoutubeComments}
+          {onStartTakeoutImport}
+          {onStartMigratedHistoryImport}
           onCancelSourceJob={onCancelSourceJob}
         />
       {:else if currentSource.sourceType === "youtube" && currentSource.sourceSubtype === "playlist"}

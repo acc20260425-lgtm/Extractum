@@ -6,7 +6,6 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
-  import YoutubeSourceActivity from "$lib/components/analysis/youtube-source-activity.svelte";
   import {
     formatYoutubeTime,
     groupYoutubeTranscriptItems,
@@ -15,7 +14,7 @@
     type YoutubeTranscriptGroup,
     type SourceReaderItem,
   } from "$lib/source-reader-model";
-  import type { SourceItem, SourceJobRecord, YoutubeTranscriptSegment } from "$lib/types/sources";
+  import type { SourceItem, YoutubeTranscriptSegment } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
 
   let {
@@ -26,7 +25,6 @@
     hasMore,
     transcriptSearch,
     showSyncActions = true,
-    sourceJobs = [],
     sourceTitle,
     selectedTraceRef,
     formatTimestamp,
@@ -35,7 +33,6 @@
     onSyncTranscript,
     onSyncMetadata,
     onSyncComments = null,
-    onCancelSourceJob = async () => {},
   }: {
     detail: YoutubeVideoDetail | null;
     segments: YoutubeTranscriptSegment[];
@@ -44,7 +41,6 @@
     hasMore: boolean;
     transcriptSearch: string;
     showSyncActions?: boolean;
-    sourceJobs?: SourceJobRecord[];
     sourceTitle: string;
     selectedTraceRef: string | null;
     formatTimestamp: (value: number | null) => string;
@@ -53,7 +49,6 @@
     onSyncTranscript: () => void | Promise<void>;
     onSyncMetadata: () => void | Promise<void>;
     onSyncComments?: (() => void | Promise<void>) | null;
-    onCancelSourceJob?: (jobId: string) => void | Promise<void>;
   } = $props();
 
   const summary = $derived(detail?.summary ?? null);
@@ -168,10 +163,6 @@
       />
     </div>
   </label>
-
-  {#if showSyncActions}
-    <YoutubeSourceActivity jobs={sourceJobs} {formatTimestamp} onCancelJob={onCancelSourceJob} />
-  {/if}
 
   {#if summary?.captions.state === "unavailable"}
     <StatusMessage tone="muted" surface={false}>

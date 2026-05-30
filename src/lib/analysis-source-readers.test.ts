@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
+import sourceActivityViewSource from "./components/analysis/source-activity-view.svelte?raw";
 import sourceBrowserShellSource from "./components/analysis/source-browser-shell.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import sourceGroupReaderSource from "./components/analysis/source-group-reader.svelte?raw";
@@ -173,14 +174,38 @@ describe("analysis source readers", () => {
     expect(sourceBrowserShellSource).toContain('sourceTitle={source.title ?? source.externalId}');
   });
 
-  it("restores live YouTube video comments sync status and activity in transcript reader", () => {
+  it("keeps live YouTube video comments sync status and CTAs in transcript reader", () => {
     expect(youtubeTranscriptSource).toContain("onSyncComments");
-    expect(youtubeTranscriptSource).toContain("sourceJobs");
-    expect(youtubeTranscriptSource).toContain("<YoutubeSourceActivity");
     expect(youtubeTranscriptSource).toContain("summary.comments.label");
     expect(youtubeTranscriptSource).toContain("summary.comments.itemCount");
     expect(youtubeTranscriptSource).toContain("summary.comments.lastSyncedAt");
     expect(youtubeTranscriptSource).toContain("Sync comments");
+  });
+
+  it("moves detailed source job cards into the Activity tab", () => {
+    expect(sourceBrowserShellSource).toContain("activity");
+    expect(sourceBrowserShellSource).toContain("<SourceActivityView");
+    expect(sourceActivityViewSource).toContain("SourceJobRecord");
+    expect(sourceActivityViewSource).toContain("Progress");
+    expect(sourceActivityViewSource).toContain("Warnings");
+    expect(sourceActivityViewSource).toContain("Error");
+    expect(sourceActivityViewSource).toContain("Cancel");
+  });
+
+  it("keeps provider tabs to contextual CTAs instead of detailed job cards", () => {
+    expect(youtubeTranscriptSource).not.toContain("<YoutubeSourceActivity");
+    expect(youtubeTranscriptSource).not.toContain("SourceJobRecord");
+    expect(youtubeTranscriptSource).toContain("Sync comments");
+    expect(youtubeTranscriptSource).toContain("Sync metadata");
+  });
+
+  it("covers Telegram source activity without adding backend job APIs", () => {
+    expect(sourceActivityViewSource).toContain("takeoutRecovery");
+    expect(sourceActivityViewSource).toContain("sourceSyncDisabledReason");
+    expect(sourceActivityViewSource).toContain("onStartTakeoutImport");
+    expect(sourceActivityViewSource).toContain("onStartMigratedHistoryImport");
+    expect(sourceActivityViewSource).toContain("Migrated history");
+    expect(sourceActivityViewSource).toContain("Takeout");
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", () => {

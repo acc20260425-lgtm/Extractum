@@ -168,6 +168,8 @@
     onChangeCustomModelOverride,
     onRunReport,
     onSyncCurrentSource,
+    onStartTakeoutImport,
+    onStartMigratedHistoryImport,
     onSyncYoutubeMetadata,
     onSyncYoutubeTranscript,
     onSyncYoutubeComments,
@@ -322,6 +324,8 @@
     onChangeCustomModelOverride: (value: string) => void;
     onRunReport: () => void;
     onSyncCurrentSource: (sourceId: number) => void;
+    onStartTakeoutImport: (sourceId: number) => void | Promise<void>;
+    onStartMigratedHistoryImport: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeMetadata: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeTranscript: (sourceId: number) => void | Promise<void>;
     onSyncYoutubeComments: (sourceId: number) => void | Promise<void>;
@@ -641,9 +645,12 @@
       onChangeSelectedGroupSourceId={onChangeSelectedGroupSourceId}
       onChangeSelectedSnapshotSourceId={onChangeSelectedSnapshotSourceId}
       onChangeSelectedTopicKey={onChangeSelectedTopicKey}
+      onSyncSource={onSyncCurrentSource}
       onSyncYoutubeMetadata={onSyncYoutubeMetadata}
       onSyncYoutubeTranscript={onSyncYoutubeTranscript}
       onSyncYoutubeComments={onSyncYoutubeComments}
+      onStartTakeoutImport={onStartTakeoutImport}
+      onStartMigratedHistoryImport={onStartMigratedHistoryImport}
       onSyncYoutubePlaylist={onSyncYoutubePlaylist}
       onRetryFailedYoutubePlaylistVideos={onRetryFailedYoutubePlaylistVideos}
       onSyncYoutubePlaylistVideo={onSyncYoutubePlaylistVideo}

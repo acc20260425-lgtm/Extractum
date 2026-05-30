@@ -597,7 +597,7 @@ git commit -m "feat: add live source browser shell"
 - Modify: `src/lib/components/analysis/youtube-transcript-reader.svelte`
 - Modify: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Write failing Activity contract tests**
+- [x] **Step 1: Write failing Activity contract tests**
 
 Update `src/lib/analysis-source-readers.test.ts`:
 
@@ -636,13 +636,13 @@ it("covers Telegram source activity without adding backend job APIs", () => {
 });
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run: `npm run test -- src/lib/analysis-source-readers.test.ts`
 
 Expected: FAIL because `SourceActivityView` does not exist and transcript reader still owns detailed activity.
 
-- [ ] **Step 3: Implement `SourceActivityView`**
+- [x] **Step 3: Implement `SourceActivityView`**
 
 Create `src/lib/components/analysis/source-activity-view.svelte` by extracting the useful job-card rendering from `youtube-source-activity.svelte` and adding source-level action buttons. Keep all detailed job rows here: job type, status badge, started/finished timestamps, progress, warnings, errors, cancel.
 
@@ -675,7 +675,7 @@ onCancelSourceJob: (jobId: string) => void | Promise<void>;
 
 If a callback is not yet passed through `ReportSourceSurface`, thread the existing route callback down from `/analysis/+page.svelte` through `ReportCanvas` and `ReportSourceSurface`. Do not create a new store for these actions.
 
-- [ ] **Step 4: Render Activity from the shell**
+- [x] **Step 4: Render Activity from the shell**
 
 Modify `source-browser-shell.svelte`:
 
@@ -697,11 +697,11 @@ Modify `source-browser-shell.svelte`:
   />
 ```
 
-- [ ] **Step 5: Remove detailed activity from transcript provider view**
+- [x] **Step 5: Remove detailed activity from transcript provider view**
 
 Modify `youtube-transcript-reader.svelte` so it keeps compact contextual CTAs (`Sync transcript`, `Sync metadata`, `Sync comments`) but no longer imports or renders `YoutubeSourceActivity`.
 
-- [ ] **Step 6: Run Activity tests**
+- [x] **Step 6: Run Activity tests**
 
 Run:
 
@@ -712,7 +712,7 @@ npm run check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 7: Commit Slice 2**
+- [x] **Step 7: Commit Slice 2**
 
 ```bash
 git add src/routes/analysis/+page.svelte src/lib/components/analysis/report-canvas.svelte src/lib/components/analysis/report-source-surface.svelte src/lib/components/analysis/source-activity-view.svelte src/lib/components/analysis/source-browser-shell.svelte src/lib/components/analysis/youtube-transcript-reader.svelte src/lib/analysis-source-readers.test.ts
