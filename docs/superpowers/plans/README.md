@@ -7,4 +7,4 @@ still useful as execution history. Otherwise, Git history is enough.
 
 Active plans:
 
-- None currently.
+- `2026-05-30-saved-runs-backend-narrowing-implementation.md`
