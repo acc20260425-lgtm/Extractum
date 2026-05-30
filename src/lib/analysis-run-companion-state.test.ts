@@ -229,7 +229,7 @@ describe("analysis run companion state", () => {
   });
 
   it("keeps local saved-run filtering as a final consistency guard", () => {
-    const filter = {
+    const filter: CompanionRunsFilterState = {
       ...runsFilterDefaults(),
       query: "needle",
       status: "completed",
