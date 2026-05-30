@@ -79,13 +79,14 @@ src/lib/source-reader-model.ts: SourceReaderItem and SourceFilterOption exist.
 Run:
 
 ```bash
-rg -n "sourceViewBasis === \"run_snapshot\"|<SourceGroupReader|<YoutubeTranscriptReader|<TelegramTimelineReader|type Props|groupBrowserData|SourceActivityView" src/lib/components/analysis/report-source-surface.svelte src/lib/components/analysis/source-browser-shell.svelte
+rg -n "sourceViewBasis === \"run_snapshot\"|runSnapshotMessages|allSnapshotReaderItems|snapshotReaderItems|<SourceGroupReader|<YoutubeTranscriptReader|<TelegramTimelineReader|type Props|groupBrowserData|SourceActivityView" src/lib/components/analysis/report-source-surface.svelte src/lib/components/analysis/source-browser-shell.svelte
 ```
 
 Expected findings:
 
 ```text
 report-source-surface.svelte contains the run_snapshot branch and direct snapshot readers.
+report-source-surface.svelte contains runSnapshotMessages, allSnapshotReaderItems, and filtered snapshotReaderItems.
 source-browser-shell.svelte contains live source/group props and SourceActivityView only for live source subjects.
 ```
 
@@ -99,6 +100,7 @@ Preflight decisions:
 - `RunSnapshotBrowserSubject.sourceType` will use `SourceType | null`.
 - `RunSnapshotBrowserSubject.sourceSubtype` will use `SourceSubtype | null`.
 - `deriveRunSnapshotBrowserKind` will accept string-compatible route inputs so raw `AnalysisRunMessage.source_type` can be used without backend DTO changes.
+- `runSnapshotMessages` is the unfiltered loaded snapshot message window; `allSnapshotReaderItems` is the unfiltered reader-row projection; `snapshotReaderItems` is source-focus filtered.
 - Snapshot available branches will use `allSnapshotReaderItems` for reader-kind derivation, not the source-filtered `snapshotReaderItems`.
 - `SourceReaderHeader` remains outside `SourceBrowserShell`.
 ```
@@ -492,6 +494,8 @@ After the `"renders universal Items as a loaded-window browser"` test, add:
     expect(snapshotGroupSourcesViewSource).toContain("groupReaderItemsBySource");
     expect(snapshotGroupSourcesViewSource).toContain("Load older snapshot messages");
     expect(snapshotGroupSourcesViewSource).toContain("showSyncActions={false}");
+    expect(snapshotGroupSourcesViewSource).toContain("otherItems");
+    expect(snapshotGroupSourcesViewSource).toContain("other-item-list");
     expect(snapshotGroupSourcesViewSource).not.toContain("hasMoreBySource");
     expect(snapshotGroupSourcesViewSource).not.toContain("onLoadMoreSource");
   });
@@ -564,9 +568,11 @@ Create `src/lib/components/analysis/snapshot-items-view.svelte` with:
         .some((value) => value?.toLowerCase().includes(query));
     });
     const direction = sortMode === "newest" ? -1 : 1;
-    return [...filtered].sort((left, right) =>
-      (left.publishedAt - right.publishedAt) * direction || left.id.localeCompare(right.id),
-    );
+    return [...filtered].sort((left, right) => {
+      const leftTime = left.publishedAt ?? 0;
+      const rightTime = right.publishedAt ?? 0;
+      return (leftTime - rightTime) * direction || left.id.localeCompare(right.id);
+    });
   });
 
   function inputValue(event: Event) {
@@ -813,19 +819,20 @@ Create `src/lib/components/analysis/snapshot-group-sources-view.svelte` with:
     <EmptyState description="No frozen source rows are loaded for this group snapshot." />
   {:else}
     {#each sourceGroups as group (group.sourceId)}
-      {@const youtubeItems = group.items.filter((item) => item.kind === "youtube_transcript")}
-      {@const telegramItems = group.items.filter((item) => item.kind !== "youtube_transcript")}
+      {@const youtubeTranscriptItems = group.items.filter((item) => item.kind === "youtube_transcript")}
+      {@const telegramItems = group.items.filter((item) => item.kind === "telegram_message")}
+      {@const otherItems = group.items.filter((item) => item.kind !== "youtube_transcript" && item.kind !== "telegram_message")}
       <section class="source-bucket" aria-label={group.sourceTitle}>
         <div class="source-heading">
           <h3>{group.sourceTitle}</h3>
           <span>{group.items.length} frozen rows</span>
         </div>
 
-        {#if youtubeItems.length > 0}
+        {#if youtubeTranscriptItems.length > 0}
           <YoutubeTranscriptReader
             detail={null}
             segments={[]}
-            snapshotItems={youtubeItems}
+            snapshotItems={youtubeTranscriptItems}
             {loading}
             hasMore={false}
             transcriptSearch=""
@@ -849,6 +856,20 @@ Create `src/lib/components/analysis/snapshot-group-sources-view.svelte` with:
             {formatTimestamp}
             onLoadMore={() => {}}
           />
+        {/if}
+
+        {#if otherItems.length > 0}
+          <ul class="other-item-list" aria-label={group.sourceTitle + " other snapshot rows"}>
+            {#each otherItems as item (item.id)}
+              <li class:selected={item.selected} data-trace-ref={item.ref}>
+                <div>
+                  <strong>{item.kind.replaceAll("_", " ")}</strong>
+                  <span>{formatTimestamp(item.publishedAt)}</span>
+                </div>
+                <p>{item.content || "No text content captured for this snapshot row."}</p>
+              </li>
+            {/each}
+          </ul>
         {/if}
       </section>
     {/each}
@@ -892,6 +913,48 @@ Create `src/lib/components/analysis/snapshot-group-sources-view.svelte` with:
   .source-heading span {
     color: var(--muted);
     font-size: 0.82rem;
+  }
+
+  .other-item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .other-item-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+
+  .other-item-list li.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+
+  .other-item-list div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .other-item-list span,
+  .other-item-list p {
+    color: var(--muted);
+  }
+
+  .other-item-list p {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   .source-group-footer {
@@ -1074,15 +1137,16 @@ Create `src/lib/components/analysis/run-snapshot-metadata-view.svelte` with:
 </style>
 ```
 
-- [ ] **Step 7: Run reader tests and verify they pass**
+- [ ] **Step 7: Run reader tests and Svelte check**
 
 Run:
 
 ```bash
 npm.cmd run test -- src/lib/analysis-source-readers.test.ts
+npm.cmd run check
 ```
 
-Expected: PASS.
+Expected: both PASS.
 
 - [ ] **Step 8: Commit snapshot leaves**
 
