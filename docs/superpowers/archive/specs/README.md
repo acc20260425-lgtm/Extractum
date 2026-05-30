@@ -14,3 +14,6 @@ The 2026-05-29 and 2026-05-30 Source Browser specs are historical rationale for
 the shipped Source Browser architecture. Current behavior is summarized in
 `docs/project.md`, `docs/design-document.md`, and
 `docs/frontend-architecture-evolution-analysis.md`.
+
+Analysis workspace parity specs record shipped canvas-level workspace tool
+contracts for setup and opened-run states.
