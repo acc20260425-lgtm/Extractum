@@ -97,6 +97,17 @@ interface RawSourceItem {
   migration_domain: "migrated_from_chat" | null;
   history_scope_label: "Current supergroup history" | "Migrated small-group history";
   page_cursor: SourceItemsCursor;
+  youtube_comment?: RawYoutubeCommentItem | null;
+}
+
+interface RawYoutubeCommentItem {
+  comment_id: string | null;
+  parent_comment_id: string | null;
+  is_reply: boolean;
+  like_count: number | null;
+  is_pinned: boolean;
+  is_hearted: boolean;
+  author_channel_url: string | null;
 }
 
 interface RawYoutubeTranscriptSegmentCursor {
@@ -345,6 +356,19 @@ function mapSourceItem(item: RawSourceItem): SourceItem {
     migrationDomain: item.migration_domain,
     historyScopeLabel: item.history_scope_label,
     pageCursor: item.page_cursor,
+    ...(item.youtube_comment
+      ? {
+          youtubeComment: {
+            commentId: item.youtube_comment.comment_id,
+            parentCommentId: item.youtube_comment.parent_comment_id,
+            isReply: item.youtube_comment.is_reply,
+            likeCount: item.youtube_comment.like_count,
+            isPinned: item.youtube_comment.is_pinned,
+            isHearted: item.youtube_comment.is_hearted,
+            authorChannelUrl: item.youtube_comment.author_channel_url,
+          },
+        }
+      : {}),
   };
 }
 

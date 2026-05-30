@@ -356,6 +356,64 @@ describe("sources api wrappers", () => {
     });
   });
 
+  it("maps optional YouTube comment enrichment on source items", async () => {
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        source_id: 7,
+        external_id: "comment:c1",
+        item_kind: "youtube_comment",
+        author: "Alice",
+        published_at: 1700000000,
+        content: "Hello",
+        content_kind: "text_only",
+        has_media: false,
+        media_kind: null,
+        media_summary: null,
+        media_file_name: null,
+        media_mime_type: null,
+        has_raw_data: true,
+        forum_topic_id: null,
+        forum_topic_title: null,
+        forum_topic_top_message_id: null,
+        reply_to_msg_id: null,
+        reply_to_peer_kind: null,
+        reply_to_peer_id: null,
+        reply_to_top_id: null,
+        reaction_count: 5,
+        history_scope: "current",
+        is_migrated_history: false,
+        migration_domain: null,
+        history_scope_label: "Current supergroup history",
+        page_cursor: "cursor",
+        youtube_comment: {
+          comment_id: "c1",
+          parent_comment_id: null,
+          is_reply: false,
+          like_count: 5,
+          is_pinned: true,
+          is_hearted: false,
+          author_channel_url: "https://www.youtube.com/@alice",
+        },
+      },
+    ]);
+
+    await expect(listSourceItems({
+      sourceId: 7,
+      limit: 50,
+      beforePublishedAt: null,
+      topicFilter: null,
+    })).resolves.toMatchObject([
+      {
+        youtubeComment: {
+          commentId: "c1",
+          isPinned: true,
+          authorChannelUrl: "https://www.youtube.com/@alice",
+        },
+      },
+    ]);
+  });
+
   it("passes explicit Telegram history scope and opaque cursor to source item loading", async () => {
     invokeMock.mockResolvedValueOnce([]);
 

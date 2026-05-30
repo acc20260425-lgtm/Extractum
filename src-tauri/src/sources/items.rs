@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use grammers_client::tl;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::AppHandle;
 
-use crate::compression::{compress_json_bytes, compress_text, decompress_text};
+use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, decompress_text};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::{decode_media_metadata, encode_media_metadata, ExtractedItemPayload};
@@ -48,6 +50,18 @@ pub struct ItemRecord {
     pub migration_domain: Option<String>,
     pub history_scope_label: String,
     pub page_cursor: String,
+    pub youtube_comment: Option<YoutubeCommentItemRecord>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct YoutubeCommentItemRecord {
+    pub comment_id: Option<String>,
+    pub parent_comment_id: Option<String>,
+    pub is_reply: bool,
+    pub like_count: Option<i64>,
+    pub is_pinned: bool,
+    pub is_hearted: bool,
+    pub author_channel_url: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -692,10 +706,68 @@ pub async fn list_source_items(
     )
     .await?;
 
-    rows.into_iter().map(item_record_from_row).collect()
+    item_records_from_rows(&pool, rows).await
 }
 
-fn item_record_from_row(row: BrowsableItemRow) -> AppResult<ItemRecord> {
+async fn item_records_from_rows(
+    pool: &sqlx::SqlitePool,
+    rows: Vec<BrowsableItemRow>,
+) -> AppResult<Vec<ItemRecord>> {
+    let enrichments = load_youtube_comment_enrichments(pool, &rows).await?;
+    rows.into_iter()
+        .map(|row| {
+            let youtube_comment = enrichments.get(&row.id).cloned();
+            item_record_from_row(row, youtube_comment)
+        })
+        .collect()
+}
+
+async fn load_youtube_comment_enrichments(
+    pool: &sqlx::SqlitePool,
+    rows: &[BrowsableItemRow],
+) -> AppResult<HashMap<i64, YoutubeCommentItemRecord>> {
+    let mut enrichments = HashMap::new();
+    let comment_item_ids = rows
+        .iter()
+        .filter(|row| row.item_kind == ITEM_KIND_YOUTUBE_COMMENT)
+        .map(|row| row.id);
+
+    for item_id in comment_item_ids {
+        let raw_data_zstd: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT raw_data_zstd FROM items WHERE id = ?")
+                .bind(item_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(AppError::database)?;
+        if let Some(record) = raw_data_zstd
+            .as_deref()
+            .and_then(youtube_comment_item_record_from_raw)
+        {
+            enrichments.insert(item_id, record);
+        }
+    }
+
+    Ok(enrichments)
+}
+
+fn youtube_comment_item_record_from_raw(raw_data_zstd: &[u8]) -> Option<YoutubeCommentItemRecord> {
+    let bytes = decompress_bytes(raw_data_zstd).ok()?;
+    let comment: crate::youtube::dto::YoutubeComment = serde_json::from_slice(&bytes).ok()?;
+    Some(YoutubeCommentItemRecord {
+        comment_id: Some(comment.comment_id),
+        parent_comment_id: comment.parent_comment_id,
+        is_reply: comment.is_reply,
+        like_count: comment.like_count,
+        is_pinned: comment.is_pinned.unwrap_or(false),
+        is_hearted: comment.is_hearted.unwrap_or(false),
+        author_channel_url: comment.author_channel_url,
+    })
+}
+
+fn item_record_from_row(
+    row: BrowsableItemRow,
+    youtube_comment: Option<YoutubeCommentItemRecord>,
+) -> AppResult<ItemRecord> {
     let media_metadata = decode_media_metadata(row.media_metadata_zstd.as_deref())?;
     let page_cursor = row.cursor().encode_opaque()?;
     Ok(ItemRecord {
@@ -734,6 +806,7 @@ fn item_record_from_row(row: BrowsableItemRow) -> AppResult<ItemRecord> {
         migration_domain: row.migration_domain,
         history_scope_label: row.history_scope_label,
         page_cursor,
+        youtube_comment,
     })
 }
 
@@ -1797,6 +1870,83 @@ mod tests {
             decompress_text(&content).expect("decompress second"),
             "Second"
         );
+    }
+
+    #[tokio::test]
+    async fn list_source_items_enriches_youtube_comment_rows_from_raw_payload() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        seed_youtube_video_source(&pool, 2).await;
+
+        let mut comment = youtube_comment("c1", "First comment");
+        comment.parent_comment_id = Some("root1".to_string());
+        comment.is_reply = true;
+        comment.like_count = Some(12);
+        comment.is_pinned = Some(true);
+        comment.is_hearted = Some(false);
+        comment.author_channel_url = Some("https://www.youtube.com/@alice".to_string());
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        upsert_youtube_comment_item(&mut tx, 2, &comment)
+            .await
+            .expect("insert comment");
+        tx.commit().await.expect("commit");
+
+        let rows = super::query::load_item_rows_from_pool(
+            &pool, 2, "youtube", 50, None, None, None, None, None,
+        )
+        .await
+        .expect("load rows");
+        let records = super::item_records_from_rows(&pool, rows)
+            .await
+            .expect("map records");
+
+        assert_eq!(records.len(), 1);
+        let enrichment = records[0]
+            .youtube_comment
+            .as_ref()
+            .expect("youtube comment enrichment");
+        assert_eq!(enrichment.comment_id.as_deref(), Some("c1"));
+        assert_eq!(enrichment.parent_comment_id.as_deref(), Some("root1"));
+        assert!(enrichment.is_reply);
+        assert_eq!(enrichment.like_count, Some(12));
+        assert!(enrichment.is_pinned);
+        assert!(!enrichment.is_hearted);
+        assert_eq!(
+            enrichment.author_channel_url.as_deref(),
+            Some("https://www.youtube.com/@alice")
+        );
+    }
+
+    #[tokio::test]
+    async fn list_source_items_keeps_base_youtube_comment_when_raw_payload_is_malformed() {
+        let pool = memory_pool_with_source_items_and_topics().await;
+        create_analysis_documents_table(&pool).await;
+        seed_youtube_video_source(&pool, 2).await;
+
+        let mut tx = pool.begin().await.expect("begin tx");
+        let item_id = upsert_youtube_comment_item(&mut tx, 2, &youtube_comment("bad", "Visible"))
+            .await
+            .expect("insert comment");
+        tx.commit().await.expect("commit");
+        sqlx::query("UPDATE items SET raw_data_zstd = x'00' WHERE id = ?")
+            .bind(item_id)
+            .execute(&pool)
+            .await
+            .expect("corrupt raw payload");
+
+        let rows = super::query::load_item_rows_from_pool(
+            &pool, 2, "youtube", 50, None, None, None, None, None,
+        )
+        .await
+        .expect("load rows");
+        let records = super::item_records_from_rows(&pool, rows)
+            .await
+            .expect("map records");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].content.as_deref(), Some("Visible"));
+        assert!(records[0].youtube_comment.is_none());
     }
 
     #[tokio::test]

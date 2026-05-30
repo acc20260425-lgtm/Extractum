@@ -861,7 +861,7 @@ git commit -m "feat: add universal loaded items browser"
 - Modify: `src/lib/api/sources.ts`
 - Modify: `src/lib/api/sources.test.ts`
 
-- [ ] **Step 1: Write failing frontend API mapping test**
+- [x] **Step 1: Write failing frontend API mapping test**
 
 Add to `src/lib/api/sources.test.ts`:
 
@@ -925,13 +925,13 @@ it("maps optional YouTube comment enrichment on source items", async () => {
 });
 ```
 
-- [ ] **Step 2: Run failing frontend test**
+- [x] **Step 2: Run failing frontend test**
 
 Run: `npm run test -- src/lib/api/sources.test.ts`
 
 Expected: FAIL because `youtube_comment` is not mapped.
 
-- [ ] **Step 3: Add frontend types and mapper**
+- [x] **Step 3: Add frontend types and mapper**
 
 In `src/lib/types/sources.ts`, add:
 
@@ -951,14 +951,14 @@ Add `youtubeComment?: YoutubeCommentItem` to `SourceItem`.
 
 In `src/lib/api/sources.ts`, add `youtube_comment?: RawYoutubeCommentItem | null` to `RawSourceItem` and map it to camelCase.
 
-- [ ] **Step 4: Write backend tests**
+- [x] **Step 4: Write backend tests**
 
 Add Rust tests in `src-tauri/src/sources/items.rs` near existing YouTube comment item tests:
 
 - one test inserts a `YoutubeComment`, calls the internal list path, and asserts `youtube_comment.comment_id`, `parent_comment_id`, `like_count`, `is_pinned`, `is_hearted`, and `author_channel_url`;
 - one test corrupts `raw_data_zstd` for a YouTube comment item and asserts the base item row still returns with `youtube_comment = None`.
 
-- [ ] **Step 5: Implement backend enrichment**
+- [x] **Step 5: Implement backend enrichment**
 
 In `src-tauri/src/sources/items.rs`:
 
@@ -973,7 +973,7 @@ In `src-tauri/src/sources/items.rs`:
 Keep malformed raw payloads non-fatal: log-free `None` is enough for this command because the base row remains valid.
 Frontend mapping owns the case conversion: backend returns snake_case `youtube_comment.comment_id`, `parent_comment_id`, `like_count`, `is_pinned`, `is_hearted`, and `author_channel_url`; `src/lib/api/sources.ts` maps that object to camelCase `SourceItem.youtubeComment`.
 
-- [ ] **Step 6: Run backend and frontend tests**
+- [x] **Step 6: Run backend and frontend tests**
 
 Run:
 
@@ -984,7 +984,7 @@ cargo test --manifest-path src-tauri/Cargo.toml youtube_comment
 
 Expected: both commands exit 0.
 
-- [ ] **Step 7: Commit Slice 4a**
+- [x] **Step 7: Commit Slice 4a**
 
 ```bash
 git add src-tauri/src/sources/items.rs src/lib/types/sources.ts src/lib/api/sources.ts src/lib/api/sources.test.ts

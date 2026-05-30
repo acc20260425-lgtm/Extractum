@@ -100,6 +100,17 @@ export interface SourceItem {
   migrationDomain: "migrated_from_chat" | null;
   historyScopeLabel: "Current supergroup history" | "Migrated small-group history";
   pageCursor: SourceItemsCursor;
+  youtubeComment?: YoutubeCommentItem;
+}
+
+export interface YoutubeCommentItem {
+  commentId: string | null;
+  parentCommentId: string | null;
+  isReply: boolean;
+  likeCount: number | null;
+  isPinned: boolean;
+  isHearted: boolean;
+  authorChannelUrl: string | null;
 }
 
 export type ForumTopicFilter =
