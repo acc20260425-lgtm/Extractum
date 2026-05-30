@@ -21,6 +21,8 @@
 - Bridge discovery contract: wait up to 90 seconds for the debug bridge by repeating short scans across ports `9223..9322`; report `app-identifier-mismatch` separately from `bridge-unavailable`.
 - Bridge probe contract: before running UI scenarios, probe `get_backend_state`, `resize_window`, `execute_js`, and screenshot command dispatch. Screenshot capture is best-effort after dispatch is proven.
 - Probe-only safety contract: `--probe-only` must not seed, verify, clean, or navigate fixture data; fixture cleanup runs only after fixture lifecycle has started.
+- UI click contract: mode switches and row actions must be scoped by smoke id or row text. Do not use broad `clickByText("Open")`, `clickByText("Source")`, or `clickByText("Report")` for navigation-critical steps.
+- Cleanup verification contract: fixture cleanup is verified by debug fixture command summaries, not by stale DOM labels after same-route navigation.
 - Fixture cleanup must remain marker-scoped. Any cleanup broad enough to delete non-fixture rows is a blocker.
 - Use deterministic smoke step names such as `source-browser.youtube-video-tabs`; use the same names in console output and artifact paths.
 
@@ -45,7 +47,7 @@
 - Modify: `src/lib/components/analysis/report-workspace-tools.svelte`
   - Add smoke ids to workspace tools, NotebookLM export button, and disabled reason. Keep `aria-describedby` as the technical association.
 - Modify: `src/lib/components/analysis/report-canvas.svelte`
-  - Add smoke ids to the canvas, template drawer, and group drawer.
+  - Add smoke ids to the canvas, report/source mode buttons, template drawer, and group drawer.
 - Modify: `src/lib/components/analysis/report-setup-panel.svelte`
   - Add `data-smoke-id="analysis-report-setup"`.
 - Modify: `src/lib/components/analysis/report-source-surface.svelte`
@@ -219,6 +221,10 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("analysisWorkspaceParitySteps");
     expect(smokeScriptSource).toContain("source-browser.youtube-video-tabs");
     expect(smokeScriptSource).toContain("workspace-parity.source-group-disabled-export");
+    expect(smokeScriptSource).toContain("workspace-parity.opened-single-run-tools");
+    expect(smokeScriptSource).toContain("assertOpenedRunNotebookLmExportContract");
+    expect(smokeScriptSource).toContain('clickRowActionByText(ctx.socket, "run-companion-runs-panel"');
+    expect(smokeScriptSource).toContain("assertEmptyFixtureSummary(verificationSummary)");
     expect(smokeScriptSource).toContain("runSmokeSteps");
     expect(smokeScriptSource).toContain("finally");
     expect(smokeScriptSource).toContain("fixturesTouched");
@@ -231,9 +237,12 @@ describe("analysis UI smoke harness contract", () => {
     expect(helperSource).toContain("executeJs");
     expect(helperSource).toContain("waitForText");
     expect(helperSource).toContain("clickByText");
+    expect(helperSource).toContain("clickByTextWithinSmokeId");
+    expect(helperSource).toContain("clickRowActionByText");
     expect(helperSource).toContain("clickBySmokeId");
     expect(helperSource).toContain("getVisibleTextSummary");
     expect(helperSource).toContain("assertTabOrderLabels");
+    expect(helperSource).toContain("assertEmptyFixtureSummary");
     expect(helperSource).toContain("assertDisabledWithReason");
     expect(helperSource).toContain("captureArtifacts");
     expect(helperSource).toContain("capture_native_screenshot");
@@ -252,6 +261,8 @@ describe("analysis UI smoke harness contract", () => {
 
   it("renders smoke hooks only for stable analysis UI contracts", () => {
     expect(reportWorkspaceToolsSource).toContain('data-smoke-id="analysis-workspace-tools"');
+    expect(reportCanvasSource).toContain('smokeId="report-canvas-mode-report"');
+    expect(reportCanvasSource).toContain('smokeId="report-canvas-mode-source"');
     expect(reportSetupPanelSource).toContain('data-smoke-id="analysis-report-setup"');
     expect(reportSourceSurfaceSource).toContain('data-smoke-id="analysis-source-surface"');
     expect(sourceBrowserShellSource).toContain('data-smoke-id="source-browser-tabs"');
@@ -320,6 +331,7 @@ import { describe, expect, it } from "vitest";
 import {
   SmokeAssertionError,
   SmokeBridgeError,
+  assertEmptyFixtureSummary,
   assertTabOrderLabels,
   bridgePortCandidates,
   classifyBridgeFailure,
@@ -378,6 +390,34 @@ describe("analysis smoke helper contracts", () => {
       sources: 4,
       youtubePlaylistItems: 2,
       youtubeTranscriptSegments: 3,
+    })).toThrow(SmokeAssertionError);
+  });
+
+  it("validates empty fixture cleanup summaries", () => {
+    expect(assertEmptyFixtureSummary({
+      accounts: 0,
+      chatMessages: 0,
+      llmProfiles: 0,
+      promptTemplates: 0,
+      runs: 0,
+      snapshotMessages: 0,
+      sourceGroups: 0,
+      sources: 0,
+      youtubePlaylistItems: 0,
+      youtubeTranscriptSegments: 0,
+    })).toBe(true);
+
+    expect(() => assertEmptyFixtureSummary({
+      accounts: 0,
+      chatMessages: 0,
+      llmProfiles: 0,
+      promptTemplates: 0,
+      runs: 0,
+      snapshotMessages: 1,
+      sourceGroups: 0,
+      sources: 0,
+      youtubePlaylistItems: 0,
+      youtubeTranscriptSegments: 0,
     })).toThrow(SmokeAssertionError);
   });
 
@@ -658,6 +698,30 @@ Change drawer wrappers:
 
 ```svelte
     <div class="workspace-group-editor-drawer" aria-label="Source group editor drawer" data-smoke-id="source-group-editor-drawer">
+```
+
+Add `smokeId` to the canvas mode buttons so smoke tests never click broad `Report` / `Source` text:
+
+```svelte
+        <Button
+          type="button"
+          role="tab"
+          smokeId="report-canvas-mode-report"
+          ...
+        >
+          Report
+        </Button>
+```
+
+```svelte
+        <Button
+          type="button"
+          role="tab"
+          smokeId="report-canvas-mode-source"
+          ...
+        >
+          Source
+        </Button>
 ```
 
 - [ ] **Step 5: Mark report setup and source surface**
@@ -970,6 +1034,18 @@ export function validateFixtureSummary(summary) {
   return true;
 }
 
+export function assertEmptyFixtureSummary(summary) {
+  const nonEmpty = Object.entries(summary ?? {})
+    .filter(([, value]) => Number(value ?? 0) !== 0)
+    .map(([key, value]) => `${key}=${value}`);
+  if (nonEmpty.length > 0) {
+    throw new SmokeAssertionError(`fixture cleanup verification found remaining rows: ${nonEmpty.join(", ")}`, {
+      summary,
+    });
+  }
+  return true;
+}
+
 export function classifyBridgeFailure(error) {
   if (error instanceof SmokeAssertionError) return { kind: "assertion", message: error.message };
   if (error instanceof SmokeBridgeError) return { kind: error.kind, message: error.message };
@@ -1186,6 +1262,40 @@ export async function clickByText(socket, text) {
   `);
 }
 
+export async function clickByTextWithinSmokeId(socket, smokeId, text) {
+  return executeJs(socket, `
+    const container = document.querySelector('[data-smoke-id="${smokeId}"]');
+    if (!container) throw new Error('ASSERT: missing smoke id ${smokeId}');
+    const targetText = ${JSON.stringify(text)};
+    const candidates = Array.from(container.querySelectorAll('button, [role="button"], a, summary'));
+    const match = candidates.find((element) => element.innerText.trim().includes(targetText)
+      || element.getAttribute('aria-label')?.includes(targetText)
+      || element.getAttribute('title')?.includes(targetText));
+    if (!match) throw new Error('ASSERT: scoped clickable text not found: ' + targetText);
+    match.click();
+    return true;
+  `);
+}
+
+export async function clickRowActionByText(socket, containerSmokeId, rowText, actionText) {
+  return executeJs(socket, `
+    const container = document.querySelector('[data-smoke-id="${containerSmokeId}"]');
+    if (!container) throw new Error('ASSERT: missing smoke id ${containerSmokeId}');
+    const rowText = ${JSON.stringify(rowText)};
+    const actionText = ${JSON.stringify(actionText)};
+    const rowCandidates = Array.from(container.querySelectorAll('li, article, .source-row, .group-row, button, [role="row"]'));
+    const row = rowCandidates.find((candidate) => candidate.innerText.includes(rowText));
+    if (!row) throw new Error('ASSERT: row not found: ' + rowText);
+    const action = Array.from(row.querySelectorAll('button, [role="button"], a'))
+      .find((candidate) => candidate.innerText.trim().includes(actionText)
+        || candidate.getAttribute('aria-label')?.includes(actionText)
+        || candidate.getAttribute('title')?.includes(actionText));
+    if (!action) throw new Error('ASSERT: row action not found: ' + actionText + ' in ' + rowText);
+    action.click();
+    return true;
+  `);
+}
+
 export async function fillByLabel(socket, label, value) {
   return executeJs(socket, `
     const labelText = ${JSON.stringify(label)};
@@ -1365,6 +1475,7 @@ import { fileURLToPath } from "node:url";
 import {
   SmokeAssertionError,
   artifactRoot,
+  assertEmptyFixtureSummary,
   assertDisabledWithReason,
   assertSelectedTab,
   assertTabOrderLabels,
@@ -1372,10 +1483,11 @@ import {
   captureArtifacts,
   clickBySmokeId,
   clickByText,
+  clickByTextWithinSmokeId,
+  clickRowActionByText,
   discoverBridge,
   executeJs,
   expectedAppIdentifier,
-  expectedFixtureLabels,
   fixtureLabels,
   fillByLabel,
   getVisibleTextSummary,
@@ -1471,14 +1583,10 @@ async function seedFixtures(ctx) {
 }
 
 async function cleanupFixtures(ctx) {
-  const summary = await invokeFixtureCommand(ctx, "clear_analysis_redesign_fixtures");
-  await navigateAnalysis(ctx);
-  const labels = await fixtureLabelsFromDom(ctx);
-  const leftovers = expectedFixtureLabels.filter((label) => labels.includes(label));
-  if (leftovers.length > 0) {
-    throw new SmokeAssertionError(`fixture cleanup left labels visible: ${leftovers.join(", ")}`, { summary, leftovers });
-  }
-  return summary;
+  const removedSummary = await invokeFixtureCommand(ctx, "clear_analysis_redesign_fixtures");
+  const verificationSummary = await invokeFixtureCommand(ctx, "clear_analysis_redesign_fixtures");
+  assertEmptyFixtureSummary(verificationSummary);
+  return { removedSummary, verificationSummary };
 }
 
 async function runSmokeSteps(ctx, steps) {
@@ -1555,6 +1663,8 @@ export {
   assertTabOrderLabels,
   clickBySmokeId,
   clickByText,
+  clickByTextWithinSmokeId,
+  clickRowActionByText,
   executeJs,
   fixtureLabels,
   fillByLabel,
@@ -1633,7 +1743,7 @@ async function closeTransientUi(ctx) {
 }
 
 async function switchCanvasMode(ctx, mode) {
-  await clickByText(ctx.socket, mode === "source" ? "Source" : "Report");
+  await clickBySmokeId(ctx.socket, mode === "source" ? "report-canvas-mode-source" : "report-canvas-mode-report");
   await waitForText(ctx.socket, mode === "source" ? "Source material" : "Workspace tools");
 }
 
@@ -1647,7 +1757,7 @@ async function selectSource(ctx, label) {
   await openSourceSwitcher(ctx);
   await fillByLabel(ctx.socket, "Search sources or groups", label);
   await waitForText(ctx.socket, label);
-  await clickByText(ctx.socket, label);
+  await clickByTextWithinSmokeId(ctx.socket, "source-switcher-panel", label);
   await waitForText(ctx.socket, label);
 }
 
@@ -1656,7 +1766,7 @@ async function selectGroup(ctx, label) {
   await openSourceSwitcher(ctx);
   await fillByLabel(ctx.socket, "Search sources or groups", label);
   await waitForText(ctx.socket, label);
-  await clickByText(ctx.socket, label);
+  await clickByTextWithinSmokeId(ctx.socket, "source-switcher-panel", label);
   await waitForText(ctx.socket, label);
 }
 
@@ -1670,7 +1780,7 @@ async function openRun(ctx, label) {
   await openRunsTab(ctx);
   await fillByLabel(ctx.socket, "Search runs", label);
   await waitForText(ctx.socket, label);
-  await clickByText(ctx.socket, "Open");
+  await clickRowActionByText(ctx.socket, "run-companion-runs-panel", label, "Open");
   await waitForText(ctx.socket, "Run #");
 }
 
@@ -1825,14 +1935,48 @@ async function closeDialog(ctx) {
   `));
 }
 
+async function assertNoNotebookLmExportDialog(ctx, reason) {
+  const reasonText = JSON.stringify(reason);
+  await executeJs(ctx.socket, `
+    const dialog = document.querySelector('[data-smoke-id="notebooklm-export-dialog"]');
+    if (dialog) throw new Error('ASSERT: NotebookLM export dialog opened unexpectedly: ' + ${reasonText});
+    return true;
+  `);
+}
+
+async function assertOpenedRunNotebookLmExportContract(ctx) {
+  const state = await executeJs(ctx.socket, `
+    const button = document.querySelector('[data-smoke-id="notebooklm-export-button"]');
+    return {
+      exists: Boolean(button),
+      disabled: Boolean(button?.disabled) || button?.getAttribute('aria-disabled') === 'true',
+      text: button?.innerText ?? '',
+    };
+  `);
+
+  if (!state.exists) {
+    await assertNoNotebookLmExportDialog(ctx, "opened single-source run has no restored currentSource");
+    return;
+  }
+
+  if (state.disabled) {
+    await clickBySmokeId(ctx.socket, "notebooklm-export-button").catch(() => true);
+    await assertNoNotebookLmExportDialog(ctx, "disabled opened-run export must not use saved-run metadata alone");
+    return;
+  }
+
+  await openNotebookLmExportDialog(ctx);
+  await closeDialog(ctx);
+}
+
 async function assertDrawer(ctx, triggerText, smokeId) {
-  await clickByText(ctx.socket, triggerText);
+  await clickByTextWithinSmokeId(ctx.socket, "analysis-workspace-tools", triggerText);
   await executeJs(ctx.socket, `
     const drawer = document.querySelector('[data-smoke-id="${smokeId}"]');
     if (!drawer) throw new Error('ASSERT: drawer missing ${smokeId}');
     return true;
   `);
-  await clickByText(ctx.socket, triggerText.replace("Edit", "Hide"));
+  await clickByTextWithinSmokeId(ctx.socket, "analysis-workspace-tools", triggerText.replace("Edit", "Hide"));
 }
 ```
 
@@ -1894,6 +2038,7 @@ export const analysisWorkspaceParitySteps = [
         if (!report) throw new Error('ASSERT: opened run report body missing');
         return true;
       `);
+      await assertOpenedRunNotebookLmExportContract(ctx);
     },
   },
   {
@@ -2084,7 +2229,7 @@ Notes:
 
 - Smoke command remains opt-in.
 - `npm.cmd run verify` does not run `smoke:analysis`.
-- Fixture cleanup completed and verified no fixture labels remained visible.
+- Fixture cleanup completed and second cleanup summary verified zero fixture rows.
 ~~~
 
 If local GUI automation cannot run in the current environment, create the same file with `Result: not run in this environment` and include the exact failure reason. Do not claim smoke pass without command output.
