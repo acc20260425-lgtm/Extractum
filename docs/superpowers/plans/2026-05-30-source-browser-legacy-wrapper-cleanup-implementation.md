@@ -55,7 +55,7 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-source-browser-legacy-wrapper-cleanup-implementation.md`
 
-- [ ] **Step 1: Create the cleanup branch**
+- [x] **Step 1: Create the cleanup branch**
 
 Run:
 
@@ -65,7 +65,26 @@ git switch -c source-browser-legacy-wrapper-cleanup
 
 Expected: branch changes from `main` to `source-browser-legacy-wrapper-cleanup`.
 
-- [ ] **Step 2: Audit both wrapper candidates**
+- [x] **Step 2: Verify the canonical snapshot browser leaves are already in the shell**
+
+Run:
+
+```bash
+rg -n "SnapshotGroupSourcesView|SnapshotItemsView|RunSnapshotMetadataView" src/lib/components/analysis/source-browser-shell.svelte
+```
+
+Expected: matches for imports and render branches in `source-browser-shell.svelte`. If this command has no matches, stop before deletion because the run snapshot migration has not landed.
+
+Actual result on 2026-05-30:
+
+```text
+src/lib/components/analysis/source-browser-shell.svelte imports and renders:
+- RunSnapshotMetadataView
+- SnapshotGroupSourcesView
+- SnapshotItemsView
+```
+
+- [x] **Step 3: Audit both wrapper candidates**
 
 Run:
 
@@ -96,7 +115,28 @@ RunSnapshotMessagesPanel / run-snapshot-messages-panel:
 
 Production source usage means a match in a non-test file under `src`. Matches in `*.test.ts` and `docs/*` are migration targets, not deletion blockers.
 
-- [ ] **Step 3: Apply the per-component hard gate**
+Actual audit result on 2026-05-30:
+
+```text
+SourceGroupReader / source-group-reader:
+- production source usage: none
+- raw-test usage:
+  - src/lib/analysis-source-readers.test.ts
+  - src/lib/analysis-redesign-safety-contract.test.ts
+- docs usage:
+  - docs/superpowers/specs/2026-05-30-source-group-source-browser-design.md
+  - docs/superpowers/specs/2026-05-30-source-browser-legacy-wrapper-cleanup-design.md
+  - historical implementation plans under docs/superpowers/plans
+
+RunSnapshotMessagesPanel / run-snapshot-messages-panel:
+- production source usage: none
+- raw-test usage:
+  - src/lib/analysis-report-canvas.test.ts
+- docs usage:
+  - docs/superpowers/specs/2026-05-30-source-browser-legacy-wrapper-cleanup-design.md
+```
+
+- [x] **Step 4: Apply the per-component hard gate**
 
 Use this decision table:
 
@@ -118,7 +158,14 @@ If run-snapshot-messages-panel.svelte has no production source usage:
 
 For the current repository state, both candidates are expected to pass the deletion gate.
 
-- [ ] **Step 4: Commit the audited plan state**
+Actual deletion decision on 2026-05-30:
+
+```text
+SourceGroupReader: delete in Task 1.
+RunSnapshotMessagesPanel: delete in Task 1.
+```
+
+- [x] **Step 5: Commit the audited plan state**
 
 Run:
 
@@ -258,7 +305,7 @@ Expected: PASS. These tests should no longer import the wrapper raw files.
 If both candidates passed the Task 0 production usage gate, run:
 
 ```bash
-git rm src/lib/components/analysis/source-group-reader.svelte src/lib/components/analysis/run-snapshot-messages-panel.svelte
+git rm --ignore-unmatch src/lib/components/analysis/source-group-reader.svelte src/lib/components/analysis/run-snapshot-messages-panel.svelte
 ```
 
 If only one candidate passed the gate, delete only that candidate with `git rm` and leave the blocked file untouched.
@@ -300,7 +347,7 @@ Expected: PASS with 0 errors.
 Run:
 
 ```bash
-git add src/lib/analysis-source-readers.test.ts src/lib/analysis-report-canvas.test.ts src/lib/analysis-redesign-safety-contract.test.ts src/lib/components/analysis/source-group-reader.svelte src/lib/components/analysis/run-snapshot-messages-panel.svelte docs/superpowers/plans/2026-05-30-source-browser-legacy-wrapper-cleanup-implementation.md
+git add -A src/lib docs/superpowers/plans/2026-05-30-source-browser-legacy-wrapper-cleanup-implementation.md
 git commit -m "test: remove legacy source browser wrappers"
 ```
 
@@ -416,7 +463,7 @@ Run:
 rg -n 'specialized readers|legacy group readers|saved run snapshot readers|keep their specialized readers|still render specialized readers|render .*SourceGroupReader' docs/design-document.md docs/project.md docs/frontend-architecture-evolution-analysis.md docs/superpowers/specs/2026-05-30-source-group-source-browser-design.md docs/superpowers/specs/2026-05-30-run-snapshot-source-browser-design.md
 ```
 
-Expected: no matches in `docs/design-document.md`, `docs/project.md`, or `docs/frontend-architecture-evolution-analysis.md`. Matches inside the two active specs are acceptable only if the post-implementation note clearly marks the following section as historical pre-slice context.
+Expected: no matches in `docs/design-document.md`, `docs/project.md`, or `docs/frontend-architecture-evolution-analysis.md`. Matches inside the two active specs are acceptable only if the post-implementation note clearly marks the following section as historical pre-slice context. If `rg` exits `0` only because of those acceptable historical spec matches, continue and do not treat that command as a failure.
 
 - [ ] **Step 6: Commit documentation cleanup**
 
