@@ -39,9 +39,12 @@ The main pressure point is `src/routes/analysis/+page.svelte`. It already uses
 smaller state/workflow modules, but the route still coordinates many
 independent concerns. The shipped `SourceBrowserShell` is the pattern to
 prefer: route-owned loading and callbacks, component-local interaction state,
-and narrow leaf components. Future work should extract small, clear units only
-when a backlog slice benefits from the boundary. A broad service-heavy frontend
-layer would add indirection without matching the current Svelte app.
+subject-specific browser data objects, and narrow leaf components. Live
+single-source browsing uses `sourceBrowserData`, live source groups use
+`groupBrowserData`, and available run snapshots use `snapshotBrowserData`.
+Future work should extract small, clear units only when a backlog slice
+benefits from the boundary. A broad service-heavy frontend layer would add
+indirection without matching the current Svelte app.
 
 ## Telegram Desktop-Informed Frontend Patterns
 

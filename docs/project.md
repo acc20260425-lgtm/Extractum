@@ -125,8 +125,10 @@ Not implemented yet:
     and Activity tabs
   - browse live YouTube playlists through Videos, Items, Metadata, and Activity
     tabs
-  - keep source groups and saved run snapshots on their existing specialized
-    readers
+  - browse live source groups through Sources, Items, Metadata, and Activity
+    tabs
+  - browse available saved run snapshots through frozen snapshot tabs without
+    live source actions
   - add Telegram sources manually or from dialogs
   - add YouTube videos and playlists by URL
   - sync Telegram source history

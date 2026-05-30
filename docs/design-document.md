@@ -49,12 +49,14 @@ legacy `/sources` route remains only as a compatibility redirect to
 Live source browsing now uses `SourceBrowserShell` for Telegram sources,
 YouTube videos, YouTube playlists, live source groups, and available run
 snapshots. The shell owns only local tab state and receives route-owned
-data/callbacks through props. Telegram defaults to `Timeline`; YouTube videos
-default to `Transcript`; YouTube playlists default to `Videos`; live source
-groups default to `Sources`; available run snapshots default to their
-provider-aware snapshot tab. All live sources expose loaded-window `Items`,
-structured `Metadata`, and consolidated `Activity`; available run snapshots
-preserve frozen snapshot semantics and do not expose live source actions.
+data/callbacks through subject-specific data objects: `sourceBrowserData`,
+`groupBrowserData`, and `snapshotBrowserData`. Telegram defaults to `Timeline`;
+YouTube videos default to `Transcript`; YouTube playlists default to `Videos`;
+live source groups default to `Sources`; available run snapshots default to
+their provider-aware snapshot tab. All live sources expose loaded-window
+`Items`, structured `Metadata`, and consolidated `Activity`; available run
+snapshots preserve frozen snapshot semantics and do not expose live source
+actions.
 
 The `/analysis` workspace mode state is centralized in a small typed
 state-machine module. `AnalysisWorkspaceEvent` values describe route-level user
