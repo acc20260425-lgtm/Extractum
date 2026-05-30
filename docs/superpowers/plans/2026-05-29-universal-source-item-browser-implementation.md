@@ -738,7 +738,7 @@ git commit -m "feat: move source activity into browser tab"
 - Modify: `src/lib/source-browser-model.ts`
 - Modify: `src/lib/source-browser-model.test.ts`
 
-- [ ] **Step 1: Write failing loaded-window helper tests**
+- [x] **Step 1: Write failing loaded-window helper tests**
 
 Add tests for:
 
@@ -748,17 +748,17 @@ Add tests for:
 
 Use existing `SourceItem` shape from `source-reader-model.test.ts` as the fixture.
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run: `npm run test -- src/lib/source-browser-model.test.ts`
 
 Expected: FAIL because item helpers do not exist.
 
-- [ ] **Step 3: Implement helpers in `source-browser-model.ts`**
+- [x] **Step 3: Implement helpers in `source-browser-model.ts`**
 
 Implement helpers as pure functions. Do not call any API from the helper layer.
 
-- [ ] **Step 4: Run helper tests**
+- [x] **Step 4: Run helper tests**
 
 Run: `npm run test -- src/lib/source-browser-model.test.ts`
 
