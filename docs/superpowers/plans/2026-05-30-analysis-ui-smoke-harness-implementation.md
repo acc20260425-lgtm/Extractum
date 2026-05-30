@@ -23,8 +23,11 @@
 - Probe-only safety contract: `--probe-only` must not seed, verify, clean, or navigate fixture data; fixture cleanup runs only after fixture lifecycle has started.
 - UI click contract: mode switches and row actions must be scoped by smoke id or row text. Do not use broad `clickByText("Open")`, `clickByText("Source")`, or `clickByText("Report")` for navigation-critical steps.
 - Source/group selection contract: after clicking a switcher result, wait for `data-smoke-id="analysis-current-context"` to contain the selected label; do not treat a label that is still visible inside the switcher as completed navigation.
+- Opened-run navigation contract: after clicking a run row action, wait for an opened-run canvas surface such as `.report-viewer` or `.report-run-header`; do not use broad `Run #` text because the runs list may already contain it.
 - Fixture DOM presence contract: seed verification checks the known expected fixture labels against body text; do not parse fixture labels from `innerText` with a broad regex.
 - Cleanup verification contract: fixture cleanup is verified by debug fixture command summaries, not by stale DOM labels after same-route navigation.
+- Cleanup summary contract: empty-cleanup verification requires every known fixture summary key to be present and equal `0`.
+- GUI smoke gate contract: `npm.cmd run smoke:analysis` is required only in GUI-capable environments. In non-GUI environments, record the exact reason as `not run in this environment`, continue non-GUI verification, and never claim smoke pass.
 - Source hook contract: run snapshot headers are identified by an explicit `smokeId` prop from `ReportSourceSurface`, not by comparing visible title copy.
 - Raw-source tests should verify semantic hook ownership with stable tokens or regex-style checks; avoid exact-line assertions for formatted Svelte attributes.
 - Fixture cleanup must remain marker-scoped. Any cleanup broad enough to delete non-fixture rows is a blocker.
@@ -76,9 +79,11 @@
 - Modify: `docs/superpowers/specs/2026-05-30-analysis-ui-smoke-harness-design.md`
   - Mark implementation status after verification.
 - Modify: `docs/superpowers/plans/2026-05-30-analysis-ui-smoke-harness-implementation.md`
-  - Track task completion.
+  - Track task completion until final removal.
 - Modify: `docs/superpowers/plans/README.md`
   - List this active implementation plan while work is in progress.
+- Delete: `docs/superpowers/plans/2026-05-30-analysis-ui-smoke-harness-implementation.md`
+  - Remove the completed implementation plan from active plans after final verification is recorded in tests, docs, verification archive, and Git history.
 
 ---
 
@@ -251,6 +256,7 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("assertEmptyFixtureSummary(verificationSummary)");
     expect(smokeScriptSource).toContain("expected.filter((label) => text.includes(label))");
     expect(smokeScriptSource).toContain("waitForCurrentContext");
+    expect(smokeScriptSource).toContain("waitForOpenedRunSurface");
     expect(smokeScriptSource).toContain("analysis-current-context");
     expect(smokeScriptSource).toContain("runSmokeSteps");
     expect(smokeScriptSource).toContain("finally");
@@ -269,6 +275,7 @@ describe("analysis UI smoke harness contract", () => {
     expect(helperSource).toContain("clickBySmokeId");
     expect(helperSource).toContain("getVisibleTextSummary");
     expect(helperSource).toContain("assertTabOrderLabels");
+    expect(helperSource).toContain("fixtureSummaryKeys");
     expect(helperSource).toContain("assertEmptyFixtureSummary");
     expect(helperSource).toContain("assertDisabledWithReason");
     expect(helperSource).toContain("captureArtifacts");
@@ -424,7 +431,7 @@ describe("analysis smoke helper contracts", () => {
   });
 
   it("validates empty fixture cleanup summaries", () => {
-    expect(assertEmptyFixtureSummary({
+    const emptySummary = {
       accounts: 0,
       chatMessages: 0,
       llmProfiles: 0,
@@ -435,20 +442,17 @@ describe("analysis smoke helper contracts", () => {
       sources: 0,
       youtubePlaylistItems: 0,
       youtubeTranscriptSegments: 0,
-    })).toBe(true);
+    };
+
+    expect(assertEmptyFixtureSummary(emptySummary)).toBe(true);
 
     expect(() => assertEmptyFixtureSummary({
-      accounts: 0,
-      chatMessages: 0,
-      llmProfiles: 0,
-      promptTemplates: 0,
-      runs: 0,
+      ...emptySummary,
       snapshotMessages: 1,
-      sourceGroups: 0,
-      sources: 0,
-      youtubePlaylistItems: 0,
-      youtubeTranscriptSegments: 0,
     })).toThrow(SmokeAssertionError);
+
+    const { accounts, ...missingAccountSummary } = emptySummary;
+    expect(() => assertEmptyFixtureSummary(missingAccountSummary)).toThrow(SmokeAssertionError);
   });
 
   it("classifies bridge failures distinctly", () => {
@@ -1018,6 +1022,19 @@ export const fixtureLabels = {
 
 export const expectedFixtureLabels = Object.values(fixtureLabels);
 
+export const fixtureSummaryKeys = [
+  "accounts",
+  "chatMessages",
+  "llmProfiles",
+  "promptTemplates",
+  "runs",
+  "snapshotMessages",
+  "sourceGroups",
+  "sources",
+  "youtubePlaylistItems",
+  "youtubeTranscriptSegments",
+];
+
 export class SmokeAssertionError extends Error {
   constructor(message, details = {}) {
     super(message.startsWith("ASSERT:") ? message : `ASSERT: ${message}`);
@@ -1095,9 +1112,21 @@ export function validateFixtureSummary(summary) {
 }
 
 export function assertEmptyFixtureSummary(summary) {
-  const nonEmpty = Object.entries(summary ?? {})
-    .filter(([, value]) => Number(value ?? 0) !== 0)
+  const missing = fixtureSummaryKeys.filter((key) => !Object.prototype.hasOwnProperty.call(summary ?? {}, key));
+  if (missing.length > 0) {
+    throw new SmokeAssertionError(`fixture cleanup summary missing keys: ${missing.join(", ")}`, {
+      summary,
+      missing,
+    });
+  }
+
+  const nonEmpty = fixtureSummaryKeys
+    .filter((key) => Number(summary[key] ?? 0) !== 0)
+    .map((key) => `${key}=${summary[key]}`);
+  const unexpectedNonEmpty = Object.entries(summary ?? {})
+    .filter(([key, value]) => !fixtureSummaryKeys.includes(key) && Number(value ?? 0) !== 0)
     .map(([key, value]) => `${key}=${value}`);
+  nonEmpty.push(...unexpectedNonEmpty);
   if (nonEmpty.length > 0) {
     throw new SmokeAssertionError(`fixture cleanup verification found remaining rows: ${nonEmpty.join(", ")}`, {
       summary,
@@ -1849,13 +1878,25 @@ async function openRunsTab(ctx) {
   await waitForText(ctx.socket, "Search runs");
 }
 
+async function waitForOpenedRunSurface(ctx, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const opened = await executeJs(ctx.socket, `
+      return Boolean(document.querySelector('.report-viewer, .report-run-header'));
+    `).catch(() => false);
+    if (opened) return true;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new SmokeAssertionError("opened run surface did not appear");
+}
+
 async function openRun(ctx, label) {
   await closeTransientUi(ctx);
   await openRunsTab(ctx);
   await fillByLabel(ctx.socket, "Search runs", label);
   await waitForText(ctx.socket, label);
   await clickRowActionByText(ctx.socket, "run-companion-runs-panel", label, "Open");
-  await waitForText(ctx.socket, "Run #");
+  await waitForOpenedRunSurface(ctx);
 }
 
 async function expectTabs(ctx, labels, selected) {
@@ -1951,7 +1992,9 @@ Run:
 npm.cmd run smoke:analysis
 ```
 
-Expected: Source Browser steps PASS in a GUI-capable local environment. If a Source Browser step fails, inspect `tmp/analysis-smoke/` artifacts and fix before continuing. Workspace Parity checks are added in Task 7.
+Expected in a GUI-capable local environment: Source Browser steps PASS. If a Source Browser step fails, inspect `tmp/analysis-smoke/` artifacts and fix before continuing. Workspace Parity checks are added in Task 7.
+
+If the current environment is not GUI-capable, do not treat this as a smoke failure. Record the exact reason as `not run in this environment`, continue with non-GUI tests, and make sure the final verification archive uses `Result: not run in this environment` rather than `passed`.
 
 - [ ] **Step 5: Commit Source Browser smoke scenarios**
 
@@ -2157,7 +2200,9 @@ Run:
 npm.cmd run smoke:analysis
 ```
 
-Expected: all Source Browser and Workspace Parity steps PASS in a GUI-capable local environment.
+Expected in a GUI-capable local environment: all Source Browser and Workspace Parity steps PASS.
+
+If the current environment is not GUI-capable, do not treat this as a smoke failure. Record the exact reason as `not run in this environment`, continue with non-GUI tests, and make sure the final verification archive uses `Result: not run in this environment` rather than `passed`.
 
 - [ ] **Step 5: Commit Workspace Parity smoke scenarios**
 
@@ -2180,6 +2225,7 @@ Expected: commit succeeds.
 - Modify: `docs/superpowers/specs/2026-05-30-analysis-ui-smoke-harness-design.md`
 - Modify: `docs/superpowers/plans/README.md`
 - Create: `docs/superpowers/archive/verification/2026-05-30-analysis-ui-smoke-harness.md`
+- Delete: `docs/superpowers/plans/2026-05-30-analysis-ui-smoke-harness-implementation.md`
 
 - [ ] **Step 1: Harden cleanup exit behavior**
 
@@ -2306,9 +2352,9 @@ Notes:
 - Fixture cleanup completed and second cleanup summary verified zero fixture rows.
 ~~~
 
-If local GUI automation cannot run in the current environment, create the same file with `Result: not run in this environment` and include the exact failure reason. Do not claim smoke pass without command output.
+If local GUI automation cannot run in the current environment, create the same file with `Result: not run in this environment` and include the exact failure reason. Keep the covered surfaces list as intended coverage, add a note that the opt-in GUI smoke still needs a GUI-capable host, and do not claim smoke pass without command output.
 
-- [ ] **Step 6: Update spec status and active plan index**
+- [ ] **Step 6: Update spec status, active plan index, and completed plan file**
 
 In `docs/superpowers/specs/2026-05-30-analysis-ui-smoke-harness-design.md`, change:
 
@@ -2324,12 +2370,20 @@ Status: implemented
 
 In `docs/superpowers/plans/README.md`, change active plan entry to `- None currently.` after all tasks are complete.
 
+Remove the completed implementation plan from `docs/superpowers/plans/` after final verification is represented by tests, current docs, the verification archive, and Git history:
+
+```powershell
+git rm docs/superpowers/plans/2026-05-30-analysis-ui-smoke-harness-implementation.md
+```
+
+Do not leave the completed implementation plan in active plans. Archive the implementation plan only if the team explicitly wants the plan itself as historical context; otherwise Git history is the archive.
+
 - [ ] **Step 7: Commit final verification docs**
 
 Run:
 
 ```powershell
-git add scripts/analysis-smoke.mjs scripts/analysis-smoke-helpers.mjs docs/superpowers/specs/2026-05-30-analysis-ui-smoke-harness-design.md docs/superpowers/plans/README.md docs/superpowers/archive/verification/2026-05-30-analysis-ui-smoke-harness.md docs/superpowers/plans/2026-05-30-analysis-ui-smoke-harness-implementation.md
+git add scripts/analysis-smoke.mjs scripts/analysis-smoke-helpers.mjs docs/superpowers/specs/2026-05-30-analysis-ui-smoke-harness-design.md docs/superpowers/plans/README.md docs/superpowers/archive/verification/2026-05-30-analysis-ui-smoke-harness.md
 git commit -m "docs: verify analysis smoke harness"
 ```
 
