@@ -56,6 +56,10 @@ describe("run companion tabs", () => {
 
   it("contains only analysis report runs in the Runs tab", () => {
     expect(runsTabSource).toContain("filterCompanionRuns");
+    expect(runsTabSource).toContain("snapshotAffordanceForRun");
+    expect(runsTabSource).toContain("snapshotAffordanceForRow");
+    expect(runsTabSource).toContain("snapshotAffordance?.compactLabel");
+    expect(runsTabSource).toContain("snapshotAffordance.badgeVariant");
     expect(runsTabSource).toContain("target instanceof HTMLInputElement");
     expect(runsTabSource).toContain("queued/running");
     expect(runsTabSource).toContain("Search runs");

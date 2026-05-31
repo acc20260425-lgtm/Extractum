@@ -5,7 +5,9 @@
     hasActiveCompanionRunsFilter,
     runsFilterDefaults,
     type CompanionRunsFilterState,
+    type CompanionRunEntry,
   } from "$lib/analysis-run-companion-state";
+  import { snapshotAffordanceForRun } from "$lib/analysis-run-snapshot-affordance";
   import type { WorkspaceSelection } from "$lib/analysis-workspace-state";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -83,6 +85,19 @@
       return target.value;
     }
     return "";
+  }
+
+  function snapshotAffordanceForRow(entry: CompanionRunEntry) {
+    if (entry.kind !== "saved") return null;
+
+    return snapshotAffordanceForRun({
+      snapshotState: entry.run.snapshot_state,
+      snapshotCapturedAt: entry.run.snapshot_captured_at,
+      snapshotError: entry.run.snapshot_error,
+      probeState: "unknown",
+      runStatus: entry.run.status,
+      surface: "runs-row",
+    });
   }
 </script>
 
@@ -184,12 +199,18 @@
     <ul class="runs-list">
       {#each entries as entry (`${entry.kind}-${entry.run.id}`)}
         {@const run = entry.run}
+        {@const snapshotAffordance = snapshotAffordanceForRow(entry)}
         <li class:selected={run.id === activeRunId}>
           <div class="run-copy">
             <div class="run-title">
               <strong>{runTargetLabel(run)}</strong>
               <Badge variant={statusTone(run.status)}>{run.status}</Badge>
               <Badge variant={entry.kind === "active" ? "info" : "neutral"}>{entry.kind}</Badge>
+              {#if snapshotAffordance?.compactLabel && snapshotAffordance.badgeVariant}
+                <Badge variant={snapshotAffordance.badgeVariant}>
+                  {snapshotAffordance.compactLabel}
+                </Badge>
+              {/if}
             </div>
             <p>{formatTimestamp(run.created_at)} - {run.provider}/{run.model} - {run.prompt_template_name ?? "Unknown template"} v{run.prompt_template_version}</p>
             <p>Period: {formatPeriod(run.period_from, run.period_to)}</p>
