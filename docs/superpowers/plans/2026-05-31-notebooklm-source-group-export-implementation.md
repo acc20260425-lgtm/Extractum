@@ -98,7 +98,7 @@ No new production dependency is required.
 - Modify: `src-tauri/src/notebooklm_export/model.rs`
 - Modify: `src-tauri/src/notebooklm_export/mod.rs`
 
-- [ ] **Step 1: Write failing validation tests**
+- [x] **Step 1: Write failing validation tests**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, extend the existing `#[cfg(test)] mod tests` imports:
 
@@ -171,7 +171,7 @@ fn validates_source_group_scope() {
 }
 ```
 
-- [ ] **Step 2: Run the focused Rust validation tests and verify failure**
+- [x] **Step 2: Run the focused Rust validation tests and verify failure**
 
 Run:
 
@@ -181,7 +181,7 @@ cargo test --manifest-path src-tauri/Cargo.toml validates_
 
 Expected: FAIL because `source_id` is still non-nullable and `NotebookLmExportScope` does not exist.
 
-- [ ] **Step 3: Implement scope-neutral backend request model**
+- [x] **Step 3: Implement scope-neutral backend request model**
 
 In `src-tauri/src/notebooklm_export/model.rs`, change the request and config types to:
 
@@ -331,7 +331,7 @@ let source_id = match config.scope {
 
 Then replace current `config.source_id` reads in the single-source branch with the local `source_id`.
 
-- [ ] **Step 4: Run validation tests and a single-source smoke subset**
+- [x] **Step 4: Run validation tests and a single-source smoke subset**
 
 Run:
 
@@ -341,7 +341,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::tests
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```powershell
 git add src-tauri/src/notebooklm_export/model.rs src-tauri/src/notebooklm_export/mod.rs

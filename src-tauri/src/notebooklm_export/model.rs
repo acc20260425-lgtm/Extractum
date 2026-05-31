@@ -6,10 +6,26 @@ pub(crate) const DEFAULT_MAX_WORDS_PER_FILE: usize = 300_000;
 pub(crate) const DEFAULT_MAX_BYTES_PER_FILE: usize = 50_000_000;
 pub(crate) const DEFAULT_MIN_MESSAGE_LENGTH: usize = 3;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum NotebookLmExportScope {
+    Source { source_id: i64 },
+    SourceGroup { source_group_id: i64 },
+}
+
+impl NotebookLmExportScope {
+    pub(crate) fn event_scope_id(&self) -> i64 {
+        match self {
+            Self::Source { source_id } => *source_id,
+            Self::SourceGroup { source_group_id } => *source_group_id,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct NotebookLmExportRequest {
     pub export_id: Option<String>,
-    pub source_id: i64,
+    pub source_id: Option<i64>,
+    pub source_group_id: Option<i64>,
     pub output_dir: String,
     pub period_from: Option<i64>,
     pub period_to: Option<i64>,
@@ -21,10 +37,10 @@ pub struct NotebookLmExportRequest {
     pub overwrite_existing: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct NotebookLmExportConfig {
     pub(crate) export_id: Option<String>,
-    pub(crate) source_id: i64,
+    pub(crate) scope: NotebookLmExportScope,
     pub(crate) output_dir: String,
     pub(crate) period_from: Option<i64>,
     pub(crate) period_to: Option<i64>,
@@ -34,6 +50,12 @@ pub(crate) struct NotebookLmExportConfig {
     pub(crate) max_words_per_file: usize,
     pub(crate) max_bytes_per_file: usize,
     pub(crate) overwrite_existing: bool,
+}
+
+impl NotebookLmExportConfig {
+    pub(crate) fn event_scope_id(&self) -> i64 {
+        self.scope.event_scope_id()
+    }
 }
 
 #[derive(Serialize)]

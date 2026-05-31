@@ -25,7 +25,7 @@ use filename::{ensure_child_path, sanitize_path_component};
 use glossary::{aggregate_participants, glossary_word_count, render_glossary};
 use model::{
     ChunkFile, NotebookLmExportConfig, NotebookLmExportFile, NotebookLmExportMessage,
-    NotebookLmExportRequest, NotebookLmExportResult, ParticipantSummary,
+    NotebookLmExportRequest, NotebookLmExportResult, NotebookLmExportScope, ParticipantSummary,
     DEFAULT_MAX_BYTES_PER_FILE, DEFAULT_MAX_WORDS_PER_FILE, DEFAULT_MIN_MESSAGE_LENGTH,
 };
 use query::{load_export_messages, load_export_source, ExportHistoryScope};
@@ -175,9 +175,19 @@ pub async fn export_source_to_notebooklm(
         config
             .export_id
             .clone()
-            .unwrap_or_else(|| format!("notebooklm-{}-{generated_at}", config.source_id)),
-        config.source_id,
+            .unwrap_or_else(|| format!("notebooklm-{}-{generated_at}", config.event_scope_id())),
+        config.event_scope_id(),
     );
+
+    let source_id = match &config.scope {
+        NotebookLmExportScope::Source { source_id } => *source_id,
+        NotebookLmExportScope::SourceGroup { .. } => {
+            let error =
+                AppError::validation("Source-group NotebookLM export is not implemented yet");
+            progress.emit_failed("loading", &error);
+            return Err(error);
+        }
+    };
 
     progress.emit_started("loading", "Loading source and synced messages.", None, None);
 
@@ -193,7 +203,7 @@ pub async fn export_source_to_notebooklm(
         progress.emit_failed("loading", &error);
         return Err(error);
     }
-    let source = match load_export_source(&pool, config.source_id).await {
+    let source = match load_export_source(&pool, source_id).await {
         Ok(source) => source,
         Err(error) => {
             progress.emit_failed("loading", &error);
@@ -202,7 +212,7 @@ pub async fn export_source_to_notebooklm(
     };
     let current_messages = match load_export_messages(
         &pool,
-        config.source_id,
+        source_id,
         config.period_from,
         config.period_to,
         ExportHistoryScope::Current,
@@ -218,7 +228,7 @@ pub async fn export_source_to_notebooklm(
     let migrated_messages = if config.include_migrated_history {
         match load_export_messages(
             &pool,
-            config.source_id,
+            source_id,
             config.period_from,
             config.period_to,
             ExportHistoryScope::Migrated,
@@ -507,12 +517,27 @@ fn validate_request(request: NotebookLmExportRequest) -> AppResult<NotebookLmExp
         }
     }
 
+    let scope = match (request.source_id, request.source_group_id) {
+        (Some(source_id), None) => NotebookLmExportScope::Source { source_id },
+        (None, Some(source_group_id)) => NotebookLmExportScope::SourceGroup { source_group_id },
+        (None, None) => {
+            return Err(AppError::validation(
+                "Select a source or source group before exporting",
+            ));
+        }
+        (Some(_), Some(_)) => {
+            return Err(AppError::validation(
+                "Select either a source or source group, not both",
+            ));
+        }
+    };
+
     Ok(NotebookLmExportConfig {
         export_id: request
             .export_id
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty()),
-        source_id: request.source_id,
+        scope,
         output_dir: output_dir.to_string(),
         period_from: request.period_from,
         period_to: request.period_to,
@@ -733,12 +758,13 @@ struct NotebookLmExportManifest {
 #[cfg(test)]
 mod tests {
     use super::{timestamp_for_folder, validate_request};
-    use crate::notebooklm_export::model::NotebookLmExportRequest;
+    use crate::notebooklm_export::model::{NotebookLmExportRequest, NotebookLmExportScope};
 
     fn request() -> NotebookLmExportRequest {
         NotebookLmExportRequest {
             export_id: None,
-            source_id: 1,
+            source_id: Some(1),
+            source_group_id: None,
             output_dir: ".".to_string(),
             period_from: None,
             period_to: None,
@@ -749,6 +775,45 @@ mod tests {
             max_bytes_per_file: 50_000_000,
             overwrite_existing: false,
         }
+    }
+
+    #[test]
+    fn validates_exactly_one_export_scope() {
+        let mut missing = request();
+        missing.source_id = None;
+        missing.source_group_id = None;
+        let error = validate_request(missing).expect_err("missing scope is invalid");
+        assert!(error.message.contains("Select a source or source group"));
+
+        let mut both = request();
+        both.source_id = Some(1);
+        both.source_group_id = Some(9);
+        let error = validate_request(both).expect_err("two scopes are invalid");
+        assert!(error
+            .message
+            .contains("Select either a source or source group"));
+    }
+
+    #[test]
+    fn validates_single_source_scope() {
+        let config = validate_request(request()).expect("valid source request");
+        assert_eq!(config.scope, NotebookLmExportScope::Source { source_id: 1 });
+        assert_eq!(config.event_scope_id(), 1);
+    }
+
+    #[test]
+    fn validates_source_group_scope() {
+        let mut request = request();
+        request.source_id = None;
+        request.source_group_id = Some(9);
+
+        let config = validate_request(request).expect("valid group request");
+
+        assert_eq!(
+            config.scope,
+            NotebookLmExportScope::SourceGroup { source_group_id: 9 }
+        );
+        assert_eq!(config.event_scope_id(), 9);
     }
 
     #[test]
