@@ -59,8 +59,9 @@ UI. It keeps the existing controls:
 
 The dialog description should identify the selected group and member count. The
 result surface can remain compact and use the existing file/message/warning
-summary. Detailed per-member facts belong in the manifest and, if added to the
-result DTO, can be rendered later without blocking this slice.
+summary. This slice does not require a result DTO expansion. Detailed per-member
+facts belong in `.extractum-notebooklm-export.json`, and frontend result UI
+should not depend on new response fields.
 
 When a selected source group has `source_type = "youtube"`, the button remains
 disabled with a clear reason such as:
@@ -113,10 +114,10 @@ groups.
 
 1. Validate the request scope.
 2. Load the source group row and ordered members.
-3. Reject non-Telegram groups as unsupported.
+3. Reject groups whose `source_type` is not `telegram` as unsupported.
 4. For each member in deterministic order:
    - load source identity with existing `load_export_source`;
-   - skip non-Telegram dirty-data members with a warning;
+   - skip dirty-data members whose source row is not Telegram with a warning;
    - load current messages through existing `load_export_messages`;
    - if migrated history is enabled, load migrated messages for that member
      through the existing migrated path;
@@ -126,8 +127,9 @@ groups.
 5. If no member produces exportable messages, return a hard validation error.
 6. Write the group package using the existing overwrite-marker policy.
 7. Write a group manifest and group glossary.
-8. Return the existing result summary, with aggregate warnings and optional
-   member summaries if the implementation extends the DTO.
+8. Return the existing compact result summary with aggregate warnings. Per-member
+   details are stored in `.extractum-notebooklm-export.json`, not in new
+   required response fields.
 
 ## Output Contract
 
@@ -150,6 +152,8 @@ Naming rules:
 
 - member ordering follows the existing group member display/query order:
   `COALESCE(sources.title, '')`, then `sources.id`;
+- the same order is used for export execution, filenames, and manifest member
+  summaries;
 - every member file prefix includes the one-based member index and `source_id`;
 - the title slug uses existing filename sanitization;
 - equal source titles cannot collide because `source_id` is part of the prefix;
@@ -189,6 +193,11 @@ group metadata should be added to that JSON. No new human-readable `manifest.md`
 is required in this slice. The implementation should not hide member skip
 reasons only in logs.
 
+Generated-file tracking must include every file written by the group export,
+including `glossary.md` and each `sources/...part-XXX.md` file. Existing
+overwrite cleanup and child-path validation must continue to work for files in
+the `sources/` subdirectory.
+
 ## Glossary Contract
 
 The group glossary aggregates participants across exported members. It should
@@ -203,7 +212,8 @@ Minimum acceptable behavior for this slice:
 
 If participant names collide across sources, exact disambiguation can remain a
 future enhancement as long as source file boundaries and manifest member
-summaries are clear.
+summaries are clear. The implementation plan should not add new author
+collision handling in this slice.
 
 ## Limits Semantics
 
@@ -236,7 +246,8 @@ When `include_migrated_history = true` for a Telegram source group:
 
 Warnings skip or annotate a member while allowing the group export to continue:
 
-- a dirty-data member is not Telegram;
+- a group has `source_type = "telegram"`, but a dirty-data member source row is
+  not Telegram;
 - a member has zero exportable messages after date and length filters;
 - migrated history was requested but no migrated messages matched for that
   member;
@@ -251,8 +262,10 @@ Hard errors stop the export:
 - both `source_id` and `source_group_id` are provided;
 - the selected group does not exist;
 - the selected group provider is unsupported, including YouTube groups;
-- the selected group has no Telegram members;
-- no Telegram member produces any exportable messages;
+- the selected group has no valid Telegram members, with user-facing copy:
+  `No Telegram sources found in this source group.`;
+- no Telegram member produces any exportable messages, with user-facing copy:
+  `No exportable Telegram messages found for this source group.`;
 - output folder validation fails;
 - overwrite safety policy rejects the target folder;
 - filesystem writes fail.
@@ -276,10 +289,9 @@ selection:
 The request builder should accept either a source id or source group id and set
 the other field to `null`.
 
-Progress events can remain compatible. For group export, progress totals may
-count messages across all members, and progress messages may include member
-display names only if they are safe user-facing source titles already visible in
-the app.
+Progress events remain compatible and best-effort. Exact per-member progress is
+not required in this slice. Progress messages may include member display names
+only if they are safe user-facing source titles already visible in the app.
 
 ## Testing
 
