@@ -30,6 +30,8 @@ Modify:
   - Add `container-type: inline-size` to `.run-evidence-tab`.
 - `src/lib/components/analysis/trace-panel.svelte`
   - Replace viewport-only `@media (min-width: 1280px)` two-column Evidence layout with `@container (min-width: 33rem)`.
+- `src/lib/analysis-source-access-placement.test.ts`
+  - Update the existing compact-rail raw contract so it expects the widened companion grid instead of the old `430px` cap.
 
 Do not modify:
 
@@ -436,7 +438,7 @@ Expected: the Evidence companion no longer reads as a cramped split panel on wid
 
 - Modify: `docs/superpowers/plans/2026-05-31-analysis-companion-width-implementation.md` if checking off tasks during execution.
 
-- [ ] **Step 1: Run the full frontend test suite**
+- [x] **Step 1: Run the full frontend test suite**
 
 Run:
 
@@ -446,7 +448,7 @@ npm.cmd run test
 
 Expected: all Vitest files pass.
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
@@ -456,7 +458,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 3: Run the project verification script**
+- [x] **Step 3: Run the project verification script**
 
 Run:
 
@@ -466,7 +468,7 @@ npm.cmd run verify
 
 Expected: the project verification script exits `0`. This is the repository-level gate from `package.json`, so keep it after the focused frontend checks.
 
-- [ ] **Step 4: Run whitespace/diff hygiene**
+- [x] **Step 4: Run whitespace/diff hygiene**
 
 Run:
 
@@ -476,17 +478,18 @@ git diff --check
 
 Expected: no output and exit code `0`.
 
-- [ ] **Step 5: Inspect the diff for scope**
+- [x] **Step 5: Inspect the diff for scope**
 
 Run:
 
 ```powershell
-git diff --stat HEAD~1..HEAD
+git diff --stat main
 ```
 
 Expected: implementation changes are limited to:
 
 - `src/lib/analysis-companion-layout.test.ts`;
+- `src/lib/analysis-source-access-placement.test.ts`;
 - `src/routes/analysis/+page.svelte`;
 - `src/lib/components/analysis/run-evidence-tab.svelte`;
 - `src/lib/components/analysis/trace-panel.svelte`;
@@ -494,7 +497,7 @@ Expected: implementation changes are limited to:
 
 No changes should appear in Chat, Chunks, or Runs inner component files.
 
-- [ ] **Step 6: Commit plan checkbox updates only if they changed**
+- [x] **Step 6: Commit plan checkbox updates only if they changed**
 
 If the implementation process updated checkboxes in this plan, run:
 
@@ -509,12 +512,12 @@ Expected: commit succeeds. If no plan checkbox changes were made, skip this comm
 
 ## Acceptance Checklist
 
-- [ ] On a 1920px desktop viewport, the companion panel is wider than the old 430px cap.
-- [ ] Evidence two-column list/detail layout depends on the Evidence panel container width, not viewport width.
-- [ ] `.trace-layout` remains single-column below the `33rem` container threshold.
-- [ ] Existing `@media (max-width: 1500px)` workspace stacking behavior is preserved.
-- [ ] Intermediate desktop widths around 1440px do not squeeze the canvas because the companion stacks below the canvas.
-- [ ] Near-breakpoint width around 1600px keeps the canvas usable; with the primary `clamp()` track the companion stays near the lower clamp range, and with the fallback it stays capped at `560px`.
-- [ ] Chat, Chunks, and Runs receive no special inner layout changes.
-- [ ] Evidence data flow, trace selection, snapshot logic, and Source navigation behavior are unchanged.
-- [ ] Focused layout tests, related raw contract tests, `npm.cmd run test`, `npm.cmd run check`, `npm.cmd run verify`, and `git diff --check` pass.
+- [x] On a 1920px desktop viewport, the companion panel is wider than the old 430px cap.
+- [x] Evidence two-column list/detail layout depends on the Evidence panel container width, not viewport width.
+- [x] `.trace-layout` remains single-column below the `33rem` container threshold.
+- [x] Existing `@media (max-width: 1500px)` workspace stacking behavior is preserved.
+- [x] Intermediate desktop widths around 1440px do not squeeze the canvas because the companion stacks below the canvas.
+- [x] Near-breakpoint width around 1600px keeps the canvas usable; with the primary `clamp()` track the companion stays near the lower clamp range, and with the fallback it stays capped at `560px`.
+- [x] Chat, Chunks, and Runs receive no special inner layout changes.
+- [x] Evidence data flow, trace selection, snapshot logic, and Source navigation behavior are unchanged.
+- [x] Focused layout tests, related raw contract tests, `npm.cmd run test`, `npm.cmd run check`, `npm.cmd run verify`, and `git diff --check` pass.
