@@ -19,6 +19,35 @@ struct SourceRow {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NotebookLmExportSourceGroup {
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    pub(crate) source_type: String,
+    pub(crate) members: Vec<NotebookLmExportSourceGroupMember>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NotebookLmExportSourceGroupMember {
+    pub(crate) source_id: i64,
+    pub(crate) source_title: Option<String>,
+    pub(crate) source_type: String,
+}
+
+#[derive(FromRow)]
+struct SourceGroupRow {
+    id: i64,
+    name: String,
+    source_type: String,
+}
+
+#[derive(FromRow)]
+struct SourceGroupMemberRow {
+    source_id: i64,
+    source_title: Option<String>,
+    source_type: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ExportLoaderSelection {
     ArchiveReadModel {
         model_version: i64,
@@ -77,6 +106,55 @@ pub(crate) async fn load_export_source(
         source_subtype: source_subtype.as_str().to_string(),
         external_id: source.external_id,
         title: source.title,
+    })
+}
+
+pub(crate) async fn load_export_source_group(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_group_id: i64,
+) -> AppResult<NotebookLmExportSourceGroup> {
+    let group = sqlx::query_as::<_, SourceGroupRow>(
+        r#"
+        SELECT id, name, source_type
+        FROM analysis_source_groups
+        WHERE id = ?
+        "#,
+    )
+    .bind(source_group_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?
+    .ok_or_else(|| AppError::not_found(format!("Source group {source_group_id} not found")))?;
+
+    let members = sqlx::query_as::<_, SourceGroupMemberRow>(
+        r#"
+        SELECT
+            sources.id AS source_id,
+            sources.title AS source_title,
+            sources.source_type AS source_type
+        FROM analysis_source_group_members members
+        JOIN sources ON sources.id = members.source_id
+        WHERE members.group_id = ?
+        ORDER BY COALESCE(sources.title, ''), sources.id
+        "#,
+    )
+    .bind(source_group_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)?
+    .into_iter()
+    .map(|row| NotebookLmExportSourceGroupMember {
+        source_id: row.source_id,
+        source_title: row.source_title,
+        source_type: row.source_type,
+    })
+    .collect();
+
+    Ok(NotebookLmExportSourceGroup {
+        id: group.id,
+        name: group.name,
+        source_type: group.source_type,
+        members,
     })
 }
 
@@ -525,8 +603,9 @@ fn archive_base_query(where_clause: &str) -> String {
 mod tests {
     use super::{
         load_export_messages, load_export_messages_from_archive,
-        load_export_messages_from_items_path, load_export_source, select_notebooklm_export_loader,
-        ArchiveReadinessFallbackReason, ExportHistoryScope, ExportLoaderSelection,
+        load_export_messages_from_items_path, load_export_source, load_export_source_group,
+        select_notebooklm_export_loader, ArchiveReadinessFallbackReason, ExportHistoryScope,
+        ExportLoaderSelection,
     };
     use crate::compression::compress_text;
     use crate::error::AppErrorKind;
@@ -563,6 +642,33 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create sources");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_source_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                source_type TEXT NOT NULL DEFAULT 'telegram',
+                created_at INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL DEFAULT 0
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create analysis_source_groups");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_source_group_members (
+                group_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (group_id, source_id)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create analysis_source_group_members");
         sqlx::query(
             r#"
             CREATE TABLE items (
@@ -1290,6 +1396,102 @@ mod tests {
             .expect("load export source");
 
         assert_eq!(source.source_subtype, "supergroup");
+    }
+
+    #[tokio::test]
+    async fn load_export_source_group_orders_members_by_title_then_id() {
+        let pool = export_pool().await;
+        for (id, source_type, title) in [
+            (30_i64, "telegram", Some("Beta")),
+            (10_i64, "telegram", Some("Alpha")),
+            (20_i64, "telegram", Some("Alpha")),
+            (40_i64, "telegram", None),
+        ] {
+            sqlx::query(
+                "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+                 VALUES (?, ?, 'channel', ?, ?)",
+            )
+            .bind(id)
+            .bind(source_type)
+            .bind(format!("ext-{id}"))
+            .bind(title)
+            .execute(&pool)
+            .await
+            .expect("insert source");
+        }
+        sqlx::query(
+            "INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at)
+             VALUES (9, 'Notebook Group', 'telegram', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert group");
+        for source_id in [30_i64, 10, 20, 40] {
+            sqlx::query(
+                "INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+                 VALUES (9, ?, 1)",
+            )
+            .bind(source_id)
+            .execute(&pool)
+            .await
+            .expect("insert member");
+        }
+
+        let group = load_export_source_group(&pool, 9)
+            .await
+            .expect("load group");
+
+        assert_eq!(group.id, 9);
+        assert_eq!(group.name, "Notebook Group");
+        assert_eq!(group.source_type, "telegram");
+        assert_eq!(
+            group
+                .members
+                .iter()
+                .map(|member| member.source_id)
+                .collect::<Vec<_>>(),
+            vec![40, 10, 20, 30]
+        );
+    }
+
+    #[tokio::test]
+    async fn load_export_source_group_keeps_dirty_member_source_type_for_skip_logic() {
+        let pool = export_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (1, 'telegram', 'channel', 'telegram-1', 'Telegram'),
+                    (2, 'youtube', 'video', 'youtube-1', 'YouTube')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert sources");
+        sqlx::query(
+            "INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at)
+             VALUES (9, 'Dirty Group', 'telegram', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert group");
+        sqlx::query(
+            "INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+             VALUES (9, 1, 1), (9, 2, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert members");
+
+        let group = load_export_source_group(&pool, 9)
+            .await
+            .expect("load group");
+
+        assert_eq!(
+            group
+                .members
+                .iter()
+                .map(|member| (member.source_id, member.source_type.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(1, "telegram"), (2, "youtube")]
+        );
     }
 
     #[tokio::test]

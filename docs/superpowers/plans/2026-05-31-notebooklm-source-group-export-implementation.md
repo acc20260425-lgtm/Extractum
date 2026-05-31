@@ -355,7 +355,7 @@ git commit -m "feat: add notebooklm export scope validation"
 **Files:**
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
 
-- [ ] **Step 1: Write failing group query tests**
+- [x] **Step 1: Write failing group query tests**
 
 In `src-tauri/src/notebooklm_export/query.rs`, extend the test import:
 
@@ -496,7 +496,7 @@ async fn load_export_source_group_keeps_dirty_member_source_type_for_skip_logic(
 }
 ```
 
-- [ ] **Step 2: Run group query tests and verify failure**
+- [x] **Step 2: Run group query tests and verify failure**
 
 Run:
 
@@ -506,7 +506,7 @@ cargo test --manifest-path src-tauri/Cargo.toml load_export_source_group
 
 Expected: FAIL because `load_export_source_group` does not exist.
 
-- [ ] **Step 3: Implement group query structs and loader**
+- [x] **Step 3: Implement group query structs and loader**
 
 In `src-tauri/src/notebooklm_export/query.rs`, add structs near `SourceRow`:
 
@@ -594,7 +594,7 @@ pub(crate) async fn load_export_source_group(
 }
 ```
 
-- [ ] **Step 4: Run group query tests**
+- [x] **Step 4: Run group query tests**
 
 Run:
 
@@ -604,7 +604,7 @@ cargo test --manifest-path src-tauri/Cargo.toml load_export_source_group
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```powershell
 git add src-tauri/src/notebooklm_export/query.rs
