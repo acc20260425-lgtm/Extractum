@@ -1362,6 +1362,60 @@
     clearSourceHighlight();
   }
 
+  type FocusedSourceRequest = {
+    requestId: string;
+    sourceScope: NonNullable<ReturnType<typeof currentEvidenceSourceScope>>;
+    sourceViewBasis: EvidenceSourceViewBasis;
+    traceRef: string;
+  };
+
+  function currentFocusMatchesRequest(request: FocusedSourceRequest) {
+    if (selectedTraceRef !== request.traceRef) {
+      return false;
+    }
+
+    return pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
+      requestId: request.requestId,
+      runId: currentRun?.id ?? null,
+      sourceScope: request.sourceScope,
+      sourceViewBasis: request.sourceViewBasis,
+      selectedTraceRef,
+    });
+  }
+
+  function clearFocusedSourceLoadingFlags(traceSourceId: number, request: FocusedSourceRequest) {
+    if (!currentFocusMatchesRequest(request)) {
+      return;
+    }
+
+    loadingItems = false;
+    loadingRunSnapshotMessages = false;
+    loadingYoutubeTranscriptSegments = false;
+    groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [traceSourceId]: false };
+  }
+
+  function completeFocusedSourceLoadWithoutTarget(traceSourceId: number, request: FocusedSourceRequest) {
+    if (!currentFocusMatchesRequest(request)) {
+      return;
+    }
+
+    clearFocusedSourceLoadingFlags(traceSourceId, request);
+    pendingEvidenceSourceFocus = null;
+    clearSourceHighlight();
+    status = "Selected evidence was not found in the loaded source window.";
+  }
+
+  function failFocusedSourceLoad(traceSourceId: number, request: FocusedSourceRequest, error: unknown) {
+    if (!currentFocusMatchesRequest(request)) {
+      return;
+    }
+
+    clearFocusedSourceLoadingFlags(traceSourceId, request);
+    pendingEvidenceSourceFocus = null;
+    clearSourceHighlight();
+    status = formatAppError("loading selected source evidence", error);
+  }
+
   async function loadSourcePageAroundTrace({
     decision,
     trace,
@@ -1378,6 +1432,12 @@
     if (decision.kind === "unavailable") {
       return;
     }
+    const focusRequest: FocusedSourceRequest = {
+      requestId,
+      sourceScope,
+      sourceViewBasis: decision.sourceViewBasis,
+      traceRef: canonicalRef,
+    };
 
     try {
       if (decision.kind === "run_snapshot") {
@@ -1392,13 +1452,7 @@
           sourceId: trace.source_id,
           aroundRef: trace.ref,
         });
-        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
-          requestId,
-          runId: currentRun?.id ?? null,
-          sourceScope: currentEvidenceSourceScope(trace.source_id),
-          sourceViewBasis: decision.sourceViewBasis,
-          selectedTraceRef,
-        })) {
+        if (!currentFocusMatchesRequest(focusRequest)) {
           return;
         }
         const snapshotItems = page.messages.map((message) =>
@@ -1416,6 +1470,7 @@
         selectedSnapshotSourceId = trace.source_id;
         applySnapshotPage(run, page, false);
         return handleFocusedSourceLoadResult({
+          traceSourceId: trace.source_id,
           requestId,
           sourceScope,
           sourceViewBasis: decision.sourceViewBasis,
@@ -1426,12 +1481,14 @@
 
       const liveTarget = focusedLiveSourceTargetForTrace(trace);
       if (liveTarget.kind === "unsupported") {
+        completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
         return;
       }
       const aroundItemId = liveTarget.kind === "source_item" ? liveTarget.aroundItemId : trace.item_id;
       const aroundStartMs = liveTarget.kind === "youtube_transcript" ? liveTarget.aroundStartMs : null;
       const source = sourceCatalog.find((candidate) => candidate.id === trace.source_id);
       if (!source) {
+        completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
         return;
       }
 
@@ -1444,13 +1501,7 @@
           topicFilter: null,
           aroundItemId,
         });
-        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
-          requestId,
-          runId: currentRun?.id ?? null,
-          sourceScope: currentEvidenceSourceScope(trace.source_id),
-          sourceViewBasis: decision.sourceViewBasis,
-          selectedTraceRef,
-        })) {
+        if (!currentFocusMatchesRequest(focusRequest)) {
           return;
         }
         const containsTarget = loadedSourceDataContainsTraceRef(
@@ -1469,6 +1520,7 @@
           [trace.source_id]: items.length === 40,
         };
         return handleFocusedSourceLoadResult({
+          traceSourceId: trace.source_id,
           requestId,
           sourceScope,
           sourceViewBasis: decision.sourceViewBasis,
@@ -1477,25 +1529,18 @@
         });
       }
 
-      if (source.sourceType === "telegram") {
-        const isTelegramSource = source.sourceType === "telegram";
+      if (liveTarget.kind === "source_item") {
         loadingItems = true;
         const items = await listSourceItems({
           sourceId: trace.source_id,
           limit: SOURCE_ITEMS_PAGE_LIMIT,
           beforePublishedAt: null,
           beforeCursor: null,
-          historyScope: isTelegramSource ? telegramHistoryScope : "current",
+          historyScope: source.sourceType === "telegram" ? telegramHistoryScope : "current",
           topicFilter: null,
           aroundItemId,
         });
-        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
-          requestId,
-          runId: currentRun?.id ?? null,
-          sourceScope: currentEvidenceSourceScope(trace.source_id),
-          sourceViewBasis: decision.sourceViewBasis,
-          selectedTraceRef,
-        })) {
+        if (!currentFocusMatchesRequest(focusRequest)) {
           return;
         }
         const containsTarget = loadedSourceDataContainsTraceRef(
@@ -1505,6 +1550,7 @@
         );
         applySourceItemsPage(items, false);
         return handleFocusedSourceLoadResult({
+          traceSourceId: trace.source_id,
           requestId,
           sourceScope,
           sourceViewBasis: decision.sourceViewBasis,
@@ -1525,16 +1571,11 @@
           searchQuery: null,
           aroundStartMs,
         });
-        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
-          requestId,
-          runId: currentRun?.id ?? null,
-          sourceScope: currentEvidenceSourceScope(trace.source_id),
-          sourceViewBasis: decision.sourceViewBasis,
-          selectedTraceRef,
-        })) {
+        if (!currentFocusMatchesRequest(focusRequest)) {
           return;
         }
         if (youtubeTranscriptRequestKey !== requestKey) {
+          completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
           return;
         }
         const containsTarget = loadedSourceDataContainsTraceRef(
@@ -1546,6 +1587,7 @@
         youtubeTranscriptCursor = page.nextCursor;
         youtubeTranscriptHasMore = page.hasMore;
         return handleFocusedSourceLoadResult({
+          traceSourceId: trace.source_id,
           requestId,
           sourceScope,
           sourceViewBasis: decision.sourceViewBasis,
@@ -1554,24 +1596,21 @@
         });
       }
     } catch (error) {
-      pendingEvidenceSourceFocus = null;
-      clearSourceHighlight();
-      status = formatAppError("loading selected source evidence", error);
+      failFocusedSourceLoad(trace.source_id, focusRequest, error);
     } finally {
-      loadingItems = false;
-      loadingRunSnapshotMessages = false;
-      loadingYoutubeTranscriptSegments = false;
-      groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: false };
+      clearFocusedSourceLoadingFlags(trace.source_id, focusRequest);
     }
   }
 
   function handleFocusedSourceLoadResult({
+    traceSourceId,
     requestId,
     sourceScope,
     sourceViewBasis,
     traceRef,
     containsTarget,
   }: {
+    traceSourceId: number;
     requestId: string;
     sourceScope: NonNullable<ReturnType<typeof currentEvidenceSourceScope>>;
     sourceViewBasis: EvidenceSourceViewBasis;
@@ -1579,6 +1618,12 @@
     containsTarget: boolean;
   }) {
     const pending = pendingEvidenceSourceFocus;
+    clearFocusedSourceLoadingFlags(traceSourceId, {
+      requestId,
+      sourceScope,
+      sourceViewBasis,
+      traceRef,
+    });
     pendingEvidenceSourceFocus = null;
 
     if (!containsTarget || pending === null) {

@@ -163,18 +163,46 @@ describe("analysis source reader route wiring", () => {
     expect(focusedLoad).not.toContain("ref: canonicalRef");
   });
 
-  it("clears pending focus on focused load success, absence, and failure through route helpers", () => {
+  it("uses the generic single-source item path for source-item targets before transcript loading", () => {
     const focusedLoad = functionSlice(
       "async function loadSourcePageAroundTrace",
       "async function showSelectedTraceInSource",
     );
-    const catchBranch = focusedLoad.slice(focusedLoad.indexOf("} catch (error)"));
+    const sourceItemBranchStart = focusedLoad.indexOf('if (liveTarget.kind === "source_item")');
+    const transcriptBranchStart = focusedLoad.indexOf(
+      'if (source.sourceType === "youtube" && source.sourceSubtype === "video")',
+    );
+
+    expect(sourceItemBranchStart, "focused live source-item branch should exist").toBeGreaterThan(-1);
+    expect(transcriptBranchStart, "focused transcript branch should exist").toBeGreaterThan(-1);
+    expect(sourceItemBranchStart, "source-item targets must not fall through to transcript loading").toBeLessThan(
+      transcriptBranchStart,
+    );
+
+    const sourceItemBranch = focusedLoad.slice(sourceItemBranchStart, transcriptBranchStart);
+    expect(sourceItemBranch).toContain("const items = await listSourceItems({");
+    expect(sourceItemBranch).toContain("aroundItemId");
+    expect(sourceItemBranch).toContain('historyScope: source.sourceType === "telegram" ? telegramHistoryScope : "current",');
+    expect(sourceItemBranch).toContain('{ kind: "source_items", items }');
+    expect(sourceItemBranch).toContain("applySourceItemsPage(items, false);");
+    expect(sourceItemBranch).not.toContain("listYoutubeTranscriptSegments(");
+  });
+
+  it("clears pending focus on focused load success, absence, and request-owned failure through route helpers", () => {
+    const focusedLoad = functionSlice(
+      "async function loadSourcePageAroundTrace",
+      "async function showSelectedTraceInSource",
+    );
+    const catchBranch = focusedLoad.slice(
+      focusedLoad.indexOf("} catch (error)"),
+      focusedLoad.indexOf("} finally"),
+    );
 
     expect(focusedLoad).toContain("pendingEvidenceSourceFocus = null;");
     expect(focusedLoad).toContain("clearSourceHighlight();");
     expect(focusedLoad).toContain("return handleFocusedSourceLoadResult(");
-    expect(catchBranch).toContain("pendingEvidenceSourceFocus = null;");
-    expect(catchBranch).toContain("clearSourceHighlight();");
-    expect(catchBranch).toContain('status = formatAppError("loading selected source evidence", error);');
+    expect(catchBranch).toContain("failFocusedSourceLoad(");
+    expect(catchBranch).not.toContain("pendingEvidenceSourceFocus = null;");
+    expect(catchBranch).not.toContain("clearSourceHighlight();");
   });
 });

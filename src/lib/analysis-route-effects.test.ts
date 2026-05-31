@@ -199,22 +199,22 @@ describe("analysis route effects", () => {
       focusedLoad.indexOf("const liveTarget = focusedLiveSourceTargetForTrace(trace);"),
     );
 
-    expect(snapshotBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expect(snapshotBranch).toContain("if (!currentFocusMatchesRequest(focusRequest)) {");
     expectOrder(
       snapshotBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "lastSnapshotLoadKey =",
       "snapshot stale guard must precede load-key assignment",
     );
     expectOrder(
       snapshotBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "selectedSnapshotSourceId =",
       "snapshot stale guard must precede source selection assignment",
     );
     expectOrder(
       snapshotBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "applySnapshotPage(",
       "snapshot stale guard must precede applying the snapshot page",
     );
@@ -224,31 +224,31 @@ describe("analysis route effects", () => {
     const focusedLoad = loadSourcePageAroundTraceFunction();
     const groupBranch = focusedLoad.slice(
       focusedLoad.indexOf('if (analysisScope === "source_group")'),
-      focusedLoad.indexOf('if (source.sourceType === "telegram")'),
+      focusedLoad.indexOf('if (liveTarget.kind === "source_item")'),
     );
 
-    expect(groupBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expect(groupBranch).toContain("if (!currentFocusMatchesRequest(focusRequest)) {");
     expectOrder(
       groupBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "selectedGroupSourceId =",
       "group-live stale guard must precede source selection assignment",
     );
     expectOrder(
       groupBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "groupLiveItemsBySource =",
       "group-live stale guard must precede item assignment",
     );
     expectOrder(
       groupBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "groupLiveCursorsBySource =",
       "group-live stale guard must precede cursor assignment",
     );
     expectOrder(
       groupBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "groupLiveHasMoreBySource =",
       "group-live stale guard must precede has-more assignment",
     );
@@ -257,7 +257,7 @@ describe("analysis route effects", () => {
   it("checks pending focus before assigning focused single-source and transcript state", () => {
     const focusedLoad = loadSourcePageAroundTraceFunction();
     const singleSourceBranch = focusedLoad.slice(
-      focusedLoad.indexOf('if (source.sourceType === "telegram")'),
+      focusedLoad.indexOf('if (liveTarget.kind === "source_item")'),
       focusedLoad.indexOf('if (source.sourceType === "youtube"'),
     );
     const transcriptBranch = focusedLoad.slice(
@@ -265,32 +265,74 @@ describe("analysis route effects", () => {
       focusedLoad.indexOf("} catch (error)"),
     );
 
-    expect(singleSourceBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expect(singleSourceBranch).toContain("if (!currentFocusMatchesRequest(focusRequest)) {");
     expectOrder(
       singleSourceBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "applySourceItemsPage(",
       "single-source stale guard must precede applying source items",
     );
 
-    expect(transcriptBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expect(transcriptBranch).toContain("if (!currentFocusMatchesRequest(focusRequest)) {");
     expectOrder(
       transcriptBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "youtubeTranscriptSegments =",
       "transcript stale guard must precede segment assignment",
     );
     expectOrder(
       transcriptBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "youtubeTranscriptCursor =",
       "transcript stale guard must precede cursor assignment",
     );
     expectOrder(
       transcriptBranch,
-      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
       "youtubeTranscriptHasMore =",
       "transcript stale guard must precede has-more assignment",
     );
+  });
+
+  it("uses request-owned helpers for focused-load absence, failure, and loading cleanup", () => {
+    const focusedLoad = loadSourcePageAroundTraceFunction();
+    const catchBranch = focusedLoad.slice(
+      focusedLoad.indexOf("} catch (error)"),
+      focusedLoad.indexOf("} finally"),
+    );
+    const finallyBranch = focusedLoad.slice(focusedLoad.indexOf("} finally"));
+
+    expect(analysisPageSource).toContain("function currentFocusMatchesRequest(");
+    expect(analysisPageSource).toContain("function completeFocusedSourceLoadWithoutTarget(");
+    expect(analysisPageSource).toContain("function failFocusedSourceLoad(");
+    expect(analysisPageSource).toContain("function clearFocusedSourceLoadingFlags(");
+    expect(catchBranch).toContain("failFocusedSourceLoad(");
+    expect(catchBranch).not.toContain("pendingEvidenceSourceFocus = null;");
+    expect(catchBranch).not.toContain("status = formatAppError(");
+    expect(finallyBranch).toContain("clearFocusedSourceLoadingFlags(");
+    expect(finallyBranch).not.toContain("loadingItems = false;");
+    expect(finallyBranch).not.toContain("loadingRunSnapshotMessages = false;");
+    expect(finallyBranch).not.toContain("loadingYoutubeTranscriptSegments = false;");
+  });
+
+  it("completes active focused loads without target on unsupported, missing source, and superseded transcript exits", () => {
+    const focusedLoad = loadSourcePageAroundTraceFunction();
+    const unsupportedBranch = focusedLoad.slice(
+      focusedLoad.indexOf('if (liveTarget.kind === "unsupported")'),
+      focusedLoad.indexOf("const aroundItemId ="),
+    );
+    const missingSourceBranch = focusedLoad.slice(
+      focusedLoad.indexOf("const source = sourceCatalog.find"),
+      focusedLoad.indexOf('if (analysisScope === "source_group")'),
+    );
+    const transcriptBranch = focusedLoad.slice(
+      focusedLoad.indexOf('if (source.sourceType === "youtube" && source.sourceSubtype === "video")'),
+      focusedLoad.indexOf("} catch (error)"),
+    );
+
+    expect(unsupportedBranch).toContain("completeFocusedSourceLoadWithoutTarget(");
+    expect(missingSourceBranch).toContain("completeFocusedSourceLoadWithoutTarget(");
+    expect(transcriptBranch).toContain("if (youtubeTranscriptRequestKey !== requestKey) {");
+    expect(transcriptBranch).toContain("completeFocusedSourceLoadWithoutTarget(");
   });
 });
