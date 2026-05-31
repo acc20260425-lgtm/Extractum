@@ -12,6 +12,14 @@ import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 
 const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
 
+function sourceBetween(source: string, start: string, end: string) {
+  const startIndex = source.indexOf(start);
+  expect(startIndex).toBeGreaterThanOrEqual(0);
+  const endIndex = source.indexOf(end, startIndex);
+  expect(endIndex).toBeGreaterThan(startIndex);
+  return source.slice(startIndex, endIndex);
+}
+
 describe("report canvas component contract", () => {
   it("owns the central Report and Source modes", () => {
     expect(reportCanvasSource).toContain('class="report-canvas"');
@@ -202,13 +210,20 @@ describe("report canvas component contract", () => {
   });
 
   it("renders the scoped evidence return affordance above source reader headers", () => {
+    const returnAffordance = sourceBetween(
+      reportSourceSurfaceSource,
+      '{#if sourceReturnContext?.kind === "evidence"}',
+      "{#if currentRun",
+    );
+
     expect(reportSourceSurfaceSource).toContain("SourceReturnContext");
     expect(reportSourceSurfaceSource).toContain("sourceReturnContext?: SourceReturnContext");
     expect(reportSourceSurfaceSource).toContain("onReturnToEvidenceReview?: () => void");
-    expect(reportSourceSurfaceSource).toContain('data-smoke-id="evidence-source-return"');
-    expect(reportSourceSurfaceSource).toContain("Back to evidence");
-    expect(reportSourceSurfaceSource).toContain('sourceReturnContext?.kind === "evidence"');
-    expect(reportSourceSurfaceSource).toContain("onclick={onReturnToEvidenceReview}");
+    expect(returnAffordance).toContain('data-smoke-id="evidence-source-return"');
+    expect(returnAffordance).toContain("Back to evidence");
+    expect(returnAffordance).toContain('sourceReturnContext?.kind === "evidence"');
+    expect(returnAffordance).toContain("onclick={onReturnToEvidenceReview}");
+    expect(returnAffordance).not.toContain("selectedTraceRef");
 
     const returnBarStart = reportSourceSurfaceSource.indexOf('class="evidence-return-bar"');
     const firstHeaderStart = reportSourceSurfaceSource.indexOf("<SourceReaderHeader");

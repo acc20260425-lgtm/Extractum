@@ -1453,7 +1453,7 @@
           after: null,
           limit: 50,
           sourceId: trace.source_id,
-          aroundRef: trace.ref,
+          aroundRef: canonicalRef,
         });
         if (!currentFocusMatchesRequest(focusRequest)) {
           return;

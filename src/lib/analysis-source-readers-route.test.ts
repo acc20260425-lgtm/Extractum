@@ -112,7 +112,8 @@ describe("analysis source reader route wiring", () => {
     );
     expect(focusedLoad).toContain("aroundItemId,");
     expect(focusedLoad).toContain("aroundStartMs,");
-    expect(focusedLoad).toContain("aroundRef: trace.ref");
+    expect(focusedLoad).toContain("aroundRef: canonicalRef");
+    expect(focusedLoad).not.toContain("aroundRef: trace.ref");
   });
 
   it("uses loaded source data matching to gate focused highlight creation", () => {

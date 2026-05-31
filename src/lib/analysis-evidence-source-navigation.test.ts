@@ -216,10 +216,13 @@ describe("analysis evidence source navigation", () => {
   });
 
   it("maps trace metadata to focused live source targets", () => {
-    expect(focusedLiveSourceTargetForTrace(trace({
+    const transcriptTarget = focusedLiveSourceTargetForTrace(trace({
       youtube_timestamp_seconds: 754.4,
       item_id: 4,
-    }))).toEqual({ kind: "youtube_transcript", aroundStartMs: 754400 });
+    }));
+
+    expect(transcriptTarget).toEqual({ kind: "youtube_transcript", aroundStartMs: 754400 });
+    expect(transcriptTarget.kind === "youtube_transcript" && Number.isInteger(transcriptTarget.aroundStartMs)).toBe(true);
     expect(focusedLiveSourceTargetForTrace(trace({ item_id: 4 }))).toEqual({
       kind: "source_item",
       aroundItemId: 4,

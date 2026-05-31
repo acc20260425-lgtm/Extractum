@@ -55,7 +55,8 @@ describe("analysis route run companion wiring", () => {
     expect(analysisPageSource).toContain("await loadSourcePageAroundTrace({");
     expect(analysisPageSource).toContain("selectedSnapshotSourceId = trace.source_id");
     expect(analysisPageSource).toContain("sourceId: trace.source_id");
-    expect(analysisPageSource).toContain("aroundRef: trace.ref");
+    expect(analysisPageSource).toContain("aroundRef: canonicalRef");
+    expect(analysisPageSource).not.toContain("aroundRef: trace.ref");
   });
 
   it("establishes evidence source navigation request identity before focused source loads", () => {
@@ -90,6 +91,9 @@ describe("analysis route run companion wiring", () => {
     );
     expect(showSelectedTrace.indexOf("pendingEvidenceSourceFocus = {")).toBeLessThan(
       showSelectedTrace.indexOf('type: "show_evidence_in_source"'),
+    );
+    expect(showSelectedTrace.indexOf("sourceReturnContext = {")).toBeLessThan(
+      showSelectedTrace.indexOf("await loadSourcePageAroundTrace({"),
     );
   });
 
