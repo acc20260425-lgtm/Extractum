@@ -5,6 +5,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import TelegramMediaCard from "$lib/components/analysis/telegram-media-card.svelte";
   import { groupReaderItemsByDay, type SourceReaderItem } from "$lib/source-reader-model";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
 
   let {
     items,
@@ -12,6 +13,7 @@
     hasMore,
     ariaLabel = "Telegram source timeline",
     contentLabel = "messages",
+    highlightToken = null,
     formatTimestamp,
     onLoadMore,
   }: {
@@ -20,12 +22,14 @@
     hasMore: boolean;
     ariaLabel?: string;
     contentLabel?: string;
+    highlightToken?: EvidenceHighlightToken | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
   } = $props();
 
   const dayGroups = $derived(groupReaderItemsByDay(items));
   let timelineElement: HTMLElement | null = $state(null);
+  const consumedHighlightTokenIds = new Set<string>();
 
   $effect(() => {
     const selectedRef = items.find((item) => item.selected)?.ref ?? null;
@@ -33,6 +37,19 @@
       void scrollSelectedMessageIntoView(selectedRef);
     }
   });
+
+  $effect(() => {
+    if (highlightToken && !consumedHighlightTokenIds.has(highlightToken.tokenId)) {
+      const highlightedRef = items.find((item) => isEvidenceHighlighted(item.ref))?.ref ?? null;
+      if (!highlightedRef) return;
+      consumedHighlightTokenIds.add(highlightToken.tokenId);
+      void scrollSelectedMessageIntoView(highlightedRef);
+    }
+  });
+
+  function isEvidenceHighlighted(ref: string | null) {
+    return ref !== null && highlightToken !== null && highlightToken.traceRef === ref;
+  }
 
   async function scrollSelectedMessageIntoView(selectedRef: string) {
     await tick();
@@ -53,7 +70,11 @@
           <div class="day-label">{day.label}</div>
           <ul>
             {#each day.items as item (item.id)}
-              <li class:selected={item.selected} data-trace-ref={item.ref}>
+              <li
+                class:selected={item.selected}
+                data-trace-ref={item.ref}
+                data-evidence-highlighted={isEvidenceHighlighted(item.ref) ? "true" : undefined}
+              >
                 <div class="telegram-message-bubble">
                   <div class="message-meta">
                     {#if item.author}<span class="message-author">{item.author}</span>{/if}
@@ -132,7 +153,8 @@
     padding: 0.125rem 0;
   }
 
-  li.selected {
+  li.selected,
+  li[data-evidence-highlighted="true"] {
     border-radius: 18px;
     background: color-mix(in srgb, var(--primary) 8%, transparent);
   }

@@ -30,6 +30,7 @@
     sourceBrowserShellAppliesToSource,
     sourceBrowserShellAppliesToSubject,
   } from "$lib/source-browser-model";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type {
     AnalysisRunDetail,
     AnalysisRunMessage,
@@ -76,6 +77,7 @@
     youtubePlaylistDetail: YoutubePlaylistDetail | null;
     loadingYoutubeDetail: boolean;
     selectedTraceRef?: string | null;
+    highlightToken?: EvidenceHighlightToken | null;
     currentScopeTitle?: string;
     youtubeTranscriptSegments?: YoutubeTranscriptSegment[];
     loadingYoutubeTranscriptSegments?: boolean;
@@ -140,6 +142,7 @@
     youtubePlaylistDetail,
     loadingYoutubeDetail,
     selectedTraceRef = null,
+    highlightToken = null,
     currentScopeTitle,
     youtubeTranscriptSegments = [],
     loadingYoutubeTranscriptSegments = false,
@@ -355,6 +358,7 @@
             onLoadMore: onLoadMoreRunSnapshotMessages,
           }}
           {selectedTraceRef}
+          {highlightToken}
           {formatTimestamp}
         />
       {:else}
@@ -467,6 +471,7 @@
           onCancelSourceJob,
         }}
         {selectedTraceRef}
+        {highlightToken}
         {formatTimestamp}
       />
     {:else}
@@ -478,6 +483,7 @@
         subject={{ kind: "source_group", group: currentGroup }}
         {loadingItems}
         {selectedTraceRef}
+        {highlightToken}
         {formatTimestamp}
         groupBrowserData={{
           liveReaderItems: groupLiveReaderItems,

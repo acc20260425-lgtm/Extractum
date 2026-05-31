@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
   import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
   import { groupReaderItemsBySource, type SourceReaderItem } from "$lib/source-reader-model";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
 
   let {
     items,
@@ -11,6 +13,7 @@
     loading,
     hasMore,
     selectedTraceRef = null,
+    highlightToken = null,
     formatTimestamp,
     onLoadMore,
   }: {
@@ -19,10 +22,13 @@
     loading: boolean;
     hasMore: boolean;
     selectedTraceRef?: string | null;
+    highlightToken?: EvidenceHighlightToken | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
   } = $props();
 
+  let sourcesElement: HTMLElement | null = $state(null);
+  const consumedHighlightTokenIds = new Set<string>();
   const sourceGroups = $derived(
     groupReaderItemsBySource(
       selectedGroupSourceId === null
@@ -30,9 +36,32 @@
         : items.filter((item) => item.sourceId === selectedGroupSourceId),
     ),
   );
+
+  $effect(() => {
+    if (highlightToken && !consumedHighlightTokenIds.has(highlightToken.tokenId)) {
+      const highlightedRef = sourceGroups
+        .flatMap((group) => group.items)
+        .find((item) => isEvidenceHighlighted(item.ref))?.ref ?? null;
+      if (!highlightedRef) return;
+      consumedHighlightTokenIds.add(highlightToken.tokenId);
+      void scrollHighlightedItemIntoView(highlightedRef);
+    }
+  });
+
+  function isEvidenceHighlighted(ref: string | null) {
+    return ref !== null && highlightToken !== null && highlightToken.traceRef === ref;
+  }
+
+  async function scrollHighlightedItemIntoView(ref: string) {
+    await tick();
+    const highlighted = sourcesElement?.querySelector<HTMLElement>(
+      `[data-trace-ref="${CSS.escape(ref)}"], [data-trace-refs~="${CSS.escape(ref)}"]`,
+    );
+    highlighted?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 </script>
 
-<section class="snapshot-group-sources-view" aria-label="Run snapshot group sources">
+<section class="snapshot-group-sources-view" aria-label="Run snapshot group sources" bind:this={sourcesElement}>
   {#if !loading && sourceGroups.length === 0}
     <EmptyState description="No frozen source rows are loaded for this group snapshot." />
   {:else}
@@ -57,6 +86,7 @@
             showSyncActions={false}
             sourceTitle={group.sourceTitle}
             {selectedTraceRef}
+            {highlightToken}
             {formatTimestamp}
             onChangeTranscriptSearch={() => {}}
             onLoadMore={() => {}}
@@ -71,6 +101,7 @@
             {loading}
             hasMore={false}
             ariaLabel="Run snapshot source material timeline"
+            {highlightToken}
             {formatTimestamp}
             onLoadMore={() => {}}
           />
@@ -79,7 +110,11 @@
         {#if otherItems.length > 0}
           <ul class="other-item-list" aria-label={group.sourceTitle + " other snapshot rows"}>
             {#each otherItems as item (item.id)}
-              <li class:selected={item.selected} data-trace-ref={item.ref}>
+              <li
+                class:selected={item.selected}
+                data-trace-ref={item.ref}
+                data-evidence-highlighted={isEvidenceHighlighted(item.ref) ? "true" : undefined}
+              >
                 <div>
                   <strong>{item.kind.replaceAll("_", " ")}</strong>
                   <span>{formatTimestamp(item.publishedAt)}</span>
@@ -152,7 +187,8 @@
     background: var(--panel);
   }
 
-  .other-item-list li.selected {
+  .other-item-list li.selected,
+  .other-item-list li[data-evidence-highlighted="true"] {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
   }

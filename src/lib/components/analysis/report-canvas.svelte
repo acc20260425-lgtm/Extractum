@@ -17,6 +17,7 @@
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
   import type { ChatAvailability } from "$lib/analysis-run-companion-state";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import type { SnapshotProbeState } from "$lib/analysis-run-snapshot-affordance";
   import type { BadgeVariant } from "$lib/components/ui/types";
@@ -117,6 +118,7 @@
     showTopicSelector,
     telegramHistoryScope,
     selectedTraceRef,
+    highlightToken = null,
     traceRefCount,
     selectedTemplate,
     templateName,
@@ -267,6 +269,7 @@
     showTopicSelector: boolean;
     telegramHistoryScope: TelegramHistoryScope;
     selectedTraceRef: string | null;
+    highlightToken?: EvidenceHighlightToken | null;
     traceRefCount: number;
     selectedTemplate: AnalysisPromptTemplate | null;
     templateName: string;
@@ -568,6 +571,7 @@
       {runSnapshotError}
       {hasMoreRunSnapshotMessages}
       {selectedTraceRef}
+      {highlightToken}
       {currentScopeTitle}
       {currentSource}
       {takeoutRecovery}

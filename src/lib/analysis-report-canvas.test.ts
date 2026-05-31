@@ -8,6 +8,7 @@ import reportWorkspaceToolsSource from "./components/analysis/report-workspace-t
 import reportViewerSource from "./components/analysis/report-viewer.svelte?raw";
 import snapshotGroupSourcesViewSource from "./components/analysis/snapshot-group-sources-view.svelte?raw";
 import snapshotItemsViewSource from "./components/analysis/snapshot-items-view.svelte?raw";
+import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 
 const runCompanionTabsTag = "<" + "Run" + "CompanionTabs";
 
@@ -179,5 +180,24 @@ describe("report canvas component contract", () => {
     expect(reportCanvasSource).toContain("<NotebookLmExportDialog");
     expect(reportCanvasSource.match(/<NotebookLmExportDialog/g)?.length ?? 0).toBe(1);
     expect(reportCanvasSource).toContain("source={currentSource}");
+  });
+
+  it("passes transient evidence highlight tokens from route to source surfaces", () => {
+    expect(analysisPageSource).toContain("highlightToken={transientSourceHighlight}");
+
+    expect(reportCanvasSource).toContain("EvidenceHighlightToken");
+    expect(reportCanvasSource).toContain("highlightToken?: EvidenceHighlightToken | null");
+    expect(reportCanvasSource).toContain("highlightToken = null");
+    expect(reportCanvasSource).toContain("{highlightToken}");
+
+    expect(reportSourceSurfaceSource).toContain("EvidenceHighlightToken");
+    expect(reportSourceSurfaceSource).toContain("highlightToken?: EvidenceHighlightToken | null");
+    expect(reportSourceSurfaceSource).toContain("highlightToken = null");
+
+    const shellCalls = reportSourceSurfaceSource.match(/<SourceBrowserShell[\s\S]*?\/>/g) ?? [];
+    expect(shellCalls).toHaveLength(3);
+    for (const shellCall of shellCalls) {
+      expect(shellCall).toContain("{highlightToken}");
+    }
   });
 });

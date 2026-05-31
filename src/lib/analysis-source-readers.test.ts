@@ -474,7 +474,61 @@ describe("analysis source readers", () => {
     expect(telegramTimelineSource).toContain("data-trace-ref={item.ref}");
     expect(youtubeTranscriptSource).toContain("scrollSelectedTranscriptGroupIntoView");
     expect(youtubeTranscriptSource).toContain("scrollIntoView");
-    expect(youtubeTranscriptSource).toContain("data-trace-ref={visibleRef}");
+    expect(youtubeTranscriptSource).toContain('data-trace-refs={group.refs.join(" ")}');
+    expect(youtubeTranscriptSource).not.toContain("data-trace-ref={visibleRef}");
+  });
+
+  it("adds one-shot evidence highlight support to trace-capable readers", () => {
+    const traceCapableReaders = [
+      telegramTimelineSource,
+      youtubeTranscriptSource,
+      snapshotItemsViewSource,
+      snapshotGroupSourcesViewSource,
+      sourceGroupSourcesViewSource,
+    ];
+
+    for (const source of traceCapableReaders) {
+      expect(source).toContain("EvidenceHighlightToken");
+      expect(source).toContain("highlightToken?: EvidenceHighlightToken | null");
+      expect(source).toContain("highlightToken = null");
+      expect(source).toContain("data-evidence-highlighted=");
+      expect(source).toContain("consumedHighlightTokenIds");
+      expect(source).toContain("!consumedHighlightTokenIds.has(highlightToken.tokenId)");
+      expect(source).toContain("consumedHighlightTokenIds.add(highlightToken.tokenId)");
+    }
+  });
+
+  it("matches evidence highlights by concrete trace refs without replacing selected row behavior", () => {
+    expect(telegramTimelineSource).toContain("function isEvidenceHighlighted(ref: string | null)");
+    expect(telegramTimelineSource).toContain("highlightToken.traceRef === ref");
+    expect(telegramTimelineSource).toContain('class:selected={item.selected}');
+    expect(telegramTimelineSource).toContain('data-evidence-highlighted={isEvidenceHighlighted(item.ref) ? "true" : undefined}');
+
+    expect(youtubeTranscriptSource).toContain("function isEvidenceHighlighted(group: YoutubeTranscriptGroup)");
+    expect(youtubeTranscriptSource).toContain("group.refs.includes(highlightToken.traceRef)");
+    expect(youtubeTranscriptSource).toContain("const highlightedGroup = transcriptGroups.find((group) => isEvidenceHighlighted(group));");
+    expect(youtubeTranscriptSource).toContain('class:selected={group.selected}');
+    expect(youtubeTranscriptSource).toContain('data-evidence-highlighted={isEvidenceHighlighted(group) ? "true" : undefined}');
+    expect(youtubeTranscriptSource).toContain('data-trace-refs={group.refs.join(" ")}');
+
+    expect(snapshotItemsViewSource).toContain("function isEvidenceHighlighted(ref: string | null)");
+    expect(snapshotItemsViewSource).toContain("highlightToken.traceRef === ref");
+    expect(snapshotItemsViewSource).toContain('class:selected={itemSelected(item)}');
+    expect(snapshotItemsViewSource).toContain('data-evidence-highlighted={isEvidenceHighlighted(item.ref) ? "true" : undefined}');
+
+    expect(snapshotGroupSourcesViewSource).toContain('data-evidence-highlighted={isEvidenceHighlighted(item.ref) ? "true" : undefined}');
+    expect(sourceGroupSourcesViewSource).toContain("{highlightToken}");
+  });
+
+  it("extends existing selected row styles for tokenized evidence highlights without hardcoded colors", () => {
+    expect(telegramTimelineSource).toContain('li.selected,\n  li[data-evidence-highlighted="true"]');
+    expect(youtubeTranscriptSource).toContain('.transcript-group-list li.selected,\n  .transcript-group-list li[data-evidence-highlighted="true"]');
+    expect(snapshotItemsViewSource).toContain('article.selected,\n  article[data-evidence-highlighted="true"]');
+    expect(snapshotGroupSourcesViewSource).toContain('.other-item-list li.selected,\n  .other-item-list li[data-evidence-highlighted="true"]');
+    expect(telegramTimelineSource).toContain("var(--primary)");
+    expect(youtubeTranscriptSource).toContain("var(--primary)");
+    expect(snapshotItemsViewSource).toContain("var(--accent)");
+    expect(snapshotGroupSourcesViewSource).toContain("var(--accent)");
   });
 
   it("renders YouTube playlist videos as a job-free leaf view", () => {

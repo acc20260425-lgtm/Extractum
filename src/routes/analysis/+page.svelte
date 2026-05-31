@@ -3037,6 +3037,7 @@
     showTopicSelector={shouldShowTopicSelector()}
     {telegramHistoryScope}
     {selectedTraceRef}
+    highlightToken={transientSourceHighlight}
     traceRefCount={traceData.refs.length}
     {selectedTemplate}
     {templateName}

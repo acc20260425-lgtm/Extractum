@@ -14,6 +14,7 @@
     type YoutubeTranscriptGroup,
     type SourceReaderItem,
   } from "$lib/source-reader-model";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { SourceItem, YoutubeTranscriptSegment } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
 
@@ -27,6 +28,7 @@
     showSyncActions = true,
     sourceTitle,
     selectedTraceRef,
+    highlightToken = null,
     formatTimestamp,
     onChangeTranscriptSearch,
     onLoadMore,
@@ -43,6 +45,7 @@
     showSyncActions?: boolean;
     sourceTitle: string;
     selectedTraceRef: string | null;
+    highlightToken?: EvidenceHighlightToken | null;
     formatTimestamp: (value: number | null) => string;
     onChangeTranscriptSearch: (value: string) => void;
     onLoadMore: () => void | Promise<void>;
@@ -65,6 +68,7 @@
   const readerItems = $derived(snapshotItems.length > 0 ? snapshotItems : liveItems);
   const transcriptGroups = $derived(groupYoutubeTranscriptItems(readerItems));
   let transcriptElement: HTMLElement | null = $state(null);
+  const consumedHighlightTokenIds = new Set<string>();
 
   $effect(() => {
     const selectedRef = transcriptGroups.find((group) => group.selected)?.refs[0] ?? null;
@@ -73,12 +77,25 @@
     }
   });
 
+  $effect(() => {
+    if (highlightToken && !consumedHighlightTokenIds.has(highlightToken.tokenId)) {
+      const highlightedGroup = transcriptGroups.find((group) => isEvidenceHighlighted(group));
+      if (!highlightedGroup) return;
+      consumedHighlightTokenIds.add(highlightToken.tokenId);
+      void scrollSelectedTranscriptGroupIntoView(highlightToken.traceRef);
+    }
+  });
+
   async function scrollSelectedTranscriptGroupIntoView(selectedRef: string) {
     await tick();
     const selected = transcriptElement?.querySelector<HTMLElement>(
-      `[data-trace-ref="${CSS.escape(selectedRef)}"]`,
+      `[data-trace-refs~="${CSS.escape(selectedRef)}"]`,
     );
     selected?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  function isEvidenceHighlighted(group: YoutubeTranscriptGroup) {
+    return highlightToken !== null && group.refs.includes(highlightToken.traceRef);
   }
 
   function timestampUrl(group: YoutubeTranscriptGroup) {
@@ -179,7 +196,12 @@
       {#each transcriptGroups as group (group.id)}
         {@const url = timestampUrl(group)}
         {@const visibleRef = refBadge(group)}
-        <li class:selected={group.selected} data-trace-ref={visibleRef}>
+        <li
+          class:selected={group.selected}
+          data-trace-ref={group.refs[0] ?? undefined}
+          data-trace-refs={group.refs.join(" ")}
+          data-evidence-highlighted={isEvidenceHighlighted(group) ? "true" : undefined}
+        >
           <div class="group-time">
             {#if group.startSeconds !== null && url}
               <a href={url} target="_blank" rel="noopener noreferrer">
@@ -317,7 +339,8 @@
     border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   }
 
-  .transcript-group-list li.selected {
+  .transcript-group-list li.selected,
+  .transcript-group-list li[data-evidence-highlighted="true"] {
     border-left-color: var(--primary);
     background: color-mix(in srgb, var(--primary) 7%, transparent);
   }

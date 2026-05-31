@@ -13,6 +13,14 @@ function sourcePropsBlock() {
   return sourceBetween(shellSource, "type Props = {", "  };");
 }
 
+function componentCall(tag: string, marker: string = `<${tag}`) {
+  const markerIndex = shellSource.indexOf(marker);
+  expect(markerIndex).toBeGreaterThanOrEqual(0);
+  const openIndex = shellSource.lastIndexOf(`<${tag}`, markerIndex);
+  expect(openIndex).toBeGreaterThanOrEqual(0);
+  return sourceBetween(shellSource.slice(openIndex), `<${tag}`, "/>");
+}
+
 describe("source browser shell component contract", () => {
   it("uses the subject-aware source browser model and keeps data fetching outside the shell", () => {
     expect(shellSource).toContain("sourceBrowserTabsForSubject");
@@ -81,5 +89,21 @@ describe("source browser shell component contract", () => {
     expect(propsBlock).not.toContain("youtubeVideoDetail: YoutubeVideoDetail | null");
     expect(propsBlock).not.toContain("onSyncYoutubeTranscript");
     expect(shellSource).toContain('subject && subject.kind === "source" ? sourceBrowserData : null');
+  });
+
+  it("accepts and forwards evidence highlight tokens to every trace-capable child", () => {
+    const propsBlock = sourcePropsBlock();
+
+    expect(shellSource).toContain("EvidenceHighlightToken");
+    expect(propsBlock).toContain("highlightToken?: EvidenceHighlightToken | null");
+    expect(shellSource).toContain("highlightToken = null");
+
+    expect(componentCall("SnapshotGroupSourcesView")).toContain("{highlightToken}");
+    expect(componentCall("SnapshotItemsView")).toContain("{highlightToken}");
+    expect(componentCall("TelegramTimelineReader", 'ariaLabel="Run snapshot source material timeline"')).toContain("{highlightToken}");
+    expect(componentCall("YoutubeTranscriptReader", "snapshotItems={snapshotData?.readerItems ?? []}")).toContain("{highlightToken}");
+    expect(componentCall("SourceGroupSourcesView")).toContain("{highlightToken}");
+    expect(componentCall("TelegramTimelineReader", "items={sourceData.liveReaderItems}")).toContain("{highlightToken}");
+    expect(componentCall("YoutubeTranscriptReader", "segments={sourceData.youtubeTranscriptSegments}")).toContain("{highlightToken}");
   });
 });

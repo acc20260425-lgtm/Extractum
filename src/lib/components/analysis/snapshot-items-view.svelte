@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import type { SourceReaderItem } from "$lib/source-reader-model";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
 
   const ALL_KINDS = "__all_snapshot_item_kinds__";
 
@@ -13,6 +15,7 @@
     loading,
     hasMore,
     selectedTraceRef = null,
+    highlightToken = null,
     formatTimestamp,
     onLoadMore,
   }: {
@@ -20,6 +23,7 @@
     loading: boolean;
     hasMore: boolean;
     selectedTraceRef?: string | null;
+    highlightToken?: EvidenceHighlightToken | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
   } = $props();
@@ -27,6 +31,8 @@
   let search = $state("");
   let selectedKind = $state(ALL_KINDS);
   let sortMode = $state<"newest" | "oldest">("newest");
+  let itemsElement: HTMLElement | null = $state(null);
+  const consumedHighlightTokenIds = new Set<string>();
 
   const kindChips = $derived.by(() => {
     const counts = new Map<string, number>();
@@ -71,9 +77,30 @@
   function itemSelected(item: SourceReaderItem) {
     return item.selected || (selectedTraceRef !== null && item.ref === selectedTraceRef);
   }
+
+  $effect(() => {
+    if (highlightToken && !consumedHighlightTokenIds.has(highlightToken.tokenId)) {
+      const highlightedRef = visibleItems.find((item) => isEvidenceHighlighted(item.ref))?.ref ?? null;
+      if (!highlightedRef) return;
+      consumedHighlightTokenIds.add(highlightToken.tokenId);
+      void scrollHighlightedItemIntoView(highlightedRef);
+    }
+  });
+
+  function isEvidenceHighlighted(ref: string | null) {
+    return ref !== null && highlightToken !== null && highlightToken.traceRef === ref;
+  }
+
+  async function scrollHighlightedItemIntoView(ref: string) {
+    await tick();
+    const highlighted = itemsElement?.querySelector<HTMLElement>(
+      `[data-trace-ref="${CSS.escape(ref)}"]`,
+    );
+    highlighted?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 </script>
 
-<section class="snapshot-items-view" aria-label="Run snapshot items">
+<section class="snapshot-items-view" aria-label="Run snapshot items" bind:this={itemsElement}>
   <div class="items-toolbar">
     <label class="search-field">
       <span>Search snapshot items</span>
@@ -132,7 +159,11 @@
     <ul class="item-list">
       {#each visibleItems as item (item.id)}
         <li>
-          <article class:selected={itemSelected(item)} data-trace-ref={item.ref}>
+          <article
+            class:selected={itemSelected(item)}
+            data-trace-ref={item.ref}
+            data-evidence-highlighted={isEvidenceHighlighted(item.ref) ? "true" : undefined}
+          >
             <div class="item-heading">
               <strong>{itemKindLabel(item.kind)}</strong>
               <span>{formatTimestamp(item.publishedAt)}</span>
@@ -228,7 +259,8 @@
     background: var(--panel);
   }
 
-  article.selected {
+  article.selected,
+  article[data-evidence-highlighted="true"] {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
   }

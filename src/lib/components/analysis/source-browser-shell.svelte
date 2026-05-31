@@ -21,6 +21,7 @@
     type SourceBrowserSubject,
     type SourceBrowserTabId,
   } from "$lib/source-browser-model";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import type { SourceFilterOption, SourceReaderItem } from "$lib/source-reader-model";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
@@ -105,6 +106,7 @@
     groupBrowserData?: SourceGroupBrowserData | null;
     snapshotBrowserData?: SnapshotBrowserData | null;
     selectedTraceRef?: string | null;
+    highlightToken?: EvidenceHighlightToken | null;
     loadingItems?: boolean;
     formatTimestamp: (value: number | null) => string;
   };
@@ -115,6 +117,7 @@
     groupBrowserData = null,
     snapshotBrowserData = null,
     selectedTraceRef = null,
+    highlightToken = null,
     loadingItems = false,
     formatTimestamp,
   }: Props = $props();
@@ -231,6 +234,7 @@
       loading={snapshotData?.loading ?? false}
       hasMore={snapshotData?.hasMore ?? false}
       selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+      {highlightToken}
       {formatTimestamp}
       onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
     />
@@ -240,6 +244,7 @@
       loading={snapshotData?.loading ?? false}
       hasMore={snapshotData?.hasMore ?? false}
       selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+      {highlightToken}
       {formatTimestamp}
       onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
     />
@@ -259,6 +264,7 @@
       loading={snapshotData?.loading ?? false}
       hasMore={snapshotData?.hasMore ?? false}
       ariaLabel="Run snapshot source material timeline"
+      {highlightToken}
       {formatTimestamp}
       onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
     />
@@ -273,6 +279,7 @@
       showSyncActions={false}
       sourceTitle={snapshotSubject.scopeLabel}
       selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+      {highlightToken}
       {formatTimestamp}
       onChangeTranscriptSearch={() => {}}
       onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
@@ -287,6 +294,7 @@
       hasMoreBySource={groupData?.hasMoreBySource ?? {}}
       youtubeDetailsBySource={groupData?.youtubeDetailsBySource ?? {}}
       {selectedTraceRef}
+      {highlightToken}
       {formatTimestamp}
       onLoadMoreSource={loadMoreGroupSourcePage}
     />
@@ -331,6 +339,7 @@
         loading={sourceData.loadingItems}
         hasMore={sourceData.sourceItemsHasMore}
         contentLabel={sourceData.currentSourceContentLabel}
+        {highlightToken}
         {formatTimestamp}
         onLoadMore={sourceData.onLoadMoreSourceItems}
       />
@@ -345,6 +354,7 @@
       transcriptSearch={sourceData.youtubeTranscriptSearch}
       sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
       {selectedTraceRef}
+      {highlightToken}
       {formatTimestamp}
       onChangeTranscriptSearch={sourceData.onChangeTranscriptSearch}
       onLoadMore={sourceData.onLoadMoreYoutubeTranscriptSegments}
