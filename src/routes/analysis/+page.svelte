@@ -193,9 +193,12 @@
   import {
     canonicalEvidenceTraceRef,
     focusedLiveSourceTargetForTrace,
+    loadedSourceDataContainsTraceRef,
+    pendingFocusMatchesCurrent,
     sourceReturnContextIsActive,
     sourceScopeForEvidence,
     type EvidenceHighlightToken,
+    type EvidenceSourceViewBasis,
     type PendingEvidenceSourceFocus,
     type SourceReturnContext,
   } from "$lib/analysis-evidence-source-navigation";
@@ -224,6 +227,7 @@
     sourceSyncDisabledReason as getSourceSyncDisabledReason,
   } from "$lib/analysis-source-state";
   import { sourceCapabilities } from "$lib/source-capabilities";
+  import { analysisRunMessageToReaderItem } from "$lib/source-reader-model";
   import type { AccountRecord, AccountRuntimeStatus } from "$lib/types/accounts";
   import type { LlmProfile, LlmProviderModel } from "$lib/types/llm";
   import type {
@@ -524,6 +528,13 @@
 
   function currentGroup() {
     return currentAnalysisGroup(selectedGroupId, groups);
+  }
+
+  function snapshotSourceTitle(sourceId: number) {
+    const source = sourceCatalog.find((candidate) => candidate.id === sourceId);
+    if (source) return source.title ?? source.externalId;
+    const member = currentGroup()?.members.find((candidate) => candidate.source_id === sourceId);
+    return member?.source_title ?? `Source ${sourceId}`;
   }
 
   function currentScopeTitle() {
@@ -1364,10 +1375,6 @@
     canonicalRef: string;
     sourceScope: NonNullable<ReturnType<typeof currentEvidenceSourceScope>>;
   }) {
-    void requestId;
-    void canonicalRef;
-    void sourceScope;
-
     if (decision.kind === "unavailable") {
       return;
     }
@@ -1385,13 +1392,36 @@
           sourceId: trace.source_id,
           aroundRef: trace.ref,
         });
-        if (currentRun?.id !== run.id) {
+        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
+          requestId,
+          runId: currentRun?.id ?? null,
+          sourceScope: currentEvidenceSourceScope(trace.source_id),
+          sourceViewBasis: decision.sourceViewBasis,
+          selectedTraceRef,
+        })) {
           return;
         }
+        const snapshotItems = page.messages.map((message) =>
+          analysisRunMessageToReaderItem(message, {
+            sourceTitle: snapshotSourceTitle(message.source_id),
+            selectedTraceRef: canonicalRef,
+          }),
+        );
+        const containsTarget = loadedSourceDataContainsTraceRef(
+          { kind: "snapshot", items: snapshotItems },
+          canonicalRef,
+          sourceScope,
+        );
         lastSnapshotLoadKey = `${run.id}:first:${trace.source_id}`;
         selectedSnapshotSourceId = trace.source_id;
         applySnapshotPage(run, page, false);
-        return;
+        return handleFocusedSourceLoadResult({
+          requestId,
+          sourceScope,
+          sourceViewBasis: decision.sourceViewBasis,
+          traceRef: canonicalRef,
+          containsTarget,
+        });
       }
 
       const liveTarget = focusedLiveSourceTargetForTrace(trace);
@@ -1406,7 +1436,6 @@
       }
 
       if (analysisScope === "source_group") {
-        selectedGroupSourceId = trace.source_id;
         groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: true };
         const items = await listSourceItems({
           sourceId: trace.source_id,
@@ -1415,6 +1444,21 @@
           topicFilter: null,
           aroundItemId,
         });
+        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
+          requestId,
+          runId: currentRun?.id ?? null,
+          sourceScope: currentEvidenceSourceScope(trace.source_id),
+          sourceViewBasis: decision.sourceViewBasis,
+          selectedTraceRef,
+        })) {
+          return;
+        }
+        const containsTarget = loadedSourceDataContainsTraceRef(
+          { kind: "source_items", items },
+          canonicalRef,
+          sourceScope,
+        );
+        selectedGroupSourceId = trace.source_id;
         groupLiveItemsBySource = { ...groupLiveItemsBySource, [trace.source_id]: items };
         groupLiveCursorsBySource = {
           ...groupLiveCursorsBySource,
@@ -1424,7 +1468,13 @@
           ...groupLiveHasMoreBySource,
           [trace.source_id]: items.length === 40,
         };
-        return;
+        return handleFocusedSourceLoadResult({
+          requestId,
+          sourceScope,
+          sourceViewBasis: decision.sourceViewBasis,
+          traceRef: canonicalRef,
+          containsTarget,
+        });
       }
 
       if (source.sourceType === "telegram") {
@@ -1439,8 +1489,28 @@
           topicFilter: null,
           aroundItemId,
         });
+        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
+          requestId,
+          runId: currentRun?.id ?? null,
+          sourceScope: currentEvidenceSourceScope(trace.source_id),
+          sourceViewBasis: decision.sourceViewBasis,
+          selectedTraceRef,
+        })) {
+          return;
+        }
+        const containsTarget = loadedSourceDataContainsTraceRef(
+          { kind: "source_items", items },
+          canonicalRef,
+          sourceScope,
+        );
         applySourceItemsPage(items, false);
-        return;
+        return handleFocusedSourceLoadResult({
+          requestId,
+          sourceScope,
+          sourceViewBasis: decision.sourceViewBasis,
+          traceRef: canonicalRef,
+          containsTarget,
+        });
       }
 
       if (source.sourceType === "youtube" && source.sourceSubtype === "video") {
@@ -1455,14 +1525,37 @@
           searchQuery: null,
           aroundStartMs,
         });
+        if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
+          requestId,
+          runId: currentRun?.id ?? null,
+          sourceScope: currentEvidenceSourceScope(trace.source_id),
+          sourceViewBasis: decision.sourceViewBasis,
+          selectedTraceRef,
+        })) {
+          return;
+        }
         if (youtubeTranscriptRequestKey !== requestKey) {
           return;
         }
+        const containsTarget = loadedSourceDataContainsTraceRef(
+          { kind: "youtube_transcript", segments: page.segments },
+          canonicalRef,
+          sourceScope,
+        );
         youtubeTranscriptSegments = page.segments;
         youtubeTranscriptCursor = page.nextCursor;
         youtubeTranscriptHasMore = page.hasMore;
+        return handleFocusedSourceLoadResult({
+          requestId,
+          sourceScope,
+          sourceViewBasis: decision.sourceViewBasis,
+          traceRef: canonicalRef,
+          containsTarget,
+        });
       }
     } catch (error) {
+      pendingEvidenceSourceFocus = null;
+      clearSourceHighlight();
       status = formatAppError("loading selected source evidence", error);
     } finally {
       loadingItems = false;
@@ -1470,6 +1563,40 @@
       loadingYoutubeTranscriptSegments = false;
       groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: false };
     }
+  }
+
+  function handleFocusedSourceLoadResult({
+    requestId,
+    sourceScope,
+    sourceViewBasis,
+    traceRef,
+    containsTarget,
+  }: {
+    requestId: string;
+    sourceScope: NonNullable<ReturnType<typeof currentEvidenceSourceScope>>;
+    sourceViewBasis: EvidenceSourceViewBasis;
+    traceRef: string;
+    containsTarget: boolean;
+  }) {
+    const pending = pendingEvidenceSourceFocus;
+    pendingEvidenceSourceFocus = null;
+
+    if (!containsTarget || pending === null) {
+      clearSourceHighlight();
+      status = "Selected evidence was not found in the loaded source window.";
+      return;
+    }
+
+    const tokenId = `${requestId}:highlight`;
+    transientSourceHighlight = {
+      tokenId,
+      runId: pending.runId,
+      sourceScope,
+      sourceViewBasis,
+      traceRef,
+      createdAt: Date.now(),
+    };
+    scheduleSourceHighlightClear(tokenId);
   }
 
   async function showSelectedTraceInSource() {

@@ -77,6 +77,22 @@ describe("analysis route effects", () => {
     return analysisPageSource.slice(start, end);
   }
 
+  function loadSourcePageAroundTraceFunction() {
+    return functionSlice(
+      "async function loadSourcePageAroundTrace",
+      "async function showSelectedTraceInSource",
+    );
+  }
+
+  function expectOrder(source: string, first: string, second: string, message: string) {
+    const firstIndex = source.indexOf(first);
+    const secondIndex = source.indexOf(second);
+
+    expect(firstIndex, `${message}: missing first marker`).toBeGreaterThan(-1);
+    expect(secondIndex, `${message}: missing second marker`).toBeGreaterThan(-1);
+    expect(firstIndex, message).toBeLessThan(secondIndex);
+  }
+
   it("schedules saved run history loading from explicit scope params and runs filters", () => {
     const effect = historyScopeEffect();
 
@@ -174,5 +190,107 @@ describe("analysis route effects", () => {
         "clearEvidenceSourceNavigation();",
       );
     }
+  });
+
+  it("checks pending focus before assigning focused snapshot state", () => {
+    const focusedLoad = loadSourcePageAroundTraceFunction();
+    const snapshotBranch = focusedLoad.slice(
+      focusedLoad.indexOf('if (decision.kind === "run_snapshot")'),
+      focusedLoad.indexOf("const liveTarget = focusedLiveSourceTargetForTrace(trace);"),
+    );
+
+    expect(snapshotBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expectOrder(
+      snapshotBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "lastSnapshotLoadKey =",
+      "snapshot stale guard must precede load-key assignment",
+    );
+    expectOrder(
+      snapshotBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "selectedSnapshotSourceId =",
+      "snapshot stale guard must precede source selection assignment",
+    );
+    expectOrder(
+      snapshotBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "applySnapshotPage(",
+      "snapshot stale guard must precede applying the snapshot page",
+    );
+  });
+
+  it("checks pending focus before assigning focused group-live state", () => {
+    const focusedLoad = loadSourcePageAroundTraceFunction();
+    const groupBranch = focusedLoad.slice(
+      focusedLoad.indexOf('if (analysisScope === "source_group")'),
+      focusedLoad.indexOf('if (source.sourceType === "telegram")'),
+    );
+
+    expect(groupBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expectOrder(
+      groupBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "selectedGroupSourceId =",
+      "group-live stale guard must precede source selection assignment",
+    );
+    expectOrder(
+      groupBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "groupLiveItemsBySource =",
+      "group-live stale guard must precede item assignment",
+    );
+    expectOrder(
+      groupBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "groupLiveCursorsBySource =",
+      "group-live stale guard must precede cursor assignment",
+    );
+    expectOrder(
+      groupBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "groupLiveHasMoreBySource =",
+      "group-live stale guard must precede has-more assignment",
+    );
+  });
+
+  it("checks pending focus before assigning focused single-source and transcript state", () => {
+    const focusedLoad = loadSourcePageAroundTraceFunction();
+    const singleSourceBranch = focusedLoad.slice(
+      focusedLoad.indexOf('if (source.sourceType === "telegram")'),
+      focusedLoad.indexOf('if (source.sourceType === "youtube"'),
+    );
+    const transcriptBranch = focusedLoad.slice(
+      focusedLoad.indexOf('if (source.sourceType === "youtube"'),
+      focusedLoad.indexOf("} catch (error)"),
+    );
+
+    expect(singleSourceBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expectOrder(
+      singleSourceBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "applySourceItemsPage(",
+      "single-source stale guard must precede applying source items",
+    );
+
+    expect(transcriptBranch).toContain("if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {");
+    expectOrder(
+      transcriptBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "youtubeTranscriptSegments =",
+      "transcript stale guard must precede segment assignment",
+    );
+    expectOrder(
+      transcriptBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "youtubeTranscriptCursor =",
+      "transcript stale guard must precede cursor assignment",
+    );
+    expectOrder(
+      transcriptBranch,
+      "if (!pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {",
+      "youtubeTranscriptHasMore =",
+      "transcript stale guard must precede has-more assignment",
+    );
   });
 });

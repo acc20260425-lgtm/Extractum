@@ -11,6 +11,15 @@ function functionSlice(name: string, nextName: string) {
   return analysisPageSource.slice(start, end);
 }
 
+function expectOrder(source: string, first: string, second: string, message: string) {
+  const firstIndex = source.indexOf(first);
+  const secondIndex = source.indexOf(second);
+
+  expect(firstIndex, `${message}: missing first marker`).toBeGreaterThan(-1);
+  expect(secondIndex, `${message}: missing second marker`).toBeGreaterThan(-1);
+  expect(firstIndex, message).toBeLessThan(secondIndex);
+}
+
 describe("analysis source reader route wiring", () => {
   it("loads live source group pages per member without closing the opened run", () => {
     expect(analysisPageSource).toContain("groupLiveItemsBySource");
@@ -104,5 +113,68 @@ describe("analysis source reader route wiring", () => {
     expect(focusedLoad).toContain("aroundItemId,");
     expect(focusedLoad).toContain("aroundStartMs,");
     expect(focusedLoad).toContain("aroundRef: trace.ref");
+  });
+
+  it("uses loaded source data matching to gate focused highlight creation", () => {
+    const focusedLoad = functionSlice(
+      "async function loadSourcePageAroundTrace",
+      "async function showSelectedTraceInSource",
+    );
+
+    expect(analysisPageSource).toContain("pendingFocusMatchesCurrent,");
+    expect(analysisPageSource).toContain("loadedSourceDataContainsTraceRef,");
+    expect(analysisPageSource).toContain("analysisRunMessageToReaderItem");
+    expect(focusedLoad).not.toContain("void requestId;");
+    expect(focusedLoad).not.toContain("void canonicalRef;");
+    expect(focusedLoad).not.toContain("void sourceScope;");
+    expect(focusedLoad).toContain("const tokenId = `${requestId}:highlight`;");
+    expect(focusedLoad).toContain("transientSourceHighlight = {");
+    expect(focusedLoad).toContain("scheduleSourceHighlightClear(tokenId);");
+    expect(focusedLoad).toContain("createdAt: Date.now(),");
+    expect(focusedLoad).toContain('status = "Selected evidence was not found in the loaded source window.";');
+    expectOrder(
+      focusedLoad,
+      "loadedSourceDataContainsTraceRef(",
+      "transientSourceHighlight = {",
+      "loaded-data match must happen before highlight creation",
+    );
+    expectOrder(
+      focusedLoad,
+      "transientSourceHighlight = {",
+      "scheduleSourceHighlightClear(tokenId);",
+      "highlight must be assigned before scheduling its clear timer",
+    );
+  });
+
+  it("matches snapshot, live item, and transcript focused load data without fabricating rows", () => {
+    const focusedLoad = functionSlice(
+      "async function loadSourcePageAroundTrace",
+      "async function showSelectedTraceInSource",
+    );
+
+    expect(focusedLoad).toContain("analysisRunMessageToReaderItem(message, {");
+    expect(focusedLoad).toContain("sourceTitle: snapshotSourceTitle(message.source_id),");
+    expect(focusedLoad).toContain('{ kind: "snapshot", items: snapshotItems }');
+    expect(focusedLoad).toContain('{ kind: "source_items", items }');
+    expect(focusedLoad).toContain('{ kind: "youtube_transcript", segments: page.segments }');
+    expect(focusedLoad).toContain("canonicalRef,");
+    expect(focusedLoad).toContain("sourceScope,");
+    expect(focusedLoad).not.toContain("canonicalRef, content:");
+    expect(focusedLoad).not.toContain("ref: canonicalRef");
+  });
+
+  it("clears pending focus on focused load success, absence, and failure through route helpers", () => {
+    const focusedLoad = functionSlice(
+      "async function loadSourcePageAroundTrace",
+      "async function showSelectedTraceInSource",
+    );
+    const catchBranch = focusedLoad.slice(focusedLoad.indexOf("} catch (error)"));
+
+    expect(focusedLoad).toContain("pendingEvidenceSourceFocus = null;");
+    expect(focusedLoad).toContain("clearSourceHighlight();");
+    expect(focusedLoad).toContain("return handleFocusedSourceLoadResult(");
+    expect(catchBranch).toContain("pendingEvidenceSourceFocus = null;");
+    expect(catchBranch).toContain("clearSourceHighlight();");
+    expect(catchBranch).toContain('status = formatAppError("loading selected source evidence", error);');
   });
 });
