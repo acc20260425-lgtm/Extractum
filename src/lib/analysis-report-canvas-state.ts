@@ -4,6 +4,8 @@ import type {
   YoutubeCorpusMode,
 } from "$lib/types/analysis";
 import type { SourceViewBasis } from "$lib/analysis-workspace-state";
+import { isActiveRunStatus } from "$lib/analysis-run-snapshot-affordance";
+export { isActiveRunStatus } from "$lib/analysis-run-snapshot-affordance";
 
 export type RunSnapshotAvailability =
   | "unknown"
@@ -29,10 +31,6 @@ export interface SourceBasisInput {
   currentRun: Pick<AnalysisRunDetail, "status"> | null;
   sourceViewBasis: SourceViewBasis;
   snapshotAvailability: RunSnapshotAvailability;
-}
-
-export function isActiveRunStatus(status: string) {
-  return status === "queued" || status === "running";
 }
 
 export function runSnapshotAvailabilityFromPage({

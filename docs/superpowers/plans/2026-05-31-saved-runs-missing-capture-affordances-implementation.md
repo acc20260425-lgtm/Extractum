@@ -74,7 +74,7 @@
 - Modify: `src/lib/analysis-report-canvas-state.ts`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-missing-capture-affordances-implementation.md`
 
-- [ ] **Step 1: Write the failing helper tests**
+- [x] **Step 1: Write the failing helper tests**
 
 Create `src/lib/analysis-run-snapshot-affordance.test.ts` with:
 
@@ -301,7 +301,7 @@ describe("analysis run snapshot affordance", () => {
 });
 ```
 
-- [ ] **Step 2: Run the helper test and verify it fails for missing module**
+- [x] **Step 2: Run the helper test and verify it fails for missing module**
 
 Run:
 
@@ -311,7 +311,7 @@ npm.cmd run test -- src/lib/analysis-run-snapshot-affordance.test.ts
 
 Expected: FAIL because `src/lib/analysis-run-snapshot-affordance.ts` does not exist.
 
-- [ ] **Step 3: Implement the helper**
+- [x] **Step 3: Implement the helper**
 
 Create `src/lib/analysis-run-snapshot-affordance.ts` with:
 
@@ -602,7 +602,7 @@ function pendingAffordance(): SnapshotAffordance {
 }
 ```
 
-- [ ] **Step 4: Reuse the helper status predicate in canvas state**
+- [x] **Step 4: Reuse the helper status predicate in canvas state**
 
 In `src/lib/analysis-report-canvas-state.ts`, add the import and re-export near the top:
 
@@ -619,7 +619,7 @@ export function isActiveRunStatus(status: string) {
 }
 ```
 
-- [ ] **Step 5: Run focused state tests**
+- [x] **Step 5: Run focused state tests**
 
 Run:
 
@@ -629,7 +629,7 @@ npm.cmd run test -- src/lib/analysis-run-snapshot-affordance.test.ts src/lib/ana
 
 Expected: PASS for both files.
 
-- [ ] **Step 6: Commit helper**
+- [x] **Step 6: Commit helper**
 
 Run:
 
