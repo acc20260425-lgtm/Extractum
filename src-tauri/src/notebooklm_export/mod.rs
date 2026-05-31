@@ -28,7 +28,10 @@ use model::{
     NotebookLmExportRequest, NotebookLmExportResult, NotebookLmExportScope, ParticipantSummary,
     DEFAULT_MAX_BYTES_PER_FILE, DEFAULT_MAX_WORDS_PER_FILE, DEFAULT_MIN_MESSAGE_LENGTH,
 };
-use query::{load_export_messages, load_export_source, ExportHistoryScope};
+use query::{
+    load_export_messages, load_export_source, load_export_source_group, ExportHistoryScope,
+    NotebookLmExportSourceGroup,
+};
 use renderer::{
     approx_word_count, render_document, render_document_overhead, render_message_block,
     DocumentRenderContext,
@@ -64,6 +67,12 @@ struct RenderedSourceExport {
     exported_messages: Vec<NotebookLmExportMessage>,
     skipped_message_count: usize,
     warnings: Vec<String>,
+}
+
+struct RenderedGroupMemberExport {
+    member_index: usize,
+    rendered: RenderedSourceExport,
+    skipped_reason: Option<String>,
 }
 
 #[derive(Clone)]
@@ -193,16 +202,31 @@ pub async fn export_source_to_notebooklm(
         config.event_scope_id(),
     );
 
-    let source_id = match &config.scope {
-        NotebookLmExportScope::Source { source_id } => *source_id,
-        NotebookLmExportScope::SourceGroup { .. } => {
-            let error =
-                AppError::validation("Source-group NotebookLM export is not implemented yet");
-            progress.emit_failed("loading", &error);
-            return Err(error);
+    match config.scope.clone() {
+        NotebookLmExportScope::Source { source_id } => {
+            export_single_source_to_notebooklm(handle, progress, config, generated_at, source_id)
+                .await
         }
-    };
+        NotebookLmExportScope::SourceGroup { source_group_id } => {
+            export_source_group_to_notebooklm(
+                handle,
+                progress,
+                config,
+                generated_at,
+                source_group_id,
+            )
+            .await
+        }
+    }
+}
 
+async fn export_single_source_to_notebooklm(
+    handle: AppHandle,
+    progress: NotebookLmExportProgress,
+    config: NotebookLmExportConfig,
+    generated_at: i64,
+    source_id: i64,
+) -> AppResult<NotebookLmExportResult> {
     progress.emit_started("loading", "Loading source and synced messages.", None, None);
 
     let pool = match get_pool(&handle).await {
@@ -445,6 +469,183 @@ pub async fn export_source_to_notebooklm(
     }
 }
 
+async fn load_group_export_inputs(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_group_id: i64,
+    config: &NotebookLmExportConfig,
+) -> AppResult<(
+    NotebookLmExportSourceGroup,
+    Vec<SourceExportInput>,
+    Vec<String>,
+)> {
+    let group = load_export_source_group(pool, source_group_id).await?;
+    if group.source_type != "telegram" {
+        return Err(AppError::validation(
+            "YouTube source-group NotebookLM export is not implemented yet.",
+        ));
+    }
+
+    let mut warnings = Vec::new();
+    let mut inputs = Vec::new();
+    for member in &group.members {
+        if member.source_type != "telegram" {
+            warnings.push(format!(
+                "Source {} was skipped because it is not a Telegram source.",
+                member.source_id
+            ));
+            continue;
+        }
+        let source = load_export_source(pool, member.source_id).await?;
+        let current_messages = load_export_messages(
+            pool,
+            member.source_id,
+            config.period_from,
+            config.period_to,
+            ExportHistoryScope::Current,
+        )
+        .await?;
+        let migrated_messages = if config.include_migrated_history {
+            load_export_messages(
+                pool,
+                member.source_id,
+                config.period_from,
+                config.period_to,
+                ExportHistoryScope::Migrated,
+            )
+            .await?
+        } else {
+            Vec::new()
+        };
+        inputs.push(SourceExportInput {
+            source,
+            current_messages,
+            migrated_messages,
+        });
+    }
+
+    if inputs.is_empty() {
+        return Err(AppError::validation(
+            "No Telegram sources found in this source group.",
+        ));
+    }
+
+    Ok((group, inputs, warnings))
+}
+
+async fn export_source_group_to_notebooklm(
+    handle: AppHandle,
+    progress: NotebookLmExportProgress,
+    config: NotebookLmExportConfig,
+    generated_at: i64,
+    source_group_id: i64,
+) -> AppResult<NotebookLmExportResult> {
+    progress.emit_started(
+        "loading",
+        "Loading source group and synced messages.",
+        None,
+        None,
+    );
+    let pool = match get_pool(&handle).await {
+        Ok(pool) => pool,
+        Err(error) => {
+            progress.emit_failed("loading", &error);
+            return Err(error);
+        }
+    };
+    let (group, inputs, load_warnings) =
+        match load_group_export_inputs(&pool, source_group_id, &config).await {
+            Ok(value) => value,
+            Err(error) => {
+                progress.emit_failed("loading", &error);
+                return Err(error);
+            }
+        };
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut warnings = load_warnings;
+        let mut rendered_members = Vec::new();
+        let mut exported_messages = Vec::new();
+        let mut skipped_message_count = 0;
+
+        for (index, input) in inputs.into_iter().enumerate() {
+            let member_index = index + 1;
+            let prefix_source = input.source.clone();
+            let prefix = source_member_file_prefix(member_index, &prefix_source);
+            let rendered = render_source_export(
+                input,
+                &config,
+                generated_at,
+                |filename| prefix_chunk_filename(&prefix, filename),
+                |_, _| {},
+            );
+            let source_label = rendered
+                .source
+                .title
+                .as_deref()
+                .unwrap_or(&rendered.source.external_id)
+                .to_string();
+            let mut member_warnings = rendered
+                .warnings
+                .iter()
+                .map(|warning| format!("{source_label}: {warning}"))
+                .collect::<Vec<_>>();
+            let skipped_reason = if rendered.exported_messages.is_empty() {
+                let reason =
+                    format!("{source_label}: no exportable messages matched the export settings.");
+                member_warnings.push(reason.clone());
+                Some(reason)
+            } else {
+                None
+            };
+            warnings.extend(member_warnings.clone());
+            skipped_message_count += rendered.skipped_message_count;
+            exported_messages.extend(rendered.exported_messages.iter().cloned());
+            rendered_members.push(RenderedGroupMemberExport {
+                member_index,
+                rendered: RenderedSourceExport {
+                    warnings: member_warnings,
+                    ..rendered
+                },
+                skipped_reason,
+            });
+        }
+
+        if exported_messages.is_empty() {
+            return Err(AppError::validation(
+                "No exportable Telegram messages found for this source group.",
+            ));
+        }
+
+        write_group_export_package(
+            &config,
+            &group,
+            generated_at,
+            rendered_members,
+            exported_messages,
+            skipped_message_count,
+            warnings,
+        )
+    })
+    .await
+    .map_err(|e| AppError::internal(format!("NotebookLM export task failed: {e}")))?;
+
+    match result {
+        Ok(result) => {
+            progress.emit_completed(
+                "completed",
+                "NotebookLM export complete.",
+                Some(result.files.len()),
+                Some(result.files.len()),
+            );
+            Ok(result)
+        }
+        Err(error) => {
+            progress.emit_failed("failed", &error);
+            Err(error)
+        }
+    }
+}
+
 fn validate_request(request: NotebookLmExportRequest) -> AppResult<NotebookLmExportConfig> {
     let output_dir = request.output_dir.trim();
     if output_dir.is_empty() {
@@ -664,9 +865,136 @@ fn render_source_export(
     }
 }
 
+fn write_group_export_package(
+    config: &NotebookLmExportConfig,
+    group: &NotebookLmExportSourceGroup,
+    generated_at: i64,
+    mut rendered_members: Vec<RenderedGroupMemberExport>,
+    exported_messages: Vec<NotebookLmExportMessage>,
+    skipped_message_count: usize,
+    warnings: Vec<String>,
+) -> AppResult<NotebookLmExportResult> {
+    rendered_members.sort_by_key(|member| member.member_index);
+    let output_root = prepare_output_root_for_label(config, &group.name, generated_at)?;
+    let mut generated_file_names = vec!["glossary.md".to_string()];
+    let participants = aggregate_participants(&exported_messages);
+    let glossary_markdown = render_glossary(generated_at, &group.name, &participants);
+    let glossary_path = write_export_file(&output_root, "glossary.md", &glossary_markdown)?;
+
+    let mut files = Vec::new();
+    for member in &rendered_members {
+        for section in &member.rendered.rendered_sections {
+            for chunk in &section.chunks {
+                generated_file_names.push(chunk.filename.clone());
+                let context = DocumentRenderContext {
+                    source: &member.rendered.source,
+                    topic: &chunk.topic,
+                    history_scope_heading: section.heading,
+                    generated_at,
+                    title_period: &chunk.title_period,
+                    period_start: chunk.period_start,
+                    period_end: chunk.period_end,
+                    participants: &section.participants,
+                    message_count: chunk.blocks.len(),
+                    is_continuation: chunk.part_number > 1,
+                };
+                let markdown = render_document(&context, &chunk.blocks);
+                let path = write_export_file(&output_root, &chunk.filename, &markdown)?;
+                files.push(NotebookLmExportFile {
+                    path: path_to_string(path),
+                    message_count: chunk.blocks.len(),
+                    byte_size: markdown.len(),
+                    approximate_word_count: approx_word_count(&markdown),
+                });
+            }
+        }
+    }
+
+    let members = rendered_members
+        .into_iter()
+        .map(|member| NotebookLmExportManifestMember {
+            source_id: member.rendered.source.id,
+            source_title: member.rendered.source.title.clone(),
+            source_subtype: Some(member.rendered.source.source_subtype.clone()),
+            exported_message_count: member.rendered.exported_messages.len(),
+            skipped_message_count: member.rendered.skipped_message_count,
+            generated_files: member
+                .rendered
+                .rendered_sections
+                .iter()
+                .flat_map(|section| section.chunks.iter().map(|chunk| chunk.filename.clone()))
+                .collect(),
+            warnings: member.rendered.warnings.clone(),
+            skipped_reason: member.skipped_reason,
+        })
+        .collect();
+
+    write_marker(
+        &output_root,
+        &NotebookLmExportManifest {
+            generated_at,
+            scope: Some("source_group".to_string()),
+            source_id: None,
+            source_external_id: None,
+            source_title: None,
+            source_group_id: Some(group.id),
+            source_group_name: Some(group.name.clone()),
+            file_count: files.len(),
+            exported_message_count: exported_messages.len(),
+            skipped_message_count,
+            warning_count: warnings.len(),
+            warnings: warnings.clone(),
+            generated_files: generated_file_names,
+            members,
+        },
+    )?;
+
+    let glossary_file = NotebookLmExportFile {
+        path: path_to_string(glossary_path),
+        message_count: participants
+            .iter()
+            .map(|summary| summary.message_count)
+            .sum(),
+        byte_size: glossary_markdown.len(),
+        approximate_word_count: glossary_word_count(&glossary_markdown),
+    };
+
+    Ok(NotebookLmExportResult {
+        output_dir: path_to_string(output_root),
+        files,
+        glossary_file: Some(glossary_file.path),
+        exported_message_count: exported_messages.len(),
+        skipped_message_count,
+        warning_count: warnings.len(),
+        warnings,
+    })
+}
+
 fn prepare_output_root(
     config: &NotebookLmExportConfig,
     source: &model::NotebookLmExportSource,
+    generated_at: i64,
+) -> AppResult<PathBuf> {
+    prepare_output_root_for_label_with_fallback(
+        config,
+        source.title.as_deref().unwrap_or(&source.external_id),
+        "source",
+        generated_at,
+    )
+}
+
+fn prepare_output_root_for_label(
+    config: &NotebookLmExportConfig,
+    label: &str,
+    generated_at: i64,
+) -> AppResult<PathBuf> {
+    prepare_output_root_for_label_with_fallback(config, label, "source_group", generated_at)
+}
+
+fn prepare_output_root_for_label_with_fallback(
+    config: &NotebookLmExportConfig,
+    label: &str,
+    fallback_slug: &str,
     generated_at: i64,
 ) -> AppResult<PathBuf> {
     let base = PathBuf::from(&config.output_dir);
@@ -678,10 +1006,7 @@ fn prepare_output_root(
         .canonicalize()
         .map_err(|e| AppError::validation(format!("Could not resolve output directory: {e}")))?;
 
-    let source_slug = sanitize_path_component(
-        source.title.as_deref().unwrap_or(&source.external_id),
-        "source",
-    );
+    let source_slug = sanitize_path_component(label, fallback_slug);
     let folder = if config.overwrite_existing {
         format!("notebooklm_export_{source_slug}")
     } else {
@@ -951,12 +1276,15 @@ fn default_manifest_scope() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::query::NotebookLmExportSourceGroup;
     use super::{
-        prefix_chunk_filename, read_manifest, remove_generated_files, render_source_export,
-        source_member_file_prefix, timestamp_for_folder, validate_request, write_export_file,
-        write_marker, NotebookLmExportManifest, NotebookLmExportManifestMember, SourceExportInput,
+        load_group_export_inputs, prefix_chunk_filename, read_manifest, remove_generated_files,
+        render_source_export, source_member_file_prefix, timestamp_for_folder, validate_request,
+        write_export_file, write_group_export_package, write_marker, NotebookLmExportManifest,
+        NotebookLmExportManifestMember, RenderedGroupMemberExport, SourceExportInput,
         EXPORT_MARKER_FILE, MIGRATED_HISTORY_EMPTY_WARNING,
     };
+    use crate::error::AppError;
     use crate::media::ItemMediaMetadata;
     use crate::notebooklm_export::model::{
         NotebookLmExportConfig, NotebookLmExportMessage, NotebookLmExportRequest,
@@ -1037,6 +1365,54 @@ mod tests {
         }
     }
 
+    async fn source_group_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_type TEXT NOT NULL,
+                source_subtype TEXT,
+                external_id TEXT NOT NULL,
+                title TEXT
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create sources");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_source_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                source_type TEXT NOT NULL DEFAULT 'telegram',
+                created_at INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL DEFAULT 0
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create analysis_source_groups");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_source_group_members (
+                group_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (group_id, source_id)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create analysis_source_group_members");
+        pool
+    }
+
     #[test]
     fn source_member_file_prefix_includes_index_id_and_slug() {
         let source = crate::notebooklm_export::model::NotebookLmExportSource {
@@ -1075,6 +1451,47 @@ mod tests {
             prefix_chunk_filename("001-source-42-alpha", "part-001.md"),
             "sources/001-source-42-alpha-part-001.md"
         );
+    }
+
+    #[test]
+    fn group_member_manifest_records_source_scoped_generated_files() {
+        let member = NotebookLmExportManifestMember {
+            source_id: 42,
+            source_title: Some("Alpha".to_string()),
+            source_subtype: Some("channel".to_string()),
+            exported_message_count: 2,
+            skipped_message_count: 1,
+            generated_files: vec![
+                "sources/001-source-42-alpha-1970_alpha_unrecognized_topic_part-001.md".to_string(),
+            ],
+            warnings: vec!["Alpha: skipped 1 short message.".to_string()],
+            skipped_reason: None,
+        };
+        let manifest = NotebookLmExportManifest {
+            generated_at: 1,
+            scope: Some("source_group".to_string()),
+            source_id: None,
+            source_external_id: None,
+            source_title: None,
+            source_group_id: Some(9),
+            source_group_name: Some("Notebook Group".to_string()),
+            file_count: 1,
+            exported_message_count: 2,
+            skipped_message_count: 1,
+            warning_count: 1,
+            warnings: vec!["Alpha: skipped 1 short message.".to_string()],
+            generated_files: vec![
+                "glossary.md".to_string(),
+                "sources/001-source-42-alpha-1970_alpha_unrecognized_topic_part-001.md".to_string(),
+            ],
+            members: vec![member],
+        };
+
+        let json = serde_json::to_string(&manifest).expect("serialize manifest");
+
+        assert!(json.contains(r#""scope":"source_group""#));
+        assert!(json.contains(r#""source_group_id":9"#));
+        assert!(json.contains("sources/001-source-42-alpha"));
     }
 
     #[test]
@@ -1151,6 +1568,72 @@ mod tests {
     }
 
     #[test]
+    fn write_group_export_package_records_group_manifest_and_source_files() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-notebooklm-group-package-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).expect("create temp");
+        let mut config = export_config();
+        config.output_dir = temp.to_string_lossy().into_owned();
+        config.scope = NotebookLmExportScope::SourceGroup { source_group_id: 9 };
+
+        let group = NotebookLmExportSourceGroup {
+            id: 9,
+            name: "Notebook Group".to_string(),
+            source_type: "telegram".to_string(),
+            members: Vec::new(),
+        };
+        let input = SourceExportInput {
+            source: test_source(),
+            current_messages: vec![export_message(1, "current history message")],
+            migrated_messages: Vec::new(),
+        };
+        let rendered = render_source_export(
+            input,
+            &config,
+            0,
+            |filename| prefix_chunk_filename("001-source-42-alpha_source", filename),
+            |_, _| {},
+        );
+        let exported_messages = rendered.exported_messages.clone();
+
+        let result = write_group_export_package(
+            &config,
+            &group,
+            0,
+            vec![RenderedGroupMemberExport {
+                member_index: 1,
+                rendered,
+                skipped_reason: None,
+            }],
+            exported_messages,
+            0,
+            Vec::new(),
+        )
+        .expect("write group package");
+
+        assert_eq!(result.files.len(), 1);
+        assert!(result.glossary_file.is_some());
+        let manifest =
+            read_manifest(std::path::Path::new(&result.output_dir)).expect("read group manifest");
+        assert_eq!(manifest.scope.as_deref(), Some("source_group"));
+        assert_eq!(manifest.source_group_id, Some(9));
+        assert_eq!(
+            manifest.source_group_name.as_deref(),
+            Some("Notebook Group")
+        );
+        assert_eq!(manifest.members.len(), 1);
+        assert_eq!(
+            manifest.members[0].generated_files,
+            vec!["sources/001-source-42-alpha_source-1970_alpha_source_unrecognized_topic_part-001.md"]
+        );
+
+        std::fs::remove_dir_all(&temp).expect("cleanup temp");
+    }
+
+    #[test]
     fn validates_exactly_one_export_scope() {
         let mut missing = request();
         missing.source_id = None;
@@ -1187,6 +1670,79 @@ mod tests {
             NotebookLmExportScope::SourceGroup { source_group_id: 9 }
         );
         assert_eq!(config.event_scope_id(), 9);
+    }
+
+    #[test]
+    fn group_export_returns_no_exportable_messages_copy_for_empty_rendered_members() {
+        let error =
+            AppError::validation("No exportable Telegram messages found for this source group.");
+        assert!(error
+            .message
+            .contains("No exportable Telegram messages found for this source group."));
+    }
+
+    #[test]
+    fn group_export_returns_no_telegram_sources_copy_for_empty_valid_members() {
+        let error = AppError::validation("No Telegram sources found in this source group.");
+        assert!(error
+            .message
+            .contains("No Telegram sources found in this source group."));
+    }
+
+    #[tokio::test]
+    async fn load_group_export_inputs_rejects_youtube_group_for_hard_validation() {
+        let pool = source_group_pool().await;
+        sqlx::query(
+            "INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at)
+             VALUES (9, 'YouTube Group', 'youtube', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert group");
+
+        let error = match load_group_export_inputs(&pool, 9, &export_config()).await {
+            Ok(_) => panic!("youtube groups are not implemented"),
+            Err(error) => error,
+        };
+
+        assert!(error
+            .message
+            .contains("YouTube source-group NotebookLM export is not implemented yet."));
+    }
+
+    #[tokio::test]
+    async fn load_group_export_inputs_rejects_group_without_telegram_members() {
+        let pool = source_group_pool().await;
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title)
+             VALUES (2, 'youtube', 'video', 'youtube-1', 'YouTube')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert source");
+        sqlx::query(
+            "INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at)
+             VALUES (9, 'Notebook Group', 'telegram', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert group");
+        sqlx::query(
+            "INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+             VALUES (9, 2, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert member");
+
+        let error = match load_group_export_inputs(&pool, 9, &export_config()).await {
+            Ok(_) => panic!("group without telegram members is rejected"),
+            Err(error) => error,
+        };
+
+        assert!(error
+            .message
+            .contains("No Telegram sources found in this source group."));
     }
 
     #[test]

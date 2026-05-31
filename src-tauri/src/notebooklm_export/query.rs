@@ -1495,6 +1495,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn load_export_source_group_exposes_youtube_group_for_hard_validation() {
+        let pool = export_pool().await;
+        sqlx::query(
+            "INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at)
+             VALUES (9, 'YouTube Group', 'youtube', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert group");
+
+        let group = load_export_source_group(&pool, 9)
+            .await
+            .expect("load group");
+
+        assert_eq!(group.source_type, "youtube");
+        assert!(group.members.is_empty());
+    }
+
+    #[tokio::test]
     async fn load_export_messages_adds_local_reply_context_outside_period() {
         let pool = export_pool().await;
         sqlx::query(

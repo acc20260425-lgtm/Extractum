@@ -1217,7 +1217,7 @@ git commit -m "refactor: reuse notebooklm source export rendering"
 - Modify: `src-tauri/src/notebooklm_export/mod.rs`
 - Modify: `src-tauri/src/notebooklm_export/query.rs`
 
-- [ ] **Step 1: Write failing backend group behavior tests**
+- [x] **Step 1: Write failing backend group behavior tests**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, add tests around pure helpers and manifest state:
 
@@ -1285,7 +1285,7 @@ async fn load_export_source_group_exposes_youtube_group_for_hard_validation() {
 }
 ```
 
-- [ ] **Step 2: Run new backend tests and verify failure**
+- [x] **Step 2: Run new backend tests and verify failure**
 
 Run:
 
@@ -1295,7 +1295,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export
 
 Expected: FAIL if the new group manifest/query helpers are not wired yet. If the manifest struct test already passes after Task 3, continue to Step 3 because the group command path still needs implementation.
 
-- [ ] **Step 3: Import group loader and split command by scope**
+- [x] **Step 3: Import group loader and split command by scope**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, import:
 
@@ -1336,7 +1336,7 @@ async fn export_single_source_to_notebooklm(
 
 This function keeps the current single-source behavior and writes a single-source manifest.
 
-- [ ] **Step 4: Implement group validation and member loading**
+- [x] **Step 4: Implement group validation and member loading**
 
 Add:
 
@@ -1401,7 +1401,7 @@ async fn load_group_export_inputs(
 }
 ```
 
-- [ ] **Step 5: Implement group rendering and output writing**
+- [x] **Step 5: Implement group rendering and output writing**
 
 Add:
 
@@ -1547,7 +1547,7 @@ NotebookLmExportManifestMember {
 }
 ```
 
-- [ ] **Step 6: Add hard behavior tests for group validation**
+- [x] **Step 6: Add hard behavior tests for group validation**
 
 Add tests that call helper functions rather than requiring a live Tauri app:
 
@@ -1567,7 +1567,7 @@ fn group_export_returns_no_telegram_sources_copy_for_empty_valid_members() {
 
 These tests are deliberately small because the database loader tests cover group/member data, and package tests cover manifest/file output.
 
-- [ ] **Step 7: Run backend NotebookLM tests**
+- [x] **Step 7: Run backend NotebookLM tests**
 
 Run:
 
@@ -1577,7 +1577,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 5**
+- [x] **Step 8: Commit Task 5**
 
 ```powershell
 git add src-tauri/src/notebooklm_export/mod.rs src-tauri/src/notebooklm_export/query.rs
