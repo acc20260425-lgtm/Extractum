@@ -8,7 +8,7 @@
 | Priority | Area | Next outcome |
 | --- | --- | --- |
 | High | Takeout source import | close remaining representative validation gaps for private/dialog-backed supergroups and richer small-group fixtures |
-| Medium | Saved runs discoverability | add useful narrowing for large saved-run histories |
+| Medium | Saved runs discoverability | decide affordances for missing/capture-failed saved-run states |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
