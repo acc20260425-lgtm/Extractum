@@ -2655,16 +2655,31 @@
   }
 
   function openNotebookLmExportDialog() {
-    if (analysisScope !== "single_source" || !currentSource()) {
-      status = "Select a single synced source before exporting.";
+    const source = currentSource();
+    const group = currentGroup();
+    const canExportSingleSource = analysisScope === "single_source" && source !== null;
+    const canExportTelegramGroup =
+      analysisScope === "source_group" && group?.source_type === "telegram";
+
+    if (analysisScope === "source_group" && group?.source_type === "youtube") {
+      status = "YouTube source-group NotebookLM export is not implemented yet.";
       return;
     }
 
+    if (!canExportSingleSource && !canExportTelegramGroup) {
+      status = "Select a source or source group before exporting.";
+      return;
+    }
+
+    const canIncludeMigratedHistory = canIncludeMigratedHistoryInReport(currentReportLaunchState());
     notebookLmExportResult = null;
     notebookLmExportForm = {
       ...notebookLmExportForm,
       fromDate: periodFrom,
       toDate: periodTo,
+      includeMigratedHistory: canIncludeMigratedHistory
+        ? notebookLmExportForm.includeMigratedHistory
+        : false,
     };
     exportDialogOpen = true;
   }
@@ -2685,8 +2700,8 @@
   }
 
   async function exportNotebookLm() {
-    const source = currentSource();
-    const group = currentGroup();
+    const source = analysisScope === "single_source" ? currentSource() : null;
+    const group = analysisScope === "source_group" ? currentGroup() : null;
     const scope = source
       ? { kind: "source" as const, sourceId: source.id }
       : group
@@ -2707,7 +2722,14 @@
     activeNotebookLmExportId = exportId;
     notebookLmExportProgress = notebookLmExportInitialProgress();
     try {
-      const request = notebookLmExportRequestFromForm(exportId, scope, notebookLmExportForm);
+      const canIncludeMigratedHistory = canIncludeMigratedHistoryInReport(currentReportLaunchState());
+      const exportForm = {
+        ...notebookLmExportForm,
+        includeMigratedHistory: canIncludeMigratedHistory
+          ? notebookLmExportForm.includeMigratedHistory
+          : false,
+      };
+      const request = notebookLmExportRequestFromForm(exportId, scope, exportForm);
 
       const result = await exportSourceToNotebookLm(request);
       notebookLmExportResult = result;

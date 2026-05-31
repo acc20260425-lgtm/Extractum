@@ -190,7 +190,32 @@ describe("report canvas component contract", () => {
   it("submits NotebookLM export for either current source or current source group", () => {
     expect(analysisPageSource).toContain('kind: "source_group"');
     expect(analysisPageSource).toContain("sourceGroupId: group.id");
-    expect(analysisPageSource).toContain("notebookLmExportRequestFromForm(exportId, scope, notebookLmExportForm)");
+    expect(analysisPageSource).not.toContain(
+      "notebookLmExportRequestFromForm(exportId, scope, notebookLmExportForm)",
+    );
+    expect(analysisPageSource).toContain(
+      "notebookLmExportRequestFromForm(exportId, scope, exportForm)",
+    );
+    expect(analysisPageSource).toContain("includeMigratedHistory: canIncludeMigratedHistory");
+    expect(analysisPageSource).toContain("? notebookLmExportForm.includeMigratedHistory");
+  });
+
+  it("opens NotebookLM export for Telegram source groups without the old single-source guard", () => {
+    const openNotebookLmExportDialogSource = sourceBetween(
+      analysisPageSource,
+      "function openNotebookLmExportDialog()",
+      "async function chooseNotebookLmOutputDir()",
+    );
+
+    expect(openNotebookLmExportDialogSource).not.toContain(
+      'analysisScope !== "single_source" || !currentSource()',
+    );
+    expect(openNotebookLmExportDialogSource).toContain('analysisScope === "single_source"');
+    expect(openNotebookLmExportDialogSource).toContain('analysisScope === "source_group"');
+    expect(openNotebookLmExportDialogSource).toContain('group?.source_type === "telegram"');
+    expect(openNotebookLmExportDialogSource).toContain(
+      "YouTube source-group NotebookLM export is not implemented yet.",
+    );
   });
 
   it("passes transient evidence highlight tokens from route to source surfaces", () => {
