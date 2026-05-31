@@ -209,6 +209,12 @@ describe("report canvas component contract", () => {
     }
   });
 
+  it("passes focused group transcript segments from route to source surfaces", () => {
+    expect(analysisPageSource).toContain("{groupLiveTranscriptSegmentsBySource}");
+    expect(reportCanvasSource).toContain("groupLiveTranscriptSegmentsBySource");
+    expect(reportSourceSurfaceSource).toContain("groupLiveTranscriptSegmentsBySource");
+  });
+
   it("renders the scoped evidence return affordance above source reader headers", () => {
     const returnAffordance = sourceBetween(
       reportSourceSurfaceSource,

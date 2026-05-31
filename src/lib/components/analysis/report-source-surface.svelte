@@ -25,6 +25,7 @@
     sourceFilterOptionsFromGroupMembers,
     sourceFilterOptionsFromReaderItems,
     sourceItemToReaderItem,
+    youtubeSegmentToReaderItem,
   } from "$lib/source-reader-model";
   import {
     deriveRunSnapshotBrowserKind,
@@ -89,6 +90,7 @@
     youtubeTranscriptHasMore?: boolean;
     youtubeTranscriptSearch?: string;
     groupLiveItemsBySource?: Record<number, SourceItem[]>;
+    groupLiveTranscriptSegmentsBySource?: Record<number, YoutubeTranscriptSegment[]>;
     groupLiveHasMoreBySource?: Record<number, boolean>;
     selectedGroupSourceId?: number | null;
     selectedSnapshotSourceId?: number | null;
@@ -156,6 +158,7 @@
     youtubeTranscriptHasMore = false,
     youtubeTranscriptSearch = "",
     groupLiveItemsBySource = {},
+    groupLiveTranscriptSegmentsBySource = {},
     groupLiveHasMoreBySource = {},
     selectedGroupSourceId = null,
     selectedSnapshotSourceId = null,
@@ -228,13 +231,28 @@
       ? allSnapshotReaderItems
       : allSnapshotReaderItems.filter((item) => item.sourceId === selectedSnapshotSourceId),
   );
-  const groupLiveReaderItems = $derived.by(() =>
+  const groupLiveSourceItemReaderItems = $derived.by(() =>
     Object.entries(groupLiveItemsBySource).flatMap(([sourceId, items]) => {
-      const source = groupMemberSource(Number(sourceId));
-      const sourceTitle = source?.source_title ?? `Source ${sourceId}`;
+      const sourceTitle = sourceTitleForGroupSource(sourceId);
       return items.map((item) => sourceItemToReaderItem(item, { sourceTitle, selectedTraceRef }));
     }),
   );
+  const groupLiveTranscriptReaderItems = $derived.by(() =>
+    Object.entries(groupLiveTranscriptSegmentsBySource).flatMap(([sourceId, segments]) => {
+      const sourceTitle = sourceTitleForGroupSource(sourceId);
+      return segments.map((segment) =>
+        youtubeSegmentToReaderItem(segment, {
+          sourceTitle,
+          canonicalUrl: null,
+          selectedTraceRef,
+        }),
+      );
+    }),
+  );
+  const groupLiveReaderItems = $derived.by(() => [
+    ...groupLiveSourceItemReaderItems,
+    ...groupLiveTranscriptReaderItems,
+  ]);
   const groupLiveSourceItems = $derived.by(() =>
     Object.values(groupLiveItemsBySource).flat(),
   );
@@ -302,9 +320,13 @@
     return currentGroup?.members.find((member) => member.source_id === sourceId) ?? null;
   }
 
+  function sourceTitleForGroupSource(sourceId: string | number) {
+    const source = groupMemberSource(Number(sourceId));
+    return source?.source_title ?? `Source ${sourceId}`;
+  }
+
   function sourceLabelForGroupItem(item: SourceItem) {
-    const member = groupMemberSource(item.sourceId);
-    return member?.source_title ?? `Source ${item.sourceId}`;
+    return sourceTitleForGroupSource(item.sourceId);
   }
 
   function snapshotBrowserSourceType(value: string | null): Source["sourceType"] | null {

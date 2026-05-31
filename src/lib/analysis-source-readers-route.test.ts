@@ -46,6 +46,7 @@ describe("analysis source reader route wiring", () => {
   it("passes source reader props into ReportSourceSurface", () => {
     expect(analysisPageSource).toContain("{youtubeTranscriptSegments}");
     expect(analysisPageSource).toContain("{groupLiveItemsBySource}");
+    expect(analysisPageSource).toContain("{groupLiveTranscriptSegmentsBySource}");
     expect(analysisPageSource).toContain("{selectedGroupSourceId}");
     expect(analysisPageSource).toContain("{sourceTopics}");
     expect(analysisPageSource).toContain("{loadingSourceTopics}");
@@ -205,5 +206,37 @@ describe("analysis source reader route wiring", () => {
     expect(catchBranch).toContain("failFocusedSourceLoad(");
     expect(catchBranch).not.toContain("pendingEvidenceSourceFocus = null;");
     expect(catchBranch).not.toContain("clearSourceHighlight();");
+  });
+
+  it("loads focused source-group YouTube transcript evidence through transcript DTOs", () => {
+    const focusedLoad = functionSlice(
+      "async function loadSourcePageAroundTrace",
+      "async function showSelectedTraceInSource",
+    );
+    const groupBranch = focusedLoad.slice(
+      focusedLoad.indexOf('if (analysisScope === "source_group")'),
+      focusedLoad.indexOf('if (liveTarget.kind === "source_item")'),
+    );
+    const transcriptBranch = groupBranch.slice(
+      groupBranch.indexOf('if (liveTarget.kind === "youtube_transcript"'),
+      groupBranch.indexOf("const items = await listSourceItems("),
+    );
+
+    expect(analysisPageSource).toContain("let groupLiveTranscriptSegmentsBySource");
+    expect(analysisPageSource).toContain("groupLiveTranscriptSegmentsBySource = {};");
+    expect(transcriptBranch).toContain("listYoutubeTranscriptSegments({");
+    expect(transcriptBranch).toContain("aroundStartMs: liveTarget.aroundStartMs");
+    expect(transcriptBranch).toContain("if (!currentFocusMatchesRequest(focusRequest)) {");
+    expect(transcriptBranch).toContain('{ kind: "youtube_transcript", segments: page.segments }');
+    expect(transcriptBranch).toContain("groupLiveTranscriptSegmentsBySource =");
+    expect(transcriptBranch).toContain("[trace.source_id]: page.segments");
+    expect(transcriptBranch).toContain("[trace.source_id]: false");
+    expect(transcriptBranch).not.toContain("liveSourceItemRef");
+    expectOrder(
+      transcriptBranch,
+      "if (!currentFocusMatchesRequest(focusRequest)) {",
+      "groupLiveTranscriptSegmentsBySource =",
+      "group transcript stale guard must precede segment assignment",
+    );
   });
 });

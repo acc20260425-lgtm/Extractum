@@ -81,6 +81,7 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source", source: currentSource }}');
     expect(reportSourceSurfaceSource).toContain('subject={{ kind: "source_group", group: currentGroup }}');
     expect(reportSourceSurfaceSource).toContain("groupLiveSourceItems");
+    expect(reportSourceSurfaceSource).toContain("groupLiveTranscriptReaderItems");
     expect(reportSourceSurfaceSource).toContain("sourceBrowserData={{");
     expect(reportSourceSurfaceSource).toContain("groupBrowserData={{");
     expect(matchCount(reportSourceSurfaceSource, /sourceBrowserData=\{\{/g)).toBe(1);
@@ -651,6 +652,19 @@ describe("analysis source readers", () => {
     expect(sourceGroupSourcesViewSource).toContain("source-heading");
     expect(sourceGroupSourcesViewSource).toContain("selectedGroupSourceId");
     expect(reportSourceSurfaceSource).toContain("onChangeSelectedSourceId={onChangeSelectedGroupSourceId}");
+  });
+
+  it("merges focused group YouTube transcript DTOs into source-group reader items", () => {
+    expect(reportSourceSurfaceSource).toContain("youtubeSegmentToReaderItem");
+    expect(reportSourceSurfaceSource).toContain("groupLiveTranscriptSegmentsBySource");
+    expect(reportSourceSurfaceSource).toContain("groupLiveTranscriptReaderItems");
+    expect(reportSourceSurfaceSource).toContain("const sourceTitle = sourceTitleForGroupSource(sourceId)");
+    expect(reportSourceSurfaceSource).toContain("youtubeSegmentToReaderItem(segment, {");
+    expect(reportSourceSurfaceSource).toContain("sourceTitle,");
+    expect(reportSourceSurfaceSource).toContain("canonicalUrl: null");
+    expect(reportSourceSurfaceSource).toContain("selectedTraceRef");
+    expect(reportSourceSurfaceSource).toContain("...groupLiveSourceItemReaderItems");
+    expect(reportSourceSurfaceSource).toContain("...groupLiveTranscriptReaderItems");
   });
 
   it("uses a neutral timeline label for mixed source-group material", () => {

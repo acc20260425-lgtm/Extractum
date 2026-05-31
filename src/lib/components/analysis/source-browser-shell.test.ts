@@ -129,6 +129,21 @@ describe("source browser shell component contract", () => {
     expect(tabTarget).toContain('return tabAvailable("comments") ? "comments" : null;');
     expect(tabTarget).toContain('return tabAvailable("items") ? "items" : null;');
     expect(tabTarget).toContain('groupData.sourceItems.some((item) => liveSourceItemRef(item) === highlightToken.traceRef)');
+    expect(tabTarget).toContain("groupData.liveReaderItems.some((item) => item.ref === highlightToken.traceRef)");
     expect(tabTarget).toContain('return tabAvailable("sources") ? "sources" : null;');
+  });
+
+  it("auto-selects the tab that renders highlighted run snapshot evidence once per token", () => {
+    const tabTarget = functionBlock("highlightTabForToken");
+
+    expect(tabTarget).toContain('subject.kind === "run_snapshot"');
+    expect(tabTarget).toContain("snapshotData.readerItems.some((item) => item.ref === highlightToken.traceRef)");
+    expect(tabTarget).toContain('snapshotSubject.readerKind === "source_group"');
+    expect(tabTarget).toContain('return tabAvailable("sources") ? "sources" : null;');
+    expect(tabTarget).toContain('snapshotSubject.readerKind === "telegram_timeline"');
+    expect(tabTarget).toContain('return tabAvailable("timeline") ? "timeline" : null;');
+    expect(tabTarget).toContain('snapshotSubject.readerKind === "youtube_transcript"');
+    expect(tabTarget).toContain('return tabAvailable("transcript") ? "transcript" : null;');
+    expect(tabTarget).toContain('return tabAvailable("items") ? "items" : null;');
   });
 });

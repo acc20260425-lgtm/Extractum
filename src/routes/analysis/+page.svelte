@@ -296,6 +296,7 @@
   let loadingYoutubeTranscriptSegments = $state(false);
   let youtubeTranscriptRequestKey = "";
   let groupLiveItemsBySource = $state<Record<number, SourceItem[]>>({});
+  let groupLiveTranscriptSegmentsBySource = $state<Record<number, YoutubeTranscriptSegment[]>>({});
   let groupLiveCursorsBySource = $state<Record<number, number | null>>({});
   let groupLiveHasMoreBySource = $state<Record<number, boolean>>({});
   let groupLiveLoadingBySource = $state<Record<number, boolean>>({});
@@ -1033,6 +1034,7 @@
 
   function resetGroupLiveReader() {
     groupLiveItemsBySource = {};
+    groupLiveTranscriptSegmentsBySource = {};
     groupLiveCursorsBySource = {};
     groupLiveHasMoreBySource = {};
     groupLiveLoadingBySource = {};
@@ -1497,6 +1499,46 @@
 
       if (analysisScope === "source_group") {
         groupLiveLoadingBySource = { ...groupLiveLoadingBySource, [trace.source_id]: true };
+        if (liveTarget.kind === "youtube_transcript") {
+          if (source.sourceType !== "youtube" || source.sourceSubtype !== "video") {
+            completeFocusedSourceLoadWithoutTarget(trace.source_id, focusRequest);
+            return;
+          }
+
+          const page = await listYoutubeTranscriptSegments({
+            sourceId: trace.source_id,
+            after: null,
+            limit: 80,
+            searchQuery: null,
+            aroundStartMs: liveTarget.aroundStartMs,
+          });
+          if (!currentFocusMatchesRequest(focusRequest)) {
+            return;
+          }
+          const containsTarget = loadedSourceDataContainsTraceRef(
+            { kind: "youtube_transcript", segments: page.segments },
+            canonicalRef,
+            sourceScope,
+          );
+          selectedGroupSourceId = trace.source_id;
+          groupLiveTranscriptSegmentsBySource = {
+            ...groupLiveTranscriptSegmentsBySource,
+            [trace.source_id]: page.segments,
+          };
+          groupLiveHasMoreBySource = {
+            ...groupLiveHasMoreBySource,
+            [trace.source_id]: false,
+          };
+          return handleFocusedSourceLoadResult({
+            traceSourceId: trace.source_id,
+            requestId,
+            sourceScope,
+            sourceViewBasis: decision.sourceViewBasis,
+            traceRef: canonicalRef,
+            containsTarget,
+          });
+        }
+
         const items = await listSourceItems({
           sourceId: trace.source_id,
           limit: 40,
@@ -2999,6 +3041,7 @@
     {youtubeTranscriptHasMore}
     {youtubeTranscriptSearch}
     {groupLiveItemsBySource}
+    {groupLiveTranscriptSegmentsBySource}
     {groupLiveHasMoreBySource}
     {selectedGroupSourceId}
     {selectedSnapshotSourceId}

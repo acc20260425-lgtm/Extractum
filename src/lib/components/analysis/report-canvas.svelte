@@ -80,6 +80,7 @@
     youtubeTranscriptHasMore,
     youtubeTranscriptSearch,
     groupLiveItemsBySource,
+    groupLiveTranscriptSegmentsBySource,
     groupLiveHasMoreBySource,
     selectedGroupSourceId,
     selectedSnapshotSourceId,
@@ -233,6 +234,7 @@
     youtubeTranscriptHasMore: boolean;
     youtubeTranscriptSearch: string;
     groupLiveItemsBySource: Record<number, SourceItem[]>;
+    groupLiveTranscriptSegmentsBySource: Record<number, YoutubeTranscriptSegment[]>;
     groupLiveHasMoreBySource: Record<number, boolean>;
     selectedGroupSourceId: number | null;
     selectedSnapshotSourceId: number | null;
@@ -594,6 +596,7 @@
       {youtubeTranscriptHasMore}
       {youtubeTranscriptSearch}
       {groupLiveItemsBySource}
+      {groupLiveTranscriptSegmentsBySource}
       {groupLiveHasMoreBySource}
       {selectedGroupSourceId}
       {selectedSnapshotSourceId}

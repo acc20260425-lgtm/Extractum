@@ -245,9 +245,25 @@
     }
 
     if (subject.kind === "source_group" && groupData) {
-      const matchingGroupItem = groupData.sourceItems.some((item) => liveSourceItemRef(item) === highlightToken.traceRef);
+      const matchingGroupItem = groupData.sourceItems.some((item) => liveSourceItemRef(item) === highlightToken.traceRef)
+        || groupData.liveReaderItems.some((item) => item.ref === highlightToken.traceRef);
       if (!matchingGroupItem) return null;
       return tabAvailable("sources") ? "sources" : null;
+    }
+
+    if (subject.kind === "run_snapshot" && snapshotData && snapshotSubject) {
+      const matchingSnapshotItem = snapshotData.readerItems.some((item) => item.ref === highlightToken.traceRef);
+      if (!matchingSnapshotItem) return null;
+      if (snapshotSubject.readerKind === "source_group") {
+        return tabAvailable("sources") ? "sources" : null;
+      }
+      if (snapshotSubject.readerKind === "telegram_timeline") {
+        return tabAvailable("timeline") ? "timeline" : null;
+      }
+      if (snapshotSubject.readerKind === "youtube_transcript") {
+        return tabAvailable("transcript") ? "transcript" : null;
+      }
+      return tabAvailable("items") ? "items" : null;
     }
 
     return null;
