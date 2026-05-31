@@ -21,6 +21,10 @@ function componentCall(tag: string, marker: string = `<${tag}`) {
   return sourceBetween(shellSource.slice(openIndex), `<${tag}`, "/>");
 }
 
+function functionBlock(name: string) {
+  return sourceBetween(shellSource, `function ${name}`, "\n  }\n");
+}
+
 describe("source browser shell component contract", () => {
   it("uses the subject-aware source browser model and keeps data fetching outside the shell", () => {
     expect(shellSource).toContain("sourceBrowserTabsForSubject");
@@ -107,5 +111,24 @@ describe("source browser shell component contract", () => {
     expect(componentCall("YoutubeTranscriptReader", "segments={sourceData.youtubeTranscriptSegments}")).toContain("{highlightToken}");
     expect(componentCall("UniversalItemsView")).toContain("{highlightToken}");
     expect(componentCall("YoutubeCommentsView")).toContain("{highlightToken}");
+  });
+
+  it("auto-selects the tab that renders highlighted source item evidence once per token", () => {
+    const tabTarget = functionBlock("highlightTabForToken");
+
+    expect(shellSource).toContain("liveSourceItemRef");
+    expect(shellSource).toContain("let lastHighlightTabTokenId");
+    expect(shellSource).toContain("lastHighlightTabTokenId === highlightToken.tokenId");
+    expect(shellSource).toContain("lastHighlightTabTokenId = highlightToken.tokenId");
+    expect(shellSource).toContain("activeTab = targetTab");
+
+    expect(tabTarget).toContain("sourceData.sourceItems.find((item) => liveSourceItemRef(item) === highlightToken.traceRef)");
+    expect(tabTarget).toContain('sourceSubject.sourceType === "youtube"');
+    expect(tabTarget).toContain('sourceSubject.sourceSubtype === "video"');
+    expect(tabTarget).toContain('matchingItem.youtubeComment || matchingItem.itemKind === "youtube_comment"');
+    expect(tabTarget).toContain('return tabAvailable("comments") ? "comments" : null;');
+    expect(tabTarget).toContain('return tabAvailable("items") ? "items" : null;');
+    expect(tabTarget).toContain('groupData.sourceItems.some((item) => liveSourceItemRef(item) === highlightToken.traceRef)');
+    expect(tabTarget).toContain('return tabAvailable("sources") ? "sources" : null;');
   });
 });

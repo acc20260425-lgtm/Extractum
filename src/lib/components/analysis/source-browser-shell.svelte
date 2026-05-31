@@ -23,7 +23,7 @@
   } from "$lib/source-browser-model";
   import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
-  import type { SourceFilterOption, SourceReaderItem } from "$lib/source-reader-model";
+  import { liveSourceItemRef, type SourceFilterOption, type SourceReaderItem } from "$lib/source-reader-model";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
   import type {
     Source,
@@ -124,6 +124,7 @@
 
   let activeTab = $state<SourceBrowserTabId | null>(null);
   let lastSubjectKey = $state<string | null>(null);
+  let lastHighlightTabTokenId = $state<string | null>(null);
   const subject = $derived(explicitSubject);
   const tabs = $derived(subject ? sourceBrowserTabsForSubject(subject) : []);
   const sourceSubject = $derived(subject && subject.kind === "source" ? subject.source : null);
@@ -177,6 +178,14 @@
     }
   });
 
+  $effect(() => {
+    if (!highlightToken || lastHighlightTabTokenId === highlightToken.tokenId) return;
+    const targetTab = highlightTabForToken();
+    if (!targetTab) return;
+    lastHighlightTabTokenId = highlightToken.tokenId;
+    activeTab = targetTab;
+  });
+
   function compareTopics(left: SourceForumTopic, right: SourceForumTopic) {
     if (left.kind !== right.kind) return left.kind === "topic" ? -1 : 1;
     if (left.isDeleted !== right.isDeleted) return left.isDeleted ? 1 : -1;
@@ -210,6 +219,42 @@
 
   function loadMoreGroupSourcePage(sourceId: number) {
     return groupData?.onLoadSourcePage(sourceId);
+  }
+
+  function highlightTabForToken(): SourceBrowserTabId | null {
+    if (!highlightToken || !subject) return null;
+
+    if (subject.kind === "source" && sourceData && sourceSubject) {
+      const matchingItem = sourceData.sourceItems.find((item) => liveSourceItemRef(item) === highlightToken.traceRef);
+      if (!matchingItem) return null;
+      if (
+        sourceSubject.sourceType === "telegram" &&
+        matchingItem.itemKind === "telegram_message" &&
+        tabAvailable("timeline")
+      ) {
+        return "timeline";
+      }
+      if (
+        sourceSubject.sourceType === "youtube" &&
+        sourceSubject.sourceSubtype === "video" &&
+        (matchingItem.youtubeComment || matchingItem.itemKind === "youtube_comment")
+      ) {
+        return tabAvailable("comments") ? "comments" : null;
+      }
+      return tabAvailable("items") ? "items" : null;
+    }
+
+    if (subject.kind === "source_group" && groupData) {
+      const matchingGroupItem = groupData.sourceItems.some((item) => liveSourceItemRef(item) === highlightToken.traceRef);
+      if (!matchingGroupItem) return null;
+      return tabAvailable("sources") ? "sources" : null;
+    }
+
+    return null;
+  }
+
+  function tabAvailable(tabId: SourceBrowserTabId) {
+    return tabs.some((tab) => tab.id === tabId);
   }
 </script>
 
