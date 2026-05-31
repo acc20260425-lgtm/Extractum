@@ -950,7 +950,7 @@ git commit -m "feat: support notebooklm grouped export files"
 **Files:**
 - Modify: `src-tauri/src/notebooklm_export/mod.rs`
 
-- [ ] **Step 1: Add helper-level regression tests before refactor**
+- [x] **Step 1: Add helper-level regression tests before refactor**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, add a test that validates the source member prefix rule without needing a Tauri app:
 
@@ -988,7 +988,7 @@ fn source_member_file_prefix_uses_fallback_slug_for_unsafe_title() {
 }
 ```
 
-- [ ] **Step 2: Run helper prefix tests and verify failure**
+- [x] **Step 2: Run helper prefix tests and verify failure**
 
 Run:
 
@@ -998,7 +998,7 @@ cargo test --manifest-path src-tauri/Cargo.toml source_member_file_prefix
 
 Expected: FAIL because `source_member_file_prefix` does not exist.
 
-- [ ] **Step 3: Add prefix helper**
+- [x] **Step 3: Add prefix helper**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, add:
 
@@ -1017,7 +1017,7 @@ fn prefix_chunk_filename(prefix: &str, filename: &str) -> String {
 }
 ```
 
-- [ ] **Step 4: Extract source rendering without changing behavior**
+- [x] **Step 4: Extract source rendering without changing behavior**
 
 Add internal structs near `RenderedExportSection`:
 
@@ -1192,7 +1192,7 @@ let rendered = render_source_export(
 
 Then use `rendered.rendered_sections`, `rendered.exported_messages`, `rendered.skipped_message_count`, and `rendered.warnings` in the existing write logic.
 
-- [ ] **Step 5: Run single-source NotebookLM export tests**
+- [x] **Step 5: Run single-source NotebookLM export tests**
 
 Run:
 
@@ -1202,7 +1202,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 ```powershell
 git add src-tauri/src/notebooklm_export/mod.rs

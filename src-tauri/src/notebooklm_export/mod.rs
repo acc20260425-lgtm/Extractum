@@ -52,6 +52,20 @@ struct RenderedExportSection {
     chunks: Vec<ChunkFile>,
 }
 
+struct SourceExportInput {
+    source: model::NotebookLmExportSource,
+    current_messages: Vec<NotebookLmExportMessage>,
+    migrated_messages: Vec<NotebookLmExportMessage>,
+}
+
+struct RenderedSourceExport {
+    source: model::NotebookLmExportSource,
+    rendered_sections: Vec<RenderedExportSection>,
+    exported_messages: Vec<NotebookLmExportMessage>,
+    skipped_message_count: usize,
+    warnings: Vec<String>,
+}
+
 #[derive(Clone)]
 struct NotebookLmExportProgress {
     handle: AppHandle,
@@ -256,38 +270,6 @@ pub async fn export_source_to_notebooklm(
 
     let task_progress = progress.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let mut warnings = Vec::new();
-        let mut skipped_message_count = 0;
-        let filter_total = current_messages.len() + migrated_messages.len();
-        let filter_step = progress_step(filter_total);
-        let sections = if config.include_migrated_history {
-            vec![
-                ExportSection {
-                    heading: Some("Current supergroup history"),
-                    filename_prefix: Some("current-supergroup-history"),
-                    empty_warning: None,
-                    messages: current_messages,
-                },
-                ExportSection {
-                    heading: Some("Migrated small-group history"),
-                    filename_prefix: Some("migrated-small-group-history"),
-                    empty_warning: Some(MIGRATED_HISTORY_EMPTY_WARNING),
-                    messages: migrated_messages,
-                },
-            ]
-        } else {
-            vec![ExportSection {
-                heading: None,
-                filename_prefix: None,
-                empty_warning: None,
-                messages: current_messages,
-            }]
-        };
-
-        let mut rendered_sections = Vec::new();
-        let mut exported_messages = Vec::new();
-        let mut filter_current = 0;
-
         task_progress.emit_progress(
             "chunking",
             "Grouping messages into NotebookLM-sized Markdown files.",
@@ -296,80 +278,32 @@ pub async fn export_source_to_notebooklm(
             None,
         );
 
-        for section in sections {
-            if section.messages.is_empty() {
-                if let Some(warning) = section.empty_warning {
-                    warnings.push(warning.to_string());
-                }
-            }
-
-            let mut blocks = Vec::new();
-            for message in &section.messages {
-                if should_export_message(
-                    message,
-                    config.min_message_length,
-                    config.include_media_placeholders,
-                ) {
-                    let mut message = message.clone();
-                    if !config.include_media_placeholders {
-                        message.media_placeholders.clear();
-                    }
-                    blocks.push(render_message_block(&message));
-                } else {
-                    skipped_message_count += 1;
-                }
-
-                filter_current += 1;
-                if should_emit_progress(filter_current, filter_total, filter_step) {
-                    task_progress.emit_progress(
-                        "filtering",
-                        "Filtering and rendering message blocks.",
-                        Some(filter_current),
-                        Some(filter_total),
-                        None,
-                    );
-                }
-            }
-
-            let section_messages = blocks
-                .iter()
-                .map(|block| block.message.clone())
-                .collect::<Vec<_>>();
-            exported_messages.extend(section_messages.iter().cloned());
-            let participants = aggregate_participants(&section_messages);
-            let (mut chunks, chunk_warnings) = build_chunks(
-                &source,
-                &blocks,
-                config.max_words_per_file,
-                config.max_bytes_per_file,
-                |topic, title_period, period_start, period_end, is_continuation, message_count| {
-                    let context = DocumentRenderContext {
-                        source: &source,
-                        topic,
-                        history_scope_heading: section.heading,
-                        generated_at,
-                        title_period,
-                        period_start,
-                        period_end,
-                        participants: &participants,
-                        message_count,
-                        is_continuation,
-                    };
-                    render_document_overhead(&context)
-                },
-            );
-            if let Some(filename_prefix) = section.filename_prefix {
-                for chunk in &mut chunks {
-                    chunk.filename = format!("{filename_prefix}-{}", chunk.filename);
-                }
-            }
-            warnings.extend(chunk_warnings);
-            rendered_sections.push(RenderedExportSection {
-                heading: section.heading,
-                participants,
-                chunks,
-            });
-        }
+        let rendered = render_source_export(
+            SourceExportInput {
+                source,
+                current_messages,
+                migrated_messages,
+            },
+            &config,
+            generated_at,
+            |filename| filename.to_string(),
+            |current, total| {
+                task_progress.emit_progress(
+                    "filtering",
+                    "Filtering and rendering message blocks.",
+                    Some(current),
+                    Some(total),
+                    None,
+                );
+            },
+        );
+        let RenderedSourceExport {
+            source,
+            rendered_sections,
+            exported_messages,
+            skipped_message_count,
+            warnings,
+        } = rendered;
 
         task_progress.emit_progress(
             "preparing_output",
@@ -587,6 +521,147 @@ fn progress_step(total: usize) -> usize {
 
 fn should_emit_progress(current: usize, total: usize, step: usize) -> bool {
     current == total || current.is_multiple_of(step)
+}
+
+fn source_member_file_prefix(
+    member_index: usize,
+    source: &model::NotebookLmExportSource,
+) -> String {
+    let fallback = format!("source_{}", source.id);
+    let slug = sanitize_path_component(
+        source.title.as_deref().unwrap_or(&source.external_id),
+        &fallback,
+    );
+    format!("{member_index:03}-source-{}-{slug}", source.id)
+}
+
+fn prefix_chunk_filename(prefix: &str, filename: &str) -> String {
+    format!("sources/{prefix}-{filename}")
+}
+
+fn render_source_export(
+    input: SourceExportInput,
+    config: &NotebookLmExportConfig,
+    generated_at: i64,
+    filename_mapper: impl Fn(&str) -> String,
+    mut on_filter_progress: impl FnMut(usize, usize),
+) -> RenderedSourceExport {
+    let SourceExportInput {
+        source,
+        current_messages,
+        migrated_messages,
+    } = input;
+    let mut warnings = Vec::new();
+    let mut skipped_message_count = 0;
+    let filter_total = current_messages.len() + migrated_messages.len();
+    let filter_step = progress_step(filter_total);
+    let sections = if config.include_migrated_history {
+        vec![
+            ExportSection {
+                heading: Some("Current supergroup history"),
+                filename_prefix: Some("current-supergroup-history"),
+                empty_warning: None,
+                messages: current_messages,
+            },
+            ExportSection {
+                heading: Some("Migrated small-group history"),
+                filename_prefix: Some("migrated-small-group-history"),
+                empty_warning: Some(MIGRATED_HISTORY_EMPTY_WARNING),
+                messages: migrated_messages,
+            },
+        ]
+    } else {
+        vec![ExportSection {
+            heading: None,
+            filename_prefix: None,
+            empty_warning: None,
+            messages: current_messages,
+        }]
+    };
+
+    let mut rendered_sections = Vec::new();
+    let mut exported_messages = Vec::new();
+    let mut filter_current = 0;
+
+    for section in sections {
+        if section.messages.is_empty() {
+            if let Some(warning) = section.empty_warning {
+                warnings.push(warning.to_string());
+            }
+        }
+
+        let mut blocks = Vec::new();
+        for message in &section.messages {
+            if should_export_message(
+                message,
+                config.min_message_length,
+                config.include_media_placeholders,
+            ) {
+                let mut message = message.clone();
+                if !config.include_media_placeholders {
+                    message.media_placeholders.clear();
+                }
+                blocks.push(render_message_block(&message));
+            } else {
+                skipped_message_count += 1;
+            }
+
+            filter_current += 1;
+            if should_emit_progress(filter_current, filter_total, filter_step) {
+                on_filter_progress(filter_current, filter_total);
+            }
+        }
+
+        let section_messages = blocks
+            .iter()
+            .map(|block| block.message.clone())
+            .collect::<Vec<_>>();
+        exported_messages.extend(section_messages.iter().cloned());
+        let participants = aggregate_participants(&section_messages);
+        let (mut chunks, chunk_warnings) = build_chunks(
+            &source,
+            &blocks,
+            config.max_words_per_file,
+            config.max_bytes_per_file,
+            |topic, title_period, period_start, period_end, is_continuation, message_count| {
+                let context = DocumentRenderContext {
+                    source: &source,
+                    topic,
+                    history_scope_heading: section.heading,
+                    generated_at,
+                    title_period,
+                    period_start,
+                    period_end,
+                    participants: &participants,
+                    message_count,
+                    is_continuation,
+                };
+                render_document_overhead(&context)
+            },
+        );
+        if let Some(filename_prefix) = section.filename_prefix {
+            for chunk in &mut chunks {
+                chunk.filename = format!("{filename_prefix}-{}", chunk.filename);
+            }
+        }
+        for chunk in &mut chunks {
+            chunk.filename = filename_mapper(&chunk.filename);
+        }
+        warnings.extend(chunk_warnings);
+        rendered_sections.push(RenderedExportSection {
+            heading: section.heading,
+            participants,
+            chunks,
+        });
+    }
+
+    RenderedSourceExport {
+        source,
+        rendered_sections,
+        exported_messages,
+        skipped_message_count,
+        warnings,
+    }
 }
 
 fn prepare_output_root(
@@ -877,9 +952,9 @@ fn default_manifest_scope() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        read_manifest, remove_generated_files, timestamp_for_folder, validate_request,
-        write_export_file, write_marker, NotebookLmExportManifest, NotebookLmExportManifestMember,
-        EXPORT_MARKER_FILE,
+        read_manifest, remove_generated_files, source_member_file_prefix, timestamp_for_folder,
+        validate_request, write_export_file, write_marker, NotebookLmExportManifest,
+        NotebookLmExportManifestMember, EXPORT_MARKER_FILE,
     };
     use crate::notebooklm_export::model::{NotebookLmExportRequest, NotebookLmExportScope};
     use std::io;
@@ -899,6 +974,38 @@ mod tests {
             max_bytes_per_file: 50_000_000,
             overwrite_existing: false,
         }
+    }
+
+    #[test]
+    fn source_member_file_prefix_includes_index_id_and_slug() {
+        let source = crate::notebooklm_export::model::NotebookLmExportSource {
+            id: 42,
+            source_type: "telegram".to_string(),
+            source_subtype: "channel".to_string(),
+            external_id: "external".to_string(),
+            title: Some("Alpha Source".to_string()),
+        };
+
+        assert_eq!(
+            source_member_file_prefix(1, &source),
+            "001-source-42-alpha_source"
+        );
+    }
+
+    #[test]
+    fn source_member_file_prefix_uses_fallback_slug_for_unsafe_title() {
+        let source = crate::notebooklm_export::model::NotebookLmExportSource {
+            id: 77,
+            source_type: "telegram".to_string(),
+            source_subtype: "channel".to_string(),
+            external_id: "external".to_string(),
+            title: Some("..".to_string()),
+        };
+
+        assert_eq!(
+            source_member_file_prefix(2, &source),
+            "002-source-77-source_77"
+        );
     }
 
     #[test]
