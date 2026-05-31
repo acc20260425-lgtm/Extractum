@@ -9,7 +9,7 @@ mod query;
 mod renderer;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -661,6 +661,7 @@ fn remove_generated_files(output_root: &Path) -> AppResult<()> {
         let path = ensure_child_relative_path(output_root, &file_name).ok_or_else(|| {
             AppError::conflict("Existing export manifest contains an invalid file path")
         })?;
+        validate_generated_path_for_io(output_root, &path)?;
         if !path.exists() {
             continue;
         }
@@ -680,9 +681,9 @@ fn remove_generated_files(output_root: &Path) -> AppResult<()> {
 fn validate_existing_export_root(base: &Path, output_root: &Path) -> AppResult<PathBuf> {
     let metadata = fs::symlink_metadata(output_root)
         .map_err(|e| AppError::validation(format!("Could not inspect export folder: {e}")))?;
-    if metadata.file_type().is_symlink() {
+    if metadata_is_link_or_reparse(&metadata) {
         return Err(AppError::conflict(
-            "Export folder cannot be a symbolic link",
+            "Export folder cannot be a symbolic link or reparse point",
         ));
     }
     if !metadata.is_dir() {
@@ -705,14 +706,84 @@ fn write_export_file(output_root: &Path, filename: &str, content: &str) -> AppRe
     let path = ensure_child_relative_path(output_root, filename).ok_or_else(|| {
         AppError::validation(format!("Generated filename '{filename}' is invalid"))
     })?;
+    validate_generated_path_for_io(output_root, &path)?;
     if let Some(parent) = path.parent() {
         if parent != output_root {
             fs::create_dir_all(parent).map_err(map_create_dir_error)?;
         }
     }
+    validate_generated_path_for_io(output_root, &path)?;
     fs::write(&path, content)
         .map_err(|e| AppError::internal(format!("Could not write export file: {e}")))?;
     Ok(path)
+}
+
+fn validate_generated_path_for_io(output_root: &Path, path: &Path) -> AppResult<()> {
+    let root_metadata = fs::symlink_metadata(output_root)
+        .map_err(|e| AppError::conflict(format!("Could not inspect export folder: {e}")))?;
+    if metadata_is_link_or_reparse(&root_metadata) {
+        return Err(AppError::conflict(
+            "Generated export path contains a symbolic link or reparse point",
+        ));
+    }
+    if !root_metadata.is_dir() {
+        return Err(AppError::conflict("Export path is not a directory"));
+    }
+
+    let relative_path = path
+        .strip_prefix(output_root)
+        .map_err(|_| AppError::conflict("Generated export path is outside the export directory"))?;
+    let components = relative_path.components().collect::<Vec<_>>();
+    let mut current = output_root.to_path_buf();
+    for (index, component) in components.iter().enumerate() {
+        let Component::Normal(value) = component else {
+            return Err(AppError::conflict(
+                "Generated export path contains an invalid component",
+            ));
+        };
+        current.push(value);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) => {
+                if metadata_is_link_or_reparse(&metadata) {
+                    return Err(AppError::conflict(
+                        "Generated export path contains a symbolic link or reparse point",
+                    ));
+                }
+                if index + 1 < components.len() && !metadata.is_dir() {
+                    return Err(AppError::conflict(
+                        "Generated export path contains a non-directory ancestor",
+                    ));
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(AppError::conflict(format!(
+                    "Could not inspect generated export path: {error}"
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn metadata_is_link_or_reparse(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    }
+
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 fn write_marker(output_root: &Path, manifest: &NotebookLmExportManifest) -> AppResult<()> {
@@ -804,9 +875,11 @@ fn default_manifest_scope() -> Option<String> {
 mod tests {
     use super::{
         read_manifest, remove_generated_files, timestamp_for_folder, validate_request,
-        write_marker, NotebookLmExportManifest, NotebookLmExportManifestMember, EXPORT_MARKER_FILE,
+        write_export_file, write_marker, NotebookLmExportManifest, NotebookLmExportManifestMember,
+        EXPORT_MARKER_FILE,
     };
     use crate::notebooklm_export::model::{NotebookLmExportRequest, NotebookLmExportScope};
+    use std::io;
 
     fn request() -> NotebookLmExportRequest {
         NotebookLmExportRequest {
@@ -988,5 +1061,176 @@ mod tests {
             .exists());
 
         std::fs::remove_dir_all(&temp).expect("cleanup temp");
+    }
+
+    #[test]
+    fn remove_generated_files_rejects_invalid_manifest_relative_path() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-group-notebooklm-invalid-manifest-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(temp.join("sources")).expect("create sources dir");
+        std::fs::write(temp.join("sources").join("source.md"), "chunk").expect("write chunk");
+        write_marker(
+            &temp,
+            &NotebookLmExportManifest {
+                generated_at: 1,
+                scope: Some("source_group".to_string()),
+                source_id: None,
+                source_external_id: None,
+                source_title: None,
+                source_group_id: Some(9),
+                source_group_name: Some("Group".to_string()),
+                file_count: 1,
+                exported_message_count: 1,
+                skipped_message_count: 0,
+                warning_count: 0,
+                warnings: Vec::new(),
+                generated_files: vec!["sources/nul.md".to_string()],
+                members: Vec::new(),
+            },
+        )
+        .expect("write marker");
+
+        let error = remove_generated_files(&temp).expect_err("invalid path is rejected");
+
+        assert!(error.message.contains("invalid file path"));
+        assert!(temp.join("sources").join("source.md").exists());
+
+        std::fs::remove_dir_all(&temp).expect("cleanup temp");
+    }
+
+    #[test]
+    fn write_export_file_creates_sources_parent_directory() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-group-notebooklm-write-sources-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).expect("create temp");
+
+        let path = write_export_file(&temp, "sources/example.md", "example").expect("write file");
+
+        assert_eq!(path, temp.join("sources").join("example.md"));
+        assert_eq!(
+            std::fs::read_to_string(temp.join("sources").join("example.md"))
+                .expect("read written file"),
+            "example"
+        );
+
+        std::fs::remove_dir_all(&temp).expect("cleanup temp");
+    }
+
+    #[test]
+    fn write_export_file_rejects_symlink_parent_directory() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-group-notebooklm-write-link-{}",
+            std::process::id()
+        ));
+        let outside = std::env::temp_dir().join(format!(
+            "extractum-group-notebooklm-write-link-outside-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&temp).expect("create temp");
+        std::fs::create_dir_all(&outside).expect("create outside");
+        if let Err(error) = symlink_dir(&outside, temp.join("sources")) {
+            if should_skip_symlink_test(&error) {
+                let _ = std::fs::remove_dir_all(&temp);
+                let _ = std::fs::remove_dir_all(&outside);
+                return;
+            }
+            panic!("create symlink: {error}");
+        }
+
+        let error = write_export_file(&temp, "sources/example.md", "example")
+            .expect_err("symlink parent is rejected");
+
+        assert!(error.message.contains("symbolic link"));
+        assert!(!outside.join("example.md").exists());
+
+        let _ = std::fs::remove_dir_all(&temp);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn remove_generated_files_rejects_symlink_parent_directory() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-group-notebooklm-remove-link-{}",
+            std::process::id()
+        ));
+        let outside = std::env::temp_dir().join(format!(
+            "extractum-group-notebooklm-remove-link-outside-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&temp).expect("create temp");
+        std::fs::create_dir_all(&outside).expect("create outside");
+        std::fs::write(outside.join("victim.md"), "outside").expect("write outside file");
+        if let Err(error) = symlink_dir(&outside, temp.join("sources")) {
+            if should_skip_symlink_test(&error) {
+                let _ = std::fs::remove_dir_all(&temp);
+                let _ = std::fs::remove_dir_all(&outside);
+                return;
+            }
+            panic!("create symlink: {error}");
+        }
+        write_marker(
+            &temp,
+            &NotebookLmExportManifest {
+                generated_at: 1,
+                scope: Some("source_group".to_string()),
+                source_id: None,
+                source_external_id: None,
+                source_title: None,
+                source_group_id: Some(9),
+                source_group_name: Some("Group".to_string()),
+                file_count: 1,
+                exported_message_count: 1,
+                skipped_message_count: 0,
+                warning_count: 0,
+                warnings: Vec::new(),
+                generated_files: vec!["sources/victim.md".to_string()],
+                members: Vec::new(),
+            },
+        )
+        .expect("write marker");
+
+        let error =
+            remove_generated_files(&temp).expect_err("symlink parent is rejected before removal");
+
+        assert!(error.message.contains("symbolic link"));
+        assert!(outside.join("victim.md").exists());
+
+        let _ = std::fs::remove_dir_all(&temp);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[cfg(unix)]
+    fn symlink_dir(
+        original: impl AsRef<std::path::Path>,
+        link: impl AsRef<std::path::Path>,
+    ) -> io::Result<()> {
+        std::os::unix::fs::symlink(original, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_dir(
+        original: impl AsRef<std::path::Path>,
+        link: impl AsRef<std::path::Path>,
+    ) -> io::Result<()> {
+        std::os::windows::fs::symlink_dir(original, link)
+    }
+
+    fn should_skip_symlink_test(error: &io::Error) -> bool {
+        matches!(
+            error.kind(),
+            io::ErrorKind::PermissionDenied
+                | io::ErrorKind::Unsupported
+                | io::ErrorKind::InvalidInput
+        ) || error.raw_os_error() == Some(1314)
     }
 }

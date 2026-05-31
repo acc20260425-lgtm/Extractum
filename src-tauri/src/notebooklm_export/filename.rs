@@ -49,13 +49,22 @@ pub(crate) fn sanitize_path_component(input: &str, fallback: &str) -> String {
 
 pub(crate) fn is_rejected_component(component: &str) -> bool {
     let trimmed = component.trim();
-    trimmed.is_empty()
+    if trimmed.is_empty()
+        || trimmed != component
         || trimmed == "."
         || trimmed == ".."
         || trimmed.contains(['/', '\\'])
-        || RESERVED_WINDOWS_NAMES
-            .iter()
-            .any(|reserved| trimmed.eq_ignore_ascii_case(reserved))
+        || trimmed.contains(['<', '>', ':', '"', '|', '?', '*'])
+        || trimmed.ends_with('.')
+        || trimmed.ends_with(' ')
+    {
+        return true;
+    }
+
+    let basename = trimmed.split('.').next().unwrap_or(trimmed);
+    RESERVED_WINDOWS_NAMES
+        .iter()
+        .any(|reserved| basename.eq_ignore_ascii_case(reserved))
 }
 
 pub(crate) fn ensure_child_path(base: &Path, component: &str) -> Option<PathBuf> {
@@ -122,6 +131,12 @@ mod tests {
         assert!(is_rejected_component(".."));
         assert!(is_rejected_component("a/b"));
         assert!(is_rejected_component("nul"));
+        assert!(is_rejected_component("nul.md"));
+        assert!(is_rejected_component("CON.txt"));
+        assert!(is_rejected_component("com1.log"));
+        assert!(is_rejected_component("source."));
+        assert!(is_rejected_component("source "));
+        assert!(is_rejected_component("source:name.md"));
     }
 
     #[test]
