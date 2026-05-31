@@ -75,6 +75,13 @@ struct RenderedGroupMemberExport {
     skipped_reason: Option<String>,
 }
 
+struct RenderedSourceGroupExport {
+    rendered_members: Vec<RenderedGroupMemberExport>,
+    exported_messages: Vec<NotebookLmExportMessage>,
+    skipped_message_count: usize,
+    warnings: Vec<String>,
+}
+
 #[derive(Clone)]
 struct NotebookLmExportProgress {
     handle: AppHandle,
@@ -562,68 +569,15 @@ async fn export_source_group_to_notebooklm(
         };
 
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let mut warnings = load_warnings;
-        let mut rendered_members = Vec::new();
-        let mut exported_messages = Vec::new();
-        let mut skipped_message_count = 0;
-
-        for (index, input) in inputs.into_iter().enumerate() {
-            let member_index = index + 1;
-            let prefix_source = input.source.clone();
-            let prefix = source_member_file_prefix(member_index, &prefix_source);
-            let rendered = render_source_export(
-                input,
-                &config,
-                generated_at,
-                |filename| prefix_chunk_filename(&prefix, filename),
-                |_, _| {},
-            );
-            let source_label = rendered
-                .source
-                .title
-                .as_deref()
-                .unwrap_or(&rendered.source.external_id)
-                .to_string();
-            let mut member_warnings = rendered
-                .warnings
-                .iter()
-                .map(|warning| format!("{source_label}: {warning}"))
-                .collect::<Vec<_>>();
-            let skipped_reason = if rendered.exported_messages.is_empty() {
-                let reason =
-                    format!("{source_label}: no exportable messages matched the export settings.");
-                member_warnings.push(reason.clone());
-                Some(reason)
-            } else {
-                None
-            };
-            warnings.extend(member_warnings.clone());
-            skipped_message_count += rendered.skipped_message_count;
-            exported_messages.extend(rendered.exported_messages.iter().cloned());
-            rendered_members.push(RenderedGroupMemberExport {
-                member_index,
-                rendered: RenderedSourceExport {
-                    warnings: member_warnings,
-                    ..rendered
-                },
-                skipped_reason,
-            });
-        }
-
-        if exported_messages.is_empty() {
-            return Err(AppError::validation(
-                "No exportable Telegram messages found for this source group.",
-            ));
-        }
-
+        let rendered = render_source_group_export(inputs, &config, generated_at, load_warnings)?;
         write_group_export_package(
             &config,
             &group,
             generated_at,
-            rendered_members,
-            exported_messages,
-            skipped_message_count,
-            warnings,
+            rendered.rendered_members,
+            rendered.exported_messages,
+            rendered.skipped_message_count,
+            rendered.warnings,
         )
     })
     .await
@@ -644,6 +598,74 @@ async fn export_source_group_to_notebooklm(
             Err(error)
         }
     }
+}
+
+fn render_source_group_export(
+    inputs: Vec<SourceExportInput>,
+    config: &NotebookLmExportConfig,
+    generated_at: i64,
+    load_warnings: Vec<String>,
+) -> AppResult<RenderedSourceGroupExport> {
+    let mut warnings = load_warnings;
+    let mut rendered_members = Vec::new();
+    let mut exported_messages = Vec::new();
+    let mut skipped_message_count = 0;
+
+    for (index, input) in inputs.into_iter().enumerate() {
+        let member_index = index + 1;
+        let prefix_source = input.source.clone();
+        let prefix = source_member_file_prefix(member_index, &prefix_source);
+        let rendered = render_source_export(
+            input,
+            config,
+            generated_at,
+            |filename| prefix_chunk_filename(&prefix, filename),
+            |_, _| {},
+        );
+        let source_label = rendered
+            .source
+            .title
+            .as_deref()
+            .unwrap_or(&rendered.source.external_id)
+            .to_string();
+        let mut member_warnings = rendered
+            .warnings
+            .iter()
+            .map(|warning| format!("{source_label}: {warning}"))
+            .collect::<Vec<_>>();
+        let skipped_reason = if rendered.exported_messages.is_empty() {
+            let reason =
+                format!("{source_label}: no exportable messages matched the export settings.");
+            member_warnings.push(reason.clone());
+            Some(reason)
+        } else {
+            None
+        };
+        warnings.extend(member_warnings.clone());
+        skipped_message_count += rendered.skipped_message_count;
+        exported_messages.extend(rendered.exported_messages.iter().cloned());
+        rendered_members.push(RenderedGroupMemberExport {
+            member_index,
+            rendered: RenderedSourceExport {
+                warnings: member_warnings,
+                ..rendered
+            },
+            skipped_reason,
+        });
+    }
+
+    if exported_messages.is_empty() {
+        return Err(AppError::validation(
+            "No exportable Telegram messages found for this source group.",
+        ));
+    }
+
+    Ok(RenderedSourceGroupExport {
+        rendered_members,
+        exported_messages,
+        skipped_message_count,
+        warnings,
+    })
 }
 
 fn validate_request(request: NotebookLmExportRequest) -> AppResult<NotebookLmExportConfig> {
@@ -1279,10 +1301,11 @@ mod tests {
     use super::query::NotebookLmExportSourceGroup;
     use super::{
         load_group_export_inputs, prefix_chunk_filename, read_manifest, remove_generated_files,
-        render_source_export, source_member_file_prefix, timestamp_for_folder, validate_request,
-        write_export_file, write_group_export_package, write_marker, NotebookLmExportManifest,
-        NotebookLmExportManifestMember, RenderedGroupMemberExport, SourceExportInput,
-        EXPORT_MARKER_FILE, MIGRATED_HISTORY_EMPTY_WARNING,
+        render_source_export, render_source_group_export, source_member_file_prefix,
+        timestamp_for_folder, validate_request, write_export_file, write_group_export_package,
+        write_marker, NotebookLmExportManifest, NotebookLmExportManifestMember,
+        RenderedGroupMemberExport, SourceExportInput, EXPORT_MARKER_FILE,
+        MIGRATED_HISTORY_EMPTY_WARNING,
     };
     use crate::error::AppError;
     use crate::media::ItemMediaMetadata;
@@ -1676,6 +1699,30 @@ mod tests {
     fn group_export_returns_no_exportable_messages_copy_for_empty_rendered_members() {
         let error =
             AppError::validation("No exportable Telegram messages found for this source group.");
+        assert!(error
+            .message
+            .contains("No exportable Telegram messages found for this source group."));
+    }
+
+    #[test]
+    fn render_source_group_export_errors_when_all_members_empty_after_filters() {
+        let mut config = export_config();
+        config.min_message_length = 100;
+
+        let error = match render_source_group_export(
+            vec![SourceExportInput {
+                source: test_source(),
+                current_messages: vec![export_message(1, "short")],
+                migrated_messages: Vec::new(),
+            }],
+            &config,
+            0,
+            Vec::new(),
+        ) {
+            Ok(_) => panic!("all-empty rendered group should fail"),
+            Err(error) => error,
+        };
+
         assert!(error
             .message
             .contains("No exportable Telegram messages found for this source group."));
