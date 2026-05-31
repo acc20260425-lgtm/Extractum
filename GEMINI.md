@@ -156,7 +156,7 @@ Implemented:
 - media-aware item metadata without binary media download
 - forum topic catalog and topic-aware message browsing for supported supergroups
 - Takeout source import for existing Telegram sources, with job state and cancellation
-- NotebookLM-friendly Markdown export for one synced source
+- NotebookLM-friendly Markdown export for one synced Telegram source or Telegram source group
 - runtime status display on `/accounts` and `/analysis`
 - `/analysis` source workspace for synced messages, report runs, active runs, saved history, trace inspection, source groups, prompt templates, follow-up chat, and exports
 - reusable LLM provider profiles on `/settings`, including Gemini and OpenAI-compatible providers with model refresh and provider smoke tests

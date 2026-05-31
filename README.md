@@ -103,7 +103,7 @@ This means saved runs are now intended to be stable artifacts rather than live v
 
 ### Exporting sources for Google NotebookLM
 
-The `/analysis` source workspace can export one synced Telegram source to NotebookLM-friendly Markdown.
+The `/analysis` source workspace can export one synced Telegram source or Telegram source group to NotebookLM-friendly Markdown.
 
 - export reads local SQLite state only;
 - sources with a current ready archive read model load export messages from
