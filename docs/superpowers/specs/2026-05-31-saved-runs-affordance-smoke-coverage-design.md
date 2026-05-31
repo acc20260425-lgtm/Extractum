@@ -64,23 +64,37 @@ Keep the existing `Missing Snapshot Run` as the legacy-missing fixture:
 - zero `analysis_run_messages`;
 - has trace data pointing at missing saved evidence.
 
+`list_analysis_runs` and `get_analysis_run` must expose this run with
+`snapshot_state: "missing_legacy"`. The smoke may rely on the existing backend
+classification rule, `completed` plus no saved snapshot rows, but the fixture
+test should assert the resulting DTO state directly so the GUI smoke is not the
+first place this contract is discovered.
+
 Add a new `Capture Failed Snapshot Run` fixture:
 
 - status: `failed`;
 - result markdown exists so the opened report remains readable;
 - trace data exists so Evidence can select a trace ref;
 - no `snapshot_captured_at`;
-- `snapshot_error` is non-empty and already sanitized for UI display;
+- `snapshot_error` is exactly
+  `Snapshot capture failed: fixture write boundary unavailable`;
 - zero `analysis_run_messages`.
 
 This should make `list_analysis_runs` and `get_analysis_run` expose
 `snapshot_state: "capture_failed"` and a non-empty `snapshot_error` without
 requiring any product code change.
 
+The opened report body should include a stable readable fragment, for example
+`This capture-failed fixture report remains readable.`, so smoke can verify that
+the UI does not collapse this case into a generic failed-run-only state.
+
 Keep the existing `Failed Run` and `Cancelled Run` available to the smoke labels.
 They are useful for future not-captured-before-terminal checks, but the first
 smoke addition should prioritize `missing_legacy` and capture-failed-with-error
-because those are the highest-risk visual affordances.
+because those are the highest-risk visual affordances. Treat the `Failed Run`
+and `Cancelled Run` labels as future-facing labels in this slice: the smoke
+should assert that the labels are present after seeding, but it does not need to
+open them or add new not-captured-before-terminal UI checks yet.
 
 ## Smoke Step Design
 
@@ -95,7 +109,14 @@ After seeding fixtures:
 3. Assert the row shows `Legacy snapshot missing`.
 4. Search `Capture Failed Snapshot Run`.
 5. Assert the row shows `Snapshot capture failed`.
-6. Assert neither row exposes raw or sanitized error details in the row body.
+6. Assert the `Missing Snapshot Run`, `Failed Run`, `Cancelled Run`, and
+   `Capture Failed Snapshot Run` labels are discoverable after seeding.
+7. Assert neither degraded row exposes raw or sanitized error details in its own
+   row-scoped text.
+
+The negative error-detail assertion must be scoped to the matching row, not the
+whole page, because an opened run details panel may legitimately show sanitized
+error text elsewhere.
 
 ### Missing Legacy Run Checks
 
@@ -116,8 +137,10 @@ Open `Missing Snapshot Run` from the Runs tab and assert:
 Open `Capture Failed Snapshot Run` from the Runs tab and assert:
 
 - the opened-run header shows capture-failed warning copy;
+- the report body includes `This capture-failed fixture report remains readable.`;
 - `Run details` contains `Snapshot capture failed`;
-- `Run details` contains the sanitized snapshot error;
+- `Run details` contains
+  `Snapshot capture failed: fixture write boundary unavailable`;
 - Source mode shows capture-failed copy and the same sanitized snapshot error;
 - Source mode includes the live-source clarification text when `View live source`
   is available;
@@ -134,6 +157,11 @@ For one degraded run with a live source, click `View live source` and assert:
 - the transition does not enable saved-run Evidence or Chat follow-up for the
   degraded snapshot context.
 
+The degraded fixture used for this check must be linked to a live source. If a
+future fixture lacks a live scope, the helper should make the clarification
+assertion conditional: when `View live source` exists, the live-source
+clarification text must be present before the click.
+
 ## Helper Boundaries
 
 Prefer small helpers in `scripts/analysis-smoke.mjs` or
@@ -144,6 +172,17 @@ Prefer small helpers in `scripts/analysis-smoke.mjs` or
 - select the first trace ref in an opened report if Evidence requires a selected
   trace before the disabled action is visible;
 - switch companion tabs by smoke id and assert disabled button reasons.
+
+Add an explicit helper contract for Evidence checks:
+
+```text
+openEvidenceForRun(runLabel):
+- open the run;
+- open the Evidence tab;
+- select the first visible trace ref if no trace is already selected;
+- assert the Show in source action is disabled;
+- assert the disabled reason contains the expected helper-derived fragment.
+```
 
 These helpers should use existing smoke primitives such as `clickBySmokeId`,
 `clickRowActionByText`, `fillByLabel`, `waitForText`, and `executeJs`.
@@ -197,7 +236,13 @@ second bridge-discovery failure as a real smoke harness issue to investigate.
   legacy and capture-failed saved runs.
 - Smoke fixtures include a capture-failed saved run with sanitized snapshot
   error detail.
+- Fixture tests assert `Missing Snapshot Run` exposes
+  `snapshot_state: "missing_legacy"` and `Capture Failed Snapshot Run` exposes
+  `snapshot_state: "capture_failed"`.
+- The capture-failed run remains report-readable in the UI.
 - Runs tab shows degraded badges without exposing error detail in rows.
+- Runs row error-detail omissions are asserted against row-scoped text, not the
+  whole page.
 - Opened-run details and Source mode show helper-derived degraded copy.
 - Source mode distinguishes saved snapshot unavailability from live source
   browsing.
