@@ -218,7 +218,7 @@
     word-break: break-word;
   }
 
-  @container (min-width: 34rem) {
+  @container (min-width: 33rem) {
     .trace-layout {
       grid-template-columns: minmax(12rem, 0.9fr) minmax(16rem, 1.1fr);
       align-items: start;

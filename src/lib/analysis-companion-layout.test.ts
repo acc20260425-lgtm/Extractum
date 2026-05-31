@@ -65,7 +65,7 @@ describe("analysis companion layout", () => {
   it("uses Evidence panel width, not viewport width, for trace list/detail columns", () => {
     const evidenceRootRule = cssBlock(runEvidenceTabSource, ".run-evidence-tab");
     const traceBaseRule = cssBlock(tracePanelSource, ".trace-layout");
-    const containerRule = cssBlock(tracePanelSource, "@container (min-width: 34rem)");
+    const containerRule = cssBlock(tracePanelSource, "@container (min-width: 33rem)");
 
     expect(evidenceRootRule).toContain("container-type: inline-size;");
 

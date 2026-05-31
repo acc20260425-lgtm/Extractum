@@ -29,7 +29,7 @@ Modify:
 - `src/lib/components/analysis/run-evidence-tab.svelte`
   - Add `container-type: inline-size` to `.run-evidence-tab`.
 - `src/lib/components/analysis/trace-panel.svelte`
-  - Replace viewport-only `@media (min-width: 1280px)` two-column Evidence layout with `@container (min-width: 34rem)`.
+  - Replace viewport-only `@media (min-width: 1280px)` two-column Evidence layout with `@container (min-width: 33rem)`.
 
 Do not modify:
 
@@ -119,7 +119,7 @@ describe("analysis companion layout", () => {
   it("uses Evidence panel width, not viewport width, for trace list/detail columns", () => {
     const evidenceRootRule = cssBlock(runEvidenceTabSource, ".run-evidence-tab");
     const traceBaseRule = cssBlock(tracePanelSource, ".trace-layout");
-    const containerRule = cssBlock(tracePanelSource, "@container (min-width: 34rem)");
+    const containerRule = cssBlock(tracePanelSource, "@container (min-width: 33rem)");
 
     expect(evidenceRootRule).toContain("container-type: inline-size;");
 
@@ -259,7 +259,7 @@ In `src/lib/components/analysis/trace-panel.svelte`, find:
 Replace it with:
 
 ```css
-@container (min-width: 34rem) {
+@container (min-width: 33rem) {
   .trace-layout {
     grid-template-columns: minmax(12rem, 0.9fr) minmax(16rem, 1.1fr);
     align-items: start;
@@ -326,7 +326,7 @@ Expected: commit succeeds with the new test and implementation together.
 
 - No file changes expected.
 
-- [ ] **Step 1: Connect to the running Tauri app if available**
+- [x] **Step 1: Connect to the running Tauri app if available**
 
 Use the Tauri MCP bridge if the app is running:
 
@@ -342,7 +342,7 @@ Then verify backend state:
 
 Expected: backend state reports `identifier: "org.ai.extractum"` and a visible `main` window. If the app is not running or MCP is unavailable, record that viewport verification was skipped and continue with automated tests. Do not block this CSS slice solely because manual MCP verification is unavailable.
 
-- [ ] **Step 2: Measure the 1920px desktop layout**
+- [x] **Step 2: Measure the 1920px desktop layout**
 
 Resize the Tauri window to a wide desktop size:
 
@@ -381,10 +381,10 @@ Expected:
 - `companionSlot.width` is greater than `430`.
 - `companionPanel.width` is greater than `430` when the companion panel is mounted; if it falls back to `.companion-slot`, use `companionSlot.width` as the source of truth.
 - `workspaceGrid` contains three columns.
-- `traceLayoutGrid` contains two columns when the Evidence tab is visible and panel content width is at least `34rem`.
+- `traceLayoutGrid` contains two columns when the Evidence tab is visible and panel content width is at least `33rem`.
 - `canvas.width` remains larger than the companion width.
 
-- [ ] **Step 3: Measure an intermediate desktop width**
+- [x] **Step 3: Measure an intermediate desktop width**
 
 Resize to `1440x900`:
 
@@ -402,7 +402,7 @@ Expected:
 
 If the host window chrome or side navigation makes the effective webview width slightly different, use the script output rather than the nominal window size and record the observed width.
 
-- [ ] **Step 4: Measure a near-breakpoint desktop width**
+- [x] **Step 4: Measure a near-breakpoint desktop width**
 
 Resize to `1600x900`:
 
@@ -418,7 +418,7 @@ Expected:
 - With the primary `clamp()` track, the companion column resolves around the lower clamp range instead of immediately taking `560px`; with the fixed fallback, it still must not exceed `560px`.
 - The canvas remains usable for the current Source/Report surface.
 
-- [ ] **Step 5: Capture a screenshot for visual sanity if MCP is available**
+- [x] **Step 5: Capture a screenshot for visual sanity if MCP is available**
 
 Run:
 
@@ -511,7 +511,7 @@ Expected: commit succeeds. If no plan checkbox changes were made, skip this comm
 
 - [ ] On a 1920px desktop viewport, the companion panel is wider than the old 430px cap.
 - [ ] Evidence two-column list/detail layout depends on the Evidence panel container width, not viewport width.
-- [ ] `.trace-layout` remains single-column below the `34rem` container threshold.
+- [ ] `.trace-layout` remains single-column below the `33rem` container threshold.
 - [ ] Existing `@media (max-width: 1500px)` workspace stacking behavior is preserved.
 - [ ] Intermediate desktop widths around 1440px do not squeeze the canvas because the companion stacks below the canvas.
 - [ ] Near-breakpoint width around 1600px keeps the canvas usable; with the primary `clamp()` track the companion stays near the lower clamp range, and with the fallback it stays capped at `560px`.
