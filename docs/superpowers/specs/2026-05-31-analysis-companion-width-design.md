@@ -45,6 +45,9 @@ In scope:
   and `src/lib/components/analysis/trace-panel.svelte`;
 - targeted tests or raw component contracts for the layout thresholds;
 - no changes to Evidence data, trace selection, or source navigation behavior.
+- no special inner-layout changes for Chat, Chunks, or Runs. They may become
+  wider because the shared companion column is wider, but this slice should not
+  redesign their internal layouts.
 
 Out of scope:
 
@@ -52,8 +55,8 @@ Out of scope:
 - persisted user-controlled companion width;
 - a full companion focus mode;
 - moving Evidence into a modal;
-- changing Chat, Chunks, or Runs behavior beyond inheriting the wider companion
-  column.
+- changing Chat, Chunks, or Runs behavior, structure, or inner responsive
+  layouts beyond inheriting the wider companion column.
 
 ## Proposed Design
 
@@ -80,6 +83,12 @@ or an equivalent `clamp(...)` shape if it fits the existing CSS style better.
 The important contract is that wide desktop gets a companion panel around
 520-560px instead of 430px, while the canvas remains the dominant workspace
 surface.
+
+The implementation plan must verify intermediate desktop widths, especially
+around 1366-1440px. The wider companion must not make the canvas feel broken on
+non-maximized desktop windows. Keep the existing `@media (max-width: 1500px)`
+stacking breakpoint unless implementation evidence shows a safer adjacent
+threshold is needed; do not silently move that breakpoint as part of this slice.
 
 The existing breakpoint that turns Evidence into two columns at viewport
 `min-width: 1280px` lives in `src/lib/components/analysis/trace-panel.svelte`
@@ -153,19 +162,35 @@ mostly default layout and responsive reflow.
 
 Add targeted coverage for:
 
-- the analysis workspace desktop grid no longer caps the companion at 430px;
+- the analysis workspace desktop grid no longer caps the companion at 430px
+  and uses a wider bounded max such as `560px`, or an equivalent semantic
+  `clamp(...)` rule;
 - the existing `@media (max-width: 1500px)` workspace breakpoint still collapses
   the companion below the canvas;
 - Evidence layout no longer uses a viewport-only `min-width: 1280px` rule for
   two columns;
 - Evidence exposes a container or equivalent local width rule before enabling
   list/detail two-column layout;
+- Chat, Chunks, and Runs do not receive new special inner-layout rules in this
+  slice;
 - existing Evidence trace selection and `Show in source` contracts keep
   passing.
 
-If tests remain raw CSS contract tests, normalize line endings like the existing
-raw source tests do so they work in both the main checkout and worktrees on
-Windows.
+If tests remain raw CSS contract tests, keep them semantic rather than
+whitespace-sensitive:
+
+- normalize line endings like the existing raw source tests do so they work in
+  both the main checkout and worktrees on Windows;
+- assert that the old `@media (min-width: 1280px)` trace-layout branch is gone
+  or no longer owns the two-column Evidence layout;
+- assert that `.run-evidence-tab` has `container-type: inline-size`;
+- assert that an `@container` rule controls `.trace-layout`;
+- assert that the companion max is greater than the old `430px` cap, without
+  depending on exact whitespace.
+
+Manual or automated viewport checks should include 1920px and at least one
+intermediate desktop width such as 1366px or 1440px. The goal is to catch a
+canvas regression before accepting the wider companion default.
 
 ## Acceptance Criteria
 
@@ -174,7 +199,11 @@ Windows.
 - Evidence no longer renders a two-column list/detail layout when each column
   would be too narrow to read comfortably.
 - The primary canvas remains usable and visually dominant on desktop.
+- Intermediate desktop widths around 1366-1440px do not regress into an
+  unusably narrow canvas before the existing stacked breakpoint applies.
 - Medium and narrow breakpoints continue to stack the companion predictably.
 - No Evidence data flow, trace selection, snapshot, or Source navigation
   behavior changes.
+- Chat, Chunks, and Runs inherit the wider companion column but do not receive
+  special inner layout changes in this slice.
 - Tests cover the width/reflow contract.
