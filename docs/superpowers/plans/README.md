@@ -7,4 +7,4 @@ still useful as execution history. Otherwise, Git history is enough.
 
 Active plans:
 
-None.
+- [Evidence Source Navigation Implementation](./2026-05-31-evidence-source-navigation-implementation.md)
