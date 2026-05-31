@@ -2038,6 +2038,11 @@ git diff --check
 
 Expected: all commands exit 0.
 
+Result: passed. `cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export`
+reported 76 passed tests; focused frontend tests reported 4 files and 73 tests
+passed; `npm.cmd run check` reported 0 errors and 0 warnings; `git diff --check`
+exited 0.
+
 - [x] **Step 5: Run full verification**
 
 Run:
@@ -2048,7 +2053,11 @@ npm.cmd run verify
 
 Expected: exit 0. If this fails outside the NotebookLM area, record the failing command, error summary, and whether the failure is pre-existing before asking for direction.
 
-- [ ] **Step 6: Commit docs closure**
+Result: passed. `npm.cmd run verify` exited 0: 64 Vitest files and 615
+frontend tests passed, Svelte check was clean, Cargo check passed, Cargo tests
+reported 648 passed, and `git diff HEAD --check` passed.
+
+- [x] **Step 6: Commit docs closure**
 
 ```powershell
 git add docs/backlog.md docs/project.md docs/superpowers/plans/2026-05-31-notebooklm-source-group-export-implementation.md
