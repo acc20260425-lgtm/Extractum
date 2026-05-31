@@ -370,7 +370,8 @@ export interface CancelTakeoutImportResponse {
 
 export interface NotebookLmExportRequest {
   export_id: string | null;
-  source_id: number;
+  source_id: number | null;
+  source_group_id: number | null;
   output_dir: string;
   period_from: number | null;
   period_to: number | null;

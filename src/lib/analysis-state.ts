@@ -117,6 +117,9 @@ export type NotebookLmExportFormState = {
   maxBytesPerFile: number;
   overwriteExisting: boolean;
 };
+export type NotebookLmExportRequestScope =
+  | { kind: "source"; sourceId: number }
+  | { kind: "source_group"; sourceGroupId: number };
 export type AnalysisReportStartState = {
   analysisScope: "single_source" | "source_group";
   selectedSourceId: string;
@@ -982,12 +985,13 @@ export function notebookLmExportInitialProgress(): NotebookLmExportProgressState
 
 export function notebookLmExportRequestFromForm(
   exportId: string,
-  sourceId: number,
+  scope: NotebookLmExportRequestScope,
   form: NotebookLmExportFormState,
 ): NotebookLmExportRequest {
   return {
     export_id: exportId,
-    source_id: sourceId,
+    source_id: scope.kind === "source" ? scope.sourceId : null,
+    source_group_id: scope.kind === "source_group" ? scope.sourceGroupId : null,
     output_dir: form.outputDir.trim(),
     period_from: form.range === "analysis_period" && form.fromDate
       ? startOfDayUnix(form.fromDate)

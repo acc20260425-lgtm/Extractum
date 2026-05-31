@@ -1594,7 +1594,7 @@ git commit -m "feat: export notebooklm telegram source groups"
 - Modify: `src/lib/analysis-state.test.ts`
 - Modify: `src/lib/api/notebooklm-export.test.ts`
 
-- [ ] **Step 1: Write failing frontend request tests**
+- [x] **Step 1: Write failing frontend request tests**
 
 In `src/lib/analysis-state.test.ts`, update the existing request test to call a scope object:
 
@@ -1673,7 +1673,7 @@ return {
 };
 ```
 
-- [ ] **Step 2: Run frontend request tests and verify failure**
+- [x] **Step 2: Run frontend request tests and verify failure**
 
 Run:
 
@@ -1683,7 +1683,7 @@ npm.cmd run test -- src/lib/analysis-state.test.ts src/lib/api/notebooklm-export
 
 Expected: FAIL because `NotebookLmExportRequest` and `notebookLmExportRequestFromForm` are still source-only.
 
-- [ ] **Step 3: Implement frontend scope request types**
+- [x] **Step 3: Implement frontend scope request types**
 
 In `src/lib/types/sources.ts`, change:
 
@@ -1741,7 +1741,7 @@ export function notebookLmExportRequestFromForm(
 }
 ```
 
-- [ ] **Step 4: Run frontend request tests**
+- [x] **Step 4: Run frontend request tests**
 
 Run:
 
@@ -1751,7 +1751,7 @@ npm.cmd run test -- src/lib/analysis-state.test.ts src/lib/api/notebooklm-export
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 6**
+- [x] **Step 5: Commit Task 6**
 
 ```powershell
 git add src/lib/types/sources.ts src/lib/analysis-state.ts src/lib/analysis-state.test.ts src/lib/api/notebooklm-export.test.ts

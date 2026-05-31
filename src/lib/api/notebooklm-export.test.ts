@@ -27,6 +27,7 @@ function notebookLmExportRequest(
   return {
     export_id: "export-a",
     source_id: 7,
+    source_group_id: null,
     output_dir: "C:/Exports",
     period_from: 1_700_000,
     period_to: 1_786_000,

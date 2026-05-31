@@ -1299,7 +1299,7 @@ describe("analysis-state", () => {
   });
 
   it("builds NotebookLM export request state from the export form", () => {
-    const request = notebookLmExportRequestFromForm("export-a", 7, {
+    const request = notebookLmExportRequestFromForm("export-a", { kind: "source", sourceId: 7 }, {
       outputDir: " C:/Exports ",
       range: "analysis_period",
       fromDate: "2026-05-03",
@@ -1315,6 +1315,7 @@ describe("analysis-state", () => {
     expect(request).toEqual({
       export_id: "export-a",
       source_id: 7,
+      source_group_id: null,
       output_dir: "C:/Exports",
       period_from: Math.floor(new Date("2026-05-03T00:00:00").getTime() / 1000),
       period_to: Math.floor(new Date("2026-05-04T23:59:59").getTime() / 1000),
@@ -1326,7 +1327,7 @@ describe("analysis-state", () => {
       overwrite_existing: false,
     });
 
-    expect(notebookLmExportRequestFromForm("export-b", 8, {
+    expect(notebookLmExportRequestFromForm("export-b", { kind: "source", sourceId: 8 }, {
       outputDir: "C:/All",
       range: "entire_history",
       fromDate: "2026-05-03",
@@ -1340,6 +1341,7 @@ describe("analysis-state", () => {
     })).toMatchObject({
       export_id: "export-b",
       source_id: 8,
+      source_group_id: null,
       output_dir: "C:/All",
       period_from: null,
       period_to: null,
@@ -1349,8 +1351,34 @@ describe("analysis-state", () => {
     });
   });
 
+  it("builds NotebookLM export request state for a source group", () => {
+    const request = notebookLmExportRequestFromForm("export-group", { kind: "source_group", sourceGroupId: 9 }, {
+      outputDir: "C:/Exports",
+      range: "entire_history",
+      fromDate: "2026-05-03",
+      toDate: "2026-05-04",
+      includeMediaPlaceholders: true,
+      includeMigratedHistory: true,
+      minMessageLength: 3,
+      maxWordsPerFile: 300000,
+      maxBytesPerFile: 50000000,
+      overwriteExisting: true,
+    });
+
+    expect(request).toMatchObject({
+      export_id: "export-group",
+      source_id: null,
+      source_group_id: 9,
+      output_dir: "C:/Exports",
+      period_from: null,
+      period_to: null,
+      include_migrated_history: true,
+      overwrite_existing: true,
+    });
+  });
+
   it("maps NotebookLM migrated history opt-in to the backend request", () => {
-    const request = notebookLmExportRequestFromForm("export-1", 7, {
+    const request = notebookLmExportRequestFromForm("export-1", { kind: "source", sourceId: 7 }, {
       outputDir: "C:/Export",
       range: "entire_history",
       fromDate: "",
