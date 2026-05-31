@@ -253,6 +253,14 @@ the pending focus/highlight state and leaves durable `selectedTraceRef` intact.
 
 Focused loading must be explicit about which trace refs can map to source rows:
 
+| Trace kind | Source basis | Focus API |
+| --- | --- | --- |
+| Saved snapshot row | `run_snapshot` | `aroundRef` |
+| Telegram item | `live_source` | `aroundItemId` |
+| YouTube comment/item | `live_source` | `aroundItemId` |
+| YouTube transcript segment | `live_source` | `aroundStartMs` |
+| Unsupported or missing focus metadata | any | unavailable or no-highlight fallback |
+
 - Run snapshot source basis uses `aroundRef` for the canonical trace ref. This
   applies to Telegram messages, YouTube transcript rows, comments/generic rows,
   and other saved snapshot rows because the frozen snapshot stores refs directly.
@@ -396,10 +404,45 @@ basis switching remains wired through `switch_source_basis_to_run_snapshot`.
 - Raw backend errors must not be rendered as snapshot failure explanations
   unless they already pass through the existing formatting/sanitization boundary.
 
+## Implementation Boundaries
+
+Avoid growing `/analysis/+page.svelte` with all evidence navigation state
+rules. Put pure navigation helpers in a focused module such as
+`src/lib/analysis-evidence-source-navigation.ts`, with colocated tests. The
+route should keep orchestration, API calls, and Svelte state assignment; the
+helper module should own deterministic logic:
+
+- canonical trace ref derivation;
+- `EvidenceSourceScope` derivation and matching;
+- `SourceReturnContext` validity predicates;
+- `PendingEvidenceSourceFocus` matching/staleness checks;
+- `EvidenceHighlightToken` matching;
+- `loadedSourceDataContainsTraceRef(...)`;
+- clear-condition helpers for run/source/basis/trace changes.
+
+Reader coverage should be staged but complete for currently rendered
+trace-capable readers in this slice. The implementation plan should explicitly
+list the touched surfaces:
+
+- `telegram-timeline-reader.svelte`;
+- `youtube-transcript-reader.svelte`;
+- `snapshot-items-view.svelte`;
+- `snapshot-group-sources-view.svelte`, including generic "other item" rows;
+- `source-group-sources-view.svelte` for nested live Telegram/YouTube readers;
+- `source-browser-shell.svelte` and `report-source-surface.svelte` for prop
+  passing and the evidence-return affordance.
+
+The virtualization behavior in this spec is future-compatible guidance. Current
+readers are non-virtualized, so the first implementation should not introduce a
+virtualizer API. It should satisfy the non-virtualized contract: apply highlight
+after focused data is present, consume each token once, and expire highlight
+when the loaded data does not contain the target.
+
 ## Testing
 
 Implementation should use targeted tests:
 
+- pure helper tests for `src/lib/analysis-evidence-source-navigation.ts`;
 - pure state tests for the new return event/state transition;
 - pure state or route tests proving `Back to evidence` depends on
   `sourceReturnContext`, not just `selectedTraceRef`;
@@ -482,6 +525,9 @@ the existing deterministic smoke harness.
   class names only.
 - `selectedTraceRef` and transient highlight state are tested as separate
   concepts.
+- Evidence navigation predicates, token matching, request staleness checks, and
+  loaded-data target detection live in a pure helper module instead of being
+  embedded only in `/analysis/+page.svelte`.
 - `Back to evidence` and `Back to run snapshot` remain separate actions with
   separate meanings.
 - Tests cover state, route wiring, and component highlight/return contracts.
