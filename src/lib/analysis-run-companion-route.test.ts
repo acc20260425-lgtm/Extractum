@@ -48,6 +48,7 @@ describe("analysis route run companion wiring", () => {
     expect(analysisPageSource).toContain('changeCompanionTab("evidence")');
     expect(analysisPageSource).toContain("async function showSelectedTraceInSource");
     expect(analysisPageSource).toContain("evidenceSourceActionDecision");
+    expect(analysisPageSource).toContain("snapshotProbeState: runSnapshotProbeState");
     expect(analysisPageSource).toContain('type: "show_evidence_in_source"');
     expect(analysisPageSource).toContain("canvasMode: decision.canvasMode");
     expect(analysisPageSource).toContain("sourceViewBasis: decision.sourceViewBasis");
@@ -65,6 +66,8 @@ describe("analysis route run companion wiring", () => {
 
     expect(analysisPageSource).toContain("submitRunQuestionFromCompanion");
     expect(analysisPageSource).toContain("chatAvailabilityForRun");
+    expect(analysisPageSource).toContain("snapshotProbeState: runSnapshotProbeState");
+    expect(analysisPageSource).toContain("snapshotProbeState={runSnapshotProbeState}");
     expect(analysisPageSource).toContain('type: "change_companion_tab"');
     expect(submitQuestion).toContain('changeCompanionTab("chat")');
     expect(submitQuestion).not.toContain('companionTab: "chat"');

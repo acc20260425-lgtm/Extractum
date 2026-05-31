@@ -46,6 +46,15 @@ describe("analysis route report canvas wiring", () => {
     expect(analysisPageSource).not.toContain("listSourceItems({ runId");
   });
 
+  it("derives snapshot probe state and passes it into the report canvas", () => {
+    expect(analysisPageSource).toContain("snapshotProbeStateFromAvailability");
+    expect(analysisPageSource).toContain("const runSnapshotProbeState = $derived(");
+    expect(analysisPageSource).toContain("snapshotAvailability: runSnapshotAvailability");
+    expect(analysisPageSource).toContain("{loadingRunSnapshotMessages}");
+    expect(analysisPageSource).toContain("{runSnapshotError}");
+    expect(analysisPageSource).toContain("snapshotProbeState={runSnapshotProbeState}");
+  });
+
   it("does not switch back to snapshot automatically when the user explicitly views live source", () => {
     expect(analysisPageSource).toContain("lastSnapshotLoadKey");
     expect(analysisPageSource).toContain('workspaceUiState.sourceViewBasis === "run_snapshot"');

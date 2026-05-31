@@ -652,7 +652,7 @@ Expected: commit succeeds on `saved-runs-missing-capture-affordances`.
 - Modify: `src/lib/analysis-run-companion-route.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-missing-capture-affordances-implementation.md`
 
-- [ ] **Step 1: Write failing route contract tests**
+- [x] **Step 1: Write failing route contract tests**
 
 In `src/lib/analysis-report-canvas-route.test.ts`, add this test:
 
@@ -674,7 +674,7 @@ In `src/lib/analysis-run-companion-route.test.ts`, add assertions to the existin
     expect(analysisPageSource).toContain("snapshotProbeState={runSnapshotProbeState}");
 ```
 
-- [ ] **Step 2: Run route contract tests and verify failure**
+- [x] **Step 2: Run route contract tests and verify failure**
 
 Run:
 
@@ -684,7 +684,7 @@ npm.cmd run test -- src/lib/analysis-report-canvas-route.test.ts src/lib/analysi
 
 Expected: FAIL because the route has not imported `snapshotProbeStateFromAvailability` or passed `snapshotProbeState`.
 
-- [ ] **Step 3: Import and derive route probe state**
+- [x] **Step 3: Import and derive route probe state**
 
 In `src/routes/analysis/+page.svelte`, add:
 
@@ -726,7 +726,7 @@ In the `<RunCompanionTabs>` call, add:
       snapshotProbeState={runSnapshotProbeState}
 ```
 
-- [ ] **Step 4: Accept and pass the prop through `ReportCanvas`**
+- [x] **Step 4: Accept and pass the prop through `ReportCanvas`**
 
 In `src/lib/components/analysis/report-canvas.svelte`, import the type:
 
@@ -752,7 +752,7 @@ Pass it to `ReportSourceSurface`:
       {snapshotProbeState}
 ```
 
-- [ ] **Step 5: Accept and pass the prop through `RunCompanionTabs`**
+- [x] **Step 5: Accept and pass the prop through `RunCompanionTabs`**
 
 In `src/lib/components/analysis/run-companion-tabs.svelte`, import the type:
 
@@ -772,7 +772,7 @@ Pass it to `RunEvidenceTab`:
         {snapshotProbeState}
 ```
 
-- [ ] **Step 6: Run route contract tests**
+- [x] **Step 6: Run route contract tests**
 
 Run:
 
@@ -782,7 +782,7 @@ npm.cmd run test -- src/lib/analysis-report-canvas-route.test.ts src/lib/analysi
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit route probe wiring**
+- [x] **Step 7: Commit route probe wiring**
 
 Run:
 

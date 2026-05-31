@@ -7,6 +7,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import type { ChatAvailability, CompanionRunsFilterState } from "$lib/analysis-run-companion-state";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
+  import type { SnapshotProbeState } from "$lib/analysis-run-snapshot-affordance";
   import type { CompanionTab, WorkspaceSelection } from "$lib/analysis-workspace-state";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
@@ -22,6 +23,7 @@
     companionTab,
     currentRun,
     snapshotAvailability,
+    snapshotProbeState,
     chatAvailability,
     traceData,
     selectedTraceRef,
@@ -69,6 +71,7 @@
     companionTab: CompanionTab;
     currentRun: AnalysisRunDetail | null;
     snapshotAvailability: RunSnapshotAvailability;
+    snapshotProbeState: SnapshotProbeState;
     chatAvailability: ChatAvailability;
     traceData: AnalysisTraceData;
     selectedTraceRef: string | null;
@@ -175,6 +178,7 @@
         {selectedTraceRef}
         {selectedTrace}
         {snapshotAvailability}
+        {snapshotProbeState}
         {formatTimestamp}
         {traceRefOrigin}
         onSelectTraceRef={onSelectTraceRef}

@@ -18,6 +18,7 @@
   } from "$lib/analysis-workspace-state";
   import type { ChatAvailability } from "$lib/analysis-run-companion-state";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
+  import type { SnapshotProbeState } from "$lib/analysis-run-snapshot-affordance";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type {
     AnalysisGroupSourceType,
@@ -65,6 +66,7 @@
     canvasMode,
     sourceViewBasis,
     runSnapshotAvailability,
+    snapshotProbeState,
     runSnapshotMessages,
     loadingRunSnapshotMessages,
     runSnapshotError,
@@ -214,6 +216,7 @@
     canvasMode: CanvasMode;
     sourceViewBasis: SourceViewBasis;
     runSnapshotAvailability: RunSnapshotAvailability;
+    snapshotProbeState: SnapshotProbeState;
     runSnapshotMessages: AnalysisRunMessage[];
     loadingRunSnapshotMessages: boolean;
     runSnapshotError: string;
@@ -471,6 +474,7 @@
         {currentRun}
         {sourceViewBasis}
         snapshotAvailability={runSnapshotAvailability}
+        {snapshotProbeState}
         {traceRefCount}
         {activePhase}
         {activeProgress}
@@ -558,6 +562,7 @@
       {currentRun}
       {sourceViewBasis}
       snapshotAvailability={runSnapshotAvailability}
+      {snapshotProbeState}
       {runSnapshotMessages}
       {loadingRunSnapshotMessages}
       {runSnapshotError}

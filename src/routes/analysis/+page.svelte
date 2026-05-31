@@ -182,6 +182,7 @@
     runSnapshotAvailabilityFromPage,
     type RunSnapshotAvailability,
   } from "$lib/analysis-report-canvas-state";
+  import { snapshotProbeStateFromAvailability } from "$lib/analysis-run-snapshot-affordance";
   import {
     chatAvailabilityForRun,
     evidenceSourceActionDecision,
@@ -830,9 +831,16 @@
     traceData.refs,
   ));
 
+  const runSnapshotProbeState = $derived(snapshotProbeStateFromAvailability({
+    snapshotAvailability: runSnapshotAvailability,
+    loadingRunSnapshotMessages,
+    runSnapshotError,
+  }));
+
   const chatAvailability = $derived(chatAvailabilityForRun({
     currentRun,
     snapshotAvailability: runSnapshotAvailability,
+    snapshotProbeState: runSnapshotProbeState,
   }));
 
   const currentScopeHasSavedRuns = $derived.by(() => hasSavedRunsForWorkspace({
@@ -1382,6 +1390,7 @@
       currentRun,
       selectedTrace: trace,
       snapshotAvailability: runSnapshotAvailability,
+      snapshotProbeState: runSnapshotProbeState,
     });
 
     if (decision.kind === "unavailable") {
@@ -1408,6 +1417,7 @@
     const availability = chatAvailabilityForRun({
       currentRun,
       snapshotAvailability: runSnapshotAvailability,
+      snapshotProbeState: runSnapshotProbeState,
     });
 
     if (!availability.enabled) {
@@ -2664,6 +2674,7 @@
     canvasMode={workspaceUiState.canvasMode}
     sourceViewBasis={workspaceUiState.sourceViewBasis}
     {runSnapshotAvailability}
+    snapshotProbeState={runSnapshotProbeState}
     {runSnapshotMessages}
     {loadingRunSnapshotMessages}
     {runSnapshotError}
@@ -2813,6 +2824,7 @@
       companionTab={workspaceUiState.companionTab}
       {currentRun}
       snapshotAvailability={runSnapshotAvailability}
+      snapshotProbeState={runSnapshotProbeState}
       {chatAvailability}
       {traceData}
       {selectedTraceRef}
