@@ -385,11 +385,31 @@
     currentSource ? sourceCapabilities(currentSource).contentLabel : "items",
   );
   const showNotebookLmExport = $derived(currentSource !== null || currentGroup !== null);
-  const sourceGroupNotebookLmExportReason = "Source-group NotebookLM export is not implemented yet.";
+  const youtubeSourceGroupNotebookLmExportReason =
+    "YouTube source-group NotebookLM export is not implemented yet.";
   const notebookLmExportDisabledReason = $derived(
-    currentGroup && !currentSource ? sourceGroupNotebookLmExportReason : null,
+    currentGroup && !currentSource && currentGroup.source_type !== "telegram"
+      ? youtubeSourceGroupNotebookLmExportReason
+      : null,
   );
-  const canExportNotebookLm = $derived(currentSource !== null && !exportingNotebookLm);
+  const canExportNotebookLm = $derived(
+    !exportingNotebookLm
+      && (currentSource !== null || currentGroup?.source_type === "telegram"),
+  );
+  const notebookLmExportTargetLabel = $derived(
+    currentSource
+      ? (currentSource.title ?? currentSource.externalId)
+      : currentGroup
+        ? currentGroup.name
+        : "",
+  );
+  const notebookLmExportTargetDescription = $derived(
+    currentSource
+      ? `Prepare Markdown files for ${currentSource.title ?? currentSource.externalId}.`
+      : currentGroup
+        ? `Prepare Markdown files for ${currentGroup.name} (${currentGroup.members.length} sources).`
+        : "",
+  );
 </script>
 
 <section class="report-canvas" data-smoke-id="analysis-report-canvas">
@@ -641,8 +661,10 @@
 
   <NotebookLmExportDialog
     open={exportDialogOpen}
-    source={currentSource}
+    targetLabel={notebookLmExportTargetLabel}
+    targetDescription={notebookLmExportTargetDescription}
     form={notebookLmExportForm}
+    canIncludeMigratedHistory={canIncludeMigratedHistory}
     exporting={exportingNotebookLm}
     result={notebookLmExportResult}
     progress={notebookLmExportProgress}

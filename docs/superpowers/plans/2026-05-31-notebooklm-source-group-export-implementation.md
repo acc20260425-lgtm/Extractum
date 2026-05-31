@@ -1769,7 +1769,7 @@ git commit -m "feat: build notebooklm export group requests"
 - Modify: `src/lib/analysis-report-canvas.test.ts`
 - Modify: `src/lib/analysis-ui-smoke-contract.test.ts`
 
-- [ ] **Step 1: Write failing raw component contract tests**
+- [x] **Step 1: Write failing raw component contract tests**
 
 In `src/lib/analysis-report-canvas.test.ts`, update the NotebookLM availability test:
 
@@ -1804,7 +1804,7 @@ In `src/lib/analysis-ui-smoke-contract.test.ts`, replace the old generic disable
 expect(reportCanvasSource).toContain("YouTube source-group NotebookLM export is not implemented yet.");
 ```
 
-- [ ] **Step 2: Run raw frontend contract tests and verify failure**
+- [x] **Step 2: Run raw frontend contract tests and verify failure**
 
 Run:
 
@@ -1814,7 +1814,7 @@ npm.cmd run test -- src/lib/analysis-report-canvas.test.ts src/lib/analysis-ui-s
 
 Expected: FAIL because UI still uses the generic source-group disabled reason and source-only dialog props.
 
-- [ ] **Step 3: Make dialog target-neutral**
+- [x] **Step 3: Make dialog target-neutral**
 
 In `src/lib/components/analysis/notebooklm-export-dialog.svelte`, remove the `Source` type import if it is no longer used, and change props:
 
@@ -1874,7 +1874,7 @@ Change export button disabled state:
 <Button onclick={onExport} disabled={exporting || !targetLabel || !form.outputDir.trim()}>
 ```
 
-- [ ] **Step 4: Enable Telegram groups in ReportCanvas**
+- [x] **Step 4: Enable Telegram groups in ReportCanvas**
 
 In `src/lib/components/analysis/report-canvas.svelte`, replace the current constants:
 
@@ -1928,7 +1928,7 @@ Pass new dialog props:
 
 Do not leave the old `source={currentSource}` prop on `NotebookLmExportDialog`.
 
-- [ ] **Step 5: Update route export scope**
+- [x] **Step 5: Update route export scope**
 
 In `src/routes/analysis/+page.svelte`, update `exportNotebookLm()` around request construction:
 
@@ -1954,7 +1954,7 @@ const request = notebookLmExportRequestFromForm(exportId, scope, notebookLmExpor
 
 Keep folder validation unchanged.
 
-- [ ] **Step 6: Run frontend tests**
+- [x] **Step 6: Run frontend tests**
 
 Run:
 
@@ -1964,7 +1964,7 @@ npm.cmd run test -- src/lib/analysis-state.test.ts src/lib/analysis-report-canva
 
 Expected: PASS.
 
-- [ ] **Step 7: Run Svelte check**
+- [x] **Step 7: Run Svelte check**
 
 Run:
 
@@ -1974,7 +1974,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 7**
+- [x] **Step 8: Commit Task 7**
 
 ```powershell
 git add src/lib/components/analysis/notebooklm-export-dialog.svelte src/lib/components/analysis/report-canvas.svelte src/routes/analysis/+page.svelte src/lib/analysis-report-canvas.test.ts src/lib/analysis-ui-smoke-contract.test.ts

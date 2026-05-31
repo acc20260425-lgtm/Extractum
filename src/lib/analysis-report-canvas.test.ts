@@ -174,20 +174,23 @@ describe("report canvas component contract", () => {
     expect(reportWorkspaceToolsSource).toContain("Edit groups");
   });
 
-  it("derives NotebookLM export availability from live canvas source or group", () => {
+  it("derives NotebookLM export availability from live canvas source or Telegram group", () => {
     expect(reportCanvasSource).toContain("showNotebookLmExport");
     expect(reportCanvasSource).toContain("currentSource !== null || currentGroup !== null");
     expect(reportCanvasSource).toContain("canExportNotebookLm");
-    expect(reportCanvasSource).toContain("currentSource !== null && !exportingNotebookLm");
-    expect(reportCanvasSource).toContain("currentGroup && !currentSource ? sourceGroupNotebookLmExportReason : null");
-    expect(reportCanvasSource).toContain("Source-group NotebookLM export is not implemented yet.");
-    expect(reportCanvasSource).toContain("<ReportWorkspaceTools");
-    expect(reportCanvasSource).toContain("{showNotebookLmExport}");
-    expect(reportCanvasSource).toContain("{canExportNotebookLm}");
-    expect(reportCanvasSource).toContain("exportDisabledReason={notebookLmExportDisabledReason}");
+    expect(reportCanvasSource).toContain('currentGroup?.source_type === "telegram"');
+    expect(reportCanvasSource).toContain("youtubeSourceGroupNotebookLmExportReason");
+    expect(reportCanvasSource).toContain("YouTube source-group NotebookLM export is not implemented yet.");
+    expect(reportCanvasSource).toContain("notebookLmExportTargetLabel");
+    expect(reportCanvasSource).toContain("canIncludeMigratedHistory={canIncludeMigratedHistory}");
     expect(reportCanvasSource).toContain("<NotebookLmExportDialog");
     expect(reportCanvasSource.match(/<NotebookLmExportDialog/g)?.length ?? 0).toBe(1);
-    expect(reportCanvasSource).toContain("source={currentSource}");
+  });
+
+  it("submits NotebookLM export for either current source or current source group", () => {
+    expect(analysisPageSource).toContain('kind: "source_group"');
+    expect(analysisPageSource).toContain("sourceGroupId: group.id");
+    expect(analysisPageSource).toContain("notebookLmExportRequestFromForm(exportId, scope, notebookLmExportForm)");
   });
 
   it("passes transient evidence highlight tokens from route to source surfaces", () => {

@@ -2686,8 +2686,14 @@
 
   async function exportNotebookLm() {
     const source = currentSource();
-    if (!source) {
-      status = "Select a source before exporting.";
+    const group = currentGroup();
+    const scope = source
+      ? { kind: "source" as const, sourceId: source.id }
+      : group
+        ? { kind: "source_group" as const, sourceGroupId: group.id }
+        : null;
+    if (!scope) {
+      status = "Select a source or source group before exporting.";
       return;
     }
     if (!notebookLmExportForm.outputDir.trim()) {
@@ -2701,7 +2707,7 @@
     activeNotebookLmExportId = exportId;
     notebookLmExportProgress = notebookLmExportInitialProgress();
     try {
-      const request = notebookLmExportRequestFromForm(exportId, source.id, notebookLmExportForm);
+      const request = notebookLmExportRequestFromForm(exportId, scope, notebookLmExportForm);
 
       const result = await exportSourceToNotebookLm(request);
       notebookLmExportResult = result;

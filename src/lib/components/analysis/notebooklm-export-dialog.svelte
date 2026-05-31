@@ -7,7 +7,6 @@
   import type {
     NotebookLmExportEvent,
     NotebookLmExportResult,
-    Source,
   } from "$lib/types/sources";
 
   export type NotebookLmExportRange = "entire_history" | "analysis_period";
@@ -34,7 +33,9 @@
 
   let {
     open,
-    source,
+    targetLabel,
+    targetDescription,
+    canIncludeMigratedHistory,
     form,
     exporting,
     progress,
@@ -45,7 +46,9 @@
     onChangeForm,
   }: {
     open: boolean;
-    source: Source | null;
+    targetLabel: string;
+    targetDescription: string;
+    canIncludeMigratedHistory: boolean;
     form: NotebookLmExportForm;
     exporting: boolean;
     progress: NotebookLmExportProgressState | null;
@@ -107,7 +110,7 @@
 <DesktopDialog
   {open}
   title="Export for NotebookLM"
-  description={source ? `Prepare Markdown files for ${source.title ?? source.externalId}.` : ""}
+  description={targetDescription}
   width="44rem"
   smokeId="notebooklm-export-dialog"
   onClose={onClose}
@@ -206,7 +209,7 @@
         disabled={exporting}
         onchange={(event) => updateForm({ includeMediaPlaceholders: (event.currentTarget as HTMLInputElement).checked })}
       />
-      {#if source?.sourceType === "telegram" && source.migratedHistoryRowCount > 0}
+      {#if canIncludeMigratedHistory}
         <CheckboxRow
           title="Include migrated historical scope"
           description="Export current and migrated history as separate sections."
@@ -260,7 +263,7 @@
       <Button variant="ghost" onclick={onClose} disabled={exporting}>
         <X size={15} aria-hidden="true" /> Close
       </Button>
-      <Button onclick={onExport} disabled={exporting || !source || !form.outputDir.trim()}>
+      <Button onclick={onExport} disabled={exporting || !targetLabel || !form.outputDir.trim()}>
         <Download size={15} aria-hidden="true" />
         {exporting ? "Exporting..." : "Export"}
       </Button>

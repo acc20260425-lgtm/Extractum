@@ -120,6 +120,7 @@ describe("analysis UI smoke harness contract", () => {
     expect(reportWorkspaceToolsSource).toContain("ariaDescribedby={exportDisabledReason ? exportReasonId : undefined}");
     expect(reportWorkspaceToolsSource).toContain("id={exportReasonId}");
     expect(reportWorkspaceToolsSource).toContain('data-smoke-id="notebooklm-export-disabled-reason"');
+    expect(reportCanvasSource).toContain("YouTube source-group NotebookLM export is not implemented yet.");
   });
 
   it("renders smoke hooks only for stable analysis UI contracts", () => {
