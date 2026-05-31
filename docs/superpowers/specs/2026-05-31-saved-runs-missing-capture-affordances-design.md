@@ -73,6 +73,76 @@ The helper returns display-ready UI decisions such as:
 Components should render these decisions instead of duplicating snapshot-state
 wording inline.
 
+The helper should return most user-facing copy, not only a state enum. Component
+code may choose where to place returned strings, but it should not locally
+invent alternate explanations for the same degraded state.
+
+## Helper Contract
+
+The implementation should define a concrete helper contract before wiring UI
+components. The expected shape is:
+
+```ts
+export type SnapshotAffordanceSurface =
+  | "runs-row"
+  | "opened-header"
+  | "run-details"
+  | "source-tab"
+  | "evidence-tab"
+  | "chat-tab";
+
+export type SnapshotAffordanceState =
+  | "available"
+  | "legacy_missing"
+  | "capture_failed_with_error"
+  | "not_captured_before_terminal"
+  | "capture_failed_without_error_unknown"
+  | "inconsistent"
+  | "checking"
+  | "pending"
+  | "unknown";
+
+export type SnapshotAffordanceSeverity =
+  | "none"
+  | "info"
+  | "warning"
+  | "error";
+
+export type SnapshotProbeState =
+  | "available"
+  | "unavailable"
+  | "error"
+  | "loading"
+  | "unknown";
+
+export interface SnapshotAffordance {
+  state: SnapshotAffordanceState;
+  severity: SnapshotAffordanceSeverity;
+  compactLabel: string | null;
+  badgeVariant: "neutral" | "info" | "warning" | "danger" | null;
+  headerWarning: string | null;
+  detailTitle: string | null;
+  detailDescription: string | null;
+  disabledReason: string | null;
+  sanitizedError: string | null;
+}
+```
+
+`SnapshotProbeState` is intentionally richer than the existing
+`snapshotAvailability` value. The route already tracks enough information to
+distinguish:
+
+- rows are available;
+- probing completed and found no rows;
+- probing failed with an error;
+- probing is loading;
+- probing has not run yet.
+
+The helper input can derive this from `snapshotAvailability`,
+`loadingRunSnapshotMessages`, and `runSnapshotError`, or from an equivalent
+route-owned value. The key contract is that `unavailable` and `error` remain
+distinct when producing copy.
+
 ## State Semantics
 
 The helper should use these priority rules:
@@ -83,35 +153,63 @@ The helper should use these priority rules:
 2. If `snapshot_state === "missing_legacy"`, show legacy-specific copy:
    `Legacy run has no saved snapshot`.
 3. If `snapshot_state === "capture_failed"` and `snapshot_error` is present,
-   show `Snapshot capture failed` and expose the sanitized error in details.
-4. If `snapshot_state === "capture_failed"` without `snapshot_error`, especially
-   for failed or cancelled runs, show softer copy:
-   `Snapshot was not captured before the run ended`.
-5. If `snapshot_state === "captured"` but the probe reports unavailable rows,
+   derive `capture_failed_with_error`, show `Snapshot capture failed`, and
+   expose the sanitized error in details.
+4. If `snapshot_state === "capture_failed"` without `snapshot_error` on a
+   failed or cancelled terminal run, derive `not_captured_before_terminal` and
+   show softer copy: `Snapshot was not captured before the run ended`.
+5. If `snapshot_state === "capture_failed"` without `snapshot_error` on a run
+   whose terminal-before-capture cause cannot be derived, derive
+   `capture_failed_without_error_unknown`. UI copy may stay soft, but tests
+   should preserve this internal distinction.
+6. If `snapshot_state === "captured"` but the probe reports unavailable rows,
    show an integrity-style unavailable message:
    `Snapshot is marked captured, but saved rows are unavailable`.
-6. If the run is active or the probe is still unknown/loading, preserve the
+7. If `snapshot_state === "captured"` but the probe failed with an error, do
+   not claim rows are missing. Say that the saved snapshot could not be
+   verified.
+8. If the run is active or the probe is still unknown/loading, preserve the
    existing checking/pending semantics.
 
 These labels are user-facing wording constraints, not necessarily exact final
 strings. Implementation may tune grammar to fit each surface, but it must keep
 the distinctions above.
 
+### Null Snapshot State Matrix
+
+`snapshot_state === null` should be handled explicitly instead of left to each
+component:
+
+| Case | Behavior |
+| --- | --- |
+| active run + `snapshot_state: null` | pending/checking; no degraded Runs badge |
+| completed run + `snapshot_state: null` + available probe | available wins |
+| completed run + `snapshot_state: null` + unavailable probe | unknown unavailable/not captured copy; do not call it legacy |
+| completed run + `snapshot_state: null` + probe error | cannot verify saved snapshot copy |
+| failed/cancelled + `snapshot_state: null` + unavailable probe | not captured before run ended |
+| failed/cancelled + `snapshot_state: null` + available probe | available wins |
+| unknown/loading probe | checking/pending copy |
+
 ## UI Behavior
 
 ### Runs Tab
 
-Each saved-run row gets a compact snapshot badge next to the existing status and
-kind badges.
+Saved-run rows should visibly identify degraded snapshot states next to the
+existing status and kind badges.
 
 Expected states:
 
-- normal captured/available: `Snapshot available`;
+- normal captured/available: `Snapshot available` only if the final row layout
+  still has enough room and the badge does not create visual noise;
 - `missing_legacy`: `Legacy snapshot missing`;
 - `capture_failed` with error: `Snapshot capture failed`;
 - `capture_failed` without error: `Snapshot not captured`;
 - active or unknown snapshot state: no noisy degraded badge unless an existing
   pending/checking badge is already useful.
+
+The required behavior is degraded-state visibility. A badge for normal
+available snapshots is optional and should be omitted if the Runs row becomes
+too dense.
 
 No new filters or cleanup controls are added.
 
@@ -186,9 +284,22 @@ If `snapshot_error` is present, display it only where details are expected,
 primarily opened-run details and the Source tab. Do not repeat long error text
 in every tab.
 
-If row probing itself fails, the current unavailable/error path remains valid,
-but the copy should prefer the shared captured-marker/integrity wording when the
-run claims `captured`.
+Surface-specific `snapshot_error` rules:
+
+- Runs row: never show the sanitized error text; show only the compact degraded
+  badge.
+- Header warning: never show long error text.
+- Run details: show sanitized error text.
+- Source tab unavailable state: may show sanitized error text, preferably in a
+  details/collapsible area or otherwise visually secondary copy.
+- Evidence disabled reason: do not show long error text.
+- Chat disabled copy: do not show long error text.
+
+If row probing succeeds and finds no rows, use unavailable-row copy. If row
+probing fails, use verification-failed copy. For `captured + probe error`, say
+the saved snapshot could not be verified. For `captured + unavailable`, use the
+integrity-style message that the run is marked captured but saved rows are
+unavailable.
 
 ## Testing
 
@@ -197,9 +308,14 @@ Add focused Vitest coverage for the pure helper:
 - captured/available snapshot;
 - `missing_legacy`;
 - `capture_failed` with `snapshot_error`;
-- `capture_failed` without `snapshot_error`;
+- `capture_failed` without `snapshot_error` as
+  `not_captured_before_terminal`;
+- `capture_failed` without `snapshot_error` as
+  `capture_failed_without_error_unknown`;
 - failed/cancelled run that ended before capture;
 - `captured` marker with unavailable rows;
+- `captured` marker with probe error;
+- `snapshot_state === null` matrix cases;
 - active/checking/pending cases.
 
 Update existing analysis state/component source-contract tests as needed:
