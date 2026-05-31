@@ -97,20 +97,31 @@ The existing `evidenceSourceActionDecision` remains the source of truth:
 `TracePanel` keeps selecting refs through `onSelectTraceRef(ref)` and invoking
 `onShowInSource()` for the selected ref.
 
-The route should track a source return context separately from durable trace
-selection:
+The route should track source scope and return context separately from durable
+trace selection:
 
 ```ts
+type EvidenceSourceScope =
+  | { kind: "source"; sourceId: number }
+  | { kind: "group_member"; groupId: number; sourceId: number };
+
 type SourceReturnContext =
   | {
       kind: "evidence";
       runId: number;
-      sourceId: number;
+      sourceScope: EvidenceSourceScope;
       sourceViewBasis: "run_snapshot" | "live_source";
       traceRef: string;
     }
   | null;
 ```
+
+Single-source runs use `{ kind: "source", sourceId }`. Source-group runs use
+`{ kind: "group_member", groupId, sourceId }`, where `groupId` is the opened
+run/source-group context and `sourceId` is the member source that owns the trace.
+This prevents return/highlight state for a member source from remaining valid
+after the user moves to a different source or another group context that happens
+to contain the same source id.
 
 This context is created only by Evidence `Show in source`. It is cleared when
 the opened run changes, the selected source/source group changes, the selected
@@ -129,21 +140,41 @@ Workspace events for this slice should use explicit names:
 Do not use a generic `back` event name for both evidence-return and source-basis
 switching. They are visually and semantically different actions.
 
+The route should also track the focused load request explicitly:
+
+```ts
+type PendingEvidenceSourceFocus = {
+  requestId: string;
+  runId: number;
+  sourceScope: EvidenceSourceScope;
+  sourceViewBasis: "run_snapshot" | "live_source";
+  traceRef: string;
+};
+```
+
+The request id is created before the focused load starts. The route applies the
+loaded page/items and creates `transientSourceHighlight` only if the pending
+request still matches current route state: opened run, source scope, source
+basis, and selected trace ref. Stale focused loads are discarded and must not
+set highlight state.
+
 The route handles the jump:
 
 1. compute `evidenceSourceActionDecision`;
 2. compute the canonical navigation ref;
-3. set `selectedTraceRef` to that canonical ref;
-4. set `sourceReturnContext`;
-5. dispatch `show_evidence_in_source`;
-6. load the focused source page for the decision:
+3. derive `sourceScope` from the opened run/workspace context and trace source;
+4. set `selectedTraceRef` to that canonical ref;
+5. set `sourceReturnContext`;
+6. create `PendingEvidenceSourceFocus`;
+7. dispatch `show_evidence_in_source`;
+8. load the focused source page for the decision:
    - snapshot: `listAnalysisRunMessages({ runId, after: null, limit, sourceId,
      aroundRef: canonicalTraceRef })`;
    - live Telegram/source items: `listSourceItems({ sourceId, aroundItemId:
      trace.item_id, ... })`;
    - live YouTube transcript: `listYoutubeTranscriptSegments({ sourceId,
-     aroundStartMs: trace.youtube_timestamp_seconds * 1000, ... })`;
-7. after the successful focused load has been applied to route state, set
+     aroundStartMs: Math.round(trace.youtube_timestamp_seconds * 1000), ... })`;
+9. after the successful focused load has been applied to route state, set
    `transientSourceHighlight` and pass it to `ReportSourceSurface` and reader
    components.
 
@@ -169,7 +200,7 @@ type EvidenceHighlightToken = {
   tokenId: string;
   kind: "evidence";
   runId: number;
-  sourceId: number;
+  sourceScope: EvidenceSourceScope;
   sourceViewBasis: "run_snapshot" | "live_source";
   traceRef: string;
   createdAt: number;
@@ -177,10 +208,33 @@ type EvidenceHighlightToken = {
 ```
 
 Readers should receive the token only when it matches the current opened run,
-source id, source basis, and selected trace ref. The route clears the token
+source scope, source basis, and selected trace ref. The route clears the token
 after the reader has had a chance to render and animate, and it also clears the
 token when the selected trace changes, the opened run changes, the user changes
 source basis/source selection, or a stale focused load completes.
+
+## Trace Target Mapping
+
+Focused loading must be explicit about which trace refs can map to source rows:
+
+- Run snapshot source basis uses `aroundRef` for the canonical trace ref. This
+  applies to Telegram messages, YouTube transcript rows, comments/generic rows,
+  and other saved snapshot rows because the frozen snapshot stores refs directly.
+- Live Telegram rows, YouTube comments, and generic source-item refs use
+  `listSourceItems({ aroundItemId: trace.item_id })` when `trace.item_id > 0`.
+- Live YouTube transcript refs use `listYoutubeTranscriptSegments` with
+  `aroundStartMs = Math.round(trace.youtube_timestamp_seconds * 1000)` after
+  verifying `youtube_timestamp_seconds` is finite. The command input must be an
+  integer number of milliseconds; do not pass float milliseconds to the backend.
+- Synthetic refs such as YouTube description evidence, or any ref that lacks a
+  usable item id/timestamp for the selected source basis, are unsupported for
+  live load-around in this slice. If a saved snapshot basis is unavailable and
+  the selected trace target is unsupported live, `Show in source` should be
+  unavailable or degrade gracefully with no focused highlight. It must not call
+  live item loading with `item_id = 0` or fabricate a row.
+- If a trace's source type is unknown to the current reader mapping, the route
+  should keep the evidence selected, surface a concise unavailable status, and
+  avoid changing source data.
 
 ## Highlight Timing
 
@@ -220,7 +274,7 @@ shape:
 - existing loading and `onLoadMore` props unchanged.
 
 Components should only apply the strong transient highlight when the token
-matches the item/group ref and source id currently being rendered. A matching
+matches the item/group ref and source scope currently being rendered. A matching
 highlighted row/group should expose a stable class or data attribute so tests
 can assert the contract without depending on CSS internals.
 
@@ -240,8 +294,7 @@ Source mode should show `Back to evidence` only when:
 - `sourceReturnContext.kind === "evidence"`;
 - `sourceReturnContext.runId === currentRun.id`;
 - `sourceReturnContext.traceRef === selectedTraceRef`;
-- the current source or focused group member still matches
-  `sourceReturnContext.sourceId`;
+- the current source scope still matches `sourceReturnContext.sourceScope`;
 - the current source basis still matches `sourceReturnContext.sourceViewBasis`.
 
 Activating it should:
@@ -304,6 +357,13 @@ Implementation should use targeted tests:
   `aroundRef`, `aroundItemId`, and `aroundStartMs`;
 - route/component tests proving the canonical ref is shared by durable
   selection, focused snapshot loading, highlight token, and return context;
+- pure route tests proving source-group returns validate both group id and
+  member source id through `sourceScope`;
+- route tests for trace target mapping:
+  snapshot `aroundRef`, live item/comment `aroundItemId`, transcript integer
+  `aroundStartMs`, and unsupported synthetic/no-item refs;
+- route tests proving stale focused loads do not apply page/items or highlight
+  when their `requestId` no longer matches current route state;
 - component tests or raw contracts proving reader components accept and render a
   scoped transient highlight token separately from durable selection;
 - tests for successful focused loads that omit the target ref: no fake row, no
@@ -327,7 +387,15 @@ the existing deterministic smoke harness.
   paging APIs.
 - The selected evidence row/group receives a temporary highlight that is
   visually distinct from normal selected state and scoped to the current run,
-  source id, source basis, and trace ref.
+  source scope, source basis, and trace ref.
+- Source-group evidence return/highlight validates both group id and member
+  source id.
+- YouTube transcript focus passes integer milliseconds derived with
+  `Math.round(trace.youtube_timestamp_seconds * 1000)`.
+- Unsupported live trace targets do not trigger invalid focused loads and do not
+  fabricate source rows.
+- Stale focused load responses do not apply page/items or highlight when their
+  request identity no longer matches current route state.
 - The highlight effect runs after focused page/items data is applied, consumes a
   token once, and does not replay on unrelated re-renders.
 - A successful focused load that does not contain the selected trace does not
