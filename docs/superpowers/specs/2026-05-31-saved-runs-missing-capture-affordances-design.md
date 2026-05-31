@@ -98,6 +98,7 @@ export type SnapshotAffordanceState =
   | "not_captured_before_terminal"
   | "capture_failed_without_error_unknown"
   | "inconsistent"
+  | "verification_failed"
   | "checking"
   | "pending"
   | "unknown";
@@ -115,6 +116,15 @@ export type SnapshotProbeState =
   | "loading"
   | "unknown";
 
+export interface SnapshotAffordanceInput {
+  snapshotState: "captured" | "missing_legacy" | "capture_failed" | null;
+  snapshotCapturedAt: string | null;
+  snapshotError: string | null;
+  probeState: SnapshotProbeState;
+  runStatus: "queued" | "running" | "completed" | "failed" | "cancelled" | string;
+  surface: SnapshotAffordanceSurface;
+}
+
 export interface SnapshotAffordance {
   state: SnapshotAffordanceState;
   severity: SnapshotAffordanceSeverity;
@@ -127,6 +137,20 @@ export interface SnapshotAffordance {
   sanitizedError: string | null;
 }
 ```
+
+The helper module should also expose or use explicit status predicates rather
+than open-coded string checks in components:
+
+```ts
+export function isActiveRunStatus(status: string): boolean;
+export function isTerminalRunStatus(status: string): boolean;
+```
+
+`isActiveRunStatus` covers `queued` and `running`.
+`isTerminalRunStatus` covers `completed`, `failed`, and `cancelled`. When a
+copy branch needs to distinguish successful completion from a run that ended
+before capture, it should still check the concrete status after using the
+terminal predicate.
 
 `SnapshotProbeState` is intentionally richer than the existing
 `snapshotAvailability` value. The route already tracks enough information to
@@ -165,9 +189,9 @@ The helper should use these priority rules:
 6. If `snapshot_state === "captured"` but the probe reports unavailable rows,
    show an integrity-style unavailable message:
    `Snapshot is marked captured, but saved rows are unavailable`.
-7. If `snapshot_state === "captured"` but the probe failed with an error, do
-   not claim rows are missing. Say that the saved snapshot could not be
-   verified.
+7. If `snapshot_state === "captured"` but the probe failed with an error, derive
+   `verification_failed`. Do not claim rows are missing. Say that the saved
+   snapshot could not be verified.
 8. If the run is active or the probe is still unknown/loading, preserve the
    existing checking/pending semantics.
 
@@ -185,7 +209,7 @@ component:
 | active run + `snapshot_state: null` | pending/checking; no degraded Runs badge |
 | completed run + `snapshot_state: null` + available probe | available wins |
 | completed run + `snapshot_state: null` + unavailable probe | unknown unavailable/not captured copy; do not call it legacy |
-| completed run + `snapshot_state: null` + probe error | cannot verify saved snapshot copy |
+| completed run + `snapshot_state: null` + probe error | `verification_failed`; cannot verify saved snapshot copy |
 | failed/cancelled + `snapshot_state: null` + unavailable probe | not captured before run ended |
 | failed/cancelled + `snapshot_state: null` + available probe | available wins |
 | unknown/loading probe | checking/pending copy |
@@ -314,8 +338,9 @@ Add focused Vitest coverage for the pure helper:
   `capture_failed_without_error_unknown`;
 - failed/cancelled run that ended before capture;
 - `captured` marker with unavailable rows;
-- `captured` marker with probe error;
+- `captured` marker with probe error as `verification_failed`;
 - `snapshot_state === null` matrix cases;
+- `isTerminalRunStatus` covers completed/failed/cancelled and excludes queued/running;
 - active/checking/pending cases.
 
 Update existing analysis state/component source-contract tests as needed:
