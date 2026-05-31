@@ -24,3 +24,6 @@ those degraded saved-run states.
 
 Evidence Source Navigation specs from 2026-05-31 record the shipped scoped
 Evidence to Source jump, focused load, one-shot highlight, and return workflow.
+
+Analysis Companion Width specs from 2026-05-31 record the shipped desktop
+companion column widening and Evidence container-query reflow.

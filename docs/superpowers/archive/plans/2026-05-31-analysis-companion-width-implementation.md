@@ -12,7 +12,7 @@
 
 ## Source Spec
 
-- `docs/superpowers/specs/2026-05-31-analysis-companion-width-design.md`
+- `docs/superpowers/archive/specs/2026-05-31-analysis-companion-width-design.md`
 
 ## Files
 

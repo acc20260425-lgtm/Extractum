@@ -1,7 +1,26 @@
 # Analysis Companion Width Design
 
 Date: 2026-05-31
-Status: ready for review
+Status: shipped on `main`
+
+## Implementation Notes
+
+Implemented in `src/routes/analysis/+page.svelte`,
+`src/lib/components/analysis/run-evidence-tab.svelte`, and
+`src/lib/components/analysis/trace-panel.svelte`.
+
+The shipped desktop workspace grid uses:
+
+```css
+grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.45fr) minmax(420px, clamp(480px, 30vw, 560px));
+```
+
+The shipped Evidence container threshold is `33rem`, not the originally
+proposed `34rem`. Tauri MCP verification showed the widened 560px companion
+panel gives `.run-evidence-tab` about 529px of content width after panel
+padding, so `34rem` did not activate the intended wide-desktop two-column
+Evidence layout. The `33rem` threshold keeps the minimum two-column shape
+readable while allowing the wide desktop case to use the available space.
 
 ## Context
 
@@ -106,14 +125,14 @@ The preferred implementation is a container query on the Evidence tab root:
   container-type: inline-size;
 }
 
-@container (min-width: 34rem) {
+@container (min-width: 33rem) {
   .trace-layout {
     grid-template-columns: minmax(12rem, 0.9fr) minmax(16rem, 1.1fr);
   }
 }
 ```
 
-The `34rem` threshold is intentionally tied to the minimum two-column shape:
+The shipped `33rem` threshold is tied to the minimum two-column shape:
 `12rem` for the trace list, `16rem` for details, plus the existing layout gap and
 a little breathing room. If the implementation changes the gap, it should keep
 the threshold high enough that both columns remain readable.

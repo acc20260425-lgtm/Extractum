@@ -20,3 +20,7 @@ those states.
 Evidence Source Navigation plans from 2026-05-31 record the shipped Evidence
 to Source jump, focused load, one-shot highlight, and `Back to evidence`
 workflow.
+
+Analysis Companion Width plans from 2026-05-31 record the shipped desktop
+companion widening, Evidence container-query threshold tuning, and viewport
+verification.
