@@ -32,7 +32,7 @@ describe("analysis route report canvas wiring", () => {
     expect(analysisPageSource).toContain("onViewLiveSource={() =>");
     expect(analysisPageSource).toContain('type: "view_live_source_for_opened_run"');
     expect(analysisPageSource).toContain("onBackToRunSnapshot={() =>");
-    expect(analysisPageSource).toContain('type: "back_to_run_snapshot"');
+    expect(analysisPageSource).toContain('type: "switch_source_basis_to_run_snapshot"');
   });
 
   it("loads run snapshot messages through the snapshot-only API", () => {

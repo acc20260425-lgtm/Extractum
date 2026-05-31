@@ -241,24 +241,65 @@ describe("analysis-workspace-state", () => {
     });
   });
 
-  it("shows selected evidence in the source canvas through a transition event", () => {
+  it.each(["run_snapshot", "live_source"] as const)(
+    "shows selected evidence in the %s source canvas through a transition event",
+    (sourceViewBasis) => {
+      const next = transitionAnalysisWorkspaceState(baseState({
+        openRunState: { kind: "saved", runId: 42 },
+        canvasMode: "report",
+        sourceViewBasis: sourceViewBasis === "run_snapshot" ? "live_source" : "run_snapshot",
+        companionTab: "chat",
+      }), {
+        type: "show_evidence_in_source",
+        sourceViewBasis,
+        highlightedRef: "s7-i11",
+      });
+
+      expect(next).toMatchObject({
+        canvasMode: "source",
+        sourceViewBasis,
+        companionTab: "evidence",
+        selectedTraceRef: "s7-i11",
+      });
+    },
+  );
+
+  it("returns from source review to the evidence companion for the same trace when a run is open", () => {
     const next = transitionAnalysisWorkspaceState(baseState({
       openRunState: { kind: "saved", runId: 42 },
-      canvasMode: "report",
-      sourceViewBasis: "run_snapshot",
-      companionTab: "chat",
-    }), {
-      type: "show_evidence_in_source",
       canvasMode: "source",
       sourceViewBasis: "run_snapshot",
-      highlightedRef: "s7-i11",
+      companionTab: "chat",
+      selectedTraceRef: "s7-i11",
+    }), {
+      type: "return_to_evidence_review",
+      traceRef: "s7-i11",
     });
 
     expect(next).toMatchObject({
-      canvasMode: "source",
-      sourceViewBasis: "run_snapshot",
+      openRunState: { kind: "saved", runId: 42 },
+      canvasMode: "report",
       companionTab: "evidence",
       selectedTraceRef: "s7-i11",
+    });
+  });
+
+  it("keeps source mode when switching an opened run back to the snapshot basis", () => {
+    const current = baseState({
+      openRunState: { kind: "saved", runId: 42 },
+      canvasMode: "source",
+      sourceViewBasis: "live_source",
+      companionTab: "evidence",
+      selectedTraceRef: "s7-i11",
+    });
+
+    const next = transitionAnalysisWorkspaceState(current, {
+      type: "switch_source_basis_to_run_snapshot",
+    });
+
+    expect(next).toEqual({
+      ...current,
+      sourceViewBasis: "run_snapshot",
     });
   });
 
@@ -267,7 +308,7 @@ describe("analysis-workspace-state", () => {
       canvasMode: "report",
       sourceViewBasis: "live_source",
     }), {
-      type: "back_to_run_snapshot",
+      type: "switch_source_basis_to_run_snapshot",
     });
 
     expect(next).toMatchObject({

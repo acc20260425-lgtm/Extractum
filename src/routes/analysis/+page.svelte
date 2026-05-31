@@ -926,7 +926,18 @@
 
   function backToRunSnapshot() {
     dispatchWorkspaceEvent({
-      type: "back_to_run_snapshot",
+      type: "switch_source_basis_to_run_snapshot",
+    });
+  }
+
+  function returnToEvidenceReview(traceRef: string | null = selectedTraceRef) {
+    if (!traceRef) {
+      return;
+    }
+
+    dispatchWorkspaceEvent({
+      type: "return_to_evidence_review",
+      traceRef,
     });
   }
 
@@ -1401,7 +1412,6 @@
     selectedTraceRef = decision.highlightedRef;
     dispatchWorkspaceEvent({
       type: "show_evidence_in_source",
-      canvasMode: decision.canvasMode,
       sourceViewBasis: decision.sourceViewBasis,
       highlightedRef: decision.highlightedRef,
     });

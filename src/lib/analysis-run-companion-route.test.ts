@@ -50,12 +50,19 @@ describe("analysis route run companion wiring", () => {
     expect(analysisPageSource).toContain("evidenceSourceActionDecision");
     expect(analysisPageSource).toContain("snapshotProbeState: runSnapshotProbeState");
     expect(analysisPageSource).toContain('type: "show_evidence_in_source"');
-    expect(analysisPageSource).toContain("canvasMode: decision.canvasMode");
     expect(analysisPageSource).toContain("sourceViewBasis: decision.sourceViewBasis");
+    expect(analysisPageSource).not.toContain("canvasMode: decision.canvasMode");
     expect(analysisPageSource).toContain("await loadSourcePageAroundTrace(decision, trace)");
     expect(analysisPageSource).toContain("selectedSnapshotSourceId = trace.source_id");
     expect(analysisPageSource).toContain("sourceId: trace.source_id");
     expect(analysisPageSource).toContain("aroundRef: trace.ref");
+  });
+
+  it("models Back to evidence with an explicit evidence-review event", () => {
+    expect(analysisPageSource).toContain('type: "return_to_evidence_review"');
+    expect(analysisPageSource).toContain("traceRef:");
+    expect(analysisPageSource).not.toContain('type: "back_to_evidence"');
+    expect(analysisPageSource).not.toContain('type: "back"');
   });
 
   it("activates Chat only through tab selection or question submission", () => {

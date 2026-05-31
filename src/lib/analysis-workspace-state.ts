@@ -44,14 +44,14 @@ export type AnalysisWorkspaceEvent =
   | { type: "select_source_group"; sourceGroupId: number }
   | { type: "change_canvas_mode"; canvasMode: CanvasMode }
   | { type: "view_live_source_for_opened_run" }
-  | { type: "back_to_run_snapshot" }
+  | { type: "switch_source_basis_to_run_snapshot" }
   | { type: "change_companion_tab"; companionTab: CompanionTab }
   | {
       type: "show_evidence_in_source";
-      canvasMode: CanvasMode;
       sourceViewBasis: SourceViewBasis;
       highlightedRef: string;
     }
+  | { type: "return_to_evidence_review"; traceRef: string }
   | { type: "restore_persisted_state"; state: AnalysisWorkspaceUiState };
 
 function numericId(value: string) {
@@ -257,7 +257,7 @@ export function transitionAnalysisWorkspaceState(
         sourceViewBasis: "live_source",
       };
 
-    case "back_to_run_snapshot":
+    case "switch_source_basis_to_run_snapshot":
       if (current.openRunState.kind === "none") {
         return normalizeWorkspaceState({
           ...current,
@@ -281,17 +281,29 @@ export function transitionAnalysisWorkspaceState(
       if (current.openRunState.kind === "none") {
         return normalizeWorkspaceState({
           ...current,
-          canvasMode: event.canvasMode,
+          canvasMode: "source",
           sourceViewBasis: event.sourceViewBasis,
         });
       }
 
       return {
         ...current,
-        canvasMode: event.canvasMode,
+        canvasMode: "source",
         sourceViewBasis: event.sourceViewBasis,
         companionTab: "evidence",
         selectedTraceRef: event.highlightedRef,
+      };
+
+    case "return_to_evidence_review":
+      if (current.openRunState.kind === "none") {
+        return normalizeWorkspaceState(current);
+      }
+
+      return {
+        ...current,
+        canvasMode: "report",
+        companionTab: "evidence",
+        selectedTraceRef: event.traceRef,
       };
 
     case "restore_persisted_state":
