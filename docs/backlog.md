@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-05-30
+> **Updated:** 2026-05-31
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -8,7 +8,6 @@
 | Priority | Area | Next outcome |
 | --- | --- | --- |
 | High | Takeout source import | close remaining representative validation gaps for private/dialog-backed supergroups and richer small-group fixtures |
-| Medium | Saved runs discoverability | decide affordances for missing/capture-failed saved-run states |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
@@ -60,20 +59,7 @@ Acceptance:
   `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
   for representative Takeout coverage and fallback context.
 
-### 3.2 Saved Runs Discoverability And Cleanup
-
-Priority: medium.
-
-- [ ] consider UI affordances for missing legacy/capture failed saved-run states
-
-Acceptance:
-
-- Missing legacy and capture-failed saved runs show explicit affordances in the
-  Runs list, opened-run details, Source, Evidence, and Chat surfaces.
-- Live source browsing remains an explicit action and is not presented as the
-  saved run corpus when a run snapshot is unavailable.
-
-### 3.3 NotebookLM Export Follow-Ups
+### 3.2 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -83,7 +69,7 @@ Priority: medium.
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 3.4 YouTube Source Follow-Ups
+### 3.3 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -102,7 +88,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 3.5 Media Download, Preview, And Analysis
+### 3.4 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -120,7 +106,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 3.6 Stabilization
+### 3.5 Stabilization
 
 Priority: medium.
 
@@ -129,7 +115,7 @@ Priority: medium.
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
 - [ ] audit backend errors, frontend status text, and debug output for accidental credential exposure
 
-### 3.7 Frontend Workspace Evolution
+### 3.6 Frontend Workspace Evolution
 
 Priority: medium.
 
@@ -145,7 +131,7 @@ Guidance: `docs/frontend-architecture-evolution-analysis.md`.
 - [ ] evolve media evidence cards only after media download and preview policy
   is approved
 
-### 3.8 Desktop Product Maturity
+### 3.7 Desktop Product Maturity
 
 Priority: medium.
 

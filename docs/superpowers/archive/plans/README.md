@@ -12,3 +12,7 @@ Active implementation plans belong in `docs/superpowers/plans/`.
 
 Analysis workspace parity plans record the shipped canvas-level workspace tool
 cleanup that unified setup and opened-run actions.
+
+Saved Runs affordance plans from 2026-05-31 record the shipped UI/backend
+closure for missing-legacy and capture-failed snapshots plus smoke coverage for
+those states.

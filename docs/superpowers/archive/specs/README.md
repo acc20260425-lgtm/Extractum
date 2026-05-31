@@ -17,3 +17,7 @@ the shipped Source Browser architecture. Current behavior is summarized in
 
 Analysis workspace parity specs record shipped canvas-level workspace tool
 contracts for setup and opened-run states.
+
+Saved Runs affordance specs from 2026-05-31 record the shipped missing-legacy
+and capture-failed snapshot affordances plus the smoke coverage fixtures for
+those degraded saved-run states.

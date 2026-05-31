@@ -7,8 +7,7 @@ Specs for shipped or superseded work should move to
 
 Active specs:
 
-- [2026-05-31 Saved Runs Affordance Smoke Coverage](2026-05-31-saved-runs-affordance-smoke-coverage-design.md)
-- [2026-05-31 Saved Runs Missing/Capture-Failed Affordances](2026-05-31-saved-runs-missing-capture-affordances-design.md)
+None.
 
 Recently shipped or superseded specs are archived under
 `docs/superpowers/archive/specs/`.
