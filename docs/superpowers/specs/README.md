@@ -7,7 +7,7 @@ Specs for shipped or superseded work should move to
 
 Active specs:
 
-None.
+- [2026-05-31 Evidence To Source Navigation](2026-05-31-evidence-source-navigation-design.md)
 
 Recently shipped or superseded specs are archived under
 `docs/superpowers/archive/specs/`.
