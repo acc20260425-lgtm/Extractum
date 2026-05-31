@@ -21,7 +21,7 @@ use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
 use crate::time::now_secs;
 
 use chunker::{build_chunks, should_export_message};
-use filename::{ensure_child_path, sanitize_path_component};
+use filename::{ensure_child_path, ensure_child_relative_path, sanitize_path_component};
 use glossary::{aggregate_participants, glossary_word_count, render_glossary};
 use model::{
     ChunkFile, NotebookLmExportConfig, NotebookLmExportFile, NotebookLmExportMessage,
@@ -455,12 +455,19 @@ pub async fn export_source_to_notebooklm(
             &output_root,
             &NotebookLmExportManifest {
                 generated_at,
-                source_id: source.id,
-                source_external_id: source.external_id.clone(),
+                scope: Some("source".to_string()),
+                source_id: Some(source.id),
+                source_external_id: Some(source.external_id.clone()),
                 source_title: source.title.clone(),
+                source_group_id: None,
+                source_group_name: None,
                 file_count: files.len(),
                 exported_message_count: exported_messages.len(),
+                skipped_message_count,
+                warning_count: warnings.len(),
+                warnings: warnings.clone(),
                 generated_files: generated_file_names,
+                members: Vec::new(),
             },
         )?;
 
@@ -651,7 +658,7 @@ fn remove_generated_files(output_root: &Path) -> AppResult<()> {
     }
 
     for file_name in manifest.generated_files {
-        let path = ensure_child_path(output_root, &file_name).ok_or_else(|| {
+        let path = ensure_child_relative_path(output_root, &file_name).ok_or_else(|| {
             AppError::conflict("Existing export manifest contains an invalid file path")
         })?;
         if !path.exists() {
@@ -695,9 +702,14 @@ fn validate_existing_export_root(base: &Path, output_root: &Path) -> AppResult<P
 }
 
 fn write_export_file(output_root: &Path, filename: &str, content: &str) -> AppResult<PathBuf> {
-    let path = ensure_child_path(output_root, filename).ok_or_else(|| {
+    let path = ensure_child_relative_path(output_root, filename).ok_or_else(|| {
         AppError::validation(format!("Generated filename '{filename}' is invalid"))
     })?;
+    if let Some(parent) = path.parent() {
+        if parent != output_root {
+            fs::create_dir_all(parent).map_err(map_create_dir_error)?;
+        }
+    }
     fs::write(&path, content)
         .map_err(|e| AppError::internal(format!("Could not write export file: {e}")))?;
     Ok(path)
@@ -747,17 +759,53 @@ fn path_to_string(path: PathBuf) -> String {
 #[derive(Deserialize, Serialize)]
 struct NotebookLmExportManifest {
     generated_at: i64,
-    source_id: i64,
-    source_external_id: String,
+    #[serde(default = "default_manifest_scope")]
+    scope: Option<String>,
+    #[serde(default)]
+    source_id: Option<i64>,
+    #[serde(default)]
+    source_external_id: Option<String>,
+    #[serde(default)]
     source_title: Option<String>,
+    #[serde(default)]
+    source_group_id: Option<i64>,
+    #[serde(default)]
+    source_group_name: Option<String>,
     file_count: usize,
     exported_message_count: usize,
+    #[serde(default)]
+    skipped_message_count: usize,
+    #[serde(default)]
+    warning_count: usize,
+    #[serde(default)]
+    warnings: Vec<String>,
     generated_files: Vec<String>,
+    #[serde(default)]
+    members: Vec<NotebookLmExportManifestMember>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct NotebookLmExportManifestMember {
+    source_id: i64,
+    source_title: Option<String>,
+    source_subtype: Option<String>,
+    exported_message_count: usize,
+    skipped_message_count: usize,
+    generated_files: Vec<String>,
+    warnings: Vec<String>,
+    skipped_reason: Option<String>,
+}
+
+fn default_manifest_scope() -> Option<String> {
+    Some("source".to_string())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{timestamp_for_folder, validate_request};
+    use super::{
+        read_manifest, remove_generated_files, timestamp_for_folder, validate_request,
+        write_marker, NotebookLmExportManifest, NotebookLmExportManifestMember, EXPORT_MARKER_FILE,
+    };
     use crate::notebooklm_export::model::{NotebookLmExportRequest, NotebookLmExportScope};
 
     fn request() -> NotebookLmExportRequest {
@@ -851,5 +899,94 @@ mod tests {
         request.export_id = Some("   ".to_string());
         let config = validate_request(request).expect("valid request");
         assert_eq!(config.export_id, None);
+    }
+
+    #[test]
+    fn reads_legacy_single_source_manifest_after_manifest_expansion() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-legacy-notebooklm-manifest-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).expect("create temp");
+        std::fs::write(
+            temp.join(EXPORT_MARKER_FILE),
+            r#"{
+          "generated_at": 1,
+          "source_id": 7,
+          "source_external_id": "source-7",
+          "source_title": "Source 7",
+          "file_count": 1,
+          "exported_message_count": 2,
+          "generated_files": ["glossary.md", "source.md"]
+        }"#,
+        )
+        .expect("write old manifest");
+
+        let manifest = read_manifest(&temp).expect("read manifest");
+
+        assert_eq!(manifest.source_id, Some(7));
+        assert_eq!(manifest.scope.as_deref(), Some("source"));
+        assert!(manifest.members.is_empty());
+
+        std::fs::remove_dir_all(&temp).expect("cleanup temp");
+    }
+
+    #[test]
+    fn removes_generated_files_in_sources_subdirectory() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-group-notebooklm-cleanup-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(temp.join("sources")).expect("create sources dir");
+        std::fs::write(temp.join("glossary.md"), "glossary").expect("write glossary");
+        std::fs::write(
+            temp.join("sources").join("001-source-7-alpha-part-001.md"),
+            "chunk",
+        )
+        .expect("write chunk");
+        write_marker(
+            &temp,
+            &NotebookLmExportManifest {
+                generated_at: 1,
+                scope: Some("source_group".to_string()),
+                source_id: None,
+                source_external_id: None,
+                source_title: None,
+                source_group_id: Some(9),
+                source_group_name: Some("Group".to_string()),
+                file_count: 1,
+                exported_message_count: 1,
+                skipped_message_count: 0,
+                warning_count: 0,
+                warnings: Vec::new(),
+                generated_files: vec![
+                    "glossary.md".to_string(),
+                    "sources/001-source-7-alpha-part-001.md".to_string(),
+                ],
+                members: vec![NotebookLmExportManifestMember {
+                    source_id: 7,
+                    source_title: Some("Alpha".to_string()),
+                    source_subtype: Some("channel".to_string()),
+                    exported_message_count: 1,
+                    skipped_message_count: 0,
+                    generated_files: vec!["sources/001-source-7-alpha-part-001.md".to_string()],
+                    warnings: Vec::new(),
+                    skipped_reason: None,
+                }],
+            },
+        )
+        .expect("write marker");
+
+        remove_generated_files(&temp).expect("remove generated files");
+
+        assert!(!temp.join("glossary.md").exists());
+        assert!(!temp
+            .join("sources")
+            .join("001-source-7-alpha-part-001.md")
+            .exists());
+
+        std::fs::remove_dir_all(&temp).expect("cleanup temp");
     }
 }

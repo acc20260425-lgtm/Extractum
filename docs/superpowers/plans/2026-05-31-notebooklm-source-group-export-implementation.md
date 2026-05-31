@@ -619,7 +619,7 @@ git commit -m "feat: load notebooklm export source groups"
 - Modify: `src-tauri/src/notebooklm_export/filename.rs`
 - Modify: `src-tauri/src/notebooklm_export/mod.rs`
 
-- [ ] **Step 1: Write failing safe relative path tests**
+- [x] **Step 1: Write failing safe relative path tests**
 
 In `src-tauri/src/notebooklm_export/filename.rs`, update test imports:
 
@@ -656,7 +656,7 @@ fn rejects_unsafe_relative_child_paths() {
 }
 ```
 
-- [ ] **Step 2: Run filename tests and verify failure**
+- [x] **Step 2: Run filename tests and verify failure**
 
 Run:
 
@@ -666,7 +666,7 @@ cargo test --manifest-path src-tauri/Cargo.toml relative_child_paths
 
 Expected: FAIL because `ensure_child_relative_path` does not exist.
 
-- [ ] **Step 3: Implement safe relative paths**
+- [x] **Step 3: Implement safe relative paths**
 
 In `src-tauri/src/notebooklm_export/filename.rs`, import `Component`:
 
@@ -706,7 +706,7 @@ pub(crate) fn ensure_child_relative_path(base: &Path, relative: &str) -> Option<
 }
 ```
 
-- [ ] **Step 4: Write failing manifest compatibility and subdir cleanup tests**
+- [x] **Step 4: Write failing manifest compatibility and subdir cleanup tests**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, extend test imports:
 
@@ -807,7 +807,7 @@ fn removes_generated_files_in_sources_subdirectory() {
 }
 ```
 
-- [ ] **Step 5: Run manifest tests and verify failure**
+- [x] **Step 5: Run manifest tests and verify failure**
 
 Run:
 
@@ -817,7 +817,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export::tests
 
 Expected: FAIL because manifest fields and relative subdir cleanup are not implemented.
 
-- [ ] **Step 6: Expand manifest and update generated-file path handling**
+- [x] **Step 6: Expand manifest and update generated-file path handling**
 
 In `src-tauri/src/notebooklm_export/mod.rs`, import the new helper:
 
@@ -926,7 +926,7 @@ write_marker(
 )?;
 ```
 
-- [ ] **Step 7: Run filename and manifest tests**
+- [x] **Step 7: Run filename and manifest tests**
 
 Run:
 
@@ -936,7 +936,7 @@ cargo test --manifest-path src-tauri/Cargo.toml notebooklm_export
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 3**
+- [x] **Step 8: Commit Task 3**
 
 ```powershell
 git add src-tauri/src/notebooklm_export/filename.rs src-tauri/src/notebooklm_export/mod.rs

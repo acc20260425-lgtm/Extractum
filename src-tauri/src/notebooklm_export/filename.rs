@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 const RESERVED_WINDOWS_NAMES: &[&str] = &[
     "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
@@ -67,9 +67,40 @@ pub(crate) fn ensure_child_path(base: &Path, component: &str) -> Option<PathBuf>
     path.starts_with(base).then_some(path)
 }
 
+pub(crate) fn ensure_child_relative_path(base: &Path, relative: &str) -> Option<PathBuf> {
+    let relative_path = Path::new(relative);
+    if relative_path.is_absolute() {
+        return None;
+    }
+
+    let mut output = base.to_path_buf();
+    let mut saw_component = false;
+    for component in relative_path.components() {
+        match component {
+            Component::Normal(value) => {
+                let value = value.to_str()?;
+                if is_rejected_component(value) {
+                    return None;
+                }
+                output.push(value);
+                saw_component = true;
+            }
+            _ => return None,
+        }
+    }
+
+    if !saw_component || !output.starts_with(base) {
+        return None;
+    }
+    Some(output)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ensure_child_path, is_rejected_component, sanitize_path_component};
+    use super::{
+        ensure_child_path, ensure_child_relative_path, is_rejected_component,
+        sanitize_path_component,
+    };
     use std::path::Path;
 
     #[test]
@@ -98,5 +129,27 @@ mod tests {
         let base = Path::new("export");
         assert!(ensure_child_path(base, "safe.md").is_some());
         assert!(ensure_child_path(base, "../nope").is_none());
+    }
+
+    #[test]
+    fn accepts_safe_relative_child_paths() {
+        let base = Path::new("export");
+        assert_eq!(
+            ensure_child_relative_path(base, "sources/source-1.md"),
+            Some(base.join("sources").join("source-1.md"))
+        );
+        assert_eq!(
+            ensure_child_relative_path(base, "glossary.md"),
+            Some(base.join("glossary.md"))
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_relative_child_paths() {
+        let base = Path::new("export");
+        assert!(ensure_child_relative_path(base, "../source.md").is_none());
+        assert!(ensure_child_relative_path(base, "sources/../source.md").is_none());
+        assert!(ensure_child_relative_path(base, "/tmp/source.md").is_none());
+        assert!(ensure_child_relative_path(base, "sources/nul/source.md").is_none());
     }
 }
