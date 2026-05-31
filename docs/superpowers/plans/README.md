@@ -7,4 +7,5 @@ still useful as execution history. Otherwise, Git history is enough.
 
 Active plans:
 
+- [2026-05-31 Saved Runs Affordance Smoke Coverage](2026-05-31-saved-runs-affordance-smoke-coverage-implementation.md)
 - [2026-05-31 Saved Runs Missing/Capture-Failed Affordances](2026-05-31-saved-runs-missing-capture-affordances-implementation.md)
