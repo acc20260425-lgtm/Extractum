@@ -27,6 +27,10 @@ const TELEGRAM_FIXTURE_SUPERGROUP_PEER_ID: i64 = 10_000_002;
 const TELEGRAM_GROUP_LABEL: &str = "__analysis_redesign_fixture__ Telegram Source Group";
 const COMPLETED_SNAPSHOT_RUN_LABEL: &str = "__analysis_redesign_fixture__ Completed Snapshot Run";
 const MISSING_SNAPSHOT_RUN_LABEL: &str = "__analysis_redesign_fixture__ Missing Snapshot Run";
+const CAPTURE_FAILED_SNAPSHOT_RUN_LABEL: &str =
+    "__analysis_redesign_fixture__ Capture Failed Snapshot Run";
+const CAPTURE_FAILED_SNAPSHOT_ERROR: &str =
+    "Snapshot capture failed: fixture write boundary unavailable";
 const RUNNING_RUN_LABEL: &str = "__analysis_redesign_fixture__ Running Run";
 const FAILED_RUN_LABEL: &str = "__analysis_redesign_fixture__ Failed Run";
 const CANCELLED_RUN_LABEL: &str = "__analysis_redesign_fixture__ Cancelled Run";
@@ -761,6 +765,23 @@ async fn mark_fixture_snapshot_captured(
     Ok(())
 }
 
+async fn mark_fixture_snapshot_capture_failed(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    run_id: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE analysis_runs
+         SET snapshot_captured_at = NULL, snapshot_error = ?
+         WHERE id = ?",
+    )
+    .bind(CAPTURE_FAILED_SNAPSHOT_ERROR)
+    .bind(run_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 fn trace_zstd(refs: serde_json::Value) -> AppResult<Vec<u8>> {
     json_zstd(serde_json::json!({ "refs": refs }))
 }
@@ -865,19 +886,49 @@ async fn insert_analysis_runs(
     )
     .await?;
 
+    let capture_failed_ref = format!("s{}-i999998", ids.telegram_channel_id);
+    let capture_failed_run_id = insert_run(
+        tx,
+        CAPTURE_FAILED_SNAPSHOT_RUN_LABEL,
+        "single_source",
+        Some(ids.telegram_channel_id),
+        None,
+        ids.prompt_template_id,
+        "failed",
+        Some(&format!(
+            "# {CAPTURE_FAILED_SNAPSHOT_RUN_LABEL}\n\nProvider fixture: {LLM_PROFILE_LABEL}.\n\nThis capture-failed fixture report remains readable.\n\nThis report cites capture-failed saved evidence [{capture_failed_ref}]."
+        )),
+        Some(trace_zstd(serde_json::json!([{
+            "ref": capture_failed_ref,
+            "item_id": 999998,
+            "source_id": ids.telegram_channel_id,
+            "external_id": "capture-failed-fixture-item",
+            "published_at": FIXTURE_PERIOD_FROM + 200,
+            "excerpt": "Capture failed fixture evidence",
+            "youtube_url": null,
+            "youtube_timestamp_seconds": null,
+            "youtube_display_label": null,
+            "is_synthetic": false
+        }]))?),
+        None,
+        Some(FIXTURE_NOW + 40),
+    )
+    .await?;
+    mark_fixture_snapshot_capture_failed(tx, capture_failed_run_id).await?;
+
     for (label, status, error, completed_at) in [
         (RUNNING_RUN_LABEL, "running", None, None),
         (
             FAILED_RUN_LABEL,
             "failed",
             Some("Fixture failure: provider request failed without changing user data"),
-            Some(FIXTURE_NOW + 40),
+            Some(FIXTURE_NOW + 50),
         ),
         (
             CANCELLED_RUN_LABEL,
             "cancelled",
             Some("Fixture cancellation: run was cancelled before snapshot capture"),
-            Some(FIXTURE_NOW + 50),
+            Some(FIXTURE_NOW + 60),
         ),
     ] {
         insert_run(
@@ -921,7 +972,7 @@ async fn insert_analysis_runs(
             "is_synthetic": false
         }]))?),
         None,
-        Some(FIXTURE_NOW + 60),
+        Some(FIXTURE_NOW + 70),
     )
     .await?;
     insert_snapshot_message(
@@ -978,11 +1029,11 @@ async fn insert_analysis_runs(
     mark_fixture_snapshot_captured(tx, group_run_id).await?;
 
     for (role, content, created_at) in [
-        ("user", "Summarize the strongest fixture evidence.", FIXTURE_NOW + 70),
+        ("user", "Summarize the strongest fixture evidence.", FIXTURE_NOW + 80),
         (
             "assistant",
             "The fixture evidence highlights saved snapshots, YouTube timestamps, and Telegram source context.",
-            FIXTURE_NOW + 71,
+            FIXTURE_NOW + 81,
         ),
     ] {
         sqlx::query(
@@ -1058,7 +1109,7 @@ async fn seed_analysis_redesign_fixtures_in_pool(
         sources: 4,
         source_groups: 1,
         prompt_templates: 1,
-        runs: 6,
+        runs: 7,
         snapshot_messages: 4,
         chat_messages: 2,
         youtube_transcript_segments: 3,
@@ -1302,7 +1353,7 @@ mod tests {
             sources: 4,
             source_groups: 1,
             prompt_templates: 1,
-            runs: 6,
+            runs: 7,
             snapshot_messages: 4,
             chat_messages: 2,
             youtube_transcript_segments: 3,
@@ -1945,7 +1996,7 @@ mod tests {
             .await
             .expect("seed fixtures");
 
-        assert_eq!(summary.runs, 6);
+        assert_eq!(summary.runs, 7);
         assert_eq!(summary.snapshot_messages, 4);
         assert_eq!(summary.chat_messages, 2);
         assert_eq!(
@@ -1954,7 +2005,7 @@ mod tests {
                 "SELECT COUNT(*) FROM analysis_runs WHERE prompt_template_id IS NOT NULL"
             )
             .await,
-            6
+            7
         );
         assert_eq!(
             count(
@@ -1986,7 +2037,7 @@ mod tests {
                 "SELECT COUNT(*) FROM analysis_runs WHERE status = 'failed'"
             )
             .await,
-            1
+            2
         );
         assert_eq!(
             count(
@@ -2080,7 +2131,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_snapshot_run_has_trace_but_no_saved_messages() {
+    async fn missing_snapshot_run_exposes_legacy_state_but_no_saved_messages() {
         let pool = fixture_pool().await;
         seed_analysis_redesign_fixtures_in_pool(&pool)
             .await
@@ -2092,6 +2143,114 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .expect("load missing snapshot run");
+
+        let summaries = crate::analysis::store::list_analysis_run_summaries(
+            &pool,
+            crate::analysis::store::AnalysisRunListFilters {
+                query: Some(MISSING_SNAPSHOT_RUN_LABEL.to_string()),
+                limit: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("list fixture runs");
+        let summary = summaries
+            .iter()
+            .find(|run| run.scope_label == MISSING_SNAPSHOT_RUN_LABEL)
+            .expect("missing snapshot summary");
+        assert_eq!(
+            summary.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+        );
+
+        let detail = crate::analysis::store::fetch_run_row(&pool, run_id)
+            .await
+            .expect("fetch missing snapshot run")
+            .map(crate::analysis::store::map_run_detail)
+            .expect("missing snapshot run exists");
+        assert_eq!(
+            detail.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+        );
+        assert_eq!(detail.snapshot_error, None);
+
+        assert_eq!(
+            count(
+                &pool,
+                &format!("SELECT COUNT(*) FROM analysis_run_messages WHERE run_id = {run_id}")
+            )
+            .await,
+            0
+        );
+        assert_eq!(
+            count(
+                &pool,
+                &format!(
+                    "SELECT COUNT(*) FROM analysis_runs WHERE id = {run_id} AND trace_data_zstd IS NOT NULL"
+                )
+            )
+            .await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_report() {
+        let pool = fixture_pool().await;
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+
+        let run_id: i64 =
+            sqlx::query_scalar("SELECT id FROM analysis_runs WHERE scope_label_snapshot = ?")
+                .bind(CAPTURE_FAILED_SNAPSHOT_RUN_LABEL)
+                .fetch_one(&pool)
+                .await
+                .expect("load capture failed snapshot run");
+
+        let summaries = crate::analysis::store::list_analysis_run_summaries(
+            &pool,
+            crate::analysis::store::AnalysisRunListFilters {
+                query: Some(CAPTURE_FAILED_SNAPSHOT_RUN_LABEL.to_string()),
+                limit: 100,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("list fixture runs");
+        let summary = summaries
+            .iter()
+            .find(|run| run.scope_label == CAPTURE_FAILED_SNAPSHOT_RUN_LABEL)
+            .expect("capture failed summary");
+        assert_eq!(
+            summary.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        );
+        assert_eq!(
+            summary.snapshot_error.as_deref(),
+            Some(CAPTURE_FAILED_SNAPSHOT_ERROR)
+        );
+
+        let detail = crate::analysis::store::fetch_run_row(&pool, run_id)
+            .await
+            .expect("fetch capture failed snapshot run")
+            .map(crate::analysis::store::map_run_detail)
+            .expect("capture failed snapshot run exists");
+        assert_eq!(detail.status, "failed");
+        assert!(detail
+            .result_markdown
+            .as_deref()
+            .unwrap_or_default()
+            .contains("This capture-failed fixture report remains readable."));
+        assert_eq!(
+            detail.snapshot_state,
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        );
+        assert_eq!(
+            detail.snapshot_error.as_deref(),
+            Some(CAPTURE_FAILED_SNAPSHOT_ERROR)
+        );
+        assert_eq!(detail.snapshot_captured_at, None);
 
         assert_eq!(
             count(
@@ -2168,7 +2327,7 @@ mod tests {
                 "SELECT COUNT(*) FROM analysis_runs WHERE scope_label_snapshot LIKE '__analysis_redesign_fixture__%'"
             )
             .await,
-            6
+            7
         );
         assert_eq!(
             count(&pool, "SELECT COUNT(*) FROM analysis_run_messages").await,

@@ -44,7 +44,7 @@
 - Modify: `src-tauri/src/analysis/fixtures.rs`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-affordance-smoke-coverage-implementation.md`
 
-- [ ] **Step 1: Write failing fixture contract tests**
+- [x] **Step 1: Write failing fixture contract tests**
 
 In `src-tauri/src/analysis/fixtures.rs`, update `summary_serializes_with_camel_case_keys` so the sample summary uses `runs: 7`:
 
@@ -80,6 +80,13 @@ for the `prompt_template_id IS NOT NULL` assertion, and:
 ```
 
 for the `status = 'failed'` assertion.
+
+In `seed_twice_keeps_one_deterministic_fixture_set`, change the
+`scope_label_snapshot LIKE '__analysis_redesign_fixture__%'` run count to:
+
+```rust
+            7
+```
 
 Replace `missing_snapshot_run_has_trace_but_no_saved_messages` with this stricter test:
 
@@ -231,7 +238,7 @@ After that test, add the capture-failed fixture test:
     }
 ```
 
-- [ ] **Step 2: Run fixture tests and verify the red state**
+- [x] **Step 2: Run fixture tests and verify the red state**
 
 Run:
 
@@ -241,7 +248,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures
 
 Expected: FAIL. The run counts still report `6`, and `CAPTURE_FAILED_SNAPSHOT_RUN_LABEL` / `CAPTURE_FAILED_SNAPSHOT_ERROR` are not defined.
 
-- [ ] **Step 3: Add capture-failed fixture constants**
+- [x] **Step 3: Add capture-failed fixture constants**
 
 In `src-tauri/src/analysis/fixtures.rs`, add these constants after `MISSING_SNAPSHOT_RUN_LABEL`:
 
@@ -252,7 +259,7 @@ const CAPTURE_FAILED_SNAPSHOT_ERROR: &str =
     "Snapshot capture failed: fixture write boundary unavailable";
 ```
 
-- [ ] **Step 4: Add a fixture helper for snapshot capture failure**
+- [x] **Step 4: Add a fixture helper for snapshot capture failure**
 
 After `mark_fixture_snapshot_captured`, add:
 
@@ -275,7 +282,7 @@ async fn mark_fixture_snapshot_capture_failed(
 }
 ```
 
-- [ ] **Step 5: Seed the capture-failed run**
+- [x] **Step 5: Seed the capture-failed run**
 
 In `insert_analysis_runs`, after the existing `Missing Snapshot Run` insertion and before the `for (label, status, error, completed_at)` loop, add:
 
@@ -346,7 +353,7 @@ and:
             FIXTURE_NOW + 81,
 ```
 
-- [ ] **Step 6: Update seeded summary count**
+- [x] **Step 6: Update seeded summary count**
 
 In `seed_analysis_redesign_fixtures_in_pool`, update the returned summary:
 
@@ -354,7 +361,7 @@ In `seed_analysis_redesign_fixtures_in_pool`, update the returned summary:
         runs: 7,
 ```
 
-- [ ] **Step 7: Run fixture tests and verify green**
+- [x] **Step 7: Run fixture tests and verify green**
 
 Run:
 
@@ -364,7 +371,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures
 
 Expected: PASS. The output includes all `analysis::fixtures` tests passing.
 
-- [ ] **Step 8: Commit fixture changes**
+- [x] **Step 8: Commit fixture changes**
 
 Run:
 
@@ -568,12 +575,12 @@ export const savedRunAffordanceSmokeSteps = [
 
       await switchToSourceSurface(ctx);
       const sourceText = await sourceSurfaceText(ctx);
-      assertTextContains(sourceText, "Legacy run has no saved snapshot", "missing legacy Source");
       assertTextContains(
         sourceText,
         "Older saved runs may not include frozen source rows",
         "missing legacy Source detail",
       );
+      assertTextContains(sourceText, "Snapshot unavailable", "missing legacy Source badge");
       assertTextOmits(sourceText, "Run snapshot\nSources", "missing legacy Source saved snapshot browser");
       await assertLiveSourceClarificationIfAvailable(ctx);
 
@@ -604,7 +611,11 @@ export const savedRunAffordanceSmokeSteps = [
 
       await switchToSourceSurface(ctx);
       const sourceText = await sourceSurfaceText(ctx);
-      assertTextContains(sourceText, "Snapshot capture failed", "capture failed Source");
+      assertTextContains(
+        sourceText,
+        "Extractum could not save the frozen source context",
+        "capture failed Source detail",
+      );
       assertTextContains(sourceText, captureFailedSnapshotErrorText, "capture failed Source error");
       await assertLiveSourceClarificationIfAvailable(ctx);
       await clickLiveSourceIfAvailable(ctx);
