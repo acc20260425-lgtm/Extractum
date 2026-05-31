@@ -356,11 +356,11 @@ function itemKind(value: string | null): SourceReaderKind {
   return "generic_item";
 }
 
-function liveSourceItemRef(item: Pick<SourceItem, "sourceId" | "id">) {
+export function liveSourceItemRef(item: Pick<SourceItem, "sourceId" | "id">) {
   return `s${item.sourceId}-i${item.id}`;
 }
 
-function youtubeSegmentRef(segment: Pick<YoutubeTranscriptSegment, "sourceId" | "itemId" | "startMs">) {
+export function youtubeSegmentRef(segment: Pick<YoutubeTranscriptSegment, "sourceId" | "itemId" | "startMs">) {
   return `s${segment.sourceId}-i${segment.itemId}@${segment.startMs}ms`;
 }
 
