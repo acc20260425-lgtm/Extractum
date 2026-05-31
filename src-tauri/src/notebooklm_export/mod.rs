@@ -628,7 +628,7 @@ fn render_source_group_export(
             .as_deref()
             .unwrap_or(&rendered.source.external_id)
             .to_string();
-        let mut member_warnings = rendered
+        let member_warnings = rendered
             .warnings
             .iter()
             .map(|warning| format!("{source_label}: {warning}"))
@@ -636,12 +636,14 @@ fn render_source_group_export(
         let skipped_reason = if rendered.exported_messages.is_empty() {
             let reason =
                 format!("{source_label}: no exportable messages matched the export settings.");
-            member_warnings.push(reason.clone());
             Some(reason)
         } else {
             None
         };
         warnings.extend(member_warnings.clone());
+        if let Some(reason) = &skipped_reason {
+            warnings.push(reason.clone());
+        }
         skipped_message_count += rendered.skipped_message_count;
         exported_messages.extend(rendered.exported_messages.iter().cloned());
         rendered_members.push(RenderedGroupMemberExport {
@@ -1307,7 +1309,6 @@ mod tests {
         RenderedGroupMemberExport, SourceExportInput, EXPORT_MARKER_FILE,
         MIGRATED_HISTORY_EMPTY_WARNING,
     };
-    use crate::error::AppError;
     use crate::media::ItemMediaMetadata;
     use crate::notebooklm_export::model::{
         NotebookLmExportConfig, NotebookLmExportMessage, NotebookLmExportRequest,
@@ -1696,15 +1697,6 @@ mod tests {
     }
 
     #[test]
-    fn group_export_returns_no_exportable_messages_copy_for_empty_rendered_members() {
-        let error =
-            AppError::validation("No exportable Telegram messages found for this source group.");
-        assert!(error
-            .message
-            .contains("No exportable Telegram messages found for this source group."));
-    }
-
-    #[test]
     fn render_source_group_export_errors_when_all_members_empty_after_filters() {
         let mut config = export_config();
         config.min_message_length = 100;
@@ -1729,11 +1721,46 @@ mod tests {
     }
 
     #[test]
-    fn group_export_returns_no_telegram_sources_copy_for_empty_valid_members() {
-        let error = AppError::validation("No Telegram sources found in this source group.");
-        assert!(error
-            .message
-            .contains("No Telegram sources found in this source group."));
+    fn render_source_group_export_keeps_empty_member_skipped_reason_out_of_member_warnings() {
+        let config = export_config();
+        let mut empty_source = test_source();
+        empty_source.id = 7;
+        empty_source.external_id = "source-7".to_string();
+        empty_source.title = Some("Beta Source".to_string());
+        let skipped_reason =
+            "Beta Source: no exportable messages matched the export settings.".to_string();
+
+        let rendered = render_source_group_export(
+            vec![
+                SourceExportInput {
+                    source: test_source(),
+                    current_messages: vec![export_message(1, "current history message")],
+                    migrated_messages: Vec::new(),
+                },
+                SourceExportInput {
+                    source: empty_source,
+                    current_messages: vec![export_message(2, "no")],
+                    migrated_messages: Vec::new(),
+                },
+            ],
+            &config,
+            0,
+            Vec::new(),
+        )
+        .expect("mixed group renders");
+
+        assert_eq!(rendered.exported_messages.len(), 1);
+        assert_eq!(rendered.skipped_message_count, 1);
+        assert_eq!(rendered.rendered_members.len(), 2);
+        assert_eq!(
+            rendered.rendered_members[1].skipped_reason,
+            Some(skipped_reason.clone())
+        );
+        assert!(rendered.warnings.contains(&skipped_reason));
+        assert!(!rendered.rendered_members[1]
+            .rendered
+            .warnings
+            .contains(&skipped_reason));
     }
 
     #[tokio::test]
