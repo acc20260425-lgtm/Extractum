@@ -4,9 +4,9 @@
 > `not run` until real Telegram accounts and representative sources are
 > available.
 
-Updated: 2026-05-29
+Updated: 2026-05-31
 
-Current matrix summary: `10 passed`, `1 needs follow-up`, `0 blocked`,
+Current matrix summary: `11 passed`, `0 needs follow-up`, `0 blocked`,
 `0 not run`.
 
 Covered highlights:
@@ -14,14 +14,17 @@ Covered highlights:
 - completed public-channel Takeout for source `18` / batch `10`, with explicit
   before/after snapshots, duplicate-after-normal-sync evidence, and row-fidelity
   comparison;
-- completed small-group Takeout for source `118` / batch `6`;
+- completed richer small-group Takeout for source `118` / batch `22`,
+  including reply, photo, sticker, and reaction aggregates after the earlier
+  basic source `118` batch `6`;
 - completed repeated Takeout-after-Takeout duplicate validation for source `73`
   / batch `3`;
 - completed public-supergroup Takeout for source `122` / batch `13`, with
   explicit before/after snapshots, duplicate-after-normal-sync evidence, and
   row-fidelity comparison;
-- bounded partial public supergroup and dialog-backed no-username supergroup
-  runs for sources `19` / `21` / `22` / `110`;
+- completed private/dialog-backed supergroup Takeout for source `110` / batch
+  `21`, after the earlier bounded partial source `110` batch `5`;
+- bounded partial public supergroup runs for sources `19` / `21` / `22`;
 - normal-sync-before-Takeout attempts for source `113`: batches `7`, `8`, and
   `9` were blocked by `TAKEOUT_INIT_DELAY`; batch `14` later completed without
   `CHANNEL_PRIVATE` fallback evidence, so fallback validation moved to source
@@ -29,8 +32,6 @@ Covered highlights:
 - source `114` Takeout batch `17` completed as partial private history with
   `only_my_messages_fallback`, `only_my_messages = 1`, and
   `history_scope = partial_private_history`;
-- the private/dialog-backed supergroup completion row remains `needs follow-up`
-  because source `110` only produced cancelled partial evidence;
 - source `115` completed migrated small-group-to-supergroup Takeout smoke as
   batch `18`, recording `migrated_history_deferred` without importing old
   `chat` history rows;
@@ -71,8 +72,8 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 | --- | --- | --- | --- | --- | --- |
 | Public channel Takeout | passed | 18 | 10 | before/after source summary, completed Takeout batch summary, duplicate summary, row-fidelity comparison, warning visibility, watermark before/after | Completed cleanly for a public/member channel with explicit before/after snapshots and no warnings |
 | Public supergroup Takeout | passed | 122 | 13 | before/after source summary, completed Takeout batch summary, duplicate summary, warning visibility, row-fidelity comparison | Completed cleanly for a public/member supergroup with explicit before/after snapshots, duplicate evidence against the normal-sync baseline, full row-fidelity match, and no warnings |
-| Private or dialog-backed supergroup Takeout | needs follow-up | 110 | 5 | before/after source summary, cancelled partial Takeout batch summary, warning visibility | Dialog-backed no-username supergroup path imported partial history and was cancelled before full completion because the Takeout estimate was large |
-| Small group Takeout | passed | 118 | 6 | source subtype and peer-kind shape, before/after source summary, batch summary, watermark before/after | Completed cleanly for a dialog-backed `group` / `chat` source with no username or access hash; richer future fixtures should use `docs/superpowers/verification/takeout-small-group-rich-fixture-checklist.md` |
+| Private or dialog-backed supergroup Takeout | passed | 110 | 21 | before/after source summary, completed Takeout batch summary, duplicate summary, warning visibility, watermark after | Completed cleanly for a dialog-backed no-username supergroup after the earlier source `110` batch `5` cancelled partial run |
+| Small group Takeout | passed | 118 | 22 | source subtype and peer-kind shape, before/after source summary, completed Takeout batch summary, duplicate summary, media/reply/reaction aggregates, watermark after | Completed cleanly for a richer dialog-backed `group` / `chat` source with reply, photo, sticker, and reaction coverage after the earlier basic batch `6` |
 | Repeated Takeout after normal sync | passed | 18 | 10 | duplicate observation summary, row-fidelity comparison, before/after source summary, latest batch summary | Batch 10 followed an existing normal-sync baseline for source 18; 42 observations were classified as duplicates and all 467 observed identities matched canonical rows |
 | Repeated Takeout after previous Takeout | passed | 73 | 3 | duplicate observation summary and latest batch summary | Batch 3 followed prior Takeout batch 1 for the same source; latest batch completed with all observations classified as duplicates |
 | `CHANNEL_PRIVATE` fallback | passed | 114 | 17 | `only_my_messages_fallback` warning code, `only_my_messages` flag, partial/private history scope, completed/partial batch summary | Source `114` batch `17` completed as partial private history with durable only-my-messages fallback evidence and zero observations |
@@ -98,6 +99,197 @@ typed/coarse terminal outcomes, and stable capped sample ids.
 Add dated notes below this heading. Keep each note sanitized and reference only
 local numeric ids, aggregate counters, warning codes, flags, and typed/coarse
 outcomes.
+
+### 2026-05-31 Source 118 Rich Small-Group Takeout Rerun
+
+App commit: `669b61c`. Post-run evidence was captured on `main` with docs-only
+working tree changes from the concurrent Takeout closure notes.
+
+Source `118` identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | group |
+| peer_kind | chat |
+| has_username | 0 |
+| has_access_hash | 0 |
+| is_member | 1 |
+| is_active | 1 |
+| resolution_strategy | dialog |
+
+Source `118` before rich rerun snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 28 |
+| telegram_message_count | 28 |
+| reply_count | 5 |
+| thread_count | 0 |
+| media_row_count | 3 |
+| reaction_item_count | 0 |
+| reaction_count_sum | 0 |
+| max_telegram_message_id | 274 |
+
+Source `118` after completed rich Takeout:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 31 |
+| telegram_message_count | 31 |
+| content_zstd_present_count | 30 |
+| reply_count | 5 |
+| thread_count | 0 |
+| media_row_count | 3 |
+| item_reaction_present_rows | 3 |
+| item_reaction_positive_rows | 3 |
+| item_reaction_sum | 3 |
+| telegram_reaction_present_rows | 3 |
+| telegram_reaction_positive_rows | 3 |
+| telegram_reaction_sum | 3 |
+| min_telegram_message_id | 239 |
+| max_telegram_message_id | 277 |
+| last_sync_state | 277 |
+
+Explicit snapshot delta for source `118`:
+
+| Field | Delta |
+| --- | ---: |
+| item_count | 3 |
+| telegram_message_count | 3 |
+| reaction_item_count | 3 |
+| reaction_count_sum | 3 |
+| max_telegram_message_id | 3 |
+
+Source `118` after-run aggregate distributions:
+
+| Distribution | Key | Count |
+| --- | --- | ---: |
+| content_kind | media_only | 1 |
+| content_kind | text_only | 28 |
+| content_kind | text_with_media | 2 |
+| media_kind | none | 28 |
+| media_kind | photo | 2 |
+| media_kind | sticker | 1 |
+
+Batch `22` summary:
+
+| Batch id | Source id | Status | Completeness | Subtype | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate | Max message id |
+| ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 22 | 118 | completed | complete | group | 3 | 31 | 28 | 0 | 0 | 1 | 0 | 0 | 0 | 33 | 277 |
+
+Durable Takeout detail flags:
+
+| Field | Value |
+| --- | --- |
+| history_scope | unknown |
+| split_count | 1 |
+| selected_split_count | 1 |
+| terminal_error_present | 0 |
+
+Batch `22` outcome counts:
+
+| Outcome | Count |
+| --- | ---: |
+| duplicate_observed | 28 |
+| inserted | 3 |
+
+Warning codes for batch `22`: none.
+
+Observation: source `118` now closes the richer small-group fixture gap. The
+latest completed Takeout covers a dialog-backed `group` / `chat` source with
+reply rows, multiple media-bearing rows, duplicate observations from the prior
+small-group baseline, and newly inserted reaction-bearing rows.
+
+### 2026-05-31 Source 110 Dialog-Backed Supergroup Completed Takeout
+
+App commit: `669b61c`. Working tree was clean before live execution on `main`.
+A live database backup was created before starting the Takeout flow.
+
+Source `110` identity shape:
+
+| Field | Value |
+| --- | --- |
+| source_type | telegram |
+| source_subtype | supergroup |
+| peer_kind | channel |
+| has_username | 0 |
+| has_access_hash | 1 |
+| is_member | 1 |
+| is_active | 1 |
+| resolution_strategy | dialog |
+
+Source `110` before snapshot:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 12279 |
+| telegram_message_count | 12279 |
+| reply_count | 5128 |
+| thread_count | 242 |
+| media_row_count | 545 |
+| reaction_item_count | 69 |
+| max_telegram_message_id | 92374 |
+
+Source `110` after completed Takeout:
+
+| Field | Value |
+| --- | ---: |
+| item_count | 76867 |
+| telegram_message_count | 76867 |
+| content_zstd_present_count | 76125 |
+| reply_count | 39209 |
+| thread_count | 16667 |
+| media_row_count | 3263 |
+| reaction_item_count | 3069 |
+| reaction_count_sum | 4481 |
+| max_telegram_message_id | 92392 |
+| last_sync_state | 92392 |
+
+Explicit snapshot delta for source `110`:
+
+| Field | Delta |
+| --- | ---: |
+| item_count | 64588 |
+| telegram_message_count | 64588 |
+| reply_count | 34081 |
+| thread_count | 16425 |
+| media_row_count | 2718 |
+| reaction_item_count | 3000 |
+| max_telegram_message_id | 18 |
+
+Batch `21` summary:
+
+| Batch id | Source id | Status | Completeness | Subtype | Inserted | Observed | Duplicates | Skipped | Warnings | Used export DC | Fallback used | Migrated detected | Only my messages | Message count estimate | Max message id |
+| ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 21 | 110 | completed | complete | supergroup | 64588 | 76867 | 12279 | 0 | 0 | 1 | 0 | 0 | 0 | 77479 | 92392 |
+
+Durable Takeout detail flags:
+
+| Field | Value |
+| --- | --- |
+| history_scope | unknown |
+| split_count | 1 |
+| selected_split_count | 1 |
+| terminal_error_present | 0 |
+
+Batch `21` outcome counts:
+
+| Outcome | Count |
+| --- | ---: |
+| duplicate_observed | 12279 |
+| inserted | 64588 |
+
+Warning codes for batch `21`: none.
+
+Latest durable recovery state for source `110`: none, because the latest
+Takeout batch completed cleanly.
+
+Observation: source `110` now closes the representative private/dialog-backed
+supergroup validation row. The earlier batch `5` remains useful cancelled
+partial evidence, but the latest completed batch proves the same no-username
+dialog-backed supergroup path can finish cleanly with rich reply, media, and
+reaction aggregates.
 
 ### 2026-05-28 Source 115 Explicit Migrated-History Opt-In E2E
 

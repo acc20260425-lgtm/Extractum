@@ -283,13 +283,12 @@ Reusable Takeout evidence and manual validation notes live in:
 
 Current status:
 
-- representative public, private/left, duplicate/fidelity, export-DC fallback,
-  and migrated-history validation is recorded in the reusable verification
-  notes;
+- representative public, private/dialog-backed, private/left,
+  richer small-group, duplicate/fidelity, export-DC fallback, and
+  migrated-history validation is recorded in the reusable verification notes;
 - explicit migrated small-group history import is implemented as a separate
   historical-scope action with current-history-only defaults for normal
   browsing, analysis, and export;
-- remaining Takeout backlog items are narrow: complete a representative
-  private/dialog-backed supergroup Takeout when a bounded fixture is available,
-  and compare against future richer small-group fixtures if they expose reply,
-  media, or reaction shapes not covered by the current evidence.
+- no active Takeout source-import validation gap remains in the current
+  backlog; future fixtures or product gaps should be opened as new backlog
+  items with fresh sanitized evidence.

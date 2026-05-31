@@ -7,7 +7,6 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| High | Takeout source import | close remaining representative validation gaps for private/dialog-backed supergroups and richer small-group fixtures |
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
@@ -28,38 +27,7 @@
 
 ## 3. Open Roadmap
 
-### 3.1 Takeout Source Import Follow-Ups
-
-Priority: high.
-
-Completed representative Takeout validation, fallback behavior, forum-topic
-refresh policy, and migrated-history import/scope behavior are documented in
-current-state docs and reusable verification notes. Keep this section limited
-to validation gaps that still need new evidence.
-
-- [ ] complete representative private/dialog-backed supergroup Takeout
-  validation if a bounded fixture becomes available; current evidence in
-  `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
-  is a cancelled partial source `110` run, while source `114` covers private
-  channel fallback rather than full private/dialog-backed supergroup completion
-- [ ] compare completed small-group Takeout validation against any future
-  additional small-group fixtures if they expose richer reply, media, or
-  reaction shapes; use
-  `docs/superpowers/verification/takeout-small-group-rich-fixture-checklist.md`
-
-Acceptance:
-
-- New fixture comparison records whether reply, media, reaction, and duplicate
-  semantics still match normal sync expectations.
-- Private/dialog-backed supergroup validation either completes against a
-  bounded fixture or records why available fixtures remain too large or
-  inconclusive.
-- Historical validation evidence remains reusable without expanding this
-  backlog file; use
-  `docs/superpowers/verification/takeout-representative-validation-and-fallback-coverage.md`
-  for representative Takeout coverage and fallback context.
-
-### 3.2 NotebookLM Export Follow-Ups
+### 3.1 NotebookLM Export Follow-Ups
 
 Priority: medium.
 
@@ -69,7 +37,7 @@ Priority: medium.
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
 
-### 3.3 YouTube Source Follow-Ups
+### 3.2 YouTube Source Follow-Ups
 
 Priority: medium.
 
@@ -88,7 +56,7 @@ Acceptance:
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
 
-### 3.4 Media Download, Preview, And Analysis
+### 3.3 Media Download, Preview, And Analysis
 
 Priority: medium.
 
@@ -106,7 +74,7 @@ Acceptance:
 - Downloaded media is stored outside SQLite with stable metadata references.
 - Reports can mention relevant media metadata with clear citations when the selected analysis mode supports it.
 
-### 3.5 Stabilization
+### 3.4 Stabilization
 
 Priority: medium.
 
@@ -115,7 +83,7 @@ Priority: medium.
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
 - [ ] audit backend errors, frontend status text, and debug output for accidental credential exposure
 
-### 3.6 Frontend Workspace Evolution
+### 3.5 Frontend Workspace Evolution
 
 Priority: medium.
 
@@ -129,7 +97,7 @@ Guidance: `docs/frontend-architecture-evolution-analysis.md`.
 - [ ] evolve media evidence cards only after media download and preview policy
   is approved
 
-### 3.7 Desktop Product Maturity
+### 3.6 Desktop Product Maturity
 
 Priority: medium.
 

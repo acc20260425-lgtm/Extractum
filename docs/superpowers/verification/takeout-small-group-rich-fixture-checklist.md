@@ -1,15 +1,16 @@
 # Takeout Small-Group Rich Fixture Checklist
 
-> Status: reusable validation checklist for future richer small-group Takeout
-> fixtures. This is not a completed run note.
+> Status: reusable validation checklist. Source `118` / batch `22` closed the
+> first richer small-group fixture on 2026-05-31; detailed sanitized evidence
+> lives in `takeout-representative-validation-and-fallback-coverage.md`.
 
-Updated: 2026-05-29
+Updated: 2026-05-31
 
 ## Purpose
 
-Use this checklist when a future completed Telegram small-group Takeout fixture
+Use this checklist when another completed Telegram small-group Takeout fixture
 contains richer reply, media, reaction, forward, or service-message shapes than
-the current source `118` baseline.
+the current source `118` / batch `22` baseline.
 
 The goal is to compare Extractum's local storage against the shape Telegram
 Desktop's exporter preserves, while keeping Extractum's current product
