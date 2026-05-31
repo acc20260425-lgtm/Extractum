@@ -178,6 +178,13 @@ The route handles the jump:
    `transientSourceHighlight` and pass it to `ReportSourceSurface` and reader
    components.
 
+`sourceReturnContext` is created before the focused load starts. If the focused
+load fails, the user should remain in Source mode with the formatted loading
+error visible and `Back to evidence` available as long as the return context
+still matches current route state. `transientSourceHighlight` is not created on
+failed loads. It is created only after a successful focused load whose loaded
+data contains the canonical trace ref.
+
 Canonical ref rule:
 
 ```ts
@@ -212,6 +219,35 @@ source scope, source basis, and selected trace ref. The route clears the token
 after the reader has had a chance to render and animate, and it also clears the
 token when the selected trace changes, the opened run changes, the user changes
 source basis/source selection, or a stale focused load completes.
+
+Route code should use a small helper to decide whether a focused load contains
+the target before creating `transientSourceHighlight`:
+
+```ts
+function loadedSourceDataContainsTraceRef(
+  data: FocusedSourceLoadData,
+  canonicalTraceRef: string,
+  sourceScope: EvidenceSourceScope,
+): boolean;
+```
+
+The helper is route/model logic, not DOM inspection. It checks the loaded data
+shape for the current basis:
+
+- snapshot rows: `AnalysisRunMessage.ref === canonicalTraceRef` and
+  `source_id` matches `sourceScope`;
+- live source item rows, including comments and generic items: compare
+  `canonicalTraceRef` with the shared live item ref shape `s{sourceId}-i{id}`
+  derived from each `SourceItem`, and require `sourceId` to match
+  `sourceScope`;
+- YouTube transcript segments: compare `canonicalTraceRef` with the shared
+  transcript segment ref shape `s{sourceId}-i{itemId}@{startMs}ms`; grouped
+  transcript readers then consume the same ref through group `refs`;
+- source-group nested rows: validate the group member scope first, then apply
+  the same snapshot/live/transcript check to the member source rows.
+
+If this helper returns false after a successful focused load, the route clears
+the pending focus/highlight state and leaves durable `selectedTraceRef` intact.
 
 ## Trace Target Mapping
 
@@ -263,6 +299,12 @@ Reader behavior:
 If the current non-virtualized readers cannot prove target absence themselves,
 the route-level loaded page check should still clear stale highlight state after
 a successful load whose items do not contain the canonical trace ref.
+
+One-shot consumption is reader-local. Each reader that can animate a highlight
+should track consumed token ids, or at least the last consumed token id, and skip
+scroll/animation for a token it has already consumed. The route may clear tokens
+with an event or timeout, but it must not be the only guard against highlight
+replay during ordinary re-renders.
 
 ## Component Contract
 
@@ -332,10 +374,21 @@ source basis to saved snapshot basis. The implementation should keep their event
 names, labels, and placement distinct enough that tests can assert which action
 is wired.
 
+Placement: render `Back to evidence` in `ReportSourceSurface` as a compact
+evidence-return bar above the `SourceReaderHeader`, aligned with the Source
+surface content. Do not put it inside the `SourceReaderHeader` action cluster
+with source-basis controls such as `Back to run snapshot`. Tests should assert
+that the label/action is wired through `return_to_evidence_review`, while source
+basis switching remains wired through `switch_source_basis_to_run_snapshot`.
+
 ## Error Handling
 
 - If loading the focused source page fails, the route surfaces the formatted
-  loading error and leaves the selected evidence intact.
+  loading error and leaves the selected evidence intact. The canvas remains in
+  Source mode because the user explicitly requested Source review, and
+  `Back to evidence` remains available through the already-created return
+  context. Pending focus state is cleared and no transient highlight token is
+  created.
 - If the source page loads but does not include the selected ref, the reader
   shows no highlighted row; the route should not fabricate evidence rows and
   should clear the pending/transient highlight state.
@@ -364,8 +417,19 @@ Implementation should use targeted tests:
   `aroundStartMs`, and unsupported synthetic/no-item refs;
 - route tests proving stale focused loads do not apply page/items or highlight
   when their `requestId` no longer matches current route state;
+- route/model tests for `loadedSourceDataContainsTraceRef(...)`: snapshot rows,
+  mapped live item/comment/generic refs, transcript segment refs, and
+  source-group member scope;
+- route tests for focused-load failure: Source mode stays active, selected
+  evidence and `sourceReturnContext` remain, `Back to evidence` is available,
+  and no transient highlight is created;
 - component tests or raw contracts proving reader components accept and render a
   scoped transient highlight token separately from durable selection;
+- component tests proving readers consume each `tokenId` once locally and do not
+  replay highlight while the same token remains present across re-renders;
+- component/contract tests proving `Back to evidence` is rendered in the
+  `ReportSourceSurface` evidence-return area and is not wired as the source-basis
+  `Back to run snapshot` action;
 - tests for successful focused loads that omit the target ref: no fake row, no
   crash, and no stale pending highlight;
 - tests proving an already consumed `tokenId` does not replay highlight on every
@@ -396,14 +460,22 @@ the existing deterministic smoke harness.
   fabricate source rows.
 - Stale focused load responses do not apply page/items or highlight when their
   request identity no longer matches current route state.
+- Focused-load failures leave the user in Source mode with a formatted error,
+  preserve `sourceReturnContext`, keep `Back to evidence` available, and do not
+  create transient highlight state.
+- The route uses `loadedSourceDataContainsTraceRef(...)` or equivalent
+  route/model logic before creating a highlight token for any focused load.
 - The highlight effect runs after focused page/items data is applied, consumes a
   token once, and does not replay on unrelated re-renders.
+- Reader components guard one-shot highlight consumption locally by token id.
 - A successful focused load that does not contain the selected trace does not
   fabricate rows, does not throw, and does not leave stale highlight state.
 - Source mode offers `Back to evidence` only for the active Evidence -> Source
   entry context and preserves the selected trace ref when returning.
 - `Back to evidence` appears only for Source sessions entered through Evidence
   `Show in source`, not for arbitrary Source mode with a selected trace.
+- `Back to evidence` is rendered as a separate `ReportSourceSurface`
+  evidence-return affordance, not in the source-basis action cluster.
 - Transient highlight clears when selected trace, opened run, source basis, or
   source selection changes.
 - Highlight behavior is testable through a stable `data-*` attribute, not CSS
