@@ -787,7 +787,9 @@ fn metadata_is_link_or_reparse(metadata: &fs::Metadata) -> bool {
 }
 
 fn write_marker(output_root: &Path, manifest: &NotebookLmExportManifest) -> AppResult<()> {
-    let path = output_root.join(EXPORT_MARKER_FILE);
+    let path = ensure_child_path(output_root, EXPORT_MARKER_FILE)
+        .ok_or_else(|| AppError::validation("Export marker filename is invalid"))?;
+    validate_generated_path_for_io(output_root, &path)?;
     let json = serde_json::to_string_pretty(manifest)
         .map_err(|e| AppError::internal(format!("Could not serialize export manifest: {e}")))?;
     fs::write(path, json)
@@ -797,6 +799,7 @@ fn write_marker(output_root: &Path, manifest: &NotebookLmExportManifest) -> AppR
 fn read_manifest(output_root: &Path) -> AppResult<NotebookLmExportManifest> {
     let path = ensure_child_path(output_root, EXPORT_MARKER_FILE)
         .ok_or_else(|| AppError::validation("Export marker filename is invalid"))?;
+    validate_generated_path_for_io(output_root, &path)?;
     let json = fs::read_to_string(path)
         .map_err(|e| AppError::conflict(format!("Could not read export manifest: {e}")))?;
     serde_json::from_str(&json)
@@ -1001,6 +1004,116 @@ mod tests {
         assert_eq!(manifest.source_id, Some(7));
         assert_eq!(manifest.scope.as_deref(), Some("source"));
         assert!(manifest.members.is_empty());
+
+        std::fs::remove_dir_all(&temp).expect("cleanup temp");
+    }
+
+    #[test]
+    fn marker_read_and_write_reject_existing_symlink_file() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-notebooklm-marker-link-{}",
+            std::process::id()
+        ));
+        let outside = std::env::temp_dir().join(format!(
+            "extractum-notebooklm-marker-link-outside-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&temp).expect("create temp");
+        std::fs::create_dir_all(&outside).expect("create outside");
+        let outside_marker = outside.join("manifest.json");
+        let outside_json = r#"{
+          "generated_at": 1,
+          "scope": "source",
+          "source_id": 7,
+          "source_external_id": "source-7",
+          "source_title": "Source 7",
+          "file_count": 1,
+          "exported_message_count": 2,
+          "generated_files": ["glossary.md", "source.md"]
+        }"#;
+        std::fs::write(&outside_marker, outside_json).expect("write outside marker");
+        if let Err(error) = symlink_file(&outside_marker, temp.join(EXPORT_MARKER_FILE)) {
+            if should_skip_symlink_test(&error) {
+                let _ = std::fs::remove_dir_all(&temp);
+                let _ = std::fs::remove_dir_all(&outside);
+                return;
+            }
+            panic!("create symlink: {error}");
+        }
+
+        let read_error = match read_manifest(&temp) {
+            Ok(_) => panic!("symlink marker read is rejected"),
+            Err(error) => error,
+        };
+        assert!(read_error.message.contains("symbolic link"));
+
+        let write_error = write_marker(
+            &temp,
+            &NotebookLmExportManifest {
+                generated_at: 2,
+                scope: Some("source".to_string()),
+                source_id: Some(8),
+                source_external_id: Some("source-8".to_string()),
+                source_title: Some("Source 8".to_string()),
+                source_group_id: None,
+                source_group_name: None,
+                file_count: 1,
+                exported_message_count: 3,
+                skipped_message_count: 0,
+                warning_count: 0,
+                warnings: Vec::new(),
+                generated_files: vec!["glossary.md".to_string(), "source.md".to_string()],
+                members: Vec::new(),
+            },
+        )
+        .expect_err("symlink marker write is rejected");
+        assert!(write_error.message.contains("symbolic link"));
+        assert_eq!(
+            std::fs::read_to_string(&outside_marker).expect("read outside marker"),
+            outside_json
+        );
+
+        let _ = std::fs::remove_dir_all(&temp);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn marker_read_and_write_accept_normal_file() {
+        let temp = std::env::temp_dir().join(format!(
+            "extractum-notebooklm-marker-normal-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).expect("create temp");
+
+        write_marker(
+            &temp,
+            &NotebookLmExportManifest {
+                generated_at: 2,
+                scope: Some("source".to_string()),
+                source_id: Some(8),
+                source_external_id: Some("source-8".to_string()),
+                source_title: Some("Source 8".to_string()),
+                source_group_id: None,
+                source_group_name: None,
+                file_count: 1,
+                exported_message_count: 3,
+                skipped_message_count: 1,
+                warning_count: 1,
+                warnings: vec!["warning".to_string()],
+                generated_files: vec!["glossary.md".to_string(), "source.md".to_string()],
+                members: Vec::new(),
+            },
+        )
+        .expect("write normal marker");
+
+        let manifest = read_manifest(&temp).expect("read normal marker");
+
+        assert_eq!(manifest.source_id, Some(8));
+        assert_eq!(manifest.exported_message_count, 3);
+        assert_eq!(manifest.warnings, vec!["warning".to_string()]);
 
         std::fs::remove_dir_all(&temp).expect("cleanup temp");
     }
@@ -1223,6 +1336,22 @@ mod tests {
         link: impl AsRef<std::path::Path>,
     ) -> io::Result<()> {
         std::os::windows::fs::symlink_dir(original, link)
+    }
+
+    #[cfg(unix)]
+    fn symlink_file(
+        original: impl AsRef<std::path::Path>,
+        link: impl AsRef<std::path::Path>,
+    ) -> io::Result<()> {
+        std::os::unix::fs::symlink(original, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_file(
+        original: impl AsRef<std::path::Path>,
+        link: impl AsRef<std::path::Path>,
+    ) -> io::Result<()> {
+        std::os::windows::fs::symlink_file(original, link)
     }
 
     fn should_skip_symlink_test(error: &io::Error) -> bool {
