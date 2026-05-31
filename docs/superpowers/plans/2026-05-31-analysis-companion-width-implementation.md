@@ -47,7 +47,7 @@ Those tabs inherit the wider companion column but do not receive special inner l
 
 - Create: `src/lib/analysis-companion-layout.test.ts`
 
-- [ ] **Step 1: Write the failing raw-source contract tests**
+- [x] **Step 1: Write the failing raw-source contract tests**
 
 Create `src/lib/analysis-companion-layout.test.ts` with this content:
 
@@ -145,7 +145,7 @@ describe("analysis companion layout", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify it fails**
+- [x] **Step 2: Run the focused test and verify it fails**
 
 Run:
 
