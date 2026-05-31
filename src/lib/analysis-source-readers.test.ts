@@ -194,6 +194,10 @@ describe("analysis source readers", () => {
     expect(sourceReaderHeaderSource).toContain("Back to run snapshot");
     expect(sourceReaderHeaderSource).toContain("View live source");
     expect(reportSourceSurfaceSource).toContain("sourceBasisState={canvasSurface}");
+    expect(reportSourceSurfaceSource).toContain("snapshotAffordance.detailTitle");
+    expect(reportSourceSurfaceSource).toContain("snapshotAffordance.detailDescription");
+    expect(reportSourceSurfaceSource).not.toContain("<StatusMessage tone=\"error\">{runSnapshotError}</StatusMessage>");
+    expect(reportSourceSurfaceSource).toContain("canViewLiveSourceForSnapshot");
   });
 
   it("uses a compact source reader heading instead of repeating the selected title", () => {

@@ -11,6 +11,10 @@
     type RunSnapshotAvailability,
   } from "$lib/analysis-report-canvas-state";
   import {
+    snapshotAffordanceForRun,
+    type SnapshotProbeState,
+  } from "$lib/analysis-run-snapshot-affordance";
+  import {
     legacyScopeFromWorkspaceSelection,
     type SourceViewBasis,
     type WorkspaceSelection,
@@ -47,6 +51,7 @@
     currentRun: AnalysisRunDetail | null;
     sourceViewBasis: SourceViewBasis;
     snapshotAvailability: RunSnapshotAvailability;
+    snapshotProbeState: SnapshotProbeState;
     runSnapshotMessages: AnalysisRunMessage[];
     loadingRunSnapshotMessages: boolean;
     runSnapshotError: string;
@@ -111,6 +116,7 @@
     currentRun,
     sourceViewBasis,
     snapshotAvailability,
+    snapshotProbeState,
     runSnapshotMessages,
     loadingRunSnapshotMessages,
     runSnapshotError,
@@ -175,6 +181,15 @@
     sourceViewBasis,
     snapshotAvailability,
   });
+  const canViewLiveSourceForSnapshot = $derived(currentSource !== null || currentGroup !== null);
+  const snapshotAffordance = $derived(snapshotAffordanceForRun({
+    snapshotState: currentRun?.snapshot_state ?? null,
+    snapshotCapturedAt: currentRun?.snapshot_captured_at ?? null,
+    snapshotError: currentRun?.snapshot_error ?? null,
+    probeState: snapshotProbeState,
+    runStatus: currentRun?.status ?? "completed",
+    surface: "source-tab",
+  }));
   const legacyWorkspaceSelection = $derived(
     legacyScopeFromWorkspaceSelection(workspaceSelection),
   );
@@ -348,12 +363,12 @@
     {:else}
       <SourceReaderHeader
         smokeId="source-browser-header"
-        title={sourceBasisLabel(sourceBasis)}
+        title={snapshotAffordance.detailTitle ?? sourceBasisLabel(sourceBasis)}
         surfaceLabel={readerSurfaceLabel}
-        subtitle={sourceBasisDescription(sourceBasis)}
+        subtitle={snapshotAffordance.detailDescription ?? sourceBasisDescription(sourceBasis)}
         {sourceViewBasis}
         sourceBasisState={canvasSurface}
-        canViewLiveSource={true}
+        canViewLiveSource={canViewLiveSourceForSnapshot}
         canBackToRunSnapshot={false}
         selectedSourceId={null}
         sourceOptions={[]}
@@ -362,17 +377,22 @@
         onChangeSelectedSourceId={() => {}}
       />
 
-      {#if snapshotAvailability === "capturing"}
-        <StatusMessage tone="muted">Snapshot pending. The frozen source corpus is not browsable yet.</StatusMessage>
-      {:else if snapshotAvailability === "unavailable"}
-        <StatusMessage>
-          Snapshot unavailable. This run ended before Extractum could expose a frozen source snapshot.
-        </StatusMessage>
-        {#if runSnapshotError}
-          <StatusMessage tone="error">{runSnapshotError}</StatusMessage>
-        {/if}
+      {#if snapshotAvailability === "capturing" || snapshotAffordance.state === "pending"}
+        <StatusMessage tone="muted">{snapshotAffordance.detailDescription ?? "Snapshot pending. The frozen source corpus is not browsable yet."}</StatusMessage>
+      {:else if snapshotAffordance.state === "checking"}
+        <StatusMessage tone="muted">{snapshotAffordance.detailDescription}</StatusMessage>
       {:else}
-        <StatusMessage tone="muted">Checking run snapshot availability...</StatusMessage>
+        <StatusMessage>
+          {snapshotAffordance.detailDescription}
+        </StatusMessage>
+        {#if snapshotAffordance.sanitizedError}
+          <StatusMessage tone="error">{snapshotAffordance.sanitizedError}</StatusMessage>
+        {/if}
+        {#if canViewLiveSourceForSnapshot}
+          <StatusMessage tone="muted">
+            View live source opens current source data. This is live data, not the saved run snapshot.
+          </StatusMessage>
+        {/if}
       {/if}
     {/if}
   {:else}

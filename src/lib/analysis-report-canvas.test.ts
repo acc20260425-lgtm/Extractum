@@ -82,7 +82,12 @@ describe("report canvas component contract", () => {
     expect(sourceReaderHeaderSource).toContain("View live source");
     expect(sourceReaderHeaderSource).toContain("Back to run snapshot");
     expect(reportSourceSurfaceSource).toContain("Snapshot pending");
-    expect(reportSourceSurfaceSource).toContain("Snapshot unavailable");
+    expect(reportSourceSurfaceSource).toContain("snapshotAffordanceForRun");
+    expect(reportSourceSurfaceSource).toContain("snapshotProbeState");
+    expect(reportSourceSurfaceSource).toContain("snapshotAffordance.detailTitle");
+    expect(reportSourceSurfaceSource).toContain("snapshotAffordance.detailDescription");
+    expect(reportSourceSurfaceSource).toContain("snapshotAffordance.sanitizedError");
+    expect(reportSourceSurfaceSource).toContain("This is live data, not the saved run snapshot.");
     expect(reportSourceSurfaceSource).toContain("<SourceReaderHeader");
     expect(reportSourceSurfaceSource).toContain("runSnapshotSubject");
     expect(reportSourceSurfaceSource).toContain("<SourceBrowserShell");

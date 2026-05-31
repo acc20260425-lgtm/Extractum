@@ -1386,7 +1386,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/analysis-source-readers.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-missing-capture-affordances-implementation.md`
 
-- [ ] **Step 1: Write failing Source contracts**
+- [x] **Step 1: Write failing Source contracts**
 
 In `"keeps snapshot and live source basis explicit"` in `src/lib/analysis-report-canvas.test.ts`, add:
 
@@ -1407,7 +1407,7 @@ In `"keeps live source and run snapshot basis visible"` in `src/lib/analysis-sou
     expect(reportSourceSurfaceSource).toContain("canViewLiveSourceForSnapshot");
 ```
 
-- [ ] **Step 2: Run Source contract tests and verify failure**
+- [x] **Step 2: Run Source contract tests and verify failure**
 
 Run:
 
@@ -1417,7 +1417,7 @@ npm.cmd run test -- src/lib/analysis-report-canvas.test.ts src/lib/analysis-sour
 
 Expected: FAIL because `ReportSourceSurface` still uses generic unavailable copy.
 
-- [ ] **Step 3: Use helper in `ReportSourceSurface`**
+- [x] **Step 3: Use helper in `ReportSourceSurface`**
 
 In `src/lib/components/analysis/report-source-surface.svelte`, add:
 
@@ -1490,7 +1490,7 @@ Change the unavailable run snapshot branch header prop from `canViewLiveSource={
 
 Do not render `runSnapshotError` directly in this branch. Probe errors should show the generic `verification_failed` copy from `snapshotAffordanceForRun`; only `snapshotAffordance.sanitizedError`, derived from backend `snapshot_error`, is displayed as error detail.
 
-- [ ] **Step 4: Run Source contract tests**
+- [x] **Step 4: Run Source contract tests**
 
 Run:
 
@@ -1500,7 +1500,7 @@ npm.cmd run test -- src/lib/analysis-report-canvas.test.ts src/lib/analysis-sour
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Source copy**
+- [x] **Step 5: Commit Source copy**
 
 Run:
 
