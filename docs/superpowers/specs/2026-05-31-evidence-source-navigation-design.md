@@ -97,11 +97,11 @@ The existing `evidenceSourceActionDecision` remains the source of truth:
 `TracePanel` keeps selecting refs through `onSelectTraceRef(ref)` and invoking
 `onShowInSource()` for the selected ref.
 
-The route should track a source entry context separately from durable trace
+The route should track a source return context separately from durable trace
 selection:
 
 ```ts
-type SourceEntryContext =
+type SourceReturnContext =
   | {
       kind: "evidence";
       runId: number;
@@ -117,12 +117,24 @@ the opened run changes, the selected source/source group changes, the selected
 trace ref changes away from the context ref, or the user enters Source mode
 through a non-evidence path.
 
+Workspace events for this slice should use explicit names:
+
+- `show_evidence_in_source`: enter Source mode from Evidence review;
+- `clear_source_highlight`: expire the transient highlight token;
+- `return_to_evidence_review`: return the canvas to report review while keeping
+  Evidence selected;
+- `switch_source_basis_to_run_snapshot`: switch live source basis back to the
+  saved run snapshot.
+
+Do not use a generic `back` event name for both evidence-return and source-basis
+switching. They are visually and semantically different actions.
+
 The route handles the jump:
 
 1. compute `evidenceSourceActionDecision`;
 2. compute the canonical navigation ref;
 3. set `selectedTraceRef` to that canonical ref;
-4. create `sourceEntryContext`;
+4. set `sourceReturnContext`;
 5. dispatch `show_evidence_in_source`;
 6. load the focused source page for the decision:
    - snapshot: `listAnalysisRunMessages({ runId, after: null, limit, sourceId,
@@ -131,7 +143,8 @@ The route handles the jump:
      trace.item_id, ... })`;
    - live YouTube transcript: `listYoutubeTranscriptSegments({ sourceId,
      aroundStartMs: trace.youtube_timestamp_seconds * 1000, ... })`;
-7. pass a transient highlight token to `ReportSourceSurface` and reader
+7. after the successful focused load has been applied to route state, set
+   `transientSourceHighlight` and pass it to `ReportSourceSurface` and reader
    components.
 
 Canonical ref rule:
@@ -141,7 +154,7 @@ const canonicalTraceRef = decision.highlightedRef ?? trace.ref;
 selectedTraceRef = canonicalTraceRef;
 aroundRef = canonicalTraceRef;
 highlightToken.traceRef = canonicalTraceRef;
-sourceEntryContext.traceRef = canonicalTraceRef;
+sourceReturnContext.traceRef = canonicalTraceRef;
 ```
 
 In the current implementation `decision.highlightedRef` is expected to equal
@@ -153,7 +166,7 @@ The highlight token must be route-owned, scoped, and short-lived:
 
 ```ts
 type EvidenceHighlightToken = {
-  id: string;
+  tokenId: string;
   kind: "evidence";
   runId: number;
   sourceId: number;
@@ -168,6 +181,34 @@ source id, source basis, and selected trace ref. The route clears the token
 after the reader has had a chance to render and animate, and it also clears the
 token when the selected trace changes, the opened run changes, the user changes
 source basis/source selection, or a stale focused load completes.
+
+## Highlight Timing
+
+Highlight is an effect of a completed focused load, not of entering Source mode
+alone.
+
+The route may track a pending focus request while the focused page is loading,
+but readers should receive an active `transientSourceHighlight` only after the
+route has applied the loaded page/items for that request. This avoids the common
+race where Source mode renders before the target row exists.
+
+Reader behavior:
+
+- when the token arrives and the target row/group exists in rendered data, the
+  reader scrolls to it and applies the temporary highlight once for that
+  `tokenId`;
+- when the target exists in virtualized data but is not mounted yet, the reader
+  or virtualizer should first scroll to the target, then apply the highlight
+  after it is rendered;
+- when the focused load succeeds but the target ref is not present in the loaded
+  data, the reader does not fabricate a row and the route expires the highlight
+  request;
+- re-renders, filter re-computation, or unchanged props must not replay the same
+  highlight animation for an already consumed `tokenId`.
+
+If the current non-virtualized readers cannot prove target absence themselves,
+the route-level loaded page check should still clear stale highlight state after
+a successful load whose items do not contain the canonical trace ref.
 
 ## Component Contract
 
@@ -196,12 +237,12 @@ At minimum, this applies to:
 Source mode should show `Back to evidence` only when:
 
 - there is an opened run;
-- `sourceEntryContext.kind === "evidence"`;
-- `sourceEntryContext.runId === currentRun.id`;
-- `sourceEntryContext.traceRef === selectedTraceRef`;
+- `sourceReturnContext.kind === "evidence"`;
+- `sourceReturnContext.runId === currentRun.id`;
+- `sourceReturnContext.traceRef === selectedTraceRef`;
 - the current source or focused group member still matches
-  `sourceEntryContext.sourceId`;
-- the current source basis still matches `sourceEntryContext.sourceViewBasis`.
+  `sourceReturnContext.sourceId`;
+- the current source basis still matches `sourceReturnContext.sourceViewBasis`.
 
 Activating it should:
 
@@ -210,17 +251,41 @@ Activating it should:
 - preserve the selected trace ref;
 - avoid reloading the run or trace data unnecessarily.
 
+State invariants:
+
+```ts
+show_evidence_in_source -> {
+  canvasMode: "source";
+  companionTab: "evidence";
+  selectedTraceRef: canonicalTraceRef;
+}
+
+return_to_evidence_review -> {
+  canvasMode: "report";
+  companionTab: "evidence";
+  selectedTraceRef: sourceReturnContext.traceRef;
+}
+```
+
 This is intentionally local UI navigation. It does not change persisted
 workspace state beyond the existing canvas/companion selection rules.
-Persisted workspace restores should not recreate `sourceEntryContext`; return
+Persisted workspace restores should not recreate `sourceReturnContext`; return
 navigation is only for the current interactive Evidence -> Source jump.
+
+`Back to evidence` and `Back to run snapshot` should not be presented as
+interchangeable neighboring "back" buttons. `Back to evidence` returns to
+report/evidence review. `Back to run snapshot` changes Source mode from live
+source basis to saved snapshot basis. The implementation should keep their event
+names, labels, and placement distinct enough that tests can assert which action
+is wired.
 
 ## Error Handling
 
 - If loading the focused source page fails, the route surfaces the formatted
   loading error and leaves the selected evidence intact.
 - If the source page loads but does not include the selected ref, the reader
-  shows no highlighted row; the route should not fabricate evidence rows.
+  shows no highlighted row; the route should not fabricate evidence rows and
+  should clear the pending/transient highlight state.
 - Disabled Evidence actions continue to use sanitized/degraded saved-run copy.
 - Raw backend errors must not be rendered as snapshot failure explanations
   unless they already pass through the existing formatting/sanitization boundary.
@@ -231,13 +296,20 @@ Implementation should use targeted tests:
 
 - pure state tests for the new return event/state transition;
 - pure state or route tests proving `Back to evidence` depends on
-  `sourceEntryContext`, not just `selectedTraceRef`;
+  `sourceReturnContext`, not just `selectedTraceRef`;
+- pure state tests for the `show_evidence_in_source` and
+  `return_to_evidence_review` invariants:
+  `canvasMode`, `companionTab`, and `selectedTraceRef`;
 - route contract tests proving Evidence `Show in source` still uses
   `aroundRef`, `aroundItemId`, and `aroundStartMs`;
 - route/component tests proving the canonical ref is shared by durable
   selection, focused snapshot loading, highlight token, and return context;
 - component tests or raw contracts proving reader components accept and render a
   scoped transient highlight token separately from durable selection;
+- tests for successful focused loads that omit the target ref: no fake row, no
+  crash, and no stale pending highlight;
+- tests proving an already consumed `tokenId` does not replay highlight on every
+  re-render;
 - workflow scenario coverage for `Show in source` -> `Back to evidence` while
   preserving `selectedTraceRef`;
 - existing degraded saved-run affordance tests must keep passing.
@@ -256,8 +328,20 @@ the existing deterministic smoke harness.
 - The selected evidence row/group receives a temporary highlight that is
   visually distinct from normal selected state and scoped to the current run,
   source id, source basis, and trace ref.
+- The highlight effect runs after focused page/items data is applied, consumes a
+  token once, and does not replay on unrelated re-renders.
+- A successful focused load that does not contain the selected trace does not
+  fabricate rows, does not throw, and does not leave stale highlight state.
 - Source mode offers `Back to evidence` only for the active Evidence -> Source
   entry context and preserves the selected trace ref when returning.
+- `Back to evidence` appears only for Source sessions entered through Evidence
+  `Show in source`, not for arbitrary Source mode with a selected trace.
+- Transient highlight clears when selected trace, opened run, source basis, or
+  source selection changes.
+- Highlight behavior is testable through a stable `data-*` attribute, not CSS
+  class names only.
+- `selectedTraceRef` and transient highlight state are tested as separate
+  concepts.
 - `Back to evidence` and `Back to run snapshot` remain separate actions with
   separate meanings.
 - Tests cover state, route wiring, and component highlight/return contracts.
