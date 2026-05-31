@@ -21,3 +21,6 @@ contracts for setup and opened-run states.
 Saved Runs affordance specs from 2026-05-31 record the shipped missing-legacy
 and capture-failed snapshot affordances plus the smoke coverage fixtures for
 those degraded saved-run states.
+
+Evidence Source Navigation specs from 2026-05-31 record the shipped scoped
+Evidence to Source jump, focused load, one-shot highlight, and return workflow.

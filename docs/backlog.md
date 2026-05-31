@@ -121,8 +121,6 @@ Priority: medium.
 
 Guidance: `docs/frontend-architecture-evolution-analysis.md`.
 
-- [ ] improve source-reader evidence navigation with jump, temporary highlight,
-  return, and load-around-ref behavior
 - [ ] add compact Telegram topic navigation/filtering for source browsing
 - [ ] extend the shipped `SourceActivityView` pattern across remaining
   non-shell source surfaces when they gain sync, Takeout, migrated-history, or

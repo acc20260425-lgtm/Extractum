@@ -16,3 +16,7 @@ cleanup that unified setup and opened-run actions.
 Saved Runs affordance plans from 2026-05-31 record the shipped UI/backend
 closure for missing-legacy and capture-failed snapshots plus smoke coverage for
 those states.
+
+Evidence Source Navigation plans from 2026-05-31 record the shipped Evidence
+to Source jump, focused load, one-shot highlight, and `Back to evidence`
+workflow.
