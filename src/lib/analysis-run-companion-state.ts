@@ -1,4 +1,11 @@
 import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
+import {
+  isActiveRunStatus,
+  isTerminalRunStatus,
+  snapshotAffordanceForRun,
+  type SnapshotAffordanceState,
+  type SnapshotProbeState,
+} from "$lib/analysis-run-snapshot-affordance";
 import type {
   CanvasMode,
   CompanionTab,
@@ -14,7 +21,14 @@ export type ChatAvailabilityReason =
   | "terminal_run"
   | "checking_snapshot"
   | "missing_snapshot"
-  | "missing_report";
+  | "missing_report"
+  | "legacy_missing"
+  | "capture_failed_with_error"
+  | "not_captured_before_terminal"
+  | "capture_failed_without_error_unknown"
+  | "inconsistent"
+  | "verification_failed"
+  | "unknown_snapshot";
 
 export interface ChatAvailability {
   enabled: boolean;
@@ -94,12 +108,29 @@ export function defaultCompanionTabForOpenedRun(run: AnalysisRunDetail | null): 
   return run?.status === "completed" ? "evidence" : "runs";
 }
 
+function chatReasonForSnapshotAffordance(state: SnapshotAffordanceState): ChatAvailabilityReason {
+  if (
+    state === "legacy_missing"
+    || state === "capture_failed_with_error"
+    || state === "not_captured_before_terminal"
+    || state === "capture_failed_without_error_unknown"
+    || state === "inconsistent"
+    || state === "verification_failed"
+  ) {
+    return state;
+  }
+  if (state === "unknown") return "unknown_snapshot";
+  return "missing_snapshot";
+}
+
 export function chatAvailabilityForRun({
   currentRun,
   snapshotAvailability,
+  snapshotProbeState,
 }: {
   currentRun: AnalysisRunDetail | null;
   snapshotAvailability: RunSnapshotAvailability;
+  snapshotProbeState: SnapshotProbeState;
 }): ChatAvailability {
   if (!currentRun) {
     return {
@@ -110,21 +141,12 @@ export function chatAvailabilityForRun({
     };
   }
 
-  if (currentRun.status === "queued" || currentRun.status === "running") {
+  if (isActiveRunStatus(currentRun.status)) {
     return {
       enabled: false,
       reason: "pending_completion",
       title: "Run still in progress",
       description: "Chat becomes available after the report completes and saved context is available.",
-    };
-  }
-
-  if (currentRun.status === "failed" || currentRun.status === "cancelled") {
-    return {
-      enabled: false,
-      reason: "terminal_run",
-      title: "Chat is disabled for this run",
-      description: "For this MVP, follow-up chat is available only for completed reports.",
     };
   }
 
@@ -137,21 +159,42 @@ export function chatAvailabilityForRun({
     };
   }
 
+  if (
+    snapshotAvailability === "unavailable"
+    || (snapshotAvailability !== "available" && (snapshotProbeState === "unavailable" || snapshotProbeState === "error"))
+  ) {
+    const affordance = snapshotAffordanceForRun({
+      snapshotState: currentRun.snapshot_state,
+      snapshotCapturedAt: currentRun.snapshot_captured_at,
+      snapshotError: currentRun.snapshot_error,
+      probeState: snapshotProbeState,
+      runStatus: currentRun.status,
+      surface: "chat-tab",
+    });
+
+    return {
+      enabled: false,
+      reason: chatReasonForSnapshotAffordance(affordance.state),
+      title: "Saved context unavailable",
+      description: affordance.detailDescription ?? "Saved snapshot context is unavailable for this run.",
+    };
+  }
+
+  if (currentRun.status === "failed" || currentRun.status === "cancelled") {
+    return {
+      enabled: false,
+      reason: "terminal_run",
+      title: "Chat is disabled for this run",
+      description: "For this MVP, follow-up chat is available only for completed reports.",
+    };
+  }
+
   if (snapshotAvailability === "available") {
     return {
       enabled: true,
       reason: "enabled",
       title: "Chat ready",
       description: "Questions use the saved report and saved run snapshot context.",
-    };
-  }
-
-  if (snapshotAvailability === "unavailable") {
-    return {
-      enabled: false,
-      reason: "missing_snapshot",
-      title: "Saved context unavailable",
-      description: "Saved snapshot rows are missing for this run, so chat is disabled instead of using replacement context.",
     };
   }
 
@@ -167,10 +210,12 @@ export function evidenceSourceActionDecision({
   currentRun,
   selectedTrace,
   snapshotAvailability,
+  snapshotProbeState,
 }: {
   currentRun: AnalysisRunDetail | null;
   selectedTrace: AnalysisTraceRef | null;
   snapshotAvailability: RunSnapshotAvailability;
+  snapshotProbeState: SnapshotProbeState;
 }): EvidenceSourceActionDecision {
   if (!currentRun || !selectedTrace) {
     return {
@@ -188,10 +233,21 @@ export function evidenceSourceActionDecision({
     };
   }
 
-  if (currentRun.status === "completed") {
+  const hasUsableSnapshot = snapshotAvailability === "available" && snapshotProbeState === "available";
+
+  if (!hasUsableSnapshot && (isTerminalRunStatus(currentRun.status) || snapshotProbeState === "error")) {
+    const affordance = snapshotAffordanceForRun({
+      snapshotState: currentRun.snapshot_state,
+      snapshotCapturedAt: currentRun.snapshot_captured_at,
+      snapshotError: currentRun.snapshot_error,
+      probeState: snapshotProbeState,
+      runStatus: currentRun.status,
+      surface: "evidence-tab",
+    });
+
     return {
       kind: "unavailable",
-      reason: "Exact source resolution is unavailable because this completed run has no saved snapshot rows.",
+      reason: affordance.disabledReason ?? "Exact source resolution is unavailable because saved snapshot rows are unavailable for this run.",
     };
   }
 

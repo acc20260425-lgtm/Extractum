@@ -804,7 +804,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/analysis-run-companion-tabs.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-missing-capture-affordances-implementation.md`
 
-- [ ] **Step 1: Write failing companion state tests**
+- [x] **Step 1: Write failing companion state tests**
 
 In `src/lib/analysis-run-companion-state.test.ts`, update the imports:
 
@@ -959,7 +959,7 @@ Add these tests:
   );
 ```
 
-- [ ] **Step 2: Run companion tests and verify failure**
+- [x] **Step 2: Run companion tests and verify failure**
 
 Run:
 
@@ -969,7 +969,7 @@ npm.cmd run test -- src/lib/analysis-run-companion-state.test.ts
 
 Expected: FAIL because `snapshotProbeState` is not in the function contracts and distinct reasons are not implemented.
 
-- [ ] **Step 3: Extend companion decision contracts**
+- [x] **Step 3: Extend companion decision contracts**
 
 In `src/lib/analysis-run-companion-state.ts`, update imports:
 
@@ -1111,7 +1111,7 @@ Replace the completed-run unavailable branch with:
 
 Keep the existing available-snapshot branch above this guard. Keep the live-source branch only for active or non-terminal runs without available saved snapshots. Failed and cancelled runs are terminal, so they must not fall through to the live-source bridge.
 
-- [ ] **Step 4: Pass `snapshotProbeState` from `RunEvidenceTab`**
+- [x] **Step 4: Pass `snapshotProbeState` from `RunEvidenceTab`**
 
 In `src/lib/components/analysis/run-evidence-tab.svelte`, import the type:
 
@@ -1131,7 +1131,7 @@ Pass it into the derived decision:
     snapshotProbeState,
 ```
 
-- [ ] **Step 5: Update raw companion component contract**
+- [x] **Step 5: Update raw companion component contract**
 
 In `src/lib/analysis-run-companion-tabs.test.ts`, update the Evidence test assertions:
 
@@ -1149,7 +1149,7 @@ Update the Chat test assertions:
     expect(chatTabSource).toContain("{chatAvailability.description}");
 ```
 
-- [ ] **Step 6: Run focused companion tests**
+- [x] **Step 6: Run focused companion tests**
 
 Run:
 
@@ -1159,7 +1159,7 @@ npm.cmd run test -- src/lib/analysis-run-companion-state.test.ts src/lib/analysi
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit companion decisions**
+- [x] **Step 7: Commit companion decisions**
 
 Run:
 

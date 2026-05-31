@@ -10,6 +10,7 @@ import {
   type CompanionRunsFilterState,
 } from "./analysis-run-companion-state";
 import type { RunSnapshotAvailability } from "./analysis-report-canvas-state";
+import type { SnapshotProbeState } from "./analysis-run-snapshot-affordance";
 import type { WorkspaceSelection } from "./analysis-workspace-state";
 import type { AnalysisRunDetail, AnalysisRunSummary, AnalysisTraceRef } from "./types/analysis";
 
@@ -109,13 +110,18 @@ describe("analysis run companion state", () => {
     ["unknown", false, "checking_snapshot"],
     ["capturing", false, "checking_snapshot"],
     ["available", true, "enabled"],
-    ["unavailable", false, "missing_snapshot"],
+    ["unavailable", false, "inconsistent"],
   ] satisfies Array<[RunSnapshotAvailability, boolean, string]>)(
     "maps completed run chat availability for %s snapshot",
     (snapshotAvailability, enabled, reason) => {
       expect(chatAvailabilityForRun({
         currentRun: run({ status: "completed" }),
         snapshotAvailability,
+        snapshotProbeState: snapshotAvailability === "available"
+          ? "available"
+          : snapshotAvailability === "unavailable"
+            ? "unavailable"
+            : "unknown",
       })).toMatchObject({ enabled, reason });
     },
   );
@@ -124,26 +130,92 @@ describe("analysis run companion state", () => {
     expect(chatAvailabilityForRun({
       currentRun: null,
       snapshotAvailability: "unknown",
+      snapshotProbeState: "unknown",
     })).toMatchObject({ enabled: false, reason: "no_run" });
     expect(chatAvailabilityForRun({
       currentRun: run({ status: "running", completed_at: null }),
       snapshotAvailability: "capturing",
+      snapshotProbeState: "unknown",
     })).toMatchObject({ enabled: false, reason: "pending_completion" });
     expect(chatAvailabilityForRun({
       currentRun: run({ status: "failed", error: "provider failed" }),
       snapshotAvailability: "available",
+      snapshotProbeState: "available",
     })).toMatchObject({ enabled: false, reason: "terminal_run" });
     expect(chatAvailabilityForRun({
       currentRun: run({ status: "cancelled" }),
       snapshotAvailability: "available",
+      snapshotProbeState: "available",
     })).toMatchObject({ enabled: false, reason: "terminal_run" });
   });
+
+  it.each([
+    [
+      "missing_legacy",
+      "unavailable",
+      "legacy_missing",
+      "Saved context unavailable",
+      "Older saved runs may not include frozen source rows",
+    ],
+    [
+      "capture_failed",
+      "unavailable",
+      "capture_failed_with_error",
+      "Saved context unavailable",
+      "could not save the frozen source context",
+    ],
+    [
+      null,
+      "unavailable",
+      "not_captured_before_terminal",
+      "Saved context unavailable",
+      "there is no frozen source corpus",
+    ],
+    [
+      "captured",
+      "unavailable",
+      "inconsistent",
+      "Saved context unavailable",
+      "marked as captured, but Extractum could not load saved snapshot rows",
+    ],
+    [
+      "captured",
+      "error",
+      "verification_failed",
+      "Saved context unavailable",
+      "could not verify saved snapshot rows",
+    ],
+  ] satisfies Array<[AnalysisRunDetail["snapshot_state"], SnapshotProbeState, string, string, string]>)(
+    "uses snapshot affordance copy for completed-run chat when state is %s and probe is %s",
+    (snapshotState, snapshotProbeState, reason, title, descriptionFragment) => {
+      const snapshotError = snapshotState === "capture_failed" ? "sqlite write failed" : null;
+      const availability = snapshotProbeState === "available" ? "available" : "unavailable";
+
+      const result = chatAvailabilityForRun({
+        currentRun: run({
+          status: snapshotState === null ? "failed" : "completed",
+          snapshot_state: snapshotState,
+          snapshot_error: snapshotError,
+        }),
+        snapshotAvailability: availability,
+        snapshotProbeState,
+      });
+
+      expect(result).toMatchObject({
+        enabled: false,
+        reason,
+        title,
+      });
+      expect(result.description).toContain(descriptionFragment);
+    },
+  );
 
   it("prefers run snapshot for Show in source when snapshot is available", () => {
     expect(evidenceSourceActionDecision({
       currentRun: run({ status: "completed" }),
       selectedTrace: traceRef(),
       snapshotAvailability: "available",
+      snapshotProbeState: "available",
     })).toEqual({
       kind: "run_snapshot",
       canvasMode: "source",
@@ -157,17 +229,19 @@ describe("analysis run companion state", () => {
       currentRun: run({ status: "completed" }),
       selectedTrace: traceRef(),
       snapshotAvailability: "unavailable",
+      snapshotProbeState: "unavailable",
     })).toEqual({
       kind: "unavailable",
-      reason: "Exact source resolution is unavailable because this completed run has no saved snapshot rows.",
+      reason: "Exact source resolution is unavailable because the run is marked captured but saved snapshot rows are unavailable.",
     });
   });
 
-  it("allows explicit live source bridge for non-completed runs without labeling it as snapshot", () => {
+  it("allows explicit live source bridge for active runs without labeling it as snapshot", () => {
     expect(evidenceSourceActionDecision({
-      currentRun: run({ status: "failed", error: "failed" }),
+      currentRun: run({ status: "running", completed_at: null }),
       selectedTrace: traceRef(),
       snapshotAvailability: "unavailable",
+      snapshotProbeState: "unavailable",
     })).toMatchObject({
       kind: "live_source",
       canvasMode: "source",
@@ -175,6 +249,72 @@ describe("analysis run companion state", () => {
       highlightedRef: "s7-i11",
     });
   });
+
+  it.each([
+    [
+      "missing_legacy",
+      "unavailable",
+      "legacy run has no saved source snapshot",
+    ],
+    [
+      "capture_failed",
+      "unavailable",
+      "snapshot capture failed",
+    ],
+    [
+      null,
+      "unavailable",
+      "run ended before a frozen source snapshot was saved",
+    ],
+    [
+      "captured",
+      "unavailable",
+      "marked captured but saved snapshot rows are unavailable",
+    ],
+    [
+      "captured",
+      "error",
+      "could not verify the saved snapshot rows",
+    ],
+  ] satisfies Array<[AnalysisRunDetail["snapshot_state"], SnapshotProbeState, string]>)(
+    "uses snapshot affordance copy for completed-run evidence when state is %s and probe is %s",
+    (snapshotState, snapshotProbeState, reasonFragment) => {
+      const snapshotError = snapshotState === "capture_failed" ? "capture failed" : null;
+
+      const result = evidenceSourceActionDecision({
+        currentRun: run({
+          status: snapshotState === null ? "failed" : "completed",
+          snapshot_state: snapshotState,
+          snapshot_error: snapshotError,
+        }),
+        selectedTrace: traceRef(),
+        snapshotAvailability: "unavailable",
+        snapshotProbeState,
+      });
+
+      expect(result).toMatchObject({ kind: "unavailable" });
+      expect(result).toMatchObject({
+        reason: expect.stringContaining(reasonFragment),
+      });
+    },
+  );
+
+  it.each(["completed", "failed", "cancelled"])(
+    "lets available saved snapshots win for %s evidence actions",
+    (status) => {
+      expect(evidenceSourceActionDecision({
+        currentRun: run({ status, snapshot_state: "captured" }),
+        selectedTrace: traceRef(),
+        snapshotAvailability: "available",
+        snapshotProbeState: "available",
+      })).toEqual({
+        kind: "run_snapshot",
+        canvasMode: "source",
+        sourceViewBasis: "run_snapshot",
+        highlightedRef: "s7-i11",
+      });
+    },
+  );
 
   it("filters companion runs across active and saved report runs", () => {
     const filter: CompanionRunsFilterState = {

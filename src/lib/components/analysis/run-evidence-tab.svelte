@@ -4,6 +4,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
+  import type { SnapshotProbeState } from "$lib/analysis-run-snapshot-affordance";
   import type { AnalysisRunDetail, AnalysisTraceData, AnalysisTraceRef } from "$lib/types/analysis";
 
   let {
@@ -12,6 +13,7 @@
     selectedTraceRef,
     selectedTrace,
     snapshotAvailability,
+    snapshotProbeState,
     formatTimestamp,
     traceRefOrigin,
     onSelectTraceRef,
@@ -22,6 +24,7 @@
     selectedTraceRef: string | null;
     selectedTrace: AnalysisTraceRef | null;
     snapshotAvailability: RunSnapshotAvailability;
+    snapshotProbeState: SnapshotProbeState;
     formatTimestamp: (timestamp: number | null) => string;
     traceRefOrigin: (ref: string) => string;
     onSelectTraceRef: (ref: string) => void | Promise<void>;
@@ -32,6 +35,7 @@
     currentRun,
     selectedTrace,
     snapshotAvailability,
+    snapshotProbeState,
   }));
 </script>
 

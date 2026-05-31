@@ -40,13 +40,16 @@ describe("run companion tabs", () => {
     expect(evidenceTabSource).toContain("<TracePanel");
     expect(evidenceTabSource).toContain("Show in source");
     expect(evidenceTabSource).toContain("onShowSelectedTraceInSource");
+    expect(evidenceTabSource).toContain("snapshotProbeState");
     expect(evidenceTabSource).toContain("evidenceSourceActionDecision");
-    expect(evidenceTabSource).toContain("Snapshot unavailable");
+    expect(evidenceTabSource).toContain("sourceDecision.reason");
   });
 
   it("keeps Chat explicit and availability-gated", () => {
     expect(chatTabSource).toContain("<ChatPanel");
     expect(chatTabSource).toContain("chatAvailability");
+    expect(chatTabSource).toContain("{chatAvailability.title}");
+    expect(chatTabSource).toContain("{chatAvailability.description}");
     expect(chatTabSource).not.toContain("onfocus");
     expect(chatTabSource).not.toContain("onFocus");
   });
