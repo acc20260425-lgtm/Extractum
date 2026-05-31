@@ -25,6 +25,10 @@ function matchCount(source: string, pattern: RegExp) {
   return source.match(pattern)?.length ?? 0;
 }
 
+function normalizeLineEndings(source: string) {
+  return source.replace(/\r\n/g, "\n");
+}
+
 function sourceBetween(source: string, start: string, end: string) {
   const startIndex = source.indexOf(start);
   expect(startIndex).toBeGreaterThanOrEqual(0);
@@ -537,10 +541,10 @@ describe("analysis source readers", () => {
   });
 
   it("extends existing selected row styles for tokenized evidence highlights without hardcoded colors", () => {
-    expect(telegramTimelineSource).toContain('li.selected,\n  li[data-evidence-highlighted="true"]');
-    expect(youtubeTranscriptSource).toContain('.transcript-group-list li.selected,\n  .transcript-group-list li[data-evidence-highlighted="true"]');
-    expect(snapshotItemsViewSource).toContain('article.selected,\n  article[data-evidence-highlighted="true"]');
-    expect(snapshotGroupSourcesViewSource).toContain('.other-item-list li.selected,\n  .other-item-list li[data-evidence-highlighted="true"]');
+    expect(normalizeLineEndings(telegramTimelineSource)).toContain('li.selected,\n  li[data-evidence-highlighted="true"]');
+    expect(normalizeLineEndings(youtubeTranscriptSource)).toContain('.transcript-group-list li.selected,\n  .transcript-group-list li[data-evidence-highlighted="true"]');
+    expect(normalizeLineEndings(snapshotItemsViewSource)).toContain('article.selected,\n  article[data-evidence-highlighted="true"]');
+    expect(normalizeLineEndings(snapshotGroupSourcesViewSource)).toContain('.other-item-list li.selected,\n  .other-item-list li[data-evidence-highlighted="true"]');
     expect(universalItemsViewSource).toContain('article[data-evidence-highlighted="true"]');
     expect(youtubeCommentsViewSource).toContain('article[data-evidence-highlighted="true"]');
     expect(telegramTimelineSource).toContain("var(--primary)");

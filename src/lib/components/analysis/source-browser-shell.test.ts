@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import shellSource from "./source-browser-shell.svelte?raw";
+import rawShellSource from "./source-browser-shell.svelte?raw";
+
+const shellSource = rawShellSource.replace(/\r\n/g, "\n");
 
 function sourceBetween(source: string, start: string, end: string) {
   const startIndex = source.indexOf(start);
