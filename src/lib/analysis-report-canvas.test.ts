@@ -56,6 +56,14 @@ describe("report canvas component contract", () => {
     expect(reportRunHeaderSource).toContain("currentRun.provider");
     expect(reportRunHeaderSource).toContain("currentRun.model");
     expect(reportRunHeaderSource).toContain("sourceBasisLabel");
+    expect(reportRunHeaderSource).toContain("snapshotAffordanceForRun");
+    expect(reportRunHeaderSource).toContain("snapshotProbeState");
+    expect(reportRunHeaderSource).toContain("snapshotAffordance.headerWarning");
+    expect(reportRunHeaderSource).toContain("Snapshot status");
+    expect(reportRunHeaderSource).toContain("Snapshot captured");
+    expect(reportRunHeaderSource).toContain("Snapshot note");
+    expect(reportRunHeaderSource).toContain("Snapshot error");
+    expect(reportRunHeaderSource).toContain("snapshotAffordance.sanitizedError");
     expect(reportRunHeaderSource).toContain("youtubeCorpusModeLabel");
   });
 

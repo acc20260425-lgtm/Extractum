@@ -9,6 +9,10 @@
     youtubeCorpusModeLabel,
     type RunSnapshotAvailability,
   } from "$lib/analysis-report-canvas-state";
+  import {
+    snapshotAffordanceForRun,
+    type SnapshotProbeState,
+  } from "$lib/analysis-run-snapshot-affordance";
   import type { BadgeVariant } from "$lib/components/ui/types";
   import type { SourceViewBasis } from "$lib/analysis-workspace-state";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
@@ -17,6 +21,7 @@
     currentRun,
     sourceViewBasis,
     snapshotAvailability,
+    snapshotProbeState,
     traceRefCount,
     activePhase,
     activeProgress,
@@ -30,6 +35,7 @@
     currentRun: AnalysisRunDetail;
     sourceViewBasis: SourceViewBasis;
     snapshotAvailability: RunSnapshotAvailability;
+    snapshotProbeState: SnapshotProbeState;
     traceRefCount: number;
     activePhase: string;
     activeProgress: string;
@@ -51,9 +57,14 @@
     sourceViewBasis,
     snapshotAvailability,
   }));
-  const hasSnapshotWarning = $derived(
-    currentRun.status === "completed" && snapshotAvailability === "unavailable",
-  );
+  const snapshotAffordance = $derived(snapshotAffordanceForRun({
+    snapshotState: currentRun.snapshot_state,
+    snapshotCapturedAt: currentRun.snapshot_captured_at,
+    snapshotError: currentRun.snapshot_error,
+    probeState: snapshotProbeState,
+    runStatus: currentRun.status,
+    surface: "opened-header",
+  }));
   const basisVariant = $derived(snapshotBadgeVariant(snapshotAvailability));
   const promptTemplateLabel = $derived(templateLabel(currentRun));
 
@@ -88,9 +99,9 @@
     </div>
   </div>
 
-  {#if hasSnapshotWarning}
+  {#if snapshotAffordance.headerWarning}
     <p class="snapshot-warning">
-      Frozen source snapshot is missing. The saved report can still be read, but exact source browsing is degraded.
+      {snapshotAffordance.headerWarning}
     </p>
   {/if}
 
@@ -110,6 +121,14 @@
       <MetaCell label="Completed">{formatTimestamp(currentRun.completed_at)}</MetaCell>
       <MetaCell label="Provider profile">{currentRun.provider_profile}</MetaCell>
       <MetaCell label="Source basis">{basisDescription}</MetaCell>
+      <MetaCell label="Snapshot status">{snapshotAffordance.detailTitle ?? basisLabel}</MetaCell>
+      <MetaCell label="Snapshot captured">{currentRun.snapshot_captured_at ?? "Not recorded"}</MetaCell>
+      {#if snapshotAffordance.detailDescription}
+        <MetaCell label="Snapshot note">{snapshotAffordance.detailDescription}</MetaCell>
+      {/if}
+      {#if snapshotAffordance.sanitizedError}
+        <MetaCell label="Snapshot error">{snapshotAffordance.sanitizedError}</MetaCell>
+      {/if}
       <MetaCell label="YouTube corpus">{youtubeCorpusModeLabel(currentRun.youtube_corpus_mode)}</MetaCell>
       {#if currentRun.telegram_history_scope === "current_plus_migrated"}
         <MetaCell label="Telegram history">Current + migrated historical scope</MetaCell>

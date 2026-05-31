@@ -1275,7 +1275,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/analysis-report-canvas.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-missing-capture-affordances-implementation.md`
 
-- [ ] **Step 1: Write failing header contract test**
+- [x] **Step 1: Write failing header contract test**
 
 In `"renders required opened-run header metadata"` in `src/lib/analysis-report-canvas.test.ts`, add:
 
@@ -1290,7 +1290,7 @@ In `"renders required opened-run header metadata"` in `src/lib/analysis-report-c
     expect(reportRunHeaderSource).toContain("snapshotAffordance.sanitizedError");
 ```
 
-- [ ] **Step 2: Run canvas contract test and verify failure**
+- [x] **Step 2: Run canvas contract test and verify failure**
 
 Run:
 
@@ -1300,7 +1300,7 @@ npm.cmd run test -- src/lib/analysis-report-canvas.test.ts
 
 Expected: FAIL because `ReportRunHeader` still uses `hasSnapshotWarning` and lacks snapshot detail metadata.
 
-- [ ] **Step 3: Use helper in `ReportRunHeader`**
+- [x] **Step 3: Use helper in `ReportRunHeader`**
 
 In `src/lib/components/analysis/report-run-header.svelte`, add:
 
@@ -1355,7 +1355,7 @@ Inside `.run-meta-grid`, after `Source basis`, add:
 
 Keep the existing `Source basis` MetaCell; it still describes the current view basis.
 
-- [ ] **Step 4: Run canvas contract test**
+- [x] **Step 4: Run canvas contract test**
 
 Run:
 
@@ -1365,7 +1365,7 @@ npm.cmd run test -- src/lib/analysis-report-canvas.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit header details**
+- [x] **Step 5: Commit header details**
 
 Run:
 
