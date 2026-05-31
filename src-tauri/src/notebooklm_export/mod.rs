@@ -952,11 +952,17 @@ fn default_manifest_scope() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        read_manifest, remove_generated_files, source_member_file_prefix, timestamp_for_folder,
-        validate_request, write_export_file, write_marker, NotebookLmExportManifest,
-        NotebookLmExportManifestMember, EXPORT_MARKER_FILE,
+        prefix_chunk_filename, read_manifest, remove_generated_files, render_source_export,
+        source_member_file_prefix, timestamp_for_folder, validate_request, write_export_file,
+        write_marker, NotebookLmExportManifest, NotebookLmExportManifestMember, SourceExportInput,
+        EXPORT_MARKER_FILE, MIGRATED_HISTORY_EMPTY_WARNING,
     };
-    use crate::notebooklm_export::model::{NotebookLmExportRequest, NotebookLmExportScope};
+    use crate::media::ItemMediaMetadata;
+    use crate::notebooklm_export::model::{
+        NotebookLmExportConfig, NotebookLmExportMessage, NotebookLmExportRequest,
+        NotebookLmExportScope, NotebookLmExportSource,
+    };
+    use crate::sources::NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP;
     use std::io;
 
     fn request() -> NotebookLmExportRequest {
@@ -973,6 +979,61 @@ mod tests {
             max_words_per_file: 300_000,
             max_bytes_per_file: 50_000_000,
             overwrite_existing: false,
+        }
+    }
+
+    fn test_source() -> NotebookLmExportSource {
+        NotebookLmExportSource {
+            id: 42,
+            source_type: "telegram".to_string(),
+            source_subtype: "channel".to_string(),
+            external_id: "source-42".to_string(),
+            title: Some("Alpha Source".to_string()),
+        }
+    }
+
+    fn export_config() -> NotebookLmExportConfig {
+        NotebookLmExportConfig {
+            export_id: None,
+            scope: NotebookLmExportScope::Source { source_id: 42 },
+            output_dir: ".".to_string(),
+            period_from: None,
+            period_to: None,
+            include_media_placeholders: true,
+            include_migrated_history: false,
+            min_message_length: 3,
+            max_words_per_file: 300_000,
+            max_bytes_per_file: 50_000_000,
+            overwrite_existing: false,
+        }
+    }
+
+    fn export_message(item_id: i64, text: &str) -> NotebookLmExportMessage {
+        NotebookLmExportMessage {
+            item_id,
+            source_id: 42,
+            external_id: format!("message-{item_id}"),
+            author: Some("Ada".to_string()),
+            published_at: 0,
+            text: Some(text.to_string()),
+            content_kind: "text_only".to_string(),
+            has_media: false,
+            media_kind: None,
+            media_metadata: ItemMediaMetadata::default(),
+            media_placeholders: Vec::new(),
+            urls: Vec::new(),
+            reply_to_msg_id: None,
+            reply_to_author: None,
+            reply_to_snippet: None,
+            reply_to_peer_kind: None,
+            reply_to_peer_id: None,
+            reply_to_top_id: None,
+            reaction_count: None,
+            forum_topic_id: None,
+            forum_topic_title: None,
+            forum_topic_top_message_id: None,
+            history_scope: NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP.to_string(),
+            migration_domain: None,
         }
     }
 
@@ -1005,6 +1066,87 @@ mod tests {
         assert_eq!(
             source_member_file_prefix(2, &source),
             "002-source-77-source_77"
+        );
+    }
+
+    #[test]
+    fn prefix_chunk_filename_adds_sources_directory_and_prefix() {
+        assert_eq!(
+            prefix_chunk_filename("001-source-42-alpha", "part-001.md"),
+            "sources/001-source-42-alpha-part-001.md"
+        );
+    }
+
+    #[test]
+    fn render_source_export_filters_messages_and_clears_media_placeholders() {
+        let mut config = export_config();
+        config.include_media_placeholders = false;
+        config.min_message_length = 10;
+
+        let mut exported = export_message(1, "this message is long enough to export");
+        exported.content_kind = "text_with_media".to_string();
+        exported.has_media = true;
+        exported.media_kind = Some("photo".to_string());
+        exported.media_placeholders = vec!["photo: image.jpg".to_string()];
+        let skipped = export_message(2, "short");
+        let mut progress = Vec::new();
+
+        let rendered = render_source_export(
+            SourceExportInput {
+                source: test_source(),
+                current_messages: vec![exported, skipped],
+                migrated_messages: Vec::new(),
+            },
+            &config,
+            0,
+            str::to_string,
+            |current, total| progress.push((current, total)),
+        );
+
+        assert_eq!(rendered.skipped_message_count, 1);
+        assert_eq!(rendered.exported_messages.len(), 1);
+        assert!(rendered.exported_messages[0].media_placeholders.is_empty());
+        assert_eq!(rendered.rendered_sections.len(), 1);
+        assert_eq!(
+            rendered.rendered_sections[0].chunks[0].filename,
+            "1970_alpha_source_unrecognized_topic_part-001.md"
+        );
+        assert_eq!(progress.last().copied(), Some((2, 2)));
+    }
+
+    #[test]
+    fn render_source_export_tracks_empty_migrated_history_warning_and_section_prefix() {
+        let mut config = export_config();
+        config.include_migrated_history = true;
+
+        let rendered = render_source_export(
+            SourceExportInput {
+                source: test_source(),
+                current_messages: vec![export_message(1, "current history message")],
+                migrated_messages: Vec::new(),
+            },
+            &config,
+            0,
+            str::to_string,
+            |_, _| {},
+        );
+
+        assert_eq!(
+            rendered.warnings,
+            vec![MIGRATED_HISTORY_EMPTY_WARNING.to_string()]
+        );
+        assert_eq!(rendered.rendered_sections.len(), 2);
+        assert_eq!(
+            rendered.rendered_sections[0].heading,
+            Some("Current supergroup history")
+        );
+        assert_eq!(
+            rendered.rendered_sections[1].heading,
+            Some("Migrated small-group history")
+        );
+        assert_eq!(
+            rendered.rendered_sections[0].chunks[0].filename,
+            "current-supergroup-history-1970_alpha_source_unrecognized_topic_part-001.md"
         );
     }
 
