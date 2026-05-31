@@ -1379,11 +1379,16 @@
       return false;
     }
 
+    const currentSourceScope = currentEvidenceSourceScope(request.sourceScope.sourceId);
+    if (currentSourceScope === null) {
+      return false;
+    }
+
     return pendingFocusMatchesCurrent(pendingEvidenceSourceFocus, {
       requestId: request.requestId,
       runId: currentRun?.id ?? null,
-      sourceScope: request.sourceScope,
-      sourceViewBasis: request.sourceViewBasis,
+      sourceScope: currentSourceScope,
+      sourceViewBasis: workspaceUiState.sourceViewBasis,
       selectedTraceRef,
     });
   }

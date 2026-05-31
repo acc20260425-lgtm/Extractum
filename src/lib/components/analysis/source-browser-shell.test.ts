@@ -117,12 +117,17 @@ describe("source browser shell component contract", () => {
     const tabTarget = functionBlock("highlightTabForToken");
 
     expect(shellSource).toContain("liveSourceItemRef");
+    expect(shellSource).toContain("youtubeSegmentRef");
     expect(shellSource).toContain("let lastHighlightTabTokenId");
     expect(shellSource).toContain("lastHighlightTabTokenId === highlightToken.tokenId");
     expect(shellSource).toContain("lastHighlightTabTokenId = highlightToken.tokenId");
     expect(shellSource).toContain("activeTab = targetTab");
 
     expect(tabTarget).toContain("sourceData.sourceItems.find((item) => liveSourceItemRef(item) === highlightToken.traceRef)");
+    expect(tabTarget).toContain(
+      "sourceData.youtubeTranscriptSegments.some((segment) => youtubeSegmentRef(segment) === highlightToken.traceRef)",
+    );
+    expect(tabTarget).toContain('return tabAvailable("transcript") ? "transcript" : null;');
     expect(tabTarget).toContain('sourceSubject.sourceType === "youtube"');
     expect(tabTarget).toContain('sourceSubject.sourceSubtype === "video"');
     expect(tabTarget).toContain('matchingItem.youtubeComment || matchingItem.itemKind === "youtube_comment"');

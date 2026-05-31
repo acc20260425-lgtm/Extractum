@@ -23,7 +23,7 @@
   } from "$lib/source-browser-model";
   import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
-  import { liveSourceItemRef, type SourceFilterOption, type SourceReaderItem } from "$lib/source-reader-model";
+  import { liveSourceItemRef, youtubeSegmentRef, type SourceFilterOption, type SourceReaderItem } from "$lib/source-reader-model";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
   import type {
     Source,
@@ -225,6 +225,13 @@
     if (!highlightToken || !subject) return null;
 
     if (subject.kind === "source" && sourceData && sourceSubject) {
+      if (sourceSubject.sourceType === "youtube" && sourceSubject.sourceSubtype === "video") {
+        const matchingTranscriptSegment = sourceData.youtubeTranscriptSegments.some((segment) => youtubeSegmentRef(segment) === highlightToken.traceRef);
+        if (matchingTranscriptSegment) {
+          return tabAvailable("transcript") ? "transcript" : null;
+        }
+      }
+
       const matchingItem = sourceData.sourceItems.find((item) => liveSourceItemRef(item) === highlightToken.traceRef);
       if (!matchingItem) return null;
       if (

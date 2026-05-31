@@ -84,6 +84,13 @@ describe("analysis route effects", () => {
     );
   }
 
+  function currentFocusMatchesRequestFunction() {
+    return functionSlice(
+      "function currentFocusMatchesRequest",
+      "function clearFocusedSourceLoadingFlags",
+    );
+  }
+
   function onMountTeardown() {
     const returnStart = analysisPageSource.indexOf("    return () => {");
     const teardownEnd = analysisPageSource.indexOf("</script>", returnStart);
@@ -234,6 +241,17 @@ describe("analysis route effects", () => {
       "applySnapshotPage(",
       "snapshot stale guard must precede applying the snapshot page",
     );
+  });
+
+  it("compares focused-load requests against current route scope and source basis", () => {
+    const focusMatcher = currentFocusMatchesRequestFunction();
+
+    expect(focusMatcher).toContain("const currentSourceScope = currentEvidenceSourceScope(request.sourceScope.sourceId);");
+    expect(focusMatcher).toContain("if (currentSourceScope === null) {");
+    expect(focusMatcher).toContain("sourceScope: currentSourceScope");
+    expect(focusMatcher).toContain("sourceViewBasis: workspaceUiState.sourceViewBasis");
+    expect(focusMatcher).not.toContain("sourceScope: request.sourceScope");
+    expect(focusMatcher).not.toContain("sourceViewBasis: request.sourceViewBasis");
   });
 
   it("checks pending focus before assigning focused group-live state", () => {
