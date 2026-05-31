@@ -68,7 +68,7 @@ Implemented:
 - saved reports
 - follow-up chat on saved runs
 - analysis report launch guards for missing source context, unusable provider profiles, source runtime problems, and large selected corpora
-- single-source NotebookLM export with local reply/thread/reaction metadata
+- single-source and Telegram source-group NotebookLM export with local reply/thread/reaction metadata
 - reusable LLM provider profiles with active-profile selection
 - configurable OpenAI-compatible `base_url` support in `/settings`
 - provider smoke testing from `/settings`

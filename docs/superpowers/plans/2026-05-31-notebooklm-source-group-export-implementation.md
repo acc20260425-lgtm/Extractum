@@ -1990,7 +1990,7 @@ git commit -m "feat: enable notebooklm export for telegram groups"
 - Modify: `docs/project.md`
 - Modify: `docs/superpowers/plans/2026-05-31-notebooklm-source-group-export-implementation.md`
 
-- [ ] **Step 1: Update backlog**
+- [x] **Step 1: Update backlog**
 
 In `docs/backlog.md`, under `### 3.1 NotebookLM Export Follow-Ups`, remove this checked-off work item:
 
@@ -2005,7 +2005,7 @@ Do not remove unrelated NotebookLM follow-ups:
 - richer topic grouping;
 - saved-analysis-snapshot export.
 
-- [ ] **Step 2: Update project current state**
+- [x] **Step 2: Update project current state**
 
 In `docs/project.md`, change the implemented NotebookLM bullet from:
 
@@ -2021,11 +2021,11 @@ to:
 
 Leave `YouTube-specific NotebookLM export enrichment` in "Not implemented yet".
 
-- [ ] **Step 3: Mark implementation plan tasks completed**
+- [x] **Step 3: Mark implementation plan tasks completed**
 
 In this plan file, mark each completed task step with `[x]` as execution progresses. Do not mark a step complete before its command or edit has actually run.
 
-- [ ] **Step 4: Run focused verification**
+- [x] **Step 4: Run focused verification**
 
 Run:
 
@@ -2038,7 +2038,7 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 5: Run full verification**
+- [x] **Step 5: Run full verification**
 
 Run:
 
@@ -2059,15 +2059,15 @@ git commit -m "docs: close notebooklm source group export"
 
 ## Final Acceptance Checklist
 
-- [ ] Backend request accepts exactly one of `source_id` or `source_group_id`.
-- [ ] Existing single-source Telegram export tests still pass.
-- [ ] Telegram source groups export a group package with source-scoped files in `sources/`.
-- [ ] YouTube source groups return explicit unsupported copy.
-- [ ] Dirty non-Telegram members inside a Telegram group are skipped with warnings.
-- [ ] No valid Telegram members errors with `No Telegram sources found in this source group.`
-- [ ] All-empty Telegram groups error with `No exportable Telegram messages found for this source group.`
-- [ ] `.extractum-notebooklm-export.json` tracks `glossary.md`, every `sources/...md` file, and per-member summaries.
-- [ ] Overwrite cleanup handles generated files in `sources/`.
-- [ ] Frontend enables export for Telegram groups and leaves YouTube groups disabled.
-- [ ] Frontend result UI does not depend on new member summary DTO fields.
-- [ ] `npm.cmd run verify` passes or any unrelated failure is documented clearly.
+- [x] Backend request accepts exactly one of `source_id` or `source_group_id`.
+- [x] Existing single-source Telegram export tests still pass.
+- [x] Telegram source groups export a group package with source-scoped files in `sources/`.
+- [x] YouTube source groups return explicit unsupported copy.
+- [x] Dirty non-Telegram members inside a Telegram group are skipped with warnings.
+- [x] No valid Telegram members errors with `No Telegram sources found in this source group.`
+- [x] All-empty Telegram groups error with `No exportable Telegram messages found for this source group.`
+- [x] `.extractum-notebooklm-export.json` tracks `glossary.md`, every `sources/...md` file, and per-member summaries.
+- [x] Overwrite cleanup handles generated files in `sources/`.
+- [x] Frontend enables export for Telegram groups and leaves YouTube groups disabled.
+- [x] Frontend result UI does not depend on new member summary DTO fields.
+- [x] `npm.cmd run verify` passes or any unrelated failure is documented clearly.

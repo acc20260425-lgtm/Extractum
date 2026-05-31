@@ -7,7 +7,7 @@
 
 | Priority | Area | Next outcome |
 | --- | --- | --- |
-| Medium | NotebookLM export follow-ups | decide on optional link enrichment, source-group export, forward metadata, and richer topic grouping |
+| Medium | NotebookLM export follow-ups | decide on optional link enrichment, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
 | Medium | Frontend workspace evolution | improve evidence navigation, topic filters, saved-run history, and remaining source-surface consistency |
@@ -32,7 +32,6 @@
 Priority: medium.
 
 - [ ] add optional link enrichment with explicit user opt-in and cache
-- [ ] add source-group export if the analysis group workflow needs it
 - [ ] render forward context after sync persists forward metadata
 - [ ] decide whether export needs richer topic grouping beyond materialized forum memberships
 - [ ] consider saved-analysis-snapshot export based on `analysis_run_messages`
