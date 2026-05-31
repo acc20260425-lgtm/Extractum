@@ -125,8 +125,8 @@ describe("analysis redesign final safety contract", () => {
     expect(storeBackendSource).toContain("scope_label_snapshot");
     expect(storeBackendSource).toContain("resolve_run_scope_label");
     expect(analysisUtilsSource).toContain("run.scope_label.trim()");
-    expect(reportRunHeaderSource).toContain("missing");
-    expect(reportRunHeaderSource).toContain("runTargetLabel(currentRun)");
+    expect(reportRunHeaderSource).toContain("<p>{runTargetLabel(currentRun)}</p>");
+    expect(reportRunHeaderSource).toContain('<MetaCell label="Scope">{runTargetLabel(currentRun)}</MetaCell>');
     expect(workspaceStateSource).toContain("liveScopeExists");
     expect(reportRunHeaderSource).toContain("Source basis");
     expect(reportRunHeaderSource).toContain("youtube_corpus_mode");

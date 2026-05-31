@@ -68,7 +68,10 @@ Priority: medium.
 
 Acceptance:
 
-- Large saved-run histories can be narrowed quickly without reconstructing the original run context.
+- Missing legacy and capture-failed saved runs show explicit affordances in the
+  Runs list, opened-run details, Source, Evidence, and Chat surfaces.
+- Live source browsing remains an explicit action and is not presented as the
+  saved run corpus when a run snapshot is unavailable.
 
 ### 3.3 NotebookLM Export Follow-Ups
 

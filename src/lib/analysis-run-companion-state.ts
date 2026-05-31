@@ -224,6 +224,8 @@ export function evidenceSourceActionDecision({
     };
   }
 
+  const hasUsableSnapshot = snapshotAvailability === "available" && snapshotProbeState === "available";
+
   if (snapshotAvailability === "available") {
     return {
       kind: "run_snapshot",
@@ -232,8 +234,6 @@ export function evidenceSourceActionDecision({
       highlightedRef: selectedTrace.ref,
     };
   }
-
-  const hasUsableSnapshot = snapshotAvailability === "available" && snapshotProbeState === "available";
 
   if (!hasUsableSnapshot && (isTerminalRunStatus(currentRun.status) || snapshotProbeState === "error")) {
     const affordance = snapshotAffordanceForRun({

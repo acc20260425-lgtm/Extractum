@@ -1519,7 +1519,7 @@ Expected: commit succeeds.
 - Modify: `docs/backlog.md`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-missing-capture-affordances-implementation.md`
 
-- [ ] **Step 1: Update Saved Runs backlog acceptance**
+- [x] **Step 1: Update Saved Runs backlog acceptance**
 
 In `docs/backlog.md`, replace the Saved Runs Discoverability acceptance item:
 
@@ -1536,7 +1536,7 @@ with:
   saved run corpus when a run snapshot is unavailable.
 ```
 
-- [ ] **Step 2: Run focused frontend tests for the whole slice**
+- [x] **Step 2: Run focused frontend tests for the whole slice**
 
 Run:
 
@@ -1546,7 +1546,7 @@ npm.cmd run test -- src/lib/analysis-run-snapshot-affordance.test.ts src/lib/ana
 
 Expected: PASS for all listed files.
 
-- [ ] **Step 3: Run Svelte and TypeScript check**
+- [x] **Step 3: Run Svelte and TypeScript check**
 
 Run:
 
@@ -1556,7 +1556,7 @@ npm.cmd run check
 
 Expected: `svelte-check` exits with 0 errors and 0 warnings.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run:
 
@@ -1566,7 +1566,7 @@ npm.cmd run verify
 
 Expected: PASS. This should include Vitest, Svelte check, Rust checks/tests, and diff checks as defined by `scripts/verify.mjs`.
 
-- [ ] **Step 5: Commit verification bookkeeping**
+- [x] **Step 5: Commit verification bookkeeping**
 
 If only `docs/backlog.md` and this plan's checkboxes changed after verification, run:
 
@@ -1581,12 +1581,12 @@ Expected: commit succeeds. If the backlog and plan checkbox updates were already
 
 ## Acceptance Checklist
 
-- [ ] Pure helper covers captured/available, legacy missing, capture failed with error, capture failed without error, terminal-before-capture, inconsistent captured marker, verification failure, null snapshot state matrix, active/checking/pending, and status predicates.
-- [ ] Runs tab visibly badges degraded saved rows and does not show raw or sanitized snapshot errors in rows.
-- [ ] Opened-run header shows short degraded warning only and puts details/error text in `Run details`.
-- [ ] Source tab distinguishes legacy missing, capture failed, not captured before end, inconsistent rows, and verification failure.
-- [ ] Evidence `Show in source` remains disabled for completed runs without usable saved snapshots and uses helper disabled reasons.
-- [ ] Chat remains disabled without usable saved snapshot context and uses helper-derived disabled copy.
-- [ ] Live source browsing remains explicit and is described as live data rather than saved run corpus.
-- [ ] `docs/backlog.md` Saved Runs Discoverability acceptance text describes missing/capture-failed affordances rather than already-shipped narrowing.
-- [ ] Backend DTOs, report execution, snapshot capture, Runs filters, cleanup flows, and GUI smoke coverage remain unchanged.
+- [x] Pure helper covers captured/available, legacy missing, capture failed with error, capture failed without error, terminal-before-capture, inconsistent captured marker, verification failure, null snapshot state matrix, active/checking/pending, and status predicates.
+- [x] Runs tab visibly badges degraded saved rows and does not show raw or sanitized snapshot errors in rows.
+- [x] Opened-run header shows short degraded warning only and puts details/error text in `Run details`.
+- [x] Source tab distinguishes legacy missing, capture failed, not captured before end, inconsistent rows, and verification failure.
+- [x] Evidence `Show in source` remains disabled for completed runs without usable saved snapshots and uses helper disabled reasons.
+- [x] Chat remains disabled without usable saved snapshot context and uses helper-derived disabled copy.
+- [x] Live source browsing remains explicit and is described as live data rather than saved run corpus.
+- [x] `docs/backlog.md` Saved Runs Discoverability acceptance text describes missing/capture-failed affordances rather than already-shipped narrowing.
+- [x] Backend DTOs, report execution, snapshot capture, Runs filters, cleanup flows, and GUI smoke coverage remain unchanged.

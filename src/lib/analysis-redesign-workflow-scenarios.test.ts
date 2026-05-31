@@ -162,11 +162,13 @@ describe("analysis redesign final workflow scenarios", () => {
     expect(chatAvailabilityForRun({
       currentRun: run(),
       snapshotAvailability,
+      snapshotProbeState: "available",
     })).toMatchObject({ enabled: true, reason: "enabled" });
     expect(evidenceSourceActionDecision({
       currentRun: run(),
       selectedTrace: trace(),
       snapshotAvailability,
+      snapshotProbeState: "available",
     })).toMatchObject({
       kind: "run_snapshot",
       canvasMode: "source",
@@ -271,6 +273,7 @@ describe("analysis redesign final workflow scenarios", () => {
     expect(chatAvailabilityForRun({
       currentRun,
       snapshotAvailability,
+      snapshotProbeState: "unknown",
     })).toMatchObject({ enabled: false, reason: "pending_completion" });
   });
 
@@ -291,14 +294,16 @@ describe("analysis redesign final workflow scenarios", () => {
     expect(chatAvailabilityForRun({
       currentRun,
       snapshotAvailability,
-    })).toMatchObject({ enabled: false, reason: "missing_snapshot" });
+      snapshotProbeState: "unavailable",
+    })).toMatchObject({ enabled: false, reason: "inconsistent" });
     expect(evidenceSourceActionDecision({
       currentRun,
       selectedTrace: trace(),
       snapshotAvailability,
+      snapshotProbeState: "unavailable",
     })).toMatchObject({
       kind: "unavailable",
-      reason: expect.stringContaining("completed run has no saved snapshot rows"),
+      reason: expect.stringContaining("marked captured but saved snapshot rows are unavailable"),
     });
   });
 

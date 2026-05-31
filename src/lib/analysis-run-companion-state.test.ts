@@ -189,7 +189,7 @@ describe("analysis run companion state", () => {
     "uses snapshot affordance copy for completed-run chat when state is %s and probe is %s",
     (snapshotState, snapshotProbeState, reason, title, descriptionFragment) => {
       const snapshotError = snapshotState === "capture_failed" ? "sqlite write failed" : null;
-      const availability = snapshotProbeState === "available" ? "available" : "unavailable";
+      const availability: RunSnapshotAvailability = "unavailable";
 
       const result = chatAvailabilityForRun({
         currentRun: run({
