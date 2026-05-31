@@ -22,10 +22,13 @@ The slice must preserve the existing Saved Runs affordance work:
 
 ## Files
 
-Modify:
+Create:
 
 - `src/lib/analysis-evidence-source-navigation.ts`
 - `src/lib/analysis-evidence-source-navigation.test.ts`
+
+Modify:
+
 - `src/lib/analysis-workspace-state.ts`
 - `src/lib/analysis-workspace-state.test.ts`
 - `src/lib/source-reader-model.ts`
@@ -76,9 +79,19 @@ expect(sourceScopesEqual(
 - [ ] `pendingFocusMatchesCurrent(...)` is false before page/items assignment when request id or current route state changes.
 - [ ] `evidenceHighlightMatchesCurrent(...)` is false when source scope or basis changes.
 - [ ] `focusedLiveSourceTargetForTrace(...)` maps:
-  - YouTube transcript traces with `youtube_timestamp_seconds` to `{ kind: "youtube_transcript"; aroundStartMs: Math.round(seconds * 1000) }`.
+  - YouTube transcript traces with finite `youtube_timestamp_seconds` to `{ kind: "youtube_transcript"; aroundStartMs: Math.round(seconds * 1000) }`.
   - Telegram and YouTube comment item traces with a positive `item_id` to `{ kind: "source_item"; aroundItemId }`.
   - synthetic or metadata-only traces without a positive `item_id` and without timestamp to `{ kind: "unsupported"; reason }`.
+- [ ] `focusedLiveSourceTargetForTrace(...)` rejects invalid live targets:
+  - `youtube_timestamp_seconds: NaN`;
+  - `youtube_timestamp_seconds: Infinity`;
+  - `youtube_timestamp_seconds: null` with `item_id: 0`;
+  - `is_synthetic: true` with no usable timestamp or item id.
+- [ ] Inspect actual DTO field names before writing ref builders:
+  - `SourceItem` in `src/lib/types/sources.ts` uses `sourceId` and `id`;
+  - `YoutubeTranscriptSegment` uses `sourceId`, `itemId`, and `startMs`;
+  - `AnalysisRunMessage` uses backend snapshot fields including ready `ref`, `source_id`, and `item_id`.
+  The helper must use these existing shapes and must not introduce parallel `source_id`/`item_id` aliases in frontend DTO helpers.
 - [ ] `loadedSourceDataContainsTraceRef(...)` returns true for:
   - snapshot rows whose DTO-derived reader item has `ref === canonicalTraceRef`;
   - live source item rows using the same source item ref builder as `source-reader-model.ts`;
@@ -149,8 +162,9 @@ export function canonicalEvidenceTraceRef(
 
 export function sourceScopeForEvidence(input: {
   runSourceGroupId: number | null;
+  workspaceSourceGroupId: number | null;
   traceSourceId: number;
-}): EvidenceSourceScope;
+}): EvidenceSourceScope | null;
 
 export function sourceScopesEqual(
   left: EvidenceSourceScope | null,
@@ -220,10 +234,12 @@ export function loadedSourceDataContainsTraceRef(
 ): boolean;
 ```
 
-Implementation rule:
+Implementation rules:
 
 - Use existing DTO fields first.
-- If DTOs do not carry a ready `ref`, use shared exported builders from `source-reader-model.ts`.
+- Snapshot `AnalysisRunMessage` DTOs carry ready `ref`; route code should convert messages through `analysisRunMessageToReaderItem(...)` and match those refs.
+- Live `SourceItem` DTOs do not carry `ref`; use the shared exported `liveSourceItemRef(...)` builder.
+- YouTube transcript segment DTOs do not carry `ref`; use the shared exported `youtubeSegmentRef(...)` builder.
 - Do not duplicate raw ref string construction in route code.
 
 - [ ] Export ref builders from `src/lib/source-reader-model.ts`:
@@ -250,7 +266,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 Expected green output:
 
 ```text
-Test Files  1 passed
+Targeted helper and source-reader tests exit 0
 ```
 
 and existing source reader tests remain green.
@@ -261,7 +277,7 @@ and existing source reader tests remain green.
 
 ```powershell
 git add src/lib/analysis-evidence-source-navigation.ts src/lib/analysis-evidence-source-navigation.test.ts src/lib/source-reader-model.ts src/lib/analysis-source-readers.test.ts
-git commit -m "test: cover evidence source navigation helpers"
+git commit -m "feat: add evidence source navigation helpers"
 ```
 
 ---
@@ -369,7 +385,9 @@ git commit -m "feat: model evidence source workspace navigation"
 
 ---
 
-## Task 3: Wire Route State, Request Identity, and Focused Loads
+## Task 3: Wire Route State, Request Identity, and Return Context
+
+This route work is deliberately split into two commits. Task 3 adds state, request identity, source scope derivation, unsupported target rejection, and return-context setup. Task 4 adds the focused-load assignment guards and loaded-data target checks.
 
 ### Red
 
@@ -396,14 +414,12 @@ let transientSourceHighlight = $state<EvidenceHighlightToken | null>(null);
 - [ ] `sourceReturnContext` is created before the focused load starts so failed loads can still return to Evidence.
 - [ ] Focused live-source loading uses `focusedLiveSourceTargetForTrace(trace)`.
 - [ ] Transcript loading passes an integer `aroundStartMs`.
-- [ ] Every focused-load response checks `pendingFocusMatchesCurrent(...)` before assigning:
-  - `applySnapshotPage(...)`
-  - `groupLiveItemsBySource = ...`
-  - `applySourceItemsPage(...)`
-  - `youtubeTranscriptSegments = ...`
-- [ ] Successful focused loads call `loadedSourceDataContainsTraceRef(...)` before creating a highlight token.
-- [ ] Successful focused loads that do not contain the selected trace clear pending highlight state and do not fabricate rows.
-- [ ] Failed focused loads leave Source mode and `sourceReturnContext` intact, clear pending/highlight state, and surface `formatAppError("loading selected source evidence", error)`.
+- [ ] `showSelectedTraceInSource()` clears any old `transientSourceHighlight` before creating a new pending request.
+- [ ] `currentEvidenceSourceScope(...)` documents and enforces the group id source:
+  - saved run over a source group uses `currentRun.source_group_id`;
+  - live source-group fallback uses `workspaceUiState.workspaceSelection.sourceGroupId` only when it matches `currentRun.source_group_id`;
+  - opened saved-run snapshot group members use `currentRun.source_group_id` as the group id and `trace.source_id` as the member source id;
+  - `selectedSnapshotSourceId` and `selectedGroupSourceId` are member-source ids, never group ids.
 
 Run:
 
@@ -451,8 +467,14 @@ function nextEvidenceSourceRequestId() {
 }
 
 function currentEvidenceSourceScope(traceSourceId: number) {
+  const workspaceSourceGroupId =
+    workspaceUiState.workspaceSelection.kind === "source_group"
+      ? workspaceUiState.workspaceSelection.sourceGroupId
+      : null;
+
   return sourceScopeForEvidence({
     runSourceGroupId: currentRun?.source_group_id ?? null,
+    workspaceSourceGroupId,
     traceSourceId,
   });
 }
@@ -527,8 +549,13 @@ const activeSourceReturnContext = $derived.by(() => {
 ```ts
 const canonicalRef = canonicalEvidenceTraceRef(decision.highlightedRef, trace.ref);
 const sourceScope = currentEvidenceSourceScope(trace.source_id);
+if (!sourceScope) {
+  status = "Selected evidence no longer belongs to the opened source group.";
+  return;
+}
 const requestId = nextEvidenceSourceRequestId();
 
+clearSourceHighlight();
 sourceReturnContext = {
   kind: "evidence",
   runId: currentRun.id,
@@ -555,6 +582,53 @@ await loadSourcePageAroundTrace({ decision, trace, requestId, canonicalRef, sour
 ```
 
 - [ ] Refactor `loadSourcePageAroundTrace(...)` to accept the request identity and canonical ref.
+
+### Verify
+
+Run:
+
+```powershell
+npm.cmd run test -- src/lib/analysis-source-readers-route.test.ts
+npm.cmd run test -- src/lib/analysis-route-effects.test.ts
+npm.cmd run test -- src/lib/analysis-redesign-workflow-scenarios.test.ts
+```
+
+### Commit
+
+- [ ] Commit:
+
+```powershell
+git add src/routes/analysis/+page.svelte src/lib/analysis-source-readers-route.test.ts src/lib/analysis-route-effects.test.ts src/lib/analysis-redesign-workflow-scenarios.test.ts
+git commit -m "feat: add evidence source route state"
+```
+
+---
+
+## Task 4: Guard Focused Loads and Target Matching
+
+### Red
+
+- [ ] Extend focused route contract tests before changing assignment behavior.
+
+Contract checks:
+
+- [ ] Every focused-load response checks `pendingFocusMatchesCurrent(...)` before assigning:
+  - `applySnapshotPage(...)`
+  - `groupLiveItemsBySource = ...`
+  - `applySourceItemsPage(...)`
+  - `youtubeTranscriptSegments = ...`
+- [ ] Successful focused loads call `loadedSourceDataContainsTraceRef(...)` before creating a highlight token.
+- [ ] Successful focused loads that do not contain the selected trace clear pending highlight state and do not fabricate rows.
+- [ ] Failed focused loads leave Source mode and `sourceReturnContext` intact, clear pending/highlight state, and surface `formatAppError("loading selected source evidence", error)`.
+
+Run:
+
+```powershell
+npm.cmd run test -- src/lib/analysis-source-readers-route.test.ts
+```
+
+### Green
+
 - [ ] Check `pendingFocusMatchesCurrent(...)` before state assignment in every awaited branch. This is required before assignment, not only before setting a highlight token.
 
 Snapshot branch:
@@ -651,12 +725,12 @@ npm.cmd run test -- src/lib/analysis-redesign-workflow-scenarios.test.ts
 
 ```powershell
 git add src/routes/analysis/+page.svelte src/lib/analysis-source-readers-route.test.ts src/lib/analysis-route-effects.test.ts src/lib/analysis-redesign-workflow-scenarios.test.ts
-git commit -m "feat: wire evidence source focused loading"
+git commit -m "feat: guard evidence source focused loads"
 ```
 
 ---
 
-## Task 4: Add One-Shot Highlight Support to Readers
+## Task 5: Add One-Shot Highlight Support to Readers
 
 ### Red
 
@@ -779,12 +853,12 @@ Do not rely on `"3 refs"` as the lookup key for evidence highlight.
 
 ```css
 [data-evidence-highlighted="true"] {
-  outline: 2px solid var(--color-accent, #4f46e5);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 2px;
 }
 ```
 
-Use existing design tokens when available. Do not introduce a new one-note palette.
+Use an existing project token or class name after inspecting nearby focus/selected styles. Do not add a new hardcoded hex fallback if the project already has a focus or accent token.
 
 ### Verify
 
@@ -806,7 +880,7 @@ git commit -m "feat: highlight evidence source rows"
 
 ---
 
-## Task 5: Add the Scoped Back to Evidence Affordance
+## Task 6: Add the Scoped Back to Evidence Affordance
 
 ### Red
 
@@ -874,10 +948,11 @@ function returnToEvidenceReview() {
     type: "return_to_evidence_review",
     traceRef: context.traceRef,
   });
+  sourceReturnContext = null;
 }
 ```
 
-- [ ] Keep `sourceReturnContext` after returning to Evidence only if the active-context predicate still passes. Since canvas mode becomes report, the route should not pass it to Source UI until another Evidence -> Source navigation occurs.
+- [ ] Clear `sourceReturnContext` after returning to Evidence. The context is local to one interactive Evidence -> Source jump and must not be recreated by persistence or reused by a later arbitrary Source visit.
 
 ### Verify
 
@@ -899,7 +974,7 @@ git commit -m "feat: add evidence source return affordance"
 
 ---
 
-## Task 6: Cover End-to-End State Invariants
+## Task 7: Cover End-to-End State Invariants
 
 ### Red
 
@@ -977,7 +1052,7 @@ git commit -m "test: cover evidence source navigation invariants"
 
 ---
 
-## Task 7: Typecheck, Full Verification, and Cleanup
+## Task 8: Typecheck, Full Verification, and Cleanup
 
 - [ ] Run targeted tests again:
 
@@ -1020,10 +1095,10 @@ git diff --stat
 rg -n "back_to_run_snapshot|return_to_evidence_review|switch_source_basis_to_run_snapshot|sourceReturnContext|pendingEvidenceSourceFocus|transientSourceHighlight" src
 ```
 
-- [ ] Final commit if Task 7 required fixes:
+- [ ] Final commit if Task 8 required fixes:
 
 ```powershell
-git add src
+git add src docs/superpowers/plans/2026-05-31-evidence-source-navigation-implementation.md
 git commit -m "chore: verify evidence source navigation"
 ```
 
