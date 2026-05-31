@@ -24,7 +24,7 @@ Create:
 Modify:
 
 - `src/routes/analysis/+page.svelte`
-  - Update `.analysis-workspace` desktop grid companion column from the old 430px cap to a wider bounded `clamp(...)` track.
+  - Update `.analysis-workspace` desktop grid companion column from the old 430px cap to a wider bounded `clamp(...)` track, with a fixed `560px` max fallback if tooling or browser verification rejects the nested `clamp()`.
   - Preserve existing `@media (max-width: 1500px)` and `@media (max-width: 1180px)` behavior.
 - `src/lib/components/analysis/run-evidence-tab.svelte`
   - Add `container-type: inline-size` to `.run-evidence-tab`.
@@ -71,31 +71,40 @@ function normalizeLineEndings(source: string) {
   return source.replace(/\r\n/g, "\n");
 }
 
-function sourceBetween(source: string, start: string, end: string) {
-  const startIndex = source.indexOf(start);
-  expect(startIndex, `missing start marker: ${start}`).toBeGreaterThanOrEqual(0);
-  const endIndex = source.indexOf(end, startIndex + start.length);
-  expect(endIndex, `missing end marker after ${start}: ${end}`).toBeGreaterThan(startIndex);
-  return source.slice(startIndex, endIndex + end.length);
+function cssBlock(source: string, marker: string) {
+  const startIndex = source.indexOf(marker);
+  expect(startIndex, `missing marker: ${marker}`).toBeGreaterThanOrEqual(0);
+  const openBraceIndex = source.indexOf("{", startIndex);
+  expect(openBraceIndex, `missing opening brace after ${marker}`).toBeGreaterThan(startIndex);
+
+  let depth = 0;
+  for (let index = openBraceIndex; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  throw new Error(`missing closing brace for ${marker}`);
 }
+
+const widerCompanionColumnPattern =
+  /minmax\(420px,\s*(?:clamp\(480px,\s*30vw,\s*560px\)|560px)\)/;
 
 describe("analysis companion layout", () => {
   it("widens the desktop companion column while preserving existing stacking breakpoints", () => {
-    const workspaceRule = sourceBetween(analysisPageSource, ".analysis-workspace {", "\n  }\n");
-    const mediumBreakpoint = sourceBetween(
-      analysisPageSource,
-      "@media (max-width: 1500px)",
-      "@media (max-width: 1180px)",
-    );
-    const narrowBreakpoint = sourceBetween(
-      analysisPageSource,
-      "@media (max-width: 1180px)",
-      "</style>",
-    );
+    const workspaceRule = cssBlock(analysisPageSource, ".analysis-workspace");
+    const mediumBreakpoint = cssBlock(analysisPageSource, "@media (max-width: 1500px)");
+    const narrowBreakpoint = cssBlock(analysisPageSource, "@media (max-width: 1180px)");
 
     expect(workspaceRule).toContain("minmax(4.25rem, 4.75rem)");
     expect(workspaceRule).toContain("minmax(0, 1.45fr)");
-    expect(workspaceRule).toContain("minmax(420px, clamp(480px, 30vw, 560px))");
+    expect(workspaceRule).toMatch(widerCompanionColumnPattern);
     expect(workspaceRule).not.toContain("minmax(320px, 430px)");
 
     expect(mediumBreakpoint).toContain("@media (max-width: 1500px)");
@@ -108,9 +117,9 @@ describe("analysis companion layout", () => {
   });
 
   it("uses Evidence panel width, not viewport width, for trace list/detail columns", () => {
-    const evidenceRootRule = sourceBetween(runEvidenceTabSource, ".run-evidence-tab {", "\n  }\n");
-    const traceBaseRule = sourceBetween(tracePanelSource, ".trace-layout {", "\n  }\n");
-    const containerRule = sourceBetween(tracePanelSource, "@container (min-width: 34rem)", "</style>");
+    const evidenceRootRule = cssBlock(runEvidenceTabSource, ".run-evidence-tab");
+    const traceBaseRule = cssBlock(tracePanelSource, ".trace-layout");
+    const containerRule = cssBlock(tracePanelSource, "@container (min-width: 34rem)");
 
     expect(evidenceRootRule).toContain("container-type: inline-size;");
 
@@ -144,7 +153,7 @@ Run:
 npm.cmd run test -- src/lib/analysis-companion-layout.test.ts
 ```
 
-Expected: FAIL. The failures should include missing `minmax(420px, clamp(480px, 30vw, 560px))`, missing `container-type: inline-size`, and the old `@media (min-width: 1280px)` still being present.
+Expected: FAIL. The failures should include the missing wider companion column, missing `container-type: inline-size`, and the old `@media (min-width: 1280px)` still being present.
 
 ---
 
@@ -169,6 +178,12 @@ with:
 
 ```css
 grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.45fr) minmax(420px, clamp(480px, 30vw, 560px));
+```
+
+Use this simpler fallback only if `npm.cmd run check` or Tauri/browser verification shows the nested `clamp()` track is rejected or ignored:
+
+```css
+grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.45fr) minmax(420px, 560px);
 ```
 
 Do not change these existing breakpoint blocks:
@@ -290,6 +305,8 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
+If this fails because the nested `clamp()` grid track is rejected by tooling, use the fixed `minmax(420px, 560px)` fallback from Step 1 and rerun this command plus the focused layout test.
+
 - [ ] **Step 7: Commit the implementation**
 
 Run:
@@ -323,7 +340,7 @@ Then verify backend state:
 {}
 ```
 
-Expected: backend state reports `identifier: "org.ai.extractum"` and a visible `main` window. If the app is not running or MCP is unavailable, record that viewport verification was skipped and continue with automated tests.
+Expected: backend state reports `identifier: "org.ai.extractum"` and a visible `main` window. If the app is not running or MCP is unavailable, record that viewport verification was skipped and continue with automated tests. Do not block this CSS slice solely because manual MCP verification is unavailable.
 
 - [ ] **Step 2: Measure the 1920px desktop layout**
 
@@ -339,7 +356,9 @@ Run this webview script:
 (() => {
   const workspace = document.querySelector(".analysis-workspace");
   const companion = document.querySelector(".companion-slot");
-  const panel = document.querySelector("#run-companion-panel");
+  const panel = document.querySelector("#run-companion-panel")
+    ?? document.querySelector(".companion-panel")
+    ?? companion;
   const traceLayout = document.querySelector(".trace-layout");
   const canvas = document.querySelector(".report-canvas, [data-smoke-id='analysis-report-canvas'], .canvas-slot");
   const rect = (el) => el
@@ -360,6 +379,7 @@ Run this webview script:
 Expected:
 
 - `companionSlot.width` is greater than `430`.
+- `companionPanel.width` is greater than `430` when the companion panel is mounted; if it falls back to `.companion-slot`, use `companionSlot.width` as the source of truth.
 - `workspaceGrid` contains three columns.
 - `traceLayoutGrid` contains two columns when the Evidence tab is visible and panel content width is at least `34rem`.
 - `canvas.width` remains larger than the companion width.
@@ -395,7 +415,7 @@ Run the same webview script from Step 2.
 Expected:
 
 - `workspaceGrid` has three columns only if the effective webview width is above `1500px`.
-- The companion column resolves around the lower clamp range instead of immediately taking `560px`.
+- With the primary `clamp()` track, the companion column resolves around the lower clamp range instead of immediately taking `560px`; with the fixed fallback, it still must not exceed `560px`.
 - The canvas remains usable for the current Source/Report surface.
 
 - [ ] **Step 5: Capture a screenshot for visual sanity if MCP is available**
@@ -436,7 +456,17 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 3: Run whitespace/diff hygiene**
+- [ ] **Step 3: Run the project verification script**
+
+Run:
+
+```powershell
+npm.cmd run verify
+```
+
+Expected: the project verification script exits `0`. This is the repository-level gate from `package.json`, so keep it after the focused frontend checks.
+
+- [ ] **Step 4: Run whitespace/diff hygiene**
 
 Run:
 
@@ -446,7 +476,7 @@ git diff --check
 
 Expected: no output and exit code `0`.
 
-- [ ] **Step 4: Inspect the diff for scope**
+- [ ] **Step 5: Inspect the diff for scope**
 
 Run:
 
@@ -464,7 +494,7 @@ Expected: implementation changes are limited to:
 
 No changes should appear in Chat, Chunks, or Runs inner component files.
 
-- [ ] **Step 5: Commit plan checkbox updates only if they changed**
+- [ ] **Step 6: Commit plan checkbox updates only if they changed**
 
 If the implementation process updated checkboxes in this plan, run:
 
@@ -484,7 +514,7 @@ Expected: commit succeeds. If no plan checkbox changes were made, skip this comm
 - [ ] `.trace-layout` remains single-column below the `34rem` container threshold.
 - [ ] Existing `@media (max-width: 1500px)` workspace stacking behavior is preserved.
 - [ ] Intermediate desktop widths around 1440px do not squeeze the canvas because the companion stacks below the canvas.
-- [ ] Near-breakpoint width around 1600px keeps the canvas usable and companion near the lower clamp range.
+- [ ] Near-breakpoint width around 1600px keeps the canvas usable; with the primary `clamp()` track the companion stays near the lower clamp range, and with the fallback it stays capped at `560px`.
 - [ ] Chat, Chunks, and Runs receive no special inner layout changes.
 - [ ] Evidence data flow, trace selection, snapshot logic, and Source navigation behavior are unchanged.
-- [ ] Focused layout tests, related raw contract tests, `npm.cmd run test`, `npm.cmd run check`, and `git diff --check` pass.
+- [ ] Focused layout tests, related raw contract tests, `npm.cmd run test`, `npm.cmd run check`, `npm.cmd run verify`, and `git diff --check` pass.
