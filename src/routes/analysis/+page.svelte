@@ -2911,6 +2911,7 @@
         statusTimer = null;
       }
       clearSavedRunsLoadTimer();
+      clearSourceHighlight();
       if (detachAnalysisListener !== null) {
         detachAnalysisListener();
       }

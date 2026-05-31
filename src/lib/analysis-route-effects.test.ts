@@ -84,6 +84,16 @@ describe("analysis route effects", () => {
     );
   }
 
+  function onMountTeardown() {
+    const returnStart = analysisPageSource.indexOf("    return () => {");
+    const teardownEnd = analysisPageSource.indexOf("</script>", returnStart);
+
+    expect(returnStart, "analysis route should define onMount teardown").toBeGreaterThan(-1);
+    expect(teardownEnd, "onMount teardown should close before onMount ends").toBeGreaterThan(returnStart);
+
+    return analysisPageSource.slice(returnStart, teardownEnd);
+  }
+
   function expectOrder(source: string, first: string, second: string, message: string) {
     const firstIndex = source.indexOf(first);
     const secondIndex = source.indexOf(second);
@@ -171,6 +181,12 @@ describe("analysis route effects", () => {
     );
     expect(analysisPageSource).toContain("const activeSourceReturnContext = $derived.by(() => {");
     expect(analysisPageSource).toContain("return sourceReturnContextIsActive(sourceReturnContext, {");
+  });
+
+  it("clears pending evidence source highlight timers on route teardown", () => {
+    const teardown = onMountTeardown();
+
+    expect(teardown).toContain("clearSourceHighlight();");
   });
 
   it("clears evidence source navigation when route context changes", () => {
