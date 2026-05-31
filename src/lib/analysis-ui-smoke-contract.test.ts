@@ -46,10 +46,27 @@ describe("analysis UI smoke harness contract", () => {
   it("keeps the smoke runner organized around deterministic named steps", () => {
     expect(smokeScriptSource).toContain("sourceBrowserSmokeSteps");
     expect(smokeScriptSource).toContain("analysisWorkspaceParitySteps");
+    expect(smokeScriptSource).toContain("savedRunAffordanceSmokeSteps");
     expect(smokeScriptSource).toContain("source-browser.youtube-video-tabs");
+    expect(smokeScriptSource).toContain("saved-runs-affordance.rows");
+    expect(smokeScriptSource).toContain("saved-runs-affordance.missing-legacy");
+    expect(smokeScriptSource).toContain("saved-runs-affordance.capture-failed");
     expect(smokeScriptSource).toContain("workspace-parity.source-group-disabled-export");
     expect(smokeScriptSource).toContain("workspace-parity.opened-single-run-tools");
     expect(smokeScriptSource).toContain("assertOpenedRunNotebookLmExportContract");
+    expect(smokeScriptSource).toContain("assertRunRowAffordance");
+    expect(smokeScriptSource).toContain("openEvidenceForRun");
+    expect(smokeScriptSource).toContain("assertShowInSourceDisabledReason");
+    expect(smokeScriptSource).toContain("fixtureLabelsFromSeededUi");
+    expect(smokeScriptSource).toContain("new Set([...sourceLabels, ...runLabels])");
+    expect(smokeScriptSource).toContain("clearRunsFilters");
+    expect(smokeScriptSource).toContain('setRunsSegment(ctx, "Runs scope", "All runs")');
+    expect(smokeScriptSource).toContain('setRunsSegment(ctx, "Runs status", "All")');
+    expect(smokeScriptSource).toContain('fillByLabel(ctx.socket, "Search runs", "__analysis_redesign_fixture__")');
+    expect(smokeScriptSource).toContain("Legacy snapshot missing");
+    expect(smokeScriptSource).toContain("Snapshot capture failed: fixture write boundary unavailable");
+    expect(smokeScriptSource).toContain("This capture-failed fixture report remains readable.");
+    expect(smokeScriptSource).toContain("...sourceBrowserSmokeSteps, ...savedRunAffordanceSmokeSteps, ...analysisWorkspaceParitySteps");
     expect(smokeScriptSource).toContain('clickRowActionByText(ctx.socket, "run-companion-runs-panel"');
     expect(smokeScriptSource).toContain("assertEmptyFixtureSummary(verificationSummary)");
     expect(smokeScriptSource).toContain("expected.filter((label) => text.includes(label))");
@@ -64,6 +81,14 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("refreshBridgeConnection");
     expect(smokeScriptSource).toContain("retryProbeCommand(ctx");
     expect(smokeScriptSource).toContain("classifyBridgeFailure(error)");
+    expect(smokeScriptSource).toContain("smokeRuntimeRoot");
+    expect(smokeScriptSource).toContain("analysisWorkspaceStateKey");
+    expect(smokeScriptSource).toContain("localStorage.removeItem(analysisWorkspaceStateKey)");
+    expect(smokeScriptSource).toContain("restoreSmokeLocalStorage");
+    expect(smokeScriptSource).toContain("APPDATA:");
+    expect(smokeScriptSource).toContain("LOCALAPPDATA:");
+    expect(smokeScriptSource).toContain("XDG_CONFIG_HOME:");
+    expect(helperSource).toContain("env = process.env");
     expect(smokeScriptSource).toContain("ctx.socket = bridge.socket");
     expect(smokeScriptSource.indexOf("PASS bridge.execute_js"))
       .toBeLessThan(smokeScriptSource.indexOf("PASS bridge.resize_window"));

@@ -35,6 +35,9 @@ import {
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const args = new Set(process.argv.slice(2));
 const probeOnly = args.has("--probe-only");
+const analysisWorkspaceStateKey = "extractum.analysis.workspace.v1";
+const captureFailedSnapshotErrorText = "Snapshot capture failed: fixture write boundary unavailable";
+const captureFailedReportText = "This capture-failed fixture report remains readable.";
 
 export const sourceBrowserSmokeSteps = [
   {
@@ -88,6 +91,96 @@ export const sourceBrowserSmokeSteps = [
         return true;
       `);
       await expectTabs(ctx, ["Sources", "Items", "Metadata"], "Sources");
+    },
+  },
+];
+export const savedRunAffordanceSmokeSteps = [
+  {
+    name: "saved-runs-affordance.rows",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await assertRunRowAffordance(
+        ctx,
+        fixtureLabels.missingSnapshotRun,
+        ["Legacy snapshot missing"],
+        [captureFailedSnapshotErrorText, "fixture write boundary unavailable"],
+      );
+      await assertRunRowAffordance(
+        ctx,
+        fixtureLabels.captureFailedSnapshotRun,
+        ["Snapshot capture failed"],
+        [captureFailedSnapshotErrorText, "fixture write boundary unavailable"],
+      );
+    },
+  },
+  {
+    name: "saved-runs-affordance.missing-legacy",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await openRun(ctx, fixtureLabels.missingSnapshotRun);
+      await switchCanvasMode(ctx, "report");
+      await openRunDetails(ctx);
+      const opened = await openedRunText(ctx);
+      assertTextContains(
+        opened.header,
+        "Saved report is readable, but this legacy run has no saved source snapshot.",
+        "missing legacy opened header",
+      );
+      assertTextContains(opened.header, "Legacy run has no saved snapshot", "missing legacy details");
+
+      await switchToSourceSurface(ctx);
+      const sourceText = await sourceSurfaceText(ctx);
+      assertTextContains(
+        sourceText,
+        "Older saved runs may not include frozen source rows",
+        "missing legacy Source detail",
+      );
+      assertTextContains(sourceText, "Snapshot unavailable", "missing legacy Source badge");
+      assertTextOmits(sourceText, "Run snapshot\nSources", "missing legacy Source saved snapshot browser");
+      await assertLiveSourceClarificationIfAvailable(ctx);
+
+      await assertEvidenceDisabledForRun(
+        ctx,
+        fixtureLabels.missingSnapshotRun,
+        "legacy run has no saved source snapshot",
+      );
+      await assertChatDisabledForOpenedRun(ctx, "Older saved runs may not include frozen source rows");
+    },
+  },
+  {
+    name: "saved-runs-affordance.capture-failed",
+    async run(ctx) {
+      await navigateAnalysis(ctx);
+      await openRun(ctx, fixtureLabels.captureFailedSnapshotRun);
+      await switchCanvasMode(ctx, "report");
+      await openRunDetails(ctx);
+      const opened = await openedRunText(ctx);
+      assertTextContains(
+        opened.header,
+        "Saved report is readable, but Extractum could not save the frozen source context for this run.",
+        "capture failed opened header",
+      );
+      assertTextContains(opened.header, "Snapshot capture failed", "capture failed details");
+      assertTextContains(opened.header, captureFailedSnapshotErrorText, "capture failed details error");
+      assertTextContains(opened.report, captureFailedReportText, "capture failed report body");
+
+      await switchToSourceSurface(ctx);
+      const sourceText = await sourceSurfaceText(ctx);
+      assertTextContains(
+        sourceText,
+        "Extractum could not save the frozen source context",
+        "capture failed Source detail",
+      );
+      assertTextContains(sourceText, captureFailedSnapshotErrorText, "capture failed Source error");
+      await assertLiveSourceClarificationIfAvailable(ctx);
+      await clickLiveSourceIfAvailable(ctx);
+
+      await assertEvidenceDisabledForRun(
+        ctx,
+        fixtureLabels.captureFailedSnapshotRun,
+        "snapshot capture failed",
+      );
+      await assertChatDisabledForOpenedRun(ctx, "could not save the frozen source context");
     },
   },
 ];
@@ -177,17 +270,58 @@ function artifactDirFor(stepName) {
 
 async function launchApp() {
   const step = npmRunStep("tauri");
+  const smokeRuntimeRoot = path.join(repoRoot, artifactRoot, "runtime", `${process.pid}-${Date.now()}`);
+  const smokeAppDataDir = path.join(smokeRuntimeRoot, "appdata");
+  const smokeLocalAppDataDir = path.join(smokeRuntimeRoot, "localappdata");
+  const smokeConfigDir = path.join(smokeRuntimeRoot, "config");
+  await Promise.all([
+    mkdir(smokeAppDataDir, { recursive: true }),
+    mkdir(smokeLocalAppDataDir, { recursive: true }),
+    mkdir(smokeConfigDir, { recursive: true }),
+  ]);
   const child = spawnTauriDev({
     command: step.command,
     args: [...step.args, "dev"],
     cwd: repoRoot,
+    env: {
+      ...process.env,
+      APPDATA: smokeAppDataDir,
+      LOCALAPPDATA: smokeLocalAppDataDir,
+      XDG_CONFIG_HOME: smokeConfigDir,
+    },
   });
   return child;
 }
 
 async function navigateAnalysis(ctx) {
-  await executeJs(ctx.socket, `window.location.assign('/analysis?smoke=' + Date.now()); return true;`, 1000).catch(() => true);
+  await executeJs(ctx.socket, `
+    const analysisWorkspaceStateKey = ${JSON.stringify(analysisWorkspaceStateKey)};
+    localStorage.removeItem(analysisWorkspaceStateKey);
+    window.location.assign('/analysis?smoke=' + Date.now());
+    return true;
+  `, 1000).catch(() => true);
   await waitForSmokeId(ctx, "analysis-source-switcher-trigger", 30000);
+}
+
+async function captureSmokeLocalStorage(ctx) {
+  ctx.initialAnalysisWorkspaceState = await executeJs(ctx.socket, `
+    const analysisWorkspaceStateKey = ${JSON.stringify(analysisWorkspaceStateKey)};
+    return localStorage.getItem(analysisWorkspaceStateKey);
+  `, 5000).catch(() => null);
+}
+
+async function restoreSmokeLocalStorage(ctx) {
+  if (!Object.prototype.hasOwnProperty.call(ctx, "initialAnalysisWorkspaceState")) return;
+  await executeJs(ctx.socket, `
+    const analysisWorkspaceStateKey = ${JSON.stringify(analysisWorkspaceStateKey)};
+    const value = ${JSON.stringify(ctx.initialAnalysisWorkspaceState)};
+    if (value === null) {
+      localStorage.removeItem(analysisWorkspaceStateKey);
+    } else {
+      localStorage.setItem(analysisWorkspaceStateKey, value);
+    }
+    return true;
+  `, 5000).catch(() => undefined);
 }
 
 async function probeBridgeCapabilities(ctx) {
@@ -260,13 +394,26 @@ async function fixtureLabelsFromDom(ctx) {
   `, 5000);
 }
 
+async function fixtureLabelsFromSeededUi(ctx) {
+  await closeTransientUi(ctx);
+  await openSourceSwitcher(ctx);
+  const sourceLabels = await fixtureLabelsFromDom(ctx);
+  await closeTransientUi(ctx);
+  await openRunsTab(ctx);
+  await clearRunsFilters(ctx);
+  await showAllRuns(ctx);
+  await fillByLabel(ctx.socket, "Search runs", "__analysis_redesign_fixture__");
+  await waitForText(ctx.socket, fixtureLabels.captureFailedSnapshotRun);
+  const runLabels = await fixtureLabelsFromDom(ctx);
+  return Array.from(new Set([...sourceLabels, ...runLabels]));
+}
+
 async function seedFixtures(ctx) {
   await invokeFixtureCommand(ctx, "clear_analysis_redesign_fixtures");
   const summary = await invokeFixtureCommand(ctx, "seed_analysis_redesign_fixtures");
   validateFixtureSummary(summary);
   await invokeFixtureCommand(ctx, "clear_analysis_redesign_fixture_active_runs");
   await navigateAnalysis(ctx);
-  await openSourceSwitcher(ctx);
   const labels = await waitForFixtureLabels(ctx);
   validateFixtureLabels(labels);
 }
@@ -298,6 +445,18 @@ async function runSmokeSteps(ctx, steps) {
   }
 }
 
+function assertTextContains(text, fragment, label) {
+  if (!String(text ?? "").includes(fragment)) {
+    throw new SmokeAssertionError(`${label} missing text: ${fragment}`);
+  }
+}
+
+function assertTextOmits(text, fragment, label) {
+  if (String(text ?? "").includes(fragment)) {
+    throw new SmokeAssertionError(`${label} unexpectedly included text: ${fragment}`);
+  }
+}
+
 async function closeTransientUi(ctx) {
   await executeJs(ctx.socket, `
     const closeButtons = Array.from(document.querySelectorAll('button'))
@@ -323,7 +482,7 @@ async function waitForFixtureLabels(ctx, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   let labels = [];
   while (Date.now() < deadline) {
-    labels = await fixtureLabelsFromDom(ctx).catch(() => []);
+    labels = await fixtureLabelsFromSeededUi(ctx).catch(() => []);
     try {
       validateFixtureLabels(labels);
       return labels;
@@ -428,6 +587,107 @@ async function openRunsTab(ctx) {
   await waitForText(ctx.socket, "Search runs");
 }
 
+async function showAllRuns(ctx) {
+  await setRunsSegment(ctx, "Runs scope", "All runs");
+  await setRunsSegment(ctx, "Runs status", "All");
+}
+
+async function clearRunsFilters(ctx) {
+  const cleared = await executeJs(ctx.socket, `
+    const panel = document.querySelector('[data-smoke-id="run-companion-runs-panel"]');
+    if (!panel) throw new Error('ASSERT: runs panel missing');
+    const button = Array.from(panel.querySelectorAll('button'))
+      .find((candidate) => candidate.innerText.trim() === 'Clear filters');
+    if (!button) return false;
+    button.click();
+    return true;
+  `);
+  if (!cleared) return false;
+
+  await waitForRunsSearchValue(ctx, "");
+  return true;
+}
+
+async function waitForRunsSearchValue(ctx, expectedValue, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const matches = await executeJs(ctx.socket, `
+      const expectedValue = ${JSON.stringify(expectedValue)};
+      const input = document.querySelector('[data-smoke-id="runs-search"] input');
+      return input?.value === expectedValue;
+    `).catch(() => false);
+    if (matches) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new SmokeAssertionError("runs search did not reset");
+}
+
+async function setRunsSegment(ctx, groupLabel, optionText) {
+  await executeJs(ctx.socket, `
+    const groupLabel = ${JSON.stringify(groupLabel)};
+    const optionText = ${JSON.stringify(optionText)};
+    const panel = document.querySelector('[data-smoke-id="run-companion-runs-panel"]');
+    if (!panel) throw new Error('ASSERT: runs panel missing');
+    const group = Array.from(panel.querySelectorAll('[aria-label]'))
+      .find((candidate) => candidate.getAttribute('aria-label') === groupLabel);
+    if (!group) throw new Error('ASSERT: runs segmented control missing: ' + groupLabel);
+    const button = Array.from(group.querySelectorAll('button'))
+      .find((candidate) => candidate.innerText.trim() === optionText);
+    if (!button) throw new Error('ASSERT: runs segment option missing: ' + optionText);
+    if (!button.classList.contains('selected')) button.click();
+    return true;
+  `);
+  await waitForRunsSegment(ctx, groupLabel, optionText);
+}
+
+async function waitForRunsSegment(ctx, groupLabel, optionText, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const selected = await executeJs(ctx.socket, `
+      const groupLabel = ${JSON.stringify(groupLabel)};
+      const optionText = ${JSON.stringify(optionText)};
+      const panel = document.querySelector('[data-smoke-id="run-companion-runs-panel"]');
+      const group = Array.from(panel?.querySelectorAll('[aria-label]') ?? [])
+        .find((candidate) => candidate.getAttribute('aria-label') === groupLabel);
+      const button = Array.from(group?.querySelectorAll('button') ?? [])
+        .find((candidate) => candidate.innerText.trim() === optionText);
+      return Boolean(button?.classList.contains('selected'));
+    `).catch(() => false);
+    if (selected) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new SmokeAssertionError(`runs segment did not select ${groupLabel}: ${optionText}`);
+}
+
+async function runRowText(ctx, label) {
+  await closeTransientUi(ctx);
+  await openRunsTab(ctx);
+  await clearRunsFilters(ctx);
+  await showAllRuns(ctx);
+  await fillByLabel(ctx.socket, "Search runs", label);
+  await waitForText(ctx.socket, label);
+  return executeJs(ctx.socket, `
+    const panel = document.querySelector('[data-smoke-id="run-companion-runs-panel"]');
+    if (!panel) throw new Error('ASSERT: runs panel missing');
+    const label = ${JSON.stringify(label)};
+    const rowCandidates = Array.from(panel.querySelectorAll('li, article, .source-row, .group-row, button, [role="row"]'));
+    const row = rowCandidates.find((candidate) => candidate.innerText.includes(label));
+    if (!row) throw new Error('ASSERT: run row missing: ' + label);
+    return row.innerText;
+  `);
+}
+
+async function assertRunRowAffordance(ctx, label, expectedFragments, forbiddenFragments = []) {
+  const text = await runRowText(ctx, label);
+  assertTextContains(text, label, `${label} row`);
+  for (const fragment of expectedFragments) {
+    assertTextContains(text, fragment, `${label} row`);
+  }
+  for (const fragment of forbiddenFragments) {
+    assertTextOmits(text, fragment, `${label} row`);
+  }
+}
+
 async function waitForOpenedRunSurface(ctx, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -440,13 +700,147 @@ async function waitForOpenedRunSurface(ctx, timeoutMs = 8000) {
   throw new SmokeAssertionError("opened run surface did not appear");
 }
 
+async function openRunDetails(ctx) {
+  return executeJs(ctx.socket, `
+    const details = document.querySelector('.report-run-header details.run-details');
+    if (!details) throw new Error('ASSERT: run details missing');
+    details.open = true;
+    return true;
+  `);
+}
+
+async function openedRunText(ctx) {
+  return executeJs(ctx.socket, `
+    return {
+      header: document.querySelector('.report-run-header')?.innerText ?? "",
+      report: document.querySelector('.report-viewer')?.innerText ?? "",
+      source: document.querySelector('[data-smoke-id="analysis-source-surface"]')?.innerText ?? "",
+      companion: document.querySelector('#run-companion-panel')?.innerText ?? "",
+    };
+  `);
+}
+
+async function switchToSourceSurface(ctx) {
+  await clickBySmokeId(ctx.socket, "report-canvas-mode-source");
+  await waitForSmokeId(ctx, "analysis-source-surface", 30000);
+}
+
+async function sourceSurfaceText(ctx) {
+  return executeJs(ctx.socket, `
+    const surface = document.querySelector('[data-smoke-id="analysis-source-surface"]');
+    if (!surface) throw new Error('ASSERT: source surface missing');
+    return surface.innerText;
+  `);
+}
+
+async function assertLiveSourceClarificationIfAvailable(ctx) {
+  const text = await sourceSurfaceText(ctx);
+  if (!text.includes("View live source")) return;
+  assertTextContains(
+    text,
+    "View live source opens current source data. This is live data, not the saved run snapshot.",
+    "live source clarification",
+  );
+}
+
+async function clickLiveSourceIfAvailable(ctx) {
+  const clicked = await executeJs(ctx.socket, `
+    const surface = document.querySelector('[data-smoke-id="analysis-source-surface"]');
+    if (!surface) throw new Error('ASSERT: source surface missing');
+    const button = Array.from(surface.querySelectorAll('button'))
+      .find((candidate) => candidate.innerText.includes('View live source'));
+    if (!button) return false;
+    button.click();
+    return true;
+  `);
+
+  if (!clicked) return false;
+  await waitForText(ctx.socket, "Live source");
+  const text = await sourceSurfaceText(ctx);
+  assertTextContains(text, "Live source", "live source header");
+  assertTextOmits(text, captureFailedSnapshotErrorText, "live source after capture failed switch");
+  assertTextOmits(text, "Legacy run has no saved snapshot", "live source after missing legacy switch");
+  return true;
+}
+
 async function openRun(ctx, label) {
   await closeTransientUi(ctx);
   await openRunsTab(ctx);
+  await clearRunsFilters(ctx);
+  await showAllRuns(ctx);
   await fillByLabel(ctx.socket, "Search runs", label);
   await waitForText(ctx.socket, label);
   await clickRowActionByText(ctx.socket, "run-companion-runs-panel", label, "Open");
   await waitForOpenedRunSurface(ctx);
+}
+
+async function openCompanionTab(ctx, label) {
+  await executeJs(ctx.socket, `
+    const tablist = document.querySelector('[aria-label="Run companion tabs"]');
+    if (!tablist) throw new Error('ASSERT: run companion tablist missing');
+    const label = ${JSON.stringify(label)};
+    const tab = Array.from(tablist.querySelectorAll('button, [role="tab"]'))
+      .find((candidate) => candidate.innerText.trim().includes(label));
+    if (!tab) throw new Error('ASSERT: companion tab missing: ' + label);
+    tab.click();
+    return true;
+  `);
+}
+
+async function selectFirstTraceRefIfNeeded(ctx) {
+  await executeJs(ctx.socket, `
+    const panel = document.querySelector('.run-evidence-tab');
+    if (!panel) throw new Error('ASSERT: evidence panel missing');
+    if (panel.querySelector('.trace-detail')) return true;
+    const firstTrace = panel.querySelector('.trace-link');
+    if (!firstTrace) throw new Error('ASSERT: trace ref missing for evidence');
+    firstTrace.click();
+    return true;
+  `);
+  await waitForText(ctx.socket, "Show in source");
+}
+
+async function openEvidenceForRun(ctx, runLabel) {
+  await navigateAnalysis(ctx);
+  await openRun(ctx, runLabel);
+  await openCompanionTab(ctx, "Evidence");
+  await waitForText(ctx.socket, "Traceability");
+  await selectFirstTraceRefIfNeeded(ctx);
+}
+
+async function assertShowInSourceDisabledReason(ctx, reasonFragment) {
+  const buttonState = await executeJs(ctx.socket, `
+    const panel = document.querySelector('.run-evidence-tab');
+    if (!panel) throw new Error('ASSERT: evidence panel missing');
+    const button = Array.from(panel.querySelectorAll('button'))
+      .find((candidate) => candidate.innerText.includes('Show in source'));
+    if (!button) throw new Error('ASSERT: Show in source button missing');
+    return {
+      disabled: Boolean(button.disabled),
+      title: button.getAttribute('title') ?? "",
+      text: button.innerText,
+    };
+  `);
+
+  if (!buttonState.disabled) {
+    throw new SmokeAssertionError("Show in source button is not disabled");
+  }
+  assertTextContains(buttonState.title, reasonFragment, "Show in source disabled reason");
+}
+
+async function assertEvidenceDisabledForRun(ctx, runLabel, reasonFragment) {
+  await openEvidenceForRun(ctx, runLabel);
+  const companionText = (await openedRunText(ctx)).companion;
+  assertTextContains(companionText, "Snapshot unavailable:", `${runLabel} Evidence unavailable copy`);
+  await assertShowInSourceDisabledReason(ctx, reasonFragment);
+}
+
+async function assertChatDisabledForOpenedRun(ctx, descriptionFragment) {
+  await openCompanionTab(ctx, "Chat");
+  await waitForText(ctx.socket, "Saved context unavailable");
+  const companionText = (await openedRunText(ctx)).companion;
+  assertTextContains(companionText, "Saved context unavailable", "Chat disabled title");
+  assertTextContains(companionText, descriptionFragment, "Chat disabled description");
 }
 
 async function expectTabs(ctx, labels, selected) {
@@ -563,10 +957,11 @@ async function main() {
       throw new SmokeAssertionError(`unexpected app identifier ${ctx.backendState.app.identifier}`);
     }
     await probeBridgeCapabilities(ctx);
+    await captureSmokeLocalStorage(ctx);
     if (probeOnly) return;
     fixturesTouched = true;
     await seedFixtures(ctx);
-    await runSmokeSteps(ctx, [...sourceBrowserSmokeSteps, ...analysisWorkspaceParitySteps]);
+    await runSmokeSteps(ctx, [...sourceBrowserSmokeSteps, ...savedRunAffordanceSmokeSteps, ...analysisWorkspaceParitySteps]);
   } catch (error) {
     failed = error;
     if (ctx?.socket) {
@@ -592,6 +987,7 @@ async function main() {
     }
 
     if (ctx?.socket) {
+      await restoreSmokeLocalStorage(ctx);
       try {
         ctx.socket.close();
       } catch {

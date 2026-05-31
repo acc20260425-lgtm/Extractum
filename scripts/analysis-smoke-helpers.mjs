@@ -495,8 +495,8 @@ export async function captureArtifacts({ socket, artifactDir, stepName, error })
   }
 }
 
-export function spawnTauriDev({ command, args, cwd }) {
-  return spawn(command, args, { cwd, shell: false, stdio: "inherit" });
+export function spawnTauriDev({ command, args, cwd, env = process.env }) {
+  return spawn(command, args, { cwd, env, shell: false, stdio: "inherit" });
 }
 
 export function killProcessTree(child) {
