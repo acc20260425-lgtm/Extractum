@@ -166,7 +166,7 @@ Expected: FAIL. The failures should include the missing wider companion column, 
 - Modify: `src/lib/components/analysis/trace-panel.svelte`
 - Test: `src/lib/analysis-companion-layout.test.ts`
 
-- [ ] **Step 1: Widen the desktop companion column**
+- [x] **Step 1: Widen the desktop companion column**
 
 In `src/routes/analysis/+page.svelte`, find the `.analysis-workspace` CSS rule and replace the current desktop grid:
 
@@ -210,7 +210,7 @@ Do not change these existing breakpoint blocks:
 }
 ```
 
-- [ ] **Step 2: Make the Evidence tab root the container**
+- [x] **Step 2: Make the Evidence tab root the container**
 
 In `src/lib/components/analysis/run-evidence-tab.svelte`, update the `.run-evidence-tab` rule from:
 
@@ -235,7 +235,7 @@ to:
 }
 ```
 
-- [ ] **Step 3: Replace TracePanel viewport media query with container query**
+- [x] **Step 3: Replace TracePanel viewport media query with container query**
 
 In `src/lib/components/analysis/trace-panel.svelte`, find:
 
@@ -275,7 +275,7 @@ Replace it with:
 }
 ```
 
-- [ ] **Step 4: Run the focused layout test and verify it passes**
+- [x] **Step 4: Run the focused layout test and verify it passes**
 
 Run:
 
@@ -285,7 +285,7 @@ npm.cmd run test -- src/lib/analysis-companion-layout.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Run existing related tests**
+- [x] **Step 5: Run existing related tests**
 
 Run:
 
@@ -295,7 +295,7 @@ npm.cmd run test -- src/lib/analysis-route-effects.test.ts src/lib/analysis-sour
 
 Expected: PASS. This checks the new focused test plus existing route/source-reader raw contracts.
 
-- [ ] **Step 6: Run Svelte check**
+- [x] **Step 6: Run Svelte check**
 
 Run:
 
@@ -307,7 +307,7 @@ Expected: `svelte-check found 0 errors and 0 warnings`.
 
 If this fails because the nested `clamp()` grid track is rejected by tooling, use the fixed `minmax(420px, 560px)` fallback from Step 1 and rerun this command plus the focused layout test.
 
-- [ ] **Step 7: Commit the implementation**
+- [x] **Step 7: Commit the implementation**
 
 Run:
 

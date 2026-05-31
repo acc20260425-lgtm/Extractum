@@ -3251,7 +3251,7 @@
 <style>
   .analysis-workspace {
     display: grid;
-    grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.6fr) minmax(320px, 430px);
+    grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.45fr) minmax(420px, clamp(480px, 30vw, 560px));
     gap: 0.9rem;
     align-items: start;
     min-width: 0;

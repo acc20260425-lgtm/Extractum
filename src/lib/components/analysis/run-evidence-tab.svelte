@@ -72,6 +72,7 @@
 
 <style>
   .run-evidence-tab {
+    container-type: inline-size;
     min-width: 0;
     display: flex;
     flex-direction: column;

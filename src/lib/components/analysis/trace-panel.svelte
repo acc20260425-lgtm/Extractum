@@ -218,9 +218,9 @@
     word-break: break-word;
   }
 
-  @media (min-width: 1280px) {
+  @container (min-width: 34rem) {
     .trace-layout {
-      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      grid-template-columns: minmax(12rem, 0.9fr) minmax(16rem, 1.1fr);
       align-items: start;
     }
 
