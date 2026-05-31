@@ -391,7 +391,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/analysis-smoke-helpers.test.ts`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-affordance-smoke-coverage-implementation.md`
 
-- [ ] **Step 1: Write failing helper contract tests**
+- [x] **Step 1: Write failing helper contract tests**
 
 In `src/lib/analysis-smoke-helpers.test.ts`, extend `validates required fixture labels` with:
 
@@ -427,7 +427,7 @@ After the positive fixture summary assertion, add this negative assertion:
     })).toThrow(SmokeAssertionError);
 ```
 
-- [ ] **Step 2: Run helper tests and verify the red state**
+- [x] **Step 2: Run helper tests and verify the red state**
 
 Run:
 
@@ -437,7 +437,7 @@ npm.cmd run test -- src/lib/analysis-smoke-helpers.test.ts
 
 Expected: FAIL because the helper does not expose the degraded saved-run labels and still accepts `runs: 6`.
 
-- [ ] **Step 3: Add degraded saved-run labels**
+- [x] **Step 3: Add degraded saved-run labels**
 
 In `scripts/analysis-smoke-helpers.mjs`, extend `fixtureLabels` to:
 
@@ -457,7 +457,7 @@ export const fixtureLabels = {
 };
 ```
 
-- [ ] **Step 4: Update smoke fixture summary minimum**
+- [x] **Step 4: Update smoke fixture summary minimum**
 
 In `scripts/analysis-smoke-helpers.mjs`, change the `runs` expected minimum in `validateFixtureSummary`:
 
@@ -465,7 +465,7 @@ In `scripts/analysis-smoke-helpers.mjs`, change the `runs` expected minimum in `
     runs: 7,
 ```
 
-- [ ] **Step 5: Run helper tests and verify green**
+- [x] **Step 5: Run helper tests and verify green**
 
 Run:
 
@@ -475,7 +475,7 @@ npm.cmd run test -- src/lib/analysis-smoke-helpers.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit helper label changes**
+- [x] **Step 6: Commit helper label changes**
 
 Run:
 

@@ -15,6 +15,10 @@ export const fixtureLabels = {
   youtubePlaylist: "__analysis_redesign_fixture__ YouTube Playlist",
   telegramSourceGroup: "__analysis_redesign_fixture__ Telegram Source Group",
   completedSnapshotRun: "__analysis_redesign_fixture__ Completed Snapshot Run",
+  missingSnapshotRun: "__analysis_redesign_fixture__ Missing Snapshot Run",
+  failedRun: "__analysis_redesign_fixture__ Failed Run",
+  cancelledRun: "__analysis_redesign_fixture__ Cancelled Run",
+  captureFailedSnapshotRun: "__analysis_redesign_fixture__ Capture Failed Snapshot Run",
   groupSnapshotRun: "__analysis_redesign_fixture__ Group Snapshot Run",
 };
 
@@ -90,7 +94,7 @@ export function validateFixtureSummary(summary) {
     chatMessages: 2,
     llmProfiles: 1,
     promptTemplates: 1,
-    runs: 6,
+    runs: 7,
     snapshotMessages: 4,
     sourceGroups: 1,
     sources: 4,

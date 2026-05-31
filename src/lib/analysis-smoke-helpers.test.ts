@@ -32,6 +32,12 @@ describe("analysis smoke helper contracts", () => {
 
   it("validates required fixture labels", () => {
     expect(validateFixtureLabels(expectedFixtureLabels)).toEqual(expectedFixtureLabels);
+    expect(expectedFixtureLabels).toEqual(expect.arrayContaining([
+      "__analysis_redesign_fixture__ Missing Snapshot Run",
+      "__analysis_redesign_fixture__ Failed Run",
+      "__analysis_redesign_fixture__ Cancelled Run",
+      "__analysis_redesign_fixture__ Capture Failed Snapshot Run",
+    ]));
     expect(() => validateFixtureLabels(expectedFixtureLabels.filter((label) => !label.includes("YouTube Video"))))
       .toThrow(SmokeAssertionError);
   });
@@ -42,13 +48,26 @@ describe("analysis smoke helper contracts", () => {
       chatMessages: 2,
       llmProfiles: 1,
       promptTemplates: 1,
-      runs: 6,
+      runs: 7,
       snapshotMessages: 4,
       sourceGroups: 1,
       sources: 4,
       youtubePlaylistItems: 2,
       youtubeTranscriptSegments: 3,
     })).toBe(true);
+
+    expect(() => validateFixtureSummary({
+      accounts: 1,
+      chatMessages: 2,
+      llmProfiles: 1,
+      promptTemplates: 1,
+      runs: 6,
+      snapshotMessages: 4,
+      sourceGroups: 1,
+      sources: 4,
+      youtubePlaylistItems: 2,
+      youtubeTranscriptSegments: 3,
+    })).toThrow(SmokeAssertionError);
 
     expect(() => validateFixtureSummary({
       accounts: 1,
