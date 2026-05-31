@@ -399,6 +399,7 @@
       emptyDescription={itemsEmptyDescription}
       helpDescription={subject && subject.kind === "source_group" ? itemsEmptyDescription : null}
       sourceLabelForItem={subject && subject.kind === "source_group" ? groupData?.sourceLabelForItem ?? null : null}
+      {highlightToken}
       {formatTimestamp}
       onLoadMore={subject && subject.kind === "source_group" ? loadMoreGroupItems : loadMoreSourceItems}
     />
@@ -410,6 +411,7 @@
       routeError={sourceData.sourceRouteError}
       loading={sourceData.loadingItems}
       hasMore={sourceData.sourceItemsHasMore}
+      {highlightToken}
       {formatTimestamp}
       onLoadMore={sourceData.onLoadMoreSourceItems}
       onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}

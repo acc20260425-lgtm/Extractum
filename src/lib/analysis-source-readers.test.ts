@@ -485,6 +485,8 @@ describe("analysis source readers", () => {
       snapshotItemsViewSource,
       snapshotGroupSourcesViewSource,
       sourceGroupSourcesViewSource,
+      universalItemsViewSource,
+      youtubeCommentsViewSource,
     ];
 
     for (const source of traceCapableReaders) {
@@ -518,6 +520,19 @@ describe("analysis source readers", () => {
 
     expect(snapshotGroupSourcesViewSource).toContain('data-evidence-highlighted={isEvidenceHighlighted(item.ref) ? "true" : undefined}');
     expect(sourceGroupSourcesViewSource).toContain("{highlightToken}");
+
+    expect(universalItemsViewSource).toContain("liveSourceItemRef");
+    expect(universalItemsViewSource).toContain("function isEvidenceHighlighted(item: SourceItem)");
+    expect(universalItemsViewSource).toContain("highlightToken.traceRef === liveSourceItemRef(item)");
+    expect(universalItemsViewSource).toContain("data-trace-ref={liveSourceItemRef(item)}");
+    expect(universalItemsViewSource).toContain('data-evidence-highlighted={isEvidenceHighlighted(item) ? "true" : undefined}');
+
+    expect(youtubeCommentsViewSource).toContain("liveSourceItemRef");
+    expect(youtubeCommentsViewSource).toContain("function isEvidenceHighlighted(item: SourceItem)");
+    expect(youtubeCommentsViewSource).toContain("highlightToken.traceRef === liveSourceItemRef(item)");
+    expect(youtubeCommentsViewSource).toContain("data-trace-ref={liveSourceItemRef(item)}");
+    expect(youtubeCommentsViewSource).toContain('data-evidence-highlighted={isEvidenceHighlighted(item) ? "true" : undefined}');
+    expect(youtubeCommentsViewSource).toContain("{#snippet commentCard(item: SourceItem, parentLoaded: boolean)}");
   });
 
   it("extends existing selected row styles for tokenized evidence highlights without hardcoded colors", () => {
@@ -525,10 +540,14 @@ describe("analysis source readers", () => {
     expect(youtubeTranscriptSource).toContain('.transcript-group-list li.selected,\n  .transcript-group-list li[data-evidence-highlighted="true"]');
     expect(snapshotItemsViewSource).toContain('article.selected,\n  article[data-evidence-highlighted="true"]');
     expect(snapshotGroupSourcesViewSource).toContain('.other-item-list li.selected,\n  .other-item-list li[data-evidence-highlighted="true"]');
+    expect(universalItemsViewSource).toContain('article[data-evidence-highlighted="true"]');
+    expect(youtubeCommentsViewSource).toContain('article[data-evidence-highlighted="true"]');
     expect(telegramTimelineSource).toContain("var(--primary)");
     expect(youtubeTranscriptSource).toContain("var(--primary)");
     expect(snapshotItemsViewSource).toContain("var(--accent)");
     expect(snapshotGroupSourcesViewSource).toContain("var(--accent)");
+    expect(universalItemsViewSource).toContain("var(--accent)");
+    expect(youtubeCommentsViewSource).toContain("var(--accent)");
   });
 
   it("renders YouTube playlist videos as a job-free leaf view", () => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -12,6 +13,8 @@
     sortLoadedYoutubeComments,
     type LoadedYoutubeCommentSort,
   } from "$lib/source-browser-model";
+  import { liveSourceItemRef } from "$lib/source-reader-model";
+  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { SourceItem, SourceJobRecord } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
 
@@ -24,6 +27,7 @@
     routeError,
     loading,
     hasMore,
+    highlightToken = null,
     formatTimestamp,
     onLoadMore,
     onSyncComments,
@@ -35,6 +39,7 @@
     routeError: string | null;
     loading: boolean;
     hasMore: boolean;
+    highlightToken?: EvidenceHighlightToken | null;
     formatTimestamp: (value: number | null) => string;
     onLoadMore: () => void | Promise<void>;
     onSyncComments: () => void | Promise<void>;
@@ -44,6 +49,8 @@
   let search = $state("");
   let viewMode = $state<ViewMode>("threaded");
   let sortMode = $state<LoadedYoutubeCommentSort>("newest");
+  let commentsElement: HTMLElement | null = $state(null);
+  const consumedHighlightTokenIds = new Set<string>();
 
   const coverage = $derived(commentsCoverageState({
     items,
@@ -68,9 +75,30 @@
   function commentLabel(item: SourceItem) {
     return item.youtubeComment?.isReply ? "Reply" : "Comment";
   }
+
+  $effect(() => {
+    if (highlightToken && !consumedHighlightTokenIds.has(highlightToken.tokenId)) {
+      const highlightedItem = visibleComments.find((item) => isEvidenceHighlighted(item)) ?? null;
+      if (!highlightedItem) return;
+      consumedHighlightTokenIds.add(highlightToken.tokenId);
+      void scrollHighlightedCommentIntoView(liveSourceItemRef(highlightedItem));
+    }
+  });
+
+  function isEvidenceHighlighted(item: SourceItem) {
+    return highlightToken !== null && highlightToken.traceRef === liveSourceItemRef(item);
+  }
+
+  async function scrollHighlightedCommentIntoView(ref: string) {
+    await tick();
+    const highlighted = commentsElement?.querySelector<HTMLElement>(
+      `[data-trace-ref="${CSS.escape(ref)}"]`,
+    );
+    highlighted?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 </script>
 
-<section class="youtube-comments-view" aria-label="YouTube comments">
+<section class="youtube-comments-view" aria-label="YouTube comments" bind:this={commentsElement}>
   <div class="comments-header">
     <div class="comments-status">
       <span class="eyebrow">YouTube comments</span>
@@ -168,7 +196,11 @@
 </section>
 
 {#snippet commentCard(item: SourceItem, parentLoaded: boolean)}
-  <article class:reply={item.youtubeComment?.isReply}>
+  <article
+    class:reply={item.youtubeComment?.isReply}
+    data-trace-ref={liveSourceItemRef(item)}
+    data-evidence-highlighted={isEvidenceHighlighted(item) ? "true" : undefined}
+  >
     <div class="comment-heading">
       <strong>{item.author ?? "Unknown author"}</strong>
       <span>{formatTimestamp(item.publishedAt)}</span>
@@ -273,6 +305,11 @@
 
   article.reply {
     background: color-mix(in srgb, var(--panel) 82%, var(--panel-strong));
+  }
+
+  article[data-evidence-highlighted="true"] {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
   }
 
   .comment-heading {

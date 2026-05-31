@@ -105,5 +105,7 @@ describe("source browser shell component contract", () => {
     expect(componentCall("SourceGroupSourcesView")).toContain("{highlightToken}");
     expect(componentCall("TelegramTimelineReader", "items={sourceData.liveReaderItems}")).toContain("{highlightToken}");
     expect(componentCall("YoutubeTranscriptReader", "segments={sourceData.youtubeTranscriptSegments}")).toContain("{highlightToken}");
+    expect(componentCall("UniversalItemsView")).toContain("{highlightToken}");
+    expect(componentCall("YoutubeCommentsView")).toContain("{highlightToken}");
   });
 });
