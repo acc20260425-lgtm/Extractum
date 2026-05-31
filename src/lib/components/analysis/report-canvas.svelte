@@ -17,7 +17,10 @@
     type WorkspaceSelection,
   } from "$lib/analysis-workspace-state";
   import type { ChatAvailability } from "$lib/analysis-run-companion-state";
-  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
+  import type {
+    EvidenceHighlightToken,
+    SourceReturnContext,
+  } from "$lib/analysis-evidence-source-navigation";
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import type { SnapshotProbeState } from "$lib/analysis-run-snapshot-affordance";
   import type { BadgeVariant } from "$lib/components/ui/types";
@@ -119,6 +122,7 @@
     telegramHistoryScope,
     selectedTraceRef,
     highlightToken = null,
+    sourceReturnContext = null,
     traceRefCount,
     selectedTemplate,
     templateName,
@@ -153,6 +157,7 @@
     onChangeCanvasMode,
     onViewLiveSource,
     onBackToRunSnapshot,
+    onReturnToEvidenceReview,
     onLoadMoreRunSnapshotMessages,
     onLoadMoreSourceItems,
     onChangeTelegramHistoryScope,
@@ -270,6 +275,7 @@
     telegramHistoryScope: TelegramHistoryScope;
     selectedTraceRef: string | null;
     highlightToken?: EvidenceHighlightToken | null;
+    sourceReturnContext?: SourceReturnContext;
     traceRefCount: number;
     selectedTemplate: AnalysisPromptTemplate | null;
     templateName: string;
@@ -312,6 +318,7 @@
     onChangeCanvasMode: (mode: CanvasMode) => void;
     onViewLiveSource: () => void;
     onBackToRunSnapshot: () => void;
+    onReturnToEvidenceReview: () => void;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
     onLoadMoreSourceItems: () => void | Promise<void>;
     onChangeTelegramHistoryScope: (scope: TelegramHistoryScope) => void;
@@ -572,6 +579,7 @@
       {hasMoreRunSnapshotMessages}
       {selectedTraceRef}
       {highlightToken}
+      {sourceReturnContext}
       {currentScopeTitle}
       {currentSource}
       {takeoutRecovery}
@@ -603,6 +611,7 @@
       {sourceSyncDisabledReason}
       onViewLiveSource={onViewLiveSource}
       onBackToRunSnapshot={onBackToRunSnapshot}
+      onReturnToEvidenceReview={onReturnToEvidenceReview}
       onLoadMoreRunSnapshotMessages={onLoadMoreRunSnapshotMessages}
       onLoadMoreSourceItems={onLoadMoreSourceItems}
       onChangeTelegramHistoryScope={onChangeTelegramHistoryScope}

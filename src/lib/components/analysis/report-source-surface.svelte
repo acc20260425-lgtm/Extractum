@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import TakeoutRecoveryNotice from "$lib/components/analysis/takeout-recovery-notice.svelte";
   import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";
@@ -30,7 +31,10 @@
     sourceBrowserShellAppliesToSource,
     sourceBrowserShellAppliesToSubject,
   } from "$lib/source-browser-model";
-  import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
+  import type {
+    EvidenceHighlightToken,
+    SourceReturnContext,
+  } from "$lib/analysis-evidence-source-navigation";
   import type {
     AnalysisRunDetail,
     AnalysisRunMessage,
@@ -78,6 +82,7 @@
     loadingYoutubeDetail: boolean;
     selectedTraceRef?: string | null;
     highlightToken?: EvidenceHighlightToken | null;
+    sourceReturnContext?: SourceReturnContext;
     currentScopeTitle?: string;
     youtubeTranscriptSegments?: YoutubeTranscriptSegment[];
     loadingYoutubeTranscriptSegments?: boolean;
@@ -103,6 +108,7 @@
     onCancelSourceJob: (jobId: string) => void | Promise<void>;
     onViewLiveSource: () => void | Promise<void>;
     onBackToRunSnapshot: () => void | Promise<void>;
+    onReturnToEvidenceReview?: () => void;
     sourceSyncDisabledReason?: (source: Source) => string | null;
     onLoadMoreRunSnapshotMessages: () => void | Promise<void>;
     onLoadMoreSourceItems?: () => void | Promise<void>;
@@ -143,6 +149,7 @@
     loadingYoutubeDetail,
     selectedTraceRef = null,
     highlightToken = null,
+    sourceReturnContext = null,
     currentScopeTitle,
     youtubeTranscriptSegments = [],
     loadingYoutubeTranscriptSegments = false,
@@ -168,6 +175,7 @@
     onCancelSourceJob,
     onViewLiveSource,
     onBackToRunSnapshot,
+    onReturnToEvidenceReview = () => {},
     sourceSyncDisabledReason = () => null,
     onLoadMoreRunSnapshotMessages,
     onLoadMoreSourceItems = () => {},
@@ -324,6 +332,14 @@
 </script>
 
 <section class="report-source-surface" data-surface={canvasSurface} data-smoke-id="analysis-source-surface">
+  {#if sourceReturnContext?.kind === "evidence"}
+    <div class="evidence-return-bar" data-smoke-id="evidence-source-return">
+      <Button type="button" variant="secondary" size="sm" onclick={onReturnToEvidenceReview}>
+        Back to evidence
+      </Button>
+    </div>
+  {/if}
+
   {#if currentRun && sourceViewBasis === "run_snapshot"}
     {#if snapshotAvailability === "available"}
       <SourceReaderHeader
@@ -507,6 +523,11 @@
     flex-direction: column;
     gap: 1rem;
     min-width: 0;
+  }
+
+  .evidence-return-bar {
+    display: flex;
+    justify-content: flex-start;
   }
 
 </style>

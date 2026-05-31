@@ -35,6 +35,31 @@ describe("analysis route report canvas wiring", () => {
     expect(analysisPageSource).toContain('type: "switch_source_basis_to_run_snapshot"');
   });
 
+  it("passes scoped evidence return state and callback into the report canvas", () => {
+    expect(analysisPageSource).toContain("sourceReturnContext={activeSourceReturnContext}");
+    expect(analysisPageSource).toContain("onReturnToEvidenceReview={returnToEvidenceReview}");
+  });
+
+  it("returns to Evidence only through the active source return context", () => {
+    const start = analysisPageSource.indexOf("  function returnToEvidenceReview");
+    const end = analysisPageSource.indexOf("\n  function resetRunSnapshotState", start + 1);
+
+    expect(start, "returnToEvidenceReview should exist").toBeGreaterThan(-1);
+    expect(end, "resetRunSnapshotState should follow returnToEvidenceReview").toBeGreaterThan(start);
+
+    const returnHelper = analysisPageSource.slice(start, end);
+
+    expect(returnHelper).toContain("const context = activeSourceReturnContext;");
+    expect(returnHelper).toContain('context?.kind !== "evidence"');
+    expect(returnHelper).toContain("pendingEvidenceSourceFocus = null;");
+    expect(returnHelper).toContain("clearSourceHighlight();");
+    expect(returnHelper).toContain("selectedTraceRef = context.traceRef;");
+    expect(returnHelper).toContain('type: "return_to_evidence_review"');
+    expect(returnHelper).toContain("traceRef: context.traceRef");
+    expect(returnHelper).toContain("sourceReturnContext = null;");
+    expect(returnHelper).not.toContain("traceRef: string | null = selectedTraceRef");
+  });
+
   it("loads run snapshot messages through the snapshot-only API", () => {
     expect(analysisPageSource).toContain("listAnalysisRunMessages");
     expect(analysisPageSource).toContain("loadRunSnapshotFirstPage");

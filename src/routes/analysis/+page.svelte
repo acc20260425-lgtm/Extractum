@@ -969,17 +969,20 @@
     });
   }
 
-  function returnToEvidenceReview(traceRef: string | null = selectedTraceRef) {
-    if (!traceRef) {
+  function returnToEvidenceReview() {
+    const context = activeSourceReturnContext;
+    if (context?.kind !== "evidence") {
       return;
     }
 
     pendingEvidenceSourceFocus = null;
     clearSourceHighlight();
+    selectedTraceRef = context.traceRef;
     dispatchWorkspaceEvent({
       type: "return_to_evidence_review",
-      traceRef,
+      traceRef: context.traceRef,
     });
+    sourceReturnContext = null;
   }
 
   function resetRunSnapshotState() {
@@ -3038,6 +3041,7 @@
     {telegramHistoryScope}
     {selectedTraceRef}
     highlightToken={transientSourceHighlight}
+    sourceReturnContext={activeSourceReturnContext}
     traceRefCount={traceData.refs.length}
     {selectedTemplate}
     {templateName}
@@ -3072,6 +3076,7 @@
     onChangeCanvasMode={(mode) => changeCanvasMode(mode)}
     onViewLiveSource={() => viewLiveSourceForOpenedRun()}
     onBackToRunSnapshot={() => backToRunSnapshot()}
+    onReturnToEvidenceReview={returnToEvidenceReview}
     onLoadMoreRunSnapshotMessages={() => void loadMoreRunSnapshotMessages()}
     onChangeTranscriptSearch={changeYoutubeTranscriptSearch}
     onLoadMoreSourceItems={() => void loadMoreSourceItems()}

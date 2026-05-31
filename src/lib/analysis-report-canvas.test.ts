@@ -200,4 +200,28 @@ describe("report canvas component contract", () => {
       expect(shellCall).toContain("{highlightToken}");
     }
   });
+
+  it("renders the scoped evidence return affordance above source reader headers", () => {
+    expect(reportSourceSurfaceSource).toContain("SourceReturnContext");
+    expect(reportSourceSurfaceSource).toContain("sourceReturnContext?: SourceReturnContext");
+    expect(reportSourceSurfaceSource).toContain("onReturnToEvidenceReview?: () => void");
+    expect(reportSourceSurfaceSource).toContain('data-smoke-id="evidence-source-return"');
+    expect(reportSourceSurfaceSource).toContain("Back to evidence");
+    expect(reportSourceSurfaceSource).toContain('sourceReturnContext?.kind === "evidence"');
+    expect(reportSourceSurfaceSource).toContain("onclick={onReturnToEvidenceReview}");
+
+    const returnBarStart = reportSourceSurfaceSource.indexOf('class="evidence-return-bar"');
+    const firstHeaderStart = reportSourceSurfaceSource.indexOf("<SourceReaderHeader");
+    expect(returnBarStart).toBeGreaterThan(0);
+    expect(firstHeaderStart).toBeGreaterThan(0);
+    expect(returnBarStart).toBeLessThan(firstHeaderStart);
+  });
+
+  it("passes evidence return context and callback through the report canvas", () => {
+    expect(reportCanvasSource).toContain("SourceReturnContext");
+    expect(reportCanvasSource).toContain("sourceReturnContext?: SourceReturnContext");
+    expect(reportCanvasSource).toContain("onReturnToEvidenceReview: () => void");
+    expect(reportCanvasSource).toContain("{sourceReturnContext}");
+    expect(reportCanvasSource).toContain("onReturnToEvidenceReview={onReturnToEvidenceReview}");
+  });
 });
