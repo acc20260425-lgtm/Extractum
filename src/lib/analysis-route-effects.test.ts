@@ -67,6 +67,16 @@ describe("analysis route effects", () => {
     return analysisPageSource.slice(functionStart, nextFunctionStart);
   }
 
+  function functionSlice(name: string, nextName: string) {
+    const start = analysisPageSource.indexOf(`  ${name}`);
+    const end = analysisPageSource.indexOf(`\n  ${nextName}`, start + 1);
+
+    expect(start, `${name} should exist`).toBeGreaterThan(-1);
+    expect(end, `${nextName} should follow ${name}`).toBeGreaterThan(start);
+
+    return analysisPageSource.slice(start, end);
+  }
+
   it("schedules saved run history loading from explicit scope params and runs filters", () => {
     const effect = historyScopeEffect();
 
@@ -121,5 +131,48 @@ describe("analysis route effects", () => {
     expect(detailFunction).toContain("if (youtubeDetailRequestKey !== requestKey) {");
     expect(detailFunction).toContain("status = formatAppError(\"loading YouTube detail\", error);");
     expect(detailFunction).toContain("loadingYoutubeDetail = false;");
+  });
+
+  it("keeps evidence source route state and active return context local to the route", () => {
+    expect(analysisPageSource).toContain('} from "$lib/analysis-evidence-source-navigation";');
+    expect(analysisPageSource).toContain("canonicalEvidenceTraceRef,");
+    expect(analysisPageSource).toContain("focusedLiveSourceTargetForTrace,");
+    expect(analysisPageSource).toContain("sourceReturnContextIsActive,");
+    expect(analysisPageSource).toContain("sourceScopeForEvidence,");
+    expect(analysisPageSource).toContain("type EvidenceHighlightToken,");
+    expect(analysisPageSource).toContain("type PendingEvidenceSourceFocus,");
+    expect(analysisPageSource).toContain("type SourceReturnContext,");
+    expect(analysisPageSource).toContain("let sourceReturnContext = $state<SourceReturnContext>(null);");
+    expect(analysisPageSource).toContain(
+      "let pendingEvidenceSourceFocus = $state<PendingEvidenceSourceFocus | null>(null);",
+    );
+    expect(analysisPageSource).toContain(
+      "let transientSourceHighlight = $state<EvidenceHighlightToken | null>(null);",
+    );
+    expect(analysisPageSource).toContain("let evidenceSourceFocusSequence = 0;");
+    expect(analysisPageSource).toContain(
+      "let sourceHighlightClearTimer: ReturnType<typeof setTimeout> | null = null;",
+    );
+    expect(analysisPageSource).toContain("const activeSourceReturnContext = $derived.by(() => {");
+    expect(analysisPageSource).toContain("return sourceReturnContextIsActive(sourceReturnContext, {");
+  });
+
+  it("clears evidence source navigation when route context changes", () => {
+    const functionPairs = [
+      ["function clearCurrentRunForWorkspaceSwitch", "function liveScopeExistsForRun"],
+      ["function viewLiveSourceForOpenedRun", "function backToRunSnapshot"],
+      ["function backToRunSnapshot", "function returnToEvidenceReview"],
+      ["async function focusTraceRef", "function currentEvidenceSourceScope"],
+      ["function changeSelectedGroupSourceId", "async function selectSource"],
+      ["async function selectSource", "function selectGroup"],
+      ["function selectGroup", "async function changeSelectedTopicKey"],
+      ["function changeSelectedSnapshotSourceId", "async function loadChatMessages"],
+    ];
+
+    for (const [name, nextName] of functionPairs) {
+      expect(functionSlice(name, nextName), `${name} should clear navigation state`).toContain(
+        "clearEvidenceSourceNavigation();",
+      );
+    }
   });
 });

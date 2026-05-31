@@ -52,10 +52,45 @@ describe("analysis route run companion wiring", () => {
     expect(analysisPageSource).toContain('type: "show_evidence_in_source"');
     expect(analysisPageSource).toContain("sourceViewBasis: decision.sourceViewBasis");
     expect(analysisPageSource).not.toContain("canvasMode: decision.canvasMode");
-    expect(analysisPageSource).toContain("await loadSourcePageAroundTrace(decision, trace)");
+    expect(analysisPageSource).toContain("await loadSourcePageAroundTrace({");
     expect(analysisPageSource).toContain("selectedSnapshotSourceId = trace.source_id");
     expect(analysisPageSource).toContain("sourceId: trace.source_id");
     expect(analysisPageSource).toContain("aroundRef: trace.ref");
+  });
+
+  it("establishes evidence source navigation request identity before focused source loads", () => {
+    const showSelectedTrace = functionSlice(
+      "async function showSelectedTraceInSource",
+      "async function submitRunQuestionFromCompanion",
+    );
+
+    expect(showSelectedTrace).toContain(
+      "const canonicalRef = canonicalEvidenceTraceRef(decision.highlightedRef, trace.ref);",
+    );
+    expect(showSelectedTrace).toContain("const sourceScope = currentEvidenceSourceScope(trace.source_id);");
+    expect(showSelectedTrace).toContain(
+      'status = "Selected evidence no longer belongs to the opened source group.";',
+    );
+    expect(showSelectedTrace).toContain("const liveTarget = focusedLiveSourceTargetForTrace(trace);");
+    expect(showSelectedTrace).toContain(
+      'status = "This evidence does not map to a browsable live source row yet.";',
+    );
+    expect(showSelectedTrace).toContain("const requestId = nextEvidenceSourceRequestId();");
+    expect(showSelectedTrace).toContain("clearSourceHighlight();");
+    expect(showSelectedTrace).toContain("sourceReturnContext = {");
+    expect(showSelectedTrace).toContain("pendingEvidenceSourceFocus = {");
+    expect(showSelectedTrace).toContain("selectedTraceRef = canonicalRef;");
+    expect(showSelectedTrace).toContain("highlightedRef: canonicalRef");
+    expect(showSelectedTrace).toContain("requestId,");
+    expect(showSelectedTrace).toContain("canonicalRef,");
+    expect(showSelectedTrace).toContain("sourceScope,");
+
+    expect(showSelectedTrace.indexOf("clearSourceHighlight();")).toBeLessThan(
+      showSelectedTrace.indexOf("pendingEvidenceSourceFocus = {"),
+    );
+    expect(showSelectedTrace.indexOf("pendingEvidenceSourceFocus = {")).toBeLessThan(
+      showSelectedTrace.indexOf('type: "show_evidence_in_source"'),
+    );
   });
 
   it("models Back to evidence with an explicit evidence-review event", () => {

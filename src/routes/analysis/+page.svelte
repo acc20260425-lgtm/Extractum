@@ -191,6 +191,15 @@
     type CompanionRunsFilterState,
   } from "$lib/analysis-run-companion-state";
   import {
+    canonicalEvidenceTraceRef,
+    focusedLiveSourceTargetForTrace,
+    sourceReturnContextIsActive,
+    sourceScopeForEvidence,
+    type EvidenceHighlightToken,
+    type PendingEvidenceSourceFocus,
+    type SourceReturnContext,
+  } from "$lib/analysis-evidence-source-navigation";
+  import {
     defaultAnalysisWorkspaceUiState,
     legacyScopeFromWorkspaceSelection,
     transitionAnalysisWorkspaceState,
@@ -367,6 +376,11 @@
   let currentRun = $state<AnalysisRunDetail | null>(null);
   let traceData = $state<AnalysisTraceData>({ refs: [] });
   let selectedTraceRef = $state<string | null>(null);
+  let sourceReturnContext = $state<SourceReturnContext>(null);
+  let pendingEvidenceSourceFocus = $state<PendingEvidenceSourceFocus | null>(null);
+  let transientSourceHighlight = $state<EvidenceHighlightToken | null>(null);
+  let evidenceSourceFocusSequence = 0;
+  let sourceHighlightClearTimer: ReturnType<typeof setTimeout> | null = null;
   let savedTraceRefs = $state<string[]>([]);
   let resolvedTraceRefs = $state<string[]>([]);
   let runFilter = $state<AnalysisRunFilter>("all");
@@ -831,6 +845,18 @@
     traceData.refs,
   ));
 
+  const activeSourceReturnContext = $derived.by(() => {
+    const runId = currentRun?.id ?? null;
+    const trace = selectedTrace;
+    const sourceScope = trace ? currentEvidenceSourceScope(trace.source_id) : null;
+    return sourceReturnContextIsActive(sourceReturnContext, {
+      runId,
+      sourceScope,
+      sourceViewBasis: workspaceUiState.sourceViewBasis,
+      selectedTraceRef,
+    }) ? sourceReturnContext : null;
+  });
+
   const runSnapshotProbeState = $derived(snapshotProbeStateFromAvailability({
     snapshotAvailability: runSnapshotAvailability,
     loadingRunSnapshotMessages,
@@ -919,12 +945,14 @@
   }
 
   function viewLiveSourceForOpenedRun() {
+    clearEvidenceSourceNavigation();
     dispatchWorkspaceEvent({
       type: "view_live_source_for_opened_run",
     });
   }
 
   function backToRunSnapshot() {
+    clearEvidenceSourceNavigation();
     dispatchWorkspaceEvent({
       type: "switch_source_basis_to_run_snapshot",
     });
@@ -935,6 +963,8 @@
       return;
     }
 
+    pendingEvidenceSourceFocus = null;
+    clearSourceHighlight();
     dispatchWorkspaceEvent({
       type: "return_to_evidence_review",
       traceRef,
@@ -1013,6 +1043,7 @@
       runWorkflow.invalidateOpenRunRequests();
     }
 
+    clearEvidenceSourceNavigation();
     activeRunId = null;
     currentRun = null;
     traceData = { refs: [] };
@@ -1269,28 +1300,74 @@
   }
 
   async function focusTraceRef(ref: string) {
+    if (ref !== selectedTraceRef) {
+      clearEvidenceSourceNavigation();
+    }
     changeCompanionTab("evidence");
     await traceWorkflow.focusTraceRef(ref);
   }
 
-  function sourceReaderFocusInput(trace: AnalysisTraceRef) {
-    if (trace.youtube_timestamp_seconds !== null) {
-      return {
-        aroundItemId: trace.item_id,
-        aroundStartMs: trace.youtube_timestamp_seconds * 1000,
-      };
-    }
-
-    return {
-      aroundItemId: trace.item_id,
-      aroundStartMs: null,
-    };
+  function currentEvidenceSourceScope(traceSourceId: number) {
+    const workspaceSourceGroupId =
+      workspaceUiState.workspaceSelection.kind === "source_group"
+        ? workspaceUiState.workspaceSelection.sourceGroupId
+        : null;
+    return sourceScopeForEvidence({
+      runSourceGroupId: currentRun?.source_group_id ?? null,
+      workspaceSourceGroupId,
+      traceSourceId,
+    });
   }
 
-  async function loadSourcePageAroundTrace(
-    decision: ReturnType<typeof evidenceSourceActionDecision>,
-    trace: AnalysisTraceRef,
-  ) {
+  function nextEvidenceSourceRequestId() {
+    evidenceSourceFocusSequence += 1;
+    return `evidence-source-${evidenceSourceFocusSequence}`;
+  }
+
+  function clearSourceHighlight(tokenId?: string) {
+    if (tokenId && transientSourceHighlight?.tokenId !== tokenId) {
+      return;
+    }
+
+    if (sourceHighlightClearTimer) {
+      clearTimeout(sourceHighlightClearTimer);
+      sourceHighlightClearTimer = null;
+    }
+    transientSourceHighlight = null;
+  }
+
+  function scheduleSourceHighlightClear(tokenId: string) {
+    if (sourceHighlightClearTimer) {
+      clearTimeout(sourceHighlightClearTimer);
+    }
+    sourceHighlightClearTimer = setTimeout(() => {
+      clearSourceHighlight(tokenId);
+    }, 2500);
+  }
+
+  function clearEvidenceSourceNavigation() {
+    sourceReturnContext = null;
+    pendingEvidenceSourceFocus = null;
+    clearSourceHighlight();
+  }
+
+  async function loadSourcePageAroundTrace({
+    decision,
+    trace,
+    requestId,
+    canonicalRef,
+    sourceScope,
+  }: {
+    decision: ReturnType<typeof evidenceSourceActionDecision>;
+    trace: AnalysisTraceRef;
+    requestId: string;
+    canonicalRef: string;
+    sourceScope: NonNullable<ReturnType<typeof currentEvidenceSourceScope>>;
+  }) {
+    void requestId;
+    void canonicalRef;
+    void sourceScope;
+
     if (decision.kind === "unavailable") {
       return;
     }
@@ -1317,7 +1394,12 @@
         return;
       }
 
-      const focus = sourceReaderFocusInput(trace);
+      const liveTarget = focusedLiveSourceTargetForTrace(trace);
+      if (liveTarget.kind === "unsupported") {
+        return;
+      }
+      const aroundItemId = liveTarget.kind === "source_item" ? liveTarget.aroundItemId : trace.item_id;
+      const aroundStartMs = liveTarget.kind === "youtube_transcript" ? liveTarget.aroundStartMs : null;
       const source = sourceCatalog.find((candidate) => candidate.id === trace.source_id);
       if (!source) {
         return;
@@ -1331,7 +1413,7 @@
           limit: 40,
           beforePublishedAt: null,
           topicFilter: null,
-          aroundItemId: focus.aroundItemId,
+          aroundItemId,
         });
         groupLiveItemsBySource = { ...groupLiveItemsBySource, [trace.source_id]: items };
         groupLiveCursorsBySource = {
@@ -1355,7 +1437,7 @@
           beforeCursor: null,
           historyScope: isTelegramSource ? telegramHistoryScope : "current",
           topicFilter: null,
-          aroundItemId: focus.aroundItemId,
+          aroundItemId,
         });
         applySourceItemsPage(items, false);
         return;
@@ -1371,7 +1453,7 @@
           after: null,
           limit: 80,
           searchQuery: null,
-          aroundStartMs: focus.aroundStartMs,
+          aroundStartMs,
         });
         if (youtubeTranscriptRequestKey !== requestKey) {
           return;
@@ -1409,18 +1491,61 @@
       return;
     }
 
-    selectedTraceRef = decision.highlightedRef;
+    const canonicalRef = canonicalEvidenceTraceRef(decision.highlightedRef, trace.ref);
+    const sourceScope = currentEvidenceSourceScope(trace.source_id);
+    if (sourceScope === null) {
+      status = "Selected evidence no longer belongs to the opened source group.";
+      return;
+    }
+
+    if (decision.kind === "live_source") {
+      const liveTarget = focusedLiveSourceTargetForTrace(trace);
+      if (liveTarget.kind === "unsupported") {
+        status = "This evidence does not map to a browsable live source row yet.";
+        return;
+      }
+    }
+
+    const requestId = nextEvidenceSourceRequestId();
+    const runId = currentRun?.id;
+    if (runId === undefined) {
+      status = "Select evidence from an opened run before showing it in source.";
+      return;
+    }
+
+    clearSourceHighlight();
+    sourceReturnContext = {
+      kind: "evidence",
+      runId,
+      sourceScope,
+      sourceViewBasis: decision.sourceViewBasis,
+      traceRef: canonicalRef,
+    };
+    pendingEvidenceSourceFocus = {
+      requestId,
+      runId,
+      sourceScope,
+      sourceViewBasis: decision.sourceViewBasis,
+      traceRef: canonicalRef,
+    };
+    selectedTraceRef = canonicalRef;
     dispatchWorkspaceEvent({
       type: "show_evidence_in_source",
       sourceViewBasis: decision.sourceViewBasis,
-      highlightedRef: decision.highlightedRef,
+      highlightedRef: canonicalRef,
     });
 
     if (decision.kind === "live_source") {
       status = decision.warning;
     }
 
-    await loadSourcePageAroundTrace(decision, trace);
+    await loadSourcePageAroundTrace({
+      decision,
+      trace,
+      requestId,
+      canonicalRef,
+      sourceScope,
+    });
   }
 
   async function submitRunQuestionFromCompanion() {
@@ -1699,6 +1824,7 @@
   }
 
   function changeSelectedGroupSourceId(sourceId: number | null) {
+    clearEvidenceSourceNavigation();
     selectedGroupSourceId = sourceId;
     if (
       sourceId !== null &&
@@ -1716,6 +1842,7 @@
     { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
   ) {
     const previousWorkspaceState = workspaceUiState;
+    clearEvidenceSourceNavigation();
     dispatchWorkspaceEvent({
       type: "select_source",
       sourceId,
@@ -1759,6 +1886,7 @@
     { preserveRestoredCanvasState = false }: { preserveRestoredCanvasState?: boolean } = {},
   ) {
     const previousWorkspaceState = workspaceUiState;
+    clearEvidenceSourceNavigation();
     dispatchWorkspaceEvent({
       type: "select_source_group",
       sourceGroupId: groupId,
@@ -2015,6 +2143,7 @@
   }
 
   function changeSelectedSnapshotSourceId(sourceId: number | null) {
+    clearEvidenceSourceNavigation();
     selectedSnapshotSourceId = sourceId;
     resetRunSnapshotState();
     if (

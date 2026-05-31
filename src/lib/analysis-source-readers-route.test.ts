@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 
+function functionSlice(name: string, nextName: string) {
+  const start = analysisPageSource.indexOf(`  ${name}`);
+  const end = analysisPageSource.indexOf(`\n  ${nextName}`, start + 1);
+
+  expect(start, `${name} should exist`).toBeGreaterThan(-1);
+  expect(end, `${nextName} should follow ${name}`).toBeGreaterThan(start);
+
+  return analysisPageSource.slice(start, end);
+}
+
 describe("analysis source reader route wiring", () => {
   it("loads live source group pages per member without closing the opened run", () => {
     expect(analysisPageSource).toContain("groupLiveItemsBySource");
@@ -73,9 +83,26 @@ describe("analysis source reader route wiring", () => {
   });
 
   it("loads live source pages around the selected trace before source readers scroll", () => {
-    expect(analysisPageSource).toContain("function sourceReaderFocusInput");
-    expect(analysisPageSource).toContain("aroundItemId: trace.item_id");
-    expect(analysisPageSource).toContain("aroundStartMs: trace.youtube_timestamp_seconds * 1000");
-    expect(analysisPageSource).toContain("loadSourcePageAroundTrace");
+    const focusedLoad = functionSlice(
+      "async function loadSourcePageAroundTrace",
+      "async function showSelectedTraceInSource",
+    );
+
+    expect(analysisPageSource).not.toContain("function sourceReaderFocusInput");
+    expect(focusedLoad).toContain("decision,");
+    expect(focusedLoad).toContain("trace,");
+    expect(focusedLoad).toContain("requestId,");
+    expect(focusedLoad).toContain("canonicalRef,");
+    expect(focusedLoad).toContain("sourceScope,");
+    expect(focusedLoad).toContain("const liveTarget = focusedLiveSourceTargetForTrace(trace);");
+    expect(focusedLoad).toContain(
+      'const aroundItemId = liveTarget.kind === "source_item" ? liveTarget.aroundItemId : trace.item_id;',
+    );
+    expect(focusedLoad).toContain(
+      'const aroundStartMs = liveTarget.kind === "youtube_transcript" ? liveTarget.aroundStartMs : null;',
+    );
+    expect(focusedLoad).toContain("aroundItemId,");
+    expect(focusedLoad).toContain("aroundStartMs,");
+    expect(focusedLoad).toContain("aroundRef: trace.ref");
   });
 });
