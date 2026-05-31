@@ -933,7 +933,7 @@ Expected: commit succeeds.
 - Create: `docs/superpowers/verification/2026-05-31-saved-runs-affordance-smoke.md`
 - Modify: `docs/superpowers/plans/2026-05-31-saved-runs-affordance-smoke-coverage-implementation.md`
 
-- [ ] **Step 1: Run required focused frontend tests**
+- [x] **Step 1: Run required focused frontend tests**
 
 Run:
 
@@ -943,7 +943,7 @@ npm.cmd run test -- src/lib/analysis-run-snapshot-affordance.test.ts src/lib/ana
 
 Expected: PASS.
 
-- [ ] **Step 2: Run required fixture tests**
+- [x] **Step 2: Run required fixture tests**
 
 Run:
 
@@ -953,7 +953,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full verification**
+- [x] **Step 3: Run full verification**
 
 Run:
 
@@ -963,7 +963,7 @@ npm.cmd run verify
 
 Expected: PASS. The output should include frontend tests, `svelte-check`, Rust tests, and verification script completion.
 
-- [ ] **Step 4: Create verification note**
+- [x] **Step 4: Create verification note**
 
 Create `docs/superpowers/verification/2026-05-31-saved-runs-affordance-smoke.md` with:
 
@@ -1029,7 +1029,7 @@ A cold Rust/Tauri build can exceed the smoke harness 90-second MCP bridge discov
 The smoke harness cleaned analysis redesign fixtures and stopped the Tauri dev process after the accepted run.
 ````
 
-- [ ] **Step 5: Run verification-note grep checks**
+- [x] **Step 5: Run verification-note grep checks**
 
 Run:
 
@@ -1039,7 +1039,7 @@ rg -n "saved-runs-affordance|runs: 7|Capture Failed Snapshot Run|Startup Caveat"
 
 Expected: output includes all four searched fragments.
 
-- [ ] **Step 6: Commit verification note**
+- [x] **Step 6: Commit verification note**
 
 Run:
 
@@ -1054,13 +1054,13 @@ Expected: commit succeeds.
 
 ## Acceptance Checklist
 
-- [ ] Fixture tests assert `Missing Snapshot Run` exposes `snapshot_state: "missing_legacy"` in summary and detail DTOs.
-- [ ] Fixture tests assert `Capture Failed Snapshot Run` exposes `snapshot_state: "capture_failed"` and `snapshot_error: "Snapshot capture failed: fixture write boundary unavailable"` in summary and detail DTOs.
-- [ ] Capture-failed fixture is `failed`, has readable `result_markdown`, has trace data, has no saved snapshot rows, and has no `snapshot_captured_at`.
-- [ ] Smoke labels include `Missing Snapshot Run`, `Failed Run`, `Cancelled Run`, and `Capture Failed Snapshot Run`.
-- [ ] Runs row smoke checks are row-scoped and verify degraded badges without exposing sanitized error details.
-- [ ] Missing-legacy smoke covers opened header details, Source copy, Evidence disabled reason, and Chat disabled copy.
-- [ ] Capture-failed smoke covers readable report body, details sanitized error, Source sanitized error, Evidence disabled reason, and Chat disabled copy.
-- [ ] Live-source clarification is asserted only when `View live source` is available, and clicking it proves the UI switches to live source basis.
-- [ ] Fresh verification note records smoke evidence, fixture summary, cleanup, and cold-build caveat.
-- [ ] Required commands pass: focused helper tests, `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures`, `npm.cmd run smoke:analysis`, and `npm.cmd run verify`.
+- [x] Fixture tests assert `Missing Snapshot Run` exposes `snapshot_state: "missing_legacy"` in summary and detail DTOs.
+- [x] Fixture tests assert `Capture Failed Snapshot Run` exposes `snapshot_state: "capture_failed"` and `snapshot_error: "Snapshot capture failed: fixture write boundary unavailable"` in summary and detail DTOs.
+- [x] Capture-failed fixture is `failed`, has readable `result_markdown`, has trace data, has no saved snapshot rows, and has no `snapshot_captured_at`.
+- [x] Smoke labels include `Missing Snapshot Run`, `Failed Run`, `Cancelled Run`, and `Capture Failed Snapshot Run`.
+- [x] Runs row smoke checks are row-scoped and verify degraded badges without exposing sanitized error details.
+- [x] Missing-legacy smoke covers opened header details, Source copy, Evidence disabled reason, and Chat disabled copy.
+- [x] Capture-failed smoke covers readable report body, details sanitized error, Source sanitized error, Evidence disabled reason, and Chat disabled copy.
+- [x] Live-source clarification is asserted only when `View live source` is available, and clicking it proves the UI switches to live source basis.
+- [x] Fresh verification note records smoke evidence, fixture summary, cleanup, and cold-build caveat.
+- [x] Required commands pass: focused helper tests, `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures`, `npm.cmd run smoke:analysis`, and `npm.cmd run verify`.
