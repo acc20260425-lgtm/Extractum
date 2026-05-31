@@ -40,8 +40,9 @@ changes:
 
 In scope:
 
-- desktop analysis workspace column sizing;
-- Evidence tab list/detail reflow;
+- desktop analysis workspace column sizing in `src/routes/analysis/+page.svelte`;
+- Evidence tab list/detail reflow through `src/lib/components/analysis/run-evidence-tab.svelte`
+  and `src/lib/components/analysis/trace-panel.svelte`;
 - targeted tests or raw component contracts for the layout thresholds;
 - no changes to Evidence data, trace selection, or source navigation behavior.
 
@@ -68,7 +69,8 @@ The current workspace rule:
 grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.6fr) minmax(320px, 430px);
 ```
 
-should move to a wider but still bounded companion column, for example:
+is defined on `.analysis-workspace` in `src/routes/analysis/+page.svelte`.
+It should move to a wider but still bounded companion column, for example:
 
 ```css
 grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.45fr) minmax(420px, 560px);
@@ -80,8 +82,15 @@ The important contract is that wide desktop gets a companion panel around
 surface.
 
 The existing breakpoint that turns Evidence into two columns at viewport
-`min-width: 1280px` is too blunt. It should become panel-aware. The preferred
-implementation is a container query on the Evidence tab root:
+`min-width: 1280px` lives in `src/lib/components/analysis/trace-panel.svelte`
+and targets `.trace-layout`. It is too blunt because it keys off the full
+viewport, not the companion panel. It should become panel-aware.
+
+The Evidence tab root class already exists as `.run-evidence-tab` in
+`src/lib/components/analysis/run-evidence-tab.svelte`; the list/detail layout
+class already exists as `.trace-layout` in `trace-panel.svelte`.
+
+The preferred implementation is a container query on the Evidence tab root:
 
 ```css
 .run-evidence-tab {
@@ -94,6 +103,11 @@ implementation is a container query on the Evidence tab root:
   }
 }
 ```
+
+The `34rem` threshold is intentionally tied to the minimum two-column shape:
+`12rem` for the trace list, `16rem` for details, plus the existing layout gap and
+a little breathing room. If the implementation changes the gap, it should keep
+the threshold high enough that both columns remain readable.
 
 If container queries are not already acceptable in the project, use a local
 class or CSS custom property driven by the companion surface width. Do not keep
@@ -111,8 +125,8 @@ On wide desktop:
 
 On medium widths:
 
-- the companion remains under the canvas according to the existing workspace
-  breakpoint;
+- the companion remains under the canvas according to the existing
+  `.analysis-workspace` breakpoint at `@media (max-width: 1500px)`;
 - Evidence can stack list above detail if the panel width is not enough for
   two useful columns.
 
@@ -140,7 +154,8 @@ mostly default layout and responsive reflow.
 Add targeted coverage for:
 
 - the analysis workspace desktop grid no longer caps the companion at 430px;
-- the companion still collapses below the existing medium-width breakpoint;
+- the existing `@media (max-width: 1500px)` workspace breakpoint still collapses
+  the companion below the canvas;
 - Evidence layout no longer uses a viewport-only `min-width: 1280px` rule for
   two columns;
 - Evidence exposes a container or equivalent local width rule before enabling
