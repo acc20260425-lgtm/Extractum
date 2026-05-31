@@ -55,6 +55,9 @@ Implemented:
   Takeout has detected the historical scope
 - durable ingest batch, warning, and item-observation provenance for Takeout
   attempts
+- representative Takeout validation coverage for public, private/dialog-backed,
+  private/left fallback, richer small-group, duplicate/fidelity,
+  migrated-history, and export-DC fallback scenarios
 - explicit migrated-history scope controls for browsing, NotebookLM export, and
   analysis, with current-history-only defaults
 - materialized Telegram forum topic memberships with source-level resolver state
@@ -245,7 +248,10 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 - YouTube analysis is text-based and uses synced transcripts, synthetic descriptions, and comments; audio/video binaries are not downloaded;
 - YouTube source jobs are process-local and are not resumed after app restart;
 - YouTube support requires `yt-dlp` on `PATH`;
-- older item rows may have `NULL` Telegram context metadata because there is no background backfill;
+- older item rows may have `NULL` Telegram context metadata because there is no
+  background backfill; mutable Telegram metadata added after ingest, such as
+  reactions on already-observed messages, is not backfilled by duplicate
+  observations;
 - saved LLM API keys and Telegram `api_hash` values use OS secure storage;
 - YouTube cookies, when enabled, use OS secure storage and are written only to temporary backend cookie files for `yt-dlp`;
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`;

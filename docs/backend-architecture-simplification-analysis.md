@@ -142,8 +142,8 @@ Backend ideas worth carrying forward:
   sparse id ranges with skipped-before/skipped-after counts. Extractum should
   not copy that cache structure, but a future
   `telegram_history_coverage_ranges`-style audit model would help explain
-  Takeout gaps, only-my-messages fallback, migrated-history scope, and partial
-  source validation better than `sources.last_sync_state` alone.
+  Takeout coverage, only-my-messages fallback, migrated-history scope, and
+  partial source validation better than `sources.last_sync_state` alone.
 - stale/batched forum-topic refresh: Telegram Desktop keeps stale topic root ids
   and batches targeted refreshes. Extractum currently performs catalog refresh
   around sync/Takeout. If topic enrichment becomes more dynamic, add targeted
