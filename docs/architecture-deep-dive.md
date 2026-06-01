@@ -242,7 +242,19 @@ YouTube transcript segment rows are not duplicated into `items.content_zstd`; th
 
 ## 5. NotebookLM export architecture
 
-NotebookLM export reads only local SQLite state. It does not call Telegram, LLM providers, link preview services, or media download paths.
+NotebookLM export reads only local SQLite state. It does not call Telegram, LLM
+providers, link preview services, or media download paths. The shipped scope is
+one synced Telegram source or one Telegram source group; YouTube source-group
+export stays explicitly unsupported until a YouTube-specific enrichment slice
+defines timestamps, canonical links, and playlist context.
+
+Single-source export writes the existing Telegram package shape. Telegram
+source-group export orchestrates the same per-source loading and rendering for
+each Telegram member, writes member Markdown chunks under `sources/`, keeps
+`glossary.md` at the package root, and records group/member summaries in
+`.extractum-notebooklm-export.json`. Non-Telegram members inside a dirty
+Telegram group are skipped with warnings; groups whose declared `source_type`
+is not `telegram` fail validation.
 
 For rows with `reply_to_msg_id`, export resolves original messages in batches from the same `source_id` by matching `items.external_id` to the Telegram reply message id. Original messages can be outside the selected period, but they are only used as YAML snippet metadata.
 

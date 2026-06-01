@@ -1995,7 +1995,7 @@ git commit -m "feat: enable notebooklm export for telegram groups"
 In `docs/backlog.md`, under `### 3.1 NotebookLM Export Follow-Ups`, remove this checked-off work item:
 
 ```markdown
-- [ ] add source-group export if the analysis group workflow needs it
+- [x] add source-group export if the analysis group workflow needs it
 ```
 
 Do not remove unrelated NotebookLM follow-ups:
@@ -2080,3 +2080,13 @@ git commit -m "docs: close notebooklm source group export"
 - [x] Frontend enables export for Telegram groups and leaves YouTube groups disabled.
 - [x] Frontend result UI does not depend on new member summary DTO fields.
 - [x] `npm.cmd run verify` passes or any unrelated failure is documented clearly.
+
+## Post-Merge Closure
+
+- [x] Merged `notebooklm-source-group-export` into `main` with a fast-forward
+  merge on 2026-06-01.
+- [x] Verified merged `main` with `npm.cmd run verify` after cleanup: 64 Vitest
+  files and 615 frontend tests passed, Svelte check was clean, Cargo check
+  passed, Cargo tests reported 648 passed, and `git diff HEAD --check` passed.
+- [x] Removed `.worktrees/notebooklm-source-group-export` and pruned worktrees.
+- [x] Deleted the merged local `notebooklm-source-group-export` branch.

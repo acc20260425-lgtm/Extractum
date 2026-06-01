@@ -31,11 +31,14 @@ repaired.
 
 ### NotebookLM export
 
-NotebookLM export is a local archive export for Telegram sources. It renders
-conversation documents with message text, media placeholders, reply context,
-topic context, reaction counts, participants, and period chunking. It must stay
-local-only: export query/rendering must not introduce live Telegram calls, LLM
-calls, network link enrichment, or media downloads.
+NotebookLM export is a local archive export for one Telegram source or one
+Telegram source group. It renders conversation documents with message text,
+media placeholders, reply context, topic context, reaction counts,
+participants, and period chunking. Source-group export still loads and renders
+each Telegram member source through the same source-scoped read model before
+writing grouped files. It must stay local-only: export query/rendering must not
+introduce live Telegram calls, LLM calls, network link enrichment, or media
+downloads.
 
 ### Source browsing
 
@@ -47,7 +50,8 @@ visible, distinguishes provider item kinds, and exposes stable local item refs.
 ## Current Data Sources
 
 NotebookLM export is now readiness-gated. For Telegram sources with a current
-ready archive model, export message loading reads `archive_read_items`. For
+ready archive model, export message loading reads `archive_read_items`.
+Telegram source-group export applies that decision per member source. For
 missing, building, stale, failed, never-built, or old-version archive states,
 it preserves the existing local provider/archive items path.
 
@@ -82,8 +86,9 @@ state.
 
 ## Fidelity Matrix
 
-Current required fidelity covers Telegram NotebookLM export and source
-browsing. YouTube NotebookLM export rows below are future-facing constraints:
+Current required fidelity covers Telegram single-source/source-group NotebookLM
+export and source browsing. YouTube NotebookLM export rows below are
+future-facing constraints:
 they must inform the archive-model boundary, but must not force schema fields
 unless the next implementation slice explicitly includes YouTube export
 enrichment.
@@ -210,7 +215,8 @@ Implemented first slice:
   reader for this slice; transcript segments are not `archive_read_items` rows.
 - Telegram NotebookLM export is the second gated consumer. It selects the
   archive loader only when source state is `ready` and current; otherwise it
-  preserves the existing local provider/archive items path.
+  preserves the existing local provider/archive items path. Source-group export
+  makes that selection independently for each member source.
 - Once Telegram NotebookLM export selects the archive loader, corrupt/decode or
   archive-row invariant failures are returned as errors rather than silently
   falling back to the items path.

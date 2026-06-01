@@ -658,10 +658,10 @@ Notes:
 ### 1.16 `archive_read_items`
 
 Provider-neutral item-level archive rows for archive UI consumers such as source
-browsing and Telegram NotebookLM export. The table duplicates compressed text
-and compressed media metadata needed for display, but does not duplicate
-`items.raw_data_zstd`; raw payload availability is represented by
-`has_raw_data`.
+browsing and Telegram single-source/source-group NotebookLM export. The table
+duplicates compressed text and compressed media metadata needed for display, but
+does not duplicate `items.raw_data_zstd`; raw payload availability is
+represented by `has_raw_data`.
 
 Important fields:
 
@@ -709,8 +709,9 @@ Notes:
   transaction;
 - bulk ingest and YouTube refresh paths mark source archive rows stale at the
   source scope instead of rebuilding every row inline;
-- source browsing and Telegram NotebookLM export use the gated archive/read UI
-  model when `archive_read_model_state` is ready and current;
+- source browsing and Telegram single-source/source-group NotebookLM export use
+  the gated archive/read UI model when `archive_read_model_state` is ready and
+  current;
 - for missing, building, stale, failed, or old-version archive states,
   NotebookLM export preserves the existing local provider/archive items path;
 - once NotebookLM export selects the archive loader, archive row decode and
@@ -995,11 +996,12 @@ post-baseline migration history.
 - source browsing now uses `archive_read_items` only when
   `archive_read_model_state` is `ready` for the current builder version; all
   other states fall back to the canonical `items` plus topic joins path;
-- Telegram NotebookLM export now uses `archive_read_items` only when
-  `archive_read_model_state` is `ready` for the current builder version; all
-  non-ready states preserve the existing local provider/archive items path, and
-  archive-loader failures after selection are surfaced as errors rather than
-  silently falling back;
+- Telegram single-source/source-group NotebookLM export now uses
+  `archive_read_items` only when `archive_read_model_state` is `ready` for the
+  current builder version; group export applies the same decision per member
+  source. All non-ready states preserve the existing local provider/archive
+  items path, and archive-loader failures after selection are surfaced as
+  errors rather than silently falling back;
 - Takeout import fills the same `items` fields as normal sync where raw TL data exposes enough metadata;
 - Telegram Takeout import persists durable ingest-batch provenance after the
   same-source ingest lock is acquired; failed or cancelled imports can leave

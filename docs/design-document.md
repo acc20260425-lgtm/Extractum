@@ -309,8 +309,13 @@ That work is deliberately postponed.
 ### 4.5 NotebookLM export context
 
 NotebookLM export remains local-only. It does not make live Telegram requests,
-LLM calls, link fetches, or media downloads. For Telegram sources with a
-current ready archive model, export reads message rows from
+LLM calls, link fetches, or media downloads. It supports one synced Telegram
+source or one Telegram source group. Telegram source-group export reuses the
+single-source loader/renderer per member, writes member chunks under
+`sources/`, and keeps per-member summaries in
+`.extractum-notebooklm-export.json`; YouTube source-group export remains
+unsupported until a YouTube-specific export contract is designed. For Telegram
+sources with a current ready archive model, export reads message rows from
 `archive_read_items`; non-ready states preserve the local provider/archive
 items fallback.
 
