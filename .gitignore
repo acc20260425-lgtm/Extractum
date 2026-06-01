@@ -10,11 +10,32 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 reference
 artifacts
-/.vscode
+
+# Shared VS Code project hints are tracked; local workspace state is not.
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/extensions.json
+
 /.codex
+/.codex-logs/
 /.superpowers/
 /.playwright-mcp/
 /tmp/analysis-smoke/
 .worktrees/
 kilo.json
+
+# Local runtime data, credentials, and generated diagnostics.
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.session
+*.session.*
+*.session.json
+*.session.json.tmp
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
 

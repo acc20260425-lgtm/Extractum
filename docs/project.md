@@ -23,6 +23,22 @@ This command runs frontend tests, Svelte checks, Rust check/tests, and
 policy, live Telegram/LLM flows, and secret-safety audit coverage remain
 separate stabilization work.
 
+## Secret/config policy
+
+Commit shared source, docs, migrations, tests, and stable project config only.
+Do not commit local runtime state, generated logs, SQLite databases, Telegram
+session files, cookie exports, private keys, or `.env*` files.
+
+Runtime secrets are intentionally split from repository files:
+
+- saved LLM API keys, Telegram `api_hash` values, Telegram session encryption
+  keys, and YouTube cookies live in OS secure storage;
+- Telegram session files live under the Tauri app-data directory and are
+  encrypted with per-account keys from OS secure storage;
+- the live SQLite database is app runtime state, not a repository artifact;
+- local MCP/tooling state such as `.codex*`, `.superpowers`, `.playwright-mcp`,
+  `.worktrees`, `tmp`, `artifacts`, and `kilo.json` stays ignored.
+
 ## Dependency policy
 
 The `grammers-*` crates are owned git dependencies because Extractum's
