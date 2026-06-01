@@ -43,6 +43,15 @@ line. The older GitHub lock rev
 `fa7692e49f301f16dc671c2f305ac1a32cad1a8e` was not available from the
 Codeberg repository during migration.
 
+Migration validation evidence recorded on 2026-06-01: the Codeberg-pinned
+`grammers-*` line passed focused live Telegram sync smoke checks through the
+running Tauri app on source `119` / `СтатусБанк` (`inserted = 0`,
+`skipped = 0`, `last_message_id = 363`, no warnings) and source `122` /
+`tools_ui_1c` (`inserted = 21`, `skipped = 3`, `last_message_id = 12262`, no
+warnings). The evidence is intentionally limited to sanitized source ids,
+counts, and sync-state values; no Telegram sessions, API hashes, or raw
+private payloads are recorded here.
+
 For any `grammers-*` update:
 
 - update the related `grammers-*` crates together unless there is a documented
