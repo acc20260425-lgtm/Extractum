@@ -30,6 +30,13 @@ Telegram behavior depends on upstream runtime details. Treat updates to
 `grammers-client`, `grammers-session`, and `grammers-mtsender` as explicit
 dependency work, not incidental lockfile churn.
 
+The historical GitHub repository
+[`Lonami/grammers`](https://github.com/Lonami/grammers/) is archived and now
+points to the canonical upstream at
+[`codeberg.org/Lonami/grammers`](https://codeberg.org/Lonami/grammers). Treat
+any migration from the old GitHub git URL to the Codeberg git URL as explicit
+dependency work under this policy.
+
 For any `grammers-*` update:
 
 - update the related `grammers-*` crates together unless there is a documented
