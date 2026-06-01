@@ -37,6 +37,12 @@ points to the canonical upstream at
 any migration from the old GitHub git URL to the Codeberg git URL as explicit
 dependency work under this policy.
 
+Current pinned upstream: Codeberg rev
+`1f901ce6e973fdcf0e74267f3d8efad5c729daaa` for the `grammers-*` `0.9.0`
+line. The older GitHub lock rev
+`fa7692e49f301f16dc671c2f305ac1a32cad1a8e` was not available from the
+Codeberg repository during migration.
+
 For any `grammers-*` update:
 
 - update the related `grammers-*` crates together unless there is a documented
