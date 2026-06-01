@@ -20,8 +20,8 @@ npm run verify
 
 This command runs frontend tests, Svelte checks, Rust check/tests, and
 `git diff HEAD --check`. It is a baseline local gate; CI, Rust formatting/lint
-policy, live Telegram/LLM flows, and secret-safety audit coverage remain
-separate stabilization work.
+policy, and broader live Telegram/LLM event-flow validation remain separate
+stabilization work.
 
 ## Secret/config policy
 
