@@ -21,9 +21,10 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
-grammers-client = { git = "https://github.com/Lonami/grammers", branch = "master", default-features = false }
-grammers-session = { git = "https://github.com/Lonami/grammers", branch = "master", default-features = false, features = ["serde"] }
-grammers-mtsender = { git = "https://github.com/Lonami/grammers", branch = "master" }
+grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }
+grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }
+grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }
+grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }
 zstd = "0.13"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"

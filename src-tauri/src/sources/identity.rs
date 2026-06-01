@@ -102,7 +102,12 @@ impl TelegramSourceIdentity {
                 TelegramSourceKind::Channel | TelegramSourceKind::Supergroup,
                 Some(access_hash),
             ) => Ok(Some(PeerRef {
-                id: PeerId::channel(self.peer_id),
+                id: PeerId::channel(self.peer_id).ok_or_else(|| {
+                    AppError::validation(format!(
+                        "Source {} has invalid Telegram channel peer id {}",
+                        self.source_id, self.peer_id
+                    ))
+                })?,
                 auth: PeerAuth::from_hash(access_hash),
             })),
             (

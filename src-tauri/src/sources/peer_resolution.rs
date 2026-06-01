@@ -267,7 +267,7 @@ async fn resolve_telegram_source_from_dialogs(
         .await
         .map_err(|e| AppError::network(e.to_string()))?
     {
-        if dialog.peer().id().bare_id() == source_id {
+        if dialog.peer().id().bare_id() == Some(source_id) {
             if let Some(source) = resolved_telegram_source_from_peer(dialog.peer()) {
                 if telegram_source_subtype_matches(&source, expected_subtype)? {
                     let mut source = source;
@@ -382,7 +382,7 @@ fn resolved_telegram_source_from_peer(peer: &Peer) -> Option<ResolvedTelegramSou
 pub(super) fn telegram_source_info_from_peer(peer: &Peer) -> Option<TelegramSourceInfo> {
     match peer {
         Peer::Channel(channel) => Some(TelegramSourceInfo {
-            id: channel.id().bare_id(),
+            id: channel.id().bare_id()?,
             title: channel.title().to_string(),
             username: channel.username().map(|value| value.to_string()),
             source_subtype: TELEGRAM_KIND_CHANNEL.to_string(),
@@ -390,7 +390,7 @@ pub(super) fn telegram_source_info_from_peer(peer: &Peer) -> Option<TelegramSour
             photo_data_url: None,
         }),
         Peer::Group(group) => Some(TelegramSourceInfo {
-            id: group.id().bare_id(),
+            id: group.id().bare_id()?,
             title: group.title().unwrap_or("Untitled group").to_string(),
             username: group.username().map(|value| value.to_string()),
             source_subtype: telegram_group_kind(group).to_string(),
@@ -529,7 +529,7 @@ async fn resolve_source_peer_from_typed_identity(
                     .await
                     .map_err(|e| AppError::network(e.to_string()))?
                 {
-                    if dialog.peer().id().bare_id() == identity.peer_id {
+                    if dialog.peer().id().bare_id() == Some(identity.peer_id) {
                         return peer_ref_for_typed_identity(dialog.peer(), source_id, identity);
                     }
                 }
@@ -583,7 +583,12 @@ fn source_peer_ref_from_identity(
 
     match source.source_subtype.as_deref() {
         Some(TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP) => Ok(Some(PeerRef {
-            id: PeerId::channel(telegram_source_id),
+            id: PeerId::channel(telegram_source_id).ok_or_else(|| {
+                AppError::validation(format!(
+                    "Source {} has invalid Telegram channel peer id {}",
+                    source.id, telegram_source_id
+                ))
+            })?,
             auth: PeerAuth::from_hash(access_hash),
         })),
         Some(TELEGRAM_KIND_GROUP) => Ok(None),
@@ -1046,7 +1051,7 @@ mod tests {
             .expect("metadata peer ref")
             .expect("peer ref");
 
-        assert_eq!(peer_ref.id.bare_id(), 12345);
+        assert_eq!(peer_ref.id.bare_id(), Some(12345));
         assert_eq!(peer_ref.auth.hash(), 67890);
     }
 
@@ -1074,7 +1079,7 @@ mod tests {
             .expect("metadata peer ref")
             .expect("peer ref");
 
-        assert_eq!(peer_ref.id.bare_id(), 12345);
+        assert_eq!(peer_ref.id.bare_id(), Some(12345));
         assert_eq!(peer_ref.auth.hash(), 67890);
     }
 

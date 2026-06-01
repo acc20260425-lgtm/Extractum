@@ -295,13 +295,16 @@ async fn export_dc_invoke_with_provenance<R: tl::RemoteCall>(
     }
 }
 
-fn peer_ref_identity(peer: PeerRef) -> (&'static str, i64) {
+fn peer_ref_identity(peer: PeerRef) -> AppResult<(&'static str, i64)> {
     let kind = match peer.id.kind() {
-        PeerKind::User | PeerKind::UserSelf => "user",
+        PeerKind::User => "user",
         PeerKind::Chat => "chat",
         PeerKind::Channel => "channel",
     };
-    (kind, peer.id.bare_id())
+    let peer_id = peer.id.bare_id().ok_or_else(|| {
+        AppError::validation("Telegram self-user peer cannot be used for Takeout import")
+    })?;
+    Ok((kind, peer_id))
 }
 
 fn migrated_history_detected_warning() -> String {
@@ -665,7 +668,7 @@ async fn run_takeout_migrated_history_import(
     .await;
     let resolved_peer =
         resolve_and_refresh_peer(handle, &pool, &client, &source, account_id).await?;
-    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer);
+    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
     update_takeout_resolved_peer(
         &pool,
         batch_id,
@@ -898,7 +901,7 @@ async fn run_takeout_source_import(
     .await;
     let resolved_peer =
         resolve_and_refresh_peer(handle, &pool, &client, &source, account_id).await?;
-    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer);
+    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
     update_takeout_resolved_peer(
         &pool,
         batch_id,
@@ -1340,7 +1343,11 @@ async fn validate_takeout_peer(
                 &tl::functions::InvokeWithTakeout {
                     takeout_id,
                     query: tl::functions::messages::GetChats {
-                        id: vec![peer.id.bare_id()],
+                        id: vec![peer.id.bare_id().ok_or_else(|| {
+                            AppError::validation(
+                                "Telegram self-user peer cannot be validated as a Takeout group",
+                            )
+                        })?],
                     },
                 },
                 warnings,
@@ -2666,11 +2673,13 @@ mod tests {
             id,
             from_id: None,
             from_boosts_applied: None,
+            from_rank: None,
             peer_id,
             saved_peer_id: None,
             fwd_from: None,
             via_bot_id: None,
             via_business_bot_id: None,
+            guestchat_via_from: None,
             reply_to: None,
             date: 1234,
             message: text.to_string(),

@@ -146,7 +146,7 @@ async fn persist_items(
         let telegram_context = extract_telegram_context(&message);
         let raw_data = build_raw_payload(&message, &source.title, &author, &item_payload)?;
 
-        let identity = fallback_message_identity(peer, message_id);
+        let identity = fallback_message_identity(peer, message_id)?;
         let telegram_identity = Some(identity.clone());
         let inserted_item = insert_telegram_source_item(
             pool,
@@ -182,21 +182,24 @@ async fn persist_items(
 fn fallback_message_identity(
     fallback_peer: grammers_session::types::PeerRef,
     telegram_message_id: i64,
-) -> TelegramMessageIdentity {
+) -> AppResult<TelegramMessageIdentity> {
     let history_peer_kind = match fallback_peer.id.kind() {
-        PeerKind::User | PeerKind::UserSelf => TELEGRAM_PEER_KIND_USER,
+        PeerKind::User => TELEGRAM_PEER_KIND_USER,
         PeerKind::Chat => TELEGRAM_PEER_KIND_CHAT,
         PeerKind::Channel => TELEGRAM_PEER_KIND_CHANNEL,
     }
     .to_string();
+    let history_peer_id = fallback_peer.id.bare_id().ok_or_else(|| {
+        AppError::validation("Telegram self-user peer cannot be used as message history peer")
+    })?;
 
-    TelegramMessageIdentity {
+    Ok(TelegramMessageIdentity {
         history_peer_kind,
-        history_peer_id: fallback_peer.id.bare_id(),
+        history_peer_id,
         telegram_message_id,
         migration_domain: None,
         is_migrated_history: false,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -204,7 +207,7 @@ fn fallback_message_identity_for_test(
     fallback_peer: grammers_session::types::PeerRef,
     telegram_message_id: i64,
 ) -> TelegramMessageIdentity {
-    fallback_message_identity(fallback_peer, telegram_message_id)
+    fallback_message_identity(fallback_peer, telegram_message_id).expect("valid fallback peer")
 }
 
 pub(crate) async fn finalize_sync(
@@ -317,7 +320,7 @@ mod tests {
 
         let identity = fallback_message_identity_for_test(
             PeerRef {
-                id: PeerId::channel(12345),
+                id: PeerId::channel(12345).expect("valid channel peer id"),
                 auth: PeerAuth::from_hash(99),
             },
             42,

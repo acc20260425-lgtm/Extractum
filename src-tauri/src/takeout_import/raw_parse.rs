@@ -366,11 +366,13 @@ mod tests {
             id,
             from_id: None,
             from_boosts_applied: None,
+            from_rank: None,
             peer_id: peer_channel(10),
             saved_peer_id: None,
             fwd_from: None,
             via_bot_id: None,
             via_business_bot_id: None,
+            guestchat_via_from: None,
             reply_to: None,
             date: 1234,
             message: String::new(),
@@ -416,6 +418,7 @@ mod tests {
                 quote_entities: None,
                 quote_offset: None,
                 todo_item_id: None,
+                poll_option: None,
             }
             .into(),
         );
@@ -532,6 +535,7 @@ mod tests {
         message.media = Some(
             tl::types::MessageMediaPhoto {
                 spoiler: false,
+                live_photo: false,
                 photo: Some(
                     tl::types::Photo {
                         has_stickers: false,
@@ -561,6 +565,7 @@ mod tests {
                     .into(),
                 ),
                 ttl_seconds: None,
+                video: None,
             }
             .into(),
         );
