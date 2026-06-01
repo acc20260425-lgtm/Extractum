@@ -18,6 +18,7 @@ artifacts
 
 /.codex
 /.codex-logs/
+/.kilo/
 /.superpowers/
 /.playwright-mcp/
 /tmp/analysis-smoke/

@@ -36,8 +36,15 @@ Runtime secrets are intentionally split from repository files:
 - Telegram session files live under the Tauri app-data directory and are
   encrypted with per-account keys from OS secure storage;
 - the live SQLite database is app runtime state, not a repository artifact;
-- local MCP/tooling state such as `.codex*`, `.superpowers`, `.playwright-mcp`,
-  `.worktrees`, `tmp`, `artifacts`, and `kilo.json` stays ignored.
+- local MCP/tooling state such as `.codex*`, `.kilo`, `.superpowers`,
+  `.playwright-mcp`, `.worktrees`, `tmp`, `artifacts`, and `kilo.json` stays
+  ignored.
+
+Workspace-local live DB backups and validation snapshots are private artifacts
+even when they are ignored by git. Keep them only as long as they are needed
+for debugging or audit evidence, store durable copies outside the repository
+when retention is required, and record only sanitized source ids, counters,
+states, or warning codes in committed documentation.
 
 ## Dependency policy
 
