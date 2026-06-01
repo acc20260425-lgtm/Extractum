@@ -20,8 +20,29 @@ npm run verify
 
 This command runs frontend tests, Svelte checks, Rust check/tests, and
 `git diff HEAD --check`. It is a baseline local gate; CI, Rust formatting/lint
-policy, live Telegram/LLM flows, dependency pinning, and secret-safety audit
-coverage remain separate stabilization work.
+policy, live Telegram/LLM flows, and secret-safety audit coverage remain
+separate stabilization work.
+
+## Dependency policy
+
+The `grammers-*` crates are owned git dependencies because Extractum's
+Telegram behavior depends on upstream runtime details. Treat updates to
+`grammers-client`, `grammers-session`, and `grammers-mtsender` as explicit
+dependency work, not incidental lockfile churn.
+
+For any `grammers-*` update:
+
+- update the related `grammers-*` crates together unless there is a documented
+  reason to split them;
+- record the old and new upstream commit revisions from `Cargo.lock`;
+- explain why the update is needed and whether it affects Telegram sync,
+  Takeout import, session handling, or source identity behavior;
+- run `npm run verify` at minimum, plus focused Telegram validation when the
+  upstream change touches runtime behavior;
+- keep the update in a dedicated dependency commit or clearly isolated slice.
+
+Do not refresh `grammers-*` from the upstream branch as part of unrelated
+feature, fix, formatting, or documentation work.
 
 ## Product slice
 

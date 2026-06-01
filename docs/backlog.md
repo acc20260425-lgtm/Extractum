@@ -12,7 +12,7 @@
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
 | Medium | Frontend workspace evolution | improve evidence navigation, topic filters, saved-run history, and remaining source-surface consistency |
 | Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
-| Medium | Stabilization and secret safety | add CI, dependency policy, event-flow validation, and secret-leak audit coverage |
+| Medium | Stabilization and secret safety | add CI, event-flow validation, and secret-leak audit coverage |
 | Medium | Desktop product maturity | add sanitized diagnostics, searchable settings, explicit export profiles, and local privacy/data lifecycle controls |
 
 ## 2. Planning Principles
@@ -78,7 +78,6 @@ Acceptance:
 Priority: medium.
 
 - [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
-- [ ] pin `grammers-*` dependencies to an explicit `rev` or owned release policy
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
 - [ ] audit backend errors, frontend status text, and debug output for accidental credential exposure
 
