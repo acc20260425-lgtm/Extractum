@@ -77,6 +77,16 @@ pub(crate) struct SourceJobRecord {
     pub(crate) error: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SourceJobDiagnosticCount {
+    pub(crate) job_type: String,
+    pub(crate) status: String,
+    pub(crate) warning_state: String,
+    pub(crate) error_kind: String,
+    pub(crate) count: i64,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SourceJobListFilter {
@@ -217,6 +227,42 @@ impl SourceJobState {
                 .then_with(|| a.job_id.cmp(&b.job_id))
         });
         jobs
+    }
+
+    pub(crate) async fn diagnostic_counts(&self) -> Vec<SourceJobDiagnosticCount> {
+        let inner = self.inner.lock().await;
+        let mut counts = std::collections::BTreeMap::<(String, String, String, String), i64>::new();
+        for job in inner.jobs.values() {
+            let key = (
+                source_job_type_diagnostic_key(&job.job_type).to_string(),
+                source_job_status_diagnostic_key(&job.status).to_string(),
+                if job.warnings.is_empty() {
+                    "none".to_string()
+                } else {
+                    "present".to_string()
+                },
+                job.error
+                    .as_deref()
+                    .map(classify_diagnostic_error_kind)
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "none".to_string()),
+            );
+            *counts.entry(key).or_insert(0) += 1;
+        }
+        counts
+            .into_iter()
+            .map(
+                |((job_type, status, warning_state, error_kind), count)| {
+                    SourceJobDiagnosticCount {
+                        job_type,
+                        status,
+                        warning_state,
+                        error_kind,
+                        count,
+                    }
+                },
+            )
+            .collect()
     }
 
     pub(crate) async fn request_cancel(&self, job_id: &str) -> Option<SourceJobRecord> {
@@ -886,6 +932,59 @@ fn is_terminal_status(status: &SourceJobStatus) -> bool {
     )
 }
 
+fn source_job_type_diagnostic_key(job_type: &SourceJobType) -> &'static str {
+    match job_type {
+        SourceJobType::YoutubeVideoMetadataSync => "youtube_video_metadata_sync",
+        SourceJobType::YoutubeVideoTranscriptSync => "youtube_video_transcript_sync",
+        SourceJobType::YoutubeVideoCommentsSync => "youtube_video_comments_sync",
+        SourceJobType::YoutubeVideoFullSync => "youtube_video_full_sync",
+        SourceJobType::YoutubePlaylistMetadataSync => "youtube_playlist_metadata_sync",
+        SourceJobType::YoutubePlaylistFullSync => "youtube_playlist_full_sync",
+        SourceJobType::YoutubePlaylistVideoSync => "youtube_playlist_video_sync",
+    }
+}
+
+fn source_job_status_diagnostic_key(status: &SourceJobStatus) -> &'static str {
+    match status {
+        SourceJobStatus::Queued => "queued",
+        SourceJobStatus::Running => "running",
+        SourceJobStatus::Succeeded => "succeeded",
+        SourceJobStatus::Failed => "failed",
+        SourceJobStatus::CancelRequested => "cancel_requested",
+        SourceJobStatus::Cancelled => "cancelled",
+    }
+}
+
+fn classify_diagnostic_error_kind(error: &str) -> &'static str {
+    let lower = error.to_ascii_lowercase();
+    if lower.trim().is_empty() {
+        "none"
+    } else if lower.contains("timeout")
+        || lower.contains("timed out")
+        || lower.contains("network")
+        || lower.contains("connection")
+        || lower.contains("dns")
+        || lower.contains("socket")
+        || lower.contains("transport")
+    {
+        "network"
+    } else if lower.contains("unauthorized")
+        || lower.contains("forbidden")
+        || lower.contains("api key")
+        || lower.contains("not authenticated")
+    {
+        "auth"
+    } else if lower.contains("invalid")
+        || lower.contains("unsupported")
+        || lower.contains("required")
+        || lower.contains("cannot be empty")
+    {
+        "validation"
+    } else {
+        "internal"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -1151,6 +1250,48 @@ mod tests {
             active_ids,
             BTreeSet::from([direct.job_id.as_str(), related.job_id.as_str()])
         );
+    }
+
+    #[tokio::test]
+    async fn diagnostic_counts_group_source_jobs_without_ids_or_raw_errors() {
+        let state = SourceJobState::new();
+        let job = state
+            .create_job(
+                10,
+                SourceJobType::YoutubeVideoFullSync,
+                None,
+                YoutubeSyncOptions {
+                    metadata: true,
+                    transcripts: true,
+                    comments: true,
+                },
+            )
+            .await
+            .expect("create job");
+        state
+            .finish_job(&job.job_id, |record| {
+                record.status = SourceJobStatus::Failed;
+                record.error =
+                    Some("timeout with https://youtube.example/watch?v=private".to_string());
+                record.warnings = vec!["raw warning with private title".to_string()];
+            })
+            .await
+            .expect("finish job");
+
+        let counts = state.diagnostic_counts().await;
+
+        assert_eq!(counts.len(), 1);
+        assert_eq!(counts[0].job_type, "youtube_video_full_sync");
+        assert_eq!(counts[0].status, "failed");
+        assert_eq!(counts[0].warning_state, "present");
+        assert_eq!(counts[0].error_kind, "network");
+        assert_eq!(counts[0].count, 1);
+        let json = serde_json::to_string(&counts).expect("serialize counts");
+        assert!(!json.contains("source-job-"));
+        assert!(!json.contains("source_id"));
+        assert!(!json.contains("related_source_id"));
+        assert!(!json.contains("youtube.example"));
+        assert!(!json.contains("private title"));
     }
 
     #[test]

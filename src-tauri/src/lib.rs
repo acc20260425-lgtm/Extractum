@@ -2,6 +2,8 @@ mod analysis_documents;
 mod archive_read_model;
 mod compression;
 mod db;
+mod diagnostics;
+use diagnostics::get_diagnostic_summary;
 mod error;
 mod forum_topics;
 mod ingest_provenance;
@@ -143,6 +145,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ping_db,
+            get_diagnostic_summary,
             tg_init,
             tg_is_authenticated,
             tg_get_account_statuses,

@@ -66,6 +66,19 @@ impl TelegramState {
             statuses: Mutex::new(HashMap::new()),
         }
     }
+
+    pub(crate) async fn diagnostic_status_counts(&self, account_ids: &[i64]) -> Vec<(String, i64)> {
+        let statuses = self.statuses.lock().await;
+        let mut counts = std::collections::BTreeMap::<String, i64>::new();
+        for account_id in account_ids {
+            let status = statuses
+                .get(account_id)
+                .map(|status| status.status.clone())
+                .unwrap_or_else(|| STATUS_NOT_INITIALIZED.to_string());
+            *counts.entry(status).or_insert(0) += 1;
+        }
+        counts.into_iter().collect()
+    }
 }
 
 async fn list_account_credentials(handle: &AppHandle) -> AppResult<Vec<AccountCredentials>> {
@@ -515,7 +528,9 @@ pub(crate) async fn get_authorized_runtime(
 
 #[cfg(test)]
 mod tests {
-    use super::{get_account_credentials_from_pool, telegram_api_id};
+    use super::{
+        get_account_credentials_from_pool, telegram_api_id, AccountRuntimeStatus, TelegramState,
+    };
     use crate::error::AppErrorKind;
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
@@ -629,6 +644,52 @@ mod tests {
             format!(
                 "Telegram API hash for account {account_id} is missing from secure storage. Recreate the account credentials."
             )
+        );
+    }
+
+    #[tokio::test]
+    async fn diagnostic_status_counts_do_not_return_account_ids_or_messages() {
+        let state = TelegramState::new();
+        set_account_status_for_test(&state, 10, "ready", Some("private phone +10000000000")).await;
+        set_account_status_for_test(&state, 11, "restore_failed", Some("C:\\Users\\Dima\\session"))
+            .await;
+
+        let counts = state.diagnostic_status_counts(&[10, 11, 12]).await;
+
+        assert_eq!(counts.len(), 3);
+        assert!(counts.contains(&("not_initialized".to_string(), 1)));
+        assert!(counts.contains(&("ready".to_string(), 1)));
+        assert!(counts.contains(&("restore_failed".to_string(), 1)));
+        let value = serde_json::to_value(&counts).expect("serialize counts value");
+        let entries = value.as_array().expect("counts serialize as array");
+        for entry in entries {
+            let pair = entry.as_array().expect("status count entry is a tuple");
+            assert_eq!(pair.len(), 2);
+            assert!(pair[0].as_str().is_some());
+            assert!(pair[1].as_i64().is_some());
+        }
+        let json = serde_json::to_string(&counts).expect("serialize counts");
+        assert!(!json.contains("account_id"));
+        assert!(!json.contains("\"10\""));
+        assert!(!json.contains("\"11\""));
+        assert!(!json.contains("\"12\""));
+        assert!(!json.contains("+10000000000"));
+        assert!(!json.contains("C:\\Users\\Dima"));
+    }
+
+    async fn set_account_status_for_test(
+        state: &TelegramState,
+        account_id: i64,
+        status: &str,
+        message: Option<&str>,
+    ) {
+        state.statuses.lock().await.insert(
+            account_id,
+            AccountRuntimeStatus {
+                account_id,
+                status: status.to_string(),
+                message: message.map(ToString::to_string),
+            },
         );
     }
 }

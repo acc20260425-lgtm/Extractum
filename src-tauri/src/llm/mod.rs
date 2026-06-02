@@ -26,7 +26,7 @@ pub(crate) use runner::{
 };
 pub(crate) use scheduler::{
     LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshot,
-    LlmSchedulerState,
+    LlmRequestSnapshotState, LlmSchedulerState,
 };
 pub use types::{
     LlmChatRequest, LlmMessage, LlmProfile, LlmProfilesState, LlmProviderModel, LlmStreamEvent,
@@ -185,6 +185,67 @@ pub async fn get_llm_profiles(
 ) -> AppResult<LlmProfilesState> {
     let pool = get_pool(&handle).await?;
     load_profiles_state_from_pool(&pool, &secret_store).await
+}
+
+pub(crate) fn llm_request_kind_diagnostic_key(kind: LlmRequestKind) -> &'static str {
+    match kind {
+        LlmRequestKind::ProviderTest => "provider_test",
+        LlmRequestKind::AnalysisChat => "analysis_chat",
+        LlmRequestKind::AnalysisReportMap => "analysis_report_map",
+        LlmRequestKind::AnalysisReportReduce => "analysis_report_reduce",
+    }
+}
+
+pub(crate) fn llm_request_state_diagnostic_key(state: LlmRequestSnapshotState) -> &'static str {
+    match state {
+        LlmRequestSnapshotState::Queued => "queued",
+        LlmRequestSnapshotState::Running => "running",
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct LlmProviderDiagnosticCount {
+    pub(crate) provider: String,
+    pub(crate) configured_count: i64,
+    pub(crate) missing_key_count: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct LlmProviderDiagnosticState {
+    pub(crate) active_provider: Option<String>,
+    pub(crate) profiles_by_provider: Vec<LlmProviderDiagnosticCount>,
+}
+
+pub(crate) async fn load_provider_diagnostics_from_pool(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    secret_store: &SecretStoreState,
+) -> AppResult<LlmProviderDiagnosticState> {
+    let state = load_profiles_state_from_pool(pool, secret_store).await?;
+    let active_provider = state
+        .profiles
+        .iter()
+        .find(|profile| profile.profile_id == state.active_profile)
+        .map(|profile| profile.provider.clone());
+    let mut counts = std::collections::BTreeMap::<String, (i64, i64)>::new();
+    for profile in state.profiles {
+        let entry = counts.entry(profile.provider).or_insert((0, 0));
+        if profile.api_key_configured {
+            entry.0 += 1;
+        } else {
+            entry.1 += 1;
+        }
+    }
+    Ok(LlmProviderDiagnosticState {
+        active_provider,
+        profiles_by_provider: counts
+            .into_iter()
+            .map(|(provider, (configured_count, missing_key_count))| LlmProviderDiagnosticCount {
+                provider,
+                configured_count,
+                missing_key_count,
+            })
+            .collect(),
+    })
 }
 
 #[tauri::command]
@@ -491,7 +552,11 @@ pub async fn cancel_llm_request(
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_base_url, ProviderKind};
+    use super::{
+        llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key,
+        load_provider_diagnostics_from_pool, normalize_base_url, save_profile_to_pool,
+        LlmRequestKind, LlmRequestSnapshotState, ProviderKind,
+    };
     use crate::error::AppErrorKind;
 
     #[test]
@@ -509,5 +574,68 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Base URL must use http or https");
+    }
+
+    #[test]
+    fn llm_request_diagnostic_keys_are_stable_snake_case() {
+        assert_eq!(
+            llm_request_kind_diagnostic_key(LlmRequestKind::AnalysisChat),
+            "analysis_chat"
+        );
+        assert_eq!(
+            llm_request_kind_diagnostic_key(LlmRequestKind::AnalysisReportReduce),
+            "analysis_report_reduce"
+        );
+        assert_eq!(
+            llm_request_state_diagnostic_key(LlmRequestSnapshotState::Queued),
+            "queued"
+        );
+        assert_eq!(
+            llm_request_state_diagnostic_key(LlmRequestSnapshotState::Running),
+            "running"
+        );
+    }
+
+    #[tokio::test]
+    async fn provider_diagnostics_exclude_profile_ids_and_base_urls() {
+        use crate::migrations::apply_all_migrations_for_test_pool;
+        use crate::secret_store::tests::InMemorySecretStore;
+        use crate::secret_store::SecretStoreState;
+        use std::sync::Arc;
+
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+        let store = Arc::new(InMemorySecretStore::new());
+        let secret_store = SecretStoreState::new(store);
+
+        save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "private-profile",
+            "gemini",
+            "private-model",
+            Some("private-api-key"),
+            "",
+            true,
+        )
+        .await
+        .expect("save profile");
+
+        let diagnostics = load_provider_diagnostics_from_pool(&pool, &secret_store)
+            .await
+            .expect("load provider diagnostics");
+        let json = serde_json::to_string(&diagnostics.profiles_by_provider)
+            .expect("serialize provider diagnostics");
+
+        assert_eq!(diagnostics.active_provider.as_deref(), Some("gemini"));
+        assert!(json.contains("gemini"));
+        assert!(!json.contains("private-profile"));
+        assert!(!json.contains("private-model"));
+        assert!(!json.contains("private-api-key"));
+        assert!(!json.contains("base_url"));
     }
 }
