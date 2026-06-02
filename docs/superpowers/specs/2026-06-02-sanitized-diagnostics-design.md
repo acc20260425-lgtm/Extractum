@@ -40,8 +40,9 @@ It does not write files, collect logs, package archives, or upload anything.
 Allowed fields:
 
 - app/build: app name, app version, debug/release mode, generated-at timestamp;
-- database: SQLite availability, schema or migration status, and aggregate
-  table counts needed to explain app health;
+- database: SQLite availability, migration status derived from
+  `_sqlx_migrations` and the current `build_migrations()` list, and explicit
+  allow-listed aggregate counts needed to explain app health;
 - providers: provider kinds, configured/not-configured booleans, active
   provider kind when available, model/catalog availability state when already
   represented as non-secret metadata;
@@ -74,7 +75,42 @@ Forbidden by default:
 
 Opaque internal numeric ids may appear only when they match the project's
 existing sanitized-evidence convention and materially help debugging. The first
-implementation should prefer counts and grouped states over itemized ids.
+implementation should not include itemized ids except schema or migration
+version numbers.
+
+## Data Collection Rules
+
+The command must not perform live provider calls or expensive source refreshes.
+It may only read existing local runtime state, existing database aggregate
+state, and cheap local availability checks such as secure-storage availability
+and `yt-dlp --version` or equivalent presence checks. It must not call model
+listing, provider smoke tests, YouTube metadata extraction, Telegram dialog
+refresh, Telegram sync, or LLM analysis/chat APIs.
+
+Database aggregation must use explicit allow-listed queries. The implementation
+must not enumerate every table, serialize arbitrary rows, or count every table
+automatically. The first implementation should limit database aggregates to:
+
+- account count;
+- source counts grouped by `source_type`, `source_subtype`, active flag, and
+  coarse sync state;
+- item counts grouped by provider/source type, item kind, content kind, and
+  media/content presence;
+- analysis run counts grouped by run type, scope type, status, and snapshot
+  state;
+- LLM request/job counts grouped by provider, status, and typed error kind;
+- YouTube source-job counts grouped by job type and status from existing
+  in-memory state;
+- Takeout/import recovery counts grouped by provider, ingest kind, status,
+  completeness, and warning code;
+- migration versions from `_sqlx_migrations` compared against
+  `build_migrations()`.
+
+Failure paths must be sanitized too. Command-level `AppError` messages exposed
+to the frontend must not include raw provider errors, local paths, source
+content, prompt text, cookies, session material, raw database paths, Telegram
+RPC detail, or raw payload fragments. Map failures into typed, bounded,
+sanitized messages before returning them across the Tauri command boundary.
 
 ## Redaction Helpers
 
@@ -160,6 +196,8 @@ Required Rust tests:
 - a fixture diagnostic summary seeded with sentinel API key, cookie, session,
   prompt, message, transcript, comment, provider payload, and local path values
   serializes without those sentinel strings;
+- command failure fixtures map sentinel provider errors, local paths, and raw
+  payload fragments into typed sanitized `AppError` messages;
 - the same serialized summary still contains useful allowed data such as
   counts, provider kinds, coarse statuses, error kinds, and warning codes;
 - source titles, usernames, URLs, profile display names, provider base URLs,
@@ -198,5 +236,4 @@ The follow-up implementation plan should be small:
    runtime checks.
 3. Register the Tauri command.
 4. Add Rust tests for redaction and serialized DTO safety.
-5. Run `npm.cmd run verify`.
-
+5. Run `npm run verify`.
