@@ -2,6 +2,8 @@ mod analysis_documents;
 mod archive_read_model;
 mod compression;
 mod db;
+#[cfg(test)]
+mod diagnostics;
 mod error;
 mod forum_topics;
 mod ingest_provenance;
