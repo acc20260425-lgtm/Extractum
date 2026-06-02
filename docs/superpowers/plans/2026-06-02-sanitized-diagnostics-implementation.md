@@ -83,7 +83,7 @@ No new production dependency is required.
 - Create: `src-tauri/src/diagnostics/mod.rs`
 - Create: `src-tauri/src/diagnostics/redaction.rs`
 
-- [ ] **Step 1: Create the diagnostics module shell**
+- [x] **Step 1: Create the diagnostics module shell**
 
 Create `src-tauri/src/diagnostics/mod.rs`:
 
@@ -95,7 +95,7 @@ pub(crate) use redaction::{
 };
 ```
 
-- [ ] **Step 2: Write failing redaction tests**
+- [x] **Step 2: Write failing redaction tests**
 
 Create `src-tauri/src/diagnostics/redaction.rs` with the tests first:
 
@@ -225,7 +225,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run the redaction tests and verify they fail**
+- [x] **Step 3: Run the redaction tests and verify they fail**
 
 Run:
 
@@ -235,7 +235,7 @@ cargo test --manifest-path src-tauri/Cargo.toml diagnostics::redaction -- --noca
 
 Expected: failures in `redact_text_removes_secret_and_content_patterns`, `redact_json_value_redacts_sensitive_keys_recursively`, and `sanitized_error_message_is_bounded`.
 
-- [ ] **Step 4: Implement redaction helpers**
+- [x] **Step 4: Implement redaction helpers**
 
 Replace the stub functions in `src-tauri/src/diagnostics/redaction.rs` with:
 
@@ -546,7 +546,7 @@ fn bound_snippet(input: &str) -> String {
 }
 ```
 
-- [ ] **Step 5: Run redaction tests and commit**
+- [x] **Step 5: Run redaction tests and commit**
 
 Run:
 
@@ -571,7 +571,7 @@ git commit -m "feat: add diagnostic redaction helpers"
 - Modify: `src-tauri/src/diagnostics/mod.rs`
 - Create: `src-tauri/src/diagnostics/dto.rs`
 
-- [ ] **Step 1: Write failing DTO serialization safety test**
+- [x] **Step 1: Write failing DTO serialization safety test**
 
 Add `mod dto;` and the re-export to `src-tauri/src/diagnostics/mod.rs`:
 
@@ -742,7 +742,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run DTO test and verify it fails to compile**
+- [x] **Step 2: Run DTO test and verify it fails to compile**
 
 Run:
 
@@ -752,7 +752,7 @@ cargo test --manifest-path src-tauri/Cargo.toml diagnostics::dto -- --nocapture
 
 Expected: compile failures for missing DTO types such as `DiagnosticSummary`, `DiagnosticAppInfo`, and `DiagnosticDatabaseInfo`.
 
-- [ ] **Step 3: Define DTO types and privacy list**
+- [x] **Step 3: Define DTO types and privacy list**
 
 Above the test module in `src-tauri/src/diagnostics/dto.rs`, add:
 
@@ -989,7 +989,7 @@ pub(crate) fn excluded_data_classes() -> Vec<String> {
 }
 ```
 
-- [ ] **Step 4: Run DTO tests and commit**
+- [x] **Step 4: Run DTO tests and commit**
 
 Run:
 
@@ -1014,7 +1014,7 @@ git commit -m "feat: add diagnostic summary dto"
 - Modify: `src-tauri/src/diagnostics/mod.rs`
 - Create: `src-tauri/src/diagnostics/database.rs`
 
-- [ ] **Step 1: Wire database module and write failing aggregate tests**
+- [x] **Step 1: Wire database module and write failing aggregate tests**
 
 Update `src-tauri/src/diagnostics/mod.rs`:
 
@@ -1281,7 +1281,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run database tests and verify they fail**
+- [x] **Step 2: Run database tests and verify they fail**
 
 Run:
 
@@ -1291,7 +1291,7 @@ cargo test --manifest-path src-tauri/Cargo.toml diagnostics::database -- --nocap
 
 Expected: `database diagnostics not loaded` failure and missing `load_migration_info` compile failure.
 
-- [ ] **Step 3: Implement migration/account/source/item/analysis/ingest aggregate loaders**
+- [x] **Step 3: Implement migration/account/source/item/analysis/ingest aggregate loaders**
 
 Replace the stubs in `src-tauri/src/diagnostics/database.rs` with:
 
@@ -1561,7 +1561,7 @@ async fn load_ingest_warning_counts(pool: &Pool<Sqlite>) -> AppResult<Vec<Diagno
 }
 ```
 
-- [ ] **Step 4: Run database aggregate tests and commit**
+- [x] **Step 4: Run database aggregate tests and commit**
 
 Run:
 
@@ -1589,7 +1589,7 @@ git commit -m "feat: add diagnostic database aggregates"
 - Modify: `src-tauri/src/diagnostics/mod.rs`
 - Create: `src-tauri/src/diagnostics/runtime.rs`
 
-- [ ] **Step 1: Add failing tests for Telegram runtime status counts**
+- [x] **Step 1: Add failing tests for Telegram runtime status counts**
 
 In `src-tauri/src/telegram.rs`, add this test inside the existing `#[cfg(test)] mod tests` or create one if the module test area has none:
 
@@ -1640,7 +1640,7 @@ async fn set_account_status_for_test(
 }
 ```
 
-- [ ] **Step 2: Implement Telegram runtime status counts**
+- [x] **Step 2: Implement Telegram runtime status counts**
 
 Add this method to `impl TelegramState` in `src-tauri/src/telegram.rs`:
 
@@ -1662,7 +1662,7 @@ Add this method to `impl TelegramState` in `src-tauri/src/telegram.rs`:
     }
 ```
 
-- [ ] **Step 3: Add failing tests for YouTube source-job diagnostic counts**
+- [x] **Step 3: Add failing tests for YouTube source-job diagnostic counts**
 
 In `src-tauri/src/youtube/jobs.rs`, add:
 
@@ -1709,7 +1709,7 @@ async fn diagnostic_counts_group_source_jobs_without_ids_or_raw_errors() {
 }
 ```
 
-- [ ] **Step 4: Implement YouTube source-job diagnostic counts**
+- [x] **Step 4: Implement YouTube source-job diagnostic counts**
 
 In `src-tauri/src/youtube/jobs.rs`, add a serializable count type near `SourceJobRecord`:
 
@@ -1818,7 +1818,7 @@ fn classify_diagnostic_error_kind(error: &str) -> &'static str {
     }
 ```
 
-- [ ] **Step 5: Add LLM diagnostic key and provider helpers**
+- [x] **Step 5: Add LLM diagnostic key and provider helpers**
 
 In `src-tauri/src/llm/mod.rs`, add `LlmRequestSnapshotState` to the existing `pub(crate) use scheduler::{ ... }` list:
 
@@ -1963,7 +1963,7 @@ async fn provider_diagnostics_exclude_profile_ids_and_base_urls() {
 }
 ```
 
-- [ ] **Step 6: Create runtime diagnostics module**
+- [x] **Step 6: Create runtime diagnostics module**
 
 Update `src-tauri/src/diagnostics/mod.rs`:
 
@@ -2210,7 +2210,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 7: Run runtime/provider tests and commit**
+- [x] **Step 7: Run runtime/provider tests and commit**
 
 Run:
 
@@ -2239,7 +2239,7 @@ git commit -m "feat: add diagnostic runtime aggregates"
 - Modify: `src-tauri/src/diagnostics/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write failing command assembly and sanitized failure tests**
+- [x] **Step 1: Write failing command assembly and sanitized failure tests**
 
 In `src-tauri/src/diagnostics/mod.rs`, replace the shell content with module imports plus these stubs and tests:
 
@@ -2340,7 +2340,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run command tests and verify the assembly stub fails only where expected**
+- [x] **Step 2: Run command tests and verify the assembly stub fails only where expected**
 
 Run:
 
@@ -2350,7 +2350,7 @@ cargo test --manifest-path src-tauri/Cargo.toml diagnostics::tests::sanitize_dia
 
 Expected: the sanitized error test passes after Task 1 redaction is in place.
 
-- [ ] **Step 3: Implement summary assembly**
+- [x] **Step 3: Implement summary assembly**
 
 Replace `build_diagnostic_summary` in `src-tauri/src/diagnostics/mod.rs` with:
 
@@ -2410,7 +2410,7 @@ async fn build_diagnostic_summary(
 }
 ```
 
-- [ ] **Step 4: Register the Tauri command**
+- [x] **Step 4: Register the Tauri command**
 
 In `src-tauri/src/lib.rs`, add the module near the other backend modules:
 
@@ -2426,7 +2426,7 @@ Add `get_diagnostic_summary` to the `tauri::generate_handler![...]` list near `p
             get_diagnostic_summary,
 ```
 
-- [ ] **Step 5: Run compile/test checks for diagnostics command**
+- [x] **Step 5: Run compile/test checks for diagnostics command**
 
 Run:
 
@@ -2451,7 +2451,7 @@ git commit -m "feat: add diagnostic summary command"
 **Files:**
 - Modify: `src-tauri/src/diagnostics/mod.rs`
 
-- [ ] **Step 1: Add whole serialized summary sentinel test**
+- [x] **Step 1: Add whole serialized summary sentinel test**
 
 In `src-tauri/src/diagnostics/mod.rs`, extend `#[cfg(test)] mod tests` with a helper that builds a `DiagnosticSummary` from DTO pieces and asserts on the final serialized JSON:
 
@@ -2611,7 +2611,7 @@ fn serialized_diagnostic_summary_preserves_allowed_data_and_excludes_forbidden_d
 }
 ```
 
-- [ ] **Step 2: Run whole summary tests**
+- [x] **Step 2: Run whole summary tests**
 
 Run:
 
@@ -2621,7 +2621,7 @@ cargo test --manifest-path src-tauri/Cargo.toml serialized_diagnostic_summary_pr
 
 Expected: the whole serialized summary test passes.
 
-- [ ] **Step 3: Run loader outward-field safety scan**
+- [x] **Step 3: Run loader outward-field safety scan**
 
 Run:
 
@@ -2631,7 +2631,7 @@ rg -n 'pub(\(crate\))?\s+.*\b(source_id|profile_id|base_url|title|url|error|mess
 
 Expected: no matches in diagnostic DTOs or diagnostic count structs. Matches inside tests, redaction helpers, existing non-diagnostic app DTOs, or private implementation variables are not blockers; any public diagnostic output field named `source_id`, `profile_id`, `base_url`, `title`, `url`, `error`, or `message` must be removed or replaced with an allow-listed aggregate/status field.
 
-- [ ] **Step 4: Run all diagnostics tests and commit**
+- [x] **Step 4: Run all diagnostics tests and commit**
 
 Run:
 
@@ -2655,7 +2655,7 @@ git commit -m "test: cover serialized diagnostic summary safety"
 **Files:**
 - No code changes unless verification exposes a compile, lint, or test failure.
 
-- [ ] **Step 1: Run the canonical project gate**
+- [x] **Step 1: Run the canonical project gate**
 
 Run on Windows PowerShell:
 
@@ -2677,11 +2677,11 @@ Expected:
 - `cargo test --manifest-path src-tauri/Cargo.toml` passes.
 - `git diff HEAD --check` passes.
 
-- [ ] **Step 2: If verification fails, use systematic debugging**
+- [x] **Step 2: If verification fails, use systematic debugging** — Not needed; verification passed.
 
 Use `superpowers:systematic-debugging` before changing code. Capture the exact failing command and first relevant error, then make the smallest fix that preserves the allow-list DTO and no-raw-data constraints.
 
-- [ ] **Step 3: Commit verification-only fixes**
+- [x] **Step 3: Commit verification-only fixes** — Not needed; no verification fixes were required.
 
 If fixes were needed:
 
