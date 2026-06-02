@@ -57,6 +57,7 @@ pub(crate) fn redact_text(text: &str) -> String {
     bound_snippet(&output)
 }
 
+#[allow(dead_code)]
 pub(crate) fn redact_json_value(value: Value) -> Value {
     match value {
         Value::Object(object) => Value::Object(redact_json_object(object)),
@@ -70,6 +71,7 @@ pub(crate) fn sanitized_error_message(message: &str) -> String {
     redact_text(message)
 }
 
+#[allow(dead_code)]
 fn redact_json_object(object: Map<String, Value>) -> Map<String, Value> {
     object
         .into_iter()
@@ -83,6 +85,7 @@ fn redact_json_object(object: Map<String, Value>) -> Map<String, Value> {
         .collect()
 }
 
+#[allow(dead_code)]
 fn redact_sensitive_value(value: Value) -> Value {
     match value {
         Value::Number(_) | Value::Bool(_) | Value::Null => value,
@@ -90,6 +93,7 @@ fn redact_sensitive_value(value: Value) -> Value {
     }
 }
 
+#[allow(dead_code)]
 fn is_sensitive_key(key: &str) -> bool {
     let normalized = key
         .chars()
