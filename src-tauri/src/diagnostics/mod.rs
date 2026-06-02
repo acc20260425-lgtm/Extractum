@@ -137,4 +137,161 @@ mod tests {
             sanitized.message.chars().count()
         );
     }
+
+    #[test]
+    fn serialized_diagnostic_summary_preserves_allowed_data_and_excludes_forbidden_data() {
+        let summary = DiagnosticSummary {
+            app: DiagnosticAppInfo {
+                app_name: "extractum".to_string(),
+                app_version: "0.1.0".to_string(),
+                build_mode: "debug".to_string(),
+                generated_at_unix: 1,
+            },
+            database: DiagnosticDatabaseInfo {
+                sqlite_available: true,
+                migrations: DiagnosticMigrationInfo {
+                    status: "current".to_string(),
+                    expected_versions: vec![1, 2, 3],
+                    applied_versions: vec![1, 2, 3],
+                    pending_versions: Vec::new(),
+                    failed_versions: Vec::new(),
+                },
+                account_count: 1,
+            },
+            providers: DiagnosticProvidersInfo {
+                active_provider: Some("gemini".to_string()),
+                profiles_by_provider: vec![DiagnosticProviderProfileCount {
+                    provider: "gemini".to_string(),
+                    configured_count: 1,
+                    missing_key_count: 0,
+                }],
+            },
+            runtimes: DiagnosticRuntimeInfo {
+                ytdlp: DiagnosticRuntimeCheck {
+                    status: "check_failed".to_string(),
+                    available: false,
+                    version: None,
+                    summary: Some(sanitized_error_message(
+                        "yt-dlp failed for https://youtube.example/watch?v=private",
+                    )),
+                },
+                secure_storage: DiagnosticRuntimeCheck {
+                    status: "available".to_string(),
+                    available: true,
+                    version: None,
+                    summary: None,
+                },
+            },
+            telegram: DiagnosticTelegramInfo {
+                account_count: 1,
+                runtime_statuses: vec![DiagnosticStatusCount {
+                    status: "ready".to_string(),
+                    count: 1,
+                }],
+            },
+            sources: DiagnosticSourcesInfo {
+                counts: vec![DiagnosticSourceCount {
+                    source_type: "telegram".to_string(),
+                    source_subtype: Some("channel".to_string()),
+                    active: true,
+                    sync_state: "synced".to_string(),
+                    count: 1,
+                }],
+            },
+            items: DiagnosticItemsInfo {
+                counts: vec![DiagnosticItemCount {
+                    source_type: "telegram".to_string(),
+                    source_subtype: Some("channel".to_string()),
+                    item_kind: "telegram_message".to_string(),
+                    content_kind: "text_only".to_string(),
+                    has_content: true,
+                    has_media: false,
+                    media_kind: None,
+                    count: 12,
+                }],
+            },
+            analysis_runs: DiagnosticAnalysisRunsInfo {
+                counts: vec![DiagnosticAnalysisRunCount {
+                    provider: "gemini".to_string(),
+                    run_type: "report".to_string(),
+                    scope_type: "single_source".to_string(),
+                    status: "failed".to_string(),
+                    snapshot_state: "failed".to_string(),
+                    error_kind: "network".to_string(),
+                    count: 1,
+                }],
+            },
+            llm_requests: DiagnosticLlmRequestsInfo {
+                counts: vec![DiagnosticLlmRequestCount {
+                    provider: "gemini".to_string(),
+                    kind: "analysis_chat".to_string(),
+                    state: "queued".to_string(),
+                    count: 1,
+                }],
+            },
+            youtube_jobs: DiagnosticYoutubeJobsInfo {
+                counts: vec![DiagnosticYoutubeJobCount {
+                    job_type: "youtube_video_comments_sync".to_string(),
+                    status: "failed".to_string(),
+                    warning_state: "present".to_string(),
+                    error_kind: "network".to_string(),
+                    count: 1,
+                }],
+            },
+            ingest: DiagnosticIngestInfo {
+                batches: vec![DiagnosticIngestBatchCount {
+                    provider: "telegram".to_string(),
+                    ingest_kind: "takeout".to_string(),
+                    status: "completed".to_string(),
+                    completeness: "complete".to_string(),
+                    error_kind: "none".to_string(),
+                    count: 1,
+                }],
+                warnings: vec![DiagnosticIngestWarningCount {
+                    provider: "telegram".to_string(),
+                    ingest_kind: "takeout".to_string(),
+                    status: "completed".to_string(),
+                    warning_code: "export_dc_fallback".to_string(),
+                    count: 1,
+                }],
+            },
+            privacy: DiagnosticPrivacyInfo {
+                excluded_data_classes: excluded_data_classes(),
+            },
+        };
+
+        let json = serde_json::to_string(&summary).expect("serialize summary");
+
+        for allowed in [
+            "gemini",
+            "telegram",
+            "channel",
+            "synced",
+            "network",
+            "export_dc_fallback",
+            "source_content",
+            "message_bodies",
+            "local_database_path",
+        ] {
+            assert!(json.contains(allowed), "missing allowed value {allowed}: {json}");
+        }
+
+        for forbidden in [
+            "youtube.example",
+            "private",
+            "api_key=",
+            "apiHash",
+            "baseUrl",
+            "profileId",
+            "source title",
+            "raw provider payload",
+            "extractum.db",
+            "telegram_42.session.json",
+        ] {
+            assert!(
+                !json.contains(forbidden),
+                "summary leaked {forbidden}: {json}"
+            );
+        }
+    }
 }
