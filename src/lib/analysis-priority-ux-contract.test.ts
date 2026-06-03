@@ -5,6 +5,7 @@ import sourceSwitcherPanelSource from "./components/analysis/source-switcher-pan
 import sourceActivityViewSource from "./components/analysis/source-activity-view.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import runsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
+import sourceBrowserModelSource from "./source-browser-model?raw";
 
 describe("analysis priority UX contract", () => {
   it("keeps the report canvas top chrome compact and action-oriented", () => {
@@ -36,7 +37,7 @@ describe("analysis priority UX contract", () => {
     expect(universalItemsViewSource).toContain("function itemContextLine");
     expect(universalItemsViewSource).toContain('class="item-preview"');
     expect(universalItemsViewSource).toContain('class:media-only={!item.content && item.hasMedia}');
-    expect(universalItemsViewSource).toContain("Media-only item");
+    expect(sourceBrowserModelSource).toContain("Media-only item");
   });
 
   it("keeps run filters progressive when no runs exist", () => {

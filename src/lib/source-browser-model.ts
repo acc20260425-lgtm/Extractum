@@ -219,6 +219,24 @@ export function sourceItemKindChips(items: SourceItem[]): SourceItemKindChip[] {
   }));
 }
 
+export function sourceItemPreviewText(item: Pick<SourceItem, "content" | "hasMedia" | "mediaKind">): string {
+  if (item.content && item.content.trim().length > 0) return item.content;
+  if (item.hasMedia) return `Media-only item${item.mediaKind ? ` (${item.mediaKind})` : ""}. Text was not loaded.`;
+  return "No text content loaded.";
+}
+
+export function sourceItemContextLine(
+  item: Pick<SourceItem, "author" | "externalId" | "hasMedia" | "mediaKind">,
+  sourceLabel: string,
+): string {
+  return [
+    item.author,
+    sourceLabel,
+    item.externalId,
+    item.hasMedia ? item.mediaKind ?? "media" : null,
+  ].filter(Boolean).join(" - ");
+}
+
 export function filterLoadedSourceItems(items: SourceItem[], filter: LoadedSourceItemFilter): SourceItem[] {
   const search = filter.search.trim().toLocaleLowerCase();
   return items.filter((item) => {

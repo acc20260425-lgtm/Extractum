@@ -611,7 +611,7 @@ git commit -m "feat(analysis): emphasize source activity operations"
 - Test: `src/lib/analysis-source-readers.test.ts`
 - Test: `src/lib/source-browser-model.test.ts`
 
-- [ ] **Step 1: Add model helpers for item copy**
+- [x] **Step 1: Add model helpers for item copy**
 
 In `src/lib/source-browser-model.ts`, add:
 
@@ -635,7 +635,7 @@ export function sourceItemContextLine(
 }
 ```
 
-- [ ] **Step 2: Add tests for model helpers**
+- [x] **Step 2: Add tests for model helpers**
 
 In `src/lib/source-browser-model.test.ts`, add:
 
@@ -656,7 +656,7 @@ it("builds compact item context lines", () => {
 });
 ```
 
-- [ ] **Step 3: Use helpers in `UniversalItemsView`**
+- [x] **Step 3: Use helpers in `UniversalItemsView`**
 
 In `universal-items-view.svelte`, import the helpers:
 
@@ -695,7 +695,7 @@ Replace the metadata and paragraph area inside each item article with:
 </p>
 ```
 
-- [ ] **Step 4: Add reader CSS**
+- [x] **Step 4: Add reader CSS**
 
 ```css
 .item-preview {
@@ -710,7 +710,7 @@ Replace the metadata and paragraph area inside each item article with:
 }
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```powershell
 npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "turns loaded items into a reader instead of a raw dump"
@@ -719,7 +719,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts src/lib/analysis-source
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/lib/source-browser-model.ts src/lib/source-browser-model.test.ts src/lib/components/analysis/universal-items-view.svelte src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-source-readers.test.ts

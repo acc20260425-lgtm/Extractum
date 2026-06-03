@@ -12,6 +12,8 @@ import {
   sourceBrowserShellAppliesToSubject,
   sourceBrowserTabsForSubject,
   sourceItemKindChips,
+  sourceItemContextLine,
+  sourceItemPreviewText,
   sourceBrowserTabsForSource,
   smartDefaultSourceBrowserTab,
   sortLoadedSourceItems,
@@ -441,6 +443,19 @@ describe("source browser model", () => {
       { kind: "telegram_message", label: "Telegram message", count: 2 },
       { kind: "youtube_comment", label: "YouTube comment", count: 1 },
     ]);
+  });
+
+  it("labels media-only source items without treating them as empty text", () => {
+    expect(sourceItemPreviewText(sourceItem({ content: null, hasMedia: true, mediaKind: "photo" })))
+      .toBe("Media-only item (photo). Text was not loaded.");
+    expect(sourceItemPreviewText(sourceItem({ content: "Body", hasMedia: false, mediaKind: null }))).toBe("Body");
+  });
+
+  it("builds compact item context lines", () => {
+    expect(sourceItemContextLine(
+      sourceItem({ author: "Alice", externalId: "42", hasMedia: true, mediaKind: "photo" }),
+      "Source #7",
+    )).toBe("Alice - Source #7 - 42 - photo");
   });
 
   it("filters loaded source items by kind plus loaded content and author", () => {

@@ -8,7 +8,9 @@
   import {
     filterLoadedSourceItems,
     sortLoadedSourceItems,
+    sourceItemContextLine,
     sourceItemKindChips,
+    sourceItemPreviewText,
     type LoadedSourceItemSort,
   } from "$lib/source-browser-model";
   import { liveSourceItemRef } from "$lib/source-reader-model";
@@ -75,6 +77,14 @@
 
   function itemSourceLabel(item: SourceItem) {
     return sourceLabelForItem?.(item) ?? `Source #${item.sourceId}`;
+  }
+
+  function itemPreviewText(item: SourceItem) {
+    return sourceItemPreviewText(item);
+  }
+
+  function itemContextLine(item: SourceItem) {
+    return sourceItemContextLine(item, itemSourceLabel(item));
   }
 
   $effect(() => {
@@ -166,12 +176,12 @@
               <span>{formatTimestamp(item.publishedAt)}</span>
             </div>
             <div class="item-meta">
-              {#if item.author}<Badge variant="neutral">{item.author}</Badge>{/if}
-              <Badge variant="neutral">{itemSourceLabel(item)}</Badge>
-              <Badge variant="neutral">{item.externalId}</Badge>
+              <Badge variant="neutral">{itemContextLine(item)}</Badge>
               {#if item.hasMedia}<Badge variant="info">{item.mediaKind ?? "media"}</Badge>{/if}
             </div>
-            <p>{item.content ?? "No text content loaded."}</p>
+            <p class="item-preview" class:media-only={!item.content && item.hasMedia}>
+              {itemPreviewText(item)}
+            </p>
           </article>
         </li>
       {/each}
@@ -268,11 +278,16 @@
     font-size: 0.82rem;
   }
 
-  p {
+  .item-preview {
     margin: 0;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     line-height: 1.45;
+  }
+
+  .item-preview.media-only {
+    color: var(--muted);
+    font-style: italic;
   }
 
   .reader-footer {
