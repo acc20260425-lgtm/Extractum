@@ -358,7 +358,7 @@ git commit -m "feat(analysis): compact workspace header actions"
 - Test: `src/lib/analysis-priority-ux-contract.test.ts`
 - Test: `src/lib/analysis-compact-source-rail.test.ts`
 
-- [ ] **Step 1: Add a source operations disclosure helper**
+- [x] **Step 1: Add a source operations disclosure helper**
 
 In `source-switcher-panel.svelte`, add this helper near the existing formatting helpers:
 
@@ -372,7 +372,7 @@ function sourceOperationSummary(source: Source, takeoutActive: boolean, sourceJo
 }
 ```
 
-- [ ] **Step 2: Replace visible row actions with a disclosure**
+- [x] **Step 2: Replace visible row actions with a disclosure**
 
 Replace the current `<div class="row-actions">...</div>` block with:
 
@@ -459,7 +459,7 @@ Replace the current `<div class="row-actions">...</div>` block with:
 </details>
 ```
 
-- [ ] **Step 3: Style source operations as secondary**
+- [x] **Step 3: Style source operations as secondary**
 
 Replace `.row-actions` CSS with:
 
@@ -497,11 +497,11 @@ Replace `.row-actions` CSS with:
 }
 ```
 
-- [ ] **Step 4: Keep the compact rail quiet**
+- [x] **Step 4: Keep the compact rail quiet**
 
 In `compact-source-rail.svelte`, keep the existing primary sync affordance only for the currently selected source. Do not add `Delete`, `Takeout`, or source job details to the collapsed rail.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```powershell
 npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "keeps the source switcher primarily focused on source selection"
@@ -510,7 +510,7 @@ npm.cmd run test -- src/lib/analysis-compact-source-rail.test.ts
 
 Expected: PASS. Update `src/lib/analysis-compact-source-rail.test.ts` assertions that currently require visible `onSyncSource(source.id)`, `onStartTakeoutImport(source.id)`, and `onDeleteSource(source)` in the expanded panel so they assert the disclosure instead.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/lib/components/analysis/source-switcher-panel.svelte src/lib/components/analysis/compact-source-rail.svelte src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-compact-source-rail.test.ts

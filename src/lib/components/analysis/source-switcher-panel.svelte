@@ -161,6 +161,14 @@
     return value ? value.replaceAll("_", " ") : null;
   }
 
+  function sourceOperationSummary(source: Source, takeoutActive: boolean, sourceJobActive: boolean) {
+    if (takeoutActive) return "Operation running";
+    if (sourceJobActive) return "Job running";
+    if (source.sourceType === "telegram") return "Sync and import";
+    if (source.sourceType === "youtube") return "Sync and delete";
+    return "Manage";
+  }
+
   function youtubeMetaLine(summary: YoutubeSourceSummary | null) {
     if (!summary) return null;
     return (
@@ -323,76 +331,85 @@
               {/if}
             </div>
 
-            <div class="row-actions">
-              {#if capabilities.canSync}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onclick={() => onSyncSource(source.id)}
-                  disabled={!!syncingIds[source.id] || deleting || takeoutActive || syncReason !== null}
-                  title={takeoutActive ? "Takeout import is active." : syncReason ?? undefined}
-                >
-                  <RefreshCw size={13} aria-hidden="true" />
-                  {syncingIds[source.id] ? "Syncing..." : "Sync"}
-                </Button>
-              {/if}
-              {#if capabilities.canImportArchive}
-                {#if takeoutActive && takeoutJob}
+            <details class="source-row-operations">
+              <summary>Source operations</summary>
+              <div class="operation-note">
+                <span>Manage operational state in the Activity tab.</span>
+                <Badge variant={takeoutActive || sourceJobActive ? "info" : "neutral"}>
+                  {sourceOperationSummary(source, takeoutActive, sourceJobActive)}
+                </Badge>
+              </div>
+              <div class="operation-actions">
+                {#if capabilities.canSync}
                   <Button
                     size="sm"
                     variant="secondary"
-                    onclick={() => onCancelTakeoutImport(takeoutJob.job_id)}
-                    disabled={takeoutJob.status === "cancel_requested"}
+                    onclick={() => onSyncSource(source.id)}
+                    disabled={!!syncingIds[source.id] || deleting || takeoutActive || syncReason !== null}
+                    title={takeoutActive ? "Takeout import is active." : syncReason ?? undefined}
                   >
-                    <Square size={13} aria-hidden="true" />
-                    {takeoutJob.status === "cancel_requested" ? "Cancelling..." : "Cancel"}
-                  </Button>
-                {:else}
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onclick={() => onStartTakeoutImport(source.id)}
-                    disabled={!!startingTakeoutSourceIds[source.id] || deleting || !!syncingIds[source.id] || syncReason !== null}
-                    title={syncReason ?? undefined}
-                  >
-                    <Archive size={13} aria-hidden="true" />
-                    {startingTakeoutSourceIds[source.id] ? "Starting..." : "Takeout"}
+                    <RefreshCw size={13} aria-hidden="true" />
+                    {syncingIds[source.id] ? "Syncing..." : "Sync"}
                   </Button>
                 {/if}
-                {#if source.migratedHistoryStatus === "available"}
-                  {@const migratedHistoryReason = migratedHistoryActionDisabledReason(
-                    source,
-                    sourceJobActive,
-                    takeoutActive,
-                    !!startingMigratedHistorySourceIds[source.id],
-                  )}
+                {#if capabilities.canImportArchive}
+                  {#if takeoutActive && takeoutJob}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onclick={() => onCancelTakeoutImport(takeoutJob.job_id)}
+                      disabled={takeoutJob.status === "cancel_requested"}
+                    >
+                      <Square size={13} aria-hidden="true" />
+                      {takeoutJob.status === "cancel_requested" ? "Cancelling..." : "Cancel"}
+                    </Button>
+                  {:else}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onclick={() => onStartTakeoutImport(source.id)}
+                      disabled={!!startingTakeoutSourceIds[source.id] || deleting || !!syncingIds[source.id] || syncReason !== null}
+                      title={syncReason ?? undefined}
+                    >
+                      <Archive size={13} aria-hidden="true" />
+                      {startingTakeoutSourceIds[source.id] ? "Starting..." : "Takeout"}
+                    </Button>
+                  {/if}
+                  {#if source.migratedHistoryStatus === "available"}
+                    {@const migratedHistoryReason = migratedHistoryActionDisabledReason(
+                      source,
+                      sourceJobActive,
+                      takeoutActive,
+                      !!startingMigratedHistorySourceIds[source.id],
+                    )}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onclick={() => onStartMigratedHistoryImport(source.id)}
+                      disabled={migratedHistoryReason !== null}
+                      title={migratedHistoryReason ?? undefined}
+                    >
+                      <Archive size={13} aria-hidden="true" />
+                      {startingMigratedHistorySourceIds[source.id]
+                        ? "Starting historical import..."
+                        : migratedHistoryActionLabel()}
+                    </Button>
+                  {/if}
+                {/if}
+                {#if capabilities.canDelete}
                   <Button
                     size="sm"
-                    variant="secondary"
-                    onclick={() => onStartMigratedHistoryImport(source.id)}
-                    disabled={migratedHistoryReason !== null}
-                    title={migratedHistoryReason ?? undefined}
+                    variant="danger-soft"
+                    onclick={() => onDeleteSource(source)}
+                    disabled={deleting || !!syncingIds[source.id] || takeoutActive || sourceJobActive}
+                    title={takeoutActive ? "Takeout import is active." : sourceJobActive ? "Source job is active." : undefined}
                   >
-                    <Archive size={13} aria-hidden="true" />
-                    {startingMigratedHistorySourceIds[source.id]
-                      ? "Starting historical import..."
-                      : migratedHistoryActionLabel()}
+                    <Trash2 size={13} aria-hidden="true" />
+                    {deleting ? "Deleting..." : "Delete"}
                   </Button>
                 {/if}
-              {/if}
-              {#if capabilities.canDelete}
-                <Button
-                  size="sm"
-                  variant="danger-soft"
-                  onclick={() => onDeleteSource(source)}
-                  disabled={deleting || !!syncingIds[source.id] || takeoutActive || sourceJobActive}
-                  title={takeoutActive ? "Takeout import is active." : sourceJobActive ? "Source job is active." : undefined}
-                >
-                  <Trash2 size={13} aria-hidden="true" />
-                  {deleting ? "Deleting..." : "Delete"}
-                </Button>
-              {/if}
-            </div>
+              </div>
+            </details>
 
             {#if takeoutJob}
               {@const progressValue = takeoutProgressValue(takeoutJob)}
@@ -506,7 +523,6 @@
   .panel-head,
   .section-title,
   .source-main,
-  .row-actions,
   .detail-badges,
   .source-meta,
   .panel-actions,
@@ -634,6 +650,38 @@
     color: var(--text);
     text-decoration: none;
     font-size: 0.78rem;
+  }
+
+  .source-row-operations {
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--panel) 76%, transparent);
+  }
+
+  .source-row-operations summary {
+    cursor: pointer;
+    padding: 0.55rem 0.65rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  .operation-note {
+    display: flex;
+    gap: 0.45rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 0 0.65rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .operation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    padding: 0.55rem 0.65rem 0.65rem;
   }
 
   .takeout-status,
