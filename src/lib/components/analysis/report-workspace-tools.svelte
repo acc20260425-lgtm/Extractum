@@ -3,6 +3,7 @@
   import Button from "$lib/components/ui/Button.svelte";
 
   let {
+    compact = false,
     showNotebookLmExport,
     canExportNotebookLm,
     exportDisabledReason,
@@ -13,6 +14,7 @@
     onToggleTemplateEditor,
     onToggleGroupEditor,
   }: {
+    compact?: boolean;
     showNotebookLmExport: boolean;
     canExportNotebookLm: boolean;
     exportDisabledReason: string | null;
@@ -27,10 +29,17 @@
   const exportReasonId = "notebooklm-export-disabled-reason";
 </script>
 
-<section class="report-workspace-tools" aria-label="Workspace tools" data-smoke-id="analysis-workspace-tools">
-  <div class="workspace-tools-copy">
-    <span class="eyebrow">Workspace tools</span>
-  </div>
+<section
+  class="report-workspace-tools"
+  class:compact={compact}
+  aria-label="Workspace actions"
+  data-smoke-id="analysis-workspace-tools"
+>
+  {#if !compact}
+    <div class="workspace-tools-copy">
+      <span class="eyebrow">Workspace tools</span>
+    </div>
+  {/if}
 
   <div class="workspace-tools-actions">
     {#if showNotebookLmExport}
@@ -90,6 +99,13 @@
     box-shadow: var(--shadow-soft);
   }
 
+  .report-workspace-tools.compact {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .workspace-tools-copy {
     min-width: 0;
   }
@@ -99,6 +115,10 @@
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 0.45rem;
+  }
+
+  .report-workspace-tools.compact .workspace-tools-actions {
+    justify-content: flex-end;
   }
 
   .workspace-tool-action {
@@ -127,6 +147,10 @@
   @media (max-width: 720px) {
     .report-workspace-tools {
       flex-direction: column;
+      align-items: stretch;
+    }
+
+    .report-workspace-tools.compact {
       align-items: stretch;
     }
 

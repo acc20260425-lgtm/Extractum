@@ -162,7 +162,7 @@ git commit -m "test: capture analysis UX priority contract"
 - Test: `src/lib/analysis-redesign-route-contract.test.ts`
 - Test: `src/lib/analysis-workspace-tools.test.ts`
 
-- [ ] **Step 1: Extend `ReportWorkspaceTools` for compact inline rendering**
+- [x] **Step 1: Extend `ReportWorkspaceTools` for compact inline rendering**
 
 In `src/lib/components/analysis/report-workspace-tools.svelte`, add a `compact` prop with default `false`:
 
@@ -213,7 +213,7 @@ Keep all three actions available. In compact mode, use the existing icon+text bu
 {/if}
 ```
 
-- [ ] **Step 2: Move tools into the report canvas top bar**
+- [x] **Step 2: Move tools into the report canvas top bar**
 
 In `src/lib/components/analysis/report-canvas.svelte`, add:
 
@@ -277,7 +277,7 @@ Replace the current `canvas-toolbar` block with this structure:
 
 Remove the separate `<ReportWorkspaceTools ... />` block below the toolbar.
 
-- [ ] **Step 3: Add compact CSS**
+- [x] **Step 3: Add compact CSS**
 
 In `report-canvas.svelte`, rename `.canvas-toolbar` styles to `.canvas-context-bar` and add:
 
@@ -324,7 +324,7 @@ In `report-workspace-tools.svelte`, add:
 }
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```powershell
 npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "keeps the report canvas top chrome compact and action-oriented"
@@ -333,7 +333,7 @@ npm.cmd run test -- src/lib/analysis-redesign-route-contract.test.ts src/lib/ana
 
 Expected: PASS.
 
-- [ ] **Step 5: Check Svelte types**
+- [x] **Step 5: Check Svelte types**
 
 ```powershell
 npm.cmd run check
@@ -341,7 +341,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/lib/components/analysis/report-canvas.svelte src/lib/components/analysis/report-workspace-tools.svelte src/lib/analysis-priority-ux-contract.test.ts

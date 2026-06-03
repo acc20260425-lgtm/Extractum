@@ -410,52 +410,58 @@
         ? `Prepare Markdown files for ${currentGroup.name} (${currentGroup.members.length} sources).`
         : "",
   );
+  const showInlineWorkspaceTools = $derived(true);
 </script>
 
 <section class="report-canvas" data-smoke-id="analysis-report-canvas">
-  <div class="canvas-toolbar">
+  <div class="canvas-context-bar" aria-label="Analysis context">
     <div class="canvas-title">
-      <span class="eyebrow">{currentRun ? "Run workspace" : "Analysis setup"}</span>
+      <span class="eyebrow">{currentRun ? "Run workspace" : "Analysis workspace"}</span>
       <h2>{currentRun ? runTargetLabel(currentRun) : currentScopeTitle}</h2>
-      <p>{currentRun ? "Read the report or inspect the source basis for this run." : currentScopeSummary}</p>
+      <p>{currentRun ? "Report and source basis stay side by side." : currentScopeSummary}</p>
     </div>
-    <div class="canvas-tabs" role="tablist" aria-label="Report canvas mode">
-      <Button
-        type="button"
-        role="tab"
-        variant="secondary"
-        selected={canvasMode === "report"}
-        ariaSelected={canvasMode === "report"}
-        smokeId="report-canvas-mode-report"
-        onclick={() => onChangeCanvasMode("report")}
-      >
-        Report
-      </Button>
-      <Button
-        type="button"
-        role="tab"
-        variant="secondary"
-        selected={canvasMode === "source"}
-        ariaSelected={canvasMode === "source"}
-        smokeId="report-canvas-mode-source"
-        onclick={() => onChangeCanvasMode("source")}
-      >
-        Source
-      </Button>
+    <div class="canvas-actions-row">
+      <div class="canvas-tabs" role="tablist" aria-label="Report canvas mode">
+        <Button
+          type="button"
+          role="tab"
+          variant="secondary"
+          selected={canvasMode === "report"}
+          ariaSelected={canvasMode === "report"}
+          smokeId="report-canvas-mode-report"
+          onclick={() => onChangeCanvasMode("report")}
+        >
+          Report
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          variant="secondary"
+          selected={canvasMode === "source"}
+          ariaSelected={canvasMode === "source"}
+          smokeId="report-canvas-mode-source"
+          onclick={() => onChangeCanvasMode("source")}
+        >
+          Source
+        </Button>
+      </div>
+
+      {#if showInlineWorkspaceTools}
+        <ReportWorkspaceTools
+          compact
+          {showNotebookLmExport}
+          {canExportNotebookLm}
+          exportDisabledReason={notebookLmExportDisabledReason}
+          {exportingNotebookLm}
+          {templateEditorOpen}
+          {groupEditorOpen}
+          onOpenNotebookLmExport={onOpenNotebookLmExport}
+          onToggleTemplateEditor={() => (templateEditorOpen = !templateEditorOpen)}
+          onToggleGroupEditor={() => (groupEditorOpen = !groupEditorOpen)}
+        />
+      {/if}
     </div>
   </div>
-
-  <ReportWorkspaceTools
-    {showNotebookLmExport}
-    {canExportNotebookLm}
-    exportDisabledReason={notebookLmExportDisabledReason}
-    {exportingNotebookLm}
-    {templateEditorOpen}
-    {groupEditorOpen}
-    onOpenNotebookLmExport={onOpenNotebookLmExport}
-    onToggleTemplateEditor={() => (templateEditorOpen = !templateEditorOpen)}
-    onToggleGroupEditor={() => (groupEditorOpen = !groupEditorOpen)}
-  />
 
   {#if templateEditorOpen}
     <div class="workspace-template-editor-drawer" aria-label="Template editor drawer" data-smoke-id="template-editor-drawer">
@@ -683,16 +689,24 @@
     gap: 0.9rem;
   }
 
-  .canvas-toolbar {
+  .canvas-context-bar {
     display: flex;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: 0.9rem;
     align-items: flex-start;
     padding: 1rem;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--panel);
     box-shadow: var(--shadow);
+  }
+
+  .canvas-actions-row {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   .canvas-title {
@@ -738,9 +752,14 @@
   }
 
   @media (max-width: 720px) {
-    .canvas-toolbar {
+    .canvas-context-bar {
       flex-direction: column;
       align-items: stretch;
+    }
+
+    .canvas-actions-row {
+      width: 100%;
+      justify-content: space-between;
     }
   }
 </style>
