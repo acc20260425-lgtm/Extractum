@@ -1140,7 +1140,7 @@ Do not commit this component by itself while the source contract test still fail
 - Create: `src/routes/diagnostics/+page.svelte`
 - Test: `src/lib/diagnostics-route-contract.test.ts`
 
-- [ ] **Step 0: Confirm existing UI component contracts**
+- [x] **Step 0: Confirm existing UI component contracts**
 
 Before writing the route, check `src/lib/components/ui/StatusMessage.svelte`,
 `src/lib/components/ui/Badge.svelte`, and `src/lib/components/ui/types.ts`. The current
@@ -1149,7 +1149,7 @@ codebase supports `StatusMessage tone="error"`, `StatusMessage tone="muted"`,
 renamed these props or tones, adapt the route to the existing component contracts
 without introducing new tone names.
 
-- [ ] **Step 1: Create the diagnostics route**
+- [x] **Step 1: Create the diagnostics route**
 
 Create `src/routes/diagnostics/+page.svelte` with this structure:
 
@@ -1606,19 +1606,19 @@ Create `src/routes/diagnostics/+page.svelte` with this structure:
 </style>
 ```
 
-- [ ] **Step 2: Run Svelte autofixer or Svelte check for route syntax**
+- [x] **Step 2: Run Svelte autofixer or Svelte check for route syntax**
 
 Run: `npm.cmd run check`
 
 Expected: PASS for Svelte syntax. If `svelte-check` reports only source-contract test failures, run the Vitest command in the next step to see the exact contract assertion.
 
-- [ ] **Step 3: Run diagnostics source contracts**
+- [x] **Step 3: Run diagnostics source contracts**
 
 Run: `npm.cmd run test -- src/lib/diagnostics-route-contract.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit navigation, component, route, and source contracts**
+- [x] **Step 4: Commit navigation, component, route, and source contracts**
 
 ```bash
 git add src/routes/+layout.svelte src/routes/diagnostics/+page.svelte src/lib/components/diagnostics/DiagnosticCountTable.svelte src/lib/diagnostics-route-contract.test.ts

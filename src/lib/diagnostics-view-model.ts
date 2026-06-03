@@ -2,7 +2,6 @@ import { formatAppError, type AppErrorKind } from "$lib/app-error";
 import type { BadgeVariant } from "$lib/components/ui/types";
 
 type CountRowValue = string | number | boolean | null | undefined;
-type CountRow = Record<string, CountRowValue> & { count: number };
 type DiagnosticAppErrorPayload = {
   kind: AppErrorKind;
   message: string;
@@ -134,12 +133,32 @@ function padUtc(value: number) {
   return value.toString().padStart(2, "0");
 }
 
+function rowValue(row: object, key: string): CountRowValue {
+  const value = (row as Record<string, unknown>)[key];
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null ||
+    value === undefined
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
 function sortValue(value: CountRowValue) {
   if (typeof value === "boolean") {
     return value ? "yes" : "no";
   }
 
   return labelFromKey(value).toLowerCase();
+}
+
+function countValue(row: object) {
+  const value = rowValue(row, "count");
+  return typeof value === "number" ? value : 0;
 }
 
 export function statusTone(status: unknown): BadgeVariant {
@@ -191,18 +210,18 @@ export function formatSummaryGeneratedAt(value: unknown) {
   return `Summary generated ${year}-${month}-${day} ${hour}:${minute}:${second} UTC`;
 }
 
-export function sortCountRows<T extends CountRow>(rows: readonly T[], groupingKeys: readonly string[]) {
+export function sortCountRows<T extends object>(rows: readonly T[], groupingKeys: readonly string[]) {
   return [...rows].sort((left, right) => {
     for (const key of groupingKeys) {
-      const leftValue = sortValue(left[key]);
-      const rightValue = sortValue(right[key]);
+      const leftValue = sortValue(rowValue(left, key));
+      const rightValue = sortValue(rowValue(right, key));
       const compared = leftValue.localeCompare(rightValue);
       if (compared !== 0) {
         return compared;
       }
     }
 
-    return left.count - right.count;
+    return countValue(left) - countValue(right);
   });
 }
 
