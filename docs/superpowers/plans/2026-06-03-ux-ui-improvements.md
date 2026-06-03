@@ -832,7 +832,7 @@ git commit -m "feat(analysis): simplify empty runs companion"
 - Create: `src/lib/settings-profile-ux-contract.test.ts`
 - Modify: `src/routes/settings/+page.svelte`
 
-- [ ] **Step 1: Write the settings UX contract**
+- [x] **Step 1: Write the settings UX contract**
 
 Create `src/lib/settings-profile-ux-contract.test.ts`:
 
@@ -856,7 +856,7 @@ describe("settings profile UX contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the new test and verify it fails**
+- [x] **Step 2: Run the new test and verify it fails**
 
 ```powershell
 npm.cmd run test -- src/lib/settings-profile-ux-contract.test.ts
@@ -864,7 +864,7 @@ npm.cmd run test -- src/lib/settings-profile-ux-contract.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 3: Add model search state**
+- [x] **Step 3: Add model search state**
 
 In `src/routes/settings/+page.svelte`, add near model state:
 
@@ -888,7 +888,7 @@ Change the model selector loop:
 {/each}
 ```
 
-- [ ] **Step 4: Add profile status strip**
+- [x] **Step 4: Add profile status strip**
 
 Replace the existing `.profile-strip` contents with:
 
@@ -904,7 +904,7 @@ Replace the existing `.profile-strip` contents with:
 </div>
 ```
 
-- [ ] **Step 5: Add search input above the model select**
+- [x] **Step 5: Add search input above the model select**
 
 Inside the `Default model` label, before `<Select>`, add:
 
@@ -918,7 +918,7 @@ Inside the `Default model` label, before `<Select>`, add:
 />
 ```
 
-- [ ] **Step 6: Run checks**
+- [x] **Step 6: Run checks**
 
 ```powershell
 npm.cmd run test -- src/lib/settings-profile-ux-contract.test.ts src/lib/diagnostics-route-contract.test.ts
@@ -927,7 +927,7 @@ npm.cmd run check
 
 Expected: PASS and `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src/routes/settings/+page.svelte src/lib/settings-profile-ux-contract.test.ts

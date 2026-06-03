@@ -67,6 +67,7 @@
   let settingsStatus = $state("");
   let saving = $state(false);
   let availableModels = $state<LlmProviderModel[]>([]);
+  let modelQuery = $state("");
   let loadingModels = $state(false);
   let modelsStatus = $state("");
 
@@ -156,6 +157,14 @@
     testOutput = "";
     testUsage = null;
   }
+
+  const filteredAvailableModels = $derived.by(() => {
+    const query = modelQuery.trim().toLowerCase();
+    if (!query) return availableModels;
+    return availableModels.filter((model) =>
+      `${model.display_name} ${model.model}`.toLowerCase().includes(query),
+    );
+  });
 
   function dedupeProviderModels(models: LlmProviderModel[]) {
     const unique: LlmProviderModel[] = [];
@@ -571,12 +580,13 @@
           </label>
         </div>
 
-        <div class="profile-strip">
-          <MetaPill>
-            {creatingProfile ? "Creating new profile" : `Editing ${selectedProfileId}`}
+        <div class="profile-status-strip">
+          <MetaPill>Editing profile: {creatingProfile ? "new profile" : selectedProfileId}</MetaPill>
+          <MetaPill tone={selectedProfileId === activeProfile && !creatingProfile ? "active" : "default"}>
+            Active profile: {activeProfile || "none"}
           </MetaPill>
-          {#if !creatingProfile && selectedProfileId === activeProfile}
-            <MetaPill tone="active">Used by default in analysis</MetaPill>
+          {#if !creatingProfile && selectedProfileId !== activeProfile}
+            <MetaPill>Set active after save</MetaPill>
           {/if}
         </div>
 
@@ -606,6 +616,13 @@
 
         <label>Default model
           {#if availableModels.length > 0}
+            <Input
+              type="search"
+              value={modelQuery}
+              placeholder="Search models"
+              ariaLabel="Search models"
+              oninput={(event) => (modelQuery = (event.currentTarget as HTMLInputElement).value)}
+            />
             <Select
               value={defaultModel}
               onchange={(event) => (defaultModel = (event.currentTarget as HTMLSelectElement).value)}
@@ -613,7 +630,7 @@
               {#if !availableModels.some((model) => model.model === defaultModel)}
                 <option value={defaultModel}>{defaultModel}</option>
               {/if}
-              {#each availableModels as model (model.model)}
+              {#each filteredAvailableModels as model (model.model)}
                 <option value={model.model}>{model.display_name} - {model.model}</option>
               {/each}
             </Select>
@@ -699,7 +716,7 @@
 
         {#if availableModels.length > 0}
           <div class="model-list">
-            {#each availableModels as model (model.model)}
+            {#each filteredAvailableModels as model (model.model)}
               <Button
                 variant="secondary"
                 selected={model.model === defaultModel}
@@ -817,7 +834,7 @@
     line-height: 1.45;
   }
 
-  .profile-strip {
+  .profile-status-strip {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
