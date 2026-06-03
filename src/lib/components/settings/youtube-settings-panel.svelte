@@ -167,7 +167,7 @@
   });
 </script>
 
-<section class="desk-panel desk-panel-subtle youtube-settings-panel" class:embedded>
+<section class={`youtube-settings-panel ${embedded ? "embedded" : "desk-panel desk-panel-subtle"}`.trim()}>
   {#if !embedded}
     <div class="panel-header">
       <div class="panel-header-copy">
@@ -373,6 +373,10 @@
     border: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  .youtube-settings-panel.embedded .cookie-box {
+    background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
   }
 
   .status-strip,

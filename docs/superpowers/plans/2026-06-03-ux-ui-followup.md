@@ -605,7 +605,7 @@ git commit -m "feat(diagnostics): prioritize issue rows"
 - Test: `src/lib/accounts-ux-contract.test.ts`
 - Test: `src/lib/source-access-placement.test.ts`
 
-- [ ] **Step 1: Remove desk panel classes in embedded mode**
+- [x] **Step 1: Remove desk panel classes in embedded mode**
 
 In `youtube-settings-panel.svelte`, change the root section from:
 
@@ -619,7 +619,7 @@ to:
 <section class={`youtube-settings-panel ${embedded ? "embedded" : "desk-panel desk-panel-subtle"}`.trim()}>
 ```
 
-- [ ] **Step 2: Make embedded spacing rely on the parent shell**
+- [x] **Step 2: Make embedded spacing rely on the parent shell**
 
 In `youtube-settings-panel.svelte`, keep:
 
@@ -640,7 +640,7 @@ Add:
 }
 ```
 
-- [ ] **Step 3: Tighten Accounts YouTube shell copy**
+- [x] **Step 3: Tighten Accounts YouTube shell copy**
 
 In `src/routes/accounts/+page.svelte`, keep the shell heading but avoid repeating wording already inside the YouTube panel. Change the paragraph to:
 
@@ -654,7 +654,7 @@ Keep:
 <YoutubeSettingsPanel embedded />
 ```
 
-- [ ] **Step 4: Run Accounts tests**
+- [x] **Step 4: Run Accounts tests**
 
 Run:
 
@@ -664,7 +664,7 @@ npm.cmd run test -- src/lib/accounts-ux-contract.test.ts src/lib/source-access-p
 
 Expected: PASS.
 
-- [ ] **Step 5: Run Svelte check**
+- [x] **Step 5: Run Svelte check**
 
 Run:
 
@@ -674,7 +674,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 6: Inspect the running app**
+- [x] **Step 6: Inspect the running app**
 
 Open `/accounts` and verify:
 
@@ -682,7 +682,7 @@ Open `/accounts` and verify:
 - Authentication and Sync policy remain visually separated.
 - The Telegram accounts section is unchanged except for surrounding page flow.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 

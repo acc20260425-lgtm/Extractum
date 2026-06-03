@@ -6,7 +6,8 @@ describe("accounts UX contract", () => {
   it("separates Telegram identity from YouTube access", () => {
     expect(accountsPageSource).toContain("Telegram accounts");
     expect(accountsPageSource).toContain("YouTube access");
-    expect(accountsPageSource).toContain("Sync policy");
+    expect(accountsPageSource).toContain("Manage cookies and sync limits without mixing them into Telegram account identity.");
+    expect(accountsPageSource).toContain("<YoutubeSettingsPanel embedded />");
   });
 
   it("keeps YouTube auth and sync settings in separate visual groups", () => {

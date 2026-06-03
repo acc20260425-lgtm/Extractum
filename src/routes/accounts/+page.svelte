@@ -261,7 +261,7 @@
         <div class="panel-header-copy">
           <span class="page-eyebrow">YouTube access</span>
           <h2>YouTube access</h2>
-          <p>Sync policy lives with cookies and auth state, separately from Telegram identities.</p>
+          <p>Manage cookies and sync limits without mixing them into Telegram account identity.</p>
         </div>
       </div>
       <YoutubeSettingsPanel embedded />
