@@ -433,7 +433,7 @@ git commit -m "feat: add diagnostics API wrapper"
 - Create: `src/lib/diagnostics-view-model.ts`
 - Create: `src/lib/diagnostics-view-model.test.ts`
 
-- [ ] **Step 1: Write the failing helper tests**
+- [x] **Step 1: Write the failing helper tests**
 
 Create `src/lib/diagnostics-view-model.test.ts`:
 
@@ -586,13 +586,13 @@ describe("diagnostics view model helpers", () => {
 });
 ```
 
-- [ ] **Step 2: Run helper tests to verify they fail**
+- [x] **Step 2: Run helper tests to verify they fail**
 
 Run: `npm.cmd run test -- src/lib/diagnostics-view-model.test.ts`
 
 Expected: FAIL because `src/lib/diagnostics-view-model.ts` does not exist yet.
 
-- [ ] **Step 3: Add the pure view-model helpers**
+- [x] **Step 3: Add the pure view-model helpers**
 
 Create `src/lib/diagnostics-view-model.ts`:
 
@@ -814,7 +814,7 @@ export function formatDiagnosticError(action: string, error: unknown) {
 }
 ```
 
-- [ ] **Step 4: Run helper tests**
+- [x] **Step 4: Run helper tests**
 
 Run: `npm.cmd run test -- src/lib/diagnostics-view-model.test.ts`
 
@@ -825,7 +825,7 @@ first `DiagnosticCountTable` implementation may render its empty row through Sve
 `{:else}` branch. It gives future diagnostics sections and source-contract tests a
 single reusable empty-row contract without moving table rendering logic into the route.
 
-- [ ] **Step 5: Commit view-model helpers**
+- [x] **Step 5: Commit view-model helpers**
 
 ```bash
 git add src/lib/diagnostics-view-model.ts src/lib/diagnostics-view-model.test.ts
