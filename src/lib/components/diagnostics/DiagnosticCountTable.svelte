@@ -14,6 +14,7 @@
     description = "",
     columns,
     rows,
+    totalRows = rows.length,
     emptyMessage = "No diagnostic counts reported",
     open = true,
   }: {
@@ -21,6 +22,7 @@
     description?: string;
     columns: DiagnosticTableColumn[];
     rows: DiagnosticTableRow[];
+    totalRows?: number;
     emptyMessage?: string;
     open?: boolean;
   } = $props();
@@ -39,7 +41,7 @@
   <details class="diagnostic-count-details" {open}>
     <summary>
       <span>{title}</span>
-      <span>{rows.length} rows</span>
+      <span>{rows.length === totalRows ? `${rows.length} rows` : `${rows.length}/${totalRows} rows`}</span>
     </summary>
     {#if description}
       <p>{description}</p>

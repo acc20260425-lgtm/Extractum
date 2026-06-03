@@ -71,6 +71,8 @@ const DANGER_STATUSES = new Set([
 const PRIVACY_FALLBACK_NOTE =
   "This diagnostics view is designed to show sanitized fields only. The backend did not report excluded data classes for this summary.";
 
+const diagnosticIssuePattern = /failed|error|missing|unavailable|pending|warning|partial|cancelled/i;
+
 function normalizedStatus(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -176,6 +178,17 @@ export function buildModeTone(buildMode: unknown): BadgeVariant {
   if (key === "release") return "success";
   if (key === "debug") return "info";
   return "neutral";
+}
+
+export function diagnosticRowHasIssue(row: Record<string, string | number | undefined>) {
+  return Object.entries(row).some(([key, value]) => {
+    if (key.toLowerCase() === "count") return false;
+    return diagnosticIssuePattern.test(String(value));
+  });
+}
+
+export function filterDiagnosticIssueRows<T extends Record<string, string | number | undefined>>(rows: T[]) {
+  return rows.filter((row) => diagnosticRowHasIssue(row));
 }
 
 export function labelFromKey(value: unknown) {

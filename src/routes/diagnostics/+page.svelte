@@ -12,6 +12,8 @@
     availabilityLabel,
     availabilityTone,
     buildModeTone,
+    diagnosticRowHasIssue,
+    filterDiagnosticIssueRows,
     formatDiagnosticError,
     formatSummaryGeneratedAt,
     labelFromKey,
@@ -29,6 +31,18 @@
     value: string;
     tone: BadgeVariant;
     meta: string;
+  };
+  type DiagnosticTableRow = Record<string, string | number>;
+  type DiagnosticTableColumn = {
+    key: string;
+    label: string;
+    align?: "start" | "end";
+  };
+  type DiagnosticTableSection = {
+    title: string;
+    description: string;
+    columns: DiagnosticTableColumn[];
+    rows: DiagnosticTableRow[];
   };
 
   const sourceColumns = [
@@ -144,10 +158,26 @@
     return runtime.version ?? runtime.summary ?? labelFromKey(runtime.status);
   }
 
-  function hasDiagnosticIssue(rows: Record<string, string | number>[]) {
-    return rows.some((row) => Object.values(row).some((cell) =>
-      /failed|error|missing|unavailable|pending|warning/i.test(String(cell)),
-    ));
+  function hasDiagnosticIssue(rows: Record<string, string | number | undefined>[]) {
+    return rows.some(diagnosticRowHasIssue);
+  }
+
+  function visibleDiagnosticRows<T extends Record<string, string | number | undefined>>(rows: T[]) {
+    return diagnosticsTableMode === "issues" ? filterDiagnosticIssueRows(rows) : rows;
+  }
+
+  function diagnosticsTableSections(current: DiagnosticSummaryDto): DiagnosticTableSection[] {
+    return [
+      { title: "Provider profiles", description: "Configured profile counts by provider", columns: providerColumns, rows: providerRows(current) },
+      { title: "Telegram runtimes", description: "Account runtime statuses by coarse state", columns: telegramColumns, rows: telegramRows(current) },
+      { title: "Sources", description: "Source counts by type, subtype, active state, and sync state", columns: sourceColumns, rows: sourceRows(current) },
+      { title: "Items", description: "Item counts by coarse source and content fields", columns: itemColumns, rows: itemRows(current) },
+      { title: "Analysis runs", description: "Run counts by provider, scope, status, snapshot state, and error kind", columns: runColumns, rows: runRows(current) },
+      { title: "LLM requests", description: "Request counts by provider, kind, and state", columns: llmColumns, rows: llmRows(current) },
+      { title: "YouTube jobs", description: "Job aggregates by type, status, warning state, and error kind", columns: youtubeJobColumns, rows: youtubeRows(current) },
+      { title: "Ingest batches", description: "Batch aggregates by provider, kind, status, completeness, and error kind", columns: ingestBatchColumns, rows: ingestBatchRows(current) },
+      { title: "Ingest warnings", description: "Warning aggregates by provider, kind, status, and warning code", columns: ingestWarningColumns, rows: ingestWarningRows(current) },
+    ];
   }
 
   function statusStripItems(current: DiagnosticSummaryDto): StatusStripItem[] {
@@ -335,17 +365,12 @@
   {/if}
 
   {#if summary}
-    {@const diagnosticsTableSections = [
-      { title: "Provider profiles", description: "Configured profile counts by provider", columns: providerColumns, rows: providerRows(summary) },
-      { title: "Telegram runtimes", description: "Account runtime statuses by coarse state", columns: telegramColumns, rows: telegramRows(summary) },
-      { title: "Sources", description: "Source counts by type, subtype, active state, and sync state", columns: sourceColumns, rows: sourceRows(summary) },
-      { title: "Items", description: "Item counts by coarse source and content fields", columns: itemColumns, rows: itemRows(summary) },
-      { title: "Analysis runs", description: "Run counts by provider, scope, status, snapshot state, and error kind", columns: runColumns, rows: runRows(summary) },
-      { title: "LLM requests", description: "Request counts by provider, kind, and state", columns: llmColumns, rows: llmRows(summary) },
-      { title: "YouTube jobs", description: "Job aggregates by type, status, warning state, and error kind", columns: youtubeJobColumns, rows: youtubeRows(summary) },
-      { title: "Ingest batches", description: "Batch aggregates by provider, kind, status, completeness, and error kind", columns: ingestBatchColumns, rows: ingestBatchRows(summary) },
-      { title: "Ingest warnings", description: "Warning aggregates by provider, kind, status, and warning code", columns: ingestWarningColumns, rows: ingestWarningRows(summary) },
-    ]}
+    {@const tableSections = diagnosticsTableSections(summary)}
+
+    <div class="diagnostics-table-controls" aria-label="Diagnostics table display">
+      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "issues"} onclick={() => (diagnosticsTableMode = "issues")}>Only issues</Button>
+      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "all"} onclick={() => (diagnosticsTableMode = "all")}>All tables</Button>
+    </div>
 
     <div class="status-strip" aria-label="Diagnostics health overview">
       {#each statusStripItems(summary) as item (item.label)}
@@ -400,19 +425,15 @@
       </SurfaceCard>
     </div>
 
-    <div class="diagnostics-table-controls" aria-label="Diagnostics table display">
-      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "issues"} onclick={() => (diagnosticsTableMode = "issues")}>Only issues</Button>
-      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "all"} onclick={() => (diagnosticsTableMode = "all")}>All tables</Button>
-    </div>
-
     <div class="diagnostics-tables">
-      {#each diagnosticsTableSections as section (section.title)}
-        {#if diagnosticsTableMode === "all" || hasDiagnosticIssue(section.rows)}
+      {#each tableSections as section (section.title)}
+        {#if diagnosticsTableMode === "all" || visibleDiagnosticRows(section.rows).length > 0}
           <DiagnosticCountTable
             title={section.title}
             description={section.description}
             columns={section.columns}
-            rows={section.rows}
+            rows={visibleDiagnosticRows(section.rows)}
+            totalRows={section.rows.length}
             open={hasDiagnosticIssue(section.rows)}
           />
         {/if}

@@ -432,7 +432,7 @@ git commit -m "feat(analysis): bound live source reading"
 - Test: `src/lib/diagnostics-ux-contract.test.ts`
 - Test: `src/lib/diagnostics-route-contract.test.ts`
 
-- [ ] **Step 1: Add issue row helpers to diagnostics view model**
+- [x] **Step 1: Add issue row helpers to diagnostics view model**
 
 In `src/lib/diagnostics-view-model.ts`, add:
 
@@ -451,7 +451,7 @@ export function filterDiagnosticIssueRows<T extends Record<string, string | numb
 }
 ```
 
-- [ ] **Step 2: Run helper tests and verify they pass**
+- [x] **Step 2: Run helper tests and verify they pass**
 
 Run:
 
@@ -461,7 +461,7 @@ npm.cmd run test -- src/lib/diagnostics-view-model.test.ts
 
 Expected: PASS after helper implementation.
 
-- [ ] **Step 3: Import helpers in diagnostics route**
+- [x] **Step 3: Import helpers in diagnostics route**
 
 In `src/routes/diagnostics/+page.svelte`, add to the existing `$lib/diagnostics-view-model` import:
 
@@ -486,7 +486,7 @@ function visibleDiagnosticRows<T extends Record<string, string | number>>(rows: 
 }
 ```
 
-- [ ] **Step 4: Move diagnostics table controls above summary cards**
+- [x] **Step 4: Move diagnostics table controls above summary cards**
 
 In `diagnostics/+page.svelte`, move:
 
@@ -503,7 +503,7 @@ so it appears after `diagnosticsTableSections` and before:
 <div class="status-strip" aria-label="Diagnostics health overview">
 ```
 
-- [ ] **Step 5: Pass filtered rows to tables**
+- [x] **Step 5: Pass filtered rows to tables**
 
 In the table render loop, change:
 
@@ -531,7 +531,7 @@ open={hasDiagnosticIssue(section.rows)}
 
 so a table with issues opens by default.
 
-- [ ] **Step 6: Add table summary copy for filtered rows**
+- [x] **Step 6: Add table summary copy for filtered rows**
 
 In `DiagnosticCountTable.svelte`, add an optional `totalRows` prop:
 
@@ -557,7 +557,7 @@ Pass it from diagnostics route:
 totalRows={section.rows.length}
 ```
 
-- [ ] **Step 7: Run Diagnostics tests**
+- [x] **Step 7: Run Diagnostics tests**
 
 Run:
 
@@ -567,7 +567,7 @@ npm.cmd run test -- src/lib/diagnostics-ux-contract.test.ts src/lib/diagnostics-
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte check**
+- [x] **Step 8: Run Svelte check**
 
 Run:
 
@@ -577,7 +577,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 9: Inspect the running app**
+- [x] **Step 9: Inspect the running app**
 
 Open `/diagnostics` and verify:
 
@@ -586,7 +586,7 @@ Open `/diagnostics` and verify:
 - Tables in `Only issues` do not include rows where status is healthy and error is `None`.
 - `All tables` restores full row counts.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 Run:
 
