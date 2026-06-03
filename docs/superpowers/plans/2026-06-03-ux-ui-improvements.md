@@ -327,7 +327,8 @@ In `report-workspace-tools.svelte`, add:
 - [ ] **Step 4: Run focused tests**
 
 ```powershell
-npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-redesign-route-contract.test.ts src/lib/analysis-workspace-tools.test.ts
+npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "keeps the report canvas top chrome compact and action-oriented"
+npm.cmd run test -- src/lib/analysis-redesign-route-contract.test.ts src/lib/analysis-workspace-tools.test.ts
 ```
 
 Expected: PASS.
@@ -503,7 +504,8 @@ In `compact-source-rail.svelte`, keep the existing primary sync affordance only 
 - [ ] **Step 5: Run focused tests**
 
 ```powershell
-npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-compact-source-rail.test.ts
+npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "keeps the source switcher primarily focused on source selection"
+npm.cmd run test -- src/lib/analysis-compact-source-rail.test.ts
 ```
 
 Expected: PASS. Update `src/lib/analysis-compact-source-rail.test.ts` assertions that currently require visible `onSyncSource(source.id)`, `onStartTakeoutImport(source.id)`, and `onDeleteSource(source)` in the expanded panel so they assert the disclosure instead.
@@ -585,7 +587,8 @@ Use the same class in both activity components:
 - [ ] **Step 5: Run focused tests**
 
 ```powershell
-npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-source-readers.test.ts
+npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "makes source activity the visible home for source operations"
+npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 ```
 
 Expected: PASS.
@@ -710,7 +713,8 @@ Replace the metadata and paragraph area inside each item article with:
 - [ ] **Step 5: Run focused tests**
 
 ```powershell
-npm.cmd run test -- src/lib/source-browser-model.test.ts src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-source-readers.test.ts
+npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "turns loaded items into a reader instead of a raw dump"
+npm.cmd run test -- src/lib/source-browser-model.test.ts src/lib/analysis-source-readers.test.ts
 ```
 
 Expected: PASS.
@@ -797,7 +801,8 @@ Replace the no-filter empty state with:
 - [ ] **Step 5: Run focused tests**
 
 ```powershell
-npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-run-companion-tabs.test.ts
+npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "keeps run filters progressive when no runs exist"
+npm.cmd run test -- src/lib/analysis-run-companion-tabs.test.ts
 ```
 
 Expected: PASS.
