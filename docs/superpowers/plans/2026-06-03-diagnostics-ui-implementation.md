@@ -820,6 +820,11 @@ Run: `npm.cmd run test -- src/lib/diagnostics-view-model.test.ts`
 
 Expected: PASS.
 
+`emptySectionRows()` is intentionally kept as a pure view-model helper even though the
+first `DiagnosticCountTable` implementation may render its empty row through Svelte's
+`{:else}` branch. It gives future diagnostics sections and source-contract tests a
+single reusable empty-row contract without moving table rendering logic into the route.
+
 - [ ] **Step 5: Commit view-model helpers**
 
 ```bash
@@ -899,6 +904,10 @@ describe("diagnostics frontend source contracts", () => {
     expect(diagnosticsPageSource).toMatch(/else\s*\{[\s\S]*status\s*=\s*"Refreshing\.\.\.";/);
   });
 
+  it("keeps privacy fallback tolerant of partial privacy payloads", () => {
+    expect(diagnosticsPageSource).toMatch(/summary\.privacy\?\.\s*excludedDataClasses/);
+  });
+
   it("adds Diagnostics navigation without moving diagnostics into Settings", () => {
     expect(layoutSource).toContain("ShieldCheck");
     expect(layoutSource).toContain('label: "Diagnostics"');
@@ -906,7 +915,8 @@ describe("diagnostics frontend source contracts", () => {
     expect(layoutSource).toContain('pathname.startsWith("/diagnostics")');
     expect(layoutSource).toContain("Diagnostics");
     expect(settingsPageSource).not.toContain("$lib/api/diagnostics");
-    expect(settingsPageSource).not.toContain("diagnostic");
+    expect(settingsPageSource).not.toContain("/diagnostics");
+    expect(settingsPageSource).not.toContain("loadDiagnosticSummary");
   });
 });
 ```
@@ -1125,6 +1135,15 @@ Do not commit this component by itself while the source contract test still fail
 **Files:**
 - Create: `src/routes/diagnostics/+page.svelte`
 - Test: `src/lib/diagnostics-route-contract.test.ts`
+
+- [ ] **Step 0: Confirm existing UI component contracts**
+
+Before writing the route, check `src/lib/components/ui/StatusMessage.svelte`,
+`src/lib/components/ui/Badge.svelte`, and `src/lib/components/ui/types.ts`. The current
+codebase supports `StatusMessage tone="error"`, `StatusMessage tone="muted"`,
+`surface={false}`, and `Badge variant="neutral"`. If the implementation branch has
+renamed these props or tones, adapt the route to the existing component contracts
+without introducing new tone names.
 
 - [ ] **Step 1: Create the diagnostics route**
 
@@ -1475,8 +1494,8 @@ Create `src/routes/diagnostics/+page.svelte` with this structure:
       </SurfaceCard>
 
       <SurfaceCard title="Privacy boundary" meta="Data classes intentionally excluded by backend diagnostics">
-        {@const excludedClasses = privacyExcludedDataClasses(summary.privacy.excludedDataClasses)}
-        {@const fallbackNote = privacyFallbackNote(summary.privacy.excludedDataClasses)}
+        {@const excludedClasses = privacyExcludedDataClasses(summary.privacy?.excludedDataClasses)}
+        {@const fallbackNote = privacyFallbackNote(summary.privacy?.excludedDataClasses)}
         {#if excludedClasses.length > 0}
           <div class="privacy-chips">
             {#each excludedClasses as item (item)}
