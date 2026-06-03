@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import reportCanvasSource from "./components/analysis/report-canvas.svelte?raw";
 import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import reportWorkspaceToolsSource from "./components/analysis/report-workspace-tools.svelte?raw";
+import sourceBrowserShellSource from "./components/analysis/source-browser-shell.svelte?raw";
 import sourceSwitcherPanelSource from "./components/analysis/source-switcher-panel.svelte?raw";
 import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
+import telegramTimelineSource from "./components/analysis/telegram-timeline-reader.svelte?raw";
 import sourceActivityViewSource from "./components/analysis/source-activity-view.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import runsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
 import sourceBrowserModelSource from "./source-browser-model?raw";
+import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 
 describe("analysis priority UX contract", () => {
   it("keeps the report canvas top chrome compact and action-oriented", () => {
@@ -59,5 +62,16 @@ describe("analysis priority UX contract", () => {
     expect(runsTabSource).toContain("showRunsToolbar");
     expect(runsTabSource).toContain('class="runs-empty-guidance"');
     expect(runsTabSource).toContain("Run a report to create the first saved workspace.");
+  });
+
+  it("keeps long source readers bounded while preserving desktop companion visibility", () => {
+    expect(analysisPageSource).toContain("minmax(21rem, clamp(22rem, 26vw, 26rem))");
+    expect(analysisPageSource).toContain("@media (max-width: 1180px)");
+    expect(sourceBrowserShellSource).toContain("bounded = false");
+    expect(sourceBrowserShellSource).toContain("class:bounded={bounded}");
+    expect(sourceBrowserShellSource).toContain('class="source-browser-body"');
+    expect(sourceBrowserShellSource).toContain("max-height: calc(100vh - 13rem)");
+    expect(sourceBrowserShellSource).toContain("overflow: auto");
+    expect(telegramTimelineSource).toContain("scroll-margin-top");
   });
 });

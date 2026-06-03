@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import layoutSource from "../routes/+layout.svelte?raw";
 import accountsPageSource from "../routes/accounts/+page.svelte?raw";
 import settingsPageSource from "../routes/settings/+page.svelte?raw";
+import youtubeSettingsPanelSource from "./components/settings/youtube-settings-panel.svelte?raw";
 
 describe("source access placement", () => {
   it("keeps the YouTube auth and sync panel on the Accounts page", () => {
@@ -31,6 +32,12 @@ describe("source access placement", () => {
   it("keeps Settings focused on LLM configuration", () => {
     expect(settingsPageSource).not.toContain("YoutubeSettingsPanel");
     expect(settingsPageSource).toContain("Settings stay focused on LLM provider profiles and test runs.");
+  });
+
+  it("keeps embedded YouTube access visually inside one shell", () => {
+    expect(accountsPageSource).toContain('<section class="desk-panel youtube-access-shell">');
+    expect(accountsPageSource).toContain("<YoutubeSettingsPanel embedded />");
+    expect(youtubeSettingsPanelSource).toContain('embedded ? "embedded" : "desk-panel desk-panel-subtle"');
   });
 
   it("keeps the navigation label as Accounts while broadening the caption", () => {

@@ -15,4 +15,9 @@ describe("accounts UX contract", () => {
     expect(youtubeSettingsPanelSource).toContain("Authentication");
     expect(youtubeSettingsPanelSource).toContain("Sync policy");
   });
+
+  it("does not render embedded YouTube settings as a nested desk panel", () => {
+    expect(youtubeSettingsPanelSource).toContain('class={`youtube-settings-panel ${embedded ? "embedded" : "desk-panel desk-panel-subtle"}`.trim()}');
+    expect(youtubeSettingsPanelSource).not.toContain('class="desk-panel desk-panel-subtle youtube-settings-panel" class:embedded');
+  });
 });

@@ -273,4 +273,10 @@ describe("report canvas component contract", () => {
     expect(reportCanvasSource).toContain("{sourceReturnContext}");
     expect(reportCanvasSource).toContain("onReturnToEvidenceReview={onReturnToEvidenceReview}");
   });
+
+  it("passes bounded source browser mode only for live source canvas review", () => {
+    expect(reportCanvasSource).toContain('sourceBrowserBounded={canvasMode === "source" && sourceViewBasis === "live_source"}');
+    expect(reportSourceSurfaceSource).toContain("sourceBrowserBounded = false");
+    expect(reportSourceSurfaceSource).toContain("bounded={sourceBrowserBounded}");
+  });
 });

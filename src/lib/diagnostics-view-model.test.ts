@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildModeTone,
+  diagnosticRowHasIssue,
   emptySectionRows,
+  filterDiagnosticIssueRows,
   formatDiagnosticError,
   formatSummaryGeneratedAt,
   labelFromKey,
@@ -159,5 +161,23 @@ describe("diagnostics view model helpers", () => {
     expect(message).not.toContain("llm.private");
     expect(message).not.toContain("private-profile");
     expect(message).not.toContain("[object Object]");
+  });
+
+  it("detects issue diagnostic rows without treating healthy rows as issues", () => {
+    expect(diagnosticRowHasIssue({ status: "Failed", error: "Internal", count: 1 })).toBe(true);
+    expect(diagnosticRowHasIssue({ status: "Completed", error: "None", count: 11 })).toBe(false);
+  });
+
+  it("filters diagnostic rows down to issue rows", () => {
+    const rows = [
+      { status: "Completed", error: "None", count: 11 },
+      { status: "Failed", error: "Internal", count: 1 },
+      { status: "Cancelled", completeness: "Partial", count: 4 },
+    ];
+
+    expect(filterDiagnosticIssueRows(rows)).toEqual([
+      { status: "Failed", error: "Internal", count: 1 },
+      { status: "Cancelled", completeness: "Partial", count: 4 },
+    ]);
   });
 });

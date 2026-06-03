@@ -73,7 +73,7 @@ Expected component and route changes:
 - Modify: `src/lib/accounts-ux-contract.test.ts`
 - Modify: `src/lib/source-access-placement.test.ts`
 
-- [ ] **Step 1: Add failing Analysis bounded-reader assertions**
+- [x] **Step 1: Add failing Analysis bounded-reader assertions**
 
 In `src/lib/analysis-priority-ux-contract.test.ts`, add these imports:
 
@@ -98,7 +98,7 @@ it("keeps long source readers bounded while preserving desktop companion visibil
 });
 ```
 
-- [ ] **Step 2: Add failing source surface plumbing assertions**
+- [x] **Step 2: Add failing source surface plumbing assertions**
 
 In `src/lib/analysis-report-canvas.test.ts`, add:
 
@@ -110,7 +110,7 @@ it("passes bounded source browser mode only for live source canvas review", () =
 });
 ```
 
-- [ ] **Step 3: Add failing Diagnostics issue-row assertions**
+- [x] **Step 3: Add failing Diagnostics issue-row assertions**
 
 In `src/lib/diagnostics-ux-contract.test.ts`, add this import:
 
@@ -159,7 +159,7 @@ it("filters diagnostic rows down to issue rows", () => {
 });
 ```
 
-- [ ] **Step 4: Add failing Accounts embedded-panel assertions**
+- [x] **Step 4: Add failing Accounts embedded-panel assertions**
 
 In `src/lib/accounts-ux-contract.test.ts`, add:
 
@@ -180,7 +180,7 @@ it("keeps embedded YouTube access visually inside one shell", () => {
 });
 ```
 
-- [ ] **Step 5: Run the focused tests and verify they fail**
+- [x] **Step 5: Run the focused tests and verify they fail**
 
 Run:
 
@@ -190,7 +190,7 @@ npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts src/lib/analys
 
 Expected: FAIL because the new bounded reader, Diagnostics row filtering, and flattened embedded YouTube panel do not exist yet.
 
-- [ ] **Step 6: Commit the failing contract**
+- [x] **Step 6: Commit the failing contract**
 
 Run:
 
