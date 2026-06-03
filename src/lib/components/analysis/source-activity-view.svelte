@@ -75,6 +75,23 @@
 </script>
 
 <section class="source-activity-view" aria-label="Source activity">
+  <div class="activity-action-grid">
+    <Button
+      type="button"
+      variant="secondary"
+      disabled={disabledReason !== null}
+      title={disabledReason ?? undefined}
+      onclick={() => onSyncSource(source.id)}
+    >
+      Sync source
+    </Button>
+    {#if source.sourceType === "telegram"}
+      <Button type="button" variant="secondary" onclick={() => onStartTakeoutImport(source.id)}>
+        Start Takeout import
+      </Button>
+    {/if}
+  </div>
+
   <section class="activity-section" aria-label="Source sync">
     <div class="section-heading">
       <span class="eyebrow">Source sync</span>
@@ -90,7 +107,6 @@
       <StatusMessage tone="error">{disabledReason}</StatusMessage>
     {/if}
     <div class="activity-actions">
-      <Button type="button" variant="secondary" onclick={() => onSyncSource(source.id)}>Sync source</Button>
       {#if source.sourceType === "youtube" && source.sourceSubtype === "video"}
         <Button type="button" variant="secondary" onclick={() => onSyncMetadata(source.id)}>Sync metadata</Button>
         <Button type="button" variant="secondary" onclick={() => onSyncTranscript(source.id)}>Sync transcript</Button>
@@ -112,11 +128,6 @@
       {:else}
         <p>No Takeout recovery is currently visible for this source.</p>
       {/if}
-      <div class="activity-actions">
-        <Button type="button" variant="secondary" onclick={() => onStartTakeoutImport(source.id)}>
-          Start Takeout import
-        </Button>
-      </div>
     </section>
 
     <section class="activity-section" aria-label="Migrated history">
@@ -226,6 +237,7 @@
 
   .section-heading,
   .activity-row,
+  .activity-action-grid,
   .activity-actions {
     display: flex;
     align-items: flex-start;
@@ -235,6 +247,15 @@
   .section-heading {
     justify-content: space-between;
     align-items: center;
+  }
+
+  .activity-action-grid {
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--primary) 6%, var(--panel));
   }
 
   .eyebrow {

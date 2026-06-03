@@ -527,7 +527,7 @@ git commit -m "feat(analysis): make source switcher selection focused"
 - Test: `src/lib/analysis-priority-ux-contract.test.ts`
 - Test: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Add an activity action grid to Telegram activity**
+- [x] **Step 1: Add an activity action grid to Telegram activity**
 
 In `source-activity-view.svelte`, group the primary actions directly below the activity intro:
 
@@ -544,7 +544,7 @@ In `source-activity-view.svelte`, group the primary actions directly below the a
 
 Keep the existing disabled rules and active job cancellation logic from the current sections. The action grid should call the same callbacks that the existing per-section buttons call.
 
-- [ ] **Step 2: Keep detailed state in the existing cards**
+- [x] **Step 2: Keep detailed state in the existing cards**
 
 Keep these sections visible below the action grid:
 
@@ -557,7 +557,7 @@ Keep these sections visible below the action grid:
 
 The first visible action in each card can remain, but avoid rendering duplicate primary buttons immediately adjacent to the new action grid. Prefer status and cancellation controls inside cards.
 
-- [ ] **Step 3: Mirror the pattern for YouTube activity**
+- [x] **Step 3: Mirror the pattern for YouTube activity**
 
 In `youtube-source-activity.svelte`, add:
 
@@ -571,7 +571,7 @@ In `youtube-source-activity.svelte`, add:
 
 Keep retry actions where they are tied to a specific YouTube job or failed playlist item.
 
-- [ ] **Step 4: Add CSS for the action grid**
+- [x] **Step 4: Add CSS for the action grid**
 
 Use the same class in both activity components:
 
@@ -584,7 +584,7 @@ Use the same class in both activity components:
 }
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```powershell
 npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "makes source activity the visible home for source operations"
@@ -593,7 +593,7 @@ npm.cmd run test -- src/lib/analysis-source-readers.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/lib/components/analysis/source-activity-view.svelte src/lib/components/analysis/youtube-source-activity.svelte src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-source-readers.test.ts

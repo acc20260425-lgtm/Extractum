@@ -9,11 +9,13 @@
     jobs,
     formatTimestamp,
     onCancelJob,
+    onSyncSource = null,
     title = "Source activity",
   }: {
     jobs: SourceJobRecord[];
     formatTimestamp: (value: number | null) => string;
     onCancelJob: (jobId: string) => void | Promise<void>;
+    onSyncSource?: (() => void | Promise<void>) | null;
     title?: string;
   } = $props();
 
@@ -52,6 +54,14 @@
       <span class="eyebrow">{title}</span>
       <Badge variant="neutral">{visibleJobs.length} recent</Badge>
     </div>
+
+    {#if onSyncSource}
+      <div class="activity-action-grid">
+        <Button type="button" variant="secondary" onclick={onSyncSource}>
+          Sync source
+        </Button>
+      </div>
+    {/if}
 
     <div class="activity-list">
       {#each visibleJobs as job (job.job_id)}
@@ -114,6 +124,7 @@
 
   .activity-heading,
   .activity-row,
+  .activity-action-grid,
   .activity-actions {
     display: flex;
     align-items: flex-start;
@@ -123,6 +134,15 @@
   .activity-heading {
     justify-content: space-between;
     align-items: center;
+  }
+
+  .activity-action-grid {
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--primary) 6%, var(--panel));
   }
 
   .eyebrow {
