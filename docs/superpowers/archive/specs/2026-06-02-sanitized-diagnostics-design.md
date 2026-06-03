@@ -1,5 +1,10 @@
 # Sanitized Diagnostic Summary Contract
 
+> Historical design record. The backend sanitized diagnostics command shipped
+> before the 2026-06-03 Diagnostics UI; current behavior is summarized in root
+> docs such as `docs/project.md`, `docs/design-document.md`, and
+> `docs/architecture-deep-dive.md`.
+
 > Date: 2026-06-02
 > Status: approved design
 

@@ -1,5 +1,9 @@
 # NotebookLM Source Group Export Implementation Plan
 
+> Historical execution record. Telegram source-group NotebookLM export shipped;
+> current behavior is summarized in root docs such as `docs/project.md`,
+> `docs/design-document.md`, and `docs/architecture-deep-dive.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enable NotebookLM export for Telegram source groups while preserving existing single-source Telegram export behavior.
@@ -12,7 +16,7 @@
 
 ## Approved Spec
 
-- `docs/superpowers/specs/2026-05-31-notebooklm-source-group-export-design.md`
+- `docs/superpowers/archive/specs/2026-05-31-notebooklm-source-group-export-design.md`
 
 Key constraints from the spec:
 

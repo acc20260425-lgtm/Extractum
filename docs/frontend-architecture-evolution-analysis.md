@@ -17,6 +17,11 @@ They confirm the preferred frontend direction: keep route data ownership in
 `/analysis`, add small focused components for provider-aware surfaces, and keep
 browser tab state local to the shell.
 
+The dedicated `/diagnostics` route has also shipped as a small route-owned
+surface: one API wrapper, one pure view-model helper module, one repeated table
+component, and no Settings integration. That is the preferred pattern for
+future app-wide utility routes that are not part of the analysis workspace.
+
 The useful Telegram Desktop lesson is interaction design for dense archive
 navigation, not its Qt widget hierarchy or live-client state model. Extractum
 should continue to keep frontend state local and typed, while improving the
@@ -34,6 +39,11 @@ The frontend is a Svelte 5 app with a large `/analysis` route orchestrating:
 - report setup/output canvas;
 - trace evidence, follow-up chat, chunk, and runs companion tabs;
 - source jobs, Takeout jobs, NotebookLM export, and provider runtime status.
+
+Outside `/analysis`, `/diagnostics` is the compact operator-health route. It
+loads the sanitized backend summary through `loadDiagnosticSummary()`, derives
+display state in `diagnostics-view-model.ts`, and keeps manual refresh and
+privacy-boundary rendering local to the route.
 
 The main pressure point is `src/routes/analysis/+page.svelte`. It already uses
 smaller state/workflow modules, but the route still coordinates many

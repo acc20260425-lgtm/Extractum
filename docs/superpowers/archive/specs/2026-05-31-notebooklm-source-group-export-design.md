@@ -1,5 +1,9 @@
 # NotebookLM Source Group Export Design
 
+> Historical design record. Telegram source-group NotebookLM export shipped;
+> current behavior is summarized in root docs such as `docs/project.md`,
+> `docs/design-document.md`, and `docs/architecture-deep-dive.md`.
+
 > **Status:** Draft for review
 > **Date:** 2026-05-31
 > **Scope:** Telegram source-group NotebookLM export follow-up

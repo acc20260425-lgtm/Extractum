@@ -32,6 +32,7 @@ Rust owns:
 - OS secure storage access
 - compression
 - report orchestration
+- sanitized diagnostic summary assembly
 
 Svelte owns:
 
@@ -39,6 +40,7 @@ Svelte owns:
 - local UI state
 - forms and filters
 - workflow composition
+- read-only diagnostics presentation
 
 The current frontend workflow is result-first: `/analysis` keeps setup,
 opened reports, or source material in the central canvas, while source
@@ -46,6 +48,11 @@ switching, evidence, follow-up chat, live chunk summaries, and saved runs stay
 nearby. Shared canvas-level workspace tools keep NotebookLM export, template editing,
 and group editing reachable in both setup and opened-run states. The legacy
 `/sources` route remains only as a compatibility redirect to `/analysis`.
+
+Diagnostics is intentionally a separate route at `/diagnostics`, not a Settings
+section. It displays the backend-provided sanitized local health summary and
+privacy boundary, with manual refresh only. It does not render raw JSON, logs,
+copy actions, support bundles, or frontend-derived environment checks.
 
 Live source browsing now uses `SourceBrowserShell` for Telegram sources,
 YouTube videos, YouTube playlists, live source groups, and available run
@@ -333,6 +340,25 @@ Telegram forum topic names and filters use materialized
 `item_topic_memberships` plus source-level `telegram_topic_resolution_state`.
 `Unrecognized topic` remains a derived bucket for ready/current resolution
 state and is not stored as a topic row.
+
+### 4.6 Diagnostics surface
+
+The diagnostics surface is a read-only operator/support panel backed by the
+single Tauri command `get_diagnostic_summary`. The frontend path stays narrow:
+`src/lib/api/diagnostics.ts` invokes the command, `src/lib/types/diagnostics.ts`
+mirrors the camelCase DTO, `src/lib/diagnostics-view-model.ts` owns labels,
+tones, sorting, timestamp formatting, empty rows, privacy fallback text, and
+safe error formatting, and `src/routes/diagnostics/+page.svelte` renders the
+summary.
+
+Diagnostics shows only coarse allow-listed facts: app/build metadata,
+SQLite/migration state, secure storage and `yt-dlp` runtime checks, provider
+profile counts, Telegram runtime counts, source/item/run/request/job/ingest
+aggregates, and backend-reported excluded data classes. Unknown statuses render
+as neutral readable labels rather than causing a page failure.
+
+Support-bundle export, log capture, explicit copy controls, polling, frontend
+runtime probes, and raw payload views remain separate future design work.
 
 ## 5. Error design
 

@@ -10,6 +10,10 @@ or `docs/backlog.md`.
 
 Active or still-relevant specs belong in `docs/superpowers/specs/`.
 
+NotebookLM source-group export specs from 2026-05-31 record the shipped
+Telegram source-group export scope, validation rules, package layout, and UI
+enablement boundaries.
+
 The 2026-05-29 and 2026-05-30 Source Browser specs are historical rationale for
 the shipped Source Browser architecture. Current behavior is summarized in
 `docs/project.md`, `docs/design-document.md`, and
@@ -27,3 +31,12 @@ Evidence to Source jump, focused load, one-shot highlight, and return workflow.
 
 Analysis Companion Width specs from 2026-05-31 record the shipped desktop
 companion column widening and Evidence container-query reflow.
+
+Sanitized Diagnostics specs from 2026-06-02 record the shipped backend
+diagnostic summary command, allow-list DTO, redaction policy, aggregate-only
+queries, runtime checks, and no-UI/no-support-bundle boundary.
+
+Diagnostics UI specs from 2026-06-03 record the shipped read-only diagnostics
+route, privacy boundary, manual refresh behavior, source-contract restrictions,
+and explicit exclusions for raw JSON, logs, copy actions, polling, and support
+bundle export.

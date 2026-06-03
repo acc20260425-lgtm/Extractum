@@ -12,3 +12,7 @@ Run a fresh Tauri smoke before using them as release evidence.
 Analysis Companion Width notes from 2026-05-31 record the shipped desktop
 companion width fix, Evidence container-query threshold tuning, viewport
 measurements, and opt-in Analysis UI smoke pass.
+
+Diagnostics UI notes from 2026-06-03 record the shipped `/diagnostics` live
+smoke, manual refresh check, privacy-boundary check, no-raw/no-copy scan, and
+full verification gate.

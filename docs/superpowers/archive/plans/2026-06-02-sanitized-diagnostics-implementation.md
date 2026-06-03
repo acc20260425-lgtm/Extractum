@@ -1,5 +1,10 @@
 # Sanitized Diagnostics Implementation Plan
 
+> Historical execution record. The backend sanitized diagnostics command shipped
+> before the 2026-06-03 Diagnostics UI; current behavior is summarized in root
+> docs such as `docs/project.md`, `docs/design-document.md`, and
+> `docs/architecture-deep-dive.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a backend-only `get_diagnostic_summary` Tauri command that returns allow-listed runtime health aggregates without source content, prompts, credentials, local paths, raw payloads, or raw terminal errors.
@@ -12,7 +17,7 @@
 
 ## Approved Spec
 
-- `docs/superpowers/specs/2026-06-02-sanitized-diagnostics-design.md`
+- `docs/superpowers/archive/specs/2026-06-02-sanitized-diagnostics-design.md`
 
 Key constraints from the spec:
 

@@ -10,6 +10,11 @@ Current product and architecture state belongs in root docs such as
 
 Active implementation plans belong in `docs/superpowers/plans/`.
 
+NotebookLM source-group export plans from 2026-05-31 record the shipped
+Telegram source-group export package behavior, group validation, member file
+layout, frontend dialog enablement, docs closure, verification, and branch
+cleanup.
+
 Analysis workspace parity plans record the shipped canvas-level workspace tool
 cleanup that unified setup and opened-run actions.
 
@@ -24,3 +29,11 @@ workflow.
 Analysis Companion Width plans from 2026-05-31 record the shipped desktop
 companion widening, Evidence container-query threshold tuning, and viewport
 verification.
+
+Sanitized Diagnostics plans from 2026-06-02 record the shipped backend-only
+`get_diagnostic_summary` command, DTO/redaction boundary, aggregate loaders,
+runtime checks, Tauri registration, tests, and full verification.
+
+Diagnostics UI plans from 2026-06-03 record the shipped read-only
+`/diagnostics` route, API wrapper, view-model helpers, table component, source
+contracts, focused tests, full verification, and live smoke closure.

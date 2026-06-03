@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-06-01
+> **Updated:** 2026-06-03
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -13,7 +13,7 @@
 | Medium | Frontend workspace evolution | improve evidence navigation, topic filters, saved-run history, and remaining source-surface consistency |
 | Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
 | Medium | Stabilization | add CI and event-flow validation after the next major backend changes |
-| Medium | Desktop product maturity | add sanitized diagnostics, searchable settings, explicit export profiles, and local privacy/data lifecycle controls |
+| Medium | Desktop product maturity | extend diagnostics toward support bundles, add searchable settings, explicit export profiles, and local privacy/data lifecycle controls |
 
 ## 2. Planning Principles
 
@@ -100,11 +100,14 @@ Priority: medium.
 
 Guidance: `docs/desktop-product-evolution-analysis.md`.
 
+Shipped baseline: `/diagnostics` now provides a read-only sanitized local health
+summary with manual refresh and a visible privacy boundary.
+
 - [ ] define a shared redaction policy for logs, diagnostics, debug status text,
   and future support bundles
-- [ ] add a local diagnostic summary or support bundle that reports app version,
-  schema state, provider health, recent job states, and sanitized logs without
-  source content or secrets
+- [ ] extend the shipped diagnostics surface into a local support-bundle flow
+  only after log capture, privacy preview, export controls, and redaction tests
+  are designed
 - [ ] introduce a lightweight settings registry/search layer before settings
   grow around media, privacy, export, and provider controls
 - [ ] define an explicit export profile contract for NotebookLM, source-group,
@@ -121,8 +124,9 @@ Guidance: `docs/desktop-product-evolution-analysis.md`.
 
 Acceptance:
 
-- Diagnostic output is useful for support and debugging without exposing local
-  archive content, prompts, provider credentials, cookies, or session material.
+- Future support bundles remain useful for support and debugging without
+  exposing local archive content, prompts, provider credentials, cookies, or
+  session material.
 - Settings and export behavior remain findable, explicit, and testable as the
   desktop app gains provider, media, privacy, and export options.
 - Privacy controls describe real local data lifecycle behavior and do not imply

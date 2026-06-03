@@ -1,5 +1,9 @@
 # Diagnostics UI Implementation Plan
 
+> Historical execution record. The Diagnostics UI shipped on 2026-06-03;
+> current behavior is summarized in root docs such as `docs/project.md`,
+> `docs/design-document.md`, and `docs/architecture-deep-dive.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a read-only `/diagnostics` frontend surface that renders the existing sanitized `get_diagnostic_summary` backend contract.

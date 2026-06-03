@@ -17,6 +17,7 @@ Owns:
 - compression / decompression
 - analysis orchestration
 - typed Tauri command errors
+- sanitized diagnostic summary assembly
 
 ### Frontend (`src/routes`, `src/lib`)
 
@@ -27,6 +28,7 @@ Owns:
 - optimistic interaction and feedback
 - filtering and presentation
 - error normalization for display
+- read-only diagnostics presentation
 
 ## 2. Telegram ingest flow
 
@@ -347,7 +349,35 @@ The backend now exposes structured `AppError` values. The frontend normalizes th
 
 This is intentionally minimal: the app gets better UX than raw strings without introducing a large error framework.
 
-## 9. Known architectural debt
+## 9. Diagnostics architecture
+
+Diagnostics is a deliberately narrow local operability slice. The backend
+command `get_diagnostic_summary` assembles sanitized app/build, database,
+provider, runtime, source, item, analysis, LLM request, YouTube job, ingest, and
+privacy-boundary aggregates. It is read-only and does not create probe records,
+write logs, or return source content, prompts, credentials, cookies, session
+material, provider payloads, local paths, source titles, URLs, profile labels,
+or raw backend errors.
+
+The frontend owns presentation only:
+
+- `src/lib/api/diagnostics.ts` is the single Tauri boundary and calls
+  `get_diagnostic_summary`;
+- `src/lib/types/diagnostics.ts` mirrors the backend camelCase DTO;
+- `src/lib/diagnostics-view-model.ts` derives display labels, tones, stable
+  count sorting, UTC generated-time text, empty rows, privacy fallback text,
+  and safe diagnostics error messages;
+- `src/lib/components/diagnostics/DiagnosticCountTable.svelte` renders repeated
+  aggregate tables;
+- `src/routes/diagnostics/+page.svelte` loads on mount, supports manual refresh,
+  and keeps the last-known-good summary visible after refresh errors.
+
+The route does not call `invoke` directly and does not derive additional
+diagnostics from browser, Tauri, filesystem, provider, source, or frontend
+environment state. Support bundles, log capture, polling, and copy/export
+actions are future design work, not hidden behavior in the current page.
+
+## 10. Known architectural debt
 
 - private peer resolution may still be fragile or expensive on large accounts because of dialog scans;
 - natural shifted export DC fallback remains unobserved in live Takeout data,
@@ -364,7 +394,7 @@ This is intentionally minimal: the app gets better UX than raw strings without i
   modeled yet;
 - Telegram session storage may still deserve a more robust long-term format.
 
-## 10. Practical entry points
+## 11. Practical entry points
 
 If you are changing ingest:
 
@@ -400,6 +430,15 @@ If you are changing LLM settings or provider behavior:
 
 - `src-tauri/src/llm/`
 - `src/routes/settings/+page.svelte`
+
+If you are changing diagnostics:
+
+- `src-tauri/src/diagnostics/`
+- `src/lib/api/diagnostics.ts`
+- `src/lib/types/diagnostics.ts`
+- `src/lib/diagnostics-view-model.ts`
+- `src/lib/components/diagnostics/`
+- `src/routes/diagnostics/+page.svelte`
 
 If you are changing app-wide failure behavior:
 

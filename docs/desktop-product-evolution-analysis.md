@@ -12,7 +12,7 @@ exports, diagnostics, and privacy around a complex local data model.
 
 The next project-level improvements should focus on:
 
-1. sanitized diagnostics and local support bundles;
+1. extend the shipped sanitized diagnostics surface toward local support bundles;
 2. searchable settings and action registries;
 3. explicit export profile contracts;
 4. resilient settings/data migration;
@@ -45,13 +45,23 @@ state model. Extractum is a local archive and analysis workspace.
 
 ## Recommended Directions
 
-### 1. Sanitized Diagnostic And Support Bundle
+### 1. Sanitized Diagnostics And Support Bundle
 
 Telegram Desktop keeps structured crash annotations, startup/runtime details,
 and rotating logs. Extractum does not need a crash-reporting subsystem yet, but
-it would benefit from a local diagnostic bundle command or settings screen.
+it benefits from local diagnostics that remain explicit, sanitized, and
+user-controlled.
 
-Recommended scope:
+Shipped baseline:
+
+- read-only `/diagnostics` route backed by `get_diagnostic_summary`;
+- app/build metadata, database/migration state, provider profile counts, secure
+  storage and `yt-dlp` runtime checks, source/item/run/request/job/ingest
+  aggregates, and a visible privacy-boundary panel;
+- manual refresh only, with no raw JSON, log viewer, copy controls, polling, or
+  support-bundle export.
+
+Recommended future support-bundle scope:
 
 - app version and build metadata;
 - database schema version and migration status;
@@ -135,7 +145,8 @@ Recommended starter actions:
 - `sources.cancelJob`
 - `export.notebooklm`
 - `settings.openProfiles`
-- `diagnostics.copySummary`
+- `diagnostics.open`
+- `diagnostics.refresh`
 
 Each action should define availability, label, and handler ownership. Keyboard
 shortcuts and command palette UI can come later.
@@ -229,8 +240,10 @@ consistent and avoid introducing a localization subsystem prematurely.
 
 ## Suggested Order
 
-1. Define a redaction policy shared by logs, diagnostics, and debug status text.
-2. Add a local diagnostic summary/support bundle surface.
+1. Broaden the shipped diagnostic redaction policy into shared logs and debug
+   status text.
+2. Extend `/diagnostics` into an explicit local support-bundle surface after
+   log capture, privacy preview, and export controls are designed.
 3. Introduce a lightweight settings registry and settings search.
 4. Define export profile settings before broadening NotebookLM/source-group or
    media export.

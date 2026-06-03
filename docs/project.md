@@ -139,6 +139,8 @@ Implemented:
 - configurable OpenAI-compatible `base_url` support in `/settings`
 - provider smoke testing from `/settings`
 - YouTube cookie/settings controls in `/settings`
+- read-only `/diagnostics` operator surface for sanitized local health, runtime,
+  provider, source, ingest, and privacy-boundary summaries
 - immutable saved run corpus snapshots
 - provider-neutral analysis refs for new live corpus rows
 - YouTube timestamp evidence refs for transcript segments
@@ -183,6 +185,13 @@ Not implemented yet:
   - refresh available models
   - run a live provider smoke test with the currently edited form
   - configure YouTube cookies and runtime settings
+- `/diagnostics`
+  - display the sanitized `get_diagnostic_summary` backend contract
+  - show app/build, SQLite/migration, secure storage, `yt-dlp`, provider,
+    source, item, run, LLM request, YouTube job, ingest, and privacy-boundary
+    aggregates
+  - refresh manually without polling, raw JSON, log viewing, copy actions, or
+    support-bundle export
 - `/analysis`
   - use the result-first research workspace layout
   - keep NotebookLM export, template editing, and group editing reachable from
@@ -268,6 +277,10 @@ Not implemented yet:
 - list provider models for Gemini and OpenAI-compatible endpoints
 - stream provider test requests and analysis/chat requests through the resolved profile
 
+### Diagnostics
+
+- `get_diagnostic_summary`
+
 ## Important persistence
 
 - `accounts`: local Telegram account metadata; saved Telegram `api_hash` secrets live in OS secure storage
@@ -314,6 +327,11 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 - YouTube analysis is text-based and uses synced transcripts, synthetic descriptions, and comments; audio/video binaries are not downloaded;
 - YouTube source jobs are process-local and are not resumed after app restart;
 - YouTube support requires `yt-dlp` on `PATH`;
+- the `/diagnostics` page is a read-only, manually refreshed summary surface;
+  it intentionally does not expose raw JSON, logs, support bundles, copy
+  actions, frontend environment probes, source titles, URLs, provider profile
+  labels, local paths, source content, prompts, credentials, cookies, or
+  session material;
 - older item rows may have `NULL` Telegram context metadata because there is no
   background backfill; mutable Telegram metadata added after ingest, such as
   reactions on already-observed messages, is not backfilled by duplicate
@@ -337,12 +355,15 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 5. `src-tauri/src/takeout_import/raw_parse.rs`
 6. `src-tauri/src/analysis/`
 7. `src-tauri/src/llm/`
-8. `src/routes/analysis/+page.svelte`
-9. `src/lib/components/analysis/`
-10. `src/routes/settings/+page.svelte`
-11. `src/routes/sources/+page.svelte`
-12. `src-tauri/src/error.rs`
-13. `src-tauri/src/migrations.rs`
+8. `src-tauri/src/diagnostics/`
+9. `src/routes/analysis/+page.svelte`
+10. `src/lib/components/analysis/`
+11. `src/routes/settings/+page.svelte`
+12. `src/routes/diagnostics/+page.svelte`
+13. `src/lib/diagnostics-view-model.ts`
+14. `src/routes/sources/+page.svelte`
+15. `src-tauri/src/error.rs`
+16. `src-tauri/src/migrations.rs`
 
 Related deep dive: `docs/takeout-source-import.md`.
 

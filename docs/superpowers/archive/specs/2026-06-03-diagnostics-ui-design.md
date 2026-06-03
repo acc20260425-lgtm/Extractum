@@ -1,5 +1,9 @@
 # Diagnostics UI Design
 
+> Historical design record. The Diagnostics UI shipped on 2026-06-03; current
+> behavior is summarized in root docs such as `docs/project.md`,
+> `docs/design-document.md`, and `docs/architecture-deep-dive.md`.
+
 ## Goal
 
 Add a frontend surface for the existing backend `get_diagnostic_summary` Tauri command.
