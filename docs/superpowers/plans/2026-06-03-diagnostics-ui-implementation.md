@@ -839,7 +839,7 @@ git commit -m "feat: add diagnostics view model helpers"
 **Files:**
 - Create: `src/lib/diagnostics-route-contract.test.ts`
 
-- [ ] **Step 1: Write the failing production-source contract tests**
+- [x] **Step 1: Write the failing production-source contract tests**
 
 Create `src/lib/diagnostics-route-contract.test.ts`:
 
@@ -925,13 +925,13 @@ describe("diagnostics frontend source contracts", () => {
 });
 ```
 
-- [ ] **Step 2: Run source contract tests to verify they fail**
+- [x] **Step 2: Run source contract tests to verify they fail**
 
 Run: `npm.cmd run test -- src/lib/diagnostics-route-contract.test.ts`
 
 Expected: FAIL because the diagnostics route and diagnostics table component do not exist yet, and navigation lacks `Diagnostics`.
 
-- [ ] **Step 3: Commit the failing contract tests only if your workflow records red tests**
+- [x] **Step 3: Commit the failing contract tests only if your workflow records red tests**
 
 If the implementation session keeps red tests in commits, run:
 
