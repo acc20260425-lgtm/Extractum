@@ -192,11 +192,11 @@
 
   <div class="page-stack">
     <section class="desk-panel account-catalog">
-      <div class="panel-header">
-        <div class="panel-header-copy">
-          <span class="page-eyebrow">Workspace access</span>
-          <h2>Configured accounts</h2>
-          <p>Open auth, check runtime state, and keep sync-capable accounts healthy.</p>
+        <div class="panel-header">
+          <div class="panel-header-copy">
+          <span class="page-eyebrow">Telegram accounts</span>
+          <h2>Telegram accounts</h2>
+          <p>Open Telegram auth, check runtime state, and keep sync-capable identities healthy.</p>
         </div>
         <div class="panel-header-actions">
           <Badge variant="neutral">{accounts.length} total</Badge>
@@ -256,7 +256,16 @@
       {/if}
     </section>
 
-    <YoutubeSettingsPanel />
+    <section class="desk-panel youtube-access-shell">
+      <div class="panel-header">
+        <div class="panel-header-copy">
+          <span class="page-eyebrow">YouTube access</span>
+          <h2>YouTube access</h2>
+          <p>Sync policy lives with cookies and auth state, separately from Telegram identities.</p>
+        </div>
+      </div>
+      <YoutubeSettingsPanel embedded />
+    </section>
   </div>
 
   <DesktopDialog

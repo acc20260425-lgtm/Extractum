@@ -24,6 +24,8 @@
     | "retryBackoffMs"
     | "stopAfterConsecutiveFailures";
 
+  let { embedded = false } = $props();
+
   let settings = $state<YoutubeSettings | null>(null);
   let draft = $state<YoutubeSettings>(defaultSettings());
   let authStatus = $state<YoutubeAuthStatus | null>(null);
@@ -165,22 +167,29 @@
   });
 </script>
 
-<section class="desk-panel desk-panel-subtle youtube-settings-panel">
-  <div class="panel-header">
-    <div class="panel-header-copy">
-      <span class="page-eyebrow">YouTube</span>
-      <h2>Auth and sync</h2>
+<section class="desk-panel desk-panel-subtle youtube-settings-panel" class:embedded>
+  {#if !embedded}
+    <div class="panel-header">
+      <div class="panel-header-copy">
+        <span class="page-eyebrow">YouTube</span>
+        <h2>Auth and sync</h2>
+      </div>
+      <div class="status-strip">
+        <Badge variant={authBadgeVariant}>{authStatus?.message ?? "Loading"}</Badge>
+      </div>
     </div>
-    <div class="status-strip">
+  {:else}
+    <div class="status-strip embedded-status">
       <Badge variant={authBadgeVariant}>{authStatus?.message ?? "Loading"}</Badge>
     </div>
-  </div>
+  {/if}
 
   {#if panelStatus}
     <StatusMessage tone={statusTone}>{panelStatus}</StatusMessage>
   {/if}
 
-  <div class="youtube-section">
+  <section class="youtube-auth-section" aria-label="YouTube authentication">
+    <h3>Authentication</h3>
     <CheckboxRow
       title="Enable YouTube auth"
       description={authStatus?.hasCookies ? "Cookies stored" : "No cookies configured"}
@@ -235,125 +244,135 @@
         </div>
       {/if}
     </div>
-  </div>
+  </section>
 
   <div class="desk-divider"></div>
 
-  <div class="settings-fields">
-    <label>Preferred captions language
-      <Input
-        type="text"
-        value={draft.preferredCaptionsLanguage}
-        placeholder="original"
-        disabled={loading || savingSettings}
-        spellcheck={false}
-        max="32"
-        oninput={(event) =>
-          (draft = {
-            ...draft,
-            preferredCaptionsLanguage: (event.currentTarget as HTMLInputElement).value,
-          })}
-      />
-    </label>
+  <section class="youtube-sync-policy-section" aria-label="YouTube sync policy">
+    <h3>Sync policy</h3>
+    <div class="settings-fields">
+      <label>Preferred captions language
+        <Input
+          type="text"
+          value={draft.preferredCaptionsLanguage}
+          placeholder="original"
+          disabled={loading || savingSettings}
+          spellcheck={false}
+          max="32"
+          oninput={(event) =>
+            (draft = {
+              ...draft,
+              preferredCaptionsLanguage: (event.currentTarget as HTMLInputElement).value,
+            })}
+        />
+      </label>
 
-    <label>Delay between requests
-      <Input
-        type="number"
-        value={draft.delayBetweenRequestsMs}
-        min="0"
-        max="60000"
-        step="100"
-        disabled={loading || savingSettings}
-        oninput={(event) => updateNumber("delayBetweenRequestsMs", event)}
-      />
-      <span class="field-hint">0 means no deliberate delay.</span>
-    </label>
+      <label>Delay between requests
+        <Input
+          type="number"
+          value={draft.delayBetweenRequestsMs}
+          min="0"
+          max="60000"
+          step="100"
+          disabled={loading || savingSettings}
+          oninput={(event) => updateNumber("delayBetweenRequestsMs", event)}
+        />
+        <span class="field-hint">0 means no deliberate delay.</span>
+      </label>
 
-    <label>Max parallel video syncs
-      <Input
-        type="number"
-        value={draft.maxParallelVideoSyncs}
-        min="1"
-        max="4"
-        step="1"
-        disabled={loading || savingSettings}
-        oninput={(event) => updateNumber("maxParallelVideoSyncs", event)}
-      />
-    </label>
+      <label>Max parallel video syncs
+        <Input
+          type="number"
+          value={draft.maxParallelVideoSyncs}
+          min="1"
+          max="4"
+          step="1"
+          disabled={loading || savingSettings}
+          oninput={(event) => updateNumber("maxParallelVideoSyncs", event)}
+        />
+      </label>
 
-    <label>Max parallel comment syncs
-      <Input
-        type="number"
-        value={draft.maxParallelCommentSyncs}
-        min="1"
-        max="2"
-        step="1"
-        disabled={loading || savingSettings}
-        oninput={(event) => updateNumber("maxParallelCommentSyncs", event)}
-      />
-    </label>
+      <label>Max parallel comment syncs
+        <Input
+          type="number"
+          value={draft.maxParallelCommentSyncs}
+          min="1"
+          max="2"
+          step="1"
+          disabled={loading || savingSettings}
+          oninput={(event) => updateNumber("maxParallelCommentSyncs", event)}
+        />
+      </label>
 
-    <label>Daily soft limit
-      <Input
-        type="number"
-        value={draft.dailySoftLimit}
-        min="0"
-        max="10000"
-        step="1"
-        disabled={loading || savingSettings}
-        oninput={(event) => updateNumber("dailySoftLimit", event)}
-      />
-      <span class="field-hint">0 means no soft limit.</span>
-    </label>
+      <label>Daily soft limit
+        <Input
+          type="number"
+          value={draft.dailySoftLimit}
+          min="0"
+          max="10000"
+          step="1"
+          disabled={loading || savingSettings}
+          oninput={(event) => updateNumber("dailySoftLimit", event)}
+        />
+        <span class="field-hint">0 means no soft limit.</span>
+      </label>
 
-    <label>Retry backoff
-      <Input
-        type="number"
-        value={draft.retryBackoffMs}
-        min="0"
-        max="300000"
-        step="100"
-        disabled={loading || savingSettings}
-        oninput={(event) => updateNumber("retryBackoffMs", event)}
-      />
-      <span class="field-hint">0 means no wait before retry.</span>
-    </label>
+      <label>Retry backoff
+        <Input
+          type="number"
+          value={draft.retryBackoffMs}
+          min="0"
+          max="300000"
+          step="100"
+          disabled={loading || savingSettings}
+          oninput={(event) => updateNumber("retryBackoffMs", event)}
+        />
+        <span class="field-hint">0 means no wait before retry.</span>
+      </label>
 
-    <label>Stop after consecutive failures
-      <Input
-        type="number"
-        value={draft.stopAfterConsecutiveFailures}
-        min="1"
-        max="50"
-        step="1"
-        disabled={loading || savingSettings}
-        oninput={(event) => updateNumber("stopAfterConsecutiveFailures", event)}
-      />
-    </label>
-  </div>
+      <label>Stop after consecutive failures
+        <Input
+          type="number"
+          value={draft.stopAfterConsecutiveFailures}
+          min="1"
+          max="50"
+          step="1"
+          disabled={loading || savingSettings}
+          oninput={(event) => updateNumber("stopAfterConsecutiveFailures", event)}
+        />
+      </label>
+    </div>
 
-  <CheckboxRow
-    title="Pause on auth challenge"
-    checked={draft.pauseOnAuthChallenge}
-    disabled={loading || savingSettings}
-    onchange={(event) => updateBoolean("pauseOnAuthChallenge", event)}
-  />
+    <CheckboxRow
+      title="Pause on auth challenge"
+      checked={draft.pauseOnAuthChallenge}
+      disabled={loading || savingSettings}
+      onchange={(event) => updateBoolean("pauseOnAuthChallenge", event)}
+    />
 
-  <div class="actions">
-    <Button onclick={saveSettings} disabled={loading || savingSettings}>
-      <Save size={15} aria-hidden="true" />
-      {savingSettings ? "Saving..." : "Save settings"}
-    </Button>
-    <Button variant="secondary" onclick={loadPanel} disabled={loading || savingSettings}>
-      <RefreshCw size={15} aria-hidden="true" />
-      Reload
-    </Button>
-  </div>
+    <div class="actions">
+      <Button onclick={saveSettings} disabled={loading || savingSettings}>
+        <Save size={15} aria-hidden="true" />
+        {savingSettings ? "Saving..." : "Save settings"}
+      </Button>
+      <Button variant="secondary" onclick={loadPanel} disabled={loading || savingSettings}>
+        <RefreshCw size={15} aria-hidden="true" />
+        Reload
+      </Button>
+    </div>
+  </section>
 </section>
 
 <style>
   .youtube-settings-panel {
     gap: 1rem;
+  }
+
+  .youtube-settings-panel.embedded {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .status-strip,
@@ -365,11 +384,27 @@
     flex-wrap: wrap;
   }
 
-  .youtube-section,
+  .youtube-auth-section,
+  .youtube-sync-policy-section,
   .cookie-box {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
+  }
+
+  .youtube-auth-section,
+  .youtube-sync-policy-section {
+    min-width: 0;
+  }
+
+  h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+
+  .embedded-status {
+    justify-content: flex-start;
   }
 
   .cookie-box {

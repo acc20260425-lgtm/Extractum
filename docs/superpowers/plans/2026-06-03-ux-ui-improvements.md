@@ -1092,7 +1092,7 @@ git commit -m "feat(diagnostics): make count tables scannable"
 - Modify: `src/lib/components/settings/youtube-settings-panel.svelte`
 - Test: `src/lib/source-access-placement.test.ts`
 
-- [ ] **Step 1: Write accounts UX contract**
+- [x] **Step 1: Write accounts UX contract**
 
 Create `src/lib/accounts-ux-contract.test.ts`:
 
@@ -1117,7 +1117,7 @@ describe("accounts UX contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the new test and verify it fails**
+- [x] **Step 2: Run the new test and verify it fails**
 
 ```powershell
 npm.cmd run test -- src/lib/accounts-ux-contract.test.ts
@@ -1125,7 +1125,7 @@ npm.cmd run test -- src/lib/accounts-ux-contract.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 3: Rename account panel copy**
+- [x] **Step 3: Rename account panel copy**
 
 In `accounts/+page.svelte`, change the configured accounts panel heading:
 
@@ -1150,7 +1150,7 @@ Add a lightweight wrapper heading before `<YoutubeSettingsPanel />`:
 </section>
 ```
 
-- [ ] **Step 4: Add `embedded` prop to YouTube panel**
+- [x] **Step 4: Add `embedded` prop to YouTube panel**
 
 In `youtube-settings-panel.svelte`, add:
 
@@ -1178,7 +1178,7 @@ Split auth and policy controls:
 </section>
 ```
 
-- [ ] **Step 5: Run tests and check**
+- [x] **Step 5: Run tests and check**
 
 ```powershell
 npm.cmd run test -- src/lib/accounts-ux-contract.test.ts src/lib/source-access-placement.test.ts
@@ -1187,7 +1187,7 @@ npm.cmd run check
 
 Expected: PASS and `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/routes/accounts/+page.svelte src/lib/components/settings/youtube-settings-panel.svelte src/lib/accounts-ux-contract.test.ts src/lib/source-access-placement.test.ts
