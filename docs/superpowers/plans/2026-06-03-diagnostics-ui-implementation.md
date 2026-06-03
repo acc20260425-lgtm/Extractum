@@ -1634,7 +1634,7 @@ git commit -m "feat: add diagnostics route"
 - Test: `src/lib/diagnostics-view-model.test.ts`
 - Test: `src/lib/diagnostics-route-contract.test.ts`
 
-- [ ] **Step 1: Run all targeted diagnostics tests**
+- [x] **Step 1: Run all targeted diagnostics tests**
 
 Run:
 
@@ -1644,7 +1644,7 @@ npm.cmd run test -- src/lib/api/diagnostics.test.ts src/lib/diagnostics-view-mod
 
 Expected: PASS for all three diagnostics test files.
 
-- [ ] **Step 2: Fix any targeted failure at the smallest owner**
+- [x] **Step 2: Fix any targeted failure at the smallest owner**
 
 Use this routing:
 
@@ -1653,7 +1653,7 @@ Use this routing:
 - Source contract failure about navigation: change only `src/routes/+layout.svelte`.
 - Source contract failure about forbidden production strings: change only `src/routes/diagnostics/+page.svelte` or `src/lib/components/diagnostics/DiagnosticCountTable.svelte`.
 
-- [ ] **Step 3: Commit focused fixes if the previous task commits did not already include them**
+- [x] **Step 3: Commit focused fixes if the previous task commits did not already include them**
 
 ```bash
 git add src/lib/api/diagnostics.ts src/lib/types/diagnostics.ts src/lib/diagnostics-view-model.ts src/routes/+layout.svelte src/routes/diagnostics/+page.svelte src/lib/components/diagnostics/DiagnosticCountTable.svelte src/lib/api/diagnostics.test.ts src/lib/diagnostics-view-model.test.ts src/lib/diagnostics-route-contract.test.ts
