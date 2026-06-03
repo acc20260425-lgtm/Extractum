@@ -74,6 +74,8 @@
     workspaceSelection,
   }));
   const hasActiveFilters = $derived(hasActiveCompanionRunsFilter(runsFilter));
+  const hasAnyRuns = $derived(activeRuns.length > 0 || savedRuns.length > 0);
+  const showRunsToolbar = $derived(hasAnyRuns || hasActiveFilters);
 
   function updateFilter(patch: Partial<CompanionRunsFilterState>) {
     onChangeRunsFilter({ ...runsFilter, ...patch });
@@ -102,87 +104,89 @@
 </script>
 
 <section class="run-companion-runs-tab" data-smoke-id="run-companion-runs-panel">
-  <div class="runs-toolbar">
-    <label data-smoke-id="runs-search">
-      <span>Search runs</span>
-      <Input
-        type="search"
-        value={runsFilter.query}
-        placeholder="Search target, template, provider, model, error"
-        ariaLabel="Search runs"
-        oninput={(event) => updateFilter({ query: inputValue(event) })}
-      />
-    </label>
+  {#if showRunsToolbar}
+    <div class="runs-toolbar">
+      <label data-smoke-id="runs-search">
+        <span>Search runs</span>
+        <Input
+          type="search"
+          value={runsFilter.query}
+          placeholder="Search target, template, provider, model, error"
+          ariaLabel="Search runs"
+          oninput={(event) => updateFilter({ query: inputValue(event) })}
+        />
+      </label>
 
-    <div class="segmented" aria-label="Runs scope">
-      <Button size="sm" variant="secondary" selected={runsFilter.scope === "current"} onclick={() => updateFilter({ scope: "current" })}>Current scope</Button>
-      <Button size="sm" variant="secondary" selected={runsFilter.scope === "all"} onclick={() => updateFilter({ scope: "all" })}>All runs</Button>
-    </div>
-
-    <div class="segmented" aria-label="Runs status">
-      <Button size="sm" variant="secondary" selected={runsFilter.status === "all"} onclick={() => updateFilter({ status: "all" })}>All</Button>
-      <Button size="sm" variant="secondary" selected={runsFilter.status === "queued_running"} onclick={() => updateFilter({ status: "queued_running" })}>queued/running</Button>
-      <Button size="sm" variant="secondary" selected={runsFilter.status === "completed"} onclick={() => updateFilter({ status: "completed" })}>Completed</Button>
-      <Button size="sm" variant="secondary" selected={runsFilter.status === "failed"} onclick={() => updateFilter({ status: "failed" })}>Failed</Button>
-      <Button size="sm" variant="secondary" selected={runsFilter.status === "cancelled"} onclick={() => updateFilter({ status: "cancelled" })}>Cancelled</Button>
-    </div>
-
-    <details class="advanced-filters">
-      <summary>Advanced filters</summary>
-      <div class="advanced-filter-grid">
-        <div class="date-row" aria-label="Date range">
-          <label>
-            <span>From</span>
-            <Input
-              type="date"
-              value={runsFilter.dateFrom}
-              ariaLabel="Runs from date"
-              oninput={(event) => updateFilter({ dateFrom: inputValue(event) })}
-            />
-          </label>
-          <label>
-            <span>To</span>
-            <Input
-              type="date"
-              value={runsFilter.dateTo}
-              ariaLabel="Runs to date"
-              oninput={(event) => updateFilter({ dateTo: inputValue(event) })}
-            />
-          </label>
-        </div>
-
-        <div class="meta-row">
-          <Input
-            value={runsFilter.provider}
-            placeholder="Provider"
-            ariaLabel="Provider filter"
-            oninput={(event) => updateFilter({ provider: inputValue(event) })}
-          />
-          <Input
-            value={runsFilter.model}
-            placeholder="Model"
-            ariaLabel="Model filter"
-            oninput={(event) => updateFilter({ model: inputValue(event) })}
-          />
-          <Input
-            value={runsFilter.template}
-            placeholder="Template"
-            ariaLabel="Template filter"
-            oninput={(event) => updateFilter({ template: inputValue(event) })}
-          />
-        </div>
+      <div class="segmented" aria-label="Runs scope">
+        <Button size="sm" variant="secondary" selected={runsFilter.scope === "current"} onclick={() => updateFilter({ scope: "current" })}>Current scope</Button>
+        <Button size="sm" variant="secondary" selected={runsFilter.scope === "all"} onclick={() => updateFilter({ scope: "all" })}>All runs</Button>
       </div>
-    </details>
 
-    <div class="refresh-row">
-      <Button size="sm" variant="secondary" onclick={onRefreshActiveRuns}>
-        <RefreshCw size={14} aria-hidden="true" /> Active
-      </Button>
-      <Button size="sm" variant="secondary" onclick={onRefreshRuns}>
-        <RefreshCw size={14} aria-hidden="true" /> Saved
-      </Button>
+      <div class="segmented" aria-label="Runs status">
+        <Button size="sm" variant="secondary" selected={runsFilter.status === "all"} onclick={() => updateFilter({ status: "all" })}>All</Button>
+        <Button size="sm" variant="secondary" selected={runsFilter.status === "queued_running"} onclick={() => updateFilter({ status: "queued_running" })}>queued/running</Button>
+        <Button size="sm" variant="secondary" selected={runsFilter.status === "completed"} onclick={() => updateFilter({ status: "completed" })}>Completed</Button>
+        <Button size="sm" variant="secondary" selected={runsFilter.status === "failed"} onclick={() => updateFilter({ status: "failed" })}>Failed</Button>
+        <Button size="sm" variant="secondary" selected={runsFilter.status === "cancelled"} onclick={() => updateFilter({ status: "cancelled" })}>Cancelled</Button>
+      </div>
+
+      <details class="advanced-filters" open={hasActiveFilters}>
+        <summary>Advanced filters</summary>
+        <div class="advanced-filter-grid">
+          <div class="date-row" aria-label="Date range">
+            <label>
+              <span>From</span>
+              <Input
+                type="date"
+                value={runsFilter.dateFrom}
+                ariaLabel="Runs from date"
+                oninput={(event) => updateFilter({ dateFrom: inputValue(event) })}
+              />
+            </label>
+            <label>
+              <span>To</span>
+              <Input
+                type="date"
+                value={runsFilter.dateTo}
+                ariaLabel="Runs to date"
+                oninput={(event) => updateFilter({ dateTo: inputValue(event) })}
+              />
+            </label>
+          </div>
+
+          <div class="meta-row">
+            <Input
+              value={runsFilter.provider}
+              placeholder="Provider"
+              ariaLabel="Provider filter"
+              oninput={(event) => updateFilter({ provider: inputValue(event) })}
+            />
+            <Input
+              value={runsFilter.model}
+              placeholder="Model"
+              ariaLabel="Model filter"
+              oninput={(event) => updateFilter({ model: inputValue(event) })}
+            />
+            <Input
+              value={runsFilter.template}
+              placeholder="Template"
+              ariaLabel="Template filter"
+              oninput={(event) => updateFilter({ template: inputValue(event) })}
+            />
+          </div>
+        </div>
+      </details>
+
+      <div class="refresh-row">
+        <Button size="sm" variant="secondary" onclick={onRefreshActiveRuns}>
+          <RefreshCw size={14} aria-hidden="true" /> Active
+        </Button>
+        <Button size="sm" variant="secondary" onclick={onRefreshRuns}>
+          <RefreshCw size={14} aria-hidden="true" /> Saved
+        </Button>
+      </div>
     </div>
-  </div>
+  {/if}
 
   {#if loadingActiveRuns || loadingRuns}
     <EmptyState description="Loading analysis report runs..." />
@@ -193,7 +197,18 @@
         <Button size="sm" variant="secondary" onclick={() => onChangeRunsFilter(runsFilterDefaults())}>Clear filters</Button>
       </div>
     {:else}
-      <EmptyState description="No analysis report runs yet." />
+      <div class="runs-empty-guidance">
+        <EmptyState description="Run a report to create the first saved workspace." />
+        <p>Completed reports will appear here with provider, model, snapshot, and error metadata.</p>
+        <div class="refresh-row">
+          <Button size="sm" variant="secondary" onclick={onRefreshActiveRuns}>
+            <RefreshCw size={14} aria-hidden="true" /> Active
+          </Button>
+          <Button size="sm" variant="secondary" onclick={onRefreshRuns}>
+            <RefreshCw size={14} aria-hidden="true" /> Saved
+          </Button>
+        </div>
+      </div>
     {/if}
   {:else}
     <ul class="runs-list">
@@ -304,6 +319,19 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.65rem;
+  }
+
+  .runs-empty-guidance {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  .runs-empty-guidance p {
+    margin: 0;
   }
 
   .runs-list li {

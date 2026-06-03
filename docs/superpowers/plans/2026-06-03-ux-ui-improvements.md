@@ -735,7 +735,7 @@ git commit -m "feat(analysis): improve source item reading"
 - Test: `src/lib/analysis-priority-ux-contract.test.ts`
 - Test: `src/lib/analysis-run-companion-tabs.test.ts`
 
-- [ ] **Step 1: Add derived toolbar visibility**
+- [x] **Step 1: Add derived toolbar visibility**
 
 In `run-companion-runs-tab.svelte`, add:
 
@@ -744,7 +744,7 @@ const hasAnyRuns = $derived(activeRuns.length > 0 || savedRuns.length > 0);
 const showRunsToolbar = $derived(hasAnyRuns || hasActiveFilters);
 ```
 
-- [ ] **Step 2: Hide filters until they are useful**
+- [x] **Step 2: Hide filters until they are useful**
 
 Wrap the current `<div class="runs-toolbar">...</div>`:
 
@@ -762,7 +762,7 @@ Set advanced filters open only when filters are active:
 <details class="advanced-filters" open={hasActiveFilters}>
 ```
 
-- [ ] **Step 3: Improve the no-runs empty state**
+- [x] **Step 3: Improve the no-runs empty state**
 
 Replace the no-filter empty state with:
 
@@ -781,7 +781,7 @@ Replace the no-filter empty state with:
 </div>
 ```
 
-- [ ] **Step 4: Add empty guidance CSS**
+- [x] **Step 4: Add empty guidance CSS**
 
 ```css
 .runs-empty-guidance {
@@ -798,7 +798,7 @@ Replace the no-filter empty state with:
 }
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```powershell
 npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "keeps run filters progressive when no runs exist"
@@ -807,7 +807,7 @@ npm.cmd run test -- src/lib/analysis-run-companion-tabs.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Run manual Analysis smoke**
+- [x] **Step 6: Run manual Analysis smoke**
 
 With the app running, run:
 
@@ -817,7 +817,7 @@ npm.cmd run smoke:analysis
 
 Expected: PASS and no browser-side failure for `/analysis`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src/lib/components/analysis/run-companion-runs-tab.svelte src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-run-companion-tabs.test.ts
