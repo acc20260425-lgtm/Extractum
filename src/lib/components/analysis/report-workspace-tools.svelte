@@ -27,6 +27,9 @@
   } = $props();
 
   const exportReasonId = "notebooklm-export-disabled-reason";
+  const notebookLmExportLabel = $derived(exportingNotebookLm ? "Exporting..." : "Export for NotebookLM");
+  const templateEditorLabel = $derived(templateEditorOpen ? "Hide templates" : "Edit templates");
+  const groupEditorLabel = $derived(groupEditorOpen ? "Hide groups" : "Edit groups");
 </script>
 
 <section
@@ -47,16 +50,19 @@
         <Button
           type="button"
           variant="secondary"
+          size={compact ? "sm" : "md"}
+          iconOnly={compact}
           onclick={onOpenNotebookLmExport}
           disabled={!canExportNotebookLm}
-          ariaDescribedby={exportDisabledReason ? exportReasonId : undefined}
+          ariaLabel={compact ? notebookLmExportLabel : undefined}
+          ariaDescribedby={!compact && exportDisabledReason ? exportReasonId : undefined}
           smokeId="notebooklm-export-button"
-          title={exportDisabledReason ?? undefined}
+          title={exportDisabledReason ?? (compact ? notebookLmExportLabel : undefined)}
         >
           <Download size={15} aria-hidden="true" />
-          {exportingNotebookLm ? "Exporting..." : "Export for NotebookLM"}
+          {#if !compact}{notebookLmExportLabel}{/if}
         </Button>
-        {#if exportDisabledReason}
+        {#if !compact && exportDisabledReason}
           <span id={exportReasonId} class="workspace-tool-helper" data-smoke-id="notebooklm-export-disabled-reason">
             {exportDisabledReason}
           </span>
@@ -67,21 +73,29 @@
     <Button
       type="button"
       variant="secondary"
+      size={compact ? "sm" : "md"}
+      iconOnly={compact}
+      ariaLabel={compact ? templateEditorLabel : undefined}
       ariaExpanded={templateEditorOpen}
+      title={compact ? templateEditorLabel : undefined}
       onclick={onToggleTemplateEditor}
     >
       <SquarePen size={15} aria-hidden="true" />
-      {templateEditorOpen ? "Hide templates" : "Edit templates"}
+      {#if !compact}{templateEditorLabel}{/if}
     </Button>
 
     <Button
       type="button"
       variant="secondary"
+      size={compact ? "sm" : "md"}
+      iconOnly={compact}
+      ariaLabel={compact ? groupEditorLabel : undefined}
       ariaExpanded={groupEditorOpen}
+      title={compact ? groupEditorLabel : undefined}
       onclick={onToggleGroupEditor}
     >
       <Folder size={15} aria-hidden="true" />
-      {groupEditorOpen ? "Hide groups" : "Edit groups"}
+      {#if !compact}{groupEditorLabel}{/if}
     </Button>
   </div>
 </section>

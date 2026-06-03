@@ -31,8 +31,9 @@ describe("analysis workspace tools component contract", () => {
     );
     expect(reportWorkspaceToolsSource).toContain('id="notebooklm-export-disabled-reason"');
     expect(reportWorkspaceToolsSource).toContain(
-      "ariaDescribedby={exportDisabledReason ? exportReasonId : undefined}",
+      "ariaDescribedby={!compact && exportDisabledReason ? exportReasonId : undefined}",
     );
+    expect(reportWorkspaceToolsSource).toContain("{#if !compact && exportDisabledReason}");
     expect(reportWorkspaceToolsSource).toContain("{exportDisabledReason}");
     expect(reportWorkspaceToolsSource).toContain('class="workspace-tool-helper"');
   });

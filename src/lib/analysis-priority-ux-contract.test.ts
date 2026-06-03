@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import reportCanvasSource from "./components/analysis/report-canvas.svelte?raw";
+import reportSourceSurfaceSource from "./components/analysis/report-source-surface.svelte?raw";
 import reportWorkspaceToolsSource from "./components/analysis/report-workspace-tools.svelte?raw";
 import sourceSwitcherPanelSource from "./components/analysis/source-switcher-panel.svelte?raw";
+import sourceReaderHeaderSource from "./components/analysis/source-reader-header.svelte?raw";
 import sourceActivityViewSource from "./components/analysis/source-activity-view.svelte?raw";
 import universalItemsViewSource from "./components/analysis/universal-items-view.svelte?raw";
 import runsTabSource from "./components/analysis/run-companion-runs-tab.svelte?raw";
@@ -13,9 +15,21 @@ describe("analysis priority UX contract", () => {
     expect(reportCanvasSource).toContain('aria-label="Analysis context"');
     expect(reportCanvasSource).toContain('class="canvas-actions-row"');
     expect(reportCanvasSource).toContain("showInlineWorkspaceTools");
+    expect(reportCanvasSource).toContain('sourceHeaderCompact={canvasMode === "source" && sourceViewBasis === "live_source"}');
+    expect(reportCanvasSource).toContain("padding: 0.65rem 0.75rem");
+    expect(reportCanvasSource).toContain("align-items: center");
+    expect(reportSourceSurfaceSource).toContain("sourceHeaderCompact = false");
+    expect(reportSourceSurfaceSource).toContain("compact={sourceHeaderCompact}");
     expect(reportWorkspaceToolsSource).toContain("compact = false");
     expect(reportWorkspaceToolsSource).toContain("class:compact={compact}");
     expect(reportWorkspaceToolsSource).toContain('aria-label="Workspace actions"');
+    expect(reportWorkspaceToolsSource).toContain('size={compact ? "sm" : "md"}');
+    expect(reportWorkspaceToolsSource).toContain("iconOnly={compact}");
+    expect(reportWorkspaceToolsSource).toContain("ariaLabel={compact ? notebookLmExportLabel : undefined}");
+    expect(sourceReaderHeaderSource).toContain("compact = false");
+    expect(sourceReaderHeaderSource).toContain("class:compact={compact}");
+    expect(sourceReaderHeaderSource).toContain('class="source-reader-compact-meta"');
+    expect(sourceReaderHeaderSource).toContain(".source-reader-header.compact");
   });
 
   it("keeps the source switcher primarily focused on source selection", () => {

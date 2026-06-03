@@ -9,6 +9,7 @@
   const allSourcesValue = "__all_sources__";
 
   let {
+    compact = false,
     title,
     subtitle,
     smokeId = "source-browser-header",
@@ -23,6 +24,7 @@
     onBackToRunSnapshot,
     onChangeSelectedSourceId,
   }: {
+    compact?: boolean;
     title: string;
     subtitle: string;
     smokeId?: string;
@@ -63,10 +65,14 @@
   });
 </script>
 
-<header class="source-reader-header" aria-label={title} data-smoke-id={smokeId}>
+<header class="source-reader-header" class:compact={compact} aria-label={title} data-smoke-id={smokeId}>
   <div class="reader-title">
     <span class="eyebrow">{surfaceLabel}</span>
-    <p>{subtitle}</p>
+    {#if compact}
+      <span class="source-reader-compact-meta">{subtitle}</span>
+    {:else}
+      <p class="reader-subtitle">{subtitle}</p>
+    {/if}
   </div>
 
   <div class="reader-actions">
@@ -109,8 +115,23 @@
     background: var(--panel);
   }
 
+  .source-reader-header.compact {
+    align-items: center;
+    padding: 0.15rem 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
   .reader-title {
     min-width: 0;
+  }
+
+  .source-reader-header.compact .reader-title {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
   }
 
   .eyebrow {
@@ -121,10 +142,16 @@
     color: var(--muted);
   }
 
-  p {
+  .reader-subtitle {
     margin: 0.2rem 0 0;
     color: var(--muted);
     line-height: 1.45;
+  }
+
+  .source-reader-compact-meta {
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.35;
   }
 
   .reader-actions {
@@ -133,6 +160,10 @@
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
+  }
+
+  .source-reader-header.compact .reader-actions {
+    gap: 0.4rem;
   }
 
   label {
@@ -147,6 +178,10 @@
   @media (max-width: 760px) {
     .source-reader-header {
       flex-direction: column;
+    }
+
+    .source-reader-header.compact {
+      align-items: stretch;
     }
 
     .reader-actions {

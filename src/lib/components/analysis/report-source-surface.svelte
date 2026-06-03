@@ -54,6 +54,7 @@
   import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
 
   type Props = {
+    sourceHeaderCompact?: boolean;
     currentRun: AnalysisRunDetail | null;
     sourceViewBasis: SourceViewBasis;
     snapshotAvailability: RunSnapshotAvailability;
@@ -123,6 +124,7 @@
   };
 
   let {
+    sourceHeaderCompact = false,
     currentRun,
     sourceViewBasis,
     snapshotAvailability,
@@ -439,6 +441,7 @@
     {/if}
   {:else}
     <SourceReaderHeader
+      compact={sourceHeaderCompact}
       smokeId="source-browser-header"
       title={currentRun && sourceViewBasis === "live_source" ? "Live source" : displayScopeTitle}
       surfaceLabel={readerSurfaceLabel}

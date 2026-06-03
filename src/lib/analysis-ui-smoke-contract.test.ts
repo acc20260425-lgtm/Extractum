@@ -117,7 +117,8 @@ describe("analysis UI smoke harness contract", () => {
   it("associates source-group NotebookLM disabled reason through aria-describedby", () => {
     expect(reportWorkspaceToolsSource).toContain("const exportReasonId = \"notebooklm-export-disabled-reason\"");
     expect(reportWorkspaceToolsSource).toContain('smokeId="notebooklm-export-button"');
-    expect(reportWorkspaceToolsSource).toContain("ariaDescribedby={exportDisabledReason ? exportReasonId : undefined}");
+    expect(reportWorkspaceToolsSource).toContain("ariaDescribedby={!compact && exportDisabledReason ? exportReasonId : undefined}");
+    expect(reportWorkspaceToolsSource).toContain("{#if !compact && exportDisabledReason}");
     expect(reportWorkspaceToolsSource).toContain("id={exportReasonId}");
     expect(reportWorkspaceToolsSource).toContain('data-smoke-id="notebooklm-export-disabled-reason"');
     expect(reportCanvasSource).toContain("YouTube source-group NotebookLM export is not implemented yet.");

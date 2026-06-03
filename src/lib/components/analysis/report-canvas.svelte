@@ -426,6 +426,7 @@
           type="button"
           role="tab"
           variant="secondary"
+          size="sm"
           selected={canvasMode === "report"}
           ariaSelected={canvasMode === "report"}
           smokeId="report-canvas-mode-report"
@@ -437,6 +438,7 @@
           type="button"
           role="tab"
           variant="secondary"
+          size="sm"
           selected={canvasMode === "source"}
           ariaSelected={canvasMode === "source"}
           smokeId="report-canvas-mode-source"
@@ -596,6 +598,7 @@
     {/if}
   {:else}
     <ReportSourceSurface
+      sourceHeaderCompact={canvasMode === "source" && sourceViewBasis === "live_source"}
       {workspaceSelection}
       {currentRun}
       {sourceViewBasis}
@@ -686,31 +689,35 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: 0.65rem;
   }
 
   .canvas-context-bar {
     display: flex;
     justify-content: space-between;
-    gap: 0.9rem;
-    align-items: flex-start;
-    padding: 1rem;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.65rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--panel);
-    box-shadow: var(--shadow);
+    background: color-mix(in srgb, var(--panel) 72%, transparent);
+    box-shadow: none;
   }
 
   .canvas-actions-row {
     display: flex;
     gap: 0.55rem;
-    align-items: flex-start;
+    align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
   }
 
   .canvas-title {
     min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    flex-wrap: wrap;
   }
 
   .canvas-title h2,
@@ -718,17 +725,22 @@
     margin: 0;
   }
 
+  .canvas-title h2 {
+    font-size: 1.05rem;
+    line-height: 1.25;
+  }
+
   .canvas-title p {
-    margin-top: 0.3rem;
     color: var(--muted);
-    line-height: 1.45;
+    font-size: 0.86rem;
+    line-height: 1.35;
   }
 
   .canvas-tabs {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
-    padding: 0.2rem;
+    padding: 0.15rem;
     border-radius: 8px;
     background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
   }
@@ -748,7 +760,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 0.2rem;
   }
 
   @media (max-width: 720px) {

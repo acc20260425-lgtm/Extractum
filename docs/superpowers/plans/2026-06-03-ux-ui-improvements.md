@@ -1267,6 +1267,50 @@ If no fixes were needed, do not create an empty commit.
 
 ---
 
+### Task 11: Correct Analysis Workspace Live Review Mismatch
+
+**Files:**
+- Modify: `src/lib/analysis-priority-ux-contract.test.ts`
+- Modify: `src/lib/components/analysis/report-canvas.svelte`
+- Modify: `src/lib/components/analysis/report-source-surface.svelte`
+- Modify: `src/lib/components/analysis/source-reader-header.svelte`
+- Modify: `src/lib/components/analysis/report-workspace-tools.svelte`
+
+- [x] **Step 1: Capture the mismatch in the Analysis UX contract**
+
+Add contract assertions that require `ReportCanvas` to pass a compact source header into the source surface, `ReportSourceSurface` to forward that state to `SourceReaderHeader`, and compact workspace tools to use small icon-only actions with accessible labels.
+
+- [x] **Step 2: Verify the new contract fails before code changes**
+
+Run:
+
+```powershell
+npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts -t "keeps the report canvas top chrome compact and action-oriented"
+```
+
+Expected: FAIL because live source mode still renders a framed `SourceReaderHeader` and text-heavy workspace actions.
+
+- [x] **Step 3: Compact the real Analysis workspace chrome**
+
+Update the live source header path so source mode renders `SourceReaderHeader` as inline metadata instead of a second card. Reduce `canvas-context-bar` spacing and change compact workspace tools to icon-only buttons with `aria-label` and `title`.
+
+- [x] **Step 4: Re-check the running Tauri app**
+
+Inspect `/analysis` in the running app and confirm the real `canvas-context-bar` no longer wraps action text and the source header has no border, shadow, or panel background.
+
+- [x] **Step 5: Run focused verification**
+
+Run:
+
+```powershell
+npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts src/lib/analysis-redesign-route-contract.test.ts src/lib/analysis-report-canvas.test.ts src/lib/analysis-source-readers.test.ts src/lib/analysis-workspace-tools.test.ts
+npm.cmd run check
+```
+
+Expected: PASS and `svelte-check found 0 errors and 0 warnings`.
+
+---
+
 ## Execution Notes
 
 - Commit after every task.
