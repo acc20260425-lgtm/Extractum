@@ -31,7 +31,7 @@
 - Create: `src/lib/api/diagnostics.ts`
 - Create: `src/lib/api/diagnostics.test.ts`
 
-- [ ] **Step 1: Write the failing API wrapper test**
+- [x] **Step 1: Write the failing API wrapper test**
 
 Create `src/lib/api/diagnostics.test.ts`:
 
@@ -228,13 +228,13 @@ describe("diagnostics api wrapper", () => {
 });
 ```
 
-- [ ] **Step 2: Run the API test to verify it fails**
+- [x] **Step 2: Run the API test to verify it fails**
 
 Run: `npm.cmd run test -- src/lib/api/diagnostics.test.ts`
 
 Expected: FAIL because `src/lib/api/diagnostics.ts` and `src/lib/types/diagnostics.ts` do not exist yet.
 
-- [ ] **Step 3: Add DTO types**
+- [x] **Step 3: Add DTO types**
 
 Create `src/lib/types/diagnostics.ts`:
 
@@ -399,7 +399,7 @@ export interface DiagnosticPrivacyInfo {
 }
 ```
 
-- [ ] **Step 4: Add the narrow API wrapper**
+- [x] **Step 4: Add the narrow API wrapper**
 
 Create `src/lib/api/diagnostics.ts`:
 
@@ -412,13 +412,13 @@ export function loadDiagnosticSummary() {
 }
 ```
 
-- [ ] **Step 5: Run the API wrapper test**
+- [x] **Step 5: Run the API wrapper test**
 
 Run: `npm.cmd run test -- src/lib/api/diagnostics.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit API boundary**
+- [x] **Step 6: Commit API boundary**
 
 ```bash
 git add src/lib/types/diagnostics.ts src/lib/api/diagnostics.ts src/lib/api/diagnostics.test.ts
