@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { LayoutDashboard, Menu, Moon, Settings, Sun, UserRound } from "@lucide/svelte";
+  import { LayoutDashboard, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import AppSidebar from "$lib/components/app-sidebar.svelte";
@@ -64,6 +64,13 @@
         pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
     },
     {
+      href: "/diagnostics",
+      label: "Diagnostics",
+      caption: "Local health",
+      icon: ShieldCheck,
+      active: (pathname: string) => pathname.startsWith("/diagnostics"),
+    },
+    {
       href: "/settings",
       label: "Settings",
       caption: "Models and app",
@@ -113,6 +120,8 @@
                 Analysis workspace
               {:else if page.url.pathname.startsWith("/accounts") || page.url.pathname.startsWith("/auth")}
                 Source access
+              {:else if page.url.pathname.startsWith("/diagnostics")}
+                Diagnostics
               {:else if page.url.pathname.startsWith("/settings")}
                 Settings
               {:else}

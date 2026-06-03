@@ -950,7 +950,7 @@ If the implementation session does not commit red tests, keep this file staged o
 - Modify: `src/routes/+layout.svelte`
 - Test: `src/lib/diagnostics-route-contract.test.ts`
 
-- [ ] **Step 1: Add `ShieldCheck` to the layout imports**
+- [x] **Step 1: Add `ShieldCheck` to the layout imports**
 
 Modify the lucide import in `src/routes/+layout.svelte`:
 
@@ -958,7 +958,7 @@ Modify the lucide import in `src/routes/+layout.svelte`:
 import { LayoutDashboard, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
 ```
 
-- [ ] **Step 2: Add Diagnostics to `navItems`**
+- [x] **Step 2: Add Diagnostics to `navItems`**
 
 Insert this entry between Accounts and Settings in `src/routes/+layout.svelte`:
 
@@ -972,7 +972,7 @@ Insert this entry between Accounts and Settings in `src/routes/+layout.svelte`:
     },
 ```
 
-- [ ] **Step 3: Add the app topbar route label**
+- [x] **Step 3: Add the app topbar route label**
 
 Update the topbar route label branch in `src/routes/+layout.svelte` so the diagnostics case is before Settings:
 
@@ -990,13 +990,13 @@ Update the topbar route label branch in `src/routes/+layout.svelte` so the diagn
               {/if}
 ```
 
-- [ ] **Step 4: Run the navigation contract test**
+- [x] **Step 4: Run the navigation contract test**
 
 Run: `npm.cmd run test -- src/lib/diagnostics-route-contract.test.ts`
 
 Expected: still FAIL because the diagnostics route and diagnostics table component are not created yet, but the navigation assertions should pass once the missing imports are resolved in later tasks.
 
-- [ ] **Step 5: Commit navigation when paired with passing route contracts**
+- [x] **Step 5: Commit navigation when paired with passing route contracts**
 
 Do not commit this task by itself if `src/lib/diagnostics-route-contract.test.ts` is still failing. Commit it together with Task 6 after the full contract test passes.
 
