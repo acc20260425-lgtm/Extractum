@@ -202,17 +202,14 @@ export const analysisWorkspaceParitySteps = [
     },
   },
   {
-    name: "workspace-parity.source-group-disabled-export",
+    name: "workspace-parity.telegram-source-group-export",
     async run(ctx) {
       await navigateAnalysis(ctx);
       await selectGroup(ctx, fixtureLabels.telegramSourceGroup);
       await switchCanvasMode(ctx, "report");
       await assertWorkspaceToolsAboveBody(ctx, "analysis-report-setup");
-      await assertDisabledWithReason(
-        ctx.socket,
-        "Export for NotebookLM",
-        "Source-group NotebookLM export is not implemented yet.",
-      );
+      await openNotebookLmExportDialog(ctx);
+      await closeDialog(ctx);
       await assertDrawer(ctx, "Edit templates", "template-editor-drawer");
       await assertDrawer(ctx, "Edit groups", "source-group-editor-drawer");
       await closeTransientUi(ctx);
@@ -235,11 +232,11 @@ export const analysisWorkspaceParitySteps = [
     },
   },
   {
-    name: "workspace-parity.opened-source-group-run-disabled-export",
+    name: "workspace-parity.opened-source-group-run-tools",
     async run(ctx) {
       await navigateAnalysis(ctx);
       await openRun(ctx, fixtureLabels.groupSnapshotRun);
-      await assertSourceGroupNotebookLmExportUnavailable(ctx);
+      await assertOpenedRunNotebookLmExportContract(ctx);
     },
   },
   {
@@ -888,23 +885,6 @@ async function assertNoNotebookLmExportDialog(ctx, reason) {
     if (dialog) throw new Error('ASSERT: NotebookLM export dialog opened unexpectedly: ' + ${reasonText});
     return true;
   `);
-}
-
-async function assertSourceGroupNotebookLmExportUnavailable(ctx) {
-  const buttonExists = await executeJs(ctx.socket, `
-    return Boolean(document.querySelector('[data-smoke-id="notebooklm-export-button"]'));
-  `);
-
-  if (buttonExists) {
-    await assertDisabledWithReason(
-      ctx.socket,
-      "Export for NotebookLM",
-      "Source-group NotebookLM export is not implemented yet.",
-    );
-    return;
-  }
-
-  await assertNoNotebookLmExportDialog(ctx, "opened source-group run has no restored currentGroup");
 }
 
 async function assertOpenedRunNotebookLmExportContract(ctx) {

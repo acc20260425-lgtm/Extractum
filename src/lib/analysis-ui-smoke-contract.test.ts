@@ -51,7 +51,7 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("saved-runs-affordance.rows");
     expect(smokeScriptSource).toContain("saved-runs-affordance.missing-legacy");
     expect(smokeScriptSource).toContain("saved-runs-affordance.capture-failed");
-    expect(smokeScriptSource).toContain("workspace-parity.source-group-disabled-export");
+    expect(smokeScriptSource).toContain("workspace-parity.telegram-source-group-export");
     expect(smokeScriptSource).toContain("workspace-parity.opened-single-run-tools");
     expect(smokeScriptSource).toContain("assertOpenedRunNotebookLmExportContract");
     expect(smokeScriptSource).toContain("assertRunRowAffordance");
