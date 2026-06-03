@@ -1008,7 +1008,7 @@ Do not commit this task by itself if `src/lib/diagnostics-route-contract.test.ts
 - Create: `src/lib/components/diagnostics/DiagnosticCountTable.svelte`
 - Test: `src/lib/diagnostics-route-contract.test.ts`
 
-- [ ] **Step 1: Create the diagnostics component directory and table component**
+- [x] **Step 1: Create the diagnostics component directory and table component**
 
 Create `src/lib/components/diagnostics/DiagnosticCountTable.svelte`:
 
@@ -1122,13 +1122,13 @@ Create `src/lib/components/diagnostics/DiagnosticCountTable.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Run Svelte check for the new component**
+- [x] **Step 2: Run Svelte check for the new component**
 
 Run: `npm.cmd run check`
 
 Expected: may still FAIL until the route is created if the source contract test import is present; if `svelte-check` reports a component syntax error, fix the component before moving on.
 
-- [ ] **Step 3: Keep component changes for Task 6**
+- [x] **Step 3: Keep component changes for Task 6**
 
 Do not commit this component by itself while the source contract test still fails on the missing route.
 
