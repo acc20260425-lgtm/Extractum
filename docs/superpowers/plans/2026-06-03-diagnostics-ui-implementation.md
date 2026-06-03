@@ -905,7 +905,11 @@ describe("diagnostics frontend source contracts", () => {
   });
 
   it("keeps privacy fallback tolerant of partial privacy payloads", () => {
+    expect(diagnosticsPageSource).toContain("function privacyLabels");
+    expect(diagnosticsPageSource).toContain("function privacyNote");
     expect(diagnosticsPageSource).toMatch(/summary\.privacy\?\.\s*excludedDataClasses/);
+    expect(diagnosticsPageSource).not.toContain("{@const excludedClasses");
+    expect(diagnosticsPageSource).not.toContain("{@const fallbackNote");
   });
 
   it("adds Diagnostics navigation without moving diagnostics into Settings", () => {
@@ -1413,6 +1417,14 @@ Create `src/routes/diagnostics/+page.svelte` with this structure:
       count: row.count,
     }));
   }
+
+  function privacyLabels(current: DiagnosticSummaryDto) {
+    return privacyExcludedDataClasses(current.privacy?.excludedDataClasses);
+  }
+
+  function privacyNote(current: DiagnosticSummaryDto) {
+    return privacyFallbackNote(current.privacy?.excludedDataClasses);
+  }
 </script>
 
 <section class="page-shell diagnostics-page">
@@ -1494,16 +1506,14 @@ Create `src/routes/diagnostics/+page.svelte` with this structure:
       </SurfaceCard>
 
       <SurfaceCard title="Privacy boundary" meta="Data classes intentionally excluded by backend diagnostics">
-        {@const excludedClasses = privacyExcludedDataClasses(summary.privacy?.excludedDataClasses)}
-        {@const fallbackNote = privacyFallbackNote(summary.privacy?.excludedDataClasses)}
-        {#if excludedClasses.length > 0}
+        {#if privacyLabels(summary).length > 0}
           <div class="privacy-chips">
-            {#each excludedClasses as item (item)}
+            {#each privacyLabels(summary) as item (item)}
               <Badge variant="neutral">{item}</Badge>
             {/each}
           </div>
         {:else}
-          <StatusMessage tone="muted" surface={false}>{fallbackNote}</StatusMessage>
+          <StatusMessage tone="muted" surface={false}>{privacyNote(summary)}</StatusMessage>
         {/if}
       </SurfaceCard>
     </div>
