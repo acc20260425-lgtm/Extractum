@@ -141,3 +141,4 @@ Acceptance:
 | Service-heavy frontend architecture | do not do | poor fit for this Svelte app |
 | E2E-first expansion before core stabilization | do not do | lower ROI than targeted storage and logic tests right now |
 | Splitting every large file automatically | do not do | only split where it lowers risk or unlocks backlog work |
+| Immediate second-pass cleanup of archived source-specific validation notes | do not do now | retained archive notes remain historical evidence unless they break current docs or block new work |
