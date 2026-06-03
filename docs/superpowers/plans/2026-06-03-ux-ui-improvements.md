@@ -69,7 +69,7 @@ Do not modify Rust, database, API wrappers, or backend command behavior in this 
 - Test: `src/lib/analysis-run-companion-tabs.test.ts`
 - Test: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Write the failing Analysis UX contract**
+- [x] **Step 1: Write the failing Analysis UX contract**
 
 Create `src/lib/analysis-priority-ux-contract.test.ts`:
 
@@ -124,7 +124,7 @@ describe("analysis priority UX contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify it fails**
+- [x] **Step 2: Run the focused test and verify it fails**
 
 Run:
 
@@ -134,7 +134,7 @@ npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts
 
 Expected: FAIL because the new contract tokens are not present yet.
 
-- [ ] **Step 3: Confirm existing guardrails still describe current behavior**
+- [x] **Step 3: Confirm existing guardrails still describe current behavior**
 
 Run:
 
@@ -144,7 +144,7 @@ npm.cmd run test -- src/lib/analysis-redesign-route-contract.test.ts src/lib/ana
 
 Expected: PASS before implementation starts.
 
-- [ ] **Step 4: Commit the failing test**
+- [x] **Step 4: Commit the failing test**
 
 ```powershell
 git add src/lib/analysis-priority-ux-contract.test.ts
