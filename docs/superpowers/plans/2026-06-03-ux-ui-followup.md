@@ -213,7 +213,7 @@ git commit -m "test: capture UX follow-up contract"
 - Test: `src/lib/analysis-report-canvas.test.ts`
 - Test: `src/lib/analysis-ui-smoke-contract.test.ts`
 
-- [ ] **Step 1: Add bounded prop to `SourceBrowserShell`**
+- [x] **Step 1: Add bounded prop to `SourceBrowserShell`**
 
 In `src/lib/components/analysis/source-browser-shell.svelte`, add `bounded = false` to props:
 
@@ -249,7 +249,7 @@ Change the outer section:
 <section class="source-browser-shell" class:bounded={bounded}>
 ```
 
-- [ ] **Step 2: Wrap active tab content in a bounded body**
+- [x] **Step 2: Wrap active tab content in a bounded body**
 
 In `source-browser-shell.svelte`, keep the existing `<nav>` where it is. Insert this opening wrapper immediately after the nav:
 
@@ -265,7 +265,7 @@ Move the existing active-tab body chain inside that wrapper. Close the wrapper i
 
 Keep all current branch conditions and branch bodies unchanged except for indentation.
 
-- [ ] **Step 3: Add bounded reader CSS**
+- [x] **Step 3: Add bounded reader CSS**
 
 In `source-browser-shell.svelte`, add:
 
@@ -295,7 +295,7 @@ In `source-browser-shell.svelte`, add:
 }
 ```
 
-- [ ] **Step 4: Add scroll offset for timeline highlight jumps**
+- [x] **Step 4: Add scroll offset for timeline highlight jumps**
 
 In `telegram-timeline-reader.svelte`, add:
 
@@ -307,7 +307,7 @@ li {
 
 Keep the existing `li` layout rules; add the new property inside the existing `li` rule.
 
-- [ ] **Step 5: Pass bounded mode from source surface**
+- [x] **Step 5: Pass bounded mode from source surface**
 
 In `report-source-surface.svelte`, add prop:
 
@@ -332,7 +332,7 @@ Pass it to every `SourceBrowserShell` call inside live source branches:
 
 For run snapshot branches, omit the `bounded` prop so they continue to use the default `false`.
 
-- [ ] **Step 6: Pass bounded mode from report canvas**
+- [x] **Step 6: Pass bounded mode from report canvas**
 
 In `report-canvas.svelte`, pass:
 
@@ -342,7 +342,7 @@ sourceBrowserBounded={canvasMode === "source" && sourceViewBasis === "live_sourc
 
 on the `<ReportSourceSurface />` call.
 
-- [ ] **Step 7: Keep companion visible at normal desktop widths**
+- [x] **Step 7: Keep companion visible at normal desktop widths**
 
 In `src/routes/analysis/+page.svelte`, change the grid columns from:
 
@@ -382,7 +382,7 @@ Replace the existing single-column `@media (max-width: 1180px)` block with this 
 }
 ```
 
-- [ ] **Step 8: Run focused Analysis tests**
+- [x] **Step 8: Run focused Analysis tests**
 
 Run:
 
@@ -392,7 +392,7 @@ npm.cmd run test -- src/lib/analysis-priority-ux-contract.test.ts src/lib/analys
 
 Expected: PASS.
 
-- [ ] **Step 9: Run Svelte check**
+- [x] **Step 9: Run Svelte check**
 
 Run:
 
@@ -402,7 +402,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 10: Inspect the running app**
+- [x] **Step 10: Inspect the running app**
 
 In the running app, open `/analysis` at about `1280x860` and verify:
 
@@ -411,7 +411,7 @@ In the running app, open `/analysis` at about `1280x860` and verify:
 - Timeline tabs remain visible while scrolling the source body.
 - The document body no longer grows to tens of thousands of pixels for a single loaded source page.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 Run:
 

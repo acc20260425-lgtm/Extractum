@@ -101,6 +101,7 @@
   };
 
   type Props = {
+    bounded?: boolean;
     subject?: SourceBrowserSubject | null;
     sourceBrowserData?: SourceBrowserData | null;
     groupBrowserData?: SourceGroupBrowserData | null;
@@ -112,6 +113,7 @@
   };
 
   let {
+    bounded = false,
     subject: explicitSubject = null,
     sourceBrowserData = null,
     groupBrowserData = null,
@@ -281,7 +283,7 @@
   }
 </script>
 
-<section class="source-browser-shell">
+<section class="source-browser-shell" class:bounded={bounded}>
   <nav class="source-browser-tabs" aria-label="Source browser tabs" data-smoke-id="source-browser-tabs">
     {#each tabs as tab (tab.id)}
       <Button
@@ -295,213 +297,215 @@
     {/each}
   </nav>
 
-  {#if activeTab === "sources" && snapshotSubject?.readerKind === "source_group"}
-    <SnapshotGroupSourcesView
-      items={snapshotData?.readerItems ?? []}
-      selectedGroupSourceId={snapshotData?.selectedSourceId ?? null}
-      loading={snapshotData?.loading ?? false}
-      hasMore={snapshotData?.hasMore ?? false}
-      selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
-      {highlightToken}
-      {formatTimestamp}
-      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
-    />
-  {:else if activeTab === "items" && subject?.kind === "run_snapshot"}
-    <SnapshotItemsView
-      items={snapshotData?.readerItems ?? []}
-      loading={snapshotData?.loading ?? false}
-      hasMore={snapshotData?.hasMore ?? false}
-      selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
-      {highlightToken}
-      {formatTimestamp}
-      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
-    />
-  {:else if activeTab === "metadata" && snapshotSubject && snapshotData}
-    <RunSnapshotMetadataView
-      run={snapshotData.run}
-      snapshot={snapshotSubject}
-      readerItems={snapshotData.readerItems}
-      sourceOptions={snapshotData.sourceOptions}
-      snapshotAvailability={snapshotData.availability}
-      snapshotError={snapshotData.error}
-      {formatTimestamp}
-    />
-  {:else if activeTab === "timeline" && snapshotSubject?.readerKind === "telegram_timeline"}
-    <TelegramTimelineReader
-      items={snapshotData?.readerItems ?? []}
-      loading={snapshotData?.loading ?? false}
-      hasMore={snapshotData?.hasMore ?? false}
-      ariaLabel="Run snapshot source material timeline"
-      {highlightToken}
-      {formatTimestamp}
-      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
-    />
-  {:else if activeTab === "transcript" && snapshotSubject?.readerKind === "youtube_transcript"}
-    <YoutubeTranscriptReader
-      detail={null}
-      segments={[]}
-      snapshotItems={snapshotData?.readerItems ?? []}
-      loading={snapshotData?.loading ?? false}
-      hasMore={snapshotData?.hasMore ?? false}
-      transcriptSearch=""
-      showSyncActions={false}
-      sourceTitle={snapshotSubject.scopeLabel}
-      selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
-      {highlightToken}
-      {formatTimestamp}
-      onChangeTranscriptSearch={() => {}}
-      onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
-      onSyncTranscript={() => {}}
-      onSyncMetadata={() => {}}
-    />
-  {:else if activeTab === "sources" && groupSubject}
-    <SourceGroupSourcesView
-      items={groupData?.liveReaderItems ?? []}
-      selectedGroupSourceId={groupData?.selectedSourceId ?? null}
-      loading={groupLoading}
-      hasMoreBySource={groupData?.hasMoreBySource ?? {}}
-      youtubeDetailsBySource={groupData?.youtubeDetailsBySource ?? {}}
-      {selectedTraceRef}
-      {highlightToken}
-      {formatTimestamp}
-      onLoadMoreSource={loadMoreGroupSourcePage}
-    />
-  {:else if activeTab === "timeline" && sourceSubject && sourceData}
-    {#if sourceSubject.sourceType === "telegram" && sourceSubject.migratedHistoryStatus === "available" && !sourceSubject.migratedHistoryImportCompleted}
-      <StatusMessage tone="info">
-        Migrated small-group history is detected but has not been imported for browsing yet.
-      </StatusMessage>
-    {/if}
-    {#if telegramHistoryScopeOptions.length > 0}
-      <label class="history-scope-control">
-        <span>History scope</span>
-        <Select value={sourceData.telegramHistoryScope} onchange={changeTelegramHistoryScope}>
-          {#each telegramHistoryScopeOptions as option (option.value)}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </Select>
-      </label>
-    {/if}
-    {#if sourceData.showTopicSelector && sourceData.telegramHistoryScope === "current"}
-      <label class="topic-filter">
-        <span>Topic view</span>
-        <Select value={sourceData.selectedTopicKey} disabled={sourceData.loadingSourceTopics} onchange={changeSelectedTopic}>
-          <option value="__all_topics__">All topics</option>
-          {#if sourceData.loadingSourceTopics && sourceData.sourceTopics.length === 0}
-            <option value="__loading_topics__" disabled>Loading topics...</option>
-          {:else}
-            {#each sortedSourceTopics as topic (topic.key)}
-              <option value={topic.key}>{topic.title} ({topic.messageCount})</option>
-            {/each}
-          {/if}
-        </Select>
-      </label>
-    {/if}
-    {#if sourceSubject.sourceType === "telegram" && sourceSubject.migratedHistoryImportCompleted && sourceSubject.migratedHistoryRowCount === 0 && sourceData.telegramHistoryScope !== "current"}
-      <StatusMessage tone="info">
-        Migrated history import completed with no browsable migrated rows for this source.
-      </StatusMessage>
-    {:else}
+  <div class="source-browser-body">
+    {#if activeTab === "sources" && snapshotSubject?.readerKind === "source_group"}
+      <SnapshotGroupSourcesView
+        items={snapshotData?.readerItems ?? []}
+        selectedGroupSourceId={snapshotData?.selectedSourceId ?? null}
+        loading={snapshotData?.loading ?? false}
+        hasMore={snapshotData?.hasMore ?? false}
+        selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+        {highlightToken}
+        {formatTimestamp}
+        onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+      />
+    {:else if activeTab === "items" && subject?.kind === "run_snapshot"}
+      <SnapshotItemsView
+        items={snapshotData?.readerItems ?? []}
+        loading={snapshotData?.loading ?? false}
+        hasMore={snapshotData?.hasMore ?? false}
+        selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+        {highlightToken}
+        {formatTimestamp}
+        onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+      />
+    {:else if activeTab === "metadata" && snapshotSubject && snapshotData}
+      <RunSnapshotMetadataView
+        run={snapshotData.run}
+        snapshot={snapshotSubject}
+        readerItems={snapshotData.readerItems}
+        sourceOptions={snapshotData.sourceOptions}
+        snapshotAvailability={snapshotData.availability}
+        snapshotError={snapshotData.error}
+        {formatTimestamp}
+      />
+    {:else if activeTab === "timeline" && snapshotSubject?.readerKind === "telegram_timeline"}
       <TelegramTimelineReader
-        items={sourceData.liveReaderItems}
+        items={snapshotData?.readerItems ?? []}
+        loading={snapshotData?.loading ?? false}
+        hasMore={snapshotData?.hasMore ?? false}
+        ariaLabel="Run snapshot source material timeline"
+        {highlightToken}
+        {formatTimestamp}
+        onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+      />
+    {:else if activeTab === "transcript" && snapshotSubject?.readerKind === "youtube_transcript"}
+      <YoutubeTranscriptReader
+        detail={null}
+        segments={[]}
+        snapshotItems={snapshotData?.readerItems ?? []}
+        loading={snapshotData?.loading ?? false}
+        hasMore={snapshotData?.hasMore ?? false}
+        transcriptSearch=""
+        showSyncActions={false}
+        sourceTitle={snapshotSubject.scopeLabel}
+        selectedTraceRef={snapshotData?.selectedTraceRef ?? selectedTraceRef}
+        {highlightToken}
+        {formatTimestamp}
+        onChangeTranscriptSearch={() => {}}
+        onLoadMore={snapshotData?.onLoadMore ?? (() => {})}
+        onSyncTranscript={() => {}}
+        onSyncMetadata={() => {}}
+      />
+    {:else if activeTab === "sources" && groupSubject}
+      <SourceGroupSourcesView
+        items={groupData?.liveReaderItems ?? []}
+        selectedGroupSourceId={groupData?.selectedSourceId ?? null}
+        loading={groupLoading}
+        hasMoreBySource={groupData?.hasMoreBySource ?? {}}
+        youtubeDetailsBySource={groupData?.youtubeDetailsBySource ?? {}}
+        {selectedTraceRef}
+        {highlightToken}
+        {formatTimestamp}
+        onLoadMoreSource={loadMoreGroupSourcePage}
+      />
+    {:else if activeTab === "timeline" && sourceSubject && sourceData}
+      {#if sourceSubject.sourceType === "telegram" && sourceSubject.migratedHistoryStatus === "available" && !sourceSubject.migratedHistoryImportCompleted}
+        <StatusMessage tone="info">
+          Migrated small-group history is detected but has not been imported for browsing yet.
+        </StatusMessage>
+      {/if}
+      {#if telegramHistoryScopeOptions.length > 0}
+        <label class="history-scope-control">
+          <span>History scope</span>
+          <Select value={sourceData.telegramHistoryScope} onchange={changeTelegramHistoryScope}>
+            {#each telegramHistoryScopeOptions as option (option.value)}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </Select>
+        </label>
+      {/if}
+      {#if sourceData.showTopicSelector && sourceData.telegramHistoryScope === "current"}
+        <label class="topic-filter">
+          <span>Topic view</span>
+          <Select value={sourceData.selectedTopicKey} disabled={sourceData.loadingSourceTopics} onchange={changeSelectedTopic}>
+            <option value="__all_topics__">All topics</option>
+            {#if sourceData.loadingSourceTopics && sourceData.sourceTopics.length === 0}
+              <option value="__loading_topics__" disabled>Loading topics...</option>
+            {:else}
+              {#each sortedSourceTopics as topic (topic.key)}
+                <option value={topic.key}>{topic.title} ({topic.messageCount})</option>
+              {/each}
+            {/if}
+          </Select>
+        </label>
+      {/if}
+      {#if sourceSubject.sourceType === "telegram" && sourceSubject.migratedHistoryImportCompleted && sourceSubject.migratedHistoryRowCount === 0 && sourceData.telegramHistoryScope !== "current"}
+        <StatusMessage tone="info">
+          Migrated history import completed with no browsable migrated rows for this source.
+        </StatusMessage>
+      {:else}
+        <TelegramTimelineReader
+          items={sourceData.liveReaderItems}
+          loading={sourceData.loadingItems}
+          hasMore={sourceData.sourceItemsHasMore}
+          contentLabel={sourceData.currentSourceContentLabel}
+          {highlightToken}
+          {formatTimestamp}
+          onLoadMore={sourceData.onLoadMoreSourceItems}
+        />
+      {/if}
+    {:else if activeTab === "transcript" && sourceSubject && sourceData}
+      <YoutubeTranscriptReader
+        detail={sourceData.youtubeVideoDetail}
+        segments={sourceData.youtubeTranscriptSegments}
+        snapshotItems={[]}
+        loading={sourceData.loadingYoutubeTranscriptSegments || sourceData.loadingYoutubeDetail}
+        hasMore={sourceData.youtubeTranscriptHasMore}
+        transcriptSearch={sourceData.youtubeTranscriptSearch}
+        sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
+        {selectedTraceRef}
+        {highlightToken}
+        {formatTimestamp}
+        onChangeTranscriptSearch={sourceData.onChangeTranscriptSearch}
+        onLoadMore={sourceData.onLoadMoreYoutubeTranscriptSegments}
+        onSyncTranscript={() => sourceData.onSyncYoutubeTranscript(sourceSubject.id)}
+        onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
+        onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}
+      />
+    {:else if activeTab === "videos" && sourceSubject && sourceData}
+      <YoutubePlaylistVideosView
+        sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
+        playlist={sourceData.youtubePlaylistDetail}
+        loading={sourceData.loadingYoutubeDetail}
+        {formatTimestamp}
+        onOpenSource={sourceData.onOpenSource}
+        onSyncPlaylist={() => sourceData.onSyncYoutubePlaylist(sourceSubject.id)}
+        onRetryFailedPlaylistVideos={() => sourceData.onRetryFailedYoutubePlaylistVideos(sourceSubject.id)}
+        onSyncPlaylistVideo={(videoSourceId) => sourceData.onSyncYoutubePlaylistVideo(sourceSubject.id, videoSourceId)}
+        onRetryPlaylistVideo={(videoSourceId) => sourceData.onRetryYoutubePlaylistVideo(sourceSubject.id, videoSourceId)}
+      />
+    {:else if activeTab === "activity" && groupSubject}
+      <SourceGroupActivityView />
+    {:else if activeTab === "activity" && sourceSubject && sourceData}
+      <SourceActivityView
+        source={sourceSubject}
+        jobs={sourceData.sourceJobs}
+        takeoutRecovery={sourceData.takeoutRecovery}
+        sourceSyncDisabledReason={sourceData.sourceSyncDisabledReason}
+        {formatTimestamp}
+        onSyncSource={() => sourceData.onSyncSource(sourceSubject.id)}
+        onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
+        onSyncTranscript={() => sourceData.onSyncYoutubeTranscript(sourceSubject.id)}
+        onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}
+        onStartTakeoutImport={() => sourceData.onStartTakeoutImport(sourceSubject.id)}
+        onStartMigratedHistoryImport={() => sourceData.onStartMigratedHistoryImport(sourceSubject.id)}
+        onCancelSourceJob={sourceData.onCancelSourceJob}
+      />
+    {:else if activeTab === "items"}
+      <UniversalItemsView
+        items={itemsForActiveSubject}
+        loading={itemsLoading}
+        hasMore={itemsHasMore}
+        emptyDescription={itemsEmptyDescription}
+        helpDescription={subject && subject.kind === "source_group" ? itemsEmptyDescription : null}
+        sourceLabelForItem={subject && subject.kind === "source_group" ? groupData?.sourceLabelForItem ?? null : null}
+        {highlightToken}
+        {formatTimestamp}
+        onLoadMore={subject && subject.kind === "source_group" ? loadMoreGroupItems : loadMoreSourceItems}
+      />
+    {:else if activeTab === "comments" && sourceSubject && sourceData}
+      <YoutubeCommentsView
+        items={sourceData.sourceItems}
+        detail={sourceData.youtubeVideoDetail}
+        sourceJobs={sourceData.sourceJobs}
+        routeError={sourceData.sourceRouteError}
         loading={sourceData.loadingItems}
         hasMore={sourceData.sourceItemsHasMore}
-        contentLabel={sourceData.currentSourceContentLabel}
         {highlightToken}
         {formatTimestamp}
         onLoadMore={sourceData.onLoadMoreSourceItems}
+        onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}
+        onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
       />
+    {:else if activeTab === "metadata" && groupSubject}
+      <SourceGroupMetadataView group={groupSubject} {formatTimestamp} />
+    {:else if activeTab === "metadata" && sourceSubject && sourceData}
+      <SourceMetadataView
+        source={sourceSubject}
+        youtubeVideoDetail={sourceData.youtubeVideoDetail}
+        youtubePlaylistDetail={sourceData.youtubePlaylistDetail}
+        sourceTopics={sourceData.sourceTopics}
+        loading={sourceData.loadingYoutubeDetail}
+        {formatTimestamp}
+        onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
+      />
+    {:else}
+      <StatusMessage tone="muted">
+        {activeTab} source browser tab is disabled in this review slice. Loaded rows: {snapshotData?.readerItems.length ?? itemsForActiveSubject.length}.
+      </StatusMessage>
     {/if}
-  {:else if activeTab === "transcript" && sourceSubject && sourceData}
-    <YoutubeTranscriptReader
-      detail={sourceData.youtubeVideoDetail}
-      segments={sourceData.youtubeTranscriptSegments}
-      snapshotItems={[]}
-      loading={sourceData.loadingYoutubeTranscriptSegments || sourceData.loadingYoutubeDetail}
-      hasMore={sourceData.youtubeTranscriptHasMore}
-      transcriptSearch={sourceData.youtubeTranscriptSearch}
-      sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
-      {selectedTraceRef}
-      {highlightToken}
-      {formatTimestamp}
-      onChangeTranscriptSearch={sourceData.onChangeTranscriptSearch}
-      onLoadMore={sourceData.onLoadMoreYoutubeTranscriptSegments}
-      onSyncTranscript={() => sourceData.onSyncYoutubeTranscript(sourceSubject.id)}
-      onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
-      onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}
-    />
-  {:else if activeTab === "videos" && sourceSubject && sourceData}
-    <YoutubePlaylistVideosView
-      sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
-      playlist={sourceData.youtubePlaylistDetail}
-      loading={sourceData.loadingYoutubeDetail}
-      {formatTimestamp}
-      onOpenSource={sourceData.onOpenSource}
-      onSyncPlaylist={() => sourceData.onSyncYoutubePlaylist(sourceSubject.id)}
-      onRetryFailedPlaylistVideos={() => sourceData.onRetryFailedYoutubePlaylistVideos(sourceSubject.id)}
-      onSyncPlaylistVideo={(videoSourceId) => sourceData.onSyncYoutubePlaylistVideo(sourceSubject.id, videoSourceId)}
-      onRetryPlaylistVideo={(videoSourceId) => sourceData.onRetryYoutubePlaylistVideo(sourceSubject.id, videoSourceId)}
-    />
-  {:else if activeTab === "activity" && groupSubject}
-    <SourceGroupActivityView />
-  {:else if activeTab === "activity" && sourceSubject && sourceData}
-    <SourceActivityView
-      source={sourceSubject}
-      jobs={sourceData.sourceJobs}
-      takeoutRecovery={sourceData.takeoutRecovery}
-      sourceSyncDisabledReason={sourceData.sourceSyncDisabledReason}
-      {formatTimestamp}
-      onSyncSource={() => sourceData.onSyncSource(sourceSubject.id)}
-      onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
-      onSyncTranscript={() => sourceData.onSyncYoutubeTranscript(sourceSubject.id)}
-      onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}
-      onStartTakeoutImport={() => sourceData.onStartTakeoutImport(sourceSubject.id)}
-      onStartMigratedHistoryImport={() => sourceData.onStartMigratedHistoryImport(sourceSubject.id)}
-      onCancelSourceJob={sourceData.onCancelSourceJob}
-    />
-  {:else if activeTab === "items"}
-    <UniversalItemsView
-      items={itemsForActiveSubject}
-      loading={itemsLoading}
-      hasMore={itemsHasMore}
-      emptyDescription={itemsEmptyDescription}
-      helpDescription={subject && subject.kind === "source_group" ? itemsEmptyDescription : null}
-      sourceLabelForItem={subject && subject.kind === "source_group" ? groupData?.sourceLabelForItem ?? null : null}
-      {highlightToken}
-      {formatTimestamp}
-      onLoadMore={subject && subject.kind === "source_group" ? loadMoreGroupItems : loadMoreSourceItems}
-    />
-  {:else if activeTab === "comments" && sourceSubject && sourceData}
-    <YoutubeCommentsView
-      items={sourceData.sourceItems}
-      detail={sourceData.youtubeVideoDetail}
-      sourceJobs={sourceData.sourceJobs}
-      routeError={sourceData.sourceRouteError}
-      loading={sourceData.loadingItems}
-      hasMore={sourceData.sourceItemsHasMore}
-      {highlightToken}
-      {formatTimestamp}
-      onLoadMore={sourceData.onLoadMoreSourceItems}
-      onSyncComments={() => sourceData.onSyncYoutubeComments(sourceSubject.id)}
-      onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
-    />
-  {:else if activeTab === "metadata" && groupSubject}
-    <SourceGroupMetadataView group={groupSubject} {formatTimestamp} />
-  {:else if activeTab === "metadata" && sourceSubject && sourceData}
-    <SourceMetadataView
-      source={sourceSubject}
-      youtubeVideoDetail={sourceData.youtubeVideoDetail}
-      youtubePlaylistDetail={sourceData.youtubePlaylistDetail}
-      sourceTopics={sourceData.sourceTopics}
-      loading={sourceData.loadingYoutubeDetail}
-      {formatTimestamp}
-      onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}
-    />
-  {:else}
-    <StatusMessage tone="muted">
-      {activeTab} source browser tab is disabled in this review slice. Loaded rows: {snapshotData?.readerItems.length ?? itemsForActiveSubject.length}.
-    </StatusMessage>
-  {/if}
+  </div>
 </section>
 
 <style>
@@ -512,11 +516,35 @@
     min-width: 0;
   }
 
+  .source-browser-body {
+    min-width: 0;
+  }
+
+  .source-browser-shell.bounded {
+    min-height: 0;
+  }
+
+  .source-browser-shell.bounded .source-browser-body {
+    max-height: calc(100vh - 13rem);
+    min-height: min(32rem, calc(100vh - 13rem));
+    overflow: auto;
+    padding-right: 0.15rem;
+    overscroll-behavior: contain;
+  }
+
   .source-browser-tabs {
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
     align-items: center;
+  }
+
+  .source-browser-shell.bounded .source-browser-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-bottom: 0.15rem;
+    background: var(--bg);
   }
 
   .history-scope-control,

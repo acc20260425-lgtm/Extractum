@@ -3279,7 +3279,7 @@
 <style>
   .analysis-workspace {
     display: grid;
-    grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.45fr) minmax(420px, clamp(480px, 30vw, 560px));
+    grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1fr) minmax(21rem, clamp(22rem, 26vw, 26rem));
     gap: 0.9rem;
     align-items: start;
     min-width: 0;
@@ -3293,7 +3293,7 @@
     min-width: 0;
   }
 
-  @media (max-width: 1500px) {
+  @media (max-width: 1180px) {
     .analysis-workspace {
       grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1fr);
     }
@@ -3303,7 +3303,7 @@
     }
   }
 
-  @media (max-width: 1180px) {
+  @media (max-width: 900px) {
     .analysis-workspace {
       grid-template-columns: 1fr;
     }

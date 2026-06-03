@@ -599,6 +599,7 @@
   {:else}
     <ReportSourceSurface
       sourceHeaderCompact={canvasMode === "source" && sourceViewBasis === "live_source"}
+      sourceBrowserBounded={canvasMode === "source" && sourceViewBasis === "live_source"}
       {workspaceSelection}
       {currentRun}
       {sourceViewBasis}

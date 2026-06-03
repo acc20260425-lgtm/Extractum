@@ -55,6 +55,7 @@
 
   type Props = {
     sourceHeaderCompact?: boolean;
+    sourceBrowserBounded?: boolean;
     currentRun: AnalysisRunDetail | null;
     sourceViewBasis: SourceViewBasis;
     snapshotAvailability: RunSnapshotAvailability;
@@ -125,6 +126,7 @@
 
   let {
     sourceHeaderCompact = false,
+    sourceBrowserBounded = false,
     currentRun,
     sourceViewBasis,
     snapshotAvailability,
@@ -470,6 +472,7 @@
         <StatusMessage tone="error">{youtubeRuntimeDiagnostic}</StatusMessage>
       {/if}
       <SourceBrowserShell
+        bounded={sourceBrowserBounded}
         subject={{ kind: "source", source: currentSource }}
         sourceBrowserData={{
           liveReaderItems,
@@ -521,6 +524,7 @@
   {:else if analysisScope === "source_group" && currentGroup}
     {#if sourceBrowserShellAppliesToSubject({ kind: "source_group", group: currentGroup })}
       <SourceBrowserShell
+        bounded={sourceBrowserBounded}
         subject={{ kind: "source_group", group: currentGroup }}
         {loadingItems}
         {selectedTraceRef}

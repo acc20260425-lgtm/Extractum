@@ -151,6 +151,7 @@
     display: flex;
     justify-content: center;
     padding: 0.125rem 0;
+    scroll-margin-top: 4.5rem;
   }
 
   li.selected,
