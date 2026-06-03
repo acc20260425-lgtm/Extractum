@@ -784,7 +784,36 @@ async function openCompanionTab(ctx, label) {
   `);
 }
 
+async function waitForEvidenceTraceTarget(ctx, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastState = null;
+
+  while (Date.now() < deadline) {
+    lastState = await executeJs(ctx.socket, `
+      const panel = document.querySelector('.run-evidence-tab');
+      return {
+        hasPanel: Boolean(panel),
+        hasTraceDetail: Boolean(panel?.querySelector('.trace-detail')),
+        hasTraceLink: Boolean(panel?.querySelector('.trace-link')),
+        text: panel?.innerText.slice(0, 240) ?? "",
+      };
+    `);
+
+    if (lastState.hasTraceDetail || lastState.hasTraceLink) {
+      return lastState;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  if (!lastState?.hasPanel) throw new SmokeAssertionError("evidence panel missing");
+  throw new SmokeAssertionError("trace ref missing for evidence", { lastState });
+}
+
 async function selectFirstTraceRefIfNeeded(ctx) {
+  const traceTarget = await waitForEvidenceTraceTarget(ctx);
+  if (traceTarget.hasTraceDetail) return;
+
   await executeJs(ctx.socket, `
     const panel = document.querySelector('.run-evidence-tab');
     if (!panel) throw new Error('ASSERT: evidence panel missing');

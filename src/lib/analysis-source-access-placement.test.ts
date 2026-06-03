@@ -27,7 +27,7 @@ describe("analysis source access placement", () => {
 
   it("keeps the left analysis column compact while rendering the run companion", () => {
     expect(analysisPageSource).toContain(
-      "grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1.45fr) minmax(420px, clamp(480px, 30vw, 560px));",
+      "grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1fr) minmax(21rem, clamp(22rem, 26vw, 26rem));",
     );
     expect(analysisPageSource).toContain("<ReportCanvas");
     expect(analysisPageSource).toContain("<RunCompanionTabs");

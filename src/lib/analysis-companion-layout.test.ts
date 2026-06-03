@@ -39,25 +39,25 @@ function cssBlock(source: string, marker: string) {
   throw new Error(`missing closing brace for ${marker}`);
 }
 
-const widerCompanionColumnPattern =
-  /minmax\(420px,\s*(?:clamp\(480px,\s*30vw,\s*560px\)|560px)\)/;
+const desktopCompanionColumnPattern =
+  /minmax\(21rem,\s*clamp\(22rem,\s*26vw,\s*26rem\)\)/;
 
 describe("analysis companion layout", () => {
-  it("widens the desktop companion column while preserving existing stacking breakpoints", () => {
+  it("keeps the desktop companion visible while preserving narrow stacking breakpoints", () => {
     const workspaceRule = cssBlock(analysisPageSource, ".analysis-workspace");
-    const mediumBreakpoint = cssBlock(analysisPageSource, "@media (max-width: 1500px)");
-    const narrowBreakpoint = cssBlock(analysisPageSource, "@media (max-width: 1180px)");
+    const mediumBreakpoint = cssBlock(analysisPageSource, "@media (max-width: 1180px)");
+    const narrowBreakpoint = cssBlock(analysisPageSource, "@media (max-width: 900px)");
 
     expect(workspaceRule).toContain("minmax(4.25rem, 4.75rem)");
-    expect(workspaceRule).toContain("minmax(0, 1.45fr)");
-    expect(workspaceRule).toMatch(widerCompanionColumnPattern);
+    expect(workspaceRule).toContain("minmax(0, 1fr)");
+    expect(workspaceRule).toMatch(desktopCompanionColumnPattern);
     expect(workspaceRule).not.toContain("minmax(320px, 430px)");
 
-    expect(mediumBreakpoint).toContain("@media (max-width: 1500px)");
+    expect(mediumBreakpoint).toContain("@media (max-width: 1180px)");
     expect(mediumBreakpoint).toContain("grid-template-columns: minmax(4.25rem, 4.75rem) minmax(0, 1fr);");
     expect(mediumBreakpoint).toContain("grid-column: 2;");
 
-    expect(narrowBreakpoint).toContain("@media (max-width: 1180px)");
+    expect(narrowBreakpoint).toContain("@media (max-width: 900px)");
     expect(narrowBreakpoint).toContain("grid-template-columns: 1fr;");
     expect(narrowBreakpoint).toContain("grid-column: 1;");
   });

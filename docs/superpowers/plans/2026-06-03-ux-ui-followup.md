@@ -698,7 +698,7 @@ git commit -m "feat(accounts): flatten embedded youtube access"
 **Files:**
 - Modify only files already touched by Tasks 1-4 if verification reveals issues.
 
-- [ ] **Step 1: Run full frontend tests**
+- [x] **Step 1: Run full frontend tests**
 
 Run:
 
@@ -708,7 +708,7 @@ npm.cmd run test
 
 Expected: all Vitest files pass.
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
@@ -718,7 +718,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 3: Run Analysis smoke**
+- [x] **Step 3: Run Analysis smoke**
 
 Run:
 
@@ -728,7 +728,7 @@ npm.cmd run smoke:analysis
 
 Expected: all Analysis smoke steps pass. If the app is already running and the smoke script reports a final dev-server port warning after `Analysis UI smoke passed`, record that separately and do not treat it as a UI failure when exit code is `0`.
 
-- [ ] **Step 4: Inspect live routes**
+- [x] **Step 4: Inspect live routes**
 
 Inspect:
 
@@ -742,7 +742,7 @@ Acceptance criteria:
 - Diagnostics table controls are visible before the summary card grid and issue mode removes healthy rows from issue tables.
 - Accounts YouTube access reads as one panel with separated auth/policy groups.
 
-- [ ] **Step 5: Commit verification fixes when verification changes files**
+- [x] **Step 5: Commit verification fixes when verification changes files**
 
 When verification produces a small fix in files already touched by this plan, run:
 
