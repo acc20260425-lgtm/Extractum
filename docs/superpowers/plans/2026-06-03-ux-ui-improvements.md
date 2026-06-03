@@ -1201,7 +1201,7 @@ git commit -m "feat(accounts): clarify source access sections"
 **Files:**
 - Modify only files already touched by Tasks 1-9 if fixes are needed.
 
-- [ ] **Step 1: Run all frontend tests**
+- [x] **Step 1: Run all frontend tests**
 
 ```powershell
 npm.cmd run test
@@ -1209,7 +1209,7 @@ npm.cmd run test
 
 Expected: all Vitest suites pass.
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 ```powershell
 npm.cmd run check
@@ -1217,7 +1217,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 3: Run analysis smoke**
+- [x] **Step 3: Run analysis smoke**
 
 ```powershell
 npm.cmd run smoke:analysis
@@ -1225,7 +1225,7 @@ npm.cmd run smoke:analysis
 
 Expected: PASS.
 
-- [ ] **Step 4: Run full project verification**
+- [x] **Step 4: Run full project verification**
 
 ```powershell
 npm.cmd run verify
@@ -1233,7 +1233,7 @@ npm.cmd run verify
 
 Expected: frontend tests, Svelte check, Rust tests, and diff check pass.
 
-- [ ] **Step 5: Inspect the running Tauri app**
+- [x] **Step 5: Inspect the running Tauri app**
 
 Use the running app and inspect these routes:
 
@@ -1254,7 +1254,7 @@ Acceptance criteria:
 - Diagnostics tables can be scanned without reading every table first.
 - Accounts visually separates Telegram identities from YouTube auth/sync policy.
 
-- [ ] **Step 6: Commit verification fixes if any**
+- [x] **Step 6: Commit verification fixes if any**
 
 If verification required small fixes:
 
