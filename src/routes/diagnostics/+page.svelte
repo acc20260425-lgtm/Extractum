@@ -108,6 +108,7 @@
   let refreshing = $state(false);
   let status = $state("");
   let error = $state<string | null>(null);
+  let diagnosticsTableMode = $state<"issues" | "all">("issues");
 
   async function refreshDiagnostics(initial: boolean) {
     if (initial) {
@@ -141,6 +142,12 @@
 
   function runtimeMeta(runtime: DiagnosticRuntimeCheck) {
     return runtime.version ?? runtime.summary ?? labelFromKey(runtime.status);
+  }
+
+  function hasDiagnosticIssue(rows: Record<string, string | number>[]) {
+    return rows.some((row) => Object.values(row).some((cell) =>
+      /failed|error|missing|unavailable|pending|warning/i.test(String(cell)),
+    ));
   }
 
   function statusStripItems(current: DiagnosticSummaryDto): StatusStripItem[] {
@@ -328,6 +335,18 @@
   {/if}
 
   {#if summary}
+    {@const diagnosticsTableSections = [
+      { title: "Provider profiles", description: "Configured profile counts by provider", columns: providerColumns, rows: providerRows(summary) },
+      { title: "Telegram runtimes", description: "Account runtime statuses by coarse state", columns: telegramColumns, rows: telegramRows(summary) },
+      { title: "Sources", description: "Source counts by type, subtype, active state, and sync state", columns: sourceColumns, rows: sourceRows(summary) },
+      { title: "Items", description: "Item counts by coarse source and content fields", columns: itemColumns, rows: itemRows(summary) },
+      { title: "Analysis runs", description: "Run counts by provider, scope, status, snapshot state, and error kind", columns: runColumns, rows: runRows(summary) },
+      { title: "LLM requests", description: "Request counts by provider, kind, and state", columns: llmColumns, rows: llmRows(summary) },
+      { title: "YouTube jobs", description: "Job aggregates by type, status, warning state, and error kind", columns: youtubeJobColumns, rows: youtubeRows(summary) },
+      { title: "Ingest batches", description: "Batch aggregates by provider, kind, status, completeness, and error kind", columns: ingestBatchColumns, rows: ingestBatchRows(summary) },
+      { title: "Ingest warnings", description: "Warning aggregates by provider, kind, status, and warning code", columns: ingestWarningColumns, rows: ingestWarningRows(summary) },
+    ]}
+
     <div class="status-strip" aria-label="Diagnostics health overview">
       {#each statusStripItems(summary) as item (item.label)}
         <div class="status-tile">
@@ -381,16 +400,23 @@
       </SurfaceCard>
     </div>
 
+    <div class="diagnostics-table-controls" aria-label="Diagnostics table display">
+      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "issues"} onclick={() => (diagnosticsTableMode = "issues")}>Only issues</Button>
+      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "all"} onclick={() => (diagnosticsTableMode = "all")}>All tables</Button>
+    </div>
+
     <div class="diagnostics-tables">
-      <DiagnosticCountTable title="Provider profiles" description="Configured profile counts by provider" columns={providerColumns} rows={providerRows(summary)} />
-      <DiagnosticCountTable title="Telegram runtimes" description="Account runtime statuses by coarse state" columns={telegramColumns} rows={telegramRows(summary)} />
-      <DiagnosticCountTable title="Sources" description="Source counts by type, subtype, active state, and sync state" columns={sourceColumns} rows={sourceRows(summary)} />
-      <DiagnosticCountTable title="Items" description="Item counts by coarse source and content fields" columns={itemColumns} rows={itemRows(summary)} />
-      <DiagnosticCountTable title="Analysis runs" description="Run counts by provider, scope, status, snapshot state, and error kind" columns={runColumns} rows={runRows(summary)} />
-      <DiagnosticCountTable title="LLM requests" description="Request counts by provider, kind, and state" columns={llmColumns} rows={llmRows(summary)} />
-      <DiagnosticCountTable title="YouTube jobs" description="Job aggregates by type, status, warning state, and error kind" columns={youtubeJobColumns} rows={youtubeRows(summary)} />
-      <DiagnosticCountTable title="Ingest batches" description="Batch aggregates by provider, kind, status, completeness, and error kind" columns={ingestBatchColumns} rows={ingestBatchRows(summary)} />
-      <DiagnosticCountTable title="Ingest warnings" description="Warning aggregates by provider, kind, status, and warning code" columns={ingestWarningColumns} rows={ingestWarningRows(summary)} />
+      {#each diagnosticsTableSections as section (section.title)}
+        {#if diagnosticsTableMode === "all" || hasDiagnosticIssue(section.rows)}
+          <DiagnosticCountTable
+            title={section.title}
+            description={section.description}
+            columns={section.columns}
+            rows={section.rows}
+            open={hasDiagnosticIssue(section.rows)}
+          />
+        {/if}
+      {/each}
     </div>
   {:else if loading}
     <StatusMessage tone="muted" className="page-status">Loading diagnostics...</StatusMessage>
@@ -453,6 +479,13 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
+  }
+
+  .diagnostics-table-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    flex-wrap: wrap;
   }
 
   @media (max-width: 980px) {

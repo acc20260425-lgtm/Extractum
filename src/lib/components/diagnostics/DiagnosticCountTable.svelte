@@ -15,12 +15,14 @@
     columns,
     rows,
     emptyMessage = "No diagnostic counts reported",
+    open = true,
   }: {
     title: string;
     description?: string;
     columns: DiagnosticTableColumn[];
     rows: DiagnosticTableRow[];
     emptyMessage?: string;
+    open?: boolean;
   } = $props();
 
   function cellValue(row: DiagnosticTableRow, key: string) {
@@ -33,36 +35,73 @@
   }
 </script>
 
-<SurfaceCard {title} meta={description} className="diagnostic-count-table">
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          {#each columns as column (column.key)}
-            <th class:align-end={column.align === "end"}>{column.label}</th>
-          {/each}
-        </tr>
-      </thead>
-      <tbody>
-        {#each rows as row, index (rowKey(row, index))}
+<SurfaceCard className="diagnostic-count-table">
+  <details class="diagnostic-count-details" {open}>
+    <summary>
+      <span>{title}</span>
+      <span>{rows.length} rows</span>
+    </summary>
+    {#if description}
+      <p>{description}</p>
+    {/if}
+    <div class="table-scroll">
+      <table>
+        <thead>
           <tr>
             {#each columns as column (column.key)}
-              <td class:align-end={column.align === "end"}>{cellValue(row, column.key)}</td>
+              <th class:align-end={column.align === "end"}>{column.label}</th>
             {/each}
           </tr>
-        {:else}
-          <tr>
-            <td class="empty-row" colspan={columns.length}>{emptyMessage}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          {#each rows as row, index (rowKey(row, index))}
+            <tr>
+              {#each columns as column (column.key)}
+                <td class:align-end={column.align === "end"}>{cellValue(row, column.key)}</td>
+              {/each}
+            </tr>
+          {:else}
+            <tr>
+              <td class="empty-row" colspan={columns.length}>{emptyMessage}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  </details>
 </SurfaceCard>
 
 <style>
   :global(.diagnostic-count-table.ui-surface-card) {
     gap: 0.7rem;
+  }
+
+  .diagnostic-count-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 650;
+  }
+
+  summary span:last-child {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.86rem;
+    line-height: 1.45;
   }
 
   .table-scroll {

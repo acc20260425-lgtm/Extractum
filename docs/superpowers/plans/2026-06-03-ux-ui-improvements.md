@@ -943,7 +943,7 @@ git commit -m "feat(settings): clarify profile and model selection"
 - Modify: `src/routes/diagnostics/+page.svelte`
 - Modify: `src/lib/components/diagnostics/DiagnosticCountTable.svelte`
 
-- [ ] **Step 1: Write diagnostics UX contract**
+- [x] **Step 1: Write diagnostics UX contract**
 
 Create `src/lib/diagnostics-ux-contract.test.ts`:
 
@@ -968,7 +968,7 @@ describe("diagnostics UX contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the new test and verify it fails**
+- [x] **Step 2: Run the new test and verify it fails**
 
 ```powershell
 npm.cmd run test -- src/lib/diagnostics-ux-contract.test.ts
@@ -976,7 +976,7 @@ npm.cmd run test -- src/lib/diagnostics-ux-contract.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 3: Make `DiagnosticCountTable` collapsible**
+- [x] **Step 3: Make `DiagnosticCountTable` collapsible**
 
 In `DiagnosticCountTable.svelte`, add an `open` prop:
 
@@ -1011,7 +1011,7 @@ Wrap the existing table body inside the existing `SurfaceCard` with:
 </details>
 ```
 
-- [ ] **Step 4: Add diagnostics table mode**
+- [x] **Step 4: Add diagnostics table mode**
 
 In `diagnostics/+page.svelte`, add:
 
@@ -1066,7 +1066,7 @@ Render tables through the sections list:
 {/each}
 ```
 
-- [ ] **Step 5: Run diagnostics tests and check**
+- [x] **Step 5: Run diagnostics tests and check**
 
 ```powershell
 npm.cmd run test -- src/lib/diagnostics-ux-contract.test.ts src/lib/diagnostics-route-contract.test.ts src/lib/diagnostics-view-model.test.ts
@@ -1075,7 +1075,7 @@ npm.cmd run check
 
 Expected: PASS and `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/routes/diagnostics/+page.svelte src/lib/components/diagnostics/DiagnosticCountTable.svelte src/lib/diagnostics-ux-contract.test.ts src/lib/diagnostics-route-contract.test.ts
