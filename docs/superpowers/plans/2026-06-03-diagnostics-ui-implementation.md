@@ -1669,25 +1669,25 @@ If there is no diff after Step 1, skip this commit.
 **Files:**
 - No planned source changes.
 
-- [ ] **Step 1: Run Svelte/TypeScript check**
+- [x] **Step 1: Run Svelte/TypeScript check**
 
 Run: `npm.cmd run check`
 
 Expected: PASS.
 
-- [ ] **Step 2: Run project tests**
+- [x] **Step 2: Run project tests**
 
 Run: `npm.cmd run test`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full project verification**
+- [x] **Step 3: Run full project verification**
 
 Run: `npm.cmd run verify`
 
 Expected: PASS.
 
-- [ ] **Step 4: Inspect final git state**
+- [x] **Step 4: Inspect final git state**
 
 Run:
 
