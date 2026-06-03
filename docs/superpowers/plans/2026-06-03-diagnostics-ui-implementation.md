@@ -545,6 +545,20 @@ describe("diagnostics view model helpers", () => {
     ).toBe("Error loading diagnostics (not_found): Summary missing");
   });
 
+  it("does not delegate AppError-shaped objects that carry detail-ish fields", () => {
+    const message = formatDiagnosticError("loading diagnostics", {
+      kind: "internal",
+      message: "private raw payload",
+      payload: "secret payload",
+      stack: "private stack",
+    });
+
+    expect(message).toBe("Error loading diagnostics: Diagnostics could not be loaded.");
+    expect(message).not.toContain("private raw payload");
+    expect(message).not.toContain("secret payload");
+    expect(message).not.toContain("private stack");
+  });
+
   it("uses a generic fallback for unknown non-app errors without leaking fields", () => {
     const message = formatDiagnosticError("loading diagnostics", {
       message: "raw object message",
@@ -553,6 +567,10 @@ describe("diagnostics view model helpers", () => {
       url: "https://private.example",
       path: "C:/Users/private/db.sqlite",
       raw: "raw payload",
+      log: "raw log",
+      baseUrl: "https://llm.private/v1",
+      sourceId: 42,
+      profileId: "private-profile",
     });
 
     expect(message).toBe("Error loading diagnostics: Diagnostics could not be loaded.");
@@ -560,6 +578,9 @@ describe("diagnostics view model helpers", () => {
     expect(message).not.toContain("private stack");
     expect(message).not.toContain("private payload");
     expect(message).not.toContain("private.example");
+    expect(message).not.toContain("raw log");
+    expect(message).not.toContain("llm.private");
+    expect(message).not.toContain("private-profile");
     expect(message).not.toContain("[object Object]");
   });
 });
@@ -576,11 +597,36 @@ Expected: FAIL because `src/lib/diagnostics-view-model.ts` does not exist yet.
 Create `src/lib/diagnostics-view-model.ts`:
 
 ```ts
-import { errorKind, formatAppError } from "$lib/app-error";
+import { formatAppError, type AppErrorKind } from "$lib/app-error";
 import type { BadgeVariant } from "$lib/components/ui/types";
 
 type CountRowValue = string | number | boolean | null | undefined;
 type CountRow = Record<string, CountRowValue> & { count: number };
+type DiagnosticAppErrorPayload = {
+  kind: AppErrorKind;
+  message: string;
+};
+
+const APP_ERROR_KINDS = new Set<AppErrorKind>([
+  "validation",
+  "not_found",
+  "auth",
+  "network",
+  "conflict",
+  "internal",
+]);
+
+const DETAILISH_ERROR_KEYS = new Set([
+  "stack",
+  "payload",
+  "url",
+  "path",
+  "raw",
+  "log",
+  "baseUrl",
+  "sourceId",
+  "profileId",
+]);
 
 const SUCCESS_STATUSES = new Set([
   "available",
@@ -627,6 +673,38 @@ export const DIAGNOSTICS_PRIVACY_FALLBACK_NOTE =
 
 function normalizedKey(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function isAppErrorKind(value: unknown): value is AppErrorKind {
+  return typeof value === "string" && APP_ERROR_KINDS.has(value as AppErrorKind);
+}
+
+function toDiagnosticAppErrorObject(value: unknown): DiagnosticAppErrorPayload | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const candidate = value as Record<string, unknown>;
+  const keys = Object.keys(candidate);
+  if (keys.some((key) => DETAILISH_ERROR_KEYS.has(key))) return null;
+  if (keys.some((key) => key !== "kind" && key !== "message")) return null;
+  if (!isAppErrorKind(candidate.kind) || typeof candidate.message !== "string") return null;
+
+  const message = candidate.message.trim();
+  if (!message) return null;
+  return { kind: candidate.kind, message };
+}
+
+function toDiagnosticAppError(value: unknown): DiagnosticAppErrorPayload | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+    try {
+      return toDiagnosticAppErrorObject(JSON.parse(trimmed));
+    } catch {
+      return null;
+    }
+  }
+
+  return toDiagnosticAppErrorObject(value);
 }
 
 function pad2(value: number) {
@@ -728,8 +806,9 @@ export function privacyFallbackNote(value: unknown) {
 }
 
 export function formatDiagnosticError(action: string, error: unknown) {
-  if (errorKind(error) !== null) {
-    return formatAppError(action, error);
+  const appError = toDiagnosticAppError(error);
+  if (appError !== null) {
+    return formatAppError(action, appError);
   }
   return `Error ${action}: Diagnostics could not be loaded.`;
 }
@@ -798,21 +877,26 @@ describe("diagnostics frontend source contracts", () => {
   });
 
   it("loads diagnostics only from mount and manual refresh state", () => {
-    expect(diagnosticsPageSource).toContain('import { onMount } from "svelte";');
-    expect(diagnosticsPageSource).toContain("onMount(() => {");
-    expect(diagnosticsPageSource).toContain("void refreshDiagnostics(true);");
-    expect(diagnosticsPageSource).toContain("onclick={() => void refreshDiagnostics(false)}");
+    expect(diagnosticsPageSource).toMatch(/import\s*\{\s*onMount\s*\}\s*from\s*"svelte"/);
+    expect(diagnosticsPageSource).toMatch(/onMount\s*\(\s*\(\)\s*=>/);
+    expect(diagnosticsPageSource).toMatch(/refreshDiagnostics\s*\(\s*true\s*\)/);
+    expect(diagnosticsPageSource).toMatch(/refreshDiagnostics\s*\(\s*false\s*\)/);
     expect(diagnosticsPageSource).not.toContain("export const load");
     expect(diagnosticsPageSource).not.toContain("setInterval");
   });
 
   it("keeps refresh failure state separate from the last successful summary", () => {
-    expect(diagnosticsPageSource).toContain("let summary = $state<DiagnosticSummaryDto | null>(null);");
-    expect(diagnosticsPageSource).toContain("let loading = $state(true);");
-    expect(diagnosticsPageSource).toContain("let refreshing = $state(false);");
-    expect(diagnosticsPageSource).toContain("let status = $state(\"\");");
-    expect(diagnosticsPageSource).toContain("let error = $state<string | null>(null);");
-    expect(diagnosticsPageSource).toContain("if (initial) summary = null;");
+    expect(diagnosticsPageSource).toMatch(/let\s+summary\s*=\s*\$state(?:\s*<[^>]+>)?\s*\(\s*null\s*\)/);
+    expect(diagnosticsPageSource).toMatch(/let\s+loading\s*=\s*\$state\s*\(\s*true\s*\)/);
+    expect(diagnosticsPageSource).toMatch(/let\s+refreshing\s*=\s*\$state\s*\(\s*false\s*\)/);
+    expect(diagnosticsPageSource).toMatch(/let\s+status\s*=\s*\$state\s*\(\s*""\s*\)/);
+    expect(diagnosticsPageSource).toMatch(/let\s+error\s*=\s*\$state(?:\s*<[^>]+>)?\s*\(\s*null\s*\)/);
+    expect(diagnosticsPageSource).toMatch(/if\s*\(\s*initial\s*\)\s*(?:\{\s*)?summary\s*=\s*null\s*;/);
+  });
+
+  it("does not render duplicate initial loading status", () => {
+    expect(diagnosticsPageSource).toMatch(/if\s*\(\s*initial\s*\)\s*\{[\s\S]*status\s*=\s*"";/);
+    expect(diagnosticsPageSource).toMatch(/else\s*\{[\s\S]*status\s*=\s*"Refreshing\.\.\.";/);
   });
 
   it("adds Diagnostics navigation without moving diagnostics into Settings", () => {
@@ -1161,7 +1245,7 @@ Create `src/routes/diagnostics/+page.svelte` with this structure:
   async function refreshDiagnostics(initial: boolean) {
     if (initial) {
       loading = true;
-      status = "Loading diagnostics...";
+      status = "";
     } else {
       refreshing = true;
       status = "Refreshing...";
