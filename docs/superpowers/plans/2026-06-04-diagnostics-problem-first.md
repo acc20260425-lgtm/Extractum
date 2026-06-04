@@ -31,7 +31,7 @@
 - Modify: `src/lib/diagnostics-ux-contract.test.ts`
 - Modify: `docs/superpowers/plans/2026-06-04-diagnostics-problem-first.md`
 
-- [ ] **Step 1: Add failing route-order assertions**
+- [x] **Step 1: Add failing route-order assertions**
 
 In `src/lib/diagnostics-ux-contract.test.ts`, add this test inside the existing `describe("diagnostics UX contract", () => { ... })` block:
 
@@ -71,7 +71,7 @@ In `src/lib/diagnostics-ux-contract.test.ts`, add this test inside the existing 
   });
 ```
 
-- [ ] **Step 2: Add failing empty issue-mode area assertions**
+- [x] **Step 2: Add failing empty issue-mode area assertions**
 
 In the same file, add this test after the route-order test:
 
@@ -84,7 +84,7 @@ In the same file, add this test after the route-order test:
   });
 ```
 
-- [ ] **Step 3: Run the focused UX contract and verify it fails**
+- [x] **Step 3: Run the focused UX contract and verify it fails**
 
 Run:
 
@@ -94,11 +94,11 @@ npm.cmd run test -- src/lib/diagnostics-ux-contract.test.ts
 
 Expected: FAIL because `diagnosticsTableArea`, `diagnosticsOverviewArea`, `visibleDiagnosticsTableSections`, and the issue-mode empty state do not exist yet.
 
-- [ ] **Step 4: Mark Task 1 steps complete in this plan**
+- [x] **Step 4: Mark Task 1 steps complete in this plan**
 
 In `docs/superpowers/plans/2026-06-04-diagnostics-problem-first.md`, change Task 1 checkboxes completed so the implementation history is visible in the plan.
 
-- [ ] **Step 5: Commit the failing contract**
+- [x] **Step 5: Commit the failing contract**
 
 Run:
 

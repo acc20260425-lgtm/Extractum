@@ -29,4 +29,45 @@ describe("diagnostics UX contract", () => {
     expect(diagnosticsViewModelSource).toContain("export function diagnosticRowHasIssue");
     expect(diagnosticsViewModelSource).toContain("export function filterDiagnosticIssueRows");
   });
+
+  it("orders diagnostics issue details before overview only in issue mode", () => {
+    expect(diagnosticsPageSource).toContain('{#if diagnosticsTableMode === "issues"}');
+    expect(diagnosticsPageSource).toContain("{@render diagnosticsTableArea(tableSections)}");
+    expect(diagnosticsPageSource).toContain("{@render diagnosticsOverviewArea(summary)}");
+
+    const issueBranchIndex = diagnosticsPageSource.indexOf('{#if diagnosticsTableMode === "issues"}');
+    const issueTableIndex = diagnosticsPageSource.indexOf(
+      "{@render diagnosticsTableArea(tableSections)}",
+      issueBranchIndex,
+    );
+    const issueOverviewIndex = diagnosticsPageSource.indexOf(
+      "{@render diagnosticsOverviewArea(summary)}",
+      issueBranchIndex,
+    );
+    const allBranchIndex = diagnosticsPageSource.indexOf("{:else}", issueBranchIndex);
+    const allOverviewIndex = diagnosticsPageSource.indexOf(
+      "{@render diagnosticsOverviewArea(summary)}",
+      allBranchIndex,
+    );
+    const allTableIndex = diagnosticsPageSource.indexOf(
+      "{@render diagnosticsTableArea(tableSections)}",
+      allBranchIndex,
+    );
+
+    expect(issueBranchIndex).toBeGreaterThan(0);
+    expect(issueTableIndex).toBeGreaterThan(issueBranchIndex);
+    expect(issueOverviewIndex).toBeGreaterThan(issueBranchIndex);
+    expect(issueTableIndex).toBeLessThan(issueOverviewIndex);
+    expect(allBranchIndex).toBeGreaterThan(issueBranchIndex);
+    expect(allOverviewIndex).toBeGreaterThan(allBranchIndex);
+    expect(allTableIndex).toBeGreaterThan(allBranchIndex);
+    expect(allOverviewIndex).toBeLessThan(allTableIndex);
+  });
+
+  it("renders an immediate table-area empty state when issue mode has no matching rows", () => {
+    expect(diagnosticsPageSource).toContain("visibleDiagnosticsTableSections");
+    expect(diagnosticsPageSource).toContain('class="diagnostics-table-area diagnostics-tables"');
+    expect(diagnosticsPageSource).toContain('class="diagnostics-overview-area"');
+    expect(diagnosticsPageSource).toContain("No diagnostic issue rows match this view.");
+  });
 });
