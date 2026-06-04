@@ -44,6 +44,9 @@
     columns: DiagnosticTableColumn[];
     rows: DiagnosticTableRow[];
   };
+  type VisibleDiagnosticTableSection = DiagnosticTableSection & {
+    visibleRows: DiagnosticTableRow[];
+  };
 
   const sourceColumns = [
     { key: "sourceType", label: "Source" },
@@ -164,6 +167,15 @@
 
   function visibleDiagnosticRows<T extends Record<string, string | number | undefined>>(rows: T[]) {
     return diagnosticsTableMode === "issues" ? filterDiagnosticIssueRows(rows) : rows;
+  }
+
+  function visibleDiagnosticsTableSections(sections: DiagnosticTableSection[]): VisibleDiagnosticTableSection[] {
+    return sections
+      .map((section) => ({
+        ...section,
+        visibleRows: visibleDiagnosticRows(section.rows),
+      }))
+      .filter((section) => diagnosticsTableMode === "all" || section.visibleRows.length > 0);
   }
 
   function diagnosticsTableSections(current: DiagnosticSummaryDto): DiagnosticTableSection[] {
@@ -372,8 +384,22 @@
       <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "all"} onclick={() => (diagnosticsTableMode = "all")}>All tables</Button>
     </div>
 
+    {#if diagnosticsTableMode === "issues"}
+      {@render diagnosticsTableArea(tableSections)}
+      {@render diagnosticsOverviewArea(summary)}
+    {:else}
+      {@render diagnosticsOverviewArea(summary)}
+      {@render diagnosticsTableArea(tableSections)}
+    {/if}
+  {:else if loading}
+    <StatusMessage tone="muted" className="page-status">Loading diagnostics...</StatusMessage>
+  {/if}
+</section>
+
+{#snippet diagnosticsOverviewArea(current: DiagnosticSummaryDto)}
+  <div class="diagnostics-overview-area">
     <div class="status-strip" aria-label="Diagnostics health overview">
-      {#each statusStripItems(summary) as item (item.label)}
+      {#each statusStripItems(current) as item (item.label)}
         <div class="status-tile">
           <span>{item.label}</span>
           <strong>{item.value}</strong>
@@ -385,64 +411,67 @@
     <div class="diagnostics-grid">
       <SurfaceCard title="App and build" meta="Factual diagnostic summary metadata">
         <div class="meta-grid">
-          <MetaCell label="App">{summary.app.appName}</MetaCell>
-          <MetaCell label="Version">{summary.app.appVersion}</MetaCell>
-          <MetaCell label="Build">{labelFromKey(summary.app.buildMode)}</MetaCell>
-          <MetaCell label="Generated">{formatSummaryGeneratedAt(summary.app.generatedAtUnix).replace("Summary generated ", "")}</MetaCell>
+          <MetaCell label="App">{current.app.appName}</MetaCell>
+          <MetaCell label="Version">{current.app.appVersion}</MetaCell>
+          <MetaCell label="Build">{labelFromKey(current.app.buildMode)}</MetaCell>
+          <MetaCell label="Generated">{formatSummaryGeneratedAt(current.app.generatedAtUnix).replace("Summary generated ", "")}</MetaCell>
         </div>
       </SurfaceCard>
 
       <SurfaceCard title="Database" meta="SQLite availability and migration state">
         <div class="meta-grid">
-          <MetaCell label="SQLite">{availabilityLabel(summary.database.sqliteAvailable)}</MetaCell>
-          <MetaCell label="Migrations">{labelFromKey(summary.database.migrations.status)}</MetaCell>
-          <MetaCell label="Accounts">{summary.database.accountCount}</MetaCell>
-          <MetaCell label="Pending versions">{summary.database.migrations.pendingVersions.length}</MetaCell>
-          <MetaCell label="Failed versions">{summary.database.migrations.failedVersions.length}</MetaCell>
+          <MetaCell label="SQLite">{availabilityLabel(current.database.sqliteAvailable)}</MetaCell>
+          <MetaCell label="Migrations">{labelFromKey(current.database.migrations.status)}</MetaCell>
+          <MetaCell label="Accounts">{current.database.accountCount}</MetaCell>
+          <MetaCell label="Pending versions">{current.database.migrations.pendingVersions.length}</MetaCell>
+          <MetaCell label="Failed versions">{current.database.migrations.failedVersions.length}</MetaCell>
         </div>
       </SurfaceCard>
 
       <SurfaceCard title="Runtimes" meta="Backend-reported runtime checks">
         <div class="meta-grid">
-          <MetaCell label="Secure storage">{labelFromKey(summary.runtimes.secureStorage.status)}</MetaCell>
-          <MetaCell label="Secure storage available">{availabilityLabel(summary.runtimes.secureStorage.available)}</MetaCell>
-          <MetaCell label="yt-dlp">{labelFromKey(summary.runtimes.ytdlp.status)}</MetaCell>
-          <MetaCell label="yt-dlp available">{availabilityLabel(summary.runtimes.ytdlp.available)}</MetaCell>
-          <MetaCell label="yt-dlp version">{summary.runtimes.ytdlp.version ?? "Unknown"}</MetaCell>
+          <MetaCell label="Secure storage">{labelFromKey(current.runtimes.secureStorage.status)}</MetaCell>
+          <MetaCell label="Secure storage available">{availabilityLabel(current.runtimes.secureStorage.available)}</MetaCell>
+          <MetaCell label="yt-dlp">{labelFromKey(current.runtimes.ytdlp.status)}</MetaCell>
+          <MetaCell label="yt-dlp available">{availabilityLabel(current.runtimes.ytdlp.available)}</MetaCell>
+          <MetaCell label="yt-dlp version">{current.runtimes.ytdlp.version ?? "Unknown"}</MetaCell>
         </div>
       </SurfaceCard>
 
       <SurfaceCard title="Privacy boundary" meta="Data classes intentionally excluded by backend diagnostics">
-        {#if privacyLabels(summary).length > 0}
+        {#if privacyLabels(current).length > 0}
           <div class="privacy-chips">
-            {#each privacyLabels(summary) as item (item)}
+            {#each privacyLabels(current) as item (item)}
               <Badge variant="neutral">{item}</Badge>
             {/each}
           </div>
         {:else}
-          <StatusMessage tone="muted" surface={false}>{privacyNote(summary)}</StatusMessage>
+          <StatusMessage tone="muted" surface={false}>{privacyNote(current)}</StatusMessage>
         {/if}
       </SurfaceCard>
     </div>
+  </div>
+{/snippet}
 
-    <div class="diagnostics-tables">
-      {#each tableSections as section (section.title)}
-        {#if diagnosticsTableMode === "all" || visibleDiagnosticRows(section.rows).length > 0}
-          <DiagnosticCountTable
-            title={section.title}
-            description={section.description}
-            columns={section.columns}
-            rows={visibleDiagnosticRows(section.rows)}
-            totalRows={section.rows.length}
-            open={hasDiagnosticIssue(section.rows)}
-          />
-        {/if}
-      {/each}
-    </div>
-  {:else if loading}
-    <StatusMessage tone="muted" className="page-status">Loading diagnostics...</StatusMessage>
-  {/if}
-</section>
+{#snippet diagnosticsTableArea(tableSections: DiagnosticTableSection[])}
+  {@const visibleSections = visibleDiagnosticsTableSections(tableSections)}
+  <div class="diagnostics-table-area diagnostics-tables">
+    {#each visibleSections as section (section.title)}
+      <DiagnosticCountTable
+        title={section.title}
+        description={section.description}
+        columns={section.columns}
+        rows={section.visibleRows}
+        totalRows={section.rows.length}
+        open={hasDiagnosticIssue(section.rows)}
+      />
+    {:else}
+      <StatusMessage tone="muted" className="diagnostics-empty-state">
+        No diagnostic issue rows match this view.
+      </StatusMessage>
+    {/each}
+  </div>
+{/snippet}
 
 <style>
   .diagnostics-page {
@@ -451,6 +480,12 @@
 
   .diagnostics-meta {
     font-size: 0.86rem;
+  }
+
+  .diagnostics-overview-area {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
   }
 
   .status-strip {
@@ -488,6 +523,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.9rem;
     align-items: start;
+  }
+
+  :global(.diagnostics-empty-state.ui-status-message) {
+    grid-column: 1 / -1;
   }
 
   .meta-grid {

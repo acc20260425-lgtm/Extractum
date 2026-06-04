@@ -116,7 +116,7 @@ git commit -m "test: capture diagnostics problem-first contract"
 - Modify: `src/lib/diagnostics-ux-contract.test.ts`
 - Modify: `docs/superpowers/plans/2026-06-04-diagnostics-problem-first.md`
 
-- [ ] **Step 1: Add a visible table-section type**
+- [x] **Step 1: Add a visible table-section type**
 
 In `src/routes/diagnostics/+page.svelte`, add this type immediately after `type DiagnosticTableSection = { ... };`:
 
@@ -126,7 +126,7 @@ In `src/routes/diagnostics/+page.svelte`, add this type immediately after `type 
   };
 ```
 
-- [ ] **Step 2: Add visible table-section helper**
+- [x] **Step 2: Add visible table-section helper**
 
 In `src/routes/diagnostics/+page.svelte`, add this function immediately after `visibleDiagnosticRows`:
 
@@ -141,7 +141,7 @@ In `src/routes/diagnostics/+page.svelte`, add this function immediately after `v
   }
 ```
 
-- [ ] **Step 3: Replace the summary-and-table markup with mode-dependent renders**
+- [x] **Step 3: Replace the summary-and-table markup with mode-dependent renders**
 
 In `src/routes/diagnostics/+page.svelte`, keep this block unchanged:
 
@@ -189,7 +189,7 @@ Insert this mode-dependent render block in the same location:
     {/if}
 ```
 
-- [ ] **Step 4: Add the Diagnostics overview snippet**
+- [x] **Step 4: Add the Diagnostics overview snippet**
 
 In `src/routes/diagnostics/+page.svelte`, add this snippet after the closing `</section>` and before `<style>`:
 
@@ -252,7 +252,7 @@ In `src/routes/diagnostics/+page.svelte`, add this snippet after the closing `</
 {/snippet}
 ```
 
-- [ ] **Step 5: Add the Diagnostics table-area snippet**
+- [x] **Step 5: Add the Diagnostics table-area snippet**
 
 In `src/routes/diagnostics/+page.svelte`, add this snippet immediately after the overview snippet and before `<style>`:
 
@@ -278,7 +278,7 @@ In `src/routes/diagnostics/+page.svelte`, add this snippet immediately after the
 {/snippet}
 ```
 
-- [ ] **Step 6: Add layout CSS for the new areas**
+- [x] **Step 6: Add layout CSS for the new areas**
 
 In `src/routes/diagnostics/+page.svelte`, add these CSS rules before the existing `.status-strip` rule:
 
@@ -300,7 +300,7 @@ Add this rule after the existing `.diagnostics-tables` rule:
 
 Keep the existing `.diagnostics-grid, .diagnostics-tables` selector so the table area keeps its two-column desktop layout and one-column narrow layout.
 
-- [ ] **Step 7: Run focused Diagnostics tests**
+- [x] **Step 7: Run focused Diagnostics tests**
 
 Run:
 
@@ -310,7 +310,7 @@ npm.cmd run test -- src/lib/diagnostics-ux-contract.test.ts src/lib/diagnostics-
 
 Expected: PASS. The focused set should include the new route-order raw-source checks and the existing row-filter helper checks.
 
-- [ ] **Step 8: Run Svelte check**
+- [x] **Step 8: Run Svelte check**
 
 Run:
 
@@ -320,11 +320,11 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 9: Mark Task 2 steps complete in this plan**
+- [x] **Step 9: Mark Task 2 steps complete in this plan**
 
 In `docs/superpowers/plans/2026-06-04-diagnostics-problem-first.md`, change Task 2 checkboxes completed after the focused tests and Svelte check pass.
 
-- [ ] **Step 10: Commit the implementation**
+- [x] **Step 10: Commit the implementation**
 
 Run:
 
