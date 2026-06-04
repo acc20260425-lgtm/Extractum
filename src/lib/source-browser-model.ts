@@ -237,6 +237,26 @@ export function sourceItemContextLine(
   ].filter(Boolean).join(" - ");
 }
 
+export function youtubeEvidenceRoleLabel(item: Pick<SourceItem, "itemKind" | "youtubeComment">): string {
+  if (item.youtubeComment || item.itemKind === "youtube_comment") {
+    return item.youtubeComment?.isReply ? "Reply" : "Comment";
+  }
+  if (item.itemKind === "youtube_transcript") return "Transcript";
+  if (item.itemKind === "youtube_description") return "Description";
+  return sourceItemKindLabel(item.itemKind);
+}
+
+export function youtubeEvidenceContextLine(
+  item: Pick<SourceItem, "author" | "hasMedia" | "mediaKind">,
+  sourceLabel: string,
+): string {
+  return [
+    item.author,
+    sourceLabel,
+    item.hasMedia ? item.mediaKind ?? "media" : null,
+  ].filter(Boolean).join(" - ");
+}
+
 export function filterLoadedSourceItems(items: SourceItem[], filter: LoadedSourceItemFilter): SourceItem[] {
   const search = filter.search.trim().toLocaleLowerCase();
   return items.filter((item) => {

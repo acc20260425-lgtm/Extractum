@@ -11,6 +11,8 @@
     sourceItemContextLine,
     sourceItemKindChips,
     sourceItemPreviewText,
+    youtubeEvidenceContextLine,
+    youtubeEvidenceRoleLabel,
     type LoadedSourceItemSort,
   } from "$lib/source-browser-model";
   import { liveSourceItemRef } from "$lib/source-reader-model";
@@ -22,6 +24,7 @@
     "telegram_message",
     "youtube_transcript",
     "youtube_comment",
+    "youtube_description",
   ]);
 
   let {
@@ -60,6 +63,9 @@
     }),
   );
   const visibleItems = $derived(sortLoadedSourceItems(filteredItems, sortMode));
+  const hasYoutubeEvidenceItems = $derived(
+    items.some((item) => item.itemKind.startsWith("youtube_") || item.youtubeComment),
+  );
 
   function inputValue(event: Event) {
     const target = event.currentTarget;
@@ -84,7 +90,18 @@
   }
 
   function itemContextLine(item: SourceItem) {
+    if (isYoutubeItem(item)) {
+      return youtubeEvidenceContextLine(item, itemSourceLabel(item));
+    }
     return sourceItemContextLine(item, itemSourceLabel(item));
+  }
+
+  function isYoutubeItem(item: SourceItem) {
+    return item.itemKind.startsWith("youtube_") || !!item.youtubeComment;
+  }
+
+  function itemRoleLabel(item: SourceItem) {
+    return isYoutubeItem(item) ? youtubeEvidenceRoleLabel(item) : itemKindTitle(item);
   }
 
   $effect(() => {
@@ -158,6 +175,10 @@
     <p class="items-help">{helpDescription}</p>
   {/if}
 
+  {#if hasYoutubeEvidenceItems}
+    <div class="evidence-inventory-label">Evidence inventory</div>
+  {/if}
+
   {#if !loading && items.length === 0}
     <EmptyState description={emptyDescription} />
   {:else if !loading && visibleItems.length === 0}
@@ -172,7 +193,7 @@
             data-evidence-highlighted={isEvidenceHighlighted(item) ? "true" : undefined}
           >
             <div class="item-heading">
-              <strong>{itemKindTitle(item)}</strong>
+              <strong>{itemRoleLabel(item)}</strong>
               <span>{formatTimestamp(item.publishedAt)}</span>
             </div>
             <div class="item-meta">
@@ -276,6 +297,14 @@
 
   .items-help {
     font-size: 0.82rem;
+  }
+
+  .evidence-inventory-label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   .item-preview {

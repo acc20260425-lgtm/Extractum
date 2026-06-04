@@ -1121,7 +1121,7 @@ git commit -m "feat(analysis): compact youtube readers"
 - Modify: `src/lib/components/analysis/universal-items-view.svelte`
 - Test: `src/lib/analysis-youtube-source-specialization.test.ts`
 
-- [ ] **Step 1: Add evidence role helper tests**
+- [x] **Step 1: Add evidence role helper tests**
 
 In `src/lib/source-browser-model.test.ts`, extend the import list with:
 
@@ -1147,7 +1147,7 @@ it("keeps raw YouTube identifiers secondary in evidence context lines", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run:
 
@@ -1157,7 +1157,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts
 
 Expected: FAIL because helper functions are missing.
 
-- [ ] **Step 3: Implement evidence helper functions**
+- [x] **Step 3: Implement evidence helper functions**
 
 In `src/lib/source-browser-model.ts`, add exports:
 
@@ -1183,7 +1183,7 @@ export function youtubeEvidenceContextLine(
 }
 ```
 
-- [ ] **Step 4: Use evidence labels in UniversalItemsView for YouTube rows**
+- [x] **Step 4: Use evidence labels in UniversalItemsView for YouTube rows**
 
 In `universal-items-view.svelte`, import:
 
@@ -1215,7 +1215,7 @@ Add a visible section heading for YouTube rows:
 {/if}
 ```
 
-- [ ] **Step 5: Add small CSS for evidence label**
+- [x] **Step 5: Add small CSS for evidence label**
 
 In `universal-items-view.svelte`, add:
 
@@ -1229,7 +1229,7 @@ In `universal-items-view.svelte`, add:
 }
 ```
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -1239,7 +1239,7 @@ npm.cmd run test -- src/lib/source-browser-model.test.ts src/lib/analysis-youtub
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 

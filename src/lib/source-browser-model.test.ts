@@ -17,6 +17,8 @@ import {
   sourceBrowserTabsForSource,
   smartDefaultSourceBrowserTab,
   sortLoadedSourceItems,
+  youtubeEvidenceContextLine,
+  youtubeEvidenceRoleLabel,
   type SourceBrowserTabId,
 } from "./source-browser-model";
 import type { SourceReaderItem } from "./source-reader-model";
@@ -456,6 +458,19 @@ describe("source browser model", () => {
       sourceItem({ author: "Alice", externalId: "42", hasMedia: true, mediaKind: "photo" }),
       "Source #7",
     )).toBe("Alice - Source #7 - 42 - photo");
+  });
+
+  it("labels YouTube item evidence roles for inventory views", () => {
+    expect(youtubeEvidenceRoleLabel(sourceItem({ itemKind: "youtube_transcript" }))).toBe("Transcript");
+    expect(youtubeEvidenceRoleLabel(youtubeCommentItem())).toBe("Comment");
+    expect(youtubeEvidenceRoleLabel(sourceItem({ itemKind: "youtube_description" }))).toBe("Description");
+  });
+
+  it("keeps raw YouTube identifiers secondary in evidence context lines", () => {
+    expect(youtubeEvidenceContextLine(
+      youtubeCommentItem({ author: "@demo", externalId: "comment:abc" }),
+      "Source #66",
+    )).toBe("@demo - Source #66");
   });
 
   it("filters loaded source items by kind plus loaded content and author", () => {
