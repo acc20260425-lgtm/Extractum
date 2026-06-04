@@ -37,3 +37,7 @@ runtime checks, Tauri registration, tests, and full verification.
 Diagnostics UI plans from 2026-06-03 record the shipped read-only
 `/diagnostics` route, API wrapper, view-model helpers, table component, source
 contracts, focused tests, full verification, and live smoke closure.
+
+Diagnostics Problem-First plans from 2026-06-04 record the shipped issue-mode
+table ordering, route snippets, raw-source contracts, full verification, and
+live desktop/narrow viewport checks.

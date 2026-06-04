@@ -40,3 +40,7 @@ Diagnostics UI specs from 2026-06-03 record the shipped read-only diagnostics
 route, privacy boundary, manual refresh behavior, source-contract restrictions,
 and explicit exclusions for raw JSON, logs, copy actions, polling, and support
 bundle export.
+
+Diagnostics Problem-First specs from 2026-06-04 record the shipped issue-mode
+layout that surfaces filtered issue tables before the healthy diagnostics
+overview while preserving overview-first order for `All tables`.

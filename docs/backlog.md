@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-06-03
+> **Updated:** 2026-06-04
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -101,7 +101,9 @@ Priority: medium.
 Guidance: `docs/desktop-product-evolution-analysis.md`.
 
 Shipped baseline: `/diagnostics` now provides a read-only sanitized local health
-summary with manual refresh and a visible privacy boundary.
+summary with manual refresh, a visible privacy boundary, and a problem-first
+`Only issues` mode that surfaces filtered issue tables before healthy overview
+context.
 
 - [ ] define a shared redaction policy for logs, diagnostics, debug status text,
   and future support bundles
