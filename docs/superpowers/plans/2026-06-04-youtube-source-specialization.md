@@ -56,7 +56,7 @@ Expected modified files:
 - Create: `src/lib/youtube-source-view-model.test.ts`
 - Create: `src/lib/analysis-youtube-source-specialization.test.ts`
 
-- [ ] **Step 1: Write failing helper tests**
+- [x] **Step 1: Write failing helper tests**
 
 Create `src/lib/youtube-source-view-model.test.ts`:
 
@@ -221,7 +221,7 @@ describe("youtube source view model", () => {
 });
 ```
 
-- [ ] **Step 2: Run helper tests and verify they fail**
+- [x] **Step 2: Run helper tests and verify they fail**
 
 Run:
 
@@ -231,7 +231,7 @@ npm.cmd run test -- src/lib/youtube-source-view-model.test.ts
 
 Expected: FAIL because `src/lib/youtube-source-view-model.ts` does not exist.
 
-- [ ] **Step 3: Implement the helper module**
+- [x] **Step 3: Implement the helper module**
 
 Create `src/lib/youtube-source-view-model.ts`:
 
@@ -391,7 +391,7 @@ export function youtubeCorpusOptionViews(detail: YoutubeVideoDetail | null): You
 }
 ```
 
-- [ ] **Step 4: Run helper tests and verify they pass**
+- [x] **Step 4: Run helper tests and verify they pass**
 
 Run:
 
@@ -401,7 +401,7 @@ npm.cmd run test -- src/lib/youtube-source-view-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing raw-source contract tests**
+- [x] **Step 5: Write failing raw-source contract tests**
 
 Create `src/lib/analysis-youtube-source-specialization.test.ts`:
 
@@ -478,7 +478,7 @@ describe("analysis youtube source specialization", () => {
 });
 ```
 
-- [ ] **Step 6: Run raw-source contract tests and verify they fail**
+- [x] **Step 6: Run raw-source contract tests and verify they fail**
 
 Run:
 
@@ -488,7 +488,7 @@ npm.cmd run test -- src/lib/analysis-youtube-source-specialization.test.ts
 
 Expected: FAIL because route props and component copy have not been updated.
 
-- [ ] **Step 7: Commit contracts**
+- [x] **Step 7: Commit contracts**
 
 Run:
 
