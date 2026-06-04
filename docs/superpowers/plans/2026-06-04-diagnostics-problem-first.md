@@ -341,7 +341,7 @@ git commit -m "feat(diagnostics): surface issue tables first"
 - Modify: `docs/superpowers/plans/2026-06-04-diagnostics-problem-first.md`
 - Modify only files from Task 2 if verification exposes a small route or test issue.
 
-- [ ] **Step 1: Run full Vitest suite**
+- [x] **Step 1: Run full Vitest suite**
 
 Run:
 
@@ -351,7 +351,7 @@ npm.cmd run test
 
 Expected: all Vitest files pass. The previous baseline was `71` files and `657` tests; the exact count can increase after Task 1.
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
@@ -361,7 +361,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 3: Inspect `/diagnostics` at normal desktop width**
+- [x] **Step 3: Inspect `/diagnostics` at normal desktop width**
 
 With the Tauri app running, connect to the MCP bridge and resize the main window to about `1280x860`. If the session is not connected, run the Tauri MCP `driver_session` action `start` with host `localhost` and port `9223`.
 
@@ -409,7 +409,7 @@ Expected:
 - `firstIssueTableInFirstViewport: true`
 - table summaries include filtered counts such as `Analysis runs\n1/2 rows` and `Ingest batches\n3/4 rows` when the local data has those issue rows.
 
-- [ ] **Step 4: Inspect `/diagnostics` at about `900px` width**
+- [x] **Step 4: Inspect `/diagnostics` at about `900px` width**
 
 Resize the same window to about `900x760`, keep `/diagnostics` in `Only issues`, and run the same JavaScript from Step 3.
 
@@ -420,7 +420,7 @@ Expected:
 - `firstIssueTableInFirstViewport: true`
 - the first issue table is no longer pushed below all healthy overview cards.
 
-- [ ] **Step 5: Verify `All tables` keeps overview-first order**
+- [x] **Step 5: Verify `All tables` keeps overview-first order**
 
 In the running `/diagnostics` page, click `All tables` or run this JavaScript:
 
@@ -442,15 +442,15 @@ Expected:
 - `overviewBeforeTables: true`
 - table summaries use full counts, such as `Analysis runs\n2 rows` and `Ingest batches\n4 rows` when the local data has those rows.
 
-- [ ] **Step 6: Restore the app window**
+- [x] **Step 6: Restore the app window**
 
 Resize the Tauri main window back to about `1280x860` so the user's app is left in the expected desktop shape.
 
-- [ ] **Step 7: Mark Task 3 verification steps complete in this plan**
+- [x] **Step 7: Mark Task 3 verification steps complete in this plan**
 
 In `docs/superpowers/plans/2026-06-04-diagnostics-problem-first.md`, change Task 3 checkboxes completed after verification passes.
 
-- [ ] **Step 8: Commit verification notes or fixes**
+- [x] **Step 8: Commit verification notes or fixes**
 
 If only this plan file changed because checkboxes were marked, run:
 
