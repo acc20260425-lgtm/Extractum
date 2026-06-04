@@ -1007,7 +1007,7 @@ git commit -m "feat(analysis): promote youtube report corpus"
 - Test: `src/lib/analysis-youtube-source-specialization.test.ts`
 - Test: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Import header/status helpers in transcript reader**
+- [x] **Step 1: Import header/status helpers in transcript reader**
 
 In `youtube-transcript-reader.svelte`, import:
 
@@ -1032,7 +1032,7 @@ const captionsStatus = $derived(summary ? youtubeContentStatusLine("captions", s
 const commentsStatus = $derived(summary ? youtubeContentStatusLine("comments", summary.comments, formatTimestamp) : null);
 ```
 
-- [ ] **Step 2: Replace duplicated status badges**
+- [x] **Step 2: Replace duplicated status badges**
 
 In the transcript header meta, replace the direct `summary.captions.*` and `summary.comments.*` badges with:
 
@@ -1059,7 +1059,7 @@ Keep the `h3`, but change it to:
 <h3>{providerHeader.title}</h3>
 ```
 
-- [ ] **Step 3: Rename comments search copy**
+- [x] **Step 3: Rename comments search copy**
 
 In `youtube-comments-view.svelte`, change label, placeholder, and aria label from `Search loaded comments` to `Search comments`:
 
@@ -1069,7 +1069,7 @@ placeholder="Search comments"
 ariaLabel="Search comments"
 ```
 
-- [ ] **Step 4: Add audience evidence note and long-thread affordance**
+- [x] **Step 4: Add audience evidence note and long-thread affordance**
 
 In `youtube-comments-view.svelte`, after the comments toolbar, add:
 
@@ -1092,7 +1092,7 @@ Add CSS:
 }
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run:
 
@@ -1102,7 +1102,7 @@ npm.cmd run test -- src/lib/analysis-youtube-source-specialization.test.ts src/l
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 

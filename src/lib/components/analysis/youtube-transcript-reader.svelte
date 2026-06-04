@@ -14,6 +14,10 @@
     type YoutubeTranscriptGroup,
     type SourceReaderItem,
   } from "$lib/source-reader-model";
+  import {
+    youtubeContentStatusLine,
+    youtubeProviderHeaderSummary,
+  } from "$lib/youtube-source-view-model";
   import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
   import type { SourceItem, YoutubeTranscriptSegment } from "$lib/types/sources";
   import type { YoutubeVideoDetail } from "$lib/types/youtube";
@@ -55,6 +59,15 @@
   } = $props();
 
   const summary = $derived(detail?.summary ?? null);
+  const providerHeader = $derived(
+    youtubeProviderHeaderSummary(
+      { sourceSubtype: "video", title: sourceTitle, externalId: sourceTitle },
+      detail,
+      formatTimestamp,
+    ),
+  );
+  const captionsStatus = $derived(summary ? youtubeContentStatusLine("captions", summary.captions, formatTimestamp) : null);
+  const commentsStatus = $derived(summary ? youtubeContentStatusLine("comments", summary.comments, formatTimestamp) : null);
   const canonicalUrl = $derived(summary?.canonicalUrl ?? null);
   const liveItems = $derived(
     segments.map((segment) =>
@@ -138,19 +151,21 @@
   <div class="transcript-header">
     <div class="transcript-title">
       <span class="eyebrow">YouTube transcript</span>
-      <h3>{summary?.title ?? sourceTitle}</h3>
+      <h3>{providerHeader.title}</h3>
       <div class="transcript-meta">
-        {#if summary}
-          <Badge variant={summary.captions.state === "synced" ? "success" : summary.captions.state === "unavailable" ? "warning" : "neutral"}>
-            {summary.captions.label}
+        {#if captionsStatus}
+          <Badge variant={captionsStatus.state === "synced" ? "success" : captionsStatus.state === "unavailable" ? "warning" : "neutral"}>
+            {captionsStatus.label}
           </Badge>
-          <Badge variant="neutral">{summary.captions.segmentCount} segments</Badge>
-          <Badge variant="neutral">Last synced {formatTimestamp(summary.captions.lastSyncedAt)}</Badge>
-          <Badge variant={summary.comments.state === "synced" ? "success" : summary.comments.state === "failed" ? "danger" : "neutral"}>
-            Comments {summary.comments.label}
+          <Badge variant="neutral">{captionsStatus.countLabel}</Badge>
+          {#if captionsStatus.lastSyncedLabel}<Badge variant="neutral">{captionsStatus.lastSyncedLabel}</Badge>{/if}
+        {/if}
+        {#if commentsStatus}
+          <Badge variant={commentsStatus.state === "synced" ? "success" : commentsStatus.state === "failed" ? "danger" : "neutral"}>
+            {commentsStatus.label}
           </Badge>
-          <Badge variant="neutral">{summary.comments.itemCount} comments</Badge>
-          <Badge variant="neutral">Comments synced {formatTimestamp(summary.comments.lastSyncedAt)}</Badge>
+          <Badge variant="neutral">{commentsStatus.countLabel}</Badge>
+          {#if commentsStatus.lastSyncedLabel}<Badge variant="neutral">{commentsStatus.lastSyncedLabel}</Badge>{/if}
         {/if}
       </div>
     </div>

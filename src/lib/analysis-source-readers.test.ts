@@ -332,9 +332,10 @@ describe("analysis source readers", () => {
 
   it("keeps live YouTube video comments sync status and CTAs in transcript reader", () => {
     expect(youtubeTranscriptSource).toContain("onSyncComments");
-    expect(youtubeTranscriptSource).toContain("summary.comments.label");
-    expect(youtubeTranscriptSource).toContain("summary.comments.itemCount");
-    expect(youtubeTranscriptSource).toContain("summary.comments.lastSyncedAt");
+    expect(youtubeTranscriptSource).toContain("youtubeProviderHeaderSummary");
+    expect(youtubeTranscriptSource).toContain("youtubeContentStatusLine");
+    expect(youtubeTranscriptSource).toContain("commentsStatus.countLabel");
+    expect(youtubeTranscriptSource).toContain("commentsStatus.lastSyncedLabel");
     expect(youtubeTranscriptSource).toContain("Sync comments");
   });
 
@@ -404,7 +405,9 @@ describe("analysis source readers", () => {
   });
 
   it("renders YouTube comments as a loaded-window browser", () => {
-    expect(youtubeCommentsViewSource).toContain("Search loaded comments");
+    expect(youtubeCommentsViewSource).toContain("Search comments");
+    expect(youtubeCommentsViewSource).not.toContain("Search loaded comments");
+    expect(youtubeCommentsViewSource).toContain("Audience comments are user-generated evidence");
     expect(youtubeCommentsViewSource).toContain("Threaded");
     expect(youtubeCommentsViewSource).toContain("Flat");
     expect(youtubeCommentsViewSource).toContain("Most liked");

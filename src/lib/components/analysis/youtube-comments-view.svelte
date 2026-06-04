@@ -118,12 +118,12 @@
 
   <div class="comments-toolbar">
     <label class="search-field">
-      <span>Search loaded comments</span>
+      <span>Search comments</span>
       <Input
         type="search"
         value={search}
-        placeholder="Search loaded comments"
-        ariaLabel="Search loaded comments"
+        placeholder="Search comments"
+        ariaLabel="Search comments"
         oninput={(event) => (search = inputValue(event))}
       />
     </label>
@@ -158,6 +158,8 @@
       </Button>
     </div>
   </div>
+
+  <p class="comments-evidence-note">Audience comments are user-generated evidence and should be cited separately from transcript claims.</p>
 
   {#if !loading && visibleComments.length === 0}
     <EmptyState description={coverage === "synced_empty" ? "This video has no synced comments." : "No loaded comments match this view."} />
@@ -288,9 +290,17 @@
   }
 
   .reply-list {
+    max-height: 22rem;
+    overflow: auto;
     margin-top: 0.55rem;
     padding-left: 1.25rem;
     border-left: 2px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+
+  .comments-evidence-note {
+    margin: -0.25rem 0 0;
+    color: var(--muted);
+    font-size: 0.78rem;
   }
 
   article {
