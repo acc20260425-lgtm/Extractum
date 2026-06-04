@@ -1378,7 +1378,7 @@ git commit -m "feat(analysis): explain youtube source activity"
 **Files:**
 - Modify only files already touched by Tasks 1-6 if verification reveals a regression.
 
-- [ ] **Step 1: Run focused YouTube tests**
+- [x] **Step 1: Run focused YouTube tests**
 
 Run:
 
@@ -1388,7 +1388,7 @@ npm.cmd run test -- src/lib/youtube-source-view-model.test.ts src/lib/analysis-y
 
 Expected: PASS.
 
-- [ ] **Step 2: Run full frontend tests**
+- [x] **Step 2: Run full frontend tests**
 
 Run:
 
@@ -1398,7 +1398,7 @@ npm.cmd run test
 
 Expected: all Vitest suites pass.
 
-- [ ] **Step 3: Run Svelte check**
+- [x] **Step 3: Run Svelte check**
 
 Run:
 
@@ -1408,7 +1408,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 4: Run Analysis smoke**
+- [x] **Step 4: Run Analysis smoke**
 
 Run:
 
@@ -1418,7 +1418,7 @@ npm.cmd run smoke:analysis
 
 Expected: Analysis smoke passes with exit code `0`.
 
-- [ ] **Step 5: Inspect the running app**
+- [x] **Step 5: Inspect the running app**
 
 Use the running Tauri app and verify:
 
@@ -1429,7 +1429,7 @@ Use the running Tauri app and verify:
 - Open Items. YouTube rows read as evidence inventory.
 - Open Activity. Metadata, Transcript, Comments, and detail error state are visible before recent jobs.
 
-- [ ] **Step 6: Commit verification fixes when files changed**
+- [x] **Step 6: Commit verification fixes when files changed**
 
 When verification requires changes in files already touched by this plan, run:
 

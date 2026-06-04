@@ -162,7 +162,9 @@ describe("analysis route effects", () => {
     expect(detailFunction).toContain("const requestKey = `${source.id}:${source.sourceSubtype}`;");
     expect(detailFunction).toContain("youtubeDetailRequestKey = requestKey;");
     expect(detailFunction).toContain("if (youtubeDetailRequestKey !== requestKey) {");
-    expect(detailFunction).toContain("status = formatAppError(\"loading YouTube detail\", error);");
+    expect(detailFunction).toContain("youtubeDetailError = {");
+    expect(detailFunction).toContain("sourceId: source.id");
+    expect(detailFunction).toContain("message: formatAppError(\"loading YouTube detail\", error)");
     expect(detailFunction).toContain("loadingYoutubeDetail = false;");
   });
 

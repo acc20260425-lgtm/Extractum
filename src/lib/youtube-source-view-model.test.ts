@@ -20,7 +20,7 @@ function youtubeSource(overrides: Partial<Source> = {}): Source {
     title: "Gemma video",
     lastSyncState: null,
     lastSyncedAt: 1_800_000_000,
-    isMember: null,
+    isMember: false,
     isActive: true,
     createdAt: 1_779_916_800,
     telegramUsername: null,
