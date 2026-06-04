@@ -456,6 +456,9 @@
         jobs={sourceData.sourceJobs}
         takeoutRecovery={sourceData.takeoutRecovery}
         sourceSyncDisabledReason={sourceData.sourceSyncDisabledReason}
+        youtubeVideoDetail={sourceData.youtubeVideoDetail}
+        youtubePlaylistDetail={sourceData.youtubePlaylistDetail}
+        youtubeDetailError={sourceData.youtubeDetailError}
         {formatTimestamp}
         onSyncSource={() => sourceData.onSyncSource(sourceSubject.id)}
         onSyncMetadata={() => sourceData.onSyncYoutubeMetadata(sourceSubject.id)}

@@ -10,12 +10,17 @@
     SourceJobRecord,
     TakeoutImportRecoveryState,
   } from "$lib/types/sources";
+  import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
+  import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
 
   let {
     source,
     jobs,
     takeoutRecovery,
     sourceSyncDisabledReason,
+    youtubeVideoDetail = null,
+    youtubePlaylistDetail = null,
+    youtubeDetailError = null,
     formatTimestamp,
     onSyncSource,
     onSyncMetadata,
@@ -29,6 +34,9 @@
     jobs: SourceJobRecord[];
     takeoutRecovery: TakeoutImportRecoveryState | null;
     sourceSyncDisabledReason: (source: Source) => string | null;
+    youtubeVideoDetail?: YoutubeVideoDetail | null;
+    youtubePlaylistDetail?: YoutubePlaylistDetail | null;
+    youtubeDetailError?: YoutubeDetailErrorState;
     formatTimestamp: (value: number | null) => string;
     onSyncSource: (sourceId: number) => void | Promise<void>;
     onSyncMetadata: (sourceId: number) => void | Promise<void>;
@@ -148,6 +156,35 @@
           </Button>
         </div>
       {/if}
+    </section>
+  {/if}
+
+  {#if source.sourceType === "youtube"}
+    {@const youtubeSummary = youtubeVideoDetail?.summary ?? youtubePlaylistDetail?.summary ?? null}
+    <section class="activity-section" aria-label="YouTube provider steps">
+      <div class="section-heading">
+        <span class="eyebrow">YouTube provider steps</span>
+        <Badge variant={youtubeDetailError?.sourceId === source.id ? "danger" : "neutral"}>
+          {youtubeDetailError?.sourceId === source.id ? "attention" : "current source"}
+        </Badge>
+      </div>
+      {#if youtubeDetailError?.sourceId === source.id}
+        <StatusMessage tone="error">{youtubeDetailError.message}</StatusMessage>
+      {/if}
+      <div class="provider-step-grid">
+        <div class="provider-step">
+          <strong>Metadata</strong>
+          <span>{youtubeSummary ? "Detail loaded" : "Detail not loaded"}</span>
+        </div>
+        <div class="provider-step">
+          <strong>Transcript</strong>
+          <span>{youtubeSummary ? `${youtubeSummary.captions.label} - ${youtubeSummary.captions.segmentCount} segments` : "Unknown"}</span>
+        </div>
+        <div class="provider-step">
+          <strong>Comments</strong>
+          <span>{youtubeSummary ? `${youtubeSummary.comments.label} - ${youtubeSummary.comments.itemCount} comments` : "Unknown"}</span>
+        </div>
+      </div>
     </section>
   {/if}
 
@@ -277,6 +314,28 @@
     gap: 0.45rem;
   }
 
+  .provider-step-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .provider-step {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+
+  .provider-step span {
+    color: var(--muted);
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+  }
+
   .activity-row {
     justify-content: space-between;
     padding: 0.6rem;
@@ -318,6 +377,10 @@
   }
 
   @media (max-width: 760px) {
+    .provider-step-grid {
+      grid-template-columns: 1fr;
+    }
+
     .activity-row {
       flex-direction: column;
     }

@@ -1258,7 +1258,7 @@ git commit -m "feat(analysis): present youtube items as evidence"
 - Test: `src/lib/analysis-youtube-source-specialization.test.ts`
 - Test: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Pass detail into SourceActivityView**
+- [x] **Step 1: Pass detail into SourceActivityView**
 
 In `source-browser-shell.svelte`, pass the current YouTube details into `<SourceActivityView />`:
 
@@ -1281,7 +1281,7 @@ youtubeDetailError?: YoutubeDetailErrorState;
 
 Default them to `null`.
 
-- [ ] **Step 2: Add YouTube provider steps section**
+- [x] **Step 2: Add YouTube provider steps section**
 
 In `source-activity-view.svelte`, before the detailed jobs section, add:
 
@@ -1316,7 +1316,7 @@ In `source-activity-view.svelte`, before the detailed jobs section, add:
 {/if}
 ```
 
-- [ ] **Step 3: Add provider step CSS**
+- [x] **Step 3: Add provider step CSS**
 
 In `source-activity-view.svelte`, add:
 
@@ -1352,7 +1352,7 @@ Add to the existing mobile block:
 }
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run:
 
@@ -1362,7 +1362,7 @@ npm.cmd run test -- src/lib/analysis-youtube-source-specialization.test.ts src/l
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
