@@ -25,6 +25,7 @@
   import type { RunSnapshotAvailability } from "$lib/analysis-report-canvas-state";
   import { liveSourceItemRef, youtubeSegmentRef, type SourceFilterOption, type SourceReaderItem } from "$lib/source-reader-model";
   import type { AnalysisRunDetail } from "$lib/types/analysis";
+  import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
   import type {
     Source,
     SourceForumTopic,
@@ -71,6 +72,7 @@
     showTopicSelector: boolean;
     youtubeVideoDetail: YoutubeVideoDetail | null;
     youtubePlaylistDetail: YoutubePlaylistDetail | null;
+    youtubeDetailError: YoutubeDetailErrorState;
     youtubeTranscriptSegments: YoutubeTranscriptSegment[];
     youtubeTranscriptSearch: string;
     youtubeTranscriptHasMore: boolean;
@@ -437,6 +439,7 @@
       <YoutubePlaylistVideosView
         sourceTitle={sourceSubject.title ?? sourceSubject.externalId}
         playlist={sourceData.youtubePlaylistDetail}
+        playlistDetailError={sourceData.youtubeDetailError?.sourceId === sourceSubject.id ? sourceData.youtubeDetailError.message : null}
         loading={sourceData.loadingYoutubeDetail}
         {formatTimestamp}
         onOpenSource={sourceData.onOpenSource}

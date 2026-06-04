@@ -816,6 +816,43 @@ describe("analysis-state", () => {
     })).toBe("Add synced sources to this group before running a report.");
   });
 
+  it("uses a selected YouTube detail problem before generic sync copy", () => {
+    const source = sourceRecord({
+      id: 7,
+      title: "Playlist",
+      sourceType: "youtube",
+      sourceSubtype: "playlist",
+    });
+    const problem = "Source 7 has missing or invalid typed YouTube playlist metadata";
+
+    expect(reportLaunchDisabledReason({
+      analysisScope: "single_source",
+      selectedSourceId: "7",
+      selectedGroupId: "",
+      selectedTemplateId: "5",
+      periodFrom: "2026-05-01",
+      periodTo: "2026-05-03",
+      outputLanguage: "Russian",
+      profileId: null,
+      modelOverride: "",
+      youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: false,
+      llmProfiles: [
+        {
+          profile_id: "default",
+          api_key_configured: true,
+        },
+      ],
+      activeLlmProfile: "default",
+      currentSource: source,
+      currentSourceMetric: sourceMetric({ id: 7, item_count: 0 }),
+      currentGroup: null,
+      sourceCatalog: [source],
+      sourceSyncDisabledReason: () => null,
+      youtubeDetailProblemReason: problem,
+    })).toBe(problem);
+  });
+
   it("blocks report launch when a source group member has an unusable runtime", () => {
     const available = sourceRecord({ id: 10, title: "Ready source" });
     const unavailable = sourceRecord({ id: 11, title: "Offline source" });

@@ -512,7 +512,7 @@ git commit -m "test: capture youtube source specialization contract"
 - Test: `src/lib/analysis-report-canvas.test.ts`
 - Test: `src/lib/analysis-state.test.ts`
 
-- [ ] **Step 1: Add route-level YouTube detail error state**
+- [x] **Step 1: Add route-level YouTube detail error state**
 
 In `src/routes/analysis/+page.svelte`, import the type:
 
@@ -526,7 +526,7 @@ Add state near the existing YouTube detail state:
 let youtubeDetailError = $state<YoutubeDetailErrorState>(null);
 ```
 
-- [ ] **Step 2: Clear detail error during YouTube state reset**
+- [x] **Step 2: Clear detail error during YouTube state reset**
 
 In `resetYoutubeDetailState()`, add:
 
@@ -546,7 +546,7 @@ function resetYoutubeDetailState() {
 }
 ```
 
-- [ ] **Step 3: Replace global YouTube detail status with scoped error**
+- [x] **Step 3: Replace global YouTube detail status with scoped error**
 
 In `loadYoutubeDetail(source)`, clear the error at request start and set it in the catch block:
 
@@ -603,7 +603,7 @@ async function loadYoutubeDetail(source: Source) {
 
 The `youtubeSummaries` update is required so the source switcher and opened source detail stop showing contradictory YouTube status after a fresh detail load.
 
-- [ ] **Step 4: Add the scoped YouTube detail problem to report preflight**
+- [x] **Step 4: Add the scoped YouTube detail problem to report preflight**
 
 In `src/lib/analysis-state.ts`, extend `ReportLaunchPreflightState`:
 
@@ -639,7 +639,7 @@ youtubeDetailProblemReason: currentYoutubeDetailProblemReason(),
 
 In `src/lib/analysis-state.test.ts`, add a preflight test that a selected YouTube source with `youtubeDetailProblemReason` returns that exact message before the generic sync-disabled reason.
 
-- [ ] **Step 5: Pass `youtubeDetailError` through canvas props**
+- [x] **Step 5: Pass `youtubeDetailError` through canvas props**
 
 In `src/lib/components/analysis/report-canvas.svelte`, import:
 
@@ -665,7 +665,7 @@ Pass it to `<ReportSetupPanel />` and `<ReportSourceSurface />`:
 {youtubeDetailError}
 ```
 
-- [ ] **Step 6: Pass `youtubeDetailError` through source surface and shell**
+- [x] **Step 6: Pass `youtubeDetailError` through source surface and shell**
 
 In `report-source-surface.svelte`, import the type, add prop, default it to `null`, and include it in `sourceBrowserData={{ ... }}`:
 
@@ -681,7 +681,7 @@ youtubeDetailError: YoutubeDetailErrorState;
 
 Import the type from `$lib/youtube-source-view-model`.
 
-- [ ] **Step 7: Render playlist detail errors in the playlist videos view**
+- [x] **Step 7: Render playlist detail errors in the playlist videos view**
 
 In `source-browser-shell.svelte`, pass:
 
@@ -718,7 +718,7 @@ Render the problem state before the normal `!playlist || !summary` branch:
   </div>
 ```
 
-- [ ] **Step 8: Run focused tests**
+- [x] **Step 8: Run focused tests**
 
 Run:
 
@@ -728,7 +728,7 @@ npm.cmd run test -- src/lib/analysis-youtube-source-specialization.test.ts src/l
 
 Expected: PASS for the scoped error and prop-threading assertions.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 

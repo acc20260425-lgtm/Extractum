@@ -52,6 +52,7 @@
     YoutubeTranscriptSegment,
   } from "$lib/types/sources";
   import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
+  import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
 
   type Props = {
     sourceHeaderCompact?: boolean;
@@ -82,6 +83,7 @@
     sourceJobs: SourceJobRecord[];
     youtubeVideoDetail: YoutubeVideoDetail | null;
     youtubePlaylistDetail: YoutubePlaylistDetail | null;
+    youtubeDetailError?: YoutubeDetailErrorState;
     loadingYoutubeDetail: boolean;
     selectedTraceRef?: string | null;
     highlightToken?: EvidenceHighlightToken | null;
@@ -152,6 +154,7 @@
     sourceJobs,
     youtubeVideoDetail,
     youtubePlaylistDetail,
+    youtubeDetailError = null,
     loadingYoutubeDetail,
     selectedTraceRef = null,
     highlightToken = null,
@@ -487,6 +490,7 @@
           showTopicSelector,
           youtubeVideoDetail,
           youtubePlaylistDetail,
+          youtubeDetailError,
           youtubeTranscriptSegments,
           youtubeTranscriptSearch,
           youtubeTranscriptHasMore,

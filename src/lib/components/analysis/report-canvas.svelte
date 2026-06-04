@@ -51,6 +51,7 @@
     YoutubePlaylistDetail as YoutubePlaylistDetailDto,
     YoutubeVideoDetail,
   } from "$lib/types/youtube";
+  import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
 
   export type NotebookLmExportProgressState = {
     phase: NotebookLmExportEvent["phase"];
@@ -142,6 +143,7 @@
     sourceJobs,
     youtubeVideoDetail,
     youtubePlaylistDetail,
+    youtubeDetailError = null,
     loadingYoutubeDetail,
     formatTimestamp,
     formatPeriod,
@@ -296,6 +298,7 @@
     sourceJobs: SourceJobRecord[];
     youtubeVideoDetail: YoutubeVideoDetail | null;
     youtubePlaylistDetail: YoutubePlaylistDetailDto | null;
+    youtubeDetailError?: YoutubeDetailErrorState;
     loadingYoutubeDetail: boolean;
     formatTimestamp: (value: number | null) => string;
     formatPeriod: (from: number, to: number) => string;
@@ -558,6 +561,9 @@
         {templates}
         {outputLanguage}
         {youtubeCorpusMode}
+        {youtubeVideoDetail}
+        {youtubePlaylistDetail}
+        {youtubeDetailError}
         {includeMigratedHistory}
         {canIncludeMigratedHistory}
         {llmProfiles}
@@ -639,6 +645,7 @@
       {sourceJobs}
       {youtubeVideoDetail}
       {youtubePlaylistDetail}
+      {youtubeDetailError}
       {loadingYoutubeDetail}
       {formatTimestamp}
       {sourceSyncDisabledReason}

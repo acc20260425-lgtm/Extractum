@@ -9,6 +9,7 @@
   let {
     sourceTitle,
     playlist,
+    playlistDetailError = null,
     loading,
     formatTimestamp,
     onOpenSource,
@@ -19,6 +20,7 @@
   }: {
     sourceTitle: string;
     playlist: YoutubePlaylistDetail | null;
+    playlistDetailError?: string | null;
     loading: boolean;
     formatTimestamp: (value: number | null) => string;
     onOpenSource: (sourceId: number) => void | Promise<void>;
@@ -77,6 +79,16 @@
 
   {#if loading}
     <StatusMessage tone="muted" surface={false}>Loading YouTube playlist...</StatusMessage>
+  {:else if playlistDetailError}
+    <StatusMessage tone="error" surface={false}>
+      <strong>Playlist metadata needs attention</strong>
+      <span>This is not an empty playlist. {playlistDetailError}</span>
+    </StatusMessage>
+    <div class="playlist-actions">
+      <Button size="sm" variant="secondary" onclick={onSyncPlaylist}>
+        <RefreshCw size={14} aria-hidden="true" /> Retry playlist sync
+      </Button>
+    </div>
   {:else if !playlist || !summary}
     <StatusMessage tone="muted" surface={false}>YouTube playlist detail is not loaded.</StatusMessage>
   {:else}

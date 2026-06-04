@@ -144,6 +144,7 @@ export type ReportLaunchPreflightState = AnalysisReportStartState & {
   currentGroup: AnalysisSourceGroup | null;
   sourceCatalog: Source[];
   sourceSyncDisabledReason: (source: Source) => string | null;
+  youtubeDetailProblemReason?: string | null;
 };
 
 export function createEmptyLiveRunState(): LiveRunState {
@@ -473,6 +474,9 @@ export function reportLaunchDisabledReason(state: ReportLaunchPreflightState) {
   if (state.analysisScope === "single_source") {
     if (!state.currentSource) {
       return "Selected source is not loaded.";
+    }
+    if (state.currentSource.sourceType === "youtube" && state.youtubeDetailProblemReason) {
+      return state.youtubeDetailProblemReason;
     }
     if (!state.currentSourceMetric || state.currentSourceMetric.item_count <= 0) {
       return "Sync this source before running a report.";

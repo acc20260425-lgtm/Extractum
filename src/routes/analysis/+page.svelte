@@ -71,6 +71,10 @@
     listYoutubeSourceSummaries,
   } from "$lib/api/youtube-detail";
   import {
+    detailErrorForYoutubeSource,
+    type YoutubeDetailErrorState,
+  } from "$lib/youtube-source-view-model";
+  import {
     exportSourceToNotebookLm,
     listenToNotebookLmExportEvents,
   } from "$lib/api/notebooklm-export";
@@ -308,6 +312,7 @@
   let youtubeSummaries = $state<Record<number, YoutubeSourceSummary>>({});
   let youtubeVideoDetail = $state<YoutubeVideoDetail | null>(null);
   let youtubePlaylistDetail = $state<YoutubePlaylistDetail | null>(null);
+  let youtubeDetailError = $state<YoutubeDetailErrorState>(null);
   let youtubeDetailRequestKey = $state("");
   let llmProfiles = $state<LlmProfile[]>([]);
   let activeLlmProfile = $state("default");
@@ -583,7 +588,16 @@
       currentGroup: currentGroup(),
       sourceCatalog,
       sourceSyncDisabledReason,
+      youtubeDetailProblemReason: currentYoutubeDetailProblemReason(),
     };
+  }
+
+  function currentYoutubeDetailProblemReason() {
+    const source = currentSource();
+    if (source?.sourceType !== "youtube") {
+      return null;
+    }
+    return detailErrorForYoutubeSource(youtubeDetailError, source);
   }
 
   function currentReportLaunchDisabledReason() {
@@ -1008,6 +1022,7 @@
   function resetYoutubeDetailState() {
     youtubeVideoDetail = null;
     youtubePlaylistDetail = null;
+    youtubeDetailError = null;
     loadingYoutubeDetail = false;
     youtubeDetailRequestKey = "";
   }
@@ -2166,6 +2181,7 @@
   async function loadYoutubeDetail(source: Source) {
     const requestKey = `${source.id}:${source.sourceSubtype}`;
     youtubeDetailRequestKey = requestKey;
+    youtubeDetailError = null;
     loadingYoutubeDetail = true;
     try {
       if (source.sourceSubtype === "playlist") {
@@ -2175,6 +2191,11 @@
         }
         youtubePlaylistDetail = detail;
         youtubeVideoDetail = null;
+        youtubeSummaries = {
+          ...youtubeSummaries,
+          [source.id]: detail.summary,
+        };
+        youtubeDetailError = null;
       } else {
         const detail = await getYoutubeVideoDetail(source.id);
         if (youtubeDetailRequestKey !== requestKey) {
@@ -2182,6 +2203,11 @@
         }
         youtubeVideoDetail = detail;
         youtubePlaylistDetail = null;
+        youtubeSummaries = {
+          ...youtubeSummaries,
+          [source.id]: detail.summary,
+        };
+        youtubeDetailError = null;
       }
     } catch (error) {
       if (youtubeDetailRequestKey !== requestKey) {
@@ -2189,7 +2215,11 @@
       }
       youtubeVideoDetail = null;
       youtubePlaylistDetail = null;
-      status = formatAppError("loading YouTube detail", error);
+      youtubeDetailError = {
+        sourceId: source.id,
+        sourceSubtype: source.sourceSubtype,
+        message: formatAppError("loading YouTube detail", error),
+      };
     } finally {
       if (youtubeDetailRequestKey === requestKey) {
         loadingYoutubeDetail = false;
@@ -3136,6 +3166,7 @@
     sourceJobs={currentSourceJobs()}
     {youtubeVideoDetail}
     {youtubePlaylistDetail}
+    {youtubeDetailError}
     {loadingYoutubeDetail}
     {formatTimestamp}
     {formatPeriod}

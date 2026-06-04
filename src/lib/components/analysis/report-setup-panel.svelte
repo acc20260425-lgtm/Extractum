@@ -19,6 +19,8 @@
   } from "$lib/types/analysis";
   import type { LlmProfile, LlmProviderModel } from "$lib/types/llm";
   import type { Source } from "$lib/types/sources";
+  import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
+  import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
 
   let {
     workspaceSelection,
@@ -34,6 +36,9 @@
     templates,
     outputLanguage,
     youtubeCorpusMode,
+    youtubeVideoDetail = null,
+    youtubePlaylistDetail = null,
+    youtubeDetailError = null,
     includeMigratedHistory,
     canIncludeMigratedHistory,
     llmProfiles,
@@ -84,6 +89,9 @@
     templates: AnalysisPromptTemplate[];
     outputLanguage: string;
     youtubeCorpusMode: YoutubeCorpusMode;
+    youtubeVideoDetail?: YoutubeVideoDetail | null;
+    youtubePlaylistDetail?: YoutubePlaylistDetail | null;
+    youtubeDetailError?: YoutubeDetailErrorState;
     includeMigratedHistory: boolean;
     canIncludeMigratedHistory: boolean;
     llmProfiles: LlmProfile[];
