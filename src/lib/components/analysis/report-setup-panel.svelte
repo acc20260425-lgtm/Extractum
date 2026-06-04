@@ -20,7 +20,11 @@
   import type { LlmProfile, LlmProviderModel } from "$lib/types/llm";
   import type { Source } from "$lib/types/sources";
   import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
-  import type { YoutubeDetailErrorState } from "$lib/youtube-source-view-model";
+  import {
+    detailErrorForYoutubeSource,
+    youtubeCorpusOptionViews,
+    type YoutubeDetailErrorState,
+  } from "$lib/youtube-source-view-model";
 
   let {
     workspaceSelection,
@@ -141,6 +145,33 @@
     (analysisScope === "single_source" && currentSource?.sourceType === "youtube") ||
       (analysisScope === "source_group" && currentGroup?.source_type === "youtube"),
   );
+  const isYoutubeVideoScope = $derived(
+    analysisScope === "single_source" &&
+      currentSource?.sourceType === "youtube" &&
+      currentSource.sourceSubtype === "video",
+  );
+  const isYoutubePlaylistScope = $derived(
+    analysisScope === "single_source" &&
+      currentSource?.sourceType === "youtube" &&
+      currentSource.sourceSubtype === "playlist",
+  );
+  const isYoutubeGroupScope = $derived(
+    analysisScope === "source_group" && currentGroup?.source_type === "youtube",
+  );
+  const selectedYoutubeError = $derived(
+    currentSource?.sourceType === "youtube"
+      ? detailErrorForYoutubeSource(youtubeDetailError, currentSource)
+      : null,
+  );
+  const youtubeCorpusOptions = $derived(
+    isYoutubeVideoScope ? youtubeCorpusOptionViews(youtubeVideoDetail ?? null) : [],
+  );
+  const youtubePlaylistLinkedCountLabel = $derived(
+    youtubePlaylistDetail?.summary.linkedVideoCount !== null &&
+      youtubePlaylistDetail?.summary.linkedVideoCount !== undefined
+      ? `${youtubePlaylistDetail.summary.linkedVideoCount} linked videos`
+      : "Playlist linked-video evidence",
+  );
   const selectedRunProfile = $derived(
     llmProfiles.find((profile) => profile.profile_id === (selectedLlmProfileId || activeLlmProfile)) ??
       null,
@@ -238,16 +269,71 @@
         />
       </label>
       {#if isYoutubeScope}
-        <label>YouTube corpus
-          <Select
-            value={youtubeCorpusMode}
-            onchange={(event) => onChangeYoutubeCorpusMode((event.currentTarget as HTMLSelectElement).value as YoutubeCorpusMode)}
-          >
-            <option value="transcript_only">Transcript</option>
-            <option value="transcript_description">Transcript + description</option>
-            <option value="transcript_description_comments">Transcript + description + comments</option>
-          </Select>
-        </label>
+        <section class="youtube-corpus-panel" aria-label="YouTube corpus">
+          <div class="youtube-corpus-heading">
+            <div>
+              <span class="eyebrow">Primary YouTube decision</span>
+              <h3>YouTube corpus</h3>
+              <p>Choose which evidence the report can use.</p>
+            </div>
+            {#if selectedYoutubeError}
+              <Badge variant="danger">source problem</Badge>
+            {/if}
+          </div>
+
+          {#if selectedYoutubeError}
+            <StatusMessage tone="error">{selectedYoutubeError}</StatusMessage>
+          {/if}
+
+          {#if isYoutubeVideoScope}
+            <div class="youtube-corpus-options">
+              {#each youtubeCorpusOptions as option (option.value)}
+                <button
+                  type="button"
+                  class:selected={youtubeCorpusMode === option.value}
+                  class="youtube-corpus-option"
+                  disabled={!option.available || !!selectedYoutubeError}
+                  title={option.disabledReason ?? undefined}
+                  onclick={() => option.available && !selectedYoutubeError && onChangeYoutubeCorpusMode(option.value)}
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                  <small>{option.countLabel}</small>
+                  {#if option.evidenceWarning}
+                    <em>{option.evidenceWarning}</em>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {:else}
+            <div class="youtube-corpus-options compact">
+              {#each [
+                ["transcript_only", "Transcript"],
+                ["transcript_description", "Transcript + description"],
+                ["transcript_description_comments", "Transcript + description + comments"],
+              ] as [value, label] (value)}
+                <button
+                  type="button"
+                  class:selected={youtubeCorpusMode === value}
+                  class="youtube-corpus-option"
+                  disabled={!!selectedYoutubeError}
+                  onclick={() => !selectedYoutubeError && onChangeYoutubeCorpusMode(value as YoutubeCorpusMode)}
+                >
+                  <strong>{label}</strong>
+                  <span>
+                    {isYoutubePlaylistScope
+                      ? "Applies to synced linked videos in this playlist."
+                      : "Applies to each synced YouTube source in this group."}
+                  </span>
+                  <small>{isYoutubeGroupScope ? "Group-level source counts" : youtubePlaylistLinkedCountLabel}</small>
+                  {#if value === "transcript_description_comments"}
+                    <em>Audience comments are user-generated evidence.</em>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </section>
       {/if}
       {#if canIncludeMigratedHistory}
         <CheckboxRow
@@ -470,6 +556,81 @@
     gap: 0.75rem;
   }
 
+  .youtube-corpus-panel {
+    display: flex;
+    grid-column: 1 / -1;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--primary) 6%, var(--panel));
+  }
+
+  .youtube-corpus-heading,
+  .youtube-corpus-options {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+  }
+
+  .youtube-corpus-heading {
+    justify-content: space-between;
+  }
+
+  .youtube-corpus-heading h3 {
+    margin: 0;
+  }
+
+  .youtube-corpus-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .youtube-corpus-options.compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .youtube-corpus-option {
+    display: flex;
+    min-height: 8rem;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+    flex-direction: column;
+    white-space: normal;
+    gap: 0.35rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .youtube-corpus-option.selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
+  .youtube-corpus-option:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+  }
+
+  .youtube-corpus-option span,
+  .youtube-corpus-option small,
+  .youtube-corpus-option em {
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .youtube-corpus-option em {
+    font-style: normal;
+    color: #a15c00;
+  }
+
   label {
     display: flex;
     flex-direction: column;
@@ -543,6 +704,7 @@
     .scope-facts,
     .controls-grid,
     .run-model-controls,
+    .youtube-corpus-options,
     .preflight-panel {
       grid-template-columns: 1fr;
     }

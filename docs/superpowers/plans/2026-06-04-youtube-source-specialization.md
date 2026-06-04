@@ -747,7 +747,7 @@ git commit -m "fix(analysis): scope youtube detail errors"
 - Test: `src/lib/analysis-youtube-source-specialization.test.ts`
 - Test: `src/lib/analysis-report-setup-props.test.ts`
 
-- [ ] **Step 1: Pass existing YouTube detail props into report setup**
+- [x] **Step 1: Pass existing YouTube detail props into report setup**
 
 `report-canvas.svelte` already receives `youtubeVideoDetail` and `youtubePlaylistDetail`. If Task 2 has not already done it, also add:
 
@@ -763,7 +763,7 @@ Ensure `<ReportSetupPanel />` receives the existing detail props and the new err
 {youtubeDetailError}
 ```
 
-- [ ] **Step 2: Import corpus helpers in setup panel**
+- [x] **Step 2: Import corpus helpers in setup panel**
 
 In `report-setup-panel.svelte`, import:
 
@@ -786,7 +786,7 @@ youtubeDetailError?: YoutubeDetailErrorState;
 
 Default them to `null`.
 
-- [ ] **Step 3: Derive setup state**
+- [x] **Step 3: Derive setup state**
 
 Add derived values:
 
@@ -820,7 +820,7 @@ const youtubePlaylistLinkedCountLabel = $derived(
 );
 ```
 
-- [ ] **Step 4: Replace the plain `YouTube corpus` select with option cards**
+- [x] **Step 4: Replace the plain `YouTube corpus` select with option cards**
 
 Replace the current `label>YouTube corpus` block with a provider section. Render counted availability cards for a single YouTube video; render a compact fallback control for YouTube playlists and YouTube source groups so the UI never shows an empty option grid.
 
@@ -894,7 +894,7 @@ Replace the current `label>YouTube corpus` block with a provider section. Render
 {/if}
 ```
 
-- [ ] **Step 5: Add scoped CSS**
+- [x] **Step 5: Add scoped CSS**
 
 In `report-setup-panel.svelte`, add:
 
@@ -978,7 +978,7 @@ In the existing `@media (max-width: 1100px)` block, add:
 }
 ```
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -988,7 +988,7 @@ npm.cmd run test -- src/lib/analysis-youtube-source-specialization.test.ts src/l
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
