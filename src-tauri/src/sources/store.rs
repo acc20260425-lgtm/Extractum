@@ -29,6 +29,8 @@ use super::types::{
     TelegramSourceKind, MIGRATED_HISTORY_STATUS_NONE, TELEGRAM_SOURCE_TYPE,
 };
 
+const SOURCE_DELETE_BUSY_TIMEOUT_MS: i64 = 10_000;
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddTelegramSourceRequest {
@@ -49,17 +51,33 @@ pub async fn delete_source(
         .try_acquire(source_id, SourceIngestKind::Delete)
         .await?;
     let pool = get_pool(&handle).await?;
-    let result = sqlx::query("DELETE FROM sources WHERE id = ?")
-        .bind(source_id)
-        .execute(&pool)
-        .await
-        .map_err(|e| AppError::internal(e.to_string()))?;
+    let rows_affected = delete_source_from_pool(&pool, source_id).await?;
 
-    if result.rows_affected() == 0 {
+    if rows_affected == 0 {
         return Err(AppError::not_found(format!("Source {source_id} not found")));
     }
 
     Ok(())
+}
+
+async fn delete_source_from_pool(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+) -> AppResult<u64> {
+    let mut conn = pool.acquire().await.map_err(AppError::database)?;
+    sqlx::query(&format!(
+        "PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}"
+    ))
+    .execute(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
+    sqlx::query("DELETE FROM sources WHERE id = ?")
+        .bind(source_id)
+        .execute(&mut *conn)
+        .await
+        .map(|result| result.rows_affected())
+        .map_err(AppError::database)
 }
 
 #[tauri::command]
@@ -577,6 +595,9 @@ mod tests {
         YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
     };
     use serde_json::json;
+    use sqlx::sqlite::SqliteConnectOptions;
+    use std::time::Duration as StdDuration;
+    use tokio::time::sleep;
 
     async fn seed_telegram_source_identity(
         pool: &sqlx::SqlitePool,
@@ -612,6 +633,58 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed telegram source");
+    }
+
+    #[tokio::test]
+    async fn delete_source_waits_for_temporary_database_write_lock() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let db_path = temp_dir.path().join("delete-lock.db");
+        let options = SqliteConnectOptions::new()
+            .filename(&db_path)
+            .create_if_missing(true);
+        let pool = sqlx::SqlitePool::connect_with(options.clone())
+            .await
+            .expect("connect delete pool");
+        let lock_pool = sqlx::SqlitePool::connect_with(options)
+            .await
+            .expect("connect lock pool");
+
+        sqlx::query("CREATE TABLE sources (id INTEGER PRIMARY KEY, title TEXT)")
+            .execute(&pool)
+            .await
+            .expect("create sources table");
+        sqlx::query("INSERT INTO sources (id, title) VALUES (1, 'Locked source')")
+            .execute(&pool)
+            .await
+            .expect("insert source");
+
+        let mut lock_conn = lock_pool.acquire().await.expect("acquire lock connection");
+        sqlx::query("BEGIN IMMEDIATE")
+            .execute(&mut *lock_conn)
+            .await
+            .expect("hold write lock");
+
+        let delete_pool = pool.clone();
+        let delete_task =
+            tokio::spawn(async move { delete_source_from_pool(&delete_pool, 1).await });
+
+        sleep(StdDuration::from_millis(100)).await;
+        sqlx::query("COMMIT")
+            .execute(&mut *lock_conn)
+            .await
+            .expect("release write lock");
+
+        let rows_affected = delete_task
+            .await
+            .expect("join delete task")
+            .expect("delete source after lock release");
+        assert_eq!(rows_affected, 1);
+
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources WHERE id = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("count remaining sources");
+        assert_eq!(remaining, 0);
     }
 
     #[test]
