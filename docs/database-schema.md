@@ -45,6 +45,10 @@ Implemented ingest providers are `telegram` and `youtube`.
 `source_subtype` is provider-local:
 
 - Telegram uses `channel`, `supergroup`, or `group`
+  - Telegram forum groups / topic-enabled groups are stored as
+    `source_type = 'telegram'` and `source_subtype = 'supergroup'`; topics are
+    modeled by `telegram_forum_topics`, not by a separate Telegram source
+    subtype.
 - YouTube uses `video` or `playlist`
 - future RSS can use `feed`
 - future forums can use `thread`, `board`, or `site`
@@ -121,6 +125,10 @@ Notes:
 - `source_subtype` uses the same Telegram values as `sources.source_subtype`.
 - `peer_kind = 'channel'` is used for Telegram channels and supergroups;
   `peer_kind = 'chat'` is used for small groups.
+- Telegram forum groups do not have a separate peer/source kind in Extractum:
+  they are supergroups whose topic catalog and memberships are stored in
+  `telegram_forum_topics`, `item_topic_memberships`, and
+  `telegram_topic_resolution_state`.
 - `resolution_strategy` records how the peer was or can be resolved:
   `username`, `dialog`, `legacy_metadata`, or `unknown`.
 - normal Telegram sync, Takeout, forum topic refresh, source list display, and
@@ -443,6 +451,9 @@ Saved LLM API keys live in OS secure storage under
 ### 1.10 `telegram_forum_topics`
 
 Stores the local catalog of Telegram forum topics for `supergroup` sources.
+In Telegram terms these are forum groups or topic-enabled supergroups. In
+Extractum they remain ordinary Telegram `supergroup` sources; this table stores
+their topic catalog.
 
 Important fields:
 

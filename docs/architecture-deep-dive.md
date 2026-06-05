@@ -94,6 +94,12 @@ Supported Telegram source kinds are:
 - `supergroup`
 - `group`
 
+Telegram forum groups, also called topic-enabled groups in product language,
+are represented as `supergroup` sources. There is no separate Telegram
+`source_subtype = 'forum'`; topic catalogs and memberships live in
+`telegram_forum_topics`, `item_topic_memberships`, and
+`telegram_topic_resolution_state`.
+
 Telegram source subtype is canonical in `sources.source_subtype`. Operational
 Telegram peer identity lives in `telegram_sources`, including `peer_kind`,
 `peer_id`, username/access-hash hints, and avatar cache keys. The former
