@@ -63,6 +63,9 @@ CREATE INDEX IF NOT EXISTS idx_archive_read_items_source_published
 
 CREATE INDEX IF NOT EXISTS idx_archive_read_items_source_topic_published
     ON archive_read_items(source_id, forum_topic_id, published_at DESC, item_id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_archive_read_items_item_id
+    ON archive_read_items(item_id);
 "#;
 
 #[derive(Debug, FromRow)]

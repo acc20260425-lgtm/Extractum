@@ -85,6 +85,10 @@ ON analysis_documents(document_kind, source_id, published_at, document_order, id
 
 CREATE INDEX IF NOT EXISTS idx_analysis_documents_ref
 ON analysis_documents(ref);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_documents_item_id
+ON analysis_documents(item_id)
+WHERE item_id IS NOT NULL;
 "#;
 
 pub(crate) async fn create_analysis_documents_schema<'e, E>(executor: E) -> AppResult<()>

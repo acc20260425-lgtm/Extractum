@@ -16,6 +16,10 @@ const ANALYSIS_TELEGRAM_HISTORY_SCOPE_VERSION: i64 = 3;
 const ANALYSIS_TELEGRAM_HISTORY_SCOPE_DESCRIPTION: &str = "analysis telegram history scope";
 const ANALYSIS_TELEGRAM_HISTORY_SCOPE_SQL: &str =
     include_str!("../migrations/0003_analysis_telegram_history_scope.sql");
+const SOURCE_DELETE_CASCADE_INDEXES_VERSION: i64 = 4;
+const SOURCE_DELETE_CASCADE_INDEXES_DESCRIPTION: &str = "source delete cascade indexes";
+const SOURCE_DELETE_CASCADE_INDEXES_SQL: &str =
+    include_str!("../migrations/0004_source_delete_cascade_indexes.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -72,11 +76,21 @@ fn analysis_telegram_history_scope_migration() -> Migration {
     }
 }
 
+fn source_delete_cascade_indexes_migration() -> Migration {
+    Migration {
+        version: SOURCE_DELETE_CASCADE_INDEXES_VERSION,
+        description: SOURCE_DELETE_CASCADE_INDEXES_DESCRIPTION,
+        sql: SOURCE_DELETE_CASCADE_INDEXES_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
         migrated_history_opt_in_migration(),
         analysis_telegram_history_scope_migration(),
+        source_delete_cascade_indexes_migration(),
     ]
 }
 
@@ -169,7 +183,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3]);
+        assert_eq!(versions, vec![1, 2, 3, 4]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -187,6 +201,8 @@ mod tests {
         assert!(migrations[2]
             .sql
             .contains("ADD COLUMN telegram_history_scope TEXT"));
+        assert_eq!(migrations[3].description, "source delete cascade indexes");
+        assert!(migrations[3].sql.contains("idx_analysis_documents_item_id"));
     }
 
     #[tokio::test]
@@ -360,6 +376,7 @@ mod tests {
             "idx_archive_read_items_source_published",
             "idx_archive_read_items_source_topic_published",
             "idx_archive_read_items_ref",
+            "idx_archive_read_items_item_id",
         ] {
             let exists: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
@@ -525,6 +542,7 @@ mod tests {
             "idx_analysis_documents_source_published",
             "idx_analysis_documents_kind_source_published",
             "idx_analysis_documents_ref",
+            "idx_analysis_documents_item_id",
         ] {
             let exists: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
