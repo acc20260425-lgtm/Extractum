@@ -151,6 +151,32 @@ For smaller desktop windows, panels may collapse or hide behind drawers. Mobile 
 
 Use a clear boundary between shadcn-svelte and SVAR.
 
+### Extractum UI Ownership
+
+Extractum owns the product visual system. shadcn-svelte and SVAR provide behavior, accessibility primitives, widget anatomy, and data-grid capability, but application screens should not depend on their raw components directly.
+
+Application and prototype screens should import product-facing components from an Extractum wrapper layer. The wrapper layer owns:
+
+- compact desktop density;
+- spacing and sizing;
+- typography;
+- active, selected, hover, disabled, and focus states;
+- surface grammar;
+- stable CSS hooks and data attributes;
+- provider/status anatomy;
+- integration with project-level tokens.
+
+Recommended layering:
+
+1. `src/lib/styles/base.css` or an equivalent project style entry defines product tokens: color, radius, typography, focus, selected states, hover states, surface grammar, and compact desktop density.
+2. `src/lib/components/ui/*` contains shadcn-svelte primitives and shadcn-compatible generated/local code.
+3. `src/lib/components/extractum-ui/*` contains product wrappers used by app and prototype screens.
+4. `src/lib/components/research-projects/*` contains feature components that depend on `extractum-ui` and the new view-model layer.
+5. SVAR widgets are introduced through product wrappers, not directly from feature screens.
+6. Feature CSS may tune layout for a concrete view, but must not become the source of shared component appearance.
+
+Allowed direct imports from shadcn-svelte or SVAR should be limited to wrapper components, low-level component tests, and short-lived experiments. The implementation plan should add contract tests or raw-source checks to keep feature screens from importing lower-level libraries directly.
+
 ### shadcn-svelte
 
 Use shadcn-svelte for app shell primitives and interaction controls:
@@ -168,7 +194,16 @@ Use shadcn-svelte for app shell primitives and interaction controls:
 - forms;
 - command/search palette if needed.
 
-The current custom components under `src/lib/components/ui/*` are not the foundation for the new UI. They may coexist until cutover.
+Generated or copied shadcn-svelte code should stay in the `ui` namespace. Product components should be exported from `extractum-ui`, even when they wrap a single shadcn primitive.
+
+When shadcn primitives are wrapped for product use:
+
+- preserve existing CSS hooks, class names, data attributes, dimensions, and active-state selectors needed by the product shell;
+- reset shadcn defaults at the wrapper boundary when default margins, radius, transitions, or display styles could change dense workspace layout;
+- keep application imports clear by path, for example feature code imports `ExtractumButton` or `ProjectTabs` from `extractum-ui`, not shadcn internals;
+- keep shadcn blocks out of product architecture decisions. Do not replace the app shell, source viewer, runbar, inspector, drawers, or modal architecture with generic shadcn blocks.
+
+The current custom components under `src/lib/components/ui/*` are not the product foundation for the new UI. They may coexist until cutover, but the implementation plan must decide whether shadcn generated components replace that namespace or land in a temporary namespace before migration.
 
 ### SVAR
 
@@ -183,12 +218,40 @@ Use SVAR for dense data-heavy work surfaces:
 
 The initial package focus should be `@svar-ui/svelte-grid`. Additional SVAR packages should be introduced only when a concrete UI need appears.
 
+SVAR components must be wrapped in product components before use by screens. Initial wrapper candidates:
+
+- `DataGrid.svelte` for SVAR Grid with Extractum sizing, selection, empty states, and theme bridge.
+- `GridToolbar.svelte` only if SVAR Toolbar is needed after the first grid pass.
+- `FilterBuilder.svelte` only if project/source filtering outgrows shadcn controls.
+
+SVAR customization should prefer:
+
+- scoped theme CSS variables;
+- wrapper-provided sizing and height containers;
+- stable row ids from adapter data;
+- documented `rowStyle`, `columnStyle`, `cellStyle`, header/footer `css`, and theme hooks;
+- custom cell/header/body components when rows must match Extractum provider/status anatomy.
+
+Important SVAR Grid constraints:
+
+- the grid root uses `height: 100%`, so the product wrapper must provide a stable height;
+- grid rows should receive stable `id` values from the adapter to avoid generated temporary ids;
+- selection state should be synchronized through the wrapper instead of being read ad hoc from feature screens;
+- checkbox cells should avoid accidental row-click selection by using the documented ignore-click pattern;
+- wrapper props should expose project vocabulary such as selected source ids and provider filters rather than raw SVAR action names;
+- direct `.wx-*` selector overrides are allowed only inside the wrapper/theme bridge and should be narrowly scoped.
+
+SVAR theme integration should import the widget theme from the widget package, for example `Willow` or `WillowDark` from `@svar-ui/svelte-grid`, because widget themes add package-specific variables. If Extractum owns fonts, pass `fonts={false}` and map SVAR font variables to Extractum typography tokens.
+
+SVAR localization should be handled at the wrapper or app-shell boundary. If SVAR displays static UI strings in the new Russian-first interface, merge the relevant package locale with core locale data instead of leaving widget fallbacks in English.
+
 ### Icons And Tokens
 
 - Use `@lucide/svelte` for general command icons.
 - Use provider-specific marks where they improve scanning.
 - Use Tailwind and CSS variables for shared theme tokens.
 - Add a SVAR theme bridge that maps SVAR Willow/WillowDark variables to Extractum tokens.
+- Keep token naming product-owned. Library variables should be mapped from Extractum tokens, not treated as the source of truth.
 
 ## Data And Adapter Flow
 
@@ -294,11 +357,15 @@ Out of scope:
 Suggested file boundaries:
 
 - `src/lib/new-ui/research-projects-model.ts` for pure view-model types and adapters.
-- `src/lib/components/new-ui/*` or a shadcn-compatible component structure for new primitives.
+- `src/lib/styles/base.css` or equivalent for new UI product tokens.
+- `src/lib/components/ui/*` for shadcn-svelte primitives and shadcn-compatible generated/local code.
+- `src/lib/components/extractum-ui/*` for product wrappers over shadcn and SVAR.
 - `src/lib/components/research-projects/*` for feature components.
 - A new route such as `src/routes/projects/+page.svelte` or an experimental route before cutover.
 
 The exact route can be decided in the implementation plan. The design requirement is that the current `/analysis` experience stays available while the new UI is built.
+
+The implementation plan should decide whether existing `src/lib/components/ui/*` files are moved, replaced, or temporarily coexist with shadcn-generated code. Avoid mixing legacy and new product primitives under ambiguous imports.
 
 ## Testing Strategy
 
@@ -307,6 +374,8 @@ Use tests proportional to the blast radius:
 - adapter/view-model unit tests for project and library projections;
 - contract tests for route composition and component prop threading;
 - component/source tests for `Connect from Library` selection state;
+- raw-source import-boundary tests so feature screens use `extractum-ui` wrappers rather than direct shadcn/SVAR imports;
+- focused tests for SVAR grid wrapper selection, disabled rows, and stable row ids;
 - focused Playwright CLI or Tauri QA for the visual workflow once implemented;
 - `npm.cmd run check` before claiming implementation completion.
 
@@ -323,6 +392,8 @@ For this design phase, no source-code verification is required beyond writing an
 - Already-connected and unavailable sources are visibly distinct and not connectable.
 - Project filters are visible in the connect workflow.
 - Connect action uses transition adapter/current APIs as far as possible.
+- Feature screens import product wrappers instead of raw shadcn/SVAR components.
+- SVAR grids are mounted through Extractum wrappers with stable height, stable row ids, and token-mapped theme variables.
 - Old Analysis route remains functional.
 
 ## Self-Review
@@ -331,5 +402,6 @@ For this design phase, no source-code verification is required beyond writing an
 - The design is scoped to one implementation plan: foundation plus Project Dashboard and Library Connect.
 - The spec does not require immediate backend schema migration.
 - The component boundary between shadcn-svelte and SVAR is explicit.
+- The Extractum wrapper layer owns product appearance and prevents direct library imports from feature screens.
 - Ultra HD desktop is the primary target; mobile is intentionally out of scope.
 - The visual references are described by layout and density rather than copied as fixed tab/content requirements.
