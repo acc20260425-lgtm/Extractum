@@ -59,9 +59,9 @@ These components are the only product-facing entrypoints for new UI feature scre
 ### New UI View Model And Workflow
 
 - Create: `src/lib/ui/research-projects-model.ts`
-  - Pure types and adapters: projects, library sources, project links, filters, connectability, source-group update command.
+  - Pure types and adapters: projects, library sources, project links, filters, source-job status projection, connectability, source-group update command.
 - Create: `src/lib/ui/research-projects-workflow.ts`
-  - Async loading and connect persistence through existing APIs.
+  - Async loading of source groups, analysis sources, active runs, source jobs, and connect persistence through existing APIs.
 - Test: `src/lib/ui/research-projects-model.test.ts`
 - Test: `src/lib/ui/research-projects-workflow.test.ts`
 
@@ -241,7 +241,7 @@ Expected: `package.json` and `package-lock.json` update. If network access is bl
 Run:
 
 ```powershell
-npx.cmd shadcn-svelte@latest init --base-color slate --css src/lib/styles/base.css --lib-alias $lib --components-alias $lib/components --utils-alias $lib/utils --hooks-alias $lib/hooks --ui-alias $lib/components/ui
+npx.cmd shadcn-svelte@latest init --base-color slate --css src/lib/styles/base.css --lib-alias '$lib' --components-alias '$lib/components' --utils-alias '$lib/utils' --hooks-alias '$lib/hooks' --ui-alias '$lib/components/ui'
 ```
 
 Expected:
@@ -516,6 +516,7 @@ import {
   type LibrarySourceView,
 } from "./research-projects-model";
 import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
+import type { SourceJobRecord } from "$lib/types/sources";
 
 function source(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOption {
   return {
@@ -525,6 +526,24 @@ function source(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOp
     title: "Radar BPLA",
     item_count: 128,
     last_synced_at: 1_717_000_000,
+    ...overrides,
+  };
+}
+
+function job(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
+  return {
+    job_id: "job-1",
+    source_id: 3,
+    related_source_id: null,
+    job_type: "youtube_video_full_sync",
+    status: "running",
+    message: "Syncing",
+    progress_current: 1,
+    progress_total: 3,
+    started_at: 1_717_000_100,
+    finished_at: null,
+    warnings: [],
+    error: null,
     ...overrides,
   };
 }
@@ -573,6 +592,27 @@ describe("research projects model", () => {
     expect(rss.provider).toBe("rss");
     expect(rss.connectable).toBe(false);
     expect(rss.disabledReason).toBe("Подключение RSS к проектам будет доступно после миграции библиотеки.");
+  });
+
+  it("marks active or failed source jobs on library rows before generic provider decisions", () => {
+    const [syncing, failed] = buildLibrarySourcesView(
+      [
+        source({ id: 3, source_type: "youtube", title: "Alpha Drones" }),
+        source({ id: 4, source_type: "youtube", title: "Broken Channel" }),
+      ],
+      [group({ source_type: "youtube", members: [] })],
+      "source-group:100",
+      [
+        job({ source_id: 3, status: "running" }),
+        job({ source_id: 4, status: "failed", error: "API quota exceeded" }),
+      ],
+    );
+
+    expect(syncing.status).toBe("syncing");
+    expect(syncing.connectable).toBe(false);
+    expect(syncing.disabledReason).toBe("Источник сейчас синхронизируется.");
+    expect(failed.status).toBe("error");
+    expect(failed.disabledReason).toBe("Последняя синхронизация завершилась ошибкой: API quota exceeded");
   });
 
   it("filters the library by search text and provider chips", () => {
@@ -690,6 +730,7 @@ import type {
   AnalysisSourceOptionType,
   UpdateAnalysisSourceGroupInput,
 } from "$lib/types/analysis";
+import type { SourceJobRecord } from "$lib/types/sources";
 
 export type LibrarySourceProvider = AnalysisSourceOptionType | "web" | "other";
 export type ProjectStatus = "ready" | "running" | "needs_attention" | "empty";
@@ -851,21 +892,57 @@ function providerMismatchReason(project: AnalysisSourceGroup | null, provider: L
   return `Этот проект сейчас сохраняет только ${PROVIDER_LABELS[project.source_type]} источники.`;
 }
 
+function activeJobBySource(sourceJobs: SourceJobRecord[]) {
+  const jobsBySource = new Map<number, SourceJobRecord>();
+  for (const job of sourceJobs) {
+    if (job.status !== "queued" && job.status !== "running" && job.status !== "failed") {
+      continue;
+    }
+    const current = jobsBySource.get(job.source_id);
+    if (!current || job.started_at > current.started_at) {
+      jobsBySource.set(job.source_id, job);
+    }
+  }
+  return jobsBySource;
+}
+
+function jobBlockedState(job: SourceJobRecord | undefined) {
+  if (!job) return null;
+  if (job.status === "queued" || job.status === "running") {
+    return {
+      status: "syncing" as const,
+      disabledReason: "Источник сейчас синхронизируется.",
+    };
+  }
+  if (job.status === "failed") {
+    return {
+      status: "error" as const,
+      disabledReason: job.error
+        ? `Последняя синхронизация завершилась ошибкой: ${job.error}`
+        : "Последняя синхронизация завершилась ошибкой.",
+    };
+  }
+  return null;
+}
+
 export function buildLibrarySourcesView(
   sources: AnalysisSourceOption[],
   groups: AnalysisSourceGroup[],
   selectedProjectId: string | null,
+  sourceJobs: SourceJobRecord[] = [],
 ): LibrarySourceView[] {
   const membership = groupMembership(groups);
   const project = selectedGroup(groups, selectedProjectId);
   const connectedIds = new Set(project?.members.map((member) => member.source_id) ?? []);
+  const jobsBySource = activeJobBySource(sourceJobs);
 
   return sources.map((source) => {
     const provider = source.source_type;
     const alreadyConnected = connectedIds.has(source.id);
-    const disabledReason = alreadyConnected
+    const jobState = jobBlockedState(jobsBySource.get(source.id));
+    const disabledReason = jobState?.disabledReason ?? (alreadyConnected
       ? "Источник уже подключен к этому проекту."
-      : unsupportedReason(provider) ?? providerMismatchReason(project, provider);
+      : unsupportedReason(provider) ?? providerMismatchReason(project, provider));
     const connectable = disabledReason === null;
 
     return {
@@ -877,7 +954,7 @@ export function buildLibrarySourcesView(
       projectCount: membership.get(source.id)?.size ?? 0,
       lastCollectedLabel: dateLabel(source.last_synced_at),
       localCopyLabel: materialLabel(source.item_count),
-      status: connectable || alreadyConnected ? "active" : "unavailable",
+      status: jobState?.status ?? (connectable || alreadyConnected ? "active" : "unavailable"),
       disabledReason,
       alreadyConnected,
       connectable,
@@ -1016,6 +1093,7 @@ Create `src/lib/ui/research-projects-workflow.test.ts` with these scenarios:
 import { describe, expect, it, vi } from "vitest";
 import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "./research-projects-workflow";
 import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
+import type { SourceJobRecord } from "$lib/types/sources";
 
 function group(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGroup {
   return {
@@ -1041,11 +1119,30 @@ function source(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOp
   };
 }
 
+function sourceJob(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
+  return {
+    job_id: "job-1",
+    source_id: 2,
+    related_source_id: null,
+    job_type: "youtube_video_full_sync",
+    status: "running",
+    message: "Syncing",
+    progress_current: 1,
+    progress_total: 3,
+    started_at: 300,
+    finished_at: null,
+    warnings: [],
+    error: null,
+    ...overrides,
+  };
+}
+
 function createHarness(initial: Partial<ResearchProjectsWorkflowState> = {}) {
   const state: ResearchProjectsWorkflowState = {
     groups: [],
     sources: [],
     runs: [],
+    sourceJobs: [],
     projects: [],
     librarySources: [],
     projectSourceLinks: [],
@@ -1063,6 +1160,7 @@ function createHarness(initial: Partial<ResearchProjectsWorkflowState> = {}) {
     listGroups: vi.fn(),
     listSources: vi.fn(),
     listRuns: vi.fn(),
+    listSourceJobs: vi.fn(),
     updateGroup: vi.fn(),
     formatError: vi.fn((action: string, error: unknown) => `Error ${action}: ${String(error)}`),
   };
@@ -1076,6 +1174,7 @@ describe("research projects workflow", () => {
     deps.listGroups.mockResolvedValueOnce([group()]);
     deps.listSources.mockResolvedValueOnce([source({ id: 1, title: "Radar BPLA" })]);
     deps.listRuns.mockResolvedValueOnce([]);
+    deps.listSourceJobs.mockResolvedValueOnce([]);
 
     await workflow.loadWorkspace();
 
@@ -1084,6 +1183,23 @@ describe("research projects workflow", () => {
     expect(state.librarySources[0].alreadyConnected).toBe(true);
     expect(state.projectSourceLinks).toHaveLength(1);
     expect(state.loading).toBe(false);
+  });
+
+  it("threads source jobs into derived library rows", async () => {
+    const { state, deps, workflow } = createHarness();
+    deps.listGroups.mockResolvedValueOnce([group({ source_type: "youtube", members: [] })]);
+    deps.listSources.mockResolvedValueOnce([source({ id: 2, source_type: "youtube", title: "Alpha Drones" })]);
+    deps.listRuns.mockResolvedValueOnce([]);
+    deps.listSourceJobs.mockResolvedValueOnce([sourceJob()]);
+
+    await workflow.loadWorkspace();
+
+    expect(state.sourceJobs).toHaveLength(1);
+    expect(state.librarySources[0]).toEqual(expect.objectContaining({
+      status: "syncing",
+      connectable: false,
+      disabledReason: "Источник сейчас синхронизируется.",
+    }));
   });
 
   it("persists only safe selected rows through updateGroup", async () => {
@@ -1098,6 +1214,7 @@ describe("research projects workflow", () => {
     deps.listGroups.mockResolvedValueOnce([{ ...currentGroup, members: [...currentGroup.members, { source_id: 2, source_title: "Drone News", item_count: 20 }] }]);
     deps.listSources.mockResolvedValueOnce(state.sources);
     deps.listRuns.mockResolvedValueOnce([]);
+    deps.listSourceJobs.mockResolvedValueOnce([]);
 
     await workflow.refreshDerivedState();
     await workflow.connectSelectedSources();
@@ -1160,11 +1277,13 @@ import type {
   AnalysisSourceOption,
   UpdateAnalysisSourceGroupInput,
 } from "$lib/types/analysis";
+import type { SourceJobRecord } from "$lib/types/sources";
 
 export interface ResearchProjectsWorkflowState {
   groups: AnalysisSourceGroup[];
   sources: AnalysisSourceOption[];
   runs: AnalysisRunSummary[];
+  sourceJobs: SourceJobRecord[];
   projects: ResearchProjectView[];
   librarySources: LibrarySourceView[];
   projectSourceLinks: ProjectSourceLinkView[];
@@ -1181,6 +1300,7 @@ export interface ResearchProjectsWorkflowDeps {
   listGroups(): Promise<AnalysisSourceGroup[]>;
   listSources(): Promise<AnalysisSourceOption[]>;
   listRuns(): Promise<AnalysisRunSummary[]>;
+  listSourceJobs(): Promise<SourceJobRecord[]>;
   updateGroup(input: UpdateAnalysisSourceGroupInput): Promise<AnalysisSourceGroup>;
   formatError(action: string, error: unknown): string;
 }
@@ -1207,7 +1327,12 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     const projects = buildResearchProjectsView(state.groups, state.runs);
     const currentProject = selectedProject(projects, state.selectedProjectId);
     const selectedProjectId = currentProject?.id ?? null;
-    const librarySources = buildLibrarySourcesView(state.sources, state.groups, selectedProjectId);
+    const librarySources = buildLibrarySourcesView(
+      state.sources,
+      state.groups,
+      selectedProjectId,
+      state.sourceJobs,
+    );
     deps.patch({
       projects,
       selectedProjectId,
@@ -1219,12 +1344,13 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
   async function loadWorkspace() {
     deps.patch({ loading: true });
     try {
-      const [groups, sources, runs] = await Promise.all([
+      const [groups, sources, runs, sourceJobs] = await Promise.all([
         deps.listGroups(),
         deps.listSources(),
         deps.listRuns(),
+        deps.listSourceJobs(),
       ]);
-      deps.patch({ groups, sources, runs });
+      deps.patch({ groups, sources, runs, sourceJobs });
       await refreshDerivedState();
     } catch (error) {
       deps.patch({ status: deps.formatError("loading research projects", error) });
@@ -1424,7 +1550,7 @@ Create compact wrappers over shadcn primitives. Each wrapper accepts a `class` p
 />
 ```
 
-Create analogous wrappers:
+Create `TextInput.svelte` and `Badge.svelte` exactly as follows:
 
 ```svelte
 <!-- TextInput.svelte -->
@@ -1692,11 +1818,16 @@ Expected: commit succeeds.
 Create `src/lib/research-projects-route-contract.test.ts`:
 
 ```ts
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import projectsRouteSource from "../routes/projects/+page.svelte?raw";
 import shellSource from "./components/research-projects/ProjectsShell.svelte?raw";
 import projectRailSource from "./components/research-projects/ProjectRail.svelte?raw";
 import workspaceSource from "./components/research-projects/ProjectWorkspace.svelte?raw";
+
+const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 describe("research projects route contract", () => {
   it("adds the new route without redirecting through the old analysis workspace", () => {
@@ -1704,6 +1835,7 @@ describe("research projects route contract", () => {
     expect(projectsRouteSource).toContain("createResearchProjectsWorkflow");
     expect(projectsRouteSource).toContain("listAnalysisSourceGroups");
     expect(projectsRouteSource).toContain("listAnalysisSources");
+    expect(projectsRouteSource).toContain("listSourceJobs");
     expect(projectsRouteSource).not.toContain('goto("/analysis")');
   });
 
@@ -1767,12 +1899,14 @@ Create `src/routes/projects/+page.svelte`:
   import { listAnalysisSourceGroups, updateAnalysisSourceGroup } from "$lib/api/analysis-source-groups";
   import { listAnalysisSources } from "$lib/api/analysis-workspace";
   import { listActiveAnalysisRuns } from "$lib/api/analysis-runs";
+  import { listSourceJobs } from "$lib/api/source-jobs";
   import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
 
   const state = $state<ResearchProjectsWorkflowState>({
     groups: [],
     sources: [],
     runs: [],
+    sourceJobs: [],
     projects: [],
     librarySources: [],
     projectSourceLinks: [],
@@ -1789,6 +1923,7 @@ Create `src/routes/projects/+page.svelte`:
     listGroups: listAnalysisSourceGroups,
     listSources: listAnalysisSources,
     listRuns: listActiveAnalysisRuns,
+    listSourceJobs: () => listSourceJobs({ limit: 50 }),
     updateGroup: updateAnalysisSourceGroup,
     formatError: (action, error) => `Ошибка ${action}: ${String(error)}`,
   });
@@ -1948,10 +2083,22 @@ it("renders the Connect from Library working sheet with searchable SVAR grid", (
   expect(connectSource).toContain("GridSelectCell");
   expect(connectSource).toContain('data-ui-panel="library-connect"');
   expect(connectSource).toContain('placeholder="Поиск по источникам..."');
+  expect(connectSource).toContain('data-ui-panel="project-filters"');
+  expect(connectSource).toContain('data-ui-panel="change-log"');
   expect(connectSource).toContain("selectedConnectableCount");
   expect(connectSource).toContain("Подключить выбранные");
   expect(connectSource).not.toContain("@svar-ui/");
   expect(connectSource).not.toContain("$lib/components/ui/");
+});
+
+it("renders the bottom queue from source jobs and active LLM runs", () => {
+  const bottomQueueSource = readFileSync(
+    path.join(repoRoot, "src/lib/components/research-projects/BottomQueue.svelte"),
+    "utf8",
+  );
+  expect(bottomQueueSource).toContain("sourceJobs");
+  expect(bottomQueueSource).toContain("runs");
+  expect(bottomQueueSource).toContain('data-ui-region="bottom-queue"');
 });
 ```
 
@@ -1972,6 +2119,7 @@ Component props:
 ```ts
 {
   open: boolean;
+  project: ResearchProjectView | null;
   librarySources: LibrarySourceView[];
   selectedSourceIds: Set<string>;
   saving: boolean;
@@ -1995,7 +2143,9 @@ Behavior:
   - `status`, width 130;
 - selected count counts only `connectableSelection`;
 - primary button is disabled when `selectedConnectableCount === 0 || saving`;
-- rows with `disabledReason` show reason in side status panel.
+- a project filter panel with `data-ui-panel="project-filters"` shows `project.periodLabel`, material type chips (`Статьи`, `Посты`, `Видео`), include-comments and include-transcripts checkboxes, and tag chips for `бпла` and `регулирование`;
+- a change log panel with `data-ui-panel="change-log"` lists already-connected rows, refused selected rows with `disabledReason`, and active/failed job rows from `librarySources`;
+- rows with `disabledReason` show the reason in the side status panel and in the row tooltip.
 
 Use this derived count:
 
@@ -2012,16 +2162,40 @@ let selectedConnectableCount = $derived(connectableSelection(librarySources, sel
 
 Wire:
 - `SourcesTab` opens it through `onOpenConnectLibrary={() => (connectOpen = true)}`;
-- `ConnectFromLibrary` receives state and callbacks from the route.
+- `ConnectFromLibrary` receives `project={currentProject}`, `state.librarySources`, `state.selectedLibrarySourceIds`, `state.saving`, `state.status`, and callbacks from the route.
 
 - [ ] **Step 5: Add BottomQueue**
 
-Create `BottomQueue.svelte` as a compact pinned strip showing:
-- loading state;
-- current status;
-- saving state.
+Create `BottomQueue.svelte` as a compact pinned strip with `data-ui-region="bottom-queue"` and these props:
 
-Mount it at the bottom of `ProjectsShell`.
+```ts
+{
+  loading: boolean;
+  saving: boolean;
+  status: string;
+  sourceJobs: SourceJobRecord[];
+  runs: AnalysisRunSummary[];
+}
+```
+
+It renders:
+- loading and saving state;
+- current status;
+- queued/running source jobs with progress labels from `progress_current` and `progress_total`;
+- failed source jobs with `error`;
+- queued/running LLM runs from `runs` with their `scope_label` and `status`.
+
+Mount it at the bottom of `ProjectsShell` and pass:
+
+```svelte
+<BottomQueue
+  loading={state.loading}
+  saving={state.saving}
+  status={state.status}
+  sourceJobs={state.sourceJobs}
+  runs={state.runs}
+/>
+```
 
 - [ ] **Step 6: Run tests and check**
 
@@ -2052,7 +2226,7 @@ Expected: commit succeeds.
 **Files:**
 - Modify: `src/lib/research-projects-route-contract.test.ts`
 - Modify: `src/routes/+page.svelte` or leave unchanged after test confirms old default behavior.
-- Modify: `src/routes/+layout.svelte` only if adding a Projects nav item is desired.
+- Modify: `src/routes/+layout.svelte`
 
 - [ ] **Step 1: Add fallback contract**
 
@@ -2064,6 +2238,7 @@ import layoutSource from "../routes/+layout.svelte?raw";
 
 it("keeps old analysis fallback available while the new UI lives at /projects", () => {
   expect(homeRouteSource).toContain('goto("/analysis")');
+  expect(layoutSource).toContain('href: "/projects"');
   expect(layoutSource).toContain('href: "/analysis"');
   expect(projectsRouteSource).toContain('data-ui-route="research-projects"');
 });
@@ -2077,11 +2252,11 @@ Run:
 npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 ```
 
-Expected: PASS if `/` still redirects to `/analysis`. If it fails because a Projects nav item was added, keep both `/analysis` and `/projects` links visible and update the assertion to require both.
+Expected: PASS with `/` still redirecting to `/analysis` and both `/projects` and `/analysis` present in the app navigation.
 
-- [ ] **Step 3: Add optional Projects nav entry without removing Analysis**
+- [ ] **Step 3: Add Projects nav entry without removing Analysis**
 
-If adding navigation in `src/routes/+layout.svelte`, add a new nav item before Workspace:
+In `src/routes/+layout.svelte`, add a new nav item before Workspace:
 
 ```ts
 {
@@ -2115,7 +2290,7 @@ git add src/routes/+layout.svelte src/lib/research-projects-route-contract.test.
 git commit -m "feat: expose projects route without removing analysis"
 ```
 
-Expected: commit succeeds. If no source file changed except test, commit only the test.
+Expected: commit succeeds.
 
 ---
 
@@ -2224,8 +2399,10 @@ Expected: commit succeeds.
 - Extractum wrapper layer owns appearance: Task 4 and import-boundary tests.
 - Transition adapter maps projects/library to existing source groups/sources: Task 2.
 - Connect from Library large sheet with search, provider filters, grid, multiselect, project filters/status panels, selected count, and connect action: Task 8.
+- Source sync/job states and active LLM runs are surfaced in library rows and BottomQueue: Task 2, Task 3, and Task 8.
 - Persistence only through safe Telegram/YouTube source-group-backed groups: Task 2 and Task 3.
 - Unsupported providers visible but disabled: Task 2 and Task 8.
+- Both `/projects` and legacy `/analysis` remain reachable from navigation: Task 9.
 - Testing strategy includes model, workflow, route contracts, import boundaries, SVAR wrapper contract, check/build, and visual QA: Tasks 1-10.
 
 ### Placeholder Scan
@@ -2237,6 +2414,7 @@ Expected: commit succeeds.
 ### Type Consistency
 
 - `ResearchProjectView`, `LibrarySourceView`, and `ProjectSourceLinkView` are defined in Task 2 and reused consistently in Tasks 3, 7, and 8.
+- `SourceJobRecord` is added to Task 2 and Task 3 state/deps so source job status is not invented in components.
 - `selectedLibrarySourceIds` is consistently a `Set<string>` in workflow and route state, and component callbacks pass string arrays back to the route.
 - `buildSourceGroupUpdateInput` returns existing `UpdateAnalysisSourceGroupInput`, matching `updateAnalysisSourceGroup`.
 - Feature components import `extractum-ui`; raw shadcn and SVAR imports are confined to wrapper files.
