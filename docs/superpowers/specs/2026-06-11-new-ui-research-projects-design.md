@@ -78,6 +78,8 @@ A `Project Source Link` connects a library source to a project and stores projec
 
 The UI should make the link concept visible even if the initial implementation maps it to existing source/source-group relationships.
 
+Transition constraint: the current durable source-group API supports provider-scoped groups for Telegram and YouTube. The first slice must not imply durable cross-provider project membership where the backend cannot safely persist it. Library sources for RSS, forums, Web, or other future providers can appear in the library inventory, but their connect rows must be disabled with a clear reason until the transition adapter has a safe persistence path.
+
 ## Information Architecture
 
 ### App-Level Shell
@@ -203,7 +205,7 @@ When shadcn primitives are wrapped for product use:
 - keep application imports clear by path, for example feature code imports `ExtractumButton` or `ProjectTabs` from `extractum-ui`, not shadcn internals;
 - keep shadcn blocks out of product architecture decisions. Do not replace the app shell, source viewer, runbar, inspector, drawers, or modal architecture with generic shadcn blocks.
 
-The current custom components under `src/lib/components/ui/*` are not the product foundation for the new UI. They may coexist until cutover, but the implementation plan must decide whether shadcn generated components replace that namespace or land in a temporary namespace before migration.
+The current custom components under `src/lib/components/ui/*` are not the product foundation for the new UI. They remain available for the old UI during the first slice. shadcn-generated primitives should use the default lower-case shadcn component directories under the same namespace, while new feature code imports only `extractum-ui` wrappers.
 
 ### SVAR
 
@@ -304,6 +306,12 @@ The adapter can assemble these views from existing APIs:
 
 The route and component tree should consume the new view-model types so old terms do not leak into the UI.
 
+Project persistence in the first slice should be explicit:
+
+- projects backed by an existing Telegram or YouTube source group may persist connected source changes through `updateAnalysisSourceGroup`;
+- projects without a safe source-group mapping may show library inventory and project shell state, but `Connect selected` must be disabled with clear copy;
+- unsupported provider rows must not silently pretend to connect.
+
 ## Error And Status Handling
 
 `Connect from Library` must handle:
@@ -312,6 +320,7 @@ The route and component tree should consume the new view-model types so old term
 - source unavailable because account/settings are missing;
 - active sync or import jobs;
 - provider-specific errors;
+- provider not supported by the current project-link persistence path;
 - partial connect success;
 - no sources matching filters;
 - empty library.
@@ -328,7 +337,7 @@ In scope:
 
 - Set up Tailwind/shadcn-svelte structure and required primitives.
 - Add SVAR Grid and theme bridge.
-- Add new UI route/shell without removing the current Analysis route.
+- Add the new `/projects` UI route/shell without removing the current Analysis route.
 - Add transition adapter/view-model module for projects and library sources.
 - Render project rail and top command bar in the new shell.
 - Render project `Sources` tab with connected source summary and source list/grid.
@@ -340,7 +349,7 @@ In scope:
   - project filters panel;
   - selected count;
   - change log/status panel;
-  - connect action wired as far as existing APIs allow.
+  - connect action that persists only safe Telegram/YouTube source-group-backed links and explains refused provider/project combinations.
 - Preserve old UI as fallback.
 
 Out of scope:
@@ -351,6 +360,7 @@ Out of scope:
 - Full mobile/tablet responsive redesign.
 - Full replacement of Accounts, Diagnostics, Settings.
 - Full backend migration from source groups to projects.
+- Durable cross-provider project membership for providers not supported by the current source-group API.
 
 ## Architecture Notes
 
@@ -361,13 +371,13 @@ Suggested file boundaries:
 - `src/lib/components/ui/*` for shadcn-svelte primitives and shadcn-compatible generated/local code.
 - `src/lib/components/extractum-ui/*` for product wrappers over shadcn and SVAR.
 - `src/lib/components/research-projects/*` for feature components.
-- A new route such as `src/routes/projects/+page.svelte` or an experimental route before cutover.
+- `src/routes/projects/+page.svelte` for the first new UI route.
 
 Use `src/lib/ui/*` for product UI contracts, view models, adapters, state helpers, and other non-component UI logic. Keep `src/lib/components/ui/*` reserved for shadcn-svelte primitives so the two namespaces stay visually similar but semantically distinct.
 
-The exact route can be decided in the implementation plan. The design requirement is that the current `/analysis` experience stays available while the new UI is built.
+The current `/analysis` experience stays available while the new UI is built.
 
-The implementation plan should decide whether existing `src/lib/components/ui/*` files are moved, replaced, or temporarily coexist with shadcn-generated code. Avoid mixing legacy and new product primitives under ambiguous imports.
+Keep existing PascalCase legacy components in `src/lib/components/ui/*` for the old UI during the first slice. Add shadcn-generated primitives in the default lower-case shadcn component directories under `src/lib/components/ui/*`, for example `src/lib/components/ui/button/*`. New feature code must import product wrappers from `extractum-ui`; it must not import legacy PascalCase components or raw shadcn primitives directly.
 
 ## Testing Strategy
 
@@ -392,8 +402,9 @@ For this design phase, no source-code verification is required beyond writing an
 - Library dialog/sheet shows searchable/filterable source inventory in SVAR grid.
 - User can select multiple connectable sources and see selected count.
 - Already-connected and unavailable sources are visibly distinct and not connectable.
+- Unsupported provider rows are visible when present, but disabled with explicit persistence-copy instead of pretending to connect.
 - Project filters are visible in the connect workflow.
-- Connect action uses transition adapter/current APIs as far as possible.
+- Connect action persists Telegram/YouTube source-group-backed project links through the current API and refuses unsafe provider/project combinations with visible reasons.
 - Feature screens import product wrappers instead of raw shadcn/SVAR components.
 - SVAR grids are mounted through Extractum wrappers with stable height, stable row ids, and token-mapped theme variables.
 - Old Analysis route remains functional.
