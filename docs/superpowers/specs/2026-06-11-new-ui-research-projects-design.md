@@ -356,12 +356,14 @@ Out of scope:
 
 Suggested file boundaries:
 
-- `src/lib/new-ui/research-projects-model.ts` for pure view-model types and adapters.
+- `src/lib/ui/research-projects-model.ts` for pure view-model types and adapters.
 - `src/lib/styles/base.css` or equivalent for new UI product tokens.
 - `src/lib/components/ui/*` for shadcn-svelte primitives and shadcn-compatible generated/local code.
 - `src/lib/components/extractum-ui/*` for product wrappers over shadcn and SVAR.
 - `src/lib/components/research-projects/*` for feature components.
 - A new route such as `src/routes/projects/+page.svelte` or an experimental route before cutover.
+
+Use `src/lib/ui/*` for product UI contracts, view models, adapters, state helpers, and other non-component UI logic. Keep `src/lib/components/ui/*` reserved for shadcn-svelte primitives so the two namespaces stay visually similar but semantically distinct.
 
 The exact route can be decided in the implementation plan. The design requirement is that the current `/analysis` experience stays available while the new UI is built.
 
