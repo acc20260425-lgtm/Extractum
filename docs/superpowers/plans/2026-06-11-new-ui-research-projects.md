@@ -1085,7 +1085,7 @@ Expected: commit succeeds.
 - Create: `src/lib/ui/research-projects-workflow.test.ts`
 - Create: `src/lib/ui/research-projects-workflow.ts`
 
-- [ ] **Step 1: Write workflow tests**
+- [x] **Step 1: Write workflow tests**
 
 Create `src/lib/ui/research-projects-workflow.test.ts` with these scenarios:
 
@@ -1247,7 +1247,7 @@ describe("research projects workflow", () => {
 });
 ```
 
-- [ ] **Step 2: Run workflow tests and verify they fail**
+- [x] **Step 2: Run workflow tests and verify they fail**
 
 Run:
 
@@ -1257,7 +1257,7 @@ npm.cmd run test -- src/lib/ui/research-projects-workflow.test.ts
 
 Expected: FAIL because `research-projects-workflow.ts` does not exist.
 
-- [ ] **Step 3: Implement workflow**
+- [x] **Step 3: Implement workflow**
 
 Create `src/lib/ui/research-projects-workflow.ts`:
 
@@ -1400,7 +1400,7 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
 }
 ```
 
-- [ ] **Step 4: Run workflow tests**
+- [x] **Step 4: Run workflow tests**
 
 Run:
 
@@ -1410,7 +1410,7 @@ npm.cmd run test -- src/lib/ui/research-projects-workflow.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit workflow**
+- [x] **Step 5: Commit workflow**
 
 Run:
 
