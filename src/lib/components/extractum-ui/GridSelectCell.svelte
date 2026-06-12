@@ -1,21 +1,28 @@
 <script lang="ts">
   let { api, row } = $props<{
     api: { exec: (action: string, data: Record<string, unknown>) => void };
-    row: { id: string; selected?: boolean; connectable?: boolean; disabledReason?: string | null };
+    row: Record<string, unknown>;
   }>();
 
+  let rowId = $derived(String(row.id ?? ""));
+  let selected = $derived(Boolean(row.selected));
+  let connectable = $derived(row.connectable !== false);
+  let disabledReason = $derived(
+    typeof row.disabledReason === "string" ? row.disabledReason : null,
+  );
+
   function toggle(event: Event) {
-    if (row.connectable === false) return;
+    if (!connectable) return;
     const target = event.currentTarget as HTMLInputElement;
-    api.exec("select-row", { id: row.id, mode: target.checked, toggle: true });
+    api.exec("select-row", { id: rowId, mode: target.checked, toggle: true });
   }
 </script>
 
-<div class="extractum-grid-select-cell" data-action="ignore-click" title={row.disabledReason ?? undefined}>
+<div class="extractum-grid-select-cell" data-action="ignore-click" title={disabledReason ?? undefined}>
   <input
     type="checkbox"
-    disabled={row.connectable === false}
-    checked={!!row.selected}
+    disabled={!connectable}
+    checked={selected}
     aria-label="Выбрать источник"
     onchange={toggle}
   />

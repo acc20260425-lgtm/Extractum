@@ -1,4 +1,6 @@
 <script lang="ts">
+  import BottomQueue from "./BottomQueue.svelte";
+  import ConnectFromLibrary from "./ConnectFromLibrary.svelte";
   import IconRail from "./IconRail.svelte";
   import ProjectRail from "./ProjectRail.svelte";
   import ProjectWorkspace from "./ProjectWorkspace.svelte";
@@ -20,10 +22,10 @@
   let currentProject = $derived(
     workflowState.projects.find((project) => project.id === workflowState.selectedProjectId) ?? workflowState.projects[0] ?? null,
   );
-  let connectLibraryRequested = $state(false);
+  let connectOpen = $state(false);
 
   function openConnectLibrary() {
-    connectLibraryRequested = true;
+    connectOpen = true;
   }
 </script>
 
@@ -52,11 +54,26 @@
         onOpenConnectLibrary={openConnectLibrary}
       />
     </div>
+    <BottomQueue
+      loading={workflowState.loading}
+      saving={workflowState.saving}
+      status={workflowState.status}
+      sourceJobs={workflowState.sourceJobs}
+      runs={workflowState.runs}
+    />
   </section>
 
-  {#if connectLibraryRequested}
-    <span class="sr-only" data-ui-state="connect-library-requested">Connect from Library requested</span>
-  {/if}
+  <ConnectFromLibrary
+    open={connectOpen}
+    project={currentProject}
+    librarySources={workflowState.librarySources}
+    selectedSourceIds={workflowState.selectedLibrarySourceIds}
+    saving={workflowState.saving}
+    status={workflowState.status}
+    onOpenChange={(open) => (connectOpen = open)}
+    onSelectedSourceIdsChange={onSelectedLibrarySourceIdsChange}
+    onConnectSelectedSources={onConnectSelectedSources}
+  />
 </div>
 
 <style>
@@ -90,15 +107,4 @@
     flex: 1;
   }
 
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
 </style>

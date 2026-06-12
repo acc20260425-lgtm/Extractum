@@ -4,6 +4,8 @@ import shellSource from "./components/research-projects/ProjectsShell.svelte?raw
 import projectRailSource from "./components/research-projects/ProjectRail.svelte?raw";
 import workspaceSource from "./components/research-projects/ProjectWorkspace.svelte?raw";
 import sourcesTabSource from "./components/research-projects/SourcesTab.svelte?raw";
+import connectSource from "./components/research-projects/ConnectFromLibrary.svelte?raw";
+import bottomQueueSource from "./components/research-projects/BottomQueue.svelte?raw";
 
 describe("research projects route contract", () => {
   it("adds the new route without redirecting through the old analysis workspace", () => {
@@ -37,5 +39,25 @@ describe("research projects route contract", () => {
     expect(sourcesTabSource).toContain("StatusBadge");
     expect(sourcesTabSource).toContain('data-ui-action="connect-library"');
     expect(sourcesTabSource).not.toContain("@svar-ui/");
+  });
+
+  it("renders the Connect from Library working sheet with searchable SVAR grid", () => {
+    expect(connectSource).toContain("ExtractumSheet");
+    expect(connectSource).toContain("ExtractumDataGrid");
+    expect(connectSource).toContain("GridSelectCell");
+    expect(connectSource).toContain('data-ui-panel="library-connect"');
+    expect(connectSource).toContain('placeholder="РџРѕРёСЃРє РїРѕ РёСЃС‚РѕС‡РЅРёРєР°Рј..."');
+    expect(connectSource).toContain('data-ui-panel="project-filters"');
+    expect(connectSource).toContain('data-ui-panel="change-log"');
+    expect(connectSource).toContain("selectedConnectableCount");
+    expect(connectSource).toContain("РџРѕРґРєР»СЋС‡РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ");
+    expect(connectSource).not.toContain("@svar-ui/");
+    expect(connectSource).not.toContain("$lib/components/ui/");
+  });
+
+  it("renders the bottom queue from source jobs and active LLM runs", () => {
+    expect(bottomQueueSource).toContain("sourceJobs");
+    expect(bottomQueueSource).toContain("runs");
+    expect(bottomQueueSource).toContain('data-ui-region="bottom-queue"');
   });
 });

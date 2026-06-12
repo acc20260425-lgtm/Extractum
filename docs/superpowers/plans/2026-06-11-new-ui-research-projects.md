@@ -2071,7 +2071,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/components/research-projects/ProjectsShell.svelte`
 - Modify: `src/lib/components/research-projects/SourcesTab.svelte`
 
-- [ ] **Step 1: Add route contract coverage for Connect from Library**
+- [x] **Step 1: Add route contract coverage for Connect from Library**
 
 Add assertions:
 
@@ -2103,7 +2103,7 @@ it("renders the bottom queue from source jobs and active LLM runs", () => {
 });
 ```
 
-- [ ] **Step 2: Run route contract and verify it fails**
+- [x] **Step 2: Run route contract and verify it fails**
 
 Run:
 
@@ -2113,7 +2113,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: FAIL because `ConnectFromLibrary.svelte` does not exist.
 
-- [ ] **Step 3: Implement ConnectFromLibrary**
+- [x] **Step 3: Implement ConnectFromLibrary**
 
 Component props:
 
@@ -2157,7 +2157,7 @@ let filteredSources = $derived(filterLibrarySources(librarySources, { query, pro
 let selectedConnectableCount = $derived(connectableSelection(librarySources, selectedSourceIds).length);
 ```
 
-- [ ] **Step 4: Mount the sheet from ProjectsShell**
+- [x] **Step 4: Mount the sheet from ProjectsShell**
 
 `ProjectsShell.svelte` owns `let connectOpen = $state(false);`.
 
@@ -2165,7 +2165,7 @@ Wire:
 - `SourcesTab` opens it through `onOpenConnectLibrary={() => (connectOpen = true)}`;
 - `ConnectFromLibrary` receives `project={currentProject}`, `state.librarySources`, `state.selectedLibrarySourceIds`, `state.saving`, `state.status`, and callbacks from the route.
 
-- [ ] **Step 5: Add BottomQueue**
+- [x] **Step 5: Add BottomQueue**
 
 Create `BottomQueue.svelte` as a compact pinned strip with `data-ui-region="bottom-queue"` and these props:
 
@@ -2198,7 +2198,7 @@ Mount it at the bottom of `ProjectsShell` and pass:
 />
 ```
 
-- [ ] **Step 6: Run tests and check**
+- [x] **Step 6: Run tests and check**
 
 Run:
 
@@ -2209,7 +2209,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Connect from Library**
+- [x] **Step 7: Commit Connect from Library**
 
 Run:
 
