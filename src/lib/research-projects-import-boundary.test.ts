@@ -48,4 +48,24 @@ describe("research projects import boundaries", () => {
     expect(wrapperSources).toContain("$lib/components/ui/sheet/index.js");
     expect(wrapperSources).not.toContain("src/lib/new-ui");
   });
+
+  it("routes SVAR Grid through ExtractumDataGrid only", () => {
+    const dataGridSource = readFileSync(
+      path.join(repoRoot, "src/lib/components/extractum-ui/DataGrid.svelte"),
+      "utf8",
+    );
+    expect(dataGridSource).toContain('from "@svar-ui/svelte-grid"');
+    expect(dataGridSource).toContain("selectedRows");
+    expect(dataGridSource).toContain("rowStyle");
+    expect(dataGridSource).toContain("Locale");
+    expect(dataGridSource).toContain("Willow");
+    expect(dataGridSource).toContain("fonts={false}");
+
+    const selectCellSource = readFileSync(
+      path.join(repoRoot, "src/lib/components/extractum-ui/GridSelectCell.svelte"),
+      "utf8",
+    );
+    expect(selectCellSource).toContain('data-action="ignore-click"');
+    expect(selectCellSource).toContain('api.exec("select-row"');
+  });
 });

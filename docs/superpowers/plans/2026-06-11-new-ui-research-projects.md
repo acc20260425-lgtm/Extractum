@@ -1612,9 +1612,10 @@ Expected: commit succeeds.
 - Modify: `src/lib/components/extractum-ui/index.ts`
 - Create: `src/lib/components/extractum-ui/DataGrid.svelte`
 - Create: `src/lib/components/extractum-ui/GridSelectCell.svelte`
+- Create: `src/lib/types/svar-locales.d.ts`
 - Modify: `src/lib/research-projects-import-boundary.test.ts`
 
-- [ ] **Step 1: Extend boundary test for SVAR wrapper ownership**
+- [x] **Step 1: Extend boundary test for SVAR wrapper ownership**
 
 Add this test case to `src/lib/research-projects-import-boundary.test.ts`:
 
@@ -1640,7 +1641,7 @@ it("routes SVAR Grid through ExtractumDataGrid only", () => {
 });
 ```
 
-- [ ] **Step 2: Run the boundary test and verify it fails**
+- [x] **Step 2: Run the boundary test and verify it fails**
 
 Run:
 
@@ -1650,7 +1651,7 @@ npm.cmd run test -- src/lib/research-projects-import-boundary.test.ts
 
 Expected: FAIL because `DataGrid.svelte` and `GridSelectCell.svelte` are missing.
 
-- [ ] **Step 3: Implement SVAR checkbox cell**
+- [x] **Step 3: Implement SVAR checkbox cell**
 
 Create `src/lib/components/extractum-ui/GridSelectCell.svelte`:
 
@@ -1674,7 +1675,7 @@ Create `src/lib/components/extractum-ui/GridSelectCell.svelte`:
 </div>
 ```
 
-- [ ] **Step 4: Implement SVAR DataGrid wrapper**
+- [x] **Step 4: Implement SVAR DataGrid wrapper**
 
 Create `src/lib/components/extractum-ui/DataGrid.svelte`:
 
@@ -1769,7 +1770,7 @@ Create `src/lib/components/extractum-ui/DataGrid.svelte`:
  </style>
 ```
 
-- [ ] **Step 5: Export the DataGrid wrapper**
+- [x] **Step 5: Export the DataGrid wrapper**
 
 Add to `src/lib/components/extractum-ui/index.ts`:
 
@@ -1778,7 +1779,7 @@ export { default as ExtractumDataGrid } from "./DataGrid.svelte";
 export { default as GridSelectCell } from "./GridSelectCell.svelte";
 ```
 
-- [ ] **Step 6: Run boundary and check**
+- [x] **Step 6: Run boundary and check**
 
 Run:
 
@@ -1789,7 +1790,7 @@ npm.cmd run check
 
 Expected: PASS. If the exact generated shadcn Checkbox API differs, adapt `GridSelectCell.svelte` to the generated API and keep the `data-action="ignore-click"` and `api.exec("select-row", ...)` contract.
 
-- [ ] **Step 7: Commit SVAR wrapper**
+- [x] **Step 7: Commit SVAR wrapper**
 
 Run:
 
