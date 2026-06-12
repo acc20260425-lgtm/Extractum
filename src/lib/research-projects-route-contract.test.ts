@@ -4,10 +4,12 @@ import layoutSource from "../routes/+layout.svelte?raw";
 import projectsRouteSource from "../routes/projects/+page.svelte?raw";
 import shellSource from "./components/research-projects/ProjectsShell.svelte?raw";
 import projectRailSource from "./components/research-projects/ProjectRail.svelte?raw";
+import topCommandBarSource from "./components/research-projects/TopCommandBar.svelte?raw";
 import workspaceSource from "./components/research-projects/ProjectWorkspace.svelte?raw";
 import sourcesTabSource from "./components/research-projects/SourcesTab.svelte?raw";
 import connectSource from "./components/research-projects/ConnectFromLibrary.svelte?raw";
 import bottomQueueSource from "./components/research-projects/BottomQueue.svelte?raw";
+import sheetSource from "./components/extractum-ui/Sheet.svelte?raw";
 
 describe("research projects route contract", () => {
   it("adds the new route without redirecting through the old analysis workspace", () => {
@@ -47,14 +49,26 @@ describe("research projects route contract", () => {
     expect(connectSource).toContain("ExtractumSheet");
     expect(connectSource).toContain("ExtractumDataGrid");
     expect(connectSource).toContain("GridSelectCell");
+    expect(connectSource).toContain('{ id: "title", header: "Источник", width: 260');
     expect(connectSource).toContain('data-ui-panel="library-connect"');
-    expect(connectSource).toContain('placeholder="РџРѕРёСЃРє РїРѕ РёСЃС‚РѕС‡РЅРёРєР°Рј..."');
+    expect(connectSource).toContain('placeholder="Поиск по источникам..."');
     expect(connectSource).toContain('data-ui-panel="project-filters"');
     expect(connectSource).toContain('data-ui-panel="change-log"');
     expect(connectSource).toContain("selectedConnectableCount");
-    expect(connectSource).toContain("РџРѕРґРєР»СЋС‡РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ");
+    expect(connectSource).toContain("Подключить выбранные");
+    expect(connectSource).toContain("position: sticky;");
+    expect(connectSource).toContain("bottom: 0;");
     expect(connectSource).not.toContain("@svar-ui/");
     expect(connectSource).not.toContain("$lib/components/ui/");
+  });
+
+  it("constrains tab grids and wide sheets to the viewport", () => {
+    expect(topCommandBarSource).toContain("flex-wrap: wrap;");
+    expect(workspaceSource).toContain("min-width: 0;");
+    expect(sourcesTabSource).toContain("min-width: 0;");
+    expect(sourcesTabSource).toContain("max-width: 100%;");
+    expect(sheetSource).toContain("data-[side=right]:w-[min(1180px,calc(100vw-96px))]");
+    expect(sheetSource).toContain("data-[side=right]:sm:max-w-none");
   });
 
   it("renders the bottom queue from source jobs and active LLM runs", () => {

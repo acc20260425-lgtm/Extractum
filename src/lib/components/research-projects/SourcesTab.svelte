@@ -96,9 +96,12 @@
   .sources-tab {
     display: flex;
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
     flex: 1;
     flex-direction: column;
     gap: 12px;
+    overflow: hidden;
     padding-top: 12px;
   }
 
@@ -117,6 +120,8 @@
 
   .sources-grid-region {
     min-height: 240px;
+    min-width: 0;
+    max-width: 100%;
     flex: 1;
     border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);

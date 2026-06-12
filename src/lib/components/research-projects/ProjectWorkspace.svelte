@@ -97,9 +97,12 @@
   .project-workspace-panel {
     display: flex;
     min-height: 0;
+    min-width: 0;
+    width: 100%;
     flex: 1;
     flex-direction: column;
     gap: 14px;
+    overflow: hidden;
     padding: 14px;
     background: var(--extractum-surface);
   }
@@ -126,6 +129,14 @@
 
   :global(.workspace-tabs) {
     min-height: 0;
+    min-width: 0;
+    width: 100%;
+  }
+
+  :global(.workspace-tabs [data-slot="tabs-content"]) {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .overview-grid {

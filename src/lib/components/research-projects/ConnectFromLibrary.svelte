@@ -47,12 +47,12 @@
 
   const columns = [
     { id: "selected", header: "", width: 44, cell: GridSelectCell },
-    { id: "title", header: "Источник", flexgrow: 1, cell: LibrarySourceCell },
-    { id: "provider", header: "Тип", width: 120 },
-    { id: "projectCount", header: "Проекты", width: 90 },
-    { id: "lastCollectedLabel", header: "Последний сбор", width: 160 },
-    { id: "localCopyLabel", header: "Локальная копия", width: 130 },
-    { id: "status", header: "Статус", width: 130 },
+    { id: "title", header: "Источник", width: 260, cell: LibrarySourceCell },
+    { id: "provider", header: "Тип", width: 96 },
+    { id: "projectCount", header: "Проекты", width: 80 },
+    { id: "lastCollectedLabel", header: "Последний сбор", width: 140 },
+    { id: "localCopyLabel", header: "Локальная копия", width: 120 },
+    { id: "status", header: "Статус", width: 100 },
   ];
 
   const materialChips = ["Статьи", "Посты", "Видео"];
@@ -96,7 +96,7 @@
           <Search size={14} aria-hidden="true" />
           <ExtractumTextInput
             bind:value={query}
-            placeholder="РџРѕРёСЃРє РїРѕ РёСЃС‚РѕС‡РЅРёРєР°Рј..."
+            placeholder="Поиск по источникам..."
             aria-label="Search library sources"
           />
         </label>
@@ -180,7 +180,7 @@
         </ExtractumButton>
         <ExtractumButton disabled={selectedConnectableCount === 0 || saving} onclick={connectSelected}>
           <Check size={14} aria-hidden="true" />
-          РџРѕРґРєР»СЋС‡РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ
+          Подключить выбранные
         </ExtractumButton>
       </footer>
     </aside>
@@ -191,6 +191,7 @@
   .connect-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
+    height: min(720px, calc(100vh - 120px));
     min-height: min(720px, calc(100vh - 120px));
     gap: 14px;
     padding-top: 14px;
@@ -203,6 +204,12 @@
     min-height: 0;
     flex-direction: column;
     gap: 12px;
+  }
+
+  .side-panels {
+    max-height: min(720px, calc(100vh - 120px));
+    overflow-y: auto;
+    padding-right: 2px;
   }
 
   .library-toolbar {
@@ -311,8 +318,14 @@
   }
 
   .connect-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
     justify-content: flex-end;
     margin-top: auto;
+    border-top: 1px solid var(--extractum-border);
+    background: var(--extractum-surface);
+    padding-top: 10px;
   }
 
   .connect-actions span {

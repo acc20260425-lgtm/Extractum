@@ -60,6 +60,8 @@ describe("research projects import boundaries", () => {
     expect(dataGridSource).toContain("Locale");
     expect(dataGridSource).toContain("Willow");
     expect(dataGridSource).toContain("fonts={false}");
+    expect(dataGridSource).toContain("visibleOverlay");
+    expect(dataGridSource).toContain("rows.length === 0 ? overlay : undefined");
 
     const selectCellSource = readFileSync(
       path.join(repoRoot, "src/lib/components/extractum-ui/GridSelectCell.svelte"),

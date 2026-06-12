@@ -32,6 +32,7 @@
   } = $props();
 
   let api = $state<any>(null);
+  let visibleOverlay = $derived(rows.length === 0 ? overlay : undefined);
 
   function rowStyle(row: GridRow) {
     return [
@@ -56,7 +57,7 @@
         bind:this={api}
         selectedRows={selectedRowIds}
         {rowStyle}
-        {overlay}
+        overlay={visibleOverlay}
         multiselect
         select
         sizes={{ rowHeight: 34, headerHeight: 34, columnWidth: 160 }}
@@ -69,7 +70,9 @@
 <style>
   .extractum-data-grid {
     min-height: 0;
+    min-width: 0;
     width: 100%;
+    max-width: 100%;
     overflow: hidden;
   }
 

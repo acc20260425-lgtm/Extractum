@@ -54,7 +54,9 @@
 <style>
   .command-bar {
     display: flex;
+    min-width: 0;
     min-height: 58px;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
@@ -65,6 +67,7 @@
 
   .project-context {
     display: flex;
+    flex: 1 1 180px;
     min-width: 180px;
     flex-direction: column;
     gap: 2px;
@@ -83,7 +86,10 @@
 
   .command-controls {
     display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
     align-items: end;
+    justify-content: flex-end;
     gap: 8px;
   }
 

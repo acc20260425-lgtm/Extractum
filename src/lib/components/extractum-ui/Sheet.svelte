@@ -34,7 +34,7 @@
   <SheetContent
     {side}
     class={cn(
-      "extractum-sheet w-[min(1180px,calc(100vw-96px))] max-w-none border-[var(--extractum-border)] bg-[var(--extractum-surface)] text-[var(--extractum-text)]",
+      "extractum-sheet w-[min(1180px,calc(100vw-96px))] data-[side=left]:w-[min(1180px,calc(100vw-96px))] data-[side=right]:w-[min(1180px,calc(100vw-96px))] max-w-none data-[side=left]:sm:max-w-none data-[side=right]:sm:max-w-none border-[var(--extractum-border)] bg-[var(--extractum-surface)] text-[var(--extractum-text)]",
       className,
       contentClass,
     )}
