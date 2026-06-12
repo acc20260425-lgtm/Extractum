@@ -2300,7 +2300,7 @@ Expected: commit succeeds.
 **Files:**
 - Create: `docs/superpowers/verification/2026-06-11-new-ui-research-projects.md`
 
-- [ ] **Step 1: Run all automated verification**
+- [x] **Step 1: Run all automated verification**
 
 Run:
 
@@ -2312,7 +2312,7 @@ npm.cmd run build
 
 Expected: PASS.
 
-- [ ] **Step 2: Start the dev server**
+- [x] **Step 2: Start the dev server**
 
 Run:
 
@@ -2322,7 +2322,7 @@ npm.cmd run dev -- --host 127.0.0.1
 
 Expected: Vite serves the app, usually at `http://127.0.0.1:1420/`. If port `1420` is occupied because of the Tauri strict port setting, stop the occupying server or run the Tauri app flow already used by this repo.
 
-- [ ] **Step 3: Inspect `/projects` at Ultra HD**
+- [x] **Step 3: Inspect `/projects` at Ultra HD**
 
 Use Playwright MCP if available. If the MCP transport fails, use the cached Playwright CLI workaround from this session:
 
@@ -2338,7 +2338,7 @@ Expected:
 - disabled rows and already-connected rows are visually distinct;
 - no obvious text overlap at 2560x1440.
 
-- [ ] **Step 4: Inspect smaller desktop fallback**
+- [x] **Step 4: Inspect smaller desktop fallback**
 
 Run the same script with viewport `{ width: 1366, height: 768 }` and save `artifacts/new-ui-projects-1366.png`.
 
@@ -2347,7 +2347,7 @@ Expected:
 - project rail/workspace remain usable;
 - Connect from Library still fits inside the viewport.
 
-- [ ] **Step 5: Record verification notes**
+- [x] **Step 5: Record verification notes**
 
 Create `docs/superpowers/verification/2026-06-11-new-ui-research-projects.md`:
 
@@ -2375,7 +2375,7 @@ Date: 2026-06-11
 - Telegram/YouTube source-group-backed projects are the only persistable first-slice connect targets.
 ```
 
-- [ ] **Step 6: Commit verification**
+- [x] **Step 6: Commit verification**
 
 Run:
 
