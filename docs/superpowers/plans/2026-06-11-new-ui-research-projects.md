@@ -2244,7 +2244,7 @@ it("keeps old analysis fallback available while the new UI lives at /projects", 
 });
 ```
 
-- [ ] **Step 2: Run the route contract**
+- [ ] **Step 2: Run the route contract and verify it fails**
 
 Run:
 
@@ -2252,7 +2252,7 @@ Run:
 npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 ```
 
-Expected: PASS with `/` still redirecting to `/analysis` and both `/projects` and `/analysis` present in the app navigation.
+Expected: FAIL because `/projects` has not been added to the app navigation yet.
 
 - [ ] **Step 3: Add Projects nav entry without removing Analysis**
 
@@ -2297,7 +2297,7 @@ Expected: commit succeeds.
 ## Task 10: Visual QA, Ultra HD Density, And Final Verification
 
 **Files:**
-- Modify: `docs/superpowers/verification/2026-06-11-new-ui-research-projects.md`
+- Create: `docs/superpowers/verification/2026-06-11-new-ui-research-projects.md`
 
 - [ ] **Step 1: Run all automated verification**
 
