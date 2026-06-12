@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import homeRouteSource from "../routes/+page.svelte?raw";
+import layoutSource from "../routes/+layout.svelte?raw";
 import projectsRouteSource from "../routes/projects/+page.svelte?raw";
 import shellSource from "./components/research-projects/ProjectsShell.svelte?raw";
 import projectRailSource from "./components/research-projects/ProjectRail.svelte?raw";
@@ -59,5 +61,12 @@ describe("research projects route contract", () => {
     expect(bottomQueueSource).toContain("sourceJobs");
     expect(bottomQueueSource).toContain("runs");
     expect(bottomQueueSource).toContain('data-ui-region="bottom-queue"');
+  });
+
+  it("keeps old analysis fallback available while the new UI lives at /projects", () => {
+    expect(homeRouteSource).toContain('goto("/analysis")');
+    expect(layoutSource).toContain('href: "/projects"');
+    expect(layoutSource).toContain('href: "/analysis"');
+    expect(projectsRouteSource).toContain('data-ui-route="research-projects"');
   });
 });

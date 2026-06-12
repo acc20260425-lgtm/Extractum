@@ -1,6 +1,6 @@
 <script lang="ts">
   import "$lib/styles/base.css";
-  import { LayoutDashboard, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
+  import { FolderKanban, LayoutDashboard, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import AppSidebar from "$lib/components/app-sidebar.svelte";
@@ -49,6 +49,13 @@
   }
 
   const navItems = [
+    {
+      href: "/projects",
+      label: "Projects",
+      caption: "Research control deck",
+      icon: FolderKanban,
+      active: (pathname: string) => pathname.startsWith("/projects"),
+    },
     {
       href: "/analysis",
       label: "Workspace",
@@ -117,7 +124,9 @@
           <div class="workspace-route">
             <span class="workspace-kicker">Current space</span>
             <strong>
-              {#if page.url.pathname.startsWith("/analysis")}
+              {#if page.url.pathname.startsWith("/projects")}
+                Research projects
+              {:else if page.url.pathname.startsWith("/analysis")}
                 Analysis workspace
               {:else if page.url.pathname.startsWith("/accounts") || page.url.pathname.startsWith("/auth")}
                 Source access

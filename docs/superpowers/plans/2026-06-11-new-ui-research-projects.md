@@ -2229,7 +2229,7 @@ Expected: commit succeeds.
 - Modify: `src/routes/+page.svelte` or leave unchanged after test confirms old default behavior.
 - Modify: `src/routes/+layout.svelte`
 
-- [ ] **Step 1: Add fallback contract**
+- [x] **Step 1: Add fallback contract**
 
 Add:
 
@@ -2245,7 +2245,7 @@ it("keeps old analysis fallback available while the new UI lives at /projects", 
 });
 ```
 
-- [ ] **Step 2: Run the route contract and verify it fails**
+- [x] **Step 2: Run the route contract and verify it fails**
 
 Run:
 
@@ -2255,7 +2255,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: FAIL because `/projects` has not been added to the app navigation yet.
 
-- [ ] **Step 3: Add Projects nav entry without removing Analysis**
+- [x] **Step 3: Add Projects nav entry without removing Analysis**
 
 In `src/routes/+layout.svelte`, add a new nav item before Workspace:
 
@@ -2271,7 +2271,7 @@ In `src/routes/+layout.svelte`, add a new nav item before Workspace:
 
 Keep `/analysis` as `"Workspace"` so the old UI remains reachable.
 
-- [ ] **Step 4: Run tests and check**
+- [x] **Step 4: Run tests and check**
 
 Run:
 
@@ -2282,7 +2282,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit fallback preservation**
+- [x] **Step 5: Commit fallback preservation**
 
 Run:
 
