@@ -52,7 +52,7 @@
     {
       href: "/projects",
       label: "Projects",
-      caption: "Research control deck",
+      caption: "Research projects",
       icon: FolderKanban,
       active: (pathname: string) => pathname.startsWith("/projects"),
     },

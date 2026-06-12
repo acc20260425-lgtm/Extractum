@@ -2263,7 +2263,7 @@ In `src/routes/+layout.svelte`, add a new nav item before Workspace:
 {
   href: "/projects",
   label: "Projects",
-  caption: "Research control deck",
+  caption: "Research projects",
   icon: FolderKanban,
   active: (pathname: string) => pathname.startsWith("/projects"),
 },
