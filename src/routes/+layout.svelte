@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "$lib/styles/base.css";
   import { LayoutDashboard, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";

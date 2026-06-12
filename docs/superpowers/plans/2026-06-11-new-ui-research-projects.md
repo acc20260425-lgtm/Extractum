@@ -154,7 +154,7 @@ Expected: both commands pass before any implementation changes. If they fail, st
 - Create: `src/lib/components/ui/label/*`
 - Create: `src/lib/components/ui/scroll-area/*`
 
-- [ ] **Step 1: Write the failing foundation contract**
+- [x] **Step 1: Write the failing foundation contract**
 
 Create `src/lib/research-projects-foundation-contract.test.ts`:
 
@@ -215,7 +215,7 @@ describe("new UI foundation", () => {
 });
 ```
 
-- [ ] **Step 2: Run the foundation contract and verify it fails**
+- [x] **Step 2: Run the foundation contract and verify it fails**
 
 Run:
 
@@ -225,7 +225,7 @@ npm.cmd run test -- src/lib/research-projects-foundation-contract.test.ts
 
 Expected: FAIL because Tailwind, shadcn generated folders, SVAR packages, `components.json`, and `base.css` are not present yet.
 
-- [ ] **Step 3: Install Tailwind v4 and SVAR packages**
+- [x] **Step 3: Install Tailwind v4 and SVAR packages**
 
 Run:
 
@@ -236,12 +236,12 @@ npm.cmd install -D tailwindcss @tailwindcss/vite tw-animate-css
 
 Expected: `package.json` and `package-lock.json` update. If network access is blocked, rerun with escalated permissions.
 
-- [ ] **Step 4: Initialize shadcn-svelte with Extractum paths**
+- [x] **Step 4: Initialize shadcn-svelte with Extractum paths**
 
 Run:
 
 ```powershell
-npx.cmd shadcn-svelte@latest init --base-color slate --css src/lib/styles/base.css --lib-alias '$lib' --components-alias '$lib/components' --utils-alias '$lib/utils' --hooks-alias '$lib/hooks' --ui-alias '$lib/components/ui'
+npx.cmd shadcn-svelte@latest init --preset bcivVKXQ --base-color zinc --css src/lib/styles/base.css --lib-alias '$lib' --components-alias '$lib/components' --utils-alias '$lib/utils' --hooks-alias '$lib/hooks' --ui-alias '$lib/components/ui' --no-deps --overwrite
 ```
 
 Expected:
@@ -250,7 +250,7 @@ Expected:
 - `src/lib/styles/base.css` exists.
 - Existing `src/lib/components/ui/Button.svelte` remains present.
 
-- [ ] **Step 5: Add the shadcn primitives for the first slice**
+- [x] **Step 5: Add the shadcn primitives for the first slice**
 
 Run:
 
@@ -260,7 +260,7 @@ npx.cmd shadcn-svelte@latest add button badge input checkbox tabs sheet dialog d
 
 Expected: lower-case directories appear under `src/lib/components/ui/*`. Existing PascalCase legacy components remain unchanged.
 
-- [ ] **Step 6: Wire Tailwind into Vite**
+- [x] **Step 6: Wire Tailwind into Vite**
 
 Modify `vite.config.js` to this structure while preserving the current Tauri server config:
 
@@ -296,7 +296,7 @@ export default defineConfig(async () => ({
 }));
 ```
 
-- [ ] **Step 7: Import the base stylesheet from the root layout**
+- [x] **Step 7: Import the base stylesheet from the root layout**
 
 Add this import at the top of `src/routes/+layout.svelte`:
 
@@ -307,7 +307,7 @@ Add this import at the top of `src/routes/+layout.svelte`:
 
 Keep the existing layout markup, theme state, `ToastHost`, `ModalHost`, `AppSidebar`, and old workspace CSS.
 
-- [ ] **Step 8: Add Extractum product tokens and SVAR bridge**
+- [x] **Step 8: Add Extractum product tokens and SVAR bridge**
 
 Replace the generated `src/lib/styles/base.css` contents with product-owned tokens that keep shadcn variables available:
 
@@ -461,7 +461,7 @@ body {
 }
 ```
 
-- [ ] **Step 9: Run the foundation contract**
+- [x] **Step 9: Run the foundation contract**
 
 Run:
 
@@ -471,7 +471,7 @@ npm.cmd run test -- src/lib/research-projects-foundation-contract.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 10: Run type checks**
+- [x] **Step 10: Run type checks**
 
 Run:
 
@@ -481,7 +481,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 11: Commit foundation**
+- [x] **Step 11: Commit foundation**
 
 Run:
 
