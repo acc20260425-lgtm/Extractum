@@ -3,10 +3,11 @@
   import { cn } from "$lib/utils.js";
   import type { ComponentProps } from "svelte";
 
-  let { class: className, ...rest }: ComponentProps<typeof Input> = $props();
+  let { class: className, value = $bindable(), ...rest }: ComponentProps<typeof Input> = $props();
 </script>
 
 <Input
   class={cn("extractum-input h-[32px] rounded-[var(--extractum-radius)] text-[13px]", className)}
+  bind:value
   {...rest}
 />

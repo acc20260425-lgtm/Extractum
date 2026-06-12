@@ -3,7 +3,7 @@
   import { cn } from "$lib/utils.js";
   import type { ComponentProps } from "svelte";
 
-  let { class: className, ...rest }: ComponentProps<typeof Tabs> = $props();
+  let { class: className, value = $bindable(""), ...rest }: ComponentProps<typeof Tabs> = $props();
 </script>
 
-<Tabs class={cn("extractum-tabs", className)} {...rest} />
+<Tabs class={cn("extractum-tabs", className)} bind:value {...rest} />

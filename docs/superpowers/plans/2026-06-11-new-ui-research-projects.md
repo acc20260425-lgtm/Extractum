@@ -1814,7 +1814,7 @@ Expected: commit succeeds.
 - Create: `src/lib/components/research-projects/TopCommandBar.svelte`
 - Create: `src/lib/components/research-projects/ProjectWorkspace.svelte`
 
-- [ ] **Step 1: Write route contract**
+- [x] **Step 1: Write route contract**
 
 Create `src/lib/research-projects-route-contract.test.ts`:
 
@@ -1858,7 +1858,7 @@ describe("research projects route contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run route contract and verify it fails**
+- [x] **Step 2: Run route contract and verify it fails**
 
 Run:
 
@@ -1868,7 +1868,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: FAIL because route and shell components do not exist.
 
-- [ ] **Step 3: Implement shell components**
+- [x] **Step 3: Implement shell components**
 
 Create:
 - `IconRail.svelte`: narrow rail with lucide icons for Projects, Library, Runs, Diagnostics, Settings. Use icon-only buttons/links with `title`.
@@ -1889,7 +1889,7 @@ Use this layout CSS in `ProjectsShell.svelte`:
 }
 ```
 
-- [ ] **Step 4: Implement `/projects` route**
+- [x] **Step 4: Implement `/projects` route**
 
 Create `src/routes/projects/+page.svelte`:
 
@@ -1949,7 +1949,7 @@ Create `src/routes/projects/+page.svelte`:
 </section>
 ```
 
-- [ ] **Step 5: Run route contract and import-boundary tests**
+- [x] **Step 5: Run route contract and import-boundary tests**
 
 Run:
 
@@ -1960,7 +1960,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit shell**
+- [x] **Step 6: Commit shell**
 
 Run:
 
