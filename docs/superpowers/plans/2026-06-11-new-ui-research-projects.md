@@ -1438,7 +1438,7 @@ Expected: commit succeeds.
 - Create: `src/lib/components/extractum-ui/StatusBadge.svelte`
 - Create: `src/lib/components/extractum-ui/index.ts`
 
-- [ ] **Step 1: Write import-boundary test**
+- [x] **Step 1: Write import-boundary test**
 
 Create `src/lib/research-projects-import-boundary.test.ts`:
 
@@ -1496,7 +1496,7 @@ describe("research projects import boundaries", () => {
 });
 ```
 
-- [ ] **Step 2: Run boundary test and verify it fails**
+- [x] **Step 2: Run boundary test and verify it fails**
 
 Run:
 
@@ -1506,7 +1506,7 @@ npm.cmd run test -- src/lib/research-projects-import-boundary.test.ts
 
 Expected: FAIL because `extractum-ui` wrappers do not exist.
 
-- [ ] **Step 3: Create wrapper exports**
+- [x] **Step 3: Create wrapper exports**
 
 Create `src/lib/components/extractum-ui/index.ts`:
 
@@ -1522,7 +1522,7 @@ export { default as ProviderBadge } from "./ProviderBadge.svelte";
 export { default as StatusBadge } from "./StatusBadge.svelte";
 ```
 
-- [ ] **Step 4: Create shadcn wrapper components**
+- [x] **Step 4: Create shadcn wrapper components**
 
 Create compact wrappers over shadcn primitives. Each wrapper accepts a `class` prop and adds stable product classes:
 
@@ -1578,11 +1578,11 @@ Create `TextInput.svelte` and `Badge.svelte` exactly as follows:
 
 For `Select.svelte`, `Checkbox.svelte`, `Tabs.svelte`, and `Sheet.svelte`, re-export or wrap the generated shadcn namespace while adding product classes at the feature usage boundary. `Sheet.svelte` must wrap `Sheet.Content` with a wide class suitable for Connect from Library: `w-[min(1180px,calc(100vw-96px))]`.
 
-- [ ] **Step 5: Create provider and status badges**
+- [x] **Step 5: Create provider and status badges**
 
 Create `ProviderBadge.svelte` with provider classes for `telegram`, `youtube`, `rss`, `forum`, `web`, and `other`. Create `StatusBadge.svelte` with statuses `active`, `needs_account`, `syncing`, `error`, and `unavailable`. Use `ExtractumBadge` internally.
 
-- [ ] **Step 6: Run boundary and type checks**
+- [x] **Step 6: Run boundary and type checks**
 
 Run:
 
@@ -1593,7 +1593,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit wrappers**
+- [x] **Step 7: Commit wrappers**
 
 Run:
 
