@@ -500,7 +500,7 @@ Expected: commit succeeds.
 - Create: `src/lib/ui/research-projects-model.test.ts`
 - Create: `src/lib/ui/research-projects-model.ts`
 
-- [ ] **Step 1: Write adapter tests**
+- [x] **Step 1: Write adapter tests**
 
 Create `src/lib/ui/research-projects-model.test.ts`:
 
@@ -707,7 +707,7 @@ describe("research projects model", () => {
 });
 ```
 
-- [ ] **Step 2: Run adapter tests and verify they fail**
+- [x] **Step 2: Run adapter tests and verify they fail**
 
 Run:
 
@@ -717,7 +717,7 @@ npm.cmd run test -- src/lib/ui/research-projects-model.test.ts
 
 Expected: FAIL because `research-projects-model.ts` does not exist.
 
-- [ ] **Step 3: Implement the adapter**
+- [x] **Step 3: Implement the adapter**
 
 Create `src/lib/ui/research-projects-model.ts`:
 
@@ -1046,7 +1046,7 @@ export function buildProjectSourceLinksView(
 }
 ```
 
-- [ ] **Step 4: Run adapter tests**
+- [x] **Step 4: Run adapter tests**
 
 Run:
 
@@ -1056,7 +1056,7 @@ npm.cmd run test -- src/lib/ui/research-projects-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Run full unit suite**
+- [x] **Step 5: Run full unit suite**
 
 Run:
 
@@ -1066,7 +1066,7 @@ npm.cmd run test
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit adapter**
+- [x] **Step 6: Commit adapter**
 
 Run:
 
