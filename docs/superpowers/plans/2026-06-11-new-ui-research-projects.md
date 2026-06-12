@@ -94,7 +94,7 @@ Feature components import from `$lib/components/extractum-ui`, `$lib/ui/research
 **Files:**
 - No source files changed.
 
-- [ ] **Step 1: Create the implementation branch**
+- [x] **Step 1: Create the implementation branch**
 
 Run:
 
@@ -104,7 +104,7 @@ git switch -c feature/new-ui-research-projects
 
 Expected: branch changes to `feature/new-ui-research-projects`.
 
-- [ ] **Step 2: Confirm the worktree starts clean**
+- [x] **Step 2: Confirm the worktree starts clean**
 
 Run:
 
@@ -114,7 +114,7 @@ git status --short
 
 Expected: no output.
 
-- [ ] **Step 3: Run the existing fast checks**
+- [x] **Step 3: Run the existing fast checks**
 
 Run:
 
