@@ -3,6 +3,7 @@ import projectsRouteSource from "../routes/projects/+page.svelte?raw";
 import shellSource from "./components/research-projects/ProjectsShell.svelte?raw";
 import projectRailSource from "./components/research-projects/ProjectRail.svelte?raw";
 import workspaceSource from "./components/research-projects/ProjectWorkspace.svelte?raw";
+import sourcesTabSource from "./components/research-projects/SourcesTab.svelte?raw";
 
 describe("research projects route contract", () => {
   it("adds the new route without redirecting through the old analysis workspace", () => {
@@ -28,5 +29,13 @@ describe("research projects route contract", () => {
     expect(workspaceSource).toContain("Overview");
     expect(workspaceSource).toContain("Sources");
     expect(workspaceSource).toContain("Evidence");
+  });
+
+  it("uses SVAR-backed product grid for project sources", () => {
+    expect(sourcesTabSource).toContain("ExtractumDataGrid");
+    expect(sourcesTabSource).toContain("ProviderBadge");
+    expect(sourcesTabSource).toContain("StatusBadge");
+    expect(sourcesTabSource).toContain('data-ui-action="connect-library"');
+    expect(sourcesTabSource).not.toContain("@svar-ui/");
   });
 });

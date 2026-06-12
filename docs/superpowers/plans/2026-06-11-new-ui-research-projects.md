@@ -1982,7 +1982,7 @@ Expected: commit succeeds.
 - Create: `src/lib/components/research-projects/LibrarySourceCell.svelte`
 - Modify: `src/lib/components/research-projects/ProjectWorkspace.svelte`
 
-- [ ] **Step 1: Add route contract coverage for Sources tab**
+- [x] **Step 1: Add route contract coverage for Sources tab**
 
 Add assertions:
 
@@ -1998,7 +1998,7 @@ it("uses SVAR-backed product grid for project sources", () => {
 });
 ```
 
-- [ ] **Step 2: Run route contract and verify it fails**
+- [x] **Step 2: Run route contract and verify it fails**
 
 Run:
 
@@ -2008,7 +2008,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: FAIL because `SourcesTab.svelte` does not exist.
 
-- [ ] **Step 3: Implement Sources tab**
+- [x] **Step 3: Implement Sources tab**
 
 `SourcesTab.svelte` responsibilities:
 - show connected counts and material counts through `ProjectSourceSummary`;
@@ -2028,7 +2028,7 @@ const columns = [
 ];
 ```
 
-- [ ] **Step 4: Mount Sources tab in ProjectWorkspace**
+- [x] **Step 4: Mount Sources tab in ProjectWorkspace**
 
 `ProjectWorkspace.svelte` must pass:
 - current project;
@@ -2038,7 +2038,7 @@ const columns = [
 
 Keep placeholder panels for `Evidence`, `Reports`, `Runs`, and `Prompts`, but do not implement those out-of-scope workspaces.
 
-- [ ] **Step 5: Run tests and check**
+- [x] **Step 5: Run tests and check**
 
 Run:
 
@@ -2049,7 +2049,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Sources tab**
+- [x] **Step 6: Commit Sources tab**
 
 Run:
 

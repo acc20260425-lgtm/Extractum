@@ -6,12 +6,23 @@
     ExtractumTabsTrigger,
     StatusBadge,
   } from "$lib/components/extractum-ui";
-  import type { ResearchProjectView } from "$lib/ui/research-projects-model";
+  import type {
+    LibrarySourceView,
+    ProjectSourceLinkView,
+    ResearchProjectView,
+  } from "$lib/ui/research-projects-model";
+  import SourcesTab from "./SourcesTab.svelte";
 
   let {
     project,
+    projectSourceLinks,
+    librarySources,
+    onOpenConnectLibrary,
   }: {
     project: ResearchProjectView | null;
+    projectSourceLinks: ProjectSourceLinkView[];
+    librarySources: LibrarySourceView[];
+    onOpenConnectLibrary: () => void;
   } = $props();
 
   let activeTab = $state("overview");
@@ -60,7 +71,12 @@
     </ExtractumTabsContent>
 
     <ExtractumTabsContent value="sources">
-      <div class="placeholder-panel">Sources workspace is prepared for the SVAR grid slice.</div>
+      <SourcesTab
+        {project}
+        {projectSourceLinks}
+        {librarySources}
+        {onOpenConnectLibrary}
+      />
     </ExtractumTabsContent>
     <ExtractumTabsContent value="evidence">
       <div class="placeholder-panel">Evidence inventory is outside this first route shell task.</div>

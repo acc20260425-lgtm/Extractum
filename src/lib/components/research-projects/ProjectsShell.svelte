@@ -6,7 +6,7 @@
   import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
 
   let {
-    state,
+    state: workflowState,
     onSelectProject,
     onConnectSelectedSources,
     onSelectedLibrarySourceIdsChange,
@@ -18,8 +18,13 @@
   } = $props();
 
   let currentProject = $derived(
-    state.projects.find((project) => project.id === state.selectedProjectId) ?? state.projects[0] ?? null,
+    workflowState.projects.find((project) => project.id === workflowState.selectedProjectId) ?? workflowState.projects[0] ?? null,
   );
+  let connectLibraryRequested = $state(false);
+
+  function openConnectLibrary() {
+    connectLibraryRequested = true;
+  }
 </script>
 
 <div class="projects-shell">
@@ -29,20 +34,29 @@
 
   <aside data-ui-region="project-rail" class="project-rail">
     <ProjectRail
-      projects={state.projects}
-      selectedProjectId={state.selectedProjectId}
+      projects={workflowState.projects}
+      selectedProjectId={workflowState.selectedProjectId}
       {onSelectProject}
     />
   </aside>
 
   <section class="workspace-column">
     <div data-ui-region="top-command-bar">
-      <TopCommandBar project={currentProject} loading={state.loading} />
+      <TopCommandBar project={currentProject} loading={workflowState.loading} />
     </div>
     <div data-ui-region="project-workspace" class="workspace-region">
-      <ProjectWorkspace project={currentProject} />
+      <ProjectWorkspace
+        project={currentProject}
+        projectSourceLinks={workflowState.projectSourceLinks}
+        librarySources={workflowState.librarySources}
+        onOpenConnectLibrary={openConnectLibrary}
+      />
     </div>
   </section>
+
+  {#if connectLibraryRequested}
+    <span class="sr-only" data-ui-state="connect-library-requested">Connect from Library requested</span>
+  {/if}
 </div>
 
 <style>
@@ -74,5 +88,17 @@
   .workspace-region {
     display: flex;
     flex: 1;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>
