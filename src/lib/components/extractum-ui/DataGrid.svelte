@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Grid, Willow, type IColumnConfig } from "@svar-ui/svelte-grid";
   import { Locale } from "@svar-ui/svelte-core";
-  import { ru as gridRu } from "@svar-ui/grid-locales";
+  import { en as gridEn } from "@svar-ui/grid-locales";
   import { ru as coreRu } from "@svar-ui/core-locales";
   import { cn } from "$lib/utils.js";
 
@@ -48,7 +48,7 @@
 </script>
 
 <div class={cn("extractum-svar-theme extractum-data-grid", className)} style={`height:${height};`}>
-  <Locale words={{ ...coreRu, ...gridRu }}>
+  <Locale words={{ ...coreRu, ...gridEn }}>
     <Willow fonts={false}>
       <Grid
         data={rows}
