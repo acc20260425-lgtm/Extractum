@@ -1464,7 +1464,75 @@ Run:
 npm.cmd run check
 ```
 
-Expected: PASS. If `bind:query` with `$bindable` reports a typing issue, change `LibraryWorkspace.svelte` to accept `query` and `onQueryChange` instead of using bindable state, then rerun this step.
+Expected: PASS.
+
+If `bind:query` with `$bindable` reports a typing issue, apply this exact fallback.
+
+In `src/lib/components/research-projects/LibraryWorkspace.svelte`, replace:
+
+```ts
+    query = $bindable(""),
+```
+
+with:
+
+```ts
+    query,
+    onQueryChange,
+```
+
+Add `onQueryChange` to the props type:
+
+```ts
+    query: string;
+    onQueryChange: (query: string) => void;
+```
+
+Add this handler before `const columns = [`:
+
+```ts
+  function handleQueryInput(event: Event) {
+    onQueryChange((event.currentTarget as HTMLInputElement).value);
+  }
+```
+
+Replace the search input:
+
+```svelte
+    <ExtractumTextInput bind:value={query} placeholder="Search sources" aria-label="Search Library sources" />
+```
+
+with:
+
+```svelte
+    <ExtractumTextInput
+      value={query}
+      placeholder="Search sources"
+      aria-label="Search Library sources"
+      oninput={handleQueryInput}
+    />
+```
+
+In `src/lib/components/research-projects/LibraryScreen.svelte`, replace:
+
+```svelte
+    bind:query
+```
+
+with:
+
+```svelte
+    query={query}
+    onQueryChange={(nextQuery) => (query = nextQuery)}
+```
+
+Then rerun:
+
+```powershell
+npm.cmd run check
+```
+
+Expected: PASS.
 
 - [ ] **Step 9: Commit Library components**
 
