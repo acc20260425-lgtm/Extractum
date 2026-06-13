@@ -88,7 +88,7 @@ This plan builds one vertical prototype: `/projects/library`. It does not add du
 **Files:**
 - No source files changed.
 
-- [ ] **Step 1: Create or confirm the implementation branch**
+- [x] **Step 1: Create or confirm the implementation branch**
 
 Run:
 
@@ -104,7 +104,7 @@ git switch -c feature/library-prototype
 
 Expected: branch changes to `feature/library-prototype`.
 
-- [ ] **Step 2: Run the current focused baseline**
+- [x] **Step 2: Run the current focused baseline**
 
 Run:
 
