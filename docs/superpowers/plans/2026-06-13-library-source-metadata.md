@@ -774,7 +774,7 @@ git commit -m "feat: add library source api wrapper"
 - Create: `src/lib/ui/library-catalog-model.ts`
 - Create: `src/lib/ui/library-catalog-model.test.ts`
 
-- [ ] **Step 1: Write catalog model tests**
+- [x] **Step 1: Write catalog model tests**
 
 Create `src/lib/ui/library-catalog-model.test.ts`:
 
@@ -953,7 +953,7 @@ describe("library catalog model", () => {
 });
 ```
 
-- [ ] **Step 2: Run catalog model tests and verify failure**
+- [x] **Step 2: Run catalog model tests and verify failure**
 
 Run:
 
@@ -963,7 +963,7 @@ npm.cmd run test -- src/lib/ui/library-catalog-model.test.ts
 
 Expected: FAIL because `src/lib/ui/library-catalog-model.ts` does not exist.
 
-- [ ] **Step 3: Implement the catalog model**
+- [x] **Step 3: Implement the catalog model**
 
 Create `src/lib/ui/library-catalog-model.ts`:
 
@@ -1236,7 +1236,7 @@ export function reconcileLibraryCatalogSourceSelection(
 }
 ```
 
-- [ ] **Step 4: Run catalog model tests and verify they pass**
+- [x] **Step 4: Run catalog model tests and verify they pass**
 
 Run:
 
@@ -1246,7 +1246,7 @@ npm.cmd run test -- src/lib/ui/library-catalog-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit catalog model**
+- [x] **Step 5: Commit catalog model**
 
 Run:
 
