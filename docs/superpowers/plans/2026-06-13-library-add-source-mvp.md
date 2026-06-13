@@ -1783,7 +1783,7 @@ Do not commit yet.
 **Files:**
 - Create: `src/lib/components/research-projects/LibraryTelegramDialogImport.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 Create `src/lib/components/research-projects/LibraryTelegramDialogImport.svelte`:
 
@@ -2060,7 +2060,7 @@ Create `src/lib/components/research-projects/LibraryTelegramDialogImport.svelte`
 </style>
 ```
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
