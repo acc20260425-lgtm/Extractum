@@ -90,7 +90,7 @@ No new Rust command, durable table, YouTube channel ingestion, or Telegram URL i
 **Files:**
 - No file changes.
 
-- [ ] **Step 1: Confirm branch and clean tracked worktree**
+- [x] **Step 1: Confirm branch and clean tracked worktree**
 
 Run:
 
@@ -100,7 +100,7 @@ git status --short --branch
 
 Expected: branch is `main` and no tracked files are modified. If untracked local scratch files appear, do not stage them.
 
-- [ ] **Step 2: Run focused Library baseline tests**
+- [x] **Step 2: Run focused Library baseline tests**
 
 Run:
 
@@ -110,7 +110,7 @@ npm.cmd run test -- src/lib/library-prototype-contract.test.ts src/lib/research-
 
 Expected: PASS. If this fails before changes, stop and record the existing failure in this plan.
 
-- [ ] **Step 3: Run Svelte check baseline**
+- [x] **Step 3: Run Svelte check baseline**
 
 Run:
 
