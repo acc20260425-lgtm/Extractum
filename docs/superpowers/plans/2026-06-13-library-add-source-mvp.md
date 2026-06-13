@@ -1707,7 +1707,7 @@ Do not commit yet.
 **Files:**
 - Create: `src/lib/components/research-projects/LibraryYoutubeAddPanel.svelte`
 
-- [ ] **Step 1: Create the provider panel**
+- [x] **Step 1: Create the provider panel**
 
 Create `src/lib/components/research-projects/LibraryYoutubeAddPanel.svelte`:
 
@@ -1764,7 +1764,7 @@ Create `src/lib/components/research-projects/LibraryYoutubeAddPanel.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Run contract tests**
+- [x] **Step 2: Run contract tests**
 
 Run:
 
