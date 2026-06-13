@@ -374,6 +374,13 @@ YouTube section when `youtube` details exist:
 - playlist video count for playlist sources;
 - provider availability status.
 
+Every provider detail field is optional from the UI point of view. If one field
+inside an otherwise present detail block is `null`, the Inspector should handle
+that single field gracefully instead of hiding the whole block. Acceptable
+display choices are either omitting that metadata row or showing a quiet empty
+value such as `N/A`; the implementation should use one consistent pattern
+within the Inspector.
+
 Telegram section when `telegram` details exist:
 
 - subtype;
@@ -398,6 +405,13 @@ If provider metadata is missing for a source:
 - set the provider detail block to `null`;
 - keep `canonical_url` and `subtitle` nullable;
 - do not fail the whole list for one incomplete provider detail row.
+
+If one optional field inside a provider detail block is missing:
+
+- keep the provider detail block present;
+- serialize the missing field as `null`;
+- do not synthesize misleading placeholder data in the backend;
+- let the frontend render a consistent empty-field treatment.
 
 If `source_subtype` is unknown:
 
