@@ -2308,7 +2308,7 @@ git commit -m "test: cover library add source boundaries"
 **Files:**
 - Modify only files from earlier tasks if verification exposes defects.
 
-- [ ] **Step 1: Run full frontend tests**
+- [x] **Step 1: Run full frontend tests**
 
 Run:
 
@@ -2318,7 +2318,7 @@ npm.cmd run test
 
 Expected: PASS.
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
@@ -2328,7 +2328,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 3: Start or reuse dev server**
+- [x] **Step 3: Start or reuse dev server**
 
 If no dev server is running, start one:
 
@@ -2338,7 +2338,7 @@ npm.cmd run dev -- --host 127.0.0.1
 
 Expected: Vite prints a local URL. Use the existing project port if already running.
 
-- [ ] **Step 4: Browser verify `/projects/library`**
+- [x] **Step 4: Browser verify `/projects/library`**
 
 Open `/projects/library` in the browser.
 
@@ -2356,7 +2356,7 @@ Verify:
 - No direct shadcn/SVAR imports were introduced in Library feature files.
 - There is no horizontal overflow at a desktop width around 1366px.
 
-- [ ] **Step 5: Commit any verification fixes**
+- [x] **Step 5: Commit any verification fixes**
 
 If browser verification required code changes, stage only the affected files and commit:
 
