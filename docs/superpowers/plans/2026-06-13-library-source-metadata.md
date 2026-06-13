@@ -130,7 +130,7 @@ Expected: no matching tests yet or PASS. This establishes the command that later
 - Create: `src-tauri/src/library_sources/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write the backend model and query tests**
+- [x] **Step 1: Write the backend model and query tests**
 
 Create `src-tauri/src/library_sources/models.rs` with the public contract:
 
@@ -565,7 +565,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the new backend tests and verify compile/test failure**
+- [x] **Step 2: Run the new backend tests and verify compile/test failure**
 
 Run:
 
@@ -575,7 +575,7 @@ cargo test library_sources --manifest-path src-tauri/Cargo.toml
 
 Expected: FAIL until `src-tauri/src/lib.rs` declares the new module, or PASS if the module is compiled as soon as it is declared. If it fails only because the module is not wired, continue to Step 3.
 
-- [ ] **Step 3: Wire the backend module into Tauri**
+- [x] **Step 3: Wire the backend module into Tauri**
 
 Modify `src-tauri/src/lib.rs`.
 
@@ -594,7 +594,7 @@ Add `list_library_sources` to the `tauri::generate_handler!` macro near the anal
             list_analysis_prompt_templates,
 ```
 
-- [ ] **Step 4: Run the backend tests and verify they pass**
+- [x] **Step 4: Run the backend tests and verify they pass**
 
 Run:
 
@@ -604,7 +604,7 @@ cargo test library_sources --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS for both `library_sources` tests.
 
-- [ ] **Step 5: Commit backend read model**
+- [x] **Step 5: Commit backend read model**
 
 Run:
 
