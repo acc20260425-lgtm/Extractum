@@ -23,7 +23,7 @@ Backend:
 - Modify `src-tauri/src/analysis/corpus.rs`: support `project_id` scope resolution.
 - Modify `src-tauri/src/analysis/report.rs`: accept `project_id` in `StartAnalysisReportRequest`.
 - Modify `src-tauri/src/analysis/report_commands.rs`: keep legacy `start_analysis_report`; project run starts through `projects::start_project_analysis`.
-- Modify `src-tauri/src/analysis/mod.rs`: expose `ANALYSIS_SCOPE_TYPE_PROJECT` if needed by sibling modules.
+- Modify `src-tauri/src/analysis/mod.rs`: expose `ANALYSIS_SCOPE_TYPE_PROJECT`, `models`, `report`, and `store` to sibling modules with `pub(crate)`.
 - Modify `src-tauri/src/library_sources/mod.rs`: count real `project_sources`.
 - Modify `src-tauri/src/sources/store.rs`: block Library source deletion when the source is used by projects.
 - Modify `docs/database-schema.md`: document new schema and `analysis_runs.project_id`.
@@ -333,7 +333,7 @@ mod tests {
         let duplicate = create_project_in_pool(&pool, "alpha", None)
             .await
             .expect_err("duplicate rejected");
-        assert_eq!(duplicate.kind(), crate::error::AppErrorKind::Validation);
+        assert_eq!(duplicate.kind, crate::error::AppErrorKind::Validation);
     }
 
     #[tokio::test]
@@ -553,7 +553,7 @@ pub(crate) async fn create_project_in_pool(
 ) -> AppResult<ProjectRecord> {
     let name = normalize_project_name(name)?;
     let description = normalize_description(description);
-    let now = crate::analysis::now_secs();
+    let now = crate::time::now_secs();
 
     let id: i64 = sqlx::query_scalar(
         r#"
@@ -606,7 +606,7 @@ pub(crate) async fn update_project_in_pool(
 ) -> AppResult<ProjectRecord> {
     let name = normalize_project_name(name)?;
     let description = normalize_description(description);
-    let now = crate::analysis::now_secs();
+    let now = crate::time::now_secs();
 
     let result = sqlx::query(
         r#"
@@ -655,7 +655,7 @@ pub(crate) async fn add_project_sources_in_pool(
     source_ids.dedup();
     ensure_sources_exist(pool, &source_ids).await?;
 
-    let now = crate::analysis::now_secs();
+    let now = crate::time::now_secs();
     let mut added_count = 0;
     let mut already_present_count = 0;
     let mut tx = pool.begin().await.map_err(AppError::database)?;
@@ -728,7 +728,7 @@ pub(crate) async fn remove_project_sources_in_pool(
         .map_err(AppError::database)?;
 
     sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?")
-        .bind(crate::analysis::now_secs())
+        .bind(crate::time::now_secs())
         .bind(project_id)
         .execute(pool)
         .await
@@ -1008,7 +1008,7 @@ async fn delete_source_is_blocked_when_source_is_used_by_project() {
     let error = delete_source_from_pool(&pool, 7)
         .await
         .expect_err("source delete blocked");
-    assert_eq!(error.kind(), crate::error::AppErrorKind::Validation);
+    assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
 }
 ```
 
@@ -1047,14 +1047,11 @@ if project_count > 0 {
 Run:
 
 ```powershell
-cargo test library_sources::tests source_is_blocked_when_source_is_used_by_project --manifest-path src-tauri/Cargo.toml
-```
-
-Expected: PASS. If the second filter misses the exact test path, run:
-
-```powershell
+cargo test library_sources::tests --manifest-path src-tauri/Cargo.toml
 cargo test delete_source_is_blocked_when_source_is_used_by_project --manifest-path src-tauri/Cargo.toml
 ```
+
+Expected: PASS.
 
 - [ ] **Step 8: Commit**
 
@@ -1086,7 +1083,7 @@ async fn resolve_analysis_sources_rejects_mixed_provider_project() {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")
         .await
         .expect("connect memory sqlite");
-    create_resolve_sources_schema(&pool).await;
+    create_project_scope_schema(&pool).await;
     sqlx::query("INSERT INTO projects (id, name, created_at, updated_at) VALUES (9, 'Mixed', 1, 1)")
         .execute(&pool)
         .await
@@ -1111,7 +1108,7 @@ async fn resolve_analysis_sources_loads_single_provider_project() {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")
         .await
         .expect("connect memory sqlite");
-    create_resolve_sources_schema(&pool).await;
+    create_project_scope_schema(&pool).await;
     sqlx::query("INSERT INTO projects (id, name, created_at, updated_at) VALUES (9, 'YouTube', 1, 1)")
         .execute(&pool)
         .await
@@ -1133,7 +1130,55 @@ async fn resolve_analysis_sources_loads_single_provider_project() {
 }
 ```
 
-Add `projects` and `project_sources` to the test schema helper used by `resolve_analysis_sources` tests.
+Add this helper in the `src-tauri/src/analysis/corpus.rs` test module:
+
+```rust
+async fn create_project_scope_schema(pool: &sqlx::SqlitePool) {
+    for statement in [
+        r#"
+        CREATE TABLE sources (
+            id INTEGER PRIMARY KEY,
+            source_type TEXT NOT NULL,
+            source_subtype TEXT,
+            external_id TEXT,
+            title TEXT,
+            is_active INTEGER NOT NULL,
+            is_member INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+        )
+        "#,
+        r#"
+        CREATE TABLE projects (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+        "#,
+        r#"
+        CREATE TABLE project_sources (
+            project_id INTEGER NOT NULL,
+            source_id INTEGER NOT NULL,
+            added_at INTEGER NOT NULL
+        )
+        "#,
+        r#"
+        CREATE TABLE youtube_playlist_items (
+            playlist_source_id INTEGER NOT NULL,
+            video_source_id INTEGER,
+            video_id TEXT NOT NULL,
+            position INTEGER,
+            is_removed_from_playlist INTEGER NOT NULL DEFAULT 0
+        )
+        "#,
+    ] {
+        sqlx::query(statement)
+            .execute(pool)
+            .await
+            .expect("create project scope test schema");
+    }
+}
+```
 
 - [ ] **Step 2: Run tests and verify failure**
 
@@ -1304,7 +1349,7 @@ if rows.iter().any(|row| row.source_type != first_type) {
 source_type = first_type;
 ```
 
-Then reuse the same playlist-expansion logic for each row that source groups use. Extract a small helper if needed:
+Then reuse the same playlist-expansion logic for each row that source groups use. Extract this helper:
 
 ```rust
 async fn push_scope_source(
@@ -1432,7 +1477,11 @@ pub async fn start_project_analysis(
 }
 ```
 
-Expose `analysis::report` functions to sibling module if currently private by changing `mod report;` to `pub(crate) mod report;` in `src-tauri/src/analysis/mod.rs`.
+In `src-tauri/src/analysis/mod.rs`, change `mod report;` to:
+
+```rust
+pub(crate) mod report;
+```
 
 Register `start_project_analysis` in `src-tauri/src/lib.rs`.
 
@@ -1468,7 +1517,12 @@ pub async fn list_project_runs(
 }
 ```
 
-Make `analysis::store` visible to sibling module with `pub(crate) mod store;` if needed.
+In `src-tauri/src/analysis/mod.rs`, make `analysis::models` and `analysis::store` visible to sibling modules:
+
+```rust
+pub(crate) mod models;
+pub(crate) mod store;
+```
 
 - [ ] **Step 10: Run backend tests**
 
@@ -2206,18 +2260,16 @@ Create `src/lib/components/research-projects/ProjectEditorDialog.svelte`:
   import type { ResearchProjectView } from "$lib/ui/research-projects-model";
 
   let {
-    open,
+    open = $bindable(false),
     project = null,
     saving = false,
     error = "",
-    onOpenChange,
     onSubmit,
   }: {
-    open: boolean;
+    open?: boolean;
     project?: ResearchProjectView | null;
     saving?: boolean;
     error?: string;
-    onOpenChange: (open: boolean) => void;
     onSubmit: (input: { name: string; description: string | null }) => void | Promise<void>;
   } = $props();
 
@@ -2236,7 +2288,7 @@ Create `src/lib/components/research-projects/ProjectEditorDialog.svelte`:
   }
 </script>
 
-<ExtractumDialog {open} title={project ? "Edit project" : "Create project"} onOpenChange={onOpenChange}>
+<ExtractumDialog bind:open title={project ? "Edit project" : "Create project"}>
   <form class="project-editor" onsubmit={(event) => { event.preventDefault(); void submit(); }}>
     <label>
       <span>Name</span>
@@ -2250,7 +2302,7 @@ Create `src/lib/components/research-projects/ProjectEditorDialog.svelte`:
       <p class="error">{error}</p>
     {/if}
     <footer>
-      <ExtractumButton type="button" variant="outline" onclick={() => onOpenChange(false)}>Cancel</ExtractumButton>
+      <ExtractumButton type="button" variant="outline" onclick={() => (open = false)}>Cancel</ExtractumButton>
       <ExtractumButton type="submit" disabled={saving || name.trim().length === 0}>
         {project ? "Save" : "Create"}
       </ExtractumButton>
@@ -2295,7 +2347,7 @@ Create `src/lib/components/research-projects/ProjectEditorDialog.svelte`:
 </style>
 ```
 
-If `ExtractumDialog` uses a different prop name for open-change, match the existing wrapper API in `src/lib/components/extractum-ui/Dialog.svelte`.
+`ExtractumDialog` exposes bindable `open`; parent components should use `bind:open` with `ProjectEditorDialog`.
 
 - [ ] **Step 5: Add project inspector**
 
@@ -2479,7 +2531,7 @@ const columns = [
 ];
 ```
 
-Pass selected row ids through `ExtractumDataGrid` wrapper-managed selection if the wrapper supports it:
+Pass selected row ids through the existing `ExtractumDataGrid` wrapper-managed selection:
 
 ```svelte
 <ExtractumDataGrid
@@ -2498,25 +2550,23 @@ Create `ProjectRunDialog.svelte` with the current report-run fields:
 
 ```svelte
 <script lang="ts">
-  import { ExtractumButton, ExtractumDialog, ExtractumTextInput, ExtractumSelect } from "$lib/components/extractum-ui";
+  import { ExtractumButton, ExtractumDialog, ExtractumTextInput } from "$lib/components/extractum-ui";
   import type { AnalysisPromptTemplate, YoutubeCorpusMode } from "$lib/types/analysis";
   import type { ProjectAnalysisStartCommand } from "$lib/types/projects";
   import type { ResearchProjectView } from "$lib/ui/research-projects-model";
   import { endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
 
   let {
-    open,
+    open = $bindable(false),
     project,
     templates,
     saving = false,
-    onOpenChange,
     onSubmit,
   }: {
-    open: boolean;
+    open?: boolean;
     project: ResearchProjectView | null;
     templates: AnalysisPromptTemplate[];
     saving?: boolean;
-    onOpenChange: (open: boolean) => void;
     onSubmit: (input: ProjectAnalysisStartCommand) => void | Promise<void>;
   } = $props();
 
@@ -2546,7 +2596,7 @@ Create `ProjectRunDialog.svelte` with the current report-run fields:
   }
 </script>
 
-<ExtractumDialog {open} title="Run project analysis" onOpenChange={onOpenChange}>
+<ExtractumDialog bind:open title="Run project analysis">
   <form class="run-dialog" onsubmit={(event) => { event.preventDefault(); void submit(); }}>
     <p>{project?.title ?? "No project selected"}</p>
     <label><span>From</span><ExtractumTextInput type="date" bind:value={periodFrom} /></label>
@@ -2569,14 +2619,14 @@ Create `ProjectRunDialog.svelte` with the current report-run fields:
       </select>
     </label>
     <footer>
-      <ExtractumButton type="button" variant="outline" onclick={() => onOpenChange(false)}>Cancel</ExtractumButton>
+      <ExtractumButton type="button" variant="outline" onclick={() => (open = false)}>Cancel</ExtractumButton>
       <ExtractumButton type="submit" disabled={!project || !selectedTemplateId || saving}>Run</ExtractumButton>
     </footer>
   </form>
 </ExtractumDialog>
 ```
 
-Use `ExtractumSelect` if the wrapper supports native option arrays; otherwise the existing local `<select>` pattern from `TopCommandBar.svelte` is acceptable for this MVP because the app already uses it there.
+Use local `<select>` elements in this MVP, matching the existing pattern in `TopCommandBar.svelte`.
 
 - [ ] **Step 10: Run frontend tests and Svelte check**
 
@@ -2602,15 +2652,17 @@ git commit -m "feat: replace projects workspace with real projects"
 
 **Files:**
 - Modify: `src/lib/types/analysis.ts`
-- Modify: `src/lib/analysis-state.ts`
+- Modify: `src/lib/components/analysis/report-canvas.svelte`
+- Modify: `src/lib/components/analysis/report-viewer.svelte`
 - Modify: `src/lib/components/analysis/run-companion-runs-tab.svelte`
+- Modify: `src/lib/components/analysis/run-companion-tabs.svelte`
 - Modify: `src/lib/components/analysis/report-run-header.svelte`
-- Test: `src/lib/analysis-state.test.ts`
+- Test: `src/lib/analysis-utils.test.ts`
 - Test: `src/lib/analysis-run-companion-tabs.test.ts`
 
 - [ ] **Step 1: Write failing tests**
 
-In `src/lib/analysis-state.test.ts`, add:
+In `src/lib/analysis-utils.test.ts`, add:
 
 ```ts
 it("labels project analysis runs from scope label", () => {
@@ -2628,21 +2680,19 @@ it("labels project analysis runs from scope label", () => {
 });
 ```
 
-If `runTargetLabel` lives in `src/lib/analysis-utils.ts`, add the test there instead.
-
 - [ ] **Step 2: Run test and verify failure**
 
 Run:
 
 ```powershell
-npm.cmd test -- --run src/lib/analysis-state.test.ts src/lib/analysis-utils.test.ts
+npm.cmd test -- --run src/lib/analysis-utils.test.ts
 ```
 
 Expected: FAIL until project scope is handled.
 
 - [ ] **Step 3: Update labels**
 
-Where run scope labels are calculated, add:
+In `src/lib/analysis-utils.ts`, update `runTargetLabel` to include project fields in the accepted pick type and add:
 
 ```ts
 if (run.scope_type === "project") {
@@ -2659,13 +2709,19 @@ In run list/header components, make labels scope-neutral:
 - replace "Source group" only labels with "Scope" where the run can be project-scoped;
 - show `run.scope_label`;
 - include `run.provider` and `run.model` as before.
+- update every `runTargetLabel` prop type in these files to include `"project_id" | "project_name"` in the `Pick<AnalysisRun...>` key list:
+  - `src/lib/components/analysis/report-canvas.svelte`
+  - `src/lib/components/analysis/report-viewer.svelte`
+  - `src/lib/components/analysis/report-run-header.svelte`
+  - `src/lib/components/analysis/run-companion-tabs.svelte`
+  - `src/lib/components/analysis/run-companion-runs-tab.svelte`
 
 - [ ] **Step 5: Run tests**
 
 Run:
 
 ```powershell
-npm.cmd test -- --run src/lib/analysis-state.test.ts src/lib/analysis-utils.test.ts src/lib/analysis-run-companion-tabs.test.ts
+npm.cmd test -- --run src/lib/analysis-utils.test.ts src/lib/analysis-run-companion-tabs.test.ts
 npm.cmd run check
 ```
 
@@ -2674,7 +2730,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add src\lib\types\analysis.ts src\lib\analysis-state.ts src\lib\analysis-utils.ts src\lib\components\analysis src\lib\analysis-state.test.ts src\lib\analysis-utils.test.ts src\lib\analysis-run-companion-tabs.test.ts
+git add src\lib\types\analysis.ts src\lib\analysis-utils.ts src\lib\components\analysis src\lib\analysis-utils.test.ts src\lib\analysis-run-companion-tabs.test.ts
 git commit -m "feat: show project-scoped analysis runs"
 ```
 
