@@ -62,8 +62,9 @@ method becomes a YouTube-specific choice instead of a global modal concept.
 - Do not implement direct Telegram URL import.
 - Do not support Telegram private invite links in this slice.
 - Do not implement YouTube channel ingestion.
-- Do not add a bulk backend command unless implementation proves the existing
-  API path is too slow or unreliable.
+- Do not add a bulk backend command in this slice. Playlist video import should
+  use repeated `addYoutubeSource(canonicalUrl)` calls first; a bulk command can
+  be designed later if the MVP proves it is needed.
 - Do not redesign the Library shell, filter rail, table, or Inspector.
 - Do not introduce direct shadcn/SVAR imports in Library feature files.
 - Do not change the existing Connect from library workflow.
@@ -100,6 +101,13 @@ Use existing `ExtractumTabs`, `ExtractumTabsList`, `ExtractumTabsTrigger`, and
 `ExtractumTabsContent` exports for tabs. If the wrapper is too low-level for the
 Library dialog, add a small `extractum-ui` wrapper that still owns all direct
 shadcn-svelte imports.
+
+Use a centered dialog primitive through an `extractum-ui` wrapper as well. The
+project already has shadcn-svelte dialog primitives under
+`$lib/components/ui/dialog`, but Library feature files should not import those
+directly. If no `ExtractumDialog` wrapper exists when implementation starts,
+create one in `src/lib/components/extractum-ui` and export its needed parts from
+`src/lib/components/extractum-ui/index.ts`.
 
 ## YouTube Smart Import
 
@@ -150,11 +158,21 @@ Flow:
    item.
 8. After completion, refresh Library data and show a result summary.
 
+Limit the first MVP batch to 10 selected videos per run. If the user selects
+more than 10 addable videos, keep `Add selected` disabled and show a scoped
+message asking them to reduce the selection. This keeps the repeated
+`yt-dlp`-based path predictable until a bulk backend command exists.
+
 Result summary should include:
 
 - added count;
 - skipped count for already-existing or disabled rows;
 - failed count with per-row error messages.
+
+Count a successful `addYoutubeSource` response as `added` even if the backend
+upsert returns an existing source that was not linked to this playlist item
+before the operation. Rows with `videoSourceId` already present before the
+operation are `skipped`.
 
 For the MVP, run adds sequentially or with very small concurrency. This avoids
 creating too many simultaneous `yt-dlp` operations. A later backend command can
@@ -167,6 +185,8 @@ Telegram has one MVP path: import from account-visible dialogs.
 Flow:
 
 1. Load Telegram accounts and runtime statuses.
+   - Use `listAccounts()`.
+   - Use `getAccountRuntimeStatuses(accountIds)`.
 2. User selects an account.
 3. If the account is not ready, show the sign-in-required state.
 4. User loads dialogs with `listTelegramSources(accountId)`.
@@ -178,6 +198,9 @@ Flow:
 6. User selects a dialog row.
 7. `Add selected` calls `addTelegramSource({ accountId, sourceRef,
    expectedSubtype })`.
+   - Use `String(selectedTelegramDialog.id)` as `sourceRef`.
+   - Use the selected `TelegramDialogSource.sourceSubtype` as
+     `expectedSubtype`.
 8. Refresh Library data and show the added source.
 
 This deliberately avoids Telegram smart import. Public usernames and private
@@ -248,6 +271,7 @@ Recommended coverage:
   - loads playlist detail;
   - disables already-linked videos;
   - disables videos without canonical URL;
+  - blocks selection batches above the MVP limit;
   - sequentially adds selected videos;
   - reports partial success.
 - Workflow tests for Telegram dialog import:
