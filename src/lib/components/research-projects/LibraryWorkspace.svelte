@@ -87,6 +87,7 @@
     display: flex;
     min-height: 46px;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
     padding: 8px;
     border-bottom: 1px solid var(--extractum-border);

@@ -1616,7 +1616,7 @@ If `git status --short` shows no staged changes because prior tasks already cove
 - No planned source changes.
 - Modify only if verification reveals a concrete defect.
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 Run:
 
@@ -1626,7 +1626,7 @@ npm.cmd run test
 
 Expected: all Vitest tests pass.
 
-- [ ] **Step 2: Run Svelte/TypeScript check**
+- [x] **Step 2: Run Svelte/TypeScript check**
 
 Run:
 
@@ -1636,7 +1636,7 @@ npm.cmd run check
 
 Expected: `svelte-check` passes.
 
-- [ ] **Step 3: Start the dev server**
+- [x] **Step 3: Start the dev server**
 
 Run:
 
@@ -1646,7 +1646,7 @@ npm.cmd run dev -- --host 127.0.0.1
 
 Expected: Vite reports a local URL, usually `http://127.0.0.1:1420/`. Keep the server running for browser verification.
 
-- [ ] **Step 4: Verify `/projects` still shows the Projects screen**
+- [x] **Step 4: Verify `/projects` still shows the Projects screen**
 
 Open `http://127.0.0.1:1420/projects`.
 
@@ -1658,7 +1658,7 @@ Expected:
 - `ProjectWorkspace` is visible.
 - No horizontal page overflow.
 
-- [ ] **Step 5: Verify `/projects/library` screen layout**
+- [x] **Step 5: Verify `/projects/library` screen layout**
 
 Open `http://127.0.0.1:1420/projects/library`.
 
@@ -1670,7 +1670,7 @@ Expected:
 - Main source table shows real `LibrarySourceView` rows when data exists.
 - Inspector is visible at `380px`.
 
-- [ ] **Step 6: Verify Library interactions**
+- [x] **Step 6: Verify Library interactions**
 
 In the browser:
 
@@ -1684,7 +1684,7 @@ In the browser:
 - Drag Inspector handle; width clamps between `380px` and `500px`.
 - Press `Tab` through `IconRail`, filter rail, toolbar, table, resize handle, and Inspector commands.
 
-- [ ] **Step 7: Verify narrower viewport**
+- [x] **Step 7: Verify narrower viewport**
 
 Resize browser to `1280x800`.
 
@@ -1695,7 +1695,7 @@ Expected:
 - Table remains usable.
 - Inspector and filter rail keep their fixed/capped widths.
 
-- [ ] **Step 8: Final status**
+- [x] **Step 8: Final status**
 
 Run:
 
