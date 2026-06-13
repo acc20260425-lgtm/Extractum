@@ -82,6 +82,27 @@ patch route state. Prefer explicit parameter APIs for effect-triggered workflow
 calls; use `untrack` for incidental reads, or prefer explicit event handlers /
 lifecycle flows for one-shot data loads.
 
+Frontend component ownership stays at the product layer. Application and
+prototype screens import product-facing components from
+`src/lib/components/extractum-ui/*`; raw shadcn-svelte and SVAR components stay
+behind wrappers except in wrapper implementations, low-level wrapper tests, or
+explicit short-lived experiments. This keeps Extractum's desktop density,
+spacing, typography, focus states, provider/status anatomy, and theme tokens
+owned by the application rather than by third-party defaults.
+
+SVAR Grid is treated as a dense data-surface engine, not as a screen-level
+dependency. Grid usage must be mounted through an Extractum wrapper that
+provides a stable height container, receives stable row ids from the view model,
+uses wrapper-managed selection through wrapper props/callbacks, owns empty
+states and density, and scopes any direct `.wx-*` selector overrides to the
+wrapper or theme bridge. Feature screens should use product vocabulary such as
+selected source ids or disabled-row reasons rather than raw SVAR action names
+or ad-hoc reads from the grid API.
+
+New UI slices that introduce shadcn-svelte or SVAR surfaces should include
+raw-source import-boundary coverage so feature routes and feature components do
+not regress to direct low-level library imports.
+
 ### 2.3 Text-first analysis, media-aware ingest
 
 The sync layer already preserves lightweight media metadata, but the analysis layer still uses a text-only corpus. This intentionally separates:

@@ -56,6 +56,27 @@ Future work should extract small, clear units only when a backlog slice
 benefits from the boundary. A broad service-heavy frontend layer would add
 indirection without matching the current Svelte app.
 
+## Component Library Boundaries
+
+New product-facing screens should not depend directly on raw shadcn-svelte or
+SVAR components. Use `src/lib/components/extractum-ui/*` wrappers for product
+surfaces, with raw library imports limited to wrapper implementations,
+low-level wrapper tests, and deliberate short-lived experiments. The wrapper
+layer owns Extractum density, spacing, typography, disabled/selected/focus
+states, provider/status anatomy, theme tokens, and stable CSS hooks.
+
+SVAR Grid wrappers must provide the stable height container required by the
+grid, enforce stable row ids from adapter/view-model data, use
+wrapper-managed selection through wrapper props and callbacks, and own
+empty-state rendering. Any direct `.wx-*` selector overrides should stay inside
+the wrapper or theme bridge and remain narrowly scoped. Feature components
+should pass product-level state, such as selected source ids and disabled
+reasons, instead of reading SVAR API state directly.
+
+When a slice adds or expands shadcn-svelte or SVAR usage, add or update
+raw-source import-boundary tests to keep feature routes and feature components
+on the `extractum-ui` wrapper boundary.
+
 ## Telegram Desktop-Informed Frontend Patterns
 
 Reference review:

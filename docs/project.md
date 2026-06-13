@@ -89,6 +89,24 @@ For any `grammers-*` update:
 Do not refresh `grammers-*` from the upstream branch as part of unrelated
 feature, fix, formatting, or documentation work.
 
+## Frontend component policy
+
+New product-facing Svelte screens must use Extractum-owned wrapper components
+from `src/lib/components/extractum-ui/*` for shadcn-svelte and SVAR behavior.
+Feature screens should not import raw shadcn-svelte or SVAR widgets directly;
+direct imports are reserved for wrapper components, low-level wrapper tests, or
+explicit short-lived experiments.
+
+SVAR Grid usage must go through the Extractum grid wrapper layer. The wrapper
+owns the stable height container, stable row ids, wrapper-managed selection,
+empty states, density, theme bridge, and any narrowly scoped `.wx-*` selector
+overrides. Feature screens should pass product-facing props and view-model rows
+instead of reading SVAR API state ad hoc.
+
+Add or keep raw-source import-boundary tests for new UI slices that use shadcn
+or SVAR so feature screens continue to depend on `extractum-ui` wrappers rather
+than lower-level library imports.
+
 ## Product slice
 
 The app is a local source ingest and analysis workspace. Telegram and YouTube
