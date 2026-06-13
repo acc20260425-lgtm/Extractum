@@ -1675,7 +1675,7 @@ git commit -m "feat: switch library screen to catalog rows"
 - Modify: `src/lib/components/research-projects/LibraryInspector.svelte`
 - Modify: `src/lib/library-prototype-contract.test.ts`
 
-- [ ] **Step 1: Extend component contract tests**
+- [x] **Step 1: Extend component contract tests**
 
 Modify the workspace test in `src/lib/library-prototype-contract.test.ts` to include metadata columns:
 
@@ -1701,7 +1701,7 @@ Modify the Inspector test to include metadata labels:
     expect(inspectorSource).toContain("metadataRows");
 ```
 
-- [ ] **Step 2: Update `LibraryWorkspace.svelte` to use catalog rows and new columns**
+- [x] **Step 2: Update `LibraryWorkspace.svelte` to use catalog rows and new columns**
 
 Replace the type import:
 
@@ -1730,7 +1730,7 @@ Replace `columns` with:
   ];
 ```
 
-- [ ] **Step 3: Update `LibraryInspector.svelte` type import and nullable helpers**
+- [x] **Step 3: Update `LibraryInspector.svelte` type import and nullable helpers**
 
 Replace the type import with:
 
@@ -1803,7 +1803,7 @@ Add helper functions below props:
   );
 ```
 
-- [ ] **Step 4: Replace Inspector metadata markup**
+- [x] **Step 4: Replace Inspector metadata markup**
 
 In the selected-source branch, replace the existing metadata definition list with:
 
@@ -1862,7 +1862,7 @@ Replace the connected pill condition:
 
 Remove the `disabledReason` notice block because catalog rows no longer carry project-connect disabled reasons.
 
-- [ ] **Step 5: Add small Inspector heading/link styles**
+- [x] **Step 5: Add small Inspector heading/link styles**
 
 Add to the `<style>` block in `LibraryInspector.svelte`:
 
@@ -1883,7 +1883,7 @@ Add to the `<style>` block in `LibraryInspector.svelte`:
   }
 ```
 
-- [ ] **Step 6: Run focused UI tests**
+- [x] **Step 6: Run focused UI tests**
 
 Run:
 
@@ -1893,7 +1893,7 @@ npm.cmd run test -- src/lib/library-prototype-contract.test.ts src/lib/research-
 
 Expected: PASS.
 
-- [ ] **Step 7: Run Svelte check**
+- [x] **Step 7: Run Svelte check**
 
 Run:
 
@@ -1903,7 +1903,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 8: Commit UI metadata display**
+- [x] **Step 8: Commit UI metadata display**
 
 Run:
 

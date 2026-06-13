@@ -5,7 +5,7 @@
     ExtractumDataGrid,
     ExtractumTextInput,
   } from "$lib/components/extractum-ui";
-  import type { LibrarySourceView } from "$lib/ui/research-projects-model";
+  import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
 
   let {
@@ -20,9 +20,9 @@
     onDelete,
     onRefresh,
   }: {
-    sources: LibrarySourceView[];
+    sources: LibraryCatalogSourceView[];
     query: string;
-    selectedSource: LibrarySourceView | null;
+    selectedSource: LibraryCatalogSourceView | null;
     selectedSourceId: string | null;
     loading?: boolean;
     onSelectedSourceIdChange: (id: string | null) => void;
@@ -33,12 +33,13 @@
   } = $props();
 
   const columns = [
-    { id: "title", header: "Источник", flexgrow: 1, cell: LibrarySourceCell },
-    { id: "provider", header: "Тип", width: 100 },
-    { id: "status", header: "Статус", width: 118 },
-    { id: "projectCount", header: "Проекты", width: 90 },
-    { id: "localCopyLabel", header: "Локально", width: 116 },
-    { id: "lastCollectedLabel", header: "Обновлен", width: 136 },
+    { id: "title", header: "Source", flexgrow: 1, cell: LibrarySourceCell },
+    { id: "typeLabel", header: "Type", width: 150 },
+    { id: "status", header: "Status", width: 110 },
+    { id: "projectCount", header: "Projects", width: 92 },
+    { id: "itemCountLabel", header: "Items", width: 100 },
+    { id: "addedAtLabel", header: "Added", width: 136 },
+    { id: "lastSyncedLabel", header: "Last synced", width: 136 },
   ];
 </script>
 

@@ -1,9 +1,64 @@
 <script lang="ts">
   import { ExternalLink, Link2, PlayCircle, RefreshCw } from "@lucide/svelte";
   import { ExtractumButton, ProviderBadge, StatusBadge } from "$lib/components/extractum-ui";
-  import type { LibrarySourceView } from "$lib/ui/research-projects-model";
+  import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
 
-  let { selectedSource }: { selectedSource: LibrarySourceView | null } = $props();
+  let { selectedSource }: { selectedSource: LibraryCatalogSourceView | null } = $props();
+
+  type MetadataRow = { label: string; value: string | null; href?: string };
+
+  function present(value: string | number | null | undefined) {
+    if (value === null || value === undefined || value === "") return null;
+    return String(value);
+  }
+
+  function secondsLabel(seconds: number | null | undefined) {
+    if (seconds === null || seconds === undefined) return null;
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    if (minutes <= 0) return `${remainder}s`;
+    return `${minutes}m ${remainder}s`;
+  }
+
+  let metadataRows = $derived<MetadataRow[]>(
+    selectedSource
+      ? [
+          { label: "Source ID", value: String(selectedSource.sourceId) },
+          { label: "Type", value: selectedSource.typeLabel },
+          {
+            label: "Canonical URL",
+            value: present(selectedSource.canonicalUrl),
+            href: selectedSource.canonicalUrl ?? undefined,
+          },
+          { label: "External ID", value: present(selectedSource.externalId) },
+          { label: "Added", value: selectedSource.addedAtLabel },
+          { label: "Last synced", value: selectedSource.lastSyncedLabel },
+          { label: "Items", value: selectedSource.itemCountLabel },
+          { label: "Projects", value: String(selectedSource.projectCount) },
+        ]
+      : [],
+  );
+
+  let youtubeRows = $derived<MetadataRow[]>(
+    selectedSource?.youtube
+      ? [
+          { label: "Channel", value: present(selectedSource.youtube.channel_title) },
+          { label: "Video form", value: present(selectedSource.youtube.video_form) },
+          { label: "Duration", value: secondsLabel(selectedSource.youtube.duration_seconds) },
+          { label: "Playlist videos", value: present(selectedSource.youtube.playlist_video_count) },
+          { label: "Availability", value: present(selectedSource.youtube.availability_status) },
+        ]
+      : [],
+  );
+
+  let telegramRows = $derived<MetadataRow[]>(
+    selectedSource?.telegram
+      ? [
+          { label: "Subtype", value: present(selectedSource.sourceSubtype) },
+          { label: "Account", value: present(selectedSource.telegram.account_id) },
+        ]
+      : [],
+  );
 </script>
 
 <aside data-ui-region="library-inspector" class="library-inspector" aria-label="Library source inspector">
@@ -18,20 +73,52 @@
 
     <div class="status-row">
       <StatusBadge status={selectedSource.status} />
-      {#if selectedSource.alreadyConnected}
-        <span class="meta-pill">Connected</span>
+      {#if selectedSource.statusDetail}
+        <span class="meta-pill">{selectedSource.statusDetail}</span>
       {/if}
     </div>
 
     <dl class="meta-list">
-      <div><dt>Source ID</dt><dd>{selectedSource.sourceId}</dd></div>
-      <div><dt>Projects</dt><dd>{selectedSource.projectCount}</dd></div>
-      <div><dt>Local copy</dt><dd>{selectedSource.localCopyLabel ?? "No local copy"}</dd></div>
-      <div><dt>Last collected</dt><dd>{selectedSource.lastCollectedLabel ?? "Never"}</dd></div>
+      {#each metadataRows as row}
+        <div>
+          <dt>{row.label}</dt>
+          <dd>
+            {#if row.href && row.value}
+              <a href={row.href} target="_blank" rel="noreferrer">{row.value}</a>
+            {:else}
+              {row.value ?? "N/A"}
+            {/if}
+          </dd>
+        </div>
+      {/each}
     </dl>
 
-    {#if selectedSource.disabledReason}
-      <p class="notice">{selectedSource.disabledReason}</p>
+    {#if selectedSource.youtube}
+      <section class="detail-section" aria-label="YouTube details">
+        <h3>YouTube details</h3>
+        <dl class="meta-list">
+          {#each youtubeRows as row}
+            <div>
+              <dt>{row.label}</dt>
+              <dd>{row.value ?? "N/A"}</dd>
+            </div>
+          {/each}
+        </dl>
+      </section>
+    {/if}
+
+    {#if selectedSource.telegram}
+      <section class="detail-section" aria-label="Telegram details">
+        <h3>Telegram details</h3>
+        <dl class="meta-list">
+          {#each telegramRows as row}
+            <div>
+              <dt>{row.label}</dt>
+              <dd>{row.value ?? "N/A"}</dd>
+            </div>
+          {/each}
+        </dl>
+      </section>
     {/if}
 
     <div class="commands" aria-label="Inspector commands">
@@ -80,6 +167,21 @@
     line-height: 1.25;
   }
 
+  h3 {
+    margin: 12px 0 8px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  a {
+    color: var(--extractum-primary);
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
   .status-row,
   .commands {
     display: flex;
@@ -118,17 +220,12 @@
     text-align: right;
   }
 
-  .meta-pill,
-  .notice {
+  .meta-pill {
     border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
     padding: 4px 7px;
     color: var(--extractum-muted);
     font-size: 12px;
-  }
-
-  .notice {
-    margin: 12px 0 0;
   }
 
   .empty-state {

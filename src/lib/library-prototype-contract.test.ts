@@ -28,6 +28,13 @@ describe("Library prototype contract", () => {
     expect(workspaceSource).toContain('data-ui-action="library-edit"');
     expect(workspaceSource).toContain('data-ui-action="library-delete"');
     expect(workspaceSource).toContain('disabled={!selectedSource}');
+    expect(workspaceSource).toContain('header: "Source"');
+    expect(workspaceSource).toContain('header: "Type"');
+    expect(workspaceSource).toContain('header: "Status"');
+    expect(workspaceSource).toContain('header: "Projects"');
+    expect(workspaceSource).toContain('header: "Items"');
+    expect(workspaceSource).toContain('header: "Added"');
+    expect(workspaceSource).toContain('header: "Last synced"');
     expect(workspaceSource).not.toContain("@svar-ui/");
     expect(workspaceSource).not.toContain("$lib/components/ui/");
   });
@@ -37,6 +44,13 @@ describe("Library prototype contract", () => {
     expect(inspectorSource).toContain("selectedSource");
     expect(inspectorSource).toContain("No source selected");
     expect(inspectorSource).toContain("aria-label=\"Inspector commands\"");
+    expect(inspectorSource).toContain("Canonical URL");
+    expect(inspectorSource).toContain("External ID");
+    expect(inspectorSource).toContain("Added");
+    expect(inspectorSource).toContain("Last synced");
+    expect(inspectorSource).toContain("YouTube details");
+    expect(inspectorSource).toContain("Telegram details");
+    expect(inspectorSource).toContain("metadataRows");
   });
 
   it("coordinates filter selection, row selection, and Inspector resizing in the screen component", () => {
