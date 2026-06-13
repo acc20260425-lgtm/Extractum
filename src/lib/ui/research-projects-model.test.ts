@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  LIBRARY_ALL_FILTER_ID,
+  YOUTUBE_SUBTYPE_FILTER_DISABLED_REASON,
+  buildLibraryFilterTree,
   buildLibrarySourcesView,
   buildProjectSourceLinksView,
   buildResearchProjectsView,
   buildSourceGroupUpdateInput,
   connectableSelection,
+  filterLibrarySourcesForLibrary,
   filterLibrarySources,
+  reconcileLibrarySourceSelection,
   type LibrarySourceView,
 } from "./research-projects-model";
 import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
@@ -126,6 +131,92 @@ describe("research projects model", () => {
       .toEqual(["source:2"]);
     expect(filterLibrarySources(rows, { query: "", providers: ["telegram"] }).map((row) => row.id))
       .toEqual(["source:1"]);
+  });
+
+  it("builds the Library filter tree with disabled YouTube subtype rows", () => {
+    const rows = buildLibrarySourcesView(
+      [
+        source({ id: 1, source_type: "telegram", title: "Radar BPLA" }),
+        source({ id: 2, source_type: "youtube", title: "Alpha Drones" }),
+        source({ id: 3, source_type: "youtube", title: "Research Playlist" }),
+      ],
+      [],
+      null,
+    );
+
+    expect(buildLibraryFilterTree(rows)).toEqual([
+      expect.objectContaining({ id: "all", label: "All sources", count: 3 }),
+      expect.objectContaining({
+        id: "provider:youtube",
+        label: "YouTube",
+        provider: "youtube",
+        count: 2,
+        data: [
+          {
+            id: "provider:youtube/subtype:video",
+            label: "Videos",
+            provider: "youtube",
+            subtype: "video",
+            count: 0,
+            disabled: true,
+            disabledReason: YOUTUBE_SUBTYPE_FILTER_DISABLED_REASON,
+          },
+          {
+            id: "provider:youtube/subtype:playlist",
+            label: "Playlists",
+            provider: "youtube",
+            subtype: "playlist",
+            count: 0,
+            disabled: true,
+            disabledReason: YOUTUBE_SUBTYPE_FILTER_DISABLED_REASON,
+          },
+          {
+            id: "provider:youtube/subtype:channel",
+            label: "Channels",
+            provider: "youtube",
+            subtype: "channel",
+            count: 0,
+            disabled: true,
+            disabledReason: YOUTUBE_SUBTYPE_FILTER_DISABLED_REASON,
+          },
+        ],
+      }),
+      expect.objectContaining({ id: "provider:telegram", label: "Telegram", provider: "telegram", count: 1 }),
+    ]);
+  });
+
+  it("filters Library sources by selected tree row and search query", () => {
+    const rows = buildLibrarySourcesView(
+      [
+        source({ id: 1, source_type: "telegram", title: "Radar BPLA" }),
+        source({ id: 2, source_type: "youtube", title: "Alpha Drones" }),
+        source({ id: 3, source_type: "youtube", title: "Research Playlist" }),
+      ],
+      [],
+      null,
+    );
+
+    expect(filterLibrarySourcesForLibrary(rows, { filterId: LIBRARY_ALL_FILTER_ID, query: "alpha" }).map((row) => row.id))
+      .toEqual(["source:2"]);
+    expect(filterLibrarySourcesForLibrary(rows, { filterId: "provider:youtube", query: "" }).map((row) => row.id))
+      .toEqual(["source:2", "source:3"]);
+    expect(filterLibrarySourcesForLibrary(rows, { filterId: "provider:youtube/subtype:video", query: "" }))
+      .toEqual([]);
+  });
+
+  it("reconciles selected Library source with the visible rows", () => {
+    const rows = buildLibrarySourcesView(
+      [
+        source({ id: 1, source_type: "telegram", title: "Radar BPLA" }),
+        source({ id: 2, source_type: "youtube", title: "Alpha Drones" }),
+      ],
+      [],
+      null,
+    );
+
+    expect(reconcileLibrarySourceSelection(rows, "source:2")).toBe("source:2");
+    expect(reconcileLibrarySourceSelection([rows[0]], "source:2")).toBe("source:1");
+    expect(reconcileLibrarySourceSelection([], "source:2")).toBeNull();
   });
 
   it("counts only connectable selected rows", () => {

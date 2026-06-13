@@ -402,7 +402,7 @@ git commit -m "feat: add projects library route shell"
 - Modify: `src/lib/ui/research-projects-model.ts`
 - Modify: `src/lib/ui/research-projects-model.test.ts`
 
-- [ ] **Step 1: Add failing view-model tests**
+- [x] **Step 1: Add failing view-model tests**
 
 Modify the import list in `src/lib/ui/research-projects-model.test.ts`:
 
@@ -504,7 +504,7 @@ Add these tests inside `describe("research projects model", () => { ... })`:
   });
 ```
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run:
 
@@ -514,7 +514,7 @@ npm.cmd run test -- src/lib/ui/research-projects-model.test.ts
 
 Expected: FAIL because the new exports are missing.
 
-- [ ] **Step 3: Add Library filter helpers**
+- [x] **Step 3: Add Library filter helpers**
 
 Append this code after `LibraryFilterState` in `src/lib/ui/research-projects-model.ts`:
 
@@ -626,7 +626,7 @@ export function reconcileLibrarySourceSelection(
 }
 ```
 
-- [ ] **Step 4: Run model tests**
+- [x] **Step 4: Run model tests**
 
 Run:
 
@@ -636,7 +636,7 @@ npm.cmd run test -- src/lib/ui/research-projects-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit view-model helpers**
+- [x] **Step 5: Commit view-model helpers**
 
 Run:
 
