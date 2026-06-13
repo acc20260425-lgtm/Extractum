@@ -69,6 +69,7 @@ describe("research projects import boundaries", () => {
       )
       .map(([file]) => file);
 
+    expect(libraryFiles.some((file) => path.basename(file) === "LibraryAddSourceDialog.svelte")).toBe(true);
     expect(offenders).toEqual([]);
   });
 

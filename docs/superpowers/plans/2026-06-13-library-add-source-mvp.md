@@ -2241,7 +2241,7 @@ git commit -m "feat: add library source import dialog"
 - Modify: `src/lib/research-projects-import-boundary.test.ts`
 - Modify: `src/lib/library-add-source-contract.test.ts`
 
-- [ ] **Step 1: Extend boundary tests to cover Add Source files**
+- [x] **Step 1: Extend boundary tests to cover Add Source files**
 
 In `src/lib/research-projects-import-boundary.test.ts`, the existing feature-file scan already covers `src/lib/components/research-projects`. Add this explicit check to the `"keeps Library route and feature screens out of direct shadcn and SVAR imports"` test after `offenders` is computed:
 
@@ -2257,7 +2257,7 @@ npm.cmd run test -- src/lib/research-projects-import-boundary.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 2: Add contract checks for MVP limit and full catalog**
+- [x] **Step 2: Add contract checks for MVP limit and full catalog**
 
 Modify `src/lib/library-add-source-contract.test.ts`.
 
@@ -2282,7 +2282,7 @@ npm.cmd run test -- src/lib/library-add-source-contract.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full focused Library Add Source tests**
+- [x] **Step 3: Run full focused Library Add Source tests**
 
 Run:
 
@@ -2292,7 +2292,7 @@ npm.cmd run test -- src/lib/library-add-source-contract.test.ts src/lib/library-
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit test tightening**
+- [x] **Step 4: Commit test tightening**
 
 Run:
 

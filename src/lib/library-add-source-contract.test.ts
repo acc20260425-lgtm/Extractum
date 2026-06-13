@@ -20,6 +20,7 @@ describe("Library Add Source contract", () => {
     expect(dialogSource).toContain("ExtractumTabsList");
     expect(dialogSource).toContain("ExtractumTabsTrigger");
     expect(dialogSource).toContain("ExtractumTabsContent");
+    expect(dialogSource).toContain('data-ui-region="library-add-source-dialog"');
     expect(dialogSource).not.toContain("$lib/components/ui/");
     expect(dialogSource).not.toContain("bits-ui");
   });
@@ -53,6 +54,8 @@ describe("Library Add Source contract", () => {
     expect(playlistImportSource).toContain("getYoutubePlaylistDetail");
     expect(playlistImportSource).toContain("addSelectedYoutubePlaylistVideos");
     expect(playlistImportSource).toContain("YOUTUBE_PLAYLIST_IMPORT_LIMIT");
+    expect(playlistImportSource).toContain("playlistSelectionLimitMessage");
+    expect(playlistImportSource).toContain("sources: LibraryCatalogSourceView[]");
     expect(playlistImportSource).toContain("Already in Library");
     expect(playlistImportSource).toContain("import-result-list");
     expect(playlistImportSource).toContain("{#each summary.results as result");
