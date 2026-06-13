@@ -858,7 +858,7 @@ git commit -m "feat: add extractum tree data grid"
 - Create: `src/lib/components/research-projects/LibraryWorkspace.svelte`
 - Create: `src/lib/components/research-projects/LibraryInspector.svelte`
 
-- [ ] **Step 1: Write the failing Library prototype contract**
+- [x] **Step 1: Write the failing Library prototype contract**
 
 Create `src/lib/library-prototype-contract.test.ts`:
 
@@ -916,7 +916,7 @@ describe("Library prototype contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run the contract and verify it fails**
+- [x] **Step 2: Run the contract and verify it fails**
 
 Run:
 
@@ -926,7 +926,7 @@ npm.cmd run test -- src/lib/library-prototype-contract.test.ts
 
 Expected: FAIL because the Library components are missing or still temporary.
 
-- [ ] **Step 3: Create `LibraryFilterRail.svelte`**
+- [x] **Step 3: Create `LibraryFilterRail.svelte`**
 
 Create `src/lib/components/research-projects/LibraryFilterRail.svelte`:
 
@@ -1017,7 +1017,7 @@ Create `src/lib/components/research-projects/LibraryFilterRail.svelte`:
 </style>
 ```
 
-- [ ] **Step 4: Create `LibraryWorkspace.svelte`**
+- [x] **Step 4: Create `LibraryWorkspace.svelte`**
 
 Create `src/lib/components/research-projects/LibraryWorkspace.svelte`:
 
@@ -1129,7 +1129,7 @@ Create `src/lib/components/research-projects/LibraryWorkspace.svelte`:
 </style>
 ```
 
-- [ ] **Step 5: Create `LibraryInspector.svelte`**
+- [x] **Step 5: Create `LibraryInspector.svelte`**
 
 Create `src/lib/components/research-projects/LibraryInspector.svelte`:
 
@@ -1277,7 +1277,7 @@ Create `src/lib/components/research-projects/LibraryInspector.svelte`:
 </style>
 ```
 
-- [ ] **Step 6: Replace `LibraryScreen.svelte` with the real coordinator**
+- [x] **Step 6: Replace `LibraryScreen.svelte` with the real coordinator**
 
 Replace `src/lib/components/research-projects/LibraryScreen.svelte`:
 
@@ -1446,7 +1446,7 @@ Replace `src/lib/components/research-projects/LibraryScreen.svelte`:
 </style>
 ```
 
-- [ ] **Step 7: Run the Library contract**
+- [x] **Step 7: Run the Library contract**
 
 Run:
 
@@ -1456,7 +1456,7 @@ npm.cmd run test -- src/lib/library-prototype-contract.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte check**
+- [x] **Step 8: Run Svelte check**
 
 Run:
 
@@ -1534,7 +1534,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Library components**
+- [x] **Step 9: Commit Library components**
 
 Run:
 
