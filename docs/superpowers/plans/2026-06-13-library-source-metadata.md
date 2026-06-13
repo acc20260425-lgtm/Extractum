@@ -1263,7 +1263,7 @@ git commit -m "feat: add library catalog view model"
 - Create: `src/lib/ui/library-catalog-workflow.ts`
 - Create: `src/lib/ui/library-catalog-workflow.test.ts`
 
-- [ ] **Step 1: Write workflow tests**
+- [x] **Step 1: Write workflow tests**
 
 Create `src/lib/ui/library-catalog-workflow.test.ts`:
 
@@ -1370,7 +1370,7 @@ describe("library catalog workflow", () => {
 });
 ```
 
-- [ ] **Step 2: Run workflow tests and verify failure**
+- [x] **Step 2: Run workflow tests and verify failure**
 
 Run:
 
@@ -1380,7 +1380,7 @@ npm.cmd run test -- src/lib/ui/library-catalog-workflow.test.ts
 
 Expected: FAIL because `src/lib/ui/library-catalog-workflow.ts` does not exist.
 
-- [ ] **Step 3: Implement the workflow**
+- [x] **Step 3: Implement the workflow**
 
 Create `src/lib/ui/library-catalog-workflow.ts`:
 
@@ -1439,7 +1439,7 @@ export function createLibraryCatalogWorkflow(deps: LibraryCatalogWorkflowDeps) {
 }
 ```
 
-- [ ] **Step 4: Run workflow tests**
+- [x] **Step 4: Run workflow tests**
 
 Run:
 
@@ -1449,7 +1449,7 @@ npm.cmd run test -- src/lib/ui/library-catalog-workflow.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit workflow**
+- [x] **Step 5: Commit workflow**
 
 Run:
 
