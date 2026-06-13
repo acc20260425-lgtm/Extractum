@@ -9,6 +9,7 @@ Active specs:
 
 - [2026-06-04 YouTube source specialization](2026-06-04-youtube-source-specialization-design.md)
 - [2026-06-13 Library prototype](2026-06-13-library-prototype-design.md)
+- [2026-06-13 Library source metadata](2026-06-13-library-source-metadata-design.md)
 
 Recently shipped or superseded specs are archived under
 `docs/superpowers/archive/specs/`.
