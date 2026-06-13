@@ -14,7 +14,7 @@
 
 Backend:
 
-- Create `src-tauri/src/migrations/0005_projects_mvp.sql`: schema migration for `projects`, `project_sources`, and `analysis_runs.project_id`.
+- Create `src-tauri/migrations/0005_projects_mvp.sql`: schema migration for `projects`, `project_sources`, and `analysis_runs.project_id`.
 - Modify `src-tauri/src/migrations.rs`: register migration 5 and add migration tests.
 - Create `src-tauri/src/projects.rs`: project CRUD, membership commands, read models, project-run command wrapper.
 - Modify `src-tauri/src/lib.rs`: register the `projects` module and Tauri commands.
@@ -51,7 +51,7 @@ Frontend:
 ### Task 1: Schema Migration
 
 **Files:**
-- Create: `src-tauri/src/migrations/0005_projects_mvp.sql`
+- Create: `src-tauri/migrations/0005_projects_mvp.sql`
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `docs/database-schema.md`
 
@@ -122,7 +122,7 @@ Expected: FAIL because migration version 5 is not registered.
 
 - [ ] **Step 3: Create migration SQL**
 
-Create `src-tauri/src/migrations/0005_projects_mvp.sql`:
+Create `src-tauri/migrations/0005_projects_mvp.sql`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS projects (
@@ -196,6 +196,15 @@ pub fn build_migrations() -> Vec<Migration> {
 }
 ```
 
+Update the existing `build_migrations_starts_at_current_schema_baseline` test so the
+version list includes the new migration:
+
+```rust
+assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+assert_eq!(migrations[4].description, "projects mvp schema");
+assert!(migrations[4].sql.contains("CREATE TABLE IF NOT EXISTS projects"));
+```
+
 - [ ] **Step 5: Update database schema docs**
 
 In `docs/database-schema.md`, add a section after `analysis_source_group_members`:
@@ -267,7 +276,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add src-tauri\src\migrations.rs src-tauri\src\migrations\0005_projects_mvp.sql docs\database-schema.md
+git add src-tauri\src\migrations.rs src-tauri\migrations\0005_projects_mvp.sql docs\database-schema.md
 git commit -m "feat: add projects mvp schema"
 ```
 
@@ -300,14 +309,26 @@ mod tests {
         pool
     }
 
+    async fn seed_account(pool: &sqlx::SqlitePool, id: i64) {
+        sqlx::query(
+            "INSERT INTO accounts (id, label, api_id, api_hash, created_at) VALUES (?, ?, 1, 'hash', 100)",
+        )
+        .bind(id)
+        .bind(format!("Account {id}"))
+        .execute(pool)
+        .await
+        .expect("seed account");
+    }
+
     async fn seed_source(pool: &sqlx::SqlitePool, id: i64, provider: &str, subtype: &str) {
+        let account_id = if provider == "telegram" { Some(1_i64) } else { None };
         sqlx::query(
             r#"
             INSERT INTO sources (
                 id, source_type, source_subtype, external_id, title,
-                is_active, is_member, created_at
+                is_active, is_member, created_at, account_id
             )
-            VALUES (?, ?, ?, ?, ?, 1, 0, 100)
+            VALUES (?, ?, ?, ?, ?, 1, 0, 100, ?)
             "#,
         )
         .bind(id)
@@ -315,6 +336,7 @@ mod tests {
         .bind(subtype)
         .bind(format!("{provider}-{id}"))
         .bind(format!("Source {id}"))
+        .bind(account_id)
         .execute(pool)
         .await
         .expect("seed source");
@@ -339,6 +361,7 @@ mod tests {
     #[tokio::test]
     async fn add_project_sources_is_idempotent_and_lists_ui_ready_rows() {
         let pool = pool().await;
+        seed_account(&pool, 1).await;
         seed_source(&pool, 10, "youtube", "video").await;
         seed_source(&pool, 11, "telegram", "supergroup").await;
         let project = create_project_in_pool(&pool, "Mixed", None)
@@ -780,6 +803,11 @@ pub(crate) async fn delete_project_in_pool(
         .execute(&mut *tx)
         .await
         .map_err(AppError::database)?;
+    sqlx::query("DELETE FROM project_sources WHERE project_id = ?")
+        .bind(project_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::database)?;
     let result = sqlx::query("DELETE FROM projects WHERE id = ?")
         .bind(project_id)
         .execute(&mut *tx)
@@ -1070,6 +1098,7 @@ git commit -m "feat: connect library sources to projects"
 - Modify: `src-tauri/src/analysis/store.rs`
 - Modify: `src-tauri/src/analysis/corpus.rs`
 - Modify: `src-tauri/src/analysis/report.rs`
+- Modify: `src-tauri/src/analysis/report_commands.rs`
 - Modify: `src-tauri/src/projects.rs`
 - Modify: `src-tauri/src/lib.rs`
 
@@ -1207,6 +1236,14 @@ pub project_name: Option<String>,
 
 For `AnalysisRunRow`, use `pub(crate)`.
 
+Update all Rust tests that manually construct `AnalysisRunSummary`,
+`AnalysisRunDetail`, or `AnalysisRunRow` with:
+
+```rust
+project_id: None,
+project_name: None,
+```
+
 - [ ] **Step 4: Update store queries**
 
 In `src-tauri/src/analysis/store.rs`, update `ANALYSIS_RUN_LIST_SELECT` and `fetch_run_row`:
@@ -1226,6 +1263,33 @@ Add `project_id` to `AnalysisRunListFilters`:
 
 ```rust
 pub(crate) project_id: Option<i64>,
+```
+
+Update `src-tauri/src/analysis/mod.rs::list_analysis_runs` to set this field to
+`None` when constructing `AnalysisRunListFilters`, because the legacy global
+Runs API does not filter by project:
+
+```rust
+project_id: None,
+```
+
+Replace the current two-scope validation in `list_analysis_run_summaries` with
+the same "at most one scope filter" rule:
+
+```rust
+let scope_filter_count = [
+    filters.source_id.is_some(),
+    filters.source_group_id.is_some(),
+    filters.project_id.is_some(),
+]
+.into_iter()
+.filter(|selected| *selected)
+.count();
+if scope_filter_count > 1 {
+    return Err(AppError::validation(
+        "Pass only one of source_id, source_group_id, or project_id",
+    ));
+}
 ```
 
 Add filtering:
@@ -1267,6 +1331,75 @@ fn resolve_run_scope_label_parts(
 
 Keep existing source and source-group fallback logic intact.
 
+Update store tests and fixtures that create minimal `analysis_runs` schemas:
+
+- add `project_id INTEGER` to every `CREATE TABLE analysis_runs` schema used by
+  `insert_analysis_run`, duplicate lookup, and run-list tests;
+- add a minimal `projects` table to the run-list test schema before using the
+  `LEFT JOIN projects`;
+- update `RunListFixture` and `insert_run_list_fixture` with `project_id:
+  Option<i64>`;
+- update `insert_run_list_fixture` scope type selection to use `"project"` when
+  `fixture.project_id.is_some()`, `"source_group"` when
+  `fixture.source_group_id.is_some()`, and `"single_source"` otherwise;
+- update existing `AnalysisRunListFilters { ... }` literals without
+  `..Default::default()` to include `project_id: None`.
+- update `sample_run_row()` / `sample_run()` fixtures with `project_id: None`
+  and `project_name: None`.
+
+Add a focused store test:
+
+```rust
+#[tokio::test]
+async fn list_analysis_run_summaries_filters_project_runs() {
+    let pool = run_list_pool().await;
+    sqlx::query("INSERT INTO projects (id, name) VALUES (7, 'Alpha Project'), (8, 'Beta Project')")
+        .execute(&pool)
+        .await
+        .expect("insert projects");
+    insert_run_list_fixture(
+        &pool,
+        RunListFixture {
+            id: 1,
+            source_id: None,
+            source_group_id: None,
+            project_id: Some(7),
+            scope_label_snapshot: "Alpha Project",
+            created_at: 300,
+            ..RunListFixture::completed(1, 300, "Alpha Project")
+        },
+    )
+    .await;
+    insert_run_list_fixture(
+        &pool,
+        RunListFixture {
+            id: 2,
+            source_id: None,
+            source_group_id: None,
+            project_id: Some(8),
+            scope_label_snapshot: "Beta Project",
+            created_at: 200,
+            ..RunListFixture::completed(2, 200, "Beta Project")
+        },
+    )
+    .await;
+
+    let runs = list_analysis_run_summaries(
+        &pool,
+        AnalysisRunListFilters {
+            project_id: Some(7),
+            limit: 50,
+            ..AnalysisRunListFilters::default()
+        },
+    )
+    .await
+    .expect("list project runs");
+
+    assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
+    assert_eq!(runs[0].project_name.as_deref(), Some("Alpha Project"));
+}
+```
+
 - [ ] **Step 5: Add `project_id` to duplicate lookup and inserts**
 
 In `DuplicateRunLookup`:
@@ -1291,6 +1424,19 @@ pub(crate) scope_label_snapshot: Option<&'a str>,
 ```
 
 Add `project_id` to the insert column list and bind it. Change `scope_label_snapshot` from hardcoded `NULL` to a bound value.
+
+Update existing tests in `src-tauri/src/analysis/store.rs` that construct
+`AnalysisRunInsert` and `DuplicateRunLookup` directly:
+
+```rust
+project_id: None,
+scope_label_snapshot: None,
+```
+
+For `DuplicateRunLookup`, add only `project_id: None`. For project-specific
+duplicate coverage, add a focused test proving a project run and a source-group
+run with the same period/template/model do not collide when their scope ids
+differ.
 
 - [ ] **Step 6: Extend corpus source resolution**
 
@@ -1433,6 +1579,12 @@ project_id: resolved_project_id,
 scope_label_snapshot: Some(&scope_label),
 ```
 
+Update all existing `StartAnalysisReportRequest` constructors:
+
+- in `src-tauri/src/analysis/report_commands.rs`, pass `project_id: None` for
+  the legacy `start_analysis_report` command;
+- in `src-tauri/src/analysis/report.rs` tests, pass `project_id: None`.
+
 - [ ] **Step 8: Add project analysis command wrapper**
 
 In `src-tauri/src/projects.rs`, add:
@@ -1532,6 +1684,7 @@ Run:
 cargo test resolve_analysis_sources_ --manifest-path src-tauri/Cargo.toml
 cargo test projects::tests --manifest-path src-tauri/Cargo.toml
 cargo test analysis::store --manifest-path src-tauri/Cargo.toml
+cargo test analysis::report --manifest-path src-tauri/Cargo.toml
 ```
 
 Expected: PASS.
@@ -1783,7 +1936,8 @@ export function startProjectAnalysis(command: ProjectAnalysisStartCommand) {
 
 - [ ] **Step 5: Extend analysis run types**
 
-In `src/lib/types/analysis.ts`, add to `AnalysisRunSummary`:
+In `src/lib/types/analysis.ts`, add to `AnalysisRunSummary` so
+`AnalysisRunDetail extends AnalysisRunSummary` receives the same fields:
 
 ```ts
 project_id: number | null;
@@ -2045,16 +2199,17 @@ export function projectRunDisabledReason(
 
 - [ ] **Step 4: Update workflow tests**
 
-In `src/lib/ui/research-projects-workflow.test.ts`, use deps with `listProjects`, `listProjectSources`, `listLibrarySources`, `listProjectRuns`, `addProjectSources`, and `removeProjectSources`. Add this test:
+In `src/lib/ui/research-projects-workflow.test.ts`, use deps with `listProjects`, `listProjectSources`, `listLibrarySources`, `listProjectRuns`, `listPromptTemplates`, `addProjectSources`, and `removeProjectSources`. Add this test:
 
 ```ts
 it("loads projects and connects selected Library sources through project APIs", async () => {
   const state = createInitialState();
   const deps = createDeps(state);
   deps.listProjects.mockResolvedValue([{ id: 1, name: "Alpha", description: null, created_at: 1, updated_at: 1 }]);
-  deps.listAllProjectSources.mockResolvedValue([]);
+  deps.listProjectSources.mockResolvedValue([]);
   deps.listLibrarySources.mockResolvedValue([librarySource({ source_id: 10 })]);
   deps.listProjectRuns.mockResolvedValue([]);
+  deps.listPromptTemplates.mockResolvedValue([]);
   deps.listSourceJobs.mockResolvedValue([]);
   deps.addProjectSources.mockResolvedValue({ added_count: 1, already_present_count: 0 });
 
@@ -2077,26 +2232,33 @@ projectsRaw: ProjectRecord[];
 projectSources: ProjectSourceRecord[];
 runs: AnalysisRunSummary[];
 libraryRecords: LibrarySourceRecord[];
+promptTemplates: AnalysisPromptTemplate[];
 ```
 
 Use deps:
 
 ```ts
 listProjects(): Promise<ProjectRecord[]>;
-listAllProjectSources(projectIds: number[]): Promise<ProjectSourceRecord[]>;
+listProjectSources(projectId: number): Promise<ProjectSourceRecord[]>;
 listLibrarySources(): Promise<LibrarySourceRecord[]>;
 listProjectRuns(projectId: number): Promise<AnalysisRunSummary[]>;
+listPromptTemplates(): Promise<AnalysisPromptTemplate[]>;
 addProjectSources(input: ProjectSourcesInput): Promise<AddProjectSourcesOutcome>;
 removeProjectSources(input: ProjectSourcesInput): Promise<void>;
+createProject(input: ProjectEditorInput): Promise<ProjectRecord>;
+updateProject(input: UpdateProjectInput): Promise<ProjectRecord>;
+deleteProject(projectId: number): Promise<void>;
+startProjectAnalysis(input: ProjectAnalysisStartCommand): Promise<number>;
 ```
 
 Implement `loadWorkspace()` as:
 
 ```ts
-const [projectsRaw, libraryRecords, sourceJobs] = await Promise.all([
+const [projectsRaw, libraryRecords, sourceJobs, promptTemplates] = await Promise.all([
   deps.listProjects(),
   deps.listLibrarySources(),
   deps.listSourceJobs(),
+  deps.listPromptTemplates(),
 ]);
 const allProjectSources = (
   await Promise.all(projectsRaw.map((project) => deps.listProjectSources(project.id)))
@@ -2104,6 +2266,7 @@ const allProjectSources = (
 const runs = (
   await Promise.all(projectsRaw.map((project) => deps.listProjectRuns(project.id)))
 ).flat();
+deps.patch({ projectsRaw, libraryRecords, projectSources: allProjectSources, runs, sourceJobs, promptTemplates });
 ```
 
 Implement `connectSelectedSources()` with:
@@ -2130,6 +2293,70 @@ if (!projectId) {
 await deps.removeProjectSources({ projectId, sourceIds: [sourceId] });
 await loadWorkspace();
 ```
+
+Implement create/edit/delete/run workflow methods:
+
+```ts
+async function createProject(input: ProjectEditorInput) {
+  deps.patch({ saving: true });
+  try {
+    const project = await deps.createProject(input);
+    deps.patch({ selectedProjectId: projectViewId(project.id), status: "Project created." });
+    await loadWorkspace();
+  } catch (error) {
+    deps.patch({ status: deps.formatError("creating project", error) });
+  } finally {
+    deps.patch({ saving: false });
+  }
+}
+
+async function updateProject(input: ProjectEditorInput) {
+  const projectId = projectIdFromViewId(deps.getState().selectedProjectId);
+  if (!projectId) return deps.patch({ status: "Select a project" });
+  deps.patch({ saving: true });
+  try {
+    await deps.updateProject({ projectId, ...input });
+    deps.patch({ status: "Project updated." });
+    await loadWorkspace();
+  } catch (error) {
+    deps.patch({ status: deps.formatError("updating project", error) });
+  } finally {
+    deps.patch({ saving: false });
+  }
+}
+
+async function deleteSelectedProject() {
+  const projectId = projectIdFromViewId(deps.getState().selectedProjectId);
+  if (!projectId) return deps.patch({ status: "Select a project" });
+  deps.patch({ saving: true });
+  try {
+    await deps.deleteProject(projectId);
+    deps.patch({ selectedProjectId: null, status: "Project deleted." });
+    await loadWorkspace();
+  } catch (error) {
+    deps.patch({ status: deps.formatError("deleting project", error) });
+  } finally {
+    deps.patch({ saving: false });
+  }
+}
+
+async function runProjectAnalysis(input: ProjectAnalysisStartCommand) {
+  deps.patch({ saving: true });
+  try {
+    const runId = await deps.startProjectAnalysis(input);
+    deps.patch({ status: `Project analysis queued: ${runId}` });
+    await loadWorkspace();
+  } catch (error) {
+    deps.patch({ status: deps.formatError("starting project analysis", error) });
+  } finally {
+    deps.patch({ saving: false });
+  }
+}
+```
+
+Expose these methods from `createResearchProjectsWorkflow` together with
+`loadWorkspace`, `refreshDerivedState`, `connectSelectedSources`, and
+`removeProjectSource`.
 
 - [ ] **Step 6: Run tests**
 
@@ -2225,6 +2452,7 @@ import {
   updateProject,
 } from "$lib/api/projects";
 import { listLibrarySources } from "$lib/api/library-sources";
+import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
 ```
 
 Remove `listAnalysisSourceGroups`, `updateAnalysisSourceGroup`, and `listAnalysisSources`.
@@ -2239,6 +2467,7 @@ const workflow = createResearchProjectsWorkflow({
   listProjectSources,
   listLibrarySources,
   listProjectRuns,
+  listPromptTemplates: () => listAnalysisPromptTemplates("report"),
   listSourceJobs: () => listSourceJobs({ limit: 50 }),
   addProjectSources,
   removeProjectSources,
@@ -2248,6 +2477,23 @@ const workflow = createResearchProjectsWorkflow({
   startProjectAnalysis,
   formatError: (action, error) => `Error ${action}: ${String(error)}`,
 });
+```
+
+Initialize `promptTemplates: []` in route state and pass workflow handlers to
+`ProjectsShell`:
+
+```svelte
+<ProjectsShell
+  {state}
+  onSelectProject={selectProject}
+  onCreateProject={workflow.createProject}
+  onUpdateProject={workflow.updateProject}
+  onDeleteProject={workflow.deleteSelectedProject}
+  onRemoveProjectSource={workflow.removeProjectSource}
+  onRunProject={workflow.runProjectAnalysis}
+  onConnectSelectedSources={workflow.connectSelectedSources}
+  onSelectedLibrarySourceIdsChange={(ids) => (state.selectedLibrarySourceIds = new Set(ids))}
+/>
 ```
 
 - [ ] **Step 4: Add project editor dialog**
@@ -2491,6 +2737,7 @@ Modify `ProjectsShell.svelte`:
 
 - add state for editor dialog, run dialog, selected source id;
 - change grid columns to `260px minmax(0, 1fr) 380px`;
+- pass `state.promptTemplates` into `ProjectRunDialog`;
 - render `<ProjectInspector data-ui-region="project-inspector" ... />`;
 - render `<ProjectEditorDialog ... />`;
 - render `<ProjectRunDialog ... />`.
