@@ -297,7 +297,7 @@ git commit -m "feat: add extractum dialog wrappers"
 - Create: `src/lib/ui/library-add-source-model.ts`
 - Create: `src/lib/ui/library-add-source-model.test.ts`
 
-- [ ] **Step 1: Write model tests**
+- [x] **Step 1: Write model tests**
 
 Create `src/lib/ui/library-add-source-model.test.ts`:
 
@@ -527,7 +527,7 @@ describe("library add source model", () => {
 });
 ```
 
-- [ ] **Step 2: Run model tests to verify failure**
+- [x] **Step 2: Run model tests to verify failure**
 
 Run:
 
@@ -537,7 +537,7 @@ npm.cmd run test -- src/lib/ui/library-add-source-model.test.ts
 
 Expected: FAIL because `src/lib/ui/library-add-source-model.ts` does not exist.
 
-- [ ] **Step 3: Implement model helpers**
+- [x] **Step 3: Implement model helpers**
 
 Create `src/lib/ui/library-add-source-model.ts`:
 
@@ -730,7 +730,7 @@ export function telegramDialogAddInput(
 }
 ```
 
-- [ ] **Step 4: Verify model tests**
+- [x] **Step 4: Verify model tests**
 
 Run:
 
@@ -740,7 +740,7 @@ npm.cmd run test -- src/lib/ui/library-add-source-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit model helpers**
+- [x] **Step 5: Commit model helpers**
 
 Run:
 
