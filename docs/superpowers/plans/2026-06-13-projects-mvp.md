@@ -1519,6 +1519,25 @@ async fn push_scope_source(
 }
 ```
 
+Update the test-only `resolve_run_source_ids` helper in the same module so
+project-scoped runs can be resolved consistently in tests and future fallback
+paths:
+
+```rust
+if run.scope_type == crate::analysis::ANALYSIS_SCOPE_TYPE_PROJECT {
+    let project_id = run
+        .project_id
+        .ok_or_else(|| format!("Analysis run {} is missing project_id", run.id))?;
+    return resolve_analysis_sources(pool, None, None, Some(project_id))
+        .await
+        .map(|resolved| resolved.source_ids)
+        .map_err(|error| error.to_string());
+}
+```
+
+Add a corpus test proving `resolve_run_source_ids` returns project source ids
+for a project-scoped run with no captured snapshot rows.
+
 - [ ] **Step 7: Extend report request**
 
 In `src-tauri/src/analysis/report.rs`, add to `StartAnalysisReportRequest`:
@@ -2901,11 +2920,15 @@ git commit -m "feat: replace projects workspace with real projects"
 - Modify: `src/lib/types/analysis.ts`
 - Modify: `src/lib/components/analysis/report-canvas.svelte`
 - Modify: `src/lib/components/analysis/report-viewer.svelte`
+- Modify: `src/lib/components/analysis/report-source-surface.svelte`
 - Modify: `src/lib/components/analysis/run-companion-runs-tab.svelte`
 - Modify: `src/lib/components/analysis/run-companion-tabs.svelte`
 - Modify: `src/lib/components/analysis/report-run-header.svelte`
+- Modify: `src/lib/source-browser-model.ts`
 - Test: `src/lib/analysis-utils.test.ts`
 - Test: `src/lib/analysis-run-companion-tabs.test.ts`
+- Test: `src/lib/source-browser-model.test.ts`
+- Test: `src/lib/analysis-source-readers.test.ts`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -2963,21 +2986,58 @@ In run list/header components, make labels scope-neutral:
   - `src/lib/components/analysis/run-companion-tabs.svelte`
   - `src/lib/components/analysis/run-companion-runs-tab.svelte`
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 5: Make run snapshot source browser project-aware**
+
+Project snapshots are multi-source snapshots, so they must not be rendered as
+single-source snapshots.
+
+In `src/lib/source-browser-model.ts`:
+
+- extend `RunSnapshotBrowserSubject.scopeType` to `"source" | "source_group" | "project"`;
+- update `deriveRunSnapshotBrowserKind` so `scopeType === "project"` returns
+  `"source_group"` for the MVP multi-source browser layout.
+
+In `src/lib/components/analysis/report-source-surface.svelte`:
+
+- set run snapshot `scopeType` from `currentRun.scope_type` with explicit
+  project handling:
+
+```ts
+scopeType: currentRun.scope_type === "project"
+  ? "project"
+  : currentRun.scope_type === "source_group"
+    ? "source_group"
+    : "source",
+```
+
+- use `"Project sources"` instead of `"Source material"` for project-scoped run
+  snapshot headers;
+- keep source-group behavior unchanged.
+
+Add tests:
+
+- in `src/lib/source-browser-model.test.ts`, assert that
+  `deriveRunSnapshotBrowserKind({ scopeType: "project", ... })` returns
+  `"source_group"` and exposes `["sources", "items", "metadata"]` tabs;
+- in `src/lib/analysis-source-readers.test.ts`, assert
+  `report-source-surface.svelte` contains explicit `currentRun.scope_type ===
+  "project"` handling.
+
+- [ ] **Step 6: Run tests**
 
 Run:
 
 ```powershell
-npm.cmd test -- --run src/lib/analysis-utils.test.ts src/lib/analysis-run-companion-tabs.test.ts
+npm.cmd test -- --run src/lib/analysis-utils.test.ts src/lib/analysis-run-companion-tabs.test.ts src/lib/source-browser-model.test.ts src/lib/analysis-source-readers.test.ts
 npm.cmd run check
 ```
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```powershell
-git add src\lib\types\analysis.ts src\lib\analysis-utils.ts src\lib\components\analysis src\lib\analysis-utils.test.ts src\lib\analysis-run-companion-tabs.test.ts
+git add src\lib\types\analysis.ts src\lib\analysis-utils.ts src\lib\source-browser-model.ts src\lib\components\analysis src\lib\analysis-utils.test.ts src\lib\analysis-run-companion-tabs.test.ts src\lib\source-browser-model.test.ts src\lib\analysis-source-readers.test.ts
 git commit -m "feat: show project-scoped analysis runs"
 ```
 
@@ -2995,6 +3055,7 @@ Run:
 ```powershell
 cargo test projects::tests --manifest-path src-tauri/Cargo.toml
 cargo test resolve_analysis_sources_ --manifest-path src-tauri/Cargo.toml
+cargo test analysis::report --manifest-path src-tauri/Cargo.toml
 cargo test library_sources::tests --manifest-path src-tauri/Cargo.toml
 cargo test delete_source_is_blocked_when_source_is_used_by_project --manifest-path src-tauri/Cargo.toml
 ```
@@ -3007,6 +3068,7 @@ Run:
 
 ```powershell
 npm.cmd test -- --run src/lib/api/projects.test.ts src/lib/ui/research-projects-model.test.ts src/lib/ui/research-projects-workflow.test.ts src/lib/research-projects-route-contract.test.ts
+npm.cmd test -- --run src/lib/analysis-utils.test.ts src/lib/analysis-run-companion-tabs.test.ts src/lib/source-browser-model.test.ts src/lib/analysis-source-readers.test.ts
 ```
 
 Expected: all PASS.
@@ -3064,8 +3126,10 @@ Date: 2026-06-13
 
 - `cargo test projects::tests --manifest-path src-tauri/Cargo.toml`: PASS
 - `cargo test resolve_analysis_sources_ --manifest-path src-tauri/Cargo.toml`: PASS
+- `cargo test analysis::report --manifest-path src-tauri/Cargo.toml`: PASS
 - `cargo test library_sources::tests --manifest-path src-tauri/Cargo.toml`: PASS
 - `npm.cmd test -- --run src/lib/api/projects.test.ts src/lib/ui/research-projects-model.test.ts src/lib/ui/research-projects-workflow.test.ts src/lib/research-projects-route-contract.test.ts`: PASS
+- `npm.cmd test -- --run src/lib/analysis-utils.test.ts src/lib/analysis-run-companion-tabs.test.ts src/lib/source-browser-model.test.ts src/lib/analysis-source-readers.test.ts`: PASS
 - `npm.cmd run check`: PASS
 - `cargo test --manifest-path src-tauri/Cargo.toml`: PASS
 
