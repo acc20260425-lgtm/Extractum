@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-06-04
+> **Updated:** 2026-06-13
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -10,6 +10,7 @@
 | Medium | NotebookLM export follow-ups | decide on optional link enrichment, forward metadata, and richer topic grouping |
 | Medium | YouTube source follow-ups | broaden live-provider validation and decide which enrichment/resumability features matter after the MVP |
 | Medium | Telegram topic/forward enrichment | model richer Forum Topics browsing/export and forward metadata when needed |
+| Medium | Library source operations | move source activity, add outcomes, playlist addability, and project compatibility into backend contracts |
 | Medium | Frontend workspace evolution | improve evidence navigation, topic filters, saved-run history, and remaining source-surface consistency |
 | Medium | Media support | move beyond metadata-first storage only after explicit download and analysis policies exist |
 | Medium | Stabilization | add CI and event-flow validation after the next major backend changes |
@@ -24,6 +25,9 @@
 5. Keep closed Superpowers plans out of active docs; preserve them through Git
    history. Move historical specs or verification notes into
    `docs/superpowers/archive/` only when they remain useful as context.
+6. Let backend APIs expose domain states such as capabilities, activity,
+   compatibility, add outcomes, and item addability. Keep frontend code focused
+   on layout, local selection, search, and presentation.
 
 ## 3. Open Roadmap
 
@@ -100,7 +104,50 @@ Guidance: `docs/frontend-architecture-evolution-analysis.md`.
 - [ ] evolve media evidence cards only after media download and preview policy
   is approved
 
-### 3.6 Desktop Product Maturity
+### 3.6 Library Source Operations
+
+Priority: medium.
+
+The Library screen should remain a thin product surface over explicit backend
+contracts. Avoid moving source identity, job interpretation, playlist item
+semantics, project compatibility, or edit/archive durability into frontend-only
+view models.
+
+- [ ] introduce a `list_library_catalog`-style read model that returns Library
+  sources together with activity state, latest relevant job, action
+  capabilities, disabled reasons, and provider/subtype filter counts
+- [ ] extend YouTube preview/add contracts so the backend reports add outcomes
+  such as `created`, `existing`, `updated`, and `unsupported`, including the
+  existing source id when a smart import target is already in Library
+- [ ] move YouTube playlist item addability into `get_youtube_playlist_detail`,
+  returning per-item states such as `addable`, `already_in_library`,
+  `unavailable`, `removed`, and `missing_url`
+- [ ] add a backend bulk command for explicit playlist video materialization,
+  for example `materialize_youtube_playlist_items(playlist_source_id,
+  video_ids)`, with per-item partial success results
+- [ ] add source-first project connection commands that list compatible
+  projects for a source and connect selected projects idempotently without
+  requiring the frontend to rewrite whole source-group membership lists
+- [ ] design durable Library source overrides before Edit/Archive, keeping
+  user-owned fields such as display title, note, and archived state separate
+  from provider metadata
+- [ ] surface source-level refresh support through backend capabilities so the
+  Library Inspector can show `Refresh` as enabled, disabled, or unsupported
+  without provider-specific frontend branching
+
+Acceptance:
+
+- Library Add Source duplicate handling is based on backend outcome data, not
+  only a frontend scan of the current table rows.
+- Playlist browser UI receives item addability and disabled reasons from the
+  backend.
+- Source-to-project connection validates provider compatibility in backend code
+  and returns clear per-project states.
+- Edit/Archive does not overwrite provider-derived metadata.
+- Library frontend view models no longer need to merge generic source records
+  with source-job records just to derive basic activity status.
+
+### 3.7 Desktop Product Maturity
 
 Priority: medium.
 
