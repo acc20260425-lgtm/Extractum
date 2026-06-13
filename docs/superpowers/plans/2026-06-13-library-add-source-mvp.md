@@ -1009,7 +1009,7 @@ git commit -m "feat: add library playlist import workflow"
 - Create: `src/lib/library-add-source-contract.test.ts`
 - Modify: `src/lib/library-prototype-contract.test.ts`
 
-- [ ] **Step 1: Add raw-source contract tests for new components**
+- [x] **Step 1: Add raw-source contract tests for new components**
 
 Create `src/lib/library-add-source-contract.test.ts`:
 
@@ -1088,7 +1088,7 @@ describe("Library Add Source contract", () => {
 });
 ```
 
-- [ ] **Step 2: Add LibraryScreen contract for replacing prototype Add**
+- [x] **Step 2: Add LibraryScreen contract for replacing prototype Add**
 
 Modify `src/lib/library-prototype-contract.test.ts`.
 
@@ -1100,7 +1100,7 @@ In the final test `"coordinates filter selection, row selection, and Inspector r
     expect(screenSource).not.toContain('prototypeFeedback("Add source")');
 ```
 
-- [ ] **Step 3: Run contract tests to verify failure**
+- [x] **Step 3: Run contract tests to verify failure**
 
 Run:
 

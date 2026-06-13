@@ -61,5 +61,8 @@ describe("Library prototype contract", () => {
     expect(screenSource).toContain("clampInspectorWidth");
     expect(screenSource).toContain('role="separator"');
     expect(screenSource).toContain("onpointerdown");
+    expect(screenSource).toContain("LibraryAddSourceDialog");
+    expect(screenSource).toContain("addSourceDialogOpen");
+    expect(screenSource).not.toContain('prototypeFeedback("Add source")');
   });
 });
