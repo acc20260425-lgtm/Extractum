@@ -8,6 +8,7 @@ Specs for shipped or superseded work should move to
 Active specs:
 
 - [2026-06-04 YouTube source specialization](2026-06-04-youtube-source-specialization-design.md)
+- [2026-06-13 Library prototype](2026-06-13-library-prototype-design.md)
 
 Recently shipped or superseded specs are archived under
 `docs/superpowers/archive/specs/`.
