@@ -1070,9 +1070,12 @@ describe("Library Add Source contract", () => {
     expect(playlistImportSource).toContain("addSelectedYoutubePlaylistVideos");
     expect(playlistImportSource).toContain("YOUTUBE_PLAYLIST_IMPORT_LIMIT");
     expect(playlistImportSource).toContain("Already in Library");
+    expect(playlistImportSource).toContain("import-result-list");
+    expect(playlistImportSource).toContain("{#each summary.results as result");
   });
 
   it("adds Telegram sources only from selected account dialogs", () => {
+    expect(telegramImportSource).toContain("onMount");
     expect(telegramImportSource).toContain("listAccounts");
     expect(telegramImportSource).toContain("getAccountRuntimeStatuses");
     expect(telegramImportSource).toContain("listTelegramSources");
@@ -1573,6 +1576,14 @@ Create `src/lib/components/research-projects/LibraryYoutubePlaylistImport.svelte
     <ExtractumStatusMessage tone={summary.failed > 0 ? "error" : "default"}>
       Added {summary.added}, skipped {summary.skipped}, failed {summary.failed}.
     </ExtractumStatusMessage>
+    <ul class="import-result-list" aria-label="Playlist import results">
+      {#each summary.results as result (result.id)}
+        <li class={result.status}>
+          <strong>{result.title}</strong>
+          <span>{result.message ?? result.status}</span>
+        </li>
+      {/each}
+    </ul>
   {/if}
 </section>
 
@@ -1620,6 +1631,30 @@ Create `src/lib/components/research-projects/LibraryYoutubePlaylistImport.svelte
     background: transparent;
     color: var(--extractum-text);
     text-align: left;
+  }
+
+  .import-result-list {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .import-result-list li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+    gap: 8px;
+    align-items: center;
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .import-result-list li.failed {
+    border-color: var(--status-error-text);
+    color: var(--status-error-text);
   }
 
   .playlist-list button.selected,
@@ -1754,6 +1789,7 @@ Create `src/lib/components/research-projects/LibraryTelegramDialogImport.svelte`
 
 ```svelte
 <script lang="ts">
+  import { onMount } from "svelte";
   import { Plus, RefreshCw } from "@lucide/svelte";
   import {
     ExtractumBadge,
@@ -1857,10 +1893,8 @@ Create `src/lib/components/research-projects/LibraryTelegramDialogImport.svelte`
     }
   }
 
-  $effect(() => {
-    if (accounts.length === 0 && !loadingAccounts) {
-      void loadAccountsAndStatuses();
-    }
+  onMount(() => {
+    void loadAccountsAndStatuses();
   });
 </script>
 
