@@ -1,7 +1,6 @@
 <script lang="ts">
   import BottomQueue from "./BottomQueue.svelte";
   import ConnectFromLibrary from "./ConnectFromLibrary.svelte";
-  import IconRail from "./IconRail.svelte";
   import ProjectRail from "./ProjectRail.svelte";
   import ProjectWorkspace from "./ProjectWorkspace.svelte";
   import TopCommandBar from "./TopCommandBar.svelte";
@@ -30,10 +29,6 @@
 </script>
 
 <div class="projects-shell">
-  <aside data-ui-region="icon-rail" class="icon-rail">
-    <IconRail />
-  </aside>
-
   <aside data-ui-region="project-rail" class="project-rail">
     <ProjectRail
       projects={workflowState.projects}
@@ -79,15 +74,9 @@
 <style>
   .projects-shell {
     display: grid;
-    grid-template-columns: 56px 260px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr);
     min-height: calc(100vh - 68px);
-    border: 1px solid var(--extractum-border);
     background: var(--extractum-surface);
-  }
-
-  .icon-rail {
-    border-right: 1px solid var(--extractum-border);
-    background: var(--extractum-surface-raised);
   }
 
   .project-rail,

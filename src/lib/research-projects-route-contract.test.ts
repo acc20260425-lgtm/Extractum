@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import homeRouteSource from "../routes/+page.svelte?raw";
 import layoutSource from "../routes/+layout.svelte?raw";
+import projectsLayoutSource from "../routes/projects/+layout.svelte?raw";
+import libraryRouteSource from "../routes/projects/library/+page.svelte?raw";
 import projectsRouteSource from "../routes/projects/+page.svelte?raw";
 import shellSource from "./components/research-projects/ProjectsShell.svelte?raw";
+import iconRailSource from "./components/research-projects/IconRail.svelte?raw";
 import projectRailSource from "./components/research-projects/ProjectRail.svelte?raw";
 import topCommandBarSource from "./components/research-projects/TopCommandBar.svelte?raw";
 import workspaceSource from "./components/research-projects/ProjectWorkspace.svelte?raw";
@@ -22,11 +25,29 @@ describe("research projects route contract", () => {
   });
 
   it("renders the dense project control deck regions", () => {
-    expect(shellSource).toContain('data-ui-region="icon-rail"');
+    expect(projectsLayoutSource).toContain('data-ui-region="icon-rail"');
     expect(shellSource).toContain('data-ui-region="project-rail"');
     expect(shellSource).toContain('data-ui-region="top-command-bar"');
     expect(shellSource).toContain('data-ui-region="project-workspace"');
-    expect(shellSource).toContain("grid-template-columns: 56px 260px minmax(0, 1fr)");
+    expect(projectsLayoutSource).toContain("grid-template-columns: 56px minmax(0, 1fr)");
+    expect(shellSource).toContain("grid-template-columns: 260px minmax(0, 1fr)");
+  });
+
+  it("shares IconRail through the projects nested layout", () => {
+    expect(projectsLayoutSource).toContain('data-ui-route-shell="projects"');
+    expect(projectsLayoutSource).toContain("<IconRail");
+    expect(projectsLayoutSource).toContain("{@render children()}");
+    expect(shellSource).not.toContain("<IconRail");
+    expect(shellSource).not.toContain('data-ui-region="icon-rail"');
+  });
+
+  it("routes Library to a separate nested screen", () => {
+    expect(iconRailSource).toContain('href: "/projects/library"');
+    expect(iconRailSource).toContain('page.url.pathname === "/projects/library"');
+    expect(libraryRouteSource).toContain('data-ui-route="library-prototype"');
+    expect(libraryRouteSource).toContain("createResearchProjectsWorkflow");
+    expect(libraryRouteSource).toContain("listAnalysisSources");
+    expect(libraryRouteSource).toContain("<LibraryScreen");
   });
 
   it("keeps project rail and workspace in product language", () => {

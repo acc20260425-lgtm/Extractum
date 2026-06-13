@@ -125,7 +125,7 @@ Expected: existing focused tests pass before changes. If they fail, stop and rec
 - Modify: `src/lib/components/research-projects/IconRail.svelte`
 - Modify: `src/lib/research-projects-route-contract.test.ts`
 
-- [ ] **Step 1: Extend the failing route contract**
+- [x] **Step 1: Extend the failing route contract**
 
 Modify `src/lib/research-projects-route-contract.test.ts` imports:
 
@@ -169,7 +169,7 @@ Update the existing dense-region assertion:
   });
 ```
 
-- [ ] **Step 2: Run the route contract and verify it fails**
+- [x] **Step 2: Run the route contract and verify it fails**
 
 Run:
 
@@ -179,7 +179,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: FAIL because `src/routes/projects/+layout.svelte`, `src/routes/projects/library/+page.svelte`, and `LibraryScreen` do not exist yet, and `ProjectsShell` still embeds `IconRail`.
 
-- [ ] **Step 3: Create the shared projects layout**
+- [x] **Step 3: Create the shared projects layout**
 
 Create `src/routes/projects/+layout.svelte`:
 
@@ -223,7 +223,7 @@ Create `src/routes/projects/+layout.svelte`:
 </style>
 ```
 
-- [ ] **Step 4: Move `IconRail` ownership out of `ProjectsShell`**
+- [x] **Step 4: Move `IconRail` ownership out of `ProjectsShell`**
 
 Modify `src/lib/components/research-projects/ProjectsShell.svelte`:
 
@@ -254,7 +254,7 @@ Modify `src/lib/components/research-projects/ProjectsShell.svelte`:
 
 4. Remove the `.icon-rail` CSS block from `ProjectsShell.svelte`.
 
-- [ ] **Step 5: Make `IconRail` route-aware**
+- [x] **Step 5: Make `IconRail` route-aware**
 
 Modify `src/lib/components/research-projects/IconRail.svelte`:
 
@@ -301,7 +301,7 @@ Modify `src/lib/components/research-projects/IconRail.svelte`:
 
 Keep the existing `<style>` block.
 
-- [ ] **Step 6: Add a temporary Library route shell to satisfy imports**
+- [x] **Step 6: Add a temporary Library route shell to satisfy imports**
 
 Create `src/routes/projects/library/+page.svelte`:
 
@@ -375,7 +375,7 @@ Create a minimal temporary `src/lib/components/research-projects/LibraryScreen.s
 </div>
 ```
 
-- [ ] **Step 7: Run route contract**
+- [x] **Step 7: Run route contract**
 
 Run:
 
@@ -385,7 +385,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit route shell extraction**
+- [x] **Step 8: Commit route shell extraction**
 
 Run:
 

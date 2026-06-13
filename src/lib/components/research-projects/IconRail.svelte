@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from "$app/state";
   import {
     Activity,
     FolderKanban,
@@ -8,17 +9,29 @@
   } from "@lucide/svelte";
 
   const items = [
-    { href: "/projects", label: "Projects", icon: FolderKanban, active: true },
-    { href: "/projects#library", label: "Library", icon: Library, active: false },
-    { href: "/projects#runs", label: "Runs", icon: Activity, active: false },
-    { href: "/diagnostics", label: "Diagnostics", icon: ShieldCheck, active: false },
-    { href: "/settings", label: "Settings", icon: Settings, active: false },
+    { href: "/projects", label: "Projects", icon: FolderKanban },
+    { href: "/projects/library", label: "Library", icon: Library },
+    { href: "/projects#runs", label: "Runs", icon: Activity },
+    { href: "/diagnostics", label: "Diagnostics", icon: ShieldCheck },
+    { href: "/settings", label: "Settings", icon: Settings },
   ];
+
+  function isActive(href: string) {
+    if (href === "/projects") return page.url.pathname === "/projects";
+    if (href === "/projects/library") return page.url.pathname === "/projects/library";
+    return page.url.pathname === href;
+  }
 </script>
 
 <nav class="icon-rail-nav" aria-label="Research project sections">
   {#each items as item (item.href)}
-    <a class:active={item.active} href={item.href} title={item.label} aria-label={item.label}>
+    <a
+      class:active={isActive(item.href)}
+      href={item.href}
+      title={item.label}
+      aria-label={item.label}
+      aria-current={isActive(item.href) ? "page" : undefined}
+    >
       <item.icon size={18} aria-hidden="true" />
     </a>
   {/each}
