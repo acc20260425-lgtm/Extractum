@@ -91,7 +91,7 @@ It does not add source CRUD, a durable `library_sources` table, YouTube channel 
 **Files:**
 - No file changes.
 
-- [ ] **Step 1: Confirm branch and clean worktree**
+- [x] **Step 1: Confirm branch and clean worktree**
 
 Run:
 
@@ -101,7 +101,7 @@ git status --short --branch
 
 Expected: current branch is `feature/library-prototype` and no modified files are listed.
 
-- [ ] **Step 2: Run focused baseline tests**
+- [x] **Step 2: Run focused baseline tests**
 
 Run:
 
@@ -111,7 +111,7 @@ npm.cmd run test -- src/lib/library-prototype-contract.test.ts src/lib/research-
 
 Expected: PASS. If these fail before changes, stop and record the existing failure.
 
-- [ ] **Step 3: Run Rust baseline for nearby source modules**
+- [x] **Step 3: Run Rust baseline for nearby source modules**
 
 Run:
 
