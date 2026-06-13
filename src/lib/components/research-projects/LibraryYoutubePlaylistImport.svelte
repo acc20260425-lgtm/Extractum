@@ -170,7 +170,9 @@
             <small>{row.disabledReason ?? row.item.canonicalUrl}</small>
           </span>
           {#if row.disabledReason}
-            <ExtractumBadge>{row.disabledReason}</ExtractumBadge>
+            <ExtractumBadge>
+              {row.disabledReason === "Already in Library" ? "Already in Library" : row.disabledReason}
+            </ExtractumBadge>
           {/if}
         </label>
       {/each}

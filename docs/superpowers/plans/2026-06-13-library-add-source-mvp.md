@@ -2080,7 +2080,7 @@ Do not commit yet.
 - Create: `src/lib/components/research-projects/LibraryAddSourceDialog.svelte`
 - Modify: `src/lib/components/research-projects/LibraryScreen.svelte`
 
-- [ ] **Step 1: Create dialog shell**
+- [x] **Step 1: Create dialog shell**
 
 Create `src/lib/components/research-projects/LibraryAddSourceDialog.svelte`:
 
@@ -2147,7 +2147,7 @@ Create `src/lib/components/research-projects/LibraryAddSourceDialog.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Wire the dialog in LibraryScreen**
+- [x] **Step 2: Wire the dialog in LibraryScreen**
 
 Modify `src/lib/components/research-projects/LibraryScreen.svelte`.
 
@@ -2204,7 +2204,7 @@ Add the dialog before the status block:
   />
 ```
 
-- [ ] **Step 3: Run contract tests**
+- [x] **Step 3: Run contract tests**
 
 Run:
 
@@ -2214,7 +2214,7 @@ npm.cmd run test -- src/lib/library-add-source-contract.test.ts src/lib/library-
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Svelte check**
+- [x] **Step 4: Run Svelte check**
 
 Run:
 
@@ -2224,7 +2224,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 5: Commit component slice**
+- [x] **Step 5: Commit component slice**
 
 Run:
 

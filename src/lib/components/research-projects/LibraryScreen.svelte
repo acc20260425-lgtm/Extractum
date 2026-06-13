@@ -1,4 +1,5 @@
 <script lang="ts">
+  import LibraryAddSourceDialog from "./LibraryAddSourceDialog.svelte";
   import LibraryFilterRail from "./LibraryFilterRail.svelte";
   import LibraryInspector from "./LibraryInspector.svelte";
   import LibraryWorkspace from "./LibraryWorkspace.svelte";
@@ -25,6 +26,7 @@
   let filterCollapsed = $state(false);
   let inspectorWidth = $state(380);
   let status = $state("");
+  let addSourceDialogOpen = $state(false);
 
   let filterRows = $derived(buildLibraryCatalogFilterTree(workflowState.sources));
   let visibleSources = $derived(
@@ -74,8 +76,11 @@
     }
   }
 
-  function prototypeFeedback(action: string) {
-    status = `${action} flow is not implemented in this prototype.`;
+  async function handleSourcesChanged(sourceId?: number) {
+    await onRefresh();
+    if (sourceId) {
+      selectedSourceId = `source:${sourceId}`;
+    }
   }
 </script>
 
@@ -99,9 +104,9 @@
     selectedSourceId={selectedSourceId}
     loading={workflowState.loading}
     onSelectedSourceIdChange={(id) => (selectedSourceId = id)}
-    onAdd={() => prototypeFeedback("Add source")}
-    onEdit={() => prototypeFeedback("Edit source")}
-    onDelete={() => prototypeFeedback("Delete source")}
+    onAdd={() => (addSourceDialogOpen = true)}
+    onEdit={() => (status = "Edit source flow is not implemented in this prototype.")}
+    onDelete={() => (status = "Delete source flow is not implemented in this prototype.")}
     onRefresh={onRefresh}
   />
 
@@ -120,6 +125,13 @@
   ></div>
 
   <LibraryInspector {selectedSource} />
+
+  <LibraryAddSourceDialog
+    bind:open={addSourceDialogOpen}
+    sources={workflowState.sources}
+    onSourcesChanged={handleSourcesChanged}
+    onStatus={(message) => (status = message)}
+  />
 
   {#if status || workflowState.status}
     <div class="library-status" role="status">{status || workflowState.status}</div>
