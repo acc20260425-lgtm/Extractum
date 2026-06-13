@@ -46,6 +46,10 @@ describe("research projects import boundaries", () => {
 
     expect(wrapperSources).toContain("$lib/components/ui/button/index.js");
     expect(wrapperSources).toContain("$lib/components/ui/sheet/index.js");
+    expect(wrapperSources).toContain("$lib/components/ui/dialog/index.js");
+    expect(wrapperSources).toContain("$lib/components/ui/StatusMessage.svelte");
+    expect(wrapperSources).toContain("ExtractumDialog");
+    expect(wrapperSources).toContain("ExtractumStatusMessage");
     expect(wrapperSources).not.toContain("src/lib/new-ui");
   });
 

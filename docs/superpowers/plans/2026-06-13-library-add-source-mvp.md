@@ -130,7 +130,7 @@ Expected: `svelte-check found 0 errors and 0 warnings`.
 - Modify: `src/lib/components/extractum-ui/index.ts`
 - Modify: `src/lib/research-projects-import-boundary.test.ts`
 
-- [ ] **Step 1: Extend the import-boundary test first**
+- [x] **Step 1: Extend the import-boundary test first**
 
 Modify `src/lib/research-projects-import-boundary.test.ts`.
 
@@ -151,7 +151,7 @@ npm.cmd run test -- src/lib/research-projects-import-boundary.test.ts
 
 Expected: FAIL because no `ExtractumDialog` or `ExtractumStatusMessage` wrapper exists yet.
 
-- [ ] **Step 2: Create the wrapper**
+- [x] **Step 2: Create the wrapper**
 
 Create `src/lib/components/extractum-ui/Dialog.svelte`:
 
@@ -218,7 +218,7 @@ Create `src/lib/components/extractum-ui/Dialog.svelte`:
 </style>
 ```
 
-- [ ] **Step 3: Create the status message wrapper**
+- [x] **Step 3: Create the status message wrapper**
 
 Create `src/lib/components/extractum-ui/StatusMessage.svelte`:
 
@@ -237,7 +237,7 @@ Create `src/lib/components/extractum-ui/StatusMessage.svelte`:
 <StatusMessage className={cn("extractum-status-message", className)} {...rest} />
 ```
 
-- [ ] **Step 4: Export wrappers and dialog subparts**
+- [x] **Step 4: Export wrappers and dialog subparts**
 
 Modify `src/lib/components/extractum-ui/index.ts`.
 
@@ -260,7 +260,7 @@ export {
 } from "$lib/components/ui/dialog/index.js";
 ```
 
-- [ ] **Step 5: Verify wrapper boundary**
+- [x] **Step 5: Verify wrapper boundary**
 
 Run:
 
@@ -270,7 +270,7 @@ npm.cmd run test -- src/lib/research-projects-import-boundary.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Run Svelte check**
+- [x] **Step 6: Run Svelte check**
 
 Run:
 
@@ -280,7 +280,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 7: Commit wrappers**
+- [x] **Step 7: Commit wrappers**
 
 Run:
 

@@ -5,6 +5,8 @@ export { default as ExtractumCheckbox } from "./Checkbox.svelte";
 export { default as ExtractumBadge } from "./Badge.svelte";
 export { default as ExtractumTabs } from "./Tabs.svelte";
 export { default as ExtractumSheet } from "./Sheet.svelte";
+export { default as ExtractumDialog } from "./Dialog.svelte";
+export { default as ExtractumStatusMessage } from "./StatusMessage.svelte";
 export { default as ProviderBadge } from "./ProviderBadge.svelte";
 export { default as StatusBadge } from "./StatusBadge.svelte";
 export { default as ExtractumDataGrid } from "./DataGrid.svelte";
@@ -32,3 +34,11 @@ export {
   SheetHeader as ExtractumSheetHeader,
   SheetTitle as ExtractumSheetTitle,
 } from "$lib/components/ui/sheet/index.js";
+
+export {
+  DialogClose as ExtractumDialogClose,
+  DialogDescription as ExtractumDialogDescription,
+  DialogFooter as ExtractumDialogFooter,
+  DialogHeader as ExtractumDialogHeader,
+  DialogTitle as ExtractumDialogTitle,
+} from "$lib/components/ui/dialog/index.js";
