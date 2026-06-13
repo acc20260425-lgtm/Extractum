@@ -211,6 +211,37 @@ describe("sources api wrappers", () => {
     });
   });
 
+  it("can add youtube playlists without materializing video sources", async () => {
+    invokeMock.mockResolvedValueOnce({
+      id: 20,
+      source_type: "youtube",
+      source_subtype: "playlist",
+      account_id: null,
+      external_id: "PLabc123",
+      title: "Demo playlist",
+      last_sync_state: null,
+      last_synced_at: null,
+      is_member: false,
+      is_active: true,
+      created_at: 1,
+      avatar_data_url: null,
+    });
+
+    await expect(
+      addYoutubeSource("https://youtube.com/playlist?list=PLabc123", {
+        materializePlaylistVideos: false,
+      }),
+    ).resolves.toMatchObject({
+      id: 20,
+      sourceType: "youtube",
+      sourceSubtype: "playlist",
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("add_youtube_source", {
+      url: "https://youtube.com/playlist?list=PLabc123",
+      materializePlaylistVideos: false,
+    });
+  });
+
   it("maps non-Telegram source fields without legacy Telegram fields", async () => {
     invokeMock.mockResolvedValueOnce([
       {

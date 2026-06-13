@@ -1,5 +1,5 @@
 import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
-import type { AddTelegramSourceInput, TelegramDialogSource } from "$lib/types/sources";
+import type { AddTelegramSourceInput, TelegramDialogSource, YoutubePreview } from "$lib/types/sources";
 import type { YoutubePlaylistDetail, YoutubePlaylistItemDetail } from "$lib/types/youtube";
 
 export const YOUTUBE_PLAYLIST_IMPORT_LIMIT = 10;
@@ -132,6 +132,21 @@ export function classifyYoutubeImportInput(input: string): YoutubeSmartImportCla
 
 export function libraryYoutubePlaylistSources(sources: LibraryCatalogSourceView[]) {
   return sources.filter((source) => source.provider === "youtube" && source.sourceSubtype === "playlist");
+}
+
+export function existingYoutubeSmartImportSource(
+  sources: LibraryCatalogSourceView[],
+  preview: YoutubePreview | null,
+) {
+  if (!preview) return null;
+  return (
+    sources.find(
+      (source) =>
+        source.provider === "youtube" &&
+        source.sourceSubtype === preview.kind &&
+        source.externalId === preview.externalId,
+    ) ?? null
+  );
 }
 
 function playlistRowDisabledReason(item: YoutubePlaylistItemDetail) {

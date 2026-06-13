@@ -2401,6 +2401,7 @@ Expected: clean tracked worktree.
 - Add Source dialog uses provider tabs: YouTube and Telegram.
 - YouTube uses inner tabs: Smart import and From existing data.
 - YouTube Smart import supports video and playlist URL preview/add.
+- YouTube Smart import playlist adds preserve playlist item rows without automatically materializing missing video sources.
 - YouTube channel URLs show `Not supported yet`.
 - YouTube From existing data adds selected playlist videos as standalone video sources using `addYoutubeSource(canonicalUrl)`.
 - YouTube playlist import uses the full Library catalog and enforces the 10-video MVP selection limit.

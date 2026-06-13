@@ -8,13 +8,19 @@
   } from "$lib/components/extractum-ui";
   import { addYoutubeSource, previewYoutubeSource } from "$lib/api/sources";
   import { formatAppError } from "$lib/app-error";
-  import { classifyYoutubeImportInput } from "$lib/ui/library-add-source-model";
+  import {
+    classifyYoutubeImportInput,
+    existingYoutubeSmartImportSource,
+  } from "$lib/ui/library-add-source-model";
+  import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
   import type { YoutubePreview } from "$lib/types/sources";
 
   let {
+    sources,
     onSourcesChanged,
     onStatus,
   }: {
+    sources: LibraryCatalogSourceView[];
     onSourcesChanged: (sourceId?: number) => void | Promise<void>;
     onStatus: (message: string) => void;
   } = $props();
@@ -29,8 +35,9 @@
   const trimmedUrl = $derived(youtubeUrl.trim());
   const classification = $derived(classifyYoutubeImportInput(trimmedUrl));
   const backendUrl = $derived(classification.normalizedUrl ?? trimmedUrl);
+  const existingSmartImportSource = $derived(existingYoutubeSmartImportSource(sources, preview));
   const canPreview = $derived(Boolean(trimmedUrl) && classification.supported && !previewing && !adding);
-  const canAdd = $derived(Boolean(preview) && !previewing && !adding);
+  const canAdd = $derived(Boolean(preview) && !existingSmartImportSource && !previewing && !adding);
 
   function updateUrl(value: string) {
     youtubeUrl = value;
@@ -55,10 +62,16 @@
 
   async function addSource() {
     if (!preview || adding) return;
+    if (existingSmartImportSource) {
+      status = `Already in Library: ${existingSmartImportSource.title}`;
+      return;
+    }
     adding = true;
     status = "";
     try {
-      const source = await addYoutubeSource(previewedUrl || backendUrl);
+      const source = await addYoutubeSource(previewedUrl || backendUrl, {
+        materializePlaylistVideos: preview.kind !== "playlist",
+      });
       onStatus(`Source "${source.title ?? source.externalId}" added.`);
       await onSourcesChanged(source.id);
       youtubeUrl = "";
@@ -115,6 +128,12 @@
     </ExtractumStatusMessage>
   {/if}
 
+  {#if existingSmartImportSource}
+    <ExtractumStatusMessage tone="info">
+      Already in Library: {existingSmartImportSource.title}
+    </ExtractumStatusMessage>
+  {/if}
+
   {#if preview}
     <article class="preview-card">
       <div class="preview-media" aria-hidden="true">
@@ -141,7 +160,11 @@
           <span>{preview.canonicalUrl}</span>
           <ExtractumButton onclick={addSource} disabled={!canAdd}>
             <Plus size={14} aria-hidden="true" />
-            {adding ? "Adding..." : "Add source"}
+            {#if existingSmartImportSource}
+              Already in Library
+            {:else}
+              {adding ? "Adding..." : "Add source"}
+            {/if}
           </ExtractumButton>
         </div>
       </div>

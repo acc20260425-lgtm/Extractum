@@ -47,6 +47,10 @@ Priority: medium.
 - [ ] add live chat ingest
 - [ ] support media-aware analysis over thumbnails or downloaded media if a future setting explicitly allows media downloads
 - [ ] make YouTube source jobs persistent/resumable across app restart
+- [ ] align YouTube playlist add semantics so adding a playlist stores the
+  playlist and membership rows first, while standalone video-source
+  materialization becomes an explicit user action; verify the Analysis playlist
+  flow before changing the current Analysis add behavior
 - [ ] broaden manual/live validation for auto-caption-only, no-caption, active live, upcoming, private/member/age/geo-gated, and large playlist sources
 
 Acceptance:
@@ -54,6 +58,8 @@ Acceptance:
 - Future YouTube export enhancements do not regress the existing generic NotebookLM export.
 - No media download or speech-to-text path runs without explicit user opt-in.
 - Restarted apps can explain or resume interrupted YouTube work according to the selected future policy.
+- Playlist-only adds do not silently break `analysis_run` behavior for YouTube
+  playlists; any video materialization is visible and intentional.
 
 ### 3.3 Media Download, Preview, And Analysis
 

@@ -228,8 +228,16 @@ export function previewYoutubeSource(url: string) {
   );
 }
 
-export function addYoutubeSource(url: string) {
-  return invoke<RawSource>(SOURCE_COMMANDS.addYoutubeSource, { url }).then(mapSource);
+export type AddYoutubeSourceOptions = {
+  materializePlaylistVideos?: boolean;
+};
+
+export function addYoutubeSource(url: string, options: AddYoutubeSourceOptions = {}) {
+  const payload: { url: string; materializePlaylistVideos?: boolean } = { url };
+  if (options.materializePlaylistVideos !== undefined) {
+    payload.materializePlaylistVideos = options.materializePlaylistVideos;
+  }
+  return invoke<RawSource>(SOURCE_COMMANDS.addYoutubeSource, payload).then(mapSource);
 }
 
 export function deleteSource(sourceId: number) {

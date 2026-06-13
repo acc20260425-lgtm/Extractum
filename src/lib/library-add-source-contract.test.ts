@@ -42,12 +42,25 @@ describe("Library Add Source contract", () => {
 
   it("classifies YouTube smart import before calling backend preview", () => {
     expect(smartImportSource).toContain("classifyYoutubeImportInput");
+    expect(smartImportSource).toContain("existingYoutubeSmartImportSource");
     expect(smartImportSource).toContain("backendUrl");
     expect(smartImportSource).toContain("previewYoutubeSource");
     expect(smartImportSource).toContain("addYoutubeSource");
     expect(smartImportSource).toContain('formatAppError("previewing the YouTube source"');
     expect(smartImportSource).toContain('formatAppError("adding the YouTube source"');
     expect(smartImportSource).toContain("Not supported yet");
+  });
+
+  it("does not materialize playlist videos from Library smart import", () => {
+    expect(smartImportSource).toContain("materializePlaylistVideos");
+    expect(smartImportSource).toContain("materializePlaylistVideos: preview.kind !== \"playlist\"");
+  });
+
+  it("keeps duplicate YouTube smart import feedback inside the modal", () => {
+    expect(youtubePanelSource).toContain("<LibraryYoutubeSmartImport {sources}");
+    expect(smartImportSource).toContain("Already in Library");
+    expect(smartImportSource).toContain("existingSmartImportSource");
+    expect(smartImportSource).toContain("canAdd = $derived(Boolean(preview) && !existingSmartImportSource");
   });
 
   it("adds selected videos from existing playlist details", () => {

@@ -14,7 +14,7 @@ use super::metadata::{
     playlist_metadata_from_ytdlp, playlist_preview_from_metadata, video_metadata_from_ytdlp,
     video_preview_from_metadata,
 };
-use super::playlist::upsert_playlist_items;
+use super::playlist::{upsert_playlist_items_with_options, UpsertPlaylistItemsOptions};
 use super::settings::load_youtube_auth_cookies_from_state;
 use super::url::{parse_youtube_url, YoutubeParsedUrl, YoutubeUrlKind};
 use super::ytdlp::{
@@ -45,6 +45,7 @@ pub async fn add_youtube_source(
     repair_state: tauri::State<'_, SourceIdentityRepairState>,
     secrets: tauri::State<'_, SecretStoreState>,
     url: String,
+    materialize_playlist_videos: Option<bool>,
 ) -> AppResult<SourceRecord> {
     require_source_identity_ready(repair_state.inner()).await?;
     let parsed = parse_youtube_url(&url)?;
@@ -59,7 +60,15 @@ pub async fn add_youtube_source(
         }
         YoutubeFetchedMetadata::Playlist(metadata) => {
             let playlist_source_id = upsert_youtube_playlist_source(&mut tx, &metadata).await?;
-            upsert_playlist_items(&mut tx, playlist_source_id, &metadata).await?;
+            upsert_playlist_items_with_options(
+                &mut tx,
+                playlist_source_id,
+                &metadata,
+                UpsertPlaylistItemsOptions {
+                    materialize_video_sources: materialize_playlist_videos.unwrap_or(true),
+                },
+            )
+            .await?;
             playlist_source_id
         }
     };

@@ -10,20 +10,50 @@ use super::dto::{
     YoutubeVideoForm, YoutubeVideoMetadata,
 };
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct UpsertPlaylistItemsOptions {
+    pub(crate) materialize_video_sources: bool,
+}
+
+impl Default for UpsertPlaylistItemsOptions {
+    fn default() -> Self {
+        Self {
+            materialize_video_sources: true,
+        }
+    }
+}
+
 pub(crate) async fn upsert_playlist_items(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     playlist_source_id: i64,
     metadata: &YoutubePlaylistMetadata,
+) -> AppResult<()> {
+    upsert_playlist_items_with_options(
+        tx,
+        playlist_source_id,
+        metadata,
+        UpsertPlaylistItemsOptions::default(),
+    )
+    .await
+}
+
+pub(crate) async fn upsert_playlist_items_with_options(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    playlist_source_id: i64,
+    metadata: &YoutubePlaylistMetadata,
+    options: UpsertPlaylistItemsOptions,
 ) -> AppResult<()> {
     let now = now_secs();
     let mut seen_video_ids = Vec::with_capacity(metadata.items.len());
 
     for item in &metadata.items {
         seen_video_ids.push(item.video_id.clone());
-        let video_source_id = if can_create_video_source(item) {
+        let video_source_id = if !can_create_video_source(item) {
+            None
+        } else if options.materialize_video_sources {
             Some(upsert_youtube_video_source(tx, &video_metadata_from_playlist_item(item)).await?)
         } else {
-            None
+            load_existing_youtube_video_source_id(tx, &item.video_id).await?
         };
         let metadata_zstd = encode_playlist_item_metadata(item)?;
         let availability_status = availability_status_wire(&item.availability_status);
@@ -77,6 +107,26 @@ pub(crate) async fn upsert_playlist_items(
     }
 
     mark_missing_playlist_items_removed(tx, playlist_source_id, &seen_video_ids, now).await
+}
+
+async fn load_existing_youtube_video_source_id(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    video_id: &str,
+) -> AppResult<Option<i64>> {
+    sqlx::query_scalar(
+        r#"
+        SELECT yvs.source_id
+        FROM youtube_video_sources yvs
+        JOIN sources s ON s.id = yvs.source_id
+        WHERE s.source_type = 'youtube'
+          AND s.source_subtype = 'video'
+          AND yvs.video_id = ?
+        "#,
+    )
+    .bind(video_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(AppError::database)
 }
 
 async fn mark_missing_playlist_items_removed(
@@ -196,7 +246,9 @@ fn availability_status_wire(status: &YoutubeAvailabilityStatus) -> &'static str 
 mod tests {
     use serde_json::json;
 
-    use super::upsert_playlist_items;
+    use super::{
+        upsert_playlist_items, upsert_playlist_items_with_options, UpsertPlaylistItemsOptions,
+    };
     use crate::sources::{upsert_youtube_playlist_source, upsert_youtube_video_source};
     use crate::youtube::dto::{
         YoutubeAvailabilityStatus, YoutubePlaylistItemMetadata, YoutubePlaylistMetadata,
@@ -322,6 +374,9 @@ mod tests {
             upsert_youtube_video_source(&mut tx, &video_metadata("video01", "Existing"))
                 .await
                 .expect("upsert existing video");
+        upsert_youtube_video_source(&mut tx, &video_metadata("private01", "Private existing"))
+            .await
+            .expect("upsert existing private video source");
         let playlist_id = upsert_youtube_playlist_source(&mut tx, &playlist_metadata(Vec::new()))
             .await
             .expect("upsert playlist");
@@ -394,6 +449,102 @@ mod tests {
 
         assert_eq!(row.0, None);
         assert_eq!(row.1, "video01");
+    }
+
+    #[tokio::test]
+    async fn upsert_playlist_items_can_skip_video_source_materialization() {
+        let pool = youtube_pool().await;
+        let mut tx = pool.begin().await.expect("begin tx");
+        let playlist_source_id = upsert_youtube_playlist_source(
+            &mut tx,
+            &playlist_metadata(vec![playlist_item(
+                "video01",
+                YoutubeAvailabilityStatus::Available,
+            )]),
+        )
+        .await
+        .expect("upsert playlist source");
+
+        upsert_playlist_items_with_options(
+            &mut tx,
+            playlist_source_id,
+            &playlist_metadata(vec![playlist_item(
+                "video01",
+                YoutubeAvailabilityStatus::Available,
+            )]),
+            UpsertPlaylistItemsOptions {
+                materialize_video_sources: false,
+            },
+        )
+        .await
+        .expect("upsert playlist items");
+        tx.commit().await.expect("commit");
+
+        let item_video_source_id: Option<i64> = sqlx::query_scalar(
+            "SELECT video_source_id FROM youtube_playlist_items WHERE video_id = 'video01'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load playlist item");
+        let video_source_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sources WHERE source_type = 'youtube' AND source_subtype = 'video'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count video sources");
+
+        assert_eq!(item_video_source_id, None);
+        assert_eq!(video_source_count, 0);
+    }
+
+    #[tokio::test]
+    async fn upsert_playlist_items_without_materialization_reuses_existing_video_source() {
+        let pool = youtube_pool().await;
+        let mut tx = pool.begin().await.expect("begin tx");
+        let existing_video_id =
+            upsert_youtube_video_source(&mut tx, &video_metadata("video01", "Existing"))
+                .await
+                .expect("upsert existing video");
+        let playlist_source_id = upsert_youtube_playlist_source(
+            &mut tx,
+            &playlist_metadata(vec![playlist_item(
+                "video01",
+                YoutubeAvailabilityStatus::Available,
+            )]),
+        )
+        .await
+        .expect("upsert playlist source");
+
+        upsert_playlist_items_with_options(
+            &mut tx,
+            playlist_source_id,
+            &playlist_metadata(vec![playlist_item(
+                "video01",
+                YoutubeAvailabilityStatus::Available,
+            )]),
+            UpsertPlaylistItemsOptions {
+                materialize_video_sources: false,
+            },
+        )
+        .await
+        .expect("upsert playlist items");
+        tx.commit().await.expect("commit");
+
+        let item_video_source_id: Option<i64> = sqlx::query_scalar(
+            "SELECT video_source_id FROM youtube_playlist_items WHERE video_id = 'video01'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load playlist item");
+        let video_source_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sources WHERE source_type = 'youtube' AND source_subtype = 'video'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count video sources");
+
+        assert_eq!(item_video_source_id, Some(existing_video_id));
+        assert_eq!(video_source_count, 1);
     }
 
     #[tokio::test]

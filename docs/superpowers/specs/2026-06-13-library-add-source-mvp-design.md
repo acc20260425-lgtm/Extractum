@@ -125,13 +125,19 @@ Supported outcomes:
 - YouTube video URL:
   - detect as `video`;
   - preview through `previewYoutubeSource(url)`;
-  - add through `addYoutubeSource(url)`.
+  - add through `addYoutubeSource(url)`;
+  - if the previewed video already exists in the Library catalog, show
+    `Already in Library` in the Smart import panel and keep `Add source`
+    disabled.
 - YouTube playlist URL:
   - detect as `playlist`;
   - preview through `previewYoutubeSource(url)`;
-  - add through `addYoutubeSource(url)`;
-  - adding a playlist should also preserve playlist item rows, matching current
-    backend behavior.
+  - add through `addYoutubeSource(url, { materializePlaylistVideos: false })`;
+  - adding a playlist should preserve playlist item rows without automatically
+    creating missing standalone YouTube video sources;
+  - if the previewed playlist already exists in the Library catalog, show
+    `Already in Library` in the Smart import panel and keep `Add source`
+    disabled.
 - YouTube channel URL:
   - detect common channel shapes in the frontend, such as `/@handle` and
     `/channel/UC...`;
@@ -322,6 +328,10 @@ Recommended coverage:
 - Top-level provider tabs are `YouTube` and `Telegram`.
 - YouTube contains `Smart import` and `From existing data` inner tabs.
 - YouTube Smart import can preview and add video and playlist URLs.
+- YouTube Smart import duplicate previews show `Already in Library` inside the
+  modal and do not call add again.
+- YouTube Smart import playlist adds do not automatically create missing
+  standalone video sources.
 - YouTube channel URLs are detected and shown as `Not supported yet`.
 - YouTube From existing data can add selected videos from an existing playlist
   as standalone YouTube video sources.

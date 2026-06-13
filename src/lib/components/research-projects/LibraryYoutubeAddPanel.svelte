@@ -30,7 +30,7 @@
     </ExtractumTabsList>
 
     <ExtractumTabsContent value="smart">
-      <LibraryYoutubeSmartImport {onSourcesChanged} {onStatus} />
+      <LibraryYoutubeSmartImport {sources} {onSourcesChanged} {onStatus} />
     </ExtractumTabsContent>
 
     <ExtractumTabsContent value="existing">

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryCatalogSourceView } from "./library-catalog-model";
-import type { TelegramDialogSource } from "$lib/types/sources";
+import type { TelegramDialogSource, YoutubePreview } from "$lib/types/sources";
 import type { YoutubePlaylistDetail, YoutubePlaylistItemDetail } from "$lib/types/youtube";
 import {
   YOUTUBE_PLAYLIST_IMPORT_LIMIT,
   buildPlaylistImportRows,
   classifyYoutubeImportInput,
+  existingYoutubeSmartImportSource,
   libraryYoutubePlaylistSources,
   playlistSelectionLimitMessage,
   selectedAddablePlaylistRows,
@@ -107,6 +108,27 @@ function playlistDetail(items: YoutubePlaylistItemDetail[]): YoutubePlaylistDeta
   };
 }
 
+function youtubePreview(overrides: Partial<YoutubePreview> = {}): YoutubePreview {
+  return {
+    kind: "video",
+    externalId: "video-1",
+    canonicalUrl: "https://www.youtube.com/watch?v=video-1",
+    title: "Video 1",
+    channelTitle: "Channel",
+    channelId: null,
+    channelHandle: null,
+    channelUrl: null,
+    thumbnailUrl: null,
+    durationSeconds: 120,
+    publishedAt: null,
+    playlistVideoCount: null,
+    captionsEstimate: null,
+    availabilityStatus: "available",
+    warnings: [],
+    ...overrides,
+  };
+}
+
 describe("library add source model", () => {
   it("classifies YouTube video playlist and channel inputs", () => {
     expect(classifyYoutubeImportInput("https://www.youtube.com/watch?v=abc123")).toMatchObject({
@@ -167,6 +189,40 @@ describe("library add source model", () => {
         source({ sourceId: 3, provider: "telegram", sourceSubtype: "channel" }),
       ]).map((row) => row.sourceId),
     ).toEqual([1]);
+  });
+
+  it("finds existing YouTube smart import sources by preview kind and external id", () => {
+    const existingVideo = source({
+      sourceId: 7,
+      sourceSubtype: "video",
+      externalId: "video-1",
+      title: "Existing Video",
+    });
+    const existingPlaylist = source({
+      sourceId: 8,
+      sourceSubtype: "playlist",
+      externalId: "PL1",
+      title: "Existing Playlist",
+    });
+
+    expect(
+      existingYoutubeSmartImportSource(
+        [existingPlaylist, existingVideo],
+        youtubePreview({ kind: "video", externalId: "video-1" }),
+      )?.sourceId,
+    ).toBe(7);
+    expect(
+      existingYoutubeSmartImportSource(
+        [existingVideo, existingPlaylist],
+        youtubePreview({ kind: "playlist", externalId: "PL1" }),
+      )?.sourceId,
+    ).toBe(8);
+    expect(
+      existingYoutubeSmartImportSource(
+        [existingVideo],
+        youtubePreview({ kind: "playlist", externalId: "video-1" }),
+      ),
+    ).toBeNull();
   });
 
   it("marks playlist rows that cannot be added", () => {
