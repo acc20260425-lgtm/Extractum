@@ -757,7 +757,7 @@ git commit -m "feat: add library source import model"
 - Create: `src/lib/ui/library-add-source-workflow.ts`
 - Create: `src/lib/ui/library-add-source-workflow.test.ts`
 
-- [ ] **Step 1: Write workflow tests**
+- [x] **Step 1: Write workflow tests**
 
 Create `src/lib/ui/library-add-source-workflow.test.ts`:
 
@@ -894,7 +894,7 @@ describe("library add source workflow", () => {
 });
 ```
 
-- [ ] **Step 2: Run workflow tests to verify failure**
+- [x] **Step 2: Run workflow tests to verify failure**
 
 Run:
 
@@ -904,7 +904,7 @@ npm.cmd run test -- src/lib/ui/library-add-source-workflow.test.ts
 
 Expected: FAIL because `src/lib/ui/library-add-source-workflow.ts` does not exist.
 
-- [ ] **Step 3: Implement workflow**
+- [x] **Step 3: Implement workflow**
 
 Create `src/lib/ui/library-add-source-workflow.ts`:
 
@@ -972,7 +972,7 @@ export async function addSelectedYoutubePlaylistVideos({
 }
 ```
 
-- [ ] **Step 4: Verify workflow tests**
+- [x] **Step 4: Verify workflow tests**
 
 Run:
 
@@ -982,7 +982,7 @@ npm.cmd run test -- src/lib/ui/library-add-source-workflow.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Run combined model/workflow tests**
+- [x] **Step 5: Run combined model/workflow tests**
 
 Run:
 
@@ -992,7 +992,7 @@ npm.cmd run test -- src/lib/ui/library-add-source-model.test.ts src/lib/ui/libra
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit workflow**
+- [x] **Step 6: Commit workflow**
 
 Run:
 
