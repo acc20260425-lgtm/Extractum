@@ -1920,7 +1920,7 @@ git commit -m "feat: show library source metadata"
 - Modify: `src/lib/ui/research-projects-model.test.ts`
 - Modify: `src/lib/ui/research-projects-model.ts` only if unused Library prototype helpers are no longer imported.
 
-- [ ] **Step 1: Check whether old prototype filter helpers are still used**
+- [x] **Step 1: Check whether old prototype filter helpers are still used**
 
 Run:
 
@@ -1930,7 +1930,7 @@ rg -n "buildLibraryFilterTree|filterLibrarySourcesForLibrary|reconcileLibrarySou
 
 Expected: only `src/lib/ui/research-projects-model.ts` and `src/lib/ui/research-projects-model.test.ts` remain.
 
-- [ ] **Step 2: Keep connect helpers and remove unused prototype-only helpers**
+- [x] **Step 2: Keep connect helpers and remove unused prototype-only helpers**
 
 If Step 1 confirms the old filter helpers are unused, remove these exports from `src/lib/ui/research-projects-model.ts`:
 
@@ -1979,7 +1979,7 @@ Keep these connect/project helpers in `research-projects-model.ts`:
 - `buildSourceGroupUpdateInput`;
 - `buildProjectSourceLinksView`.
 
-- [ ] **Step 3: Remove obsolete tests**
+- [x] **Step 3: Remove obsolete tests**
 
 In `src/lib/ui/research-projects-model.test.ts`, remove imports for:
 
@@ -1997,7 +1997,7 @@ Remove these tests because `src/lib/ui/library-catalog-model.test.ts` now owns t
 - `"filters Library sources by selected tree row and search query"`;
 - `"reconciles selected Library source with the visible rows"`.
 
-- [ ] **Step 4: Run model tests**
+- [x] **Step 4: Run model tests**
 
 Run:
 
@@ -2007,7 +2007,7 @@ npm.cmd run test -- src/lib/ui/research-projects-model.test.ts src/lib/ui/librar
 
 Expected: PASS.
 
-- [ ] **Step 5: Run TypeScript/Svelte check**
+- [x] **Step 5: Run TypeScript/Svelte check**
 
 Run:
 
@@ -2017,7 +2017,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 6: Commit cleanup**
+- [x] **Step 6: Commit cleanup**
 
 Run:
 

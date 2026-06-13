@@ -58,32 +58,6 @@ export type LibraryFilterState = {
   providers: LibrarySourceProvider[];
 };
 
-export type LibrarySourceSubtype = "video" | "playlist" | "channel";
-export type LibraryFilterId =
-  | "all"
-  | `provider:${LibrarySourceProvider}`
-  | `provider:youtube/subtype:${LibrarySourceSubtype}`;
-
-export type LibraryFilterTreeRow = {
-  id: LibraryFilterId;
-  label: string;
-  provider: LibrarySourceProvider | "all";
-  subtype?: LibrarySourceSubtype;
-  count: number;
-  disabled?: boolean;
-  disabledReason?: string;
-  data?: LibraryFilterTreeRow[];
-};
-
-export type LibraryTableFilterState = {
-  filterId: LibraryFilterId;
-  query: string;
-};
-
-export const LIBRARY_ALL_FILTER_ID: LibraryFilterId = "all";
-export const YOUTUBE_SUBTYPE_FILTER_DISABLED_REASON =
-  "Subtype filtering requires source subtype metadata.";
-
 export type SourceGroupUpdateDecision =
   | {
       ok: true;
@@ -281,82 +255,6 @@ export function filterLibrarySources(
     const matchesProvider = providers.size === 0 || providers.has(source.provider);
     return matchesQuery && matchesProvider;
   });
-}
-
-function countProvider(sources: LibrarySourceView[], provider: LibrarySourceProvider) {
-  return sources.filter((source) => source.provider === provider).length;
-}
-
-function disabledYoutubeSubtypeRow(
-  subtype: LibrarySourceSubtype,
-  label: string,
-): LibraryFilterTreeRow {
-  return {
-    id: `provider:youtube/subtype:${subtype}`,
-    label,
-    provider: "youtube",
-    subtype,
-    count: 0,
-    disabled: true,
-    disabledReason: YOUTUBE_SUBTYPE_FILTER_DISABLED_REASON,
-  };
-}
-
-export function buildLibraryFilterTree(sources: LibrarySourceView[]): LibraryFilterTreeRow[] {
-  return [
-    {
-      id: LIBRARY_ALL_FILTER_ID,
-      label: "All sources",
-      provider: "all",
-      count: sources.length,
-    },
-    {
-      id: "provider:youtube",
-      label: "YouTube",
-      provider: "youtube",
-      count: countProvider(sources, "youtube"),
-      data: [
-        disabledYoutubeSubtypeRow("video", "Videos"),
-        disabledYoutubeSubtypeRow("playlist", "Playlists"),
-        disabledYoutubeSubtypeRow("channel", "Channels"),
-      ],
-    },
-    {
-      id: "provider:telegram",
-      label: "Telegram",
-      provider: "telegram",
-      count: countProvider(sources, "telegram"),
-    },
-  ];
-}
-
-function providerFromFilterId(filterId: LibraryFilterId): LibrarySourceProvider | null {
-  if (filterId === LIBRARY_ALL_FILTER_ID) return null;
-  if (filterId.startsWith("provider:youtube/subtype:")) return "youtube";
-  return filterId.replace("provider:", "") as LibrarySourceProvider;
-}
-
-export function filterLibrarySourcesForLibrary(
-  sources: LibrarySourceView[],
-  filters: LibraryTableFilterState,
-) {
-  if (filters.filterId.startsWith("provider:youtube/subtype:")) return [];
-
-  const provider = providerFromFilterId(filters.filterId);
-  return filterLibrarySources(sources, {
-    query: filters.query,
-    providers: provider ? [provider] : [],
-  });
-}
-
-export function reconcileLibrarySourceSelection(
-  sources: LibrarySourceView[],
-  selectedSourceId: string | null,
-) {
-  if (selectedSourceId && sources.some((source) => source.id === selectedSourceId)) {
-    return selectedSourceId;
-  }
-  return sources[0]?.id ?? null;
 }
 
 export function connectableSelection(sources: LibrarySourceView[], selectedIds: Set<string>) {
