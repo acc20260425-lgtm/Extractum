@@ -78,8 +78,10 @@ Expected component shape:
 
 - `LibraryAddSourceDialog.svelte`
   - owns modal open state, provider tab state, and top-level status;
-  - emits `onSourcesChanged(sourceId?: number)` after successful adds;
-  - emits status messages to the parent Library workflow if needed.
+  - accepts an `onSourcesChanged(sourceId?: number)` callback prop after
+    successful adds;
+  - accepts status callback props if parent-level Library status messages are
+    needed.
 - `LibraryYoutubeAddPanel.svelte`
   - owns YouTube provider tab content;
   - contains Smart import and From existing data modes.
@@ -108,6 +110,11 @@ project already has shadcn-svelte dialog primitives under
 directly. If no `ExtractumDialog` wrapper exists when implementation starts,
 create one in `src/lib/components/extractum-ui` and export its needed parts from
 `src/lib/components/extractum-ui/index.ts`.
+
+Integrate the dialog by replacing the current Library prototype Add handler.
+`LibraryScreen.svelte` currently wires `onAdd` to prototype feedback; this slice
+should instead open `LibraryAddSourceDialog`. Edit and Delete may remain
+placeholder flows.
 
 ## YouTube Smart Import
 
@@ -145,8 +152,12 @@ existing Library playlist.
 
 Flow:
 
-1. Show existing Library sources where `provider = "youtube"` and
-   `source_subtype = "playlist"`.
+1. Show existing Library sources where `provider = "youtube"` and the subtype
+   is `playlist`.
+   - If using `LibrarySourceRecord`, the field is `source_subtype`.
+   - If using `LibraryCatalogSourceView`, the field is `sourceSubtype`.
+   - Use the full Library catalog state, not the currently visible table rows;
+     the modal should not be affected by the left filter rail or search query.
 2. User selects one playlist.
 3. Load details with `getYoutubePlaylistDetail(sourceId)`.
 4. Render playlist items with checkbox selection.
@@ -156,7 +167,8 @@ Flow:
 6. The user selects one or more addable videos.
 7. `Add selected` calls `addYoutubeSource(item.canonicalUrl)` for each selected
    item.
-8. After completion, refresh Library data and show a result summary.
+8. After completion, refresh Library data if at least one source was added and
+   show a result summary.
 
 Limit the first MVP batch to 10 selected videos per run. If the user selects
 more than 10 addable videos, keep `Add selected` disabled and show a scoped
@@ -166,13 +178,15 @@ message asking them to reduce the selection. This keeps the repeated
 Result summary should include:
 
 - added count;
-- skipped count for already-existing or disabled rows;
+- skipped count only for selected rows that become non-addable during execution,
+  for example because a refreshed detail row now has `videoSourceId`;
 - failed count with per-row error messages.
 
 Count a successful `addYoutubeSource` response as `added` even if the backend
 upsert returns an existing source that was not linked to this playlist item
 before the operation. Rows with `videoSourceId` already present before the
-operation are `skipped`.
+operation are disabled before selection and are not included in the result
+summary.
 
 For the MVP, run adds sequentially or with very small concurrency. This avoids
 creating too many simultaneous `yt-dlp` operations. A later backend command can
@@ -256,6 +270,11 @@ Recommended coverage:
 
 - Contract/import-boundary test proving Library Add Source files import
   `ExtractumTabs*` from `extractum-ui`, not direct shadcn/SVAR primitives.
+- Contract/import-boundary test proving Library Add Source files import any
+  centered dialog primitive through `extractum-ui`, not direct
+  `$lib/components/ui/dialog` files.
+- Contract test proving `LibraryScreen.svelte` opens the Add Source dialog from
+  `data-ui-action="library-add"` instead of using prototype Add feedback.
 - Unit tests for YouTube URL classification:
   - video;
   - playlist;
@@ -268,6 +287,7 @@ Recommended coverage:
   - add failure.
 - Workflow tests for YouTube playlist import:
   - lists only playlist sources;
+  - uses the full Library catalog, not current table visibility;
   - loads playlist detail;
   - disables already-linked videos;
   - disables videos without canonical URL;
@@ -298,6 +318,7 @@ Recommended coverage:
 ## Acceptance Criteria
 
 - Clicking Library `Add` opens a centered Add Source modal.
+- The Add path no longer shows prototype feedback.
 - Top-level provider tabs are `YouTube` and `Telegram`.
 - YouTube contains `Smart import` and `From existing data` inner tabs.
 - YouTube Smart import can preview and add video and playlist URLs.
@@ -306,4 +327,5 @@ Recommended coverage:
   as standalone YouTube video sources.
 - Telegram can add a source from a selected account dialog.
 - Library refreshes after successful adds.
+- The centered dialog and tabs are imported through `extractum-ui` wrappers.
 - Direct shadcn/SVAR imports remain blocked from Library feature files.
