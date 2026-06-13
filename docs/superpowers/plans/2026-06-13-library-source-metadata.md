@@ -2033,7 +2033,7 @@ git commit -m "refactor: separate library catalog model"
 **Files:**
 - No planned source changes unless verification exposes a defect.
 
-- [ ] **Step 1: Run backend tests for the new module**
+- [x] **Step 1: Run backend tests for the new module**
 
 Run:
 
@@ -2043,7 +2043,7 @@ cargo test library_sources --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [ ] **Step 2: Run focused frontend tests**
+- [x] **Step 2: Run focused frontend tests**
 
 Run:
 
@@ -2053,7 +2053,7 @@ npm.cmd run test -- src/lib/api/library-sources.test.ts src/lib/ui/library-catal
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full frontend test suite**
+- [x] **Step 3: Run full frontend test suite**
 
 Run:
 
@@ -2063,7 +2063,7 @@ npm.cmd run test
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Svelte check**
+- [x] **Step 4: Run Svelte check**
 
 Run:
 
@@ -2073,7 +2073,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 5: Start or reuse the dev server**
+- [x] **Step 5: Start or reuse the dev server**
 
 If no dev server is running, start one:
 
@@ -2083,7 +2083,7 @@ npm.cmd run dev -- --host 127.0.0.1
 
 Expected: Vite prints a local URL, usually `http://127.0.0.1:5173/` or the Tauri dev URL already used by the project.
 
-- [ ] **Step 6: Browser-verify `/projects/library`**
+- [x] **Step 6: Browser-verify `/projects/library`**
 
 Open `/projects/library` in the in-app browser or Chrome DevTools browser.
 
@@ -2100,7 +2100,7 @@ Verify:
 - `Edit` and `Delete` remain disabled when no source is selected.
 - No horizontal overflow at desktop width and narrow laptop width.
 
-- [ ] **Step 7: Browser-verify `/projects` and Connect from library**
+- [x] **Step 7: Browser-verify `/projects` and Connect from library**
 
 Open `/projects`.
 
@@ -2110,7 +2110,7 @@ Verify:
 - `ProjectRail` is still present only on `/projects`.
 - Connect from library still uses project compatibility state and still calls `list_analysis_sources` through the existing research-projects workflow.
 
-- [ ] **Step 8: Commit any verification fixes**
+- [x] **Step 8: Commit any verification fixes**
 
 If verification required code changes, stage the exact files reported by `git status --short` and commit them. For example, if verification changed only the Library screen and Inspector, run:
 

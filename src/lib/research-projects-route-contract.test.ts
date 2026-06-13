@@ -45,8 +45,8 @@ describe("research projects route contract", () => {
     expect(iconRailSource).toContain('href: "/projects/library"');
     expect(iconRailSource).toContain('page.url.pathname === "/projects/library"');
     expect(libraryRouteSource).toContain('data-ui-route="library-prototype"');
-    expect(libraryRouteSource).toContain("createResearchProjectsWorkflow");
-    expect(libraryRouteSource).toContain("listAnalysisSources");
+    expect(libraryRouteSource).toContain("createLibraryCatalogWorkflow");
+    expect(libraryRouteSource).toContain("listLibrarySources");
     expect(libraryRouteSource).toContain("<LibraryScreen");
   });
 
