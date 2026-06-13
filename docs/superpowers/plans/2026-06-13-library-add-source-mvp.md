@@ -417,9 +417,19 @@ describe("library add source model", () => {
       kind: "video",
       supported: true,
     });
+    expect(classifyYoutubeImportInput("youtube.com/watch?v=abc123")).toMatchObject({
+      kind: "video",
+      supported: true,
+      normalizedUrl: "https://youtube.com/watch?v=abc123",
+    });
     expect(classifyYoutubeImportInput("https://youtu.be/abc123")).toMatchObject({
       kind: "video",
       supported: true,
+    });
+    expect(classifyYoutubeImportInput("youtu.be/abc123")).toMatchObject({
+      kind: "video",
+      supported: true,
+      normalizedUrl: "https://youtu.be/abc123",
     });
     expect(classifyYoutubeImportInput("https://www.youtube.com/playlist?list=PLabc")).toMatchObject({
       kind: "playlist",
@@ -546,6 +556,7 @@ export interface YoutubeSmartImportClassification {
   kind: YoutubeSmartImportKind;
   supported: boolean;
   reason: string | null;
+  normalizedUrl?: string;
 }
 
 export interface PlaylistImportRow {
@@ -585,6 +596,11 @@ function firstNonEmptySegment(url: URL) {
   return url.pathname.split("/").find((segment) => segment.trim().length > 0) ?? "";
 }
 
+function parseImportUrl(input: string) {
+  const hasScheme = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(input);
+  return new URL(hasScheme ? input : `https://${input}`);
+}
+
 export function classifyYoutubeImportInput(input: string): YoutubeSmartImportClassification {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -598,7 +614,7 @@ export function classifyYoutubeImportInput(input: string): YoutubeSmartImportCla
 
   let parsed: URL;
   try {
-    parsed = new URL(trimmed);
+    parsed = parseImportUrl(trimmed);
   } catch {
     return {
       provider: "unknown",
@@ -637,12 +653,17 @@ export function classifyYoutubeImportInput(input: string): YoutubeSmartImportCla
     };
   }
 
-  if (parsed.searchParams.get("v") || host === "youtu.be" || firstSegment === "shorts" || firstSegment === "live") {
-    return { provider: "youtube", kind: "video", supported: true, reason: null };
+  if (
+    parsed.searchParams.get("v") ||
+    (host === "youtu.be" && firstSegment) ||
+    firstSegment === "shorts" ||
+    firstSegment === "live"
+  ) {
+    return { provider: "youtube", kind: "video", supported: true, reason: null, normalizedUrl: parsed.toString() };
   }
 
   if (parsed.searchParams.get("list")) {
-    return { provider: "youtube", kind: "playlist", supported: true, reason: null };
+    return { provider: "youtube", kind: "playlist", supported: true, reason: null, normalizedUrl: parsed.toString() };
   }
 
   return {
@@ -1036,8 +1057,11 @@ describe("Library Add Source contract", () => {
 
   it("classifies YouTube smart import before calling backend preview", () => {
     expect(smartImportSource).toContain("classifyYoutubeImportInput");
+    expect(smartImportSource).toContain("backendUrl");
     expect(smartImportSource).toContain("previewYoutubeSource");
     expect(smartImportSource).toContain("addYoutubeSource");
+    expect(smartImportSource).toContain('formatAppError("previewing the YouTube source"');
+    expect(smartImportSource).toContain('formatAppError("adding the YouTube source"');
     expect(smartImportSource).toContain("Not supported yet");
   });
 
@@ -1054,6 +1078,9 @@ describe("Library Add Source contract", () => {
     expect(telegramImportSource).toContain("listTelegramSources");
     expect(telegramImportSource).toContain("telegramDialogAddInput");
     expect(telegramImportSource).toContain("addTelegramSource");
+    expect(telegramImportSource).toContain("No accounts configured");
+    expect(telegramImportSource).toContain("before loading Telegram dialogs");
+    expect(telegramImportSource).toContain('formatAppError("adding Telegram source"');
   });
 });
 ```
@@ -1124,6 +1151,7 @@ Create `src/lib/components/research-projects/LibraryYoutubeSmartImport.svelte`:
 
   const trimmedUrl = $derived(youtubeUrl.trim());
   const classification = $derived(classifyYoutubeImportInput(trimmedUrl));
+  const backendUrl = $derived(classification.normalizedUrl ?? trimmedUrl);
   const canPreview = $derived(Boolean(trimmedUrl) && classification.supported && !previewing && !adding);
   const canAdd = $derived(Boolean(preview) && !previewing && !adding);
 
@@ -1138,8 +1166,8 @@ Create `src/lib/components/research-projects/LibraryYoutubeSmartImport.svelte`:
     previewing = true;
     status = "";
     try {
-      preview = await previewYoutubeSource(trimmedUrl);
-      previewedUrl = trimmedUrl;
+      preview = await previewYoutubeSource(backendUrl);
+      previewedUrl = backendUrl;
     } catch (error) {
       preview = null;
       status = formatAppError("previewing the YouTube source", error);
@@ -1153,7 +1181,7 @@ Create `src/lib/components/research-projects/LibraryYoutubeSmartImport.svelte`:
     adding = true;
     status = "";
     try {
-      const source = await addYoutubeSource(previewedUrl || trimmedUrl);
+      const source = await addYoutubeSource(previewedUrl || backendUrl);
       onStatus(`Source "${source.title ?? source.externalId}" added.`);
       await onSourcesChanged(source.id);
       youtubeUrl = "";
@@ -2041,7 +2069,7 @@ Create `src/lib/components/research-projects/LibraryAddSourceDialog.svelte`:
     onSourcesChanged,
     onStatus,
   }: {
-    open: boolean;
+    open?: boolean;
     sources: LibraryCatalogSourceView[];
     onSourcesChanged: (sourceId?: number) => void | Promise<void>;
     onStatus: (message: string) => void;
