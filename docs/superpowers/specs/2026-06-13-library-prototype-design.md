@@ -79,10 +79,9 @@ Contents:
 
 Data constraint:
 
-Current `AnalysisSourceOption` exposes `source_type`, but not `source_subtype`. The first prototype can filter real data reliably by top-level provider (`youtube`, `telegram`, etc.). YouTube subtype rows should either:
+Current `AnalysisSourceOption` exposes `source_type`, but not `source_subtype`. The first prototype can filter real data reliably by top-level provider (`youtube`, `telegram`, etc.).
 
-- become active after the adapter exposes a source subtype such as `video`, `playlist`, or `channel`; or
-- appear as planned refinement rows with zero/disabled state in the first static prototype.
+For the first prototype, YouTube subtype rows (`Videos`, `Playlists`, `Channels`) should appear as disabled planned-refinement rows. They should show the intended taxonomy without implying that subtype filtering is already backed by the adapter. The disabled reason should explain that subtype filtering requires source subtype metadata.
 
 ### B. Main Panel
 
@@ -143,6 +142,8 @@ First Inspector sections:
 - contextual command buttons such as `Open`, `Sync`, `Connect`, and `Run report`.
 
 When no source is selected, the Inspector should show a neutral empty state prompting row selection.
+
+When no source is selected, source-specific toolbar commands such as `Edit` and `Delete` must be disabled.
 
 ## Component Boundaries
 
@@ -235,7 +236,7 @@ Collapsed mode must remain keyboard and tooltip accessible in the implementation
 
 Selecting a table row updates `LibraryInspector`.
 
-If the current filter removes the selected source from the table, the selection should move to the first visible row or become empty.
+If the current filter removes the selected source from the table, selection should move to the first visible row. If the filtered table is empty, selection becomes empty and the Inspector shows its neutral empty state.
 
 ### Inspector Resize
 
@@ -253,6 +254,21 @@ For the first prototype:
 - `Edit` is disabled unless a source is selected.
 - `Delete` is disabled unless a source is selected.
 - `Refresh` can reload the current workspace data if that is cheap, or remain a visible placeholder with status feedback.
+
+## Accessibility
+
+The first implementation plan should treat keyboard access as part of the prototype, not as later polish.
+
+Minimum expectations:
+
+- `IconRail` links are reachable with `Tab` and expose clear accessible labels.
+- The filter tree can be traversed with keyboard focus; selected and disabled rows expose their state.
+- Collapsed filter tokens have accessible names and tooltips.
+- The source table supports keyboard navigation between rows with arrow keys where the grid wrapper supports it.
+- `Enter` or `Space` selects the focused source row when supported by the wrapper.
+- Toolbar buttons are reachable with `Tab`; disabled states are exposed as real disabled controls.
+- The Inspector resize handle has an accessible label and keyboard fallback if practical for the first slice.
+- Focus order should move predictably from `IconRail` to filter rail to table toolbar/table to Inspector commands.
 
 ## Styling
 
@@ -281,8 +297,12 @@ Manual verification:
 - confirm `ProjectRail` is gone on Library and present on Projects;
 - collapse and expand the Library filter rail;
 - select provider filters;
+- confirm YouTube subtype rows are disabled until subtype metadata is available;
 - select source rows and confirm Inspector changes;
+- change filters and confirm selection moves to the first visible source or becomes empty when no rows remain;
 - drag Inspector width and confirm it clamps to `380-500px`;
+- confirm `Edit` and `Delete` are disabled when no source row is selected;
+- keyboard through `IconRail`, filter rail, toolbar, table, and Inspector commands;
 - check desktop and narrower laptop-width viewports for text overflow and panel overlap.
 
 ## Acceptance Criteria
@@ -293,7 +313,11 @@ Manual verification:
 - `ProjectRail` appears only on `/projects`, not on `/projects/library`.
 - The source table uses real `LibrarySourceView` rows from the current adapter.
 - Filter tree selection affects table rows.
+- YouTube subtype filter rows are disabled in the first prototype until subtype metadata is exposed.
 - Table row selection affects Inspector content.
+- Filter changes select the first visible source when possible.
+- `Edit` and `Delete` are disabled when no source is selected.
 - CRUD command buttons are visible with safe prototype behavior.
+- Core interactive regions are keyboard reachable.
 - SVAR Grid and tree usage goes through Extractum wrappers.
 - The prototype does not imply unsupported durable backend capabilities.
