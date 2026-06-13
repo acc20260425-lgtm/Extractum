@@ -1388,7 +1388,7 @@ Do not commit yet; commit after the full dialog/component slice is wired.
 **Files:**
 - Create: `src/lib/components/research-projects/LibraryYoutubePlaylistImport.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 Create `src/lib/components/research-projects/LibraryYoutubePlaylistImport.svelte`:
 
@@ -1688,7 +1688,7 @@ Create `src/lib/components/research-projects/LibraryYoutubePlaylistImport.svelte
 </style>
 ```
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
