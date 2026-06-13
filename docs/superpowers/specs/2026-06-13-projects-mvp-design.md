@@ -50,9 +50,11 @@ Rules:
 - `name` is trimmed.
 - Empty names are rejected.
 - Project names are unique in the MVP.
+- Name uniqueness is checked after trimming. Prefer case-insensitive comparison for user-facing validation if the local database layer can enforce it consistently.
 - The unique-name rule is a temporary product policy, not project identity.
 - All durable relationships must use `project_id`, not project name.
 - Future versions may allow duplicate project names by removing the unique validation/index.
+- Timestamp fields follow the existing project convention: integer Unix seconds.
 
 ### `project_sources`
 
@@ -64,11 +66,15 @@ Fields:
 
 Rules:
 
+- `project_id` references `projects(id)` and is deleted with the project.
+- `source_id` references the canonical Library `sources(id)`.
+- Library source deletion should be restricted while a matching `project_sources` row exists.
 - `UNIQUE(project_id, source_id)`.
 - The same Library source can belong to multiple projects.
 - The same Library source cannot be connected twice to one project.
 - `project_sources` stores only membership and add time in the MVP.
 - No `enabled`, `note`, `display_alias`, `priority`, or include rules.
+- `added_at` uses integer Unix seconds.
 
 ### `analysis_runs`
 
@@ -79,6 +85,8 @@ Add:
 
 Project runs remain normal `analysis_runs`. Do not add a separate `project_runs` table in the MVP.
 
+`project_id` references `projects(id)`. Because project deletion deletes project runs in this MVP, either use a safe cascade path or explicitly delete run-dependent rows through the existing run deletion logic before deleting the project.
+
 For project runs, persist snapshots at start time:
 
 - project label snapshot;
@@ -87,6 +95,8 @@ For project runs, persist snapshots at start time:
 - existing prompt/model/profile/period snapshots already required by the run model.
 
 If project membership changes after a run starts, historical run context stays based on the snapshots.
+
+Do not reconstruct old project run scope from current `project_sources`. If the current run snapshot storage cannot represent the project source list clearly enough for Reports/Runs UI, add the smallest project-scope snapshot payload or read model needed for that display.
 
 ### Delete Semantics
 
