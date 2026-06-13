@@ -49,6 +49,25 @@ describe("research projects import boundaries", () => {
     expect(wrapperSources).not.toContain("src/lib/new-ui");
   });
 
+  it("keeps Library route and feature screens out of direct shadcn and SVAR imports", () => {
+    const libraryFiles = [
+      path.join(repoRoot, "src/routes/projects/library/+page.svelte"),
+      ...collectFiles("src/lib/components/research-projects")
+        .filter((file) => path.basename(file).startsWith("Library")),
+    ];
+
+    const offenders = libraryFiles
+      .map((file) => [path.relative(repoRoot, file).replaceAll("\\", "/"), sourceOf(file)] as const)
+      .filter(([, source]) =>
+        source.includes("@svar-ui/") ||
+        source.includes("bits-ui") ||
+        source.includes("$lib/components/ui/"),
+      )
+      .map(([file]) => file);
+
+    expect(offenders).toEqual([]);
+  });
+
   it("routes SVAR Grid through Extractum grid wrappers only", () => {
     const dataGridSource = readFileSync(
       path.join(repoRoot, "src/lib/components/extractum-ui/DataGrid.svelte"),

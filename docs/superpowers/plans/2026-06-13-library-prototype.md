@@ -1552,7 +1552,7 @@ git commit -m "feat: add library prototype workspace"
 - Modify: `src/lib/research-projects-route-contract.test.ts`
 - Modify: Library files only if tests reveal drift.
 
-- [ ] **Step 1: Tighten the import-boundary test around Library files**
+- [x] **Step 1: Tighten the import-boundary test around Library files**
 
 Add this test to `src/lib/research-projects-import-boundary.test.ts`:
 
@@ -1577,7 +1577,7 @@ Add this test to `src/lib/research-projects-import-boundary.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run boundary and route tests**
+- [x] **Step 2: Run boundary and route tests**
 
 Run:
 
@@ -1587,7 +1587,7 @@ npm.cmd run test -- src/lib/research-projects-import-boundary.test.ts src/lib/re
 
 Expected: PASS.
 
-- [ ] **Step 3: Run all UI model tests touched by Library**
+- [x] **Step 3: Run all UI model tests touched by Library**
 
 Run:
 
@@ -1597,7 +1597,7 @@ npm.cmd run test -- src/lib/ui/research-projects-model.test.ts src/lib/ui/resear
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit route and boundary polish**
+- [x] **Step 4: Commit route and boundary polish**
 
 Run:
 
