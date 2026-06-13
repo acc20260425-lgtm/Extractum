@@ -8,8 +8,8 @@ import inspectorSource from "./components/research-projects/LibraryInspector.sve
 describe("Library prototype contract", () => {
   it("renders Library as a separate route backed by the current workflow", () => {
     expect(routeSource).toContain('data-ui-route="library-prototype"');
-    expect(routeSource).toContain("createResearchProjectsWorkflow");
-    expect(routeSource).toContain("listAnalysisSources");
+    expect(routeSource).toContain("createLibraryCatalogWorkflow");
+    expect(routeSource).toContain("listLibrarySources");
     expect(routeSource).toContain("<LibraryScreen");
   });
 
@@ -40,9 +40,9 @@ describe("Library prototype contract", () => {
   });
 
   it("coordinates filter selection, row selection, and Inspector resizing in the screen component", () => {
-    expect(screenSource).toContain("buildLibraryFilterTree");
-    expect(screenSource).toContain("filterLibrarySourcesForLibrary");
-    expect(screenSource).toContain("reconcileLibrarySourceSelection");
+    expect(screenSource).toContain("buildLibraryCatalogFilterTree");
+    expect(screenSource).toContain("filterLibraryCatalogSources");
+    expect(screenSource).toContain("reconcileLibraryCatalogSourceSelection");
     expect(screenSource).toContain("inspectorWidth");
     expect(screenSource).toContain("clampInspectorWidth");
     expect(screenSource).toContain('role="separator"');

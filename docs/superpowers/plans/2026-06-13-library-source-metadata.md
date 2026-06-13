@@ -1469,7 +1469,7 @@ git commit -m "feat: add library catalog workflow"
 - Modify: `src/lib/components/research-projects/LibrarySourceCell.svelte`
 - Modify: `src/lib/library-prototype-contract.test.ts`
 
-- [ ] **Step 1: Update Library route and screen contract expectations**
+- [x] **Step 1: Update Library route and screen contract expectations**
 
 Modify `src/lib/library-prototype-contract.test.ts`.
 
@@ -1505,7 +1505,7 @@ with:
     expect(screenSource).toContain("reconcileLibraryCatalogSourceSelection");
 ```
 
-- [ ] **Step 2: Update `/projects/library` route to use the Library workflow**
+- [x] **Step 2: Update `/projects/library` route to use the Library workflow**
 
 Replace the script block in `src/routes/projects/library/+page.svelte` with:
 
@@ -1550,7 +1550,7 @@ Keep the markup as:
 </section>
 ```
 
-- [ ] **Step 3: Update `LibraryScreen.svelte` imports and state type**
+- [x] **Step 3: Update `LibraryScreen.svelte` imports and state type**
 
 In `src/lib/components/research-projects/LibraryScreen.svelte`, replace the model imports with:
 
@@ -1592,7 +1592,7 @@ Replace selection reconciliation:
     const nextSelectedId = reconcileLibraryCatalogSourceSelection(visibleSources, selectedSourceId);
 ```
 
-- [ ] **Step 4: Update `LibraryFilterRail.svelte` imports and prop types**
+- [x] **Step 4: Update `LibraryFilterRail.svelte` imports and prop types**
 
 In `src/lib/components/research-projects/LibraryFilterRail.svelte`, replace:
 
@@ -1623,7 +1623,7 @@ Replace the callback cast:
       if (id) onSelectedFilterIdChange(id as LibraryCatalogFilterId);
 ```
 
-- [ ] **Step 5: Remove project-flow fallback text from `LibrarySourceCell.svelte`**
+- [x] **Step 5: Remove project-flow fallback text from `LibrarySourceCell.svelte`**
 
 Replace the `subtitle` derived expression with:
 
@@ -1637,7 +1637,7 @@ Replace the `subtitle` derived expression with:
   );
 ```
 
-- [ ] **Step 6: Run focused component contract tests**
+- [x] **Step 6: Run focused component contract tests**
 
 Run:
 
@@ -1647,7 +1647,7 @@ npm.cmd run test -- src/lib/library-prototype-contract.test.ts src/lib/ui/librar
 
 Expected: PASS after Task 5 changes.
 
-- [ ] **Step 7: Run Svelte check for type errors**
+- [x] **Step 7: Run Svelte check for type errors**
 
 Run:
 
@@ -1657,7 +1657,7 @@ npm.cmd run check
 
 Expected: `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 8: Commit screen catalog switch**
+- [x] **Step 8: Commit screen catalog switch**
 
 Run:
 

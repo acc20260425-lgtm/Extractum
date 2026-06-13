@@ -9,9 +9,9 @@
   let subtitle = $derived(
     typeof row.subtitle === "string" && row.subtitle.length > 0
       ? row.subtitle
-      : typeof row.filterSummary === "string"
-        ? row.filterSummary
-        : "Фильтры проекта применяются при запуске анализа.",
+      : typeof row.typeLabel === "string"
+        ? row.typeLabel
+        : "",
   );
 </script>
 

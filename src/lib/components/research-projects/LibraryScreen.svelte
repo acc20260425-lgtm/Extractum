@@ -3,39 +3,39 @@
   import LibraryInspector from "./LibraryInspector.svelte";
   import LibraryWorkspace from "./LibraryWorkspace.svelte";
   import {
-    LIBRARY_ALL_FILTER_ID,
-    buildLibraryFilterTree,
-    filterLibrarySourcesForLibrary,
-    reconcileLibrarySourceSelection,
-    type LibraryFilterId,
-  } from "$lib/ui/research-projects-model";
-  import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
+    LIBRARY_CATALOG_ALL_FILTER_ID,
+    buildLibraryCatalogFilterTree,
+    filterLibraryCatalogSources,
+    reconcileLibraryCatalogSourceSelection,
+    type LibraryCatalogFilterId,
+  } from "$lib/ui/library-catalog-model";
+  import type { LibraryCatalogWorkflowState } from "$lib/ui/library-catalog-workflow";
 
   let {
     state: workflowState,
     onRefresh,
   }: {
-    state: ResearchProjectsWorkflowState;
+    state: LibraryCatalogWorkflowState;
     onRefresh: () => void | Promise<void>;
   } = $props();
 
-  let selectedFilterId = $state<LibraryFilterId>(LIBRARY_ALL_FILTER_ID);
+  let selectedFilterId = $state<LibraryCatalogFilterId>(LIBRARY_CATALOG_ALL_FILTER_ID);
   let selectedSourceId = $state<string | null>(null);
   let query = $state("");
   let filterCollapsed = $state(false);
   let inspectorWidth = $state(380);
   let status = $state("");
 
-  let filterRows = $derived(buildLibraryFilterTree(workflowState.librarySources));
+  let filterRows = $derived(buildLibraryCatalogFilterTree(workflowState.sources));
   let visibleSources = $derived(
-    filterLibrarySourcesForLibrary(workflowState.librarySources, { filterId: selectedFilterId, query }),
+    filterLibraryCatalogSources(workflowState.sources, { filterId: selectedFilterId, query }),
   );
   let selectedSource = $derived(
     visibleSources.find((source) => source.id === selectedSourceId) ?? null,
   );
 
   $effect(() => {
-    const nextSelectedId = reconcileLibrarySourceSelection(visibleSources, selectedSourceId);
+    const nextSelectedId = reconcileLibraryCatalogSourceSelection(visibleSources, selectedSourceId);
     if (nextSelectedId !== selectedSourceId) selectedSourceId = nextSelectedId;
   });
 

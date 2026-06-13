@@ -1,7 +1,10 @@
 <script lang="ts">
   import { PanelLeftClose, PanelLeftOpen } from "@lucide/svelte";
   import { ExtractumButton, ExtractumTreeDataGrid } from "$lib/components/extractum-ui";
-  import type { LibraryFilterId, LibraryFilterTreeRow } from "$lib/ui/research-projects-model";
+  import type {
+    LibraryCatalogFilterId,
+    LibraryCatalogFilterTreeRow,
+  } from "$lib/ui/library-catalog-model";
 
   let {
     rows,
@@ -10,10 +13,10 @@
     onSelectedFilterIdChange,
     onCollapsedChange,
   }: {
-    rows: LibraryFilterTreeRow[];
-    selectedFilterId: LibraryFilterId;
+    rows: LibraryCatalogFilterTreeRow[];
+    selectedFilterId: LibraryCatalogFilterId;
     collapsed: boolean;
-    onSelectedFilterIdChange: (id: LibraryFilterId) => void;
+    onSelectedFilterIdChange: (id: LibraryCatalogFilterId) => void;
     onCollapsedChange: (collapsed: boolean) => void;
   } = $props();
 </script>
@@ -48,7 +51,7 @@
     {collapsed}
     height="100%"
     onSelectedRowIdChange={(id) => {
-      if (id) onSelectedFilterIdChange(id as LibraryFilterId);
+      if (id) onSelectedFilterIdChange(id as LibraryCatalogFilterId);
     }}
   />
 </aside>
