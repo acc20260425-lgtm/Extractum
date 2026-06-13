@@ -622,7 +622,7 @@ git commit -m "feat: add library source read model"
 - Create: `src/lib/api/library-sources.ts`
 - Create: `src/lib/api/library-sources.test.ts`
 
-- [ ] **Step 1: Write the failing API wrapper test**
+- [x] **Step 1: Write the failing API wrapper test**
 
 Create `src/lib/api/library-sources.test.ts`:
 
@@ -675,7 +675,7 @@ describe("library source api wrappers", () => {
 });
 ```
 
-- [ ] **Step 2: Run the API test and verify it fails**
+- [x] **Step 2: Run the API test and verify it fails**
 
 Run:
 
@@ -685,7 +685,7 @@ npm.cmd run test -- src/lib/api/library-sources.test.ts
 
 Expected: FAIL because `src/lib/api/library-sources.ts` does not exist.
 
-- [ ] **Step 3: Add Library source types**
+- [x] **Step 3: Add Library source types**
 
 Create `src/lib/types/library-sources.ts`:
 
@@ -734,7 +734,7 @@ export interface LibrarySourceRecord {
 }
 ```
 
-- [ ] **Step 4: Add the API wrapper**
+- [x] **Step 4: Add the API wrapper**
 
 Create `src/lib/api/library-sources.ts`:
 
@@ -747,7 +747,7 @@ export function listLibrarySources() {
 }
 ```
 
-- [ ] **Step 5: Run the API test and verify it passes**
+- [x] **Step 5: Run the API test and verify it passes**
 
 Run:
 
@@ -757,7 +757,7 @@ npm.cmd run test -- src/lib/api/library-sources.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit API and types**
+- [x] **Step 6: Commit API and types**
 
 Run:
 
