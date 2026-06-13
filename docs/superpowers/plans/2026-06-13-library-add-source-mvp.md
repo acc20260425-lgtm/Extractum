@@ -1119,7 +1119,7 @@ Do not commit yet. The tests should pass in later tasks.
 **Files:**
 - Create: `src/lib/components/research-projects/LibraryYoutubeSmartImport.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 Create `src/lib/components/research-projects/LibraryYoutubeSmartImport.svelte`:
 
@@ -1359,7 +1359,7 @@ Create `src/lib/components/research-projects/LibraryYoutubeSmartImport.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Run contract tests**
+- [x] **Step 2: Run contract tests**
 
 Run:
 
@@ -1369,7 +1369,7 @@ npm.cmd run test -- src/lib/library-add-source-contract.test.ts
 
 Expected: still FAIL because other Add Source components do not exist.
 
-- [ ] **Step 3: Run Svelte check for this component**
+- [x] **Step 3: Run Svelte check for this component**
 
 Run:
 
