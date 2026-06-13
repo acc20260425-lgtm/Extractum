@@ -8,6 +8,7 @@ export { default as ExtractumSheet } from "./Sheet.svelte";
 export { default as ProviderBadge } from "./ProviderBadge.svelte";
 export { default as StatusBadge } from "./StatusBadge.svelte";
 export { default as ExtractumDataGrid } from "./DataGrid.svelte";
+export { default as ExtractumTreeDataGrid } from "./TreeDataGrid.svelte";
 export { default as GridSelectCell } from "./GridSelectCell.svelte";
 
 export {

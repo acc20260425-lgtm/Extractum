@@ -654,7 +654,7 @@ git commit -m "feat: add library filter view model"
 - Modify: `src/lib/components/extractum-ui/index.ts`
 - Modify: `src/lib/research-projects-import-boundary.test.ts`
 
-- [ ] **Step 1: Update import-boundary tests for the tree wrapper**
+- [x] **Step 1: Update import-boundary tests for the tree wrapper**
 
 Modify `src/lib/research-projects-import-boundary.test.ts`.
 
@@ -684,7 +684,7 @@ After the existing `DataGrid.svelte` assertions, add:
 
 The first feature-boundary test already collects `src/lib/components/research-projects` and `src/routes/projects`; keep it unchanged so Library components are covered automatically.
 
-- [ ] **Step 2: Run import-boundary test and verify it fails**
+- [x] **Step 2: Run import-boundary test and verify it fails**
 
 Run:
 
@@ -694,7 +694,7 @@ npm.cmd run test -- src/lib/research-projects-import-boundary.test.ts
 
 Expected: FAIL because `TreeDataGrid.svelte` does not exist yet.
 
-- [ ] **Step 3: Create `ExtractumTreeDataGrid`**
+- [x] **Step 3: Create `ExtractumTreeDataGrid`**
 
 Create `src/lib/components/extractum-ui/TreeDataGrid.svelte`:
 
@@ -819,7 +819,7 @@ Create `src/lib/components/extractum-ui/TreeDataGrid.svelte`:
 </style>
 ```
 
-- [ ] **Step 4: Export the wrapper**
+- [x] **Step 4: Export the wrapper**
 
 Modify `src/lib/components/extractum-ui/index.ts`:
 
@@ -827,7 +827,7 @@ Modify `src/lib/components/extractum-ui/index.ts`:
 export { default as ExtractumTreeDataGrid } from "./TreeDataGrid.svelte";
 ```
 
-- [ ] **Step 5: Run focused checks**
+- [x] **Step 5: Run focused checks**
 
 Run:
 
@@ -838,7 +838,7 @@ npm.cmd run check
 
 Expected: both commands pass.
 
-- [ ] **Step 6: Commit tree wrapper**
+- [x] **Step 6: Commit tree wrapper**
 
 Run:
 

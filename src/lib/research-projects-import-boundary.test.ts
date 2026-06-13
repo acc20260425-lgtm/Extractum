@@ -49,7 +49,7 @@ describe("research projects import boundaries", () => {
     expect(wrapperSources).not.toContain("src/lib/new-ui");
   });
 
-  it("routes SVAR Grid through ExtractumDataGrid only", () => {
+  it("routes SVAR Grid through Extractum grid wrappers only", () => {
     const dataGridSource = readFileSync(
       path.join(repoRoot, "src/lib/components/extractum-ui/DataGrid.svelte"),
       "utf8",
@@ -62,6 +62,20 @@ describe("research projects import boundaries", () => {
     expect(dataGridSource).toContain("fonts={false}");
     expect(dataGridSource).toContain("visibleOverlay");
     expect(dataGridSource).toContain("rows.length === 0 ? overlay : undefined");
+
+    const treeGridSource = readFileSync(
+      path.join(repoRoot, "src/lib/components/extractum-ui/TreeDataGrid.svelte"),
+      "utf8",
+    );
+    expect(treeGridSource).toContain('from "@svar-ui/svelte-grid"');
+    expect(treeGridSource).toContain("tree");
+    expect(treeGridSource).toContain("treetoggle");
+    expect(treeGridSource).toContain("selectedRows");
+    expect(treeGridSource).toContain("onselectrow");
+    expect(treeGridSource).toContain("Willow");
+    expect(treeGridSource).toContain("Locale");
+    expect(treeGridSource).toContain("fonts={false}");
+    expect(treeGridSource).toContain(".extractum-tree-data-grid :global(.wx-");
 
     const selectCellSource = readFileSync(
       path.join(repoRoot, "src/lib/components/extractum-ui/GridSelectCell.svelte"),
