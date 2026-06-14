@@ -725,6 +725,8 @@ pub(crate) fn preflight_limit_error(preflight: &AnalysisRunPreflight) -> Option<
     ))
 }
 
+// Kept separate until report preflight can load selected-model metadata.
+#[allow(dead_code)]
 pub(crate) fn model_limit_preflight_error(
     preflight: &AnalysisRunPreflight,
     model_input_limit: Option<usize>,
