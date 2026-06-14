@@ -301,7 +301,8 @@ Required constraints and indexes:
 - `prompt_pack_schema_assets`: `PRIMARY KEY(id)`, FK `pack_version_id` to
   `prompt_pack_versions(id) ON DELETE CASCADE`,
   `UNIQUE(pack_version_id, schema_id)`, `UNIQUE(pack_version_id,
-  relative_path)`.
+  relative_path)`, and `CHECK(schema_kind IN ('canonical_result',
+  'stage_input', 'stage_output', 'pack_data'))`.
 - `prompt_pack_runs`: `PRIMARY KEY(id)`, nullable FK `project_id` to
   `projects(id) ON DELETE CASCADE`, FK `pack_id` to `prompt_packs(pack_id)`,
   composite FK `(pack_version_id, pack_id, pack_version, schema_version)` to
@@ -573,6 +574,36 @@ Important fields:
 Transcript segments are the primary evidence material for MVP. Description is
 included. Comments are included only when `include_comments = true`.
 
+Comment inclusion is deterministic when enabled. The run stores the exact
+selection policy in frozen metadata so the same synced Library state, pack
+version, provider model budget, and run options produce the same comment
+material set.
+
+Comment selection policy:
+
+- comments are never a transcript substitute and never unblock preflight;
+- `comment_count_cap` comes from the pack runtime config, defaulting to `50`
+  for MVP;
+- `comment_budget_ratio` comes from the pack runtime config, defaulting to
+  `0.15` of the effective per-video stage input budget;
+- `comment_token_cap` comes from the pack runtime config, defaulting to
+  `4000` input tokens;
+- effective comment budget is
+  `min(comment_token_cap, floor(effective_stage_input_budget *
+  comment_budget_ratio))`;
+- candidate comments are selected from already-synced `youtube_comment`
+  Library items for the frozen video source;
+- candidate order is stable and SQLite-safe: `published_at IS NULL ASC`, then
+  `published_at ASC`, then `external_id ASC`, then live `items.id ASC`;
+- the snapshot includes comments in that order until either `comment_count_cap`
+  or the effective comment token budget is reached;
+- per-comment truncation uses the same tokenizer estimate used for input
+  budgeting, preserves a deterministic prefix, and records
+  `truncated = true`, original estimated token count, and retained estimated
+  token count in `metadata_zstd`;
+- excluded and truncated counts are written to the source snapshot metadata and
+  the stage input envelope.
+
 ### `prompt_pack_stage_runs`
 
 Stores each planned or executed stage.
@@ -618,6 +649,17 @@ recorded for multi-video runs as `not_implemented` or `skipped`.
 The combined MVP stage still uses the generic stage I/O rules from
 `docs/prompt-packs/stage_io_contracts.md`.
 
+Validator identity:
+
+- `input_schema_id = "stage-io/youtube_summary_transcript_analysis_input"`
+- `output_schema_id = "stage-io/youtube_summary_transcript_analysis_output"`
+- `validator_mode = "stage_output"`
+- `validator_stage = "youtube_summary/transcript_analysis"`
+- both schema assets are seeded through `prompt_pack_schema_assets` with
+  `schema_kind = "stage_input"` and `schema_kind = "stage_output"`;
+- the `prompt_pack_stage_templates` row for
+  `youtube_summary/transcript_analysis` references these schema ids.
+
 Stage input envelope:
 
 - `stage_io_version = "1.0"`
@@ -632,6 +674,7 @@ Stage input envelope:
 - `transcript_segment_registry`
 - `description_material_ref`
 - `comment_material_refs`
+- `comment_selection_policy`
 - `control_preset`
 - `evidence_mode`
 - `output_language`
@@ -646,6 +689,9 @@ Closed-world rules:
   or final pack object ids.
 - The validator rejects any candidate object that references a material outside
   the stage input registry.
+- Parsed output is first validated against
+  `stage-io/youtube_summary_transcript_analysis_output`, then the backend runs
+  closed-world reference checks against the frozen input registries.
 
 Expected parsed output shape:
 
@@ -731,6 +777,31 @@ derived from it and may be rebuilt. Before insertion, the backend validates that
 the canonical JSON `run_id`, `pack_id`, `pack_version`, and `schema_version`
 match the owning `prompt_pack_runs` row and `pack_snapshot_json_zstd`; DB
 constraints then prevent row-level pack identity drift.
+
+Final result persistence is transactional. The backend must use one DB
+transaction for:
+
+1. insert or update `prompt_pack_results`;
+2. delete any existing projection rows for the `result_row_id`;
+3. rebuild all projection rows and `prompt_pack_result_ref_edges` from
+   canonical JSON;
+4. set `prompt_pack_results.projection_updated_at`;
+5. update `prompt_pack_runs.run_status`, `result_status`, and `completed_at`;
+6. write the terminal audit event.
+
+The terminal `PromptPackRunEvent` is emitted only after this transaction
+commits. If the transaction rolls back, the run must not be visible as
+`completed` or `partial` with missing projections.
+
+Repair rule:
+
+- `get_prompt_pack_result`, startup maintenance, or any run-list path that
+  detects a terminal result with `projection_updated_at IS NULL` or stale
+  projection metadata must rebuild projections from `canonical_json_zstd` in a
+  repair transaction before returning projection-backed data.
+- If repair fails, the backend returns the canonical result with a storage
+  warning and records a `projection_repair_failed` audit event; it does not
+  silently serve stale projection rows.
 
 ### Projection Tables
 
@@ -837,8 +908,7 @@ User selects synced video or playlist
   -> run per-video LLM stage
   -> validate stage output
   -> assemble canonical result JSON
-  -> write projection tables
-  -> mark complete, partial, or failed
+  -> persist canonical result, projections, and terminal status transactionally
 ```
 
 ### Preflight
@@ -1164,16 +1234,22 @@ Backend tests should cover:
 - playlist video oversized transcript preflight skipped entry;
 - start recomputing preflight when source state changed after UI preview;
 - run snapshot independence from live Library mutations;
+- deterministic comment material selection when `include_comments = true`,
+  including stable ordering, token-budget truncation, and excluded counts;
 - source origin rows preserving playlist membership without duplicating canonical
   video snapshots;
 - stage skeleton creation;
 - per-video LLM success path using a fake provider;
 - per-video LLM failure producing partial multi-video run;
 - canonical result storage and projection rebuild;
+- final result persistence rollback leaving no terminal run with missing
+  projections;
+- startup or read-time repair rebuilding stale projections from canonical JSON;
 - canonical result insert rejected when row pack identity and canonical JSON or
   owning run identity disagree;
 - spec-aware validator success and failure cases;
 - combined `youtube_summary/transcript_analysis` stage output validation against
+  `stage-io/youtube_summary_transcript_analysis_output`,
   `stage_io_version`, allowed source ids, and allowed material refs;
 - validator coverage for traversal unions, quote word counts, segment evidence
   ranges, and one-claim-per-evidence ownership;
