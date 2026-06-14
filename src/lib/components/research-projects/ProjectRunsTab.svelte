@@ -3,15 +3,18 @@
   import { formatPeriod, formatTimestamp, runTargetLabel } from "$lib/analysis-utils";
   import { ExtractumButton } from "$lib/components/extractum-ui";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
+  import YoutubeSummaryRunsPanel from "./YoutubeSummaryRunsPanel.svelte";
 
   let {
     runs,
     loading = false,
     onRefreshProjectRuns,
+    projectId = null,
   }: {
     runs: AnalysisRunSummary[];
     loading?: boolean;
     onRefreshProjectRuns: () => void | Promise<void>;
+    projectId?: number | null;
   } = $props();
 
   const sortedRuns = $derived([...runs].sort((left, right) => right.created_at - left.created_at));
@@ -61,6 +64,8 @@
       {/each}
     </ul>
   {/if}
+
+  <YoutubeSummaryRunsPanel {projectId} />
 </section>
 
 <style>

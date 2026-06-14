@@ -59,4 +59,28 @@ describe("youtube summary workflow", () => {
     expect(runs[0].runStatus).toBe("running");
     expect(runs[0].latestMessage).toBe("Analyzing transcript");
   });
+
+  it("marks run terminal from completed event", () => {
+    const runs = updateRunListFromEvent(
+      [{ runId: 42, runStatus: "running", latestMessage: "Running" }],
+      {
+        runId: 42,
+        requestId: "req-42",
+        kind: "completed",
+        runStatus: "complete",
+        phase: "terminal",
+        stageRunId: null,
+        stageName: null,
+        sourceSnapshotId: null,
+        queuePosition: null,
+        progressCurrent: 2,
+        progressTotal: 2,
+        message: "Completed",
+        error: null,
+      },
+    );
+
+    expect(runs[0].runStatus).toBe("complete");
+    expect(runs[0].latestMessage).toBe("Completed");
+  });
 });

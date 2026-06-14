@@ -407,7 +407,7 @@ git commit -m "feat: add youtube summary launch dialog"
 - Create: `src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte`
 - Modify: `src/lib/components/research-projects/ProjectRunsTab.svelte`
 
-- [ ] **Step 1: Add workflow coverage**
+- [x] **Step 1: Add workflow coverage**
 
 Extend `youtube-summary-workflow.test.ts` to cover terminal event updates:
 
@@ -437,7 +437,7 @@ it("marks run terminal from completed event", () => {
 });
 ```
 
-- [ ] **Step 2: Implement panel**
+- [x] **Step 2: Implement panel**
 
 Panel responsibilities:
 
@@ -448,11 +448,11 @@ Panel responsibilities:
 - call `cancelPromptPackRun` for non-terminal runs;
 - select terminal run to load result.
 
-- [ ] **Step 3: Wire into Project runs surface**
+- [x] **Step 3: Wire into Project runs surface**
 
 In `ProjectRunsTab.svelte`, add a Prompt Pack section or tab that hosts `YoutubeSummaryRunsPanel`. Keep legacy analysis runs visually separate.
 
-- [ ] **Step 4: Run tests/check**
+- [x] **Step 4: Run tests/check**
 
 Run:
 
@@ -463,7 +463,7 @@ npm run check
 
 Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte src/lib/components/research-projects/ProjectRunsTab.svelte src/lib/ui/youtube-summary-workflow.test.ts

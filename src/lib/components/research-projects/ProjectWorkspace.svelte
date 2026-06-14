@@ -99,7 +99,7 @@
       <div class="placeholder-panel">Reports stay in the legacy analysis workspace until the next slice.</div>
     </ExtractumTabsContent>
     <ExtractumTabsContent value="runs">
-      <ProjectRunsTab {runs} {loading} {onRefreshProjectRuns} />
+      <ProjectRunsTab {runs} {loading} {onRefreshProjectRuns} projectId={project?.projectId ?? null} />
     </ExtractumTabsContent>
     <ExtractumTabsContent value="prompts">
       <div class="placeholder-panel">Prompt controls are represented in the top command bar.</div>
