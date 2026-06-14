@@ -84,6 +84,57 @@ fn build_migrations_includes_prompt_pack_mvp_version_six() {
 
     assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
 }
+
+#[tokio::test]
+async fn prompt_pack_mvp_migration_declares_required_integrity_constraints() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect memory sqlite");
+
+    apply_all_migrations_for_test_pool(&pool)
+        .await
+        .expect("apply migrations");
+
+    let prompt_pack_runs_sql = table_sql(&pool, "prompt_pack_runs").await;
+    assert!(prompt_pack_runs_sql.contains(
+        "FOREIGN KEY (pack_version_id, pack_id, pack_version, schema_version)"
+    ));
+    assert!(prompt_pack_runs_sql.contains(
+        "REFERENCES prompt_pack_versions(id, pack_id, pack_version, schema_version)"
+    ));
+
+    let origins_sql = table_sql(&pool, "prompt_pack_run_source_origins").await;
+    assert!(origins_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
+    assert!(origins_sql.contains("FOREIGN KEY (origin_scope_id, run_id)"));
+    assert!(origins_sql.contains(
+        "inclusion_status <> 'included' OR source_snapshot_id IS NOT NULL"
+    ));
+
+    let material_sql = table_sql(&pool, "prompt_pack_run_material_snapshots").await;
+    assert!(material_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
+
+    let stages_sql = table_sql(&pool, "prompt_pack_stage_runs").await;
+    assert!(stages_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
+    assert!(stages_sql.contains("UNIQUE(id, run_id)"));
+
+    let active_version_index: Option<String> = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'prompt_pack_versions' AND sql LIKE '%UNIQUE%' AND sql LIKE '%lifecycle_status = ''active''%'",
+    )
+    .fetch_optional(&pool)
+    .await
+    .expect("active version index lookup");
+    assert!(active_version_index.is_some(), "missing active version unique index");
+}
+
+async fn table_sql(pool: &sqlx::SqlitePool, table_name: &str) -> String {
+    sqlx::query_scalar::<_, String>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .bind(table_name)
+    .fetch_one(pool)
+    .await
+    .unwrap_or_else(|error| panic!("load table sql for {table_name}: {error}"))
+}
 ```
 
 - [ ] **Step 2: Run tests to verify failure**
@@ -93,9 +144,11 @@ Run:
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --lib migrations::tests::build_migrations_includes_prompt_pack_mvp_version_six
 cargo test --manifest-path src-tauri/Cargo.toml --lib migrations::tests::prompt_pack_mvp_migration_creates_library_and_run_tables
+cargo test --manifest-path src-tauri/Cargo.toml --lib migrations::tests::prompt_pack_mvp_migration_declares_required_integrity_constraints
 ```
 
-Expected: fail because migration 6 is not registered and the tables do not exist.
+Expected: fail because migration 6 is not registered, the tables do not exist,
+and the required FK/UNIQUE/CHECK contracts are not declared.
 
 - [ ] **Step 3: Add migration registration**
 
@@ -131,6 +184,14 @@ Create `src-tauri/migrations/0006_prompt_pack_mvp.sql` with tables and constrain
   - composite FKs `(origin_scope_id, run_id)`;
   - composite FK `(pack_version_id, pack_id, pack_version, schema_version)` from `prompt_pack_runs` to `prompt_pack_versions`;
   - composite FKs `(result_row_id, run_id)` from projection tables to `prompt_pack_results`.
+- required CHECK/partial unique constraints:
+  - included `prompt_pack_run_source_origins` rows require
+    `source_snapshot_id IS NOT NULL`;
+  - skipped and blocking origin rows may have `source_snapshot_id IS NULL`;
+  - at most one `prompt_pack_versions.lifecycle_status = 'active'` row per
+    `pack_id`;
+  - `prompt_pack_schema_assets.schema_kind` accepts only canonical result,
+    stage input, stage output, and pack data schema kinds.
 
 - [ ] **Step 5: Run migration tests**
 
@@ -215,9 +276,65 @@ Write `schemas/stage-io-youtube-summary-transcript-analysis-output.json` requiri
 
 - [ ] **Step 5: Create canonical result schema asset**
 
-Write `schemas/canonical-result.json` with a `$comment` pointing to `docs/prompt-packs/prompt_pack_json_contract_v1_draft.md` and required top-level keys `schema_version`, `pack_id`, `pack_version`, `run_id`, `result_id`, `result_status`, `sources`, `claims`, `evidence`, `pack_data`, and `audit`.
+Write `schemas/canonical-result.json` with a `$comment` pointing to
+`docs/prompt-packs/prompt_pack_json_contract_v1_draft.md`.
 
-- [ ] **Step 6: Commit**
+Required top-level keys must match the contract/spec names:
+
+- `schema_version`
+- `result_id`
+- `run_id`
+- `pack_id`
+- `pack_version`
+- `stage`
+- `created_at`
+- `output_language`
+- `metadata`
+- `run_context`
+- `outputs`
+- `source_refs`
+- `claims`
+- `evidence`
+- `warnings`
+- `limitations`
+- `quality_flags`
+- `audit_refs`
+
+The YouTube-specific objects live under
+`outputs.pack_data.youtube_summary`, not a top-level `pack_data` key. The source
+list is `source_refs`, not `sources`. Audit references are stored in
+`audit_refs`, not `audit`.
+
+- [ ] **Step 6: Run asset parse and manifest check**
+
+Run:
+
+```powershell
+$root = "src-tauri/prompt-packs/youtube_summary/1.0.0"
+Get-ChildItem $root -Recurse -Filter *.json | ForEach-Object {
+  Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
+}
+$pack = Get-Content -Raw "$root/pack.json" | ConvertFrom-Json
+if ($pack.pack_id -ne "youtube_summary") { throw "pack_id mismatch" }
+if ($pack.default_control_preset -ne "standard") { throw "default_control_preset mismatch" }
+if ($pack.default_evidence_mode -ne "standard") { throw "default_evidence_mode mismatch" }
+$stage = Get-Content -Raw "$root/stages/transcript_analysis.json" | ConvertFrom-Json
+if ($stage.input_schema_id -ne "stage-io/youtube_summary_transcript_analysis_input") { throw "input_schema_id mismatch" }
+if ($stage.output_schema_id -ne "stage-io/youtube_summary_transcript_analysis_output") { throw "output_schema_id mismatch" }
+$canonical = Get-Content -Raw "$root/schemas/canonical-result.json" | ConvertFrom-Json
+$required = @($canonical.required)
+foreach ($key in @("source_refs", "outputs", "audit_refs")) {
+  if ($required -notcontains $key) { throw "missing canonical key $key" }
+}
+foreach ($wrongKey in @("sources", "pack_data", "audit")) {
+  if ($required -contains $wrongKey) { throw "wrong canonical key $wrongKey" }
+}
+```
+
+Expected: no output and exit code 0 after every JSON asset parses and the
+canonical schema uses contract-compatible top-level keys.
+
+- [ ] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/prompt-packs/youtube_summary/1.0.0
@@ -279,6 +396,105 @@ async fn seed_youtube_summary_pack_writes_required_schema_assets() {
         ],
     );
 }
+
+#[tokio::test]
+async fn seed_youtube_summary_pack_rejects_bundled_hash_conflict() {
+    let pool = test_pool_with_migrations().await;
+
+    seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+
+    sqlx::query(
+        "UPDATE prompt_pack_versions SET content_hash = 'sha384-conflict' WHERE pack_id = 'youtube_summary' AND pack_version = '1.0.0'",
+    )
+    .execute(&pool)
+    .await
+    .expect("mutate content hash");
+
+    let error = seed_builtin_prompt_packs_in_pool(&pool)
+        .await
+        .expect_err("hash conflict rejected");
+
+    assert!(error.to_string().contains("hash conflict"));
+}
+
+#[tokio::test]
+async fn seed_youtube_summary_pack_rejects_user_collision() {
+    let pool = test_pool_with_migrations().await;
+
+    sqlx::query(
+        r#"
+        INSERT INTO prompt_packs (pack_id, display_name, is_builtin, created_at, updated_at)
+        VALUES ('youtube_summary', 'User YouTube Summary', 0, 1, 1)
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("insert colliding pack");
+
+    sqlx::query(
+        r#"
+        INSERT INTO prompt_pack_versions (
+            pack_id, pack_version, schema_version, origin_kind, lifecycle_status,
+            content_hash, bundled_source_path, created_at, updated_at
+        )
+        VALUES (
+            'youtube_summary', '1.0.0', '1.0', 'user', 'draft',
+            'sha384-user-draft', NULL, 1, 1
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("insert colliding user draft");
+
+    let error = seed_builtin_prompt_packs_in_pool(&pool)
+        .await
+        .expect_err("user collision rejected");
+
+    assert!(error.to_string().contains("collision"));
+}
+
+#[tokio::test]
+async fn seed_youtube_summary_pack_preserves_unknown_newer_bundled_version() {
+    let pool = test_pool_with_migrations().await;
+
+    sqlx::query(
+        r#"
+        INSERT INTO prompt_packs (pack_id, display_name, is_builtin, created_at, updated_at)
+        VALUES ('youtube_summary', 'YouTube Summary', 1, 1, 1)
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("insert pack");
+
+    sqlx::query(
+        r#"
+        INSERT INTO prompt_pack_versions (
+            pack_id, pack_version, schema_version, origin_kind, lifecycle_status,
+            content_hash, bundled_source_path, created_at, updated_at
+        )
+        VALUES (
+            'youtube_summary', '9.9.9', '1.0', 'bundled', 'archived',
+            'sha384-future', 'future-bundle', 1, 1
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("insert future bundled version");
+
+    seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed current bundle");
+
+    let future_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_versions WHERE pack_id = 'youtube_summary' AND pack_version = '9.9.9'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("future version count");
+
+    assert_eq!(future_count, 1);
+}
 ```
 
 - [ ] **Step 2: Run tests to verify failure**
@@ -303,6 +519,11 @@ Seed rules:
 - insert `prompt_pack_versions` if `(pack_id, pack_version)` is missing;
 - if bundled `(pack_id, pack_version)` exists with same content hash, update only `last_seeded_at`;
 - if bundled `(pack_id, pack_version)` exists with a different content hash, return `AppError::validation`;
+- if `(pack_id, pack_version)` exists with `origin_kind = 'user'`, return
+  `AppError::validation` and do not overwrite the draft;
+- activation is explicit from `pack.json`; seed must preserve unknown newer
+  bundled versions and must not delete or archive versions absent from the
+  current bundle;
 - insert or refresh stage templates and schema assets only for the matching immutable bundled version.
 
 - [ ] **Step 5: Register startup seed**
@@ -314,7 +535,22 @@ mod prompt_packs;
 use prompt_packs::{get_prompt_pack_library, seed_builtin_prompt_packs};
 ```
 
-Inside `setup`, spawn `seed_builtin_prompt_packs(handle.clone()).await` before runtime cleanup tasks that might read prompt-pack state.
+Inside `setup`, run the seed in the existing non-async setup closure style before
+runtime cleanup tasks that might read prompt-pack state:
+
+```rust
+let prompt_pack_seed_handle = app.handle().clone();
+tauri::async_runtime::spawn(async move {
+    if let Err(error) = seed_builtin_prompt_packs(prompt_pack_seed_handle).await {
+        eprintln!("Prompt Pack seed failed: {error}");
+    }
+});
+```
+
+MVP policy: seed failure is logged and the app continues to start. Prompt Pack
+commands must return a validation/internal error if the required active
+`youtube_summary` pack version is unavailable. Do not silently create runs
+against missing seed assets.
 
 - [ ] **Step 6: Run seed tests**
 
@@ -347,7 +583,16 @@ git commit -m "feat: seed youtube summary prompt pack"
 
 - [ ] **Step 1: Add backend command tests**
 
-Add Rust tests proving `get_prompt_pack_library_in_pool` returns `youtube_summary` with active `1.0.0`, the combined stage template, and both stage schema ids.
+Add Rust tests proving `get_prompt_pack_library_in_pool` returns
+`youtube_summary` with:
+
+- active `1.0.0`;
+- `schema_version = "1.0"`;
+- `default_control_preset = "standard"`;
+- `default_evidence_mode = "standard"`;
+- `default_include_comments = false`;
+- the combined stage template;
+- both stage schema ids and their schema kinds.
 
 - [ ] **Step 2: Implement backend command**
 
@@ -370,6 +615,32 @@ pub struct PromptPackDto {
     pub display_name: String,
     pub active_version: Option<PromptPackVersionDto>,
 }
+
+pub struct PromptPackVersionDto {
+    pub pack_version_id: i64,
+    pub pack_version: String,
+    pub schema_version: String,
+    pub lifecycle_status: String,
+    pub default_control_preset: String,
+    pub default_evidence_mode: String,
+    pub default_include_comments: bool,
+    pub stages: Vec<PromptPackStageTemplateDto>,
+    pub schema_assets: Vec<PromptPackSchemaAssetDto>,
+}
+
+pub struct PromptPackStageTemplateDto {
+    pub stage_name: String,
+    pub stage_order: i64,
+    pub provider_family: String,
+    pub input_schema_id: String,
+    pub output_schema_id: String,
+}
+
+pub struct PromptPackSchemaAssetDto {
+    pub schema_id: String,
+    pub schema_kind: String,
+    pub content_hash: String,
+}
 ```
 
 - [ ] **Step 3: Register command**
@@ -386,6 +657,46 @@ expect(invoke).toHaveBeenCalledWith("get_prompt_pack_library");
 ```
 
 - [ ] **Step 5: Implement frontend wrapper**
+
+Create `src/lib/types/prompt-packs.ts`:
+
+```ts
+export interface PromptPackLibrary {
+  packs: PromptPack[];
+}
+
+export interface PromptPack {
+  packId: string;
+  displayName: string;
+  activeVersion: PromptPackVersion | null;
+}
+
+export interface PromptPackVersion {
+  packVersionId: number;
+  packVersion: string;
+  schemaVersion: string;
+  lifecycleStatus: string;
+  defaultControlPreset: string;
+  defaultEvidenceMode: string;
+  defaultIncludeComments: boolean;
+  stages: PromptPackStageTemplate[];
+  schemaAssets: PromptPackSchemaAsset[];
+}
+
+export interface PromptPackStageTemplate {
+  stageName: string;
+  stageOrder: number;
+  providerFamily: string;
+  inputSchemaId: string;
+  outputSchemaId: string;
+}
+
+export interface PromptPackSchemaAsset {
+  schemaId: string;
+  schemaKind: string;
+  contentHash: string;
+}
+```
 
 Create `src/lib/api/prompt-packs.ts`:
 
