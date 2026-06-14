@@ -110,7 +110,7 @@ Svelte checks:
 **Files:**
 - No source edits.
 
-- [ ] **Step 1: Confirm clean worktree**
+- [x] **Step 1: Confirm clean worktree**
 
 Run:
 
@@ -120,7 +120,7 @@ git status --short --branch
 
 Expected: output starts with `## main` and contains no modified files.
 
-- [ ] **Step 2: Run focused baseline tests**
+- [x] **Step 2: Run focused baseline tests**
 
 Run:
 
@@ -130,7 +130,7 @@ npm.cmd test -- --run src/lib/api/library-sources.test.ts src/lib/ui/library-cat
 
 Expected: PASS before changes. If this fails, stop and record the pre-existing failure.
 
-- [ ] **Step 3: Run backend baseline tests**
+- [x] **Step 3: Run backend baseline tests**
 
 Run:
 
