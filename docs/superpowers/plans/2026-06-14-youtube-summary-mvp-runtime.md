@@ -4,7 +4,7 @@
 
 **Goal:** Add the YouTube Summary run runtime up to stage skeleton creation, without executing LLM calls.
 
-**Architecture:** Keep runtime orchestration inside `src-tauri/src/prompt_packs`. `preflight_youtube_summary_run` is a preview command. `start_youtube_summary_run` recomputes preflight, freezes snapshots, creates stage rows, registers active state, emits lifecycle events, and then stops at `not_implemented` execution until the execution/result plan is applied.
+**Architecture:** Keep runtime orchestration inside `src-tauri/src/prompt_packs`. `preflight_youtube_summary_run` is a preview command. `start_youtube_summary_run` recomputes preflight, freezes snapshots, creates stage rows, registers active state, emits lifecycle events, and leaves execution-owned stages pending until the execution/result plan is applied.
 
 **Tech Stack:** Rust/Tauri 2, SQLite via `sqlx`, existing YouTube Library tables, existing LLM profile/model limit helpers, Tauri events, Svelte-friendly DTOs.
 
@@ -19,6 +19,10 @@ Complete `docs/superpowers/plans/2026-06-14-youtube-summary-mvp-foundation.md` f
 ## File Structure
 
 - Modify `src-tauri/src/prompt_packs/mod.rs`: expose runtime commands and state.
+- Modify `src-tauri/migrations/0006_prompt_pack_mvp.sql` before the foundation
+  migration ships, or create the next migration if foundation is already
+  applied: add `prompt_pack_runs.client_request_id TEXT` with a partial unique
+  index for non-null values.
 - Create `src-tauri/src/prompt_packs/dto.rs`: preflight, start, run, stage, and event DTOs.
 - Create `src-tauri/src/prompt_packs/runtime.rs`: active run state, cancellation, events, active list, startup cleanup.
 - Create `src-tauri/src/prompt_packs/youtube_summary.rs`: source expansion, preflight partitions, deterministic snapshot creation, and stage skeleton creation.
@@ -55,6 +59,20 @@ pub struct PreflightYoutubeSummaryRunRequest {
     pub include_comments: bool,
 }
 
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartYoutubeSummaryRunRequest {
+    pub client_request_id: String,
+    pub project_id: Option<i64>,
+    pub source_ids: Vec<i64>,
+    pub profile_id: Option<String>,
+    pub model_override: Option<String>,
+    pub output_language: String,
+    pub control_preset: String,
+    pub evidence_mode: String,
+    pub include_comments: bool,
+}
+
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeSummaryPreflightResponse {
@@ -71,11 +89,18 @@ pub struct YoutubeSummaryPreflightResponse {
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackRunEvent {
     pub run_id: i64,
-    pub event_kind: String,
+    pub request_id: String,
+    pub kind: String,
     pub run_status: String,
+    pub phase: String,
+    pub stage_run_id: Option<i64>,
     pub stage_name: Option<String>,
-    pub source_ref_id: Option<String>,
+    pub source_snapshot_id: Option<i64>,
+    pub queue_position: Option<i64>,
+    pub progress_current: Option<i64>,
+    pub progress_total: Option<i64>,
     pub message: Option<String>,
+    pub error: Option<String>,
 }
 ```
 
@@ -87,12 +112,53 @@ Mirror the Rust DTOs in `src/lib/types/prompt-packs.ts`. Use string unions for s
 export type PromptPackRunStatus =
   | "queued"
   | "running"
+  | "complete"
+  | "partial"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+
+export type PromptPackRunEventKind =
+  | "queued"
+  | "started"
+  | "progress"
+  | "stage_started"
+  | "stage_completed"
+  | "stage_failed"
   | "completed"
   | "partial"
   | "failed"
-  | "cancel_requested"
-  | "cancelled";
+  | "cancelled"
+  | "interrupted";
+
+export type PromptPackRunEventPhase =
+  | "preflight"
+  | "snapshot"
+  | "stage"
+  | "validation"
+  | "projection"
+  | "persist"
+  | "terminal";
+
+export interface StartYoutubeSummaryRunInput {
+  clientRequestId: string;
+  projectId: number | null;
+  sourceIds: number[];
+  profileId: string | null;
+  modelOverride: string | null;
+  outputLanguage: string;
+  controlPreset: string;
+  evidenceMode: string;
+  includeComments: boolean;
+}
+
+export type StartYoutubeSummaryRunOutcome =
+  | { kind: "started"; run: PromptPackRunSummary }
+  | { kind: "blocked"; preflight: YoutubeSummaryPreflightResponse };
 ```
+
+`cancel_requested` is an in-memory runtime flag and may appear in message text,
+but it is not a persisted `run_status` and not a `PromptPackRunEvent.kind`.
 
 - [ ] **Step 3: Commit**
 
@@ -223,7 +289,7 @@ Add tests:
 #[tokio::test]
 async fn start_freezes_one_canonical_video_snapshot_with_multiple_origins() {
     let pool = test_pool_with_same_video_selected_explicitly_and_from_playlist().await;
-    let request = request_for_video_and_playlist(901, 701);
+    let request = request_for_video_and_playlist("req-freeze-1", 901, 701);
 
     let run_id = create_youtube_summary_run_skeleton_in_pool(&pool, request, test_pack_version())
         .await
@@ -247,6 +313,53 @@ async fn start_freezes_one_canonical_video_snapshot_with_multiple_origins() {
 
     assert_eq!(snapshot_count, 1);
     assert_eq!(origin_count, 2);
+}
+
+#[tokio::test]
+async fn start_returns_existing_run_for_duplicate_client_request_id() {
+    let pool = test_pool_with_ready_video().await;
+    let request = request_for_video("req-duplicate-start", 901);
+
+    let first = start_youtube_summary_run_in_pool(&pool, request.clone())
+        .await
+        .expect("first start")
+        .expect_started("first start returns a run");
+    let second = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("duplicate start")
+        .expect_started("duplicate start returns existing run");
+
+    assert_eq!(first.run_id, second.run_id);
+
+    let run_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_runs WHERE client_request_id = 'req-duplicate-start'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("run count");
+    assert_eq!(run_count, 1);
+}
+
+#[tokio::test]
+async fn start_with_recomputed_blocking_preflight_returns_response_without_run() {
+    let pool = test_pool_with_youtube_video_without_transcript().await;
+    let request = request_for_video("req-blocked-start", 901);
+
+    let outcome = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start command returns structured blocking response");
+
+    let blocking = outcome.expect_blocked("blocking response");
+    assert!(blocking.included_videos.is_empty());
+    assert_eq!(blocking.blocking_failures[0].reason, "no_usable_transcript");
+
+    let run_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_runs WHERE client_request_id = 'req-blocked-start'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("run count");
+    assert_eq!(run_count, 0);
 }
 
 #[tokio::test]
@@ -280,7 +393,16 @@ Expected: fail because snapshot creation does not exist.
 
 Inside one DB transaction:
 
+- reject an empty or whitespace-only `client_request_id`;
+- if a run already exists for `client_request_id`, return that run summary
+  without creating new rows;
+- recompute preflight from current Library rows before inserting any run row;
+- if recomputed preflight has `blocking_failures` or no `included_videos`,
+  return a structured blocked-start response containing the fresh preflight and
+  do not insert `prompt_pack_runs`;
 - insert `prompt_pack_runs` with `run_status = 'queued'`;
+- persist `client_request_id` with a unique DB constraint so app retry and
+  double-clicks are idempotent across process restarts;
 - insert `prompt_pack_run_scopes` for selected video/playlist scopes;
 - insert canonical video snapshots unique by `(run_id, video_id)`;
 - insert source origins unique by `(run_id, origin_scope_id, video_id)`;
@@ -290,8 +412,16 @@ Inside one DB transaction:
   - `youtube_summary/transcript_analysis` once per included video;
   - skipped MVP rows for `segment_extraction`, `key_point_extraction`, `quote_extraction`;
   - `youtube_summary/synthesis` as `skipped` or `not_implemented`;
-  - `final_synthesis`;
-  - `validation`.
+  - `final_synthesis` as `pending`;
+  - `validation` as `pending`.
+
+Runtime-only handoff rule:
+
+- after skeleton creation, leave the run `queued` or `running` and leave
+  execution-owned stage rows `pending` or `not_implemented`;
+- do not mark the run `failed` with `execution_not_implemented`;
+- the execution/result plan is responsible for launching LLM work and terminal
+  transitions.
 
 - [ ] **Step 4: Implement deterministic comments**
 
@@ -350,6 +480,51 @@ async fn prompt_pack_run_state_tracks_active_and_cancel_requested_runs() {
     state.finish(42).await;
     assert!(!state.active_run_ids().await.contains(&42));
 }
+
+#[tokio::test]
+async fn terminal_event_removes_run_from_active_state() {
+    let state = PromptPackRunState::new();
+
+    state.track(42).await.expect("track");
+    state.apply_event(PromptPackRunEvent {
+        run_id: 42,
+        request_id: "req-42".to_string(),
+        kind: "completed".to_string(),
+        run_status: "complete".to_string(),
+        phase: "terminal".to_string(),
+        stage_run_id: None,
+        stage_name: None,
+        source_snapshot_id: None,
+        queue_position: None,
+        progress_current: Some(1),
+        progress_total: Some(1),
+        message: Some("Completed".to_string()),
+        error: None,
+    })
+    .await;
+
+    assert!(!state.active_run_ids().await.contains(&42));
+}
+
+#[tokio::test]
+async fn cleanup_interrupted_prompt_pack_runs_marks_stale_active_rows_interrupted() {
+    let pool = test_pool_with_prompt_pack_runs([
+        (41, "queued"),
+        (42, "running"),
+        (43, "complete"),
+    ])
+    .await;
+    let state = PromptPackRunState::new();
+
+    cleanup_interrupted_prompt_pack_runs_in_pool(&pool, &state)
+        .await
+        .expect("cleanup");
+
+    let statuses = list_run_statuses(&pool).await;
+    assert_eq!(statuses.get(&41).map(String::as_str), Some("interrupted"));
+    assert_eq!(statuses.get(&42).map(String::as_str), Some("interrupted"));
+    assert_eq!(statuses.get(&43).map(String::as_str), Some("complete"));
+}
 ```
 
 - [ ] **Step 2: Implement state**
@@ -359,6 +534,8 @@ Implement `PromptPackRunState` with:
 - active run ids;
 - cancel-requested run ids;
 - duplicate prevention per run id;
+- terminal event cleanup for `completed`, `partial`, `failed`, `cancelled`, and
+  `interrupted` event kinds;
 - `list_active_prompt_pack_runs` support.
 
 - [ ] **Step 3: Implement backend commands**
@@ -370,7 +547,7 @@ Expose:
 pub async fn preflight_youtube_summary_run(...) -> AppResult<YoutubeSummaryPreflightResponse>
 
 #[tauri::command]
-pub async fn start_youtube_summary_run(...) -> AppResult<PromptPackRunSummaryDto>
+pub async fn start_youtube_summary_run(...) -> AppResult<StartYoutubeSummaryRunOutcomeDto>
 
 #[tauri::command]
 pub async fn cancel_prompt_pack_run(...) -> AppResult<()>
@@ -382,17 +559,57 @@ pub async fn list_active_prompt_pack_runs(...) -> AppResult<Vec<PromptPackRunSum
 pub async fn list_prompt_pack_run_stages(...) -> AppResult<Vec<PromptPackStageRunDto>>
 ```
 
-`start_youtube_summary_run` must recompute preflight from current DB state and store the recomputed response in `prompt_pack_runs.preflight_json_zstd`.
+`StartYoutubeSummaryRunOutcomeDto` must be a tagged response:
+
+```rust
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum StartYoutubeSummaryRunOutcomeDto {
+    Started { run: PromptPackRunSummaryDto },
+    Blocked { preflight: YoutubeSummaryPreflightResponse },
+}
+```
+
+`start_youtube_summary_run` rules:
+
+- accepts `client_request_id`;
+- validates `client_request_id` is not empty;
+- returns an existing `Started` run when the same `client_request_id` was
+  already persisted;
+- recomputes preflight from current DB state before creating snapshots;
+- if recomputed preflight has blocking failures or no included videos, returns
+  `Blocked { preflight }` and creates no run row;
+- if recomputed preflight can start, stores the recomputed response in
+  `prompt_pack_runs.preflight_json_zstd`.
 
 - [ ] **Step 4: Emit lifecycle events**
 
 Define:
 
 ```rust
-pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack://run";
+pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
 ```
 
-Emit events for `queued`, `started`, `progress`, `cancel_requested`, `cancelled`, `failed`, `completed`, and `partial`. The runtime plan can emit `failed` with `status_reason = "execution_not_implemented"` after skeleton creation until the execution/result plan replaces this behavior.
+Emit events using the approved `PromptPackRunEvent` shape:
+
+- `request_id` is the `client_request_id` for start-created runs or a generated
+  internal id for cleanup/interruption events;
+- `kind`: `queued`, `started`, `progress`, `stage_started`,
+  `stage_completed`, `stage_failed`, `completed`, `partial`, `failed`,
+  `cancelled`, or `interrupted`;
+- `run_status`: `queued`, `running`, `complete`, `partial`, `failed`,
+  `cancelled`, or `interrupted`;
+- `phase`: `preflight`, `snapshot`, `stage`, `validation`, `projection`,
+  `persist`, or `terminal`;
+- include `stage_run_id` and `stage_name` on stage events;
+- include `source_snapshot_id` for video-scoped stage events;
+- include `queue_position`, `progress_current`, and `progress_total` when known;
+- include `error` only for failed/interrupted paths.
+
+Terminal events are `completed`, `partial`, `failed`, `cancelled`, and
+`interrupted`; after emitting a terminal event, remove the run from active state.
+Do not emit a terminal `failed` event only because execution has not been
+implemented in this runtime slice.
 
 - [ ] **Step 5: Register commands and state**
 
@@ -408,19 +625,50 @@ In `src-tauri/src/lib.rs`:
 In `src/lib/api/prompt-packs.ts` expose:
 
 ```ts
-export const PROMPT_PACK_RUN_EVENT = "prompt-pack://run";
+export const PROMPT_PACK_RUN_EVENT = "prompt-pack-run-event";
 
 export function preflightYoutubeSummaryRun(input: PreflightYoutubeSummaryRunInput) {
   return invoke<YoutubeSummaryPreflightResponse>("preflight_youtube_summary_run", { ...input });
 }
 
 export function startYoutubeSummaryRun(input: StartYoutubeSummaryRunInput) {
-  return invoke<PromptPackRunSummary>("start_youtube_summary_run", { ...input });
+  return invoke<StartYoutubeSummaryRunOutcome>("start_youtube_summary_run", { ...input });
 }
 
 export function cancelPromptPackRun(runId: number) {
   return invoke<void>("cancel_prompt_pack_run", { runId });
 }
+```
+
+Extend `src/lib/api/prompt-packs.test.ts` so it verifies:
+
+```ts
+await startYoutubeSummaryRun({
+  clientRequestId: "req-ui-start-1",
+  projectId: null,
+  sourceIds: [901],
+  profileId: null,
+  modelOverride: null,
+  outputLanguage: "en",
+  controlPreset: "standard",
+  evidenceMode: "standard",
+  includeComments: false,
+});
+
+expect(invoke).toHaveBeenCalledWith("start_youtube_summary_run", {
+  clientRequestId: "req-ui-start-1",
+  projectId: null,
+  sourceIds: [901],
+  profileId: null,
+  modelOverride: null,
+  outputLanguage: "en",
+  controlPreset: "standard",
+  evidenceMode: "standard",
+  includeComments: false,
+});
+
+await listenToPromptPackRunEvents(vi.fn());
+expect(listen).toHaveBeenCalledWith("prompt-pack-run-event", expect.any(Function));
 ```
 
 - [ ] **Step 7: Run runtime tests**
@@ -456,7 +704,15 @@ git status --short
 Expected:
 
 - preflight partitions behave as specified;
+- start recomputes preflight and returns blocked response without creating a
+  failed run when start-time preflight has blocking failures;
+- duplicate `client_request_id` returns the existing run instead of creating a
+  duplicate;
 - snapshots are deterministic and run-local;
 - stage skeleton rows are created;
-- active run/cancel state works;
+- active run/cancel state works without persisting `cancel_requested` as
+  `run_status`;
+- stale `queued` and `running` rows are marked `interrupted` during cleanup;
+- terminal events remove runs from active state and use
+  `prompt-pack-run-event`;
 - frontend wrappers call the expected Tauri commands.
