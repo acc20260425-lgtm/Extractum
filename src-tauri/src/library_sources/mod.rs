@@ -1,12 +1,19 @@
 mod models;
 
+use std::collections::{BTreeMap, HashMap, HashSet};
+
 use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
+use crate::youtube::jobs::{SourceJobRecord, SourceJobState, SourceJobStatus};
 
 use models::LibrarySourceRow;
+pub(crate) use models::{
+    LibraryCatalogCapabilities, LibraryCatalogDisabledReasons, LibraryCatalogFilterCount,
+    LibraryCatalogRecord, LibraryCatalogResponse, LibraryCatalogStatus,
+};
 pub use models::{LibrarySourceRecord, LibraryTelegramSourceDetails, LibraryYoutubeSourceDetails};
 
 #[tauri::command]
@@ -19,6 +26,17 @@ pub async fn list_library_sources(
     query_library_sources(&pool).await
 }
 
+#[tauri::command]
+pub(crate) async fn list_library_catalog(
+    handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
+    source_jobs: tauri::State<'_, SourceJobState>,
+) -> AppResult<LibraryCatalogResponse> {
+    require_source_identity_ready(repair_state.inner()).await?;
+    let pool = get_pool(&handle).await?;
+    query_library_catalog(&pool, source_jobs.inner()).await
+}
+
 pub(crate) async fn query_library_sources(
     pool: &sqlx::SqlitePool,
 ) -> AppResult<Vec<LibrarySourceRecord>> {
@@ -28,6 +46,32 @@ pub(crate) async fn query_library_sources(
         .map_err(AppError::database)?;
 
     Ok(rows.into_iter().map(map_library_source_row).collect())
+}
+
+pub(crate) async fn query_library_catalog(
+    pool: &sqlx::SqlitePool,
+    source_jobs: &SourceJobState,
+) -> AppResult<LibraryCatalogResponse> {
+    let sources = query_library_sources(pool).await?;
+    let source_ids = sources
+        .iter()
+        .map(|source| source.source_id)
+        .collect::<Vec<_>>();
+    let jobs = source_jobs.catalog_jobs_for_sources(&source_ids).await;
+    let latest_jobs = latest_catalog_jobs_by_source(&source_ids, jobs);
+    let filter_counts = build_catalog_filter_counts(&sources);
+    let sources = sources
+        .into_iter()
+        .map(|source| {
+            let latest_job = latest_jobs.get(&source.source_id).cloned();
+            catalog_record_for_source(source, latest_job)
+        })
+        .collect();
+
+    Ok(LibraryCatalogResponse {
+        sources,
+        filter_counts,
+    })
 }
 
 const LIBRARY_SOURCES_SQL: &str = r#"
@@ -76,6 +120,190 @@ const LIBRARY_SOURCES_SQL: &str = r#"
         AND s.source_subtype = 'playlist'
     ORDER BY s.created_at DESC, s.id DESC
 "#;
+
+pub(crate) const YOUTUBE_CHANNEL_DISABLED_REASON: &str =
+    "YouTube channel sources are not supported by the current backend.";
+const SOURCE_EDIT_DISABLED_REASON: &str = "Source editing is not available yet.";
+const SOURCE_SYNCING_DISABLED_REASON: &str = "Source is syncing.";
+
+fn latest_catalog_jobs_by_source(
+    source_ids: &[i64],
+    jobs: Vec<SourceJobRecord>,
+) -> HashMap<i64, SourceJobRecord> {
+    let source_ids = source_ids.iter().copied().collect::<HashSet<_>>();
+    let mut latest = HashMap::<i64, SourceJobRecord>::new();
+
+    for job in jobs {
+        let mut matched_source_ids = Vec::new();
+        if source_ids.contains(&job.source_id) {
+            matched_source_ids.push(job.source_id);
+        }
+        if let Some(related_source_id) = job.related_source_id {
+            if source_ids.contains(&related_source_id)
+                && !matched_source_ids.contains(&related_source_id)
+            {
+                matched_source_ids.push(related_source_id);
+            }
+        }
+
+        for source_id in matched_source_ids {
+            let replace = latest.get(&source_id).is_none_or(|current| {
+                job.started_at > current.started_at
+                    || (job.started_at == current.started_at && job.job_id > current.job_id)
+            });
+            if replace {
+                latest.insert(source_id, job.clone());
+            }
+        }
+    }
+
+    latest
+}
+
+fn catalog_record_for_source(
+    source: LibrarySourceRecord,
+    latest_job: Option<SourceJobRecord>,
+) -> LibraryCatalogRecord {
+    let (status, status_detail) = catalog_status_for_source(&source, latest_job.as_ref());
+    let disabled_reasons = catalog_disabled_reasons(&source, status);
+    let capabilities = LibraryCatalogCapabilities {
+        can_refresh_source: disabled_reasons.refresh_source.is_none(),
+        can_delete: disabled_reasons.delete.is_none(),
+        can_edit: disabled_reasons.edit.is_none(),
+        can_connect_to_project: disabled_reasons.connect_to_project.is_none(),
+    };
+
+    LibraryCatalogRecord {
+        source,
+        latest_job,
+        status,
+        status_detail,
+        capabilities,
+        disabled_reasons,
+    }
+}
+
+fn catalog_status_for_source(
+    source: &LibrarySourceRecord,
+    latest_job: Option<&SourceJobRecord>,
+) -> (LibraryCatalogStatus, Option<String>) {
+    if is_unsupported_youtube_channel(source) {
+        return (
+            LibraryCatalogStatus::Unavailable,
+            Some(YOUTUBE_CHANNEL_DISABLED_REASON.to_string()),
+        );
+    }
+
+    if let Some(job) = latest_job {
+        return match job.status {
+            SourceJobStatus::Queued | SourceJobStatus::Running => (
+                LibraryCatalogStatus::Syncing,
+                job.message.clone().or_else(|| Some(SOURCE_SYNCING_DISABLED_REASON.to_string())),
+            ),
+            SourceJobStatus::Failed => (
+                LibraryCatalogStatus::Error,
+                job.error.clone().or_else(|| job.message.clone()),
+            ),
+            _ => (LibraryCatalogStatus::Active, None),
+        };
+    }
+
+    (LibraryCatalogStatus::Active, None)
+}
+
+fn catalog_disabled_reasons(
+    source: &LibrarySourceRecord,
+    status: LibraryCatalogStatus,
+) -> LibraryCatalogDisabledReasons {
+    let unsupported_reason = is_unsupported_youtube_channel(source)
+        .then(|| YOUTUBE_CHANNEL_DISABLED_REASON.to_string());
+    let refresh_source = if unsupported_reason.is_some() {
+        unsupported_reason.clone()
+    } else if status == LibraryCatalogStatus::Syncing {
+        Some(SOURCE_SYNCING_DISABLED_REASON.to_string())
+    } else {
+        None
+    };
+    let delete = (source.project_count > 0).then(|| {
+        format!(
+            "Source {} is used by {} project(s). Remove it from projects first.",
+            source.source_id, source.project_count
+        )
+    });
+    let connect_to_project = unsupported_reason;
+
+    LibraryCatalogDisabledReasons {
+        refresh_source,
+        delete,
+        edit: Some(SOURCE_EDIT_DISABLED_REASON.to_string()),
+        connect_to_project,
+    }
+}
+
+fn build_catalog_filter_counts(sources: &[LibrarySourceRecord]) -> Vec<LibraryCatalogFilterCount> {
+    let mut counts = BTreeMap::<(String, Option<String>), i64>::new();
+    for source in sources {
+        *counts
+            .entry((source.provider.clone(), source.source_subtype.clone()))
+            .or_insert(0) += 1;
+    }
+
+    let stable_rows = [
+        ("youtube", Some("video"), false, None),
+        ("youtube", Some("playlist"), false, None),
+        (
+            "youtube",
+            Some("channel"),
+            true,
+            Some(YOUTUBE_CHANNEL_DISABLED_REASON),
+        ),
+        ("telegram", Some("channel"), false, None),
+        ("telegram", Some("supergroup"), false, None),
+        ("telegram", Some("group"), false, None),
+    ];
+
+    let mut rows = stable_rows
+        .iter()
+        .map(|(provider, subtype, disabled, disabled_reason)| {
+            let subtype = subtype.map(str::to_string);
+            LibraryCatalogFilterCount {
+                provider: (*provider).to_string(),
+                source_subtype: subtype.clone(),
+                count: counts
+                    .get(&((*provider).to_string(), subtype))
+                    .copied()
+                    .unwrap_or(0),
+                disabled: *disabled,
+                disabled_reason: disabled_reason.map(|reason| (*reason).to_string()),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for ((provider, subtype), count) in counts {
+        if stable_rows
+            .iter()
+            .any(|(stable_provider, stable_subtype, _, _)| {
+                *stable_provider == provider.as_str()
+                    && stable_subtype.map(str::to_string) == subtype
+            })
+        {
+            continue;
+        }
+        rows.push(LibraryCatalogFilterCount {
+            provider,
+            source_subtype: subtype,
+            count,
+            disabled: false,
+            disabled_reason: None,
+        });
+    }
+
+    rows
+}
+
+fn is_unsupported_youtube_channel(source: &LibrarySourceRecord) -> bool {
+    source.provider == "youtube" && source.source_subtype.as_deref() == Some("channel")
+}
 
 fn map_library_source_row(row: LibrarySourceRow) -> LibrarySourceRecord {
     let youtube = match (row.provider.as_str(), row.source_subtype.as_deref()) {
@@ -163,6 +391,9 @@ fn map_library_source_row(row: LibrarySourceRow) -> LibrarySourceRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::youtube::jobs::{
+        SourceJobState, SourceJobStatus, SourceJobType, YoutubeSyncOptions,
+    };
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -439,5 +670,223 @@ mod tests {
         assert_eq!(rows[0].title.as_deref(), Some("Stored title"));
         assert_eq!(rows[0].canonical_url, None);
         assert_eq!(rows[0].youtube, None);
+    }
+
+    #[tokio::test]
+    async fn list_library_catalog_returns_status_capabilities_and_filter_counts() {
+        let pool = memory_pool().await;
+        insert_source(
+            &pool,
+            1,
+            "youtube",
+            Some("video"),
+            None,
+            "vid-1",
+            "Video fallback",
+            100,
+            Some(200),
+        )
+        .await;
+        insert_source(
+            &pool,
+            2,
+            "youtube",
+            Some("playlist"),
+            None,
+            "pl-1",
+            "Playlist fallback",
+            101,
+            None,
+        )
+        .await;
+        insert_source(
+            &pool,
+            3,
+            "telegram",
+            Some("supergroup"),
+            Some(77),
+            "-1007",
+            "Drone Radar",
+            102,
+            Some(202),
+        )
+        .await;
+        insert_source(
+            &pool,
+            4,
+            "youtube",
+            Some("channel"),
+            None,
+            "chan-1",
+            "Unsupported channel",
+            103,
+            None,
+        )
+        .await;
+
+        sqlx::query("INSERT INTO items (id, source_id, content_zstd) VALUES (1, 1, X'01'), (2, 2, X'02'), (3, 3, X'03')")
+            .execute(&pool)
+            .await
+            .expect("insert items");
+        sqlx::query("INSERT INTO projects (id, name, created_at, updated_at) VALUES (10, 'Project A', 1, 1), (11, 'Project B', 1, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert projects");
+        sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (10, 1, 1), (11, 1, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert project sources");
+        sqlx::query(
+            r#"
+            INSERT INTO youtube_video_sources (
+                source_id, video_id, canonical_url, title, channel_title,
+                duration_seconds, video_form, availability_status
+            )
+            VALUES (1, 'vid-1', 'https://youtu.be/vid-1', 'Video title', 'Channel A', 321, 'short', 'available')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert video metadata");
+        sqlx::query(
+            r#"
+            INSERT INTO youtube_playlist_sources (
+                source_id, playlist_id, canonical_url, title, channel_title,
+                video_count, availability_status
+            )
+            VALUES (2, 'pl-1', 'https://www.youtube.com/playlist?list=pl-1', 'Playlist title', 'Channel B', 44, 'available')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert playlist metadata");
+
+        let source_jobs = SourceJobState::new();
+        let options = YoutubeSyncOptions {
+            metadata: true,
+            transcripts: false,
+            comments: false,
+        };
+        let failed = source_jobs
+            .create_job(
+                1,
+                SourceJobType::YoutubeVideoTranscriptSync,
+                None,
+                options.clone(),
+            )
+            .await
+            .expect("create failed source job");
+        source_jobs
+            .finish_job(&failed.job_id, |job| {
+                job.status = SourceJobStatus::Failed;
+                job.started_at = 20;
+                job.error = Some("Transcript quota exceeded".to_string());
+            })
+            .await
+            .expect("finish failed source job");
+        let running = source_jobs
+            .create_job(2, SourceJobType::YoutubePlaylistFullSync, None, options)
+            .await
+            .expect("create running source job");
+        source_jobs
+            .update_job(&running.job_id, |job| {
+                job.status = SourceJobStatus::Running;
+                job.started_at = 30;
+                job.message = Some("Syncing playlist.".to_string());
+            })
+            .await
+            .expect("update running source job");
+
+        let catalog = query_library_catalog(&pool, &source_jobs)
+            .await
+            .expect("query library catalog");
+
+        let video = catalog
+            .sources
+            .iter()
+            .find(|record| record.source.source_id == 1)
+            .expect("video catalog record");
+        assert_eq!(video.status, LibraryCatalogStatus::Error);
+        assert_eq!(
+            video.status_detail.as_deref(),
+            Some("Transcript quota exceeded")
+        );
+        assert_eq!(
+            video.latest_job.as_ref().map(|job| job.job_id.as_str()),
+            Some(failed.job_id.as_str())
+        );
+        assert!(!video.capabilities.can_delete);
+        assert_eq!(
+            video.disabled_reasons.delete.as_deref(),
+            Some("Source 1 is used by 2 project(s). Remove it from projects first.")
+        );
+        assert!(!video.capabilities.can_edit);
+        assert_eq!(
+            video.disabled_reasons.edit.as_deref(),
+            Some("Source editing is not available yet.")
+        );
+
+        let playlist = catalog
+            .sources
+            .iter()
+            .find(|record| record.source.source_id == 2)
+            .expect("playlist catalog record");
+        assert_eq!(playlist.status, LibraryCatalogStatus::Syncing);
+        assert_eq!(playlist.status_detail.as_deref(), Some("Syncing playlist."));
+        assert!(!playlist.capabilities.can_refresh_source);
+        assert_eq!(
+            playlist.disabled_reasons.refresh_source.as_deref(),
+            Some("Source is syncing.")
+        );
+
+        let telegram = catalog
+            .sources
+            .iter()
+            .find(|record| record.source.source_id == 3)
+            .expect("telegram catalog record");
+        assert_eq!(telegram.status, LibraryCatalogStatus::Active);
+        assert!(telegram.latest_job.is_none());
+        assert!(telegram.capabilities.can_connect_to_project);
+
+        let channel = catalog
+            .sources
+            .iter()
+            .find(|record| record.source.source_id == 4)
+            .expect("youtube channel catalog record");
+        assert_eq!(channel.status, LibraryCatalogStatus::Unavailable);
+        assert_eq!(
+            channel.status_detail.as_deref(),
+            Some(YOUTUBE_CHANNEL_DISABLED_REASON)
+        );
+        assert!(!channel.capabilities.can_refresh_source);
+        assert!(!channel.capabilities.can_connect_to_project);
+        assert_eq!(
+            channel.disabled_reasons.connect_to_project.as_deref(),
+            Some(YOUTUBE_CHANNEL_DISABLED_REASON)
+        );
+
+        let youtube_video_count = catalog
+            .filter_counts
+            .iter()
+            .find(|count| {
+                count.provider == "youtube" && count.source_subtype.as_deref() == Some("video")
+            })
+            .expect("youtube video count");
+        assert_eq!(youtube_video_count.count, 1);
+        assert!(!youtube_video_count.disabled);
+
+        let youtube_channel_count = catalog
+            .filter_counts
+            .iter()
+            .find(|count| {
+                count.provider == "youtube" && count.source_subtype.as_deref() == Some("channel")
+            })
+            .expect("youtube channel count");
+        assert_eq!(youtube_channel_count.count, 1);
+        assert!(youtube_channel_count.disabled);
+        assert_eq!(
+            youtube_channel_count.disabled_reason.as_deref(),
+            Some(YOUTUBE_CHANNEL_DISABLED_REASON)
+        );
     }
 }

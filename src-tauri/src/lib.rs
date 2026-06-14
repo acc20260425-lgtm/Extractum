@@ -9,7 +9,7 @@ mod forum_topics;
 mod ingest_provenance;
 mod job_helpers;
 mod library_sources;
-use library_sources::list_library_sources;
+use library_sources::{list_library_catalog, list_library_sources};
 mod media;
 mod migrations;
 mod projects;
@@ -204,6 +204,7 @@ pub fn run() {
             cancel_llm_request,
             list_analysis_sources,
             list_library_sources,
+            list_library_catalog,
             list_analysis_prompt_templates,
             create_analysis_prompt_template,
             update_analysis_prompt_template,

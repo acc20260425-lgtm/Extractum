@@ -229,6 +229,37 @@ impl SourceJobState {
         jobs
     }
 
+    pub(crate) async fn catalog_jobs_for_sources(&self, source_ids: &[i64]) -> Vec<SourceJobRecord> {
+        let source_ids = source_ids.iter().copied().collect::<HashSet<_>>();
+        let mut jobs = self
+            .inner
+            .lock()
+            .await
+            .jobs
+            .values()
+            .filter(|job| {
+                source_ids.contains(&job.source_id)
+                    || job
+                        .related_source_id
+                        .is_some_and(|source_id| source_ids.contains(&source_id))
+            })
+            .filter(|job| {
+                matches!(
+                    &job.status,
+                    SourceJobStatus::Queued | SourceJobStatus::Running | SourceJobStatus::Failed
+                )
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        jobs.sort_by(|a, b| {
+            b.started_at
+                .cmp(&a.started_at)
+                .then_with(|| b.job_id.cmp(&a.job_id))
+        });
+        jobs
+    }
+
     pub(crate) async fn diagnostic_counts(&self) -> Vec<SourceJobDiagnosticCount> {
         let inner = self.inner.lock().await;
         let mut counts = std::collections::BTreeMap::<(String, String, String, String), i64>::new();
@@ -1250,6 +1281,80 @@ mod tests {
             active_ids,
             BTreeSet::from([direct.job_id.as_str(), related.job_id.as_str()])
         );
+    }
+
+    #[tokio::test]
+    async fn catalog_jobs_for_sources_includes_latest_failed_jobs() {
+        let state = SourceJobState::new();
+        let options = YoutubeSyncOptions {
+            metadata: true,
+            transcripts: false,
+            comments: false,
+        };
+
+        let succeeded = state
+            .create_job(
+                7,
+                SourceJobType::YoutubeVideoMetadataSync,
+                None,
+                options.clone(),
+            )
+            .await
+            .expect("create succeeded job");
+        state
+            .finish_job(&succeeded.job_id, |job| {
+                job.status = SourceJobStatus::Succeeded;
+                job.started_at = 10;
+            })
+            .await
+            .expect("finish succeeded job");
+
+        let failed = state
+            .create_job(
+                7,
+                SourceJobType::YoutubeVideoTranscriptSync,
+                None,
+                options.clone(),
+            )
+            .await
+            .expect("create failed job");
+        state
+            .finish_job(&failed.job_id, |job| {
+                job.status = SourceJobStatus::Failed;
+                job.started_at = 20;
+                job.error = Some("Transcript quota exceeded".to_string());
+            })
+            .await
+            .expect("finish failed job");
+
+        let related = state
+            .create_job(
+                99,
+                SourceJobType::YoutubePlaylistVideoSync,
+                Some(8),
+                options,
+            )
+            .await
+            .expect("create related job");
+        state
+            .update_job(&related.job_id, |job| {
+                job.status = SourceJobStatus::Running;
+                job.started_at = 30;
+                job.message = Some("Syncing playlist video.".to_string());
+            })
+            .await
+            .expect("update related job");
+
+        let jobs = state.catalog_jobs_for_sources(&[7, 8]).await;
+
+        assert_eq!(
+            jobs.iter()
+                .map(|job| job.job_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![related.job_id.as_str(), failed.job_id.as_str()]
+        );
+        assert_eq!(jobs[0].related_source_id, Some(8));
+        assert_eq!(jobs[1].status, SourceJobStatus::Failed);
     }
 
     #[tokio::test]

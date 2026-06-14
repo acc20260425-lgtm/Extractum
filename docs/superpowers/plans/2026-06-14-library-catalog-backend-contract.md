@@ -151,7 +151,7 @@ Expected: PASS before changes.
 - Modify: `src-tauri/src/library_sources/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write failing source-job helper test**
+- [x] **Step 1: Write failing source-job helper test**
 
 In `src-tauri/src/youtube/jobs.rs`, inside the existing `#[cfg(test)] mod tests`, add:
 
@@ -229,7 +229,7 @@ async fn catalog_jobs_for_sources_includes_latest_failed_jobs() {
 }
 ```
 
-- [ ] **Step 2: Run source-job test and verify failure**
+- [x] **Step 2: Run source-job test and verify failure**
 
 Run:
 
@@ -239,7 +239,7 @@ cargo test catalog_jobs_for_sources_includes_latest_failed_jobs --manifest-path 
 
 Expected: FAIL with a missing `catalog_jobs_for_sources` method.
 
-- [ ] **Step 3: Implement source-job catalog helper**
+- [x] **Step 3: Implement source-job catalog helper**
 
 In `impl SourceJobState` in `src-tauri/src/youtube/jobs.rs`, add:
 
@@ -278,7 +278,7 @@ pub(crate) async fn catalog_jobs_for_sources(&self, source_ids: &[i64]) -> Vec<S
 
 The file already imports `HashSet`; do not add a duplicate import.
 
-- [ ] **Step 4: Run source-job test and verify pass**
+- [x] **Step 4: Run source-job test and verify pass**
 
 Run:
 
@@ -288,7 +288,7 @@ cargo test catalog_jobs_for_sources_includes_latest_failed_jobs --manifest-path 
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing Library catalog backend tests**
+- [x] **Step 5: Write failing Library catalog backend tests**
 
 In `src-tauri/src/library_sources/mod.rs`, extend the test module imports:
 
@@ -513,7 +513,7 @@ async fn list_library_catalog_returns_status_capabilities_and_filter_counts() {
 }
 ```
 
-- [ ] **Step 6: Run Library catalog backend test and verify failure**
+- [x] **Step 6: Run Library catalog backend test and verify failure**
 
 Run:
 
@@ -523,7 +523,7 @@ cargo test list_library_catalog_returns_status_capabilities_and_filter_counts --
 
 Expected: FAIL with missing catalog types and `query_library_catalog`.
 
-- [ ] **Step 7: Add catalog models**
+- [x] **Step 7: Add catalog models**
 
 In `src-tauri/src/library_sources/models.rs`, add this import with the existing imports at the top:
 
@@ -586,7 +586,7 @@ pub(crate) struct LibraryCatalogFilterCount {
 }
 ```
 
-- [ ] **Step 8: Implement catalog query and helpers**
+- [x] **Step 8: Implement catalog query and helpers**
 
 In `src-tauri/src/library_sources/mod.rs`, keep the existing public source
 record export, keep the existing `LibrarySourceRow` import, and add
@@ -827,7 +827,7 @@ fn build_catalog_filter_counts(sources: &[LibrarySourceRecord]) -> Vec<LibraryCa
 }
 ```
 
-- [ ] **Step 9: Register the command**
+- [x] **Step 9: Register the command**
 
 In `src-tauri/src/lib.rs`, replace the import:
 
@@ -848,7 +848,7 @@ Add `list_library_catalog` next to `list_library_sources` inside `tauri::generat
             list_library_catalog,
 ```
 
-- [ ] **Step 10: Run backend tests**
+- [x] **Step 10: Run backend tests**
 
 Run:
 
@@ -860,7 +860,7 @@ cargo test library_sources --manifest-path src-tauri/Cargo.toml
 
 Expected: all PASS.
 
-- [ ] **Step 11: Commit backend catalog contract**
+- [x] **Step 11: Commit backend catalog contract**
 
 Run:
 

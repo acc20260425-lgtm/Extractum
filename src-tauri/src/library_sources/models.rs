@@ -1,6 +1,8 @@
 use serde::Serialize;
 use sqlx::FromRow;
 
+use crate::youtube::jobs::SourceJobRecord;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct LibraryYoutubeSourceDetails {
     pub video_form: Option<String>,
@@ -31,6 +33,56 @@ pub struct LibrarySourceRecord {
     pub project_count: i64,
     pub youtube: Option<LibraryYoutubeSourceDetails>,
     pub telegram: Option<LibraryTelegramSourceDetails>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LibraryCatalogResponse {
+    pub sources: Vec<LibraryCatalogRecord>,
+    pub filter_counts: Vec<LibraryCatalogFilterCount>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LibraryCatalogRecord {
+    pub source: LibrarySourceRecord,
+    pub latest_job: Option<SourceJobRecord>,
+    pub status: LibraryCatalogStatus,
+    pub status_detail: Option<String>,
+    pub capabilities: LibraryCatalogCapabilities,
+    pub disabled_reasons: LibraryCatalogDisabledReasons,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum LibraryCatalogStatus {
+    Active,
+    Syncing,
+    Error,
+    Unavailable,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct LibraryCatalogCapabilities {
+    pub can_refresh_source: bool,
+    pub can_delete: bool,
+    pub can_edit: bool,
+    pub can_connect_to_project: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct LibraryCatalogDisabledReasons {
+    pub refresh_source: Option<String>,
+    pub delete: Option<String>,
+    pub edit: Option<String>,
+    pub connect_to_project: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct LibraryCatalogFilterCount {
+    pub provider: String,
+    pub source_subtype: Option<String>,
+    pub count: i64,
+    pub disabled: bool,
+    pub disabled_reason: Option<String>,
 }
 
 #[derive(Debug, FromRow)]
