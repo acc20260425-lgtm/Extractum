@@ -65,7 +65,7 @@ const ANALYSIS_STATUS_RUNNING: &str = "running";
 const ANALYSIS_STATUS_COMPLETED: &str = "completed";
 const ANALYSIS_STATUS_FAILED: &str = "failed";
 const ANALYSIS_STATUS_CANCELLED: &str = "cancelled";
-const ANALYSIS_CHUNK_TARGET_CHARS: usize = 16_000;
+const ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS: usize = 16_000;
 
 pub struct AnalysisState {
     active_report_runs: Mutex<HashSet<i64>>,

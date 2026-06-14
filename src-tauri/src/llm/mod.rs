@@ -41,6 +41,7 @@ const DEFAULT_MODEL: &str = "gemini-2.5-flash";
 const DEFAULT_OPENAI_COMPAT_BASE_URL: &str = "http://localhost:20128/v1";
 const GEMINI_MODELS_TIMEOUT_SECS: u64 = 30;
 const OPENAI_COMPAT_MODELS_TIMEOUT_SECS: u64 = 30;
+const MODEL_LIMIT_LOOKUP_TIMEOUT_SECS: u64 = 5;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -109,6 +110,55 @@ fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> AppResu
 
 fn emit_response_event(handle: &AppHandle, event: &LlmStreamEvent) {
     let _ = handle.emit(LLM_RESPONSE_EVENT, event);
+}
+
+fn model_input_token_limit_from_models(
+    models: &[LlmProviderModel],
+    requested_model: &str,
+) -> Option<usize> {
+    let requested_model = requested_model.trim();
+    if requested_model.is_empty() {
+        return None;
+    }
+
+    models
+        .iter()
+        .find(|model| {
+            model.model == requested_model
+                || model.name == requested_model
+                || model.display_name == requested_model
+        })
+        .and_then(|model| usize::try_from(model.input_token_limit?).ok())
+        .filter(|limit| *limit > 0)
+}
+
+pub(crate) async fn resolve_model_input_token_limit_for_backend(
+    profile: &ResolvedLlmProfile,
+    model: &str,
+) -> Option<usize> {
+    let provider = profile.provider;
+    let api_key = profile.api_key.clone();
+    let openai_compat_config = OpenAiCompatProviderConfig {
+        provider,
+        base_url: profile.base_url.clone(),
+    };
+    let result = timeout(
+        Duration::from_secs(MODEL_LIMIT_LOOKUP_TIMEOUT_SECS),
+        async move {
+            match provider {
+                ProviderKind::Gemini => list_gemini_models(&api_key).await,
+                ProviderKind::OpenAiCompatible => {
+                    list_openai_compat_models(&api_key, &openai_compat_config).await
+                }
+            }
+        },
+    )
+    .await;
+
+    match result {
+        Ok(Ok(models)) => model_input_token_limit_from_models(&models, model),
+        Ok(Err(_)) | Err(_) => None,
+    }
 }
 
 struct StreamEvent {
@@ -239,11 +289,13 @@ pub(crate) async fn load_provider_diagnostics_from_pool(
         active_provider,
         profiles_by_provider: counts
             .into_iter()
-            .map(|(provider, (configured_count, missing_key_count))| LlmProviderDiagnosticCount {
-                provider,
-                configured_count,
-                missing_key_count,
-            })
+            .map(
+                |(provider, (configured_count, missing_key_count))| LlmProviderDiagnosticCount {
+                    provider,
+                    configured_count,
+                    missing_key_count,
+                },
+            )
             .collect(),
     })
 }
@@ -554,10 +606,12 @@ pub async fn cancel_llm_request(
 mod tests {
     use super::{
         llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key,
-        load_provider_diagnostics_from_pool, normalize_base_url, save_profile_to_pool,
-        LlmRequestKind, LlmRequestSnapshotState, ProviderKind,
+        load_provider_diagnostics_from_pool, model_input_token_limit_from_models,
+        normalize_base_url, save_profile_to_pool, LlmRequestKind, LlmRequestSnapshotState,
+        ProviderKind,
     };
     use crate::error::AppErrorKind;
+    use crate::llm::LlmProviderModel;
 
     #[test]
     fn provider_parse_returns_typed_validation_error() {
@@ -576,6 +630,44 @@ mod tests {
         let legacy_provider = ProviderKind::parse("omniroute").expect("parse legacy provider");
         assert_eq!(legacy_provider.as_str(), "openai_compatible");
         assert_eq!(legacy_provider.display_name(), "OpenAI-compatible");
+    }
+
+    #[test]
+    fn model_input_token_limit_lookup_matches_provider_model_ids_and_names() {
+        let models = vec![
+            LlmProviderModel {
+                model: "gemini-2.5-pro".to_string(),
+                name: "models/gemini-2.5-pro".to_string(),
+                display_name: "Gemini 2.5 Pro".to_string(),
+                description: String::new(),
+                input_token_limit: Some(1_048_576),
+                output_token_limit: None,
+                supported_generation_methods: Vec::new(),
+            },
+            LlmProviderModel {
+                model: "broken".to_string(),
+                name: "broken".to_string(),
+                display_name: "Broken".to_string(),
+                description: String::new(),
+                input_token_limit: Some(-1),
+                output_token_limit: None,
+                supported_generation_methods: Vec::new(),
+            },
+        ];
+
+        assert_eq!(
+            model_input_token_limit_from_models(&models, "gemini-2.5-pro"),
+            Some(1_048_576)
+        );
+        assert_eq!(
+            model_input_token_limit_from_models(&models, "models/gemini-2.5-pro"),
+            Some(1_048_576)
+        );
+        assert_eq!(model_input_token_limit_from_models(&models, "broken"), None);
+        assert_eq!(
+            model_input_token_limit_from_models(&models, "missing"),
+            None
+        );
     }
 
     #[test]

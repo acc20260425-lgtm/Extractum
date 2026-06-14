@@ -8,9 +8,10 @@ use tokio::task::JoinSet;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::llm::{
-    resolve_effective_model, resolve_profile_for_backend, run_llm_collect_with_profile,
-    run_llm_stream_with_profile, LlmChatRequest, LlmCompletion, LlmMessage, LlmRequestError,
-    LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
+    resolve_effective_model, resolve_model_input_token_limit_for_backend,
+    resolve_profile_for_backend, run_llm_collect_with_profile, run_llm_stream_with_profile,
+    LlmChatRequest, LlmCompletion, LlmMessage, LlmRequestError, LlmRequestKind, LlmRequestMetadata,
+    LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
 };
 
 use super::corpus::{
@@ -29,7 +30,7 @@ use super::store::{
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
-    emit_analysis_event, now_secs, AnalysisState, ANALYSIS_CHUNK_TARGET_CHARS,
+    emit_analysis_event, now_secs, AnalysisState, ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS,
     ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
     ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED,
     ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
@@ -38,6 +39,11 @@ use super::{
 const INTERRUPTED_RUN_MESSAGE: &str = "Analysis run was interrupted when the app was restarted.";
 const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
 const SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed";
+const ANALYSIS_CHUNK_PROMPT_OVERHEAD_TOKENS: usize = 1_500;
+const ANALYSIS_CHUNK_OUTPUT_RESERVE_TOKENS: usize = 2_000;
+const ANALYSIS_CHUNK_SAFETY_PERCENT: usize = 80;
+const ANALYSIS_CHUNK_ESTIMATED_CHARS_PER_TOKEN: usize = 3;
+const ANALYSIS_CHUNK_MIN_TARGET_CHARS: usize = 2_000;
 
 pub(crate) struct StartAnalysisReportRequest {
     pub(crate) source_id: Option<i64>,
@@ -432,7 +438,24 @@ struct ReportRunInput {
     prompt_template: AnalysisPromptTemplate,
     model_override: Option<String>,
     resolved_profile: ResolvedLlmProfile,
+    chunk_target_chars: usize,
     preflight: AnalysisRunPreflight,
+}
+
+fn chunk_target_chars_for_model_input_limit(model_input_token_limit: Option<usize>) -> usize {
+    let Some(model_input_token_limit) = model_input_token_limit else {
+        return ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS;
+    };
+
+    let reserved_tokens =
+        ANALYSIS_CHUNK_PROMPT_OVERHEAD_TOKENS + ANALYSIS_CHUNK_OUTPUT_RESERVE_TOKENS;
+    if model_input_token_limit <= reserved_tokens {
+        return ANALYSIS_CHUNK_MIN_TARGET_CHARS;
+    }
+
+    let usable_tokens =
+        (model_input_token_limit - reserved_tokens) * ANALYSIS_CHUNK_SAFETY_PERCENT / 100;
+    (usable_tokens * ANALYSIS_CHUNK_ESTIMATED_CHARS_PER_TOKEN).max(ANALYSIS_CHUNK_MIN_TARGET_CHARS)
 }
 
 fn validate_report_preflight(preflight: &AnalysisRunPreflight) -> AppResult<()> {
@@ -821,7 +844,7 @@ async fn run_report_pipeline(
         ))
         .emit(&handle);
 
-    let chunks = chunk_messages(&corpus, ANALYSIS_CHUNK_TARGET_CHARS);
+    let chunks = chunk_messages(&corpus, input.chunk_target_chars);
     let ctx = ReportPipelineContext {
         handle,
         pool,
@@ -1029,6 +1052,9 @@ pub(crate) async fn start_analysis_report_run(
 
     let resolved_profile = resolve_profile_for_backend(&handle, profile_id.as_deref()).await?;
     let effective_model = resolve_effective_model(&resolved_profile, model_override.as_deref())?;
+    let model_input_token_limit =
+        resolve_model_input_token_limit_for_backend(&resolved_profile, &effective_model).await;
+    let chunk_target_chars = chunk_target_chars_for_model_input_limit(model_input_token_limit);
     let youtube_corpus_mode = YoutubeCorpusMode::from_wire(youtube_corpus_mode.as_deref())
         .map_err(AppError::validation)?;
 
@@ -1127,7 +1153,7 @@ pub(crate) async fn start_analysis_report_run(
     let preflight = preflight_analysis_run(
         &pool,
         &corpus_request,
-        ANALYSIS_CHUNK_TARGET_CHARS,
+        chunk_target_chars,
         AnalysisRunPreflightLimits::default(),
     )
     .await?;
@@ -1209,6 +1235,7 @@ pub(crate) async fn start_analysis_report_run(
                 prompt_template,
                 model_override,
                 resolved_profile,
+                chunk_target_chars,
                 preflight,
             },
         )
@@ -1235,8 +1262,9 @@ pub(crate) async fn start_analysis_report_run(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_map_request, build_reduce_request, capture_report_corpus, extract_json_payload,
-        finish_map_phase, mark_interrupted_analysis_runs, parse_chunk_summary,
+        build_map_request, build_reduce_request, capture_report_corpus,
+        chunk_target_chars_for_model_input_limit, extract_json_payload, finish_map_phase,
+        mark_interrupted_analysis_runs, parse_chunk_summary,
         resolve_analysis_telegram_history_scope, validate_report_preflight, ReduceRequestParams,
         ReportRunError, ReportRunInput, StartAnalysisReportRequest,
     };
@@ -1316,6 +1344,7 @@ mod tests {
             prompt_template: sample_prompt_template(),
             model_override: Some("gemini-2.5-pro".to_string()),
             resolved_profile: sample_resolved_profile(),
+            chunk_target_chars: 16_000,
             preflight: AnalysisRunPreflight {
                 source_ids: vec![2],
                 message_count: 1,
@@ -1366,6 +1395,16 @@ mod tests {
         };
 
         assert!(request.include_migrated_history);
+    }
+
+    #[test]
+    fn chunk_target_chars_are_derived_from_model_input_limit_with_fallback() {
+        assert_eq!(chunk_target_chars_for_model_input_limit(None), 16_000);
+        assert_eq!(
+            chunk_target_chars_for_model_input_limit(Some(8_192)),
+            11_259
+        );
+        assert!(chunk_target_chars_for_model_input_limit(Some(32_768)) > 16_000);
     }
 
     #[tokio::test]
