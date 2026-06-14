@@ -201,6 +201,13 @@ prompt_pack_result_source_refs
 prompt_pack_result_claims
 prompt_pack_result_evidence
 prompt_pack_result_claim_relations
+prompt_pack_result_unknowns
+prompt_pack_result_verification_tasks
+prompt_pack_result_warnings
+prompt_pack_result_limitations
+prompt_pack_result_quality_flags
+prompt_pack_result_audit_refs
+prompt_pack_result_ref_edges
 prompt_pack_result_validation_findings
 prompt_pack_result_audit_events
 prompt_pack_result_quarantine_artifacts
@@ -213,6 +220,131 @@ prompt_pack_youtube_open_questions
 prompt_pack_youtube_synthesis_items
 ```
 
+### DB Integrity Contract
+
+The migration should treat this as a relational contract, not only a list of
+columns. Canonical JSON remains the source of truth, but DB constraints should
+protect run ownership, pack-version consistency, and projection rebuildability.
+
+Naming rules:
+
+- `id` is always a SQLite row id.
+- `result_row_id` is the foreign key to `prompt_pack_results.id`.
+- Canonical JSON ids keep their semantic names: `result_id`, `source_ref_id`,
+  `claim_id`, `evidence_id`, `relation_id`, `video_id`, and nested pack ids.
+- Projection and validation tables should not use `result_id` as a DB foreign
+  key name because it collides with canonical `result_id`.
+
+Ownership rules:
+
+- Library definition tables cascade from `prompt_packs`.
+- Runs should restrict deletion of referenced pack versions, but preserve the
+  exact `pack_snapshot_json_zstd` so run reads do not depend on mutable library
+  assets.
+- All run-owned rows cascade from `prompt_pack_runs` or
+  `prompt_pack_results`.
+- Links to live Library rows (`sources`, `items`, `youtube_transcript_segments`)
+  are best-effort nullable links with `ON DELETE SET NULL`; frozen snapshots are
+  authoritative after run creation.
+- Compressed JSON/text fields are stored as `BLOB` containing zstd payloads.
+
+Required constraints and indexes:
+
+- `prompt_packs`: `PRIMARY KEY(id)`, `UNIQUE(pack_id)`,
+  `CHECK(is_builtin IN (0, 1))`.
+- `prompt_pack_versions`: `PRIMARY KEY(id)`, FK `pack_id` to
+  `prompt_packs(pack_id) ON DELETE CASCADE`, `UNIQUE(pack_id, pack_version)`,
+  `UNIQUE(id, pack_id)`, `CHECK(lifecycle_status IN ('draft', 'active',
+  'archived'))`, and at most one active version per pack.
+- `prompt_pack_stage_templates`: `PRIMARY KEY(id)`, FK `pack_version_id` to
+  `prompt_pack_versions(id) ON DELETE CASCADE`,
+  `UNIQUE(pack_version_id, stage_name, provider_family)`, index
+  `(pack_version_id, stage_order)`.
+- `prompt_pack_schema_assets`: `PRIMARY KEY(id)`, FK `pack_version_id` to
+  `prompt_pack_versions(id) ON DELETE CASCADE`,
+  `UNIQUE(pack_version_id, schema_id)`, `UNIQUE(pack_version_id,
+  relative_path)`.
+- `prompt_pack_runs`: `PRIMARY KEY(id)`, nullable FK `project_id` to
+  `projects(id) ON DELETE CASCADE`, FK `pack_id` to `prompt_packs(pack_id)`,
+  composite FK `(pack_version_id, pack_id)` to
+  `prompt_pack_versions(id, pack_id) ON DELETE RESTRICT`, status `CHECK`s,
+  `result_status` nullable until a result exists, indexes `(project_id,
+  created_at DESC)`, `(pack_id, created_at DESC)`, and `(run_status,
+  created_at DESC)`.
+- `prompt_pack_run_scopes`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `source_id` to
+  `sources(id) ON DELETE SET NULL`, `UNIQUE(run_id, selected_order)`, index
+  `(source_id)`, and `CHECK(scope_kind IN ('youtube_video',
+  'youtube_playlist'))`.
+- `prompt_pack_run_source_snapshots`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FKs `live_source_id` and
+  `playlist_source_id` to `sources(id) ON DELETE SET NULL`,
+  `UNIQUE(run_id, source_ref_id)`, `UNIQUE(run_id, video_id)`, partial unique
+  `(run_id, live_source_id)` when `live_source_id IS NOT NULL`, and
+  `CHECK(source_type = 'youtube_video')`.
+- `prompt_pack_run_material_snapshots`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, FK `source_snapshot_id` to
+  `prompt_pack_run_source_snapshots(id) ON DELETE CASCADE`, nullable FK
+  `live_item_id` to `items(id) ON DELETE SET NULL`, nullable FK
+  `live_segment_id` to `youtube_transcript_segments(id) ON DELETE SET NULL`,
+  `UNIQUE(run_id, ref)`, indexes `(source_snapshot_id, document_order)` and
+  `(source_snapshot_id, timestamp_start_ms)`, and `CHECK(material_kind IN
+  ('youtube_transcript_segment', 'youtube_description', 'youtube_comment'))`.
+- `prompt_pack_stage_runs`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `source_snapshot_id` to
+  `prompt_pack_run_source_snapshots(id) ON DELETE CASCADE`, stage/status
+  `CHECK`s, `CHECK((stage_scope_kind = 'run' AND source_snapshot_id IS NULL)
+  OR (stage_scope_kind = 'video' AND source_snapshot_id IS NOT NULL))`, partial
+  unique `(run_id, stage_name)` for run-scoped stages, partial unique
+  `(run_id, stage_name, source_snapshot_id)` for video-scoped stages, indexes
+  `(run_id, stage_order)` and `(run_id, stage_status)`.
+- `prompt_pack_stage_artifacts`: `PRIMARY KEY(id)`, FK `stage_run_id` to
+  `prompt_pack_stage_runs(id) ON DELETE CASCADE`, `attempt_number`,
+  `artifact_index`, `redaction_state`, artifact-kind `CHECK`, `CHECK` that at
+  least one content column is present, `UNIQUE(stage_run_id, artifact_kind,
+  attempt_number, artifact_index)`, index `(stage_run_id, created_at)`.
+- `prompt_pack_results`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, `UNIQUE(run_id)` for MVP,
+  `UNIQUE(run_id, result_id)`, `UNIQUE(id, run_id)`, result-status `CHECK`, and
+  index `(pack_id, created_at DESC)`.
+- Core projection tables: FK `result_row_id` to `prompt_pack_results(id) ON
+  DELETE CASCADE`, denormalized `run_id`, `UNIQUE(result_row_id, <canonical
+  object id>)`, relevant indexes for UI filters, and `raw_object_json_zstd`.
+  This applies to source refs, claims, evidence, claim relations, unknowns,
+  verification tasks, warnings, limitations, and audit refs. `quality_flags`
+  have no canonical id, so use `flag_index` with
+  `UNIQUE(result_row_id, flag_index)` plus indexes on `(flag, severity)`.
+- `prompt_pack_result_ref_edges`: generic projection of array refs from
+  canonical JSON and pack data. Store `from_object_kind`, `from_object_id`,
+  `from_object_path`, `ref_kind`, `target_id`, and `ordinal`; use
+  `UNIQUE(result_row_id, from_object_path, ref_kind, ordinal)` plus indexes
+  `(result_row_id, ref_kind, target_id)` and `(result_row_id,
+  from_object_kind, from_object_id)`.
+- YouTube projection tables: FK `result_row_id` to `prompt_pack_results(id) ON
+  DELETE CASCADE`, denormalized `run_id`, parent video object references, and
+  `raw_object_json_zstd`. Use `UNIQUE(result_row_id, video_id)` for videos and
+  `UNIQUE(result_row_id, video_id, <nested object id>)` for segments,
+  key points, quotes, action items, and open questions. Store synthesis rows in
+  `prompt_pack_youtube_synthesis_items` with `synthesis_item_kind` and
+  `synthesis_item_id`, unique by `(result_row_id, synthesis_item_kind,
+  synthesis_item_id)`.
+- `prompt_pack_result_validation_findings`: `PRIMARY KEY(id)`, FK
+  `result_row_id` to `prompt_pack_results(id) ON DELETE CASCADE`, nullable FK
+  `stage_run_id` to `prompt_pack_stage_runs(id) ON DELETE SET NULL`, severity
+  and layer `CHECK`s, indexes `(result_row_id, severity)`, `(rule_id)`, and
+  `(stage_run_id)`.
+- `prompt_pack_result_audit_events`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FKs `result_row_id` and
+  `stage_run_id`, `audit_id`, event type fields, summary, object refs, payload,
+  and indexes `(run_id, created_at)`, `(result_row_id, audit_id)`,
+  `(stage_run_id)`.
+- `prompt_pack_result_quarantine_artifacts`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FKs `result_row_id` and
+  `stage_run_id`, `quarantine_id`, reason, object path/type, validation
+  findings, invalid object payload, raw artifact payload, `redaction_state`,
+  `content_hash`, `UNIQUE(result_row_id, quarantine_id)` when both are present,
+  and indexes `(run_id, created_at)`, `(stage_run_id)`.
+
 ### `prompt_pack_runs`
 
 The root row for a Prompt Pack run.
@@ -220,6 +352,7 @@ The root row for a Prompt Pack run.
 Important fields:
 
 - `id`
+- `project_id`
 - `pack_id`
 - `pack_version_id`
 - `pack_version`
@@ -390,6 +523,9 @@ Important fields:
 - `stage_run_id`
 - `artifact_kind`: `prompt_input`, `raw_output`, `parsed_output`,
   `repair_input`, `error`, `metrics`
+- `attempt_number`
+- `artifact_index`
+- `redaction_state`
 - `content_json_zstd`
 - `content_text_zstd`
 - `content_hash`
@@ -429,6 +565,13 @@ Projection tables store queryable slices of canonical JSON:
 - `prompt_pack_result_claims`
 - `prompt_pack_result_evidence`
 - `prompt_pack_result_claim_relations`
+- `prompt_pack_result_unknowns`
+- `prompt_pack_result_verification_tasks`
+- `prompt_pack_result_warnings`
+- `prompt_pack_result_limitations`
+- `prompt_pack_result_quality_flags`
+- `prompt_pack_result_audit_refs`
+- `prompt_pack_result_ref_edges`
 - `prompt_pack_youtube_videos`
 - `prompt_pack_youtube_segments`
 - `prompt_pack_youtube_key_points`
@@ -437,14 +580,18 @@ Projection tables store queryable slices of canonical JSON:
 - `prompt_pack_youtube_open_questions`
 - `prompt_pack_youtube_synthesis_items`
 
-Every projection row should store:
+Every object projection row should store:
 
 - `run_id`
-- `result_id`
+- `result_row_id`
 - the object id from canonical JSON;
 - denormalized display/search fields;
 - relevant refs;
 - `raw_object_json_zstd` for lossless projection rebuild and debugging.
+
+`prompt_pack_result_ref_edges` stores normalized reference edges instead of
+canonical objects. It exists so UI and validators can query "what points to this
+claim/evidence/source/relation" without decompressing canonical JSON.
 
 Projection tables do not replace canonical JSON.
 
@@ -455,8 +602,9 @@ QA findings.
 
 Important fields:
 
+- `id`
 - `run_id`
-- `result_id`
+- `result_row_id`
 - `stage_run_id`
 - `rule_id`
 - `severity`
@@ -469,8 +617,39 @@ Important fields:
 `prompt_pack_result_audit_events` stores compact audit events. Large payloads do
 not live inline in canonical JSON.
 
+Important fields:
+
+- `id`
+- `run_id`
+- `result_row_id`
+- `stage_run_id`
+- `audit_id`
+- `event_type`
+- `custom_event_type`
+- `summary`
+- `object_refs_json_zstd`
+- `payload_json_zstd`
+- `created_at`
+
 `prompt_pack_result_quarantine_artifacts` stores invalid stage or graph objects
 that cannot be safely included in canonical JSON.
+
+Important fields:
+
+- `id`
+- `run_id`
+- `result_row_id`
+- `stage_run_id`
+- `quarantine_id`
+- `reason`
+- `object_path`
+- `object_type`
+- `validation_findings_json_zstd`
+- `invalid_object_json_zstd`
+- `raw_artifact_json_zstd`
+- `redaction_state`
+- `content_hash`
+- `created_at`
 
 ## Runtime Flow
 
@@ -709,9 +888,14 @@ Backend tests should cover:
 Schema tests should verify:
 
 - foreign keys and indexes exist;
+- `prompt_pack_runs.pack_id` cannot disagree with `pack_version_id`;
+- active pack-version uniqueness is enforced per pack;
+- stage skeleton uniqueness handles run-scoped and video-scoped stages;
 - cascade behavior for run-owned data;
+- deleting live Library rows nulls live links but keeps run snapshots readable;
 - canonical JSON survives compression/decompression;
-- projection tables can be rebuilt from canonical JSON.
+- projection tables and `prompt_pack_result_ref_edges` can be rebuilt from
+  canonical JSON.
 
 UI tests should cover:
 
