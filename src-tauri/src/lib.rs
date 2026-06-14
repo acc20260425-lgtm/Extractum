@@ -21,7 +21,7 @@ use projects::{
     list_projects, remove_project_sources, start_project_analysis, update_project,
 };
 mod prompt_packs;
-use prompt_packs::seed_builtin_prompt_packs;
+use prompt_packs::{get_prompt_pack_library, seed_builtin_prompt_packs};
 
 mod secret_store;
 use secret_store::SecretStoreState;
@@ -180,6 +180,7 @@ pub fn run() {
             remove_project_sources,
             start_project_analysis,
             list_project_runs,
+            get_prompt_pack_library,
             get_source_identity_repair_status,
             preview_source_identity_repair,
             audit_legacy_telegram_source_metadata,

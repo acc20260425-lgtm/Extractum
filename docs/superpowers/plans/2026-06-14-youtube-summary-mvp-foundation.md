@@ -581,7 +581,7 @@ git commit -m "feat: seed youtube summary prompt pack"
 - Create: `src/lib/api/prompt-packs.ts`
 - Create: `src/lib/api/prompt-packs.test.ts`
 
-- [ ] **Step 1: Add backend command tests**
+- [x] **Step 1: Add backend command tests**
 
 Add Rust tests proving `get_prompt_pack_library_in_pool` returns
 `youtube_summary` with:
@@ -594,7 +594,7 @@ Add Rust tests proving `get_prompt_pack_library_in_pool` returns
 - the combined stage template;
 - both stage schema ids and their schema kinds.
 
-- [ ] **Step 2: Implement backend command**
+- [x] **Step 2: Implement backend command**
 
 Expose:
 
@@ -643,11 +643,11 @@ pub struct PromptPackSchemaAssetDto {
 }
 ```
 
-- [ ] **Step 3: Register command**
+- [x] **Step 3: Register command**
 
 Add `get_prompt_pack_library` to `tauri::generate_handler!` in `src-tauri/src/lib.rs`.
 
-- [ ] **Step 4: Add frontend wrapper test**
+- [x] **Step 4: Add frontend wrapper test**
 
 In `src/lib/api/prompt-packs.test.ts`, mock `@tauri-apps/api/core` and verify:
 
@@ -656,7 +656,7 @@ await getPromptPackLibrary();
 expect(invoke).toHaveBeenCalledWith("get_prompt_pack_library");
 ```
 
-- [ ] **Step 5: Implement frontend wrapper**
+- [x] **Step 5: Implement frontend wrapper**
 
 Create `src/lib/types/prompt-packs.ts`:
 
@@ -709,7 +709,7 @@ export function getPromptPackLibrary() {
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run:
 
@@ -720,7 +720,7 @@ npm test -- --run src/lib/api/prompt-packs.test.ts
 
 Expected: pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs src-tauri/src/lib.rs src/lib/types/prompt-packs.ts src/lib/api/prompt-packs.ts src/lib/api/prompt-packs.test.ts
