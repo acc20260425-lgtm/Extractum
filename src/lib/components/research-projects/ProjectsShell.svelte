@@ -85,7 +85,12 @@
 
   <section class="workspace-column">
     <div data-ui-region="top-command-bar">
-      <TopCommandBar project={currentProject} loading={workflowState.loading} />
+      <TopCommandBar
+        project={currentProject}
+        sources={currentProjectSources}
+        loading={workflowState.loading}
+        onRunProject={() => (runOpen = true)}
+      />
     </div>
     <div data-ui-region="project-workspace" class="workspace-region">
       <ProjectWorkspace

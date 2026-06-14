@@ -1,15 +1,24 @@
 <script lang="ts">
   import { Download, Play } from "@lucide/svelte";
   import { ExtractumButton, ProviderBadge } from "$lib/components/extractum-ui";
-  import type { ResearchProjectView } from "$lib/ui/research-projects-model";
+  import { projectRunDisabledReason, type ResearchProjectView } from "$lib/ui/research-projects-model";
+  import type { ProjectSourceRecord } from "$lib/types/projects";
+
+  const PROJECT_EXPORT_DISABLED_REASON = "Project export is not available yet.";
 
   let {
     project,
+    sources,
     loading = false,
+    onRunProject,
   }: {
     project: ResearchProjectView | null;
+    sources: Pick<ProjectSourceRecord, "provider">[];
     loading?: boolean;
+    onRunProject: () => void;
   } = $props();
+
+  const runDisabledReason = $derived(projectRunDisabledReason(project, sources));
 </script>
 
 <div class="command-bar">
@@ -40,11 +49,17 @@
       </select>
     </label>
     <ProviderBadge provider="telegram" label="Library" />
-    <ExtractumButton disabled={loading || !project}>
+    <ExtractumButton disabled={loading || runDisabledReason !== null} onclick={onRunProject}>
       <Play size={14} aria-hidden="true" />
       Run
     </ExtractumButton>
-    <ExtractumButton variant="outline" disabled={!project}>
+    <ExtractumButton
+      variant="outline"
+      disabled={true}
+      title={PROJECT_EXPORT_DISABLED_REASON}
+      aria-label="Export unavailable"
+      data-disabled-reason={PROJECT_EXPORT_DISABLED_REASON}
+    >
       <Download size={14} aria-hidden="true" />
       Export
     </ExtractumButton>
