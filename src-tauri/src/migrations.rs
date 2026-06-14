@@ -26,6 +26,10 @@ const PROJECTS_MVP_SQL: &str = include_str!("../migrations/0005_projects_mvp.sql
 const PROMPT_PACK_MVP_VERSION: i64 = 6;
 const PROMPT_PACK_MVP_DESCRIPTION: &str = "prompt pack mvp schema";
 const PROMPT_PACK_MVP_SQL: &str = include_str!("../migrations/0006_prompt_pack_mvp.sql");
+const PROMPT_PACK_RUN_IDEMPOTENCY_VERSION: i64 = 7;
+const PROMPT_PACK_RUN_IDEMPOTENCY_DESCRIPTION: &str = "prompt pack run idempotency";
+const PROMPT_PACK_RUN_IDEMPOTENCY_SQL: &str =
+    include_str!("../migrations/0007_prompt_pack_run_idempotency.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -109,6 +113,15 @@ fn prompt_pack_mvp_migration() -> Migration {
     }
 }
 
+fn prompt_pack_run_idempotency_migration() -> Migration {
+    Migration {
+        version: PROMPT_PACK_RUN_IDEMPOTENCY_VERSION,
+        description: PROMPT_PACK_RUN_IDEMPOTENCY_DESCRIPTION,
+        sql: PROMPT_PACK_RUN_IDEMPOTENCY_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
@@ -117,6 +130,7 @@ pub fn build_migrations() -> Vec<Migration> {
         source_delete_cascade_indexes_migration(),
         projects_mvp_migration(),
         prompt_pack_mvp_migration(),
+        prompt_pack_run_idempotency_migration(),
     ]
 }
 
@@ -209,7 +223,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -237,6 +251,10 @@ mod tests {
         assert!(migrations[5]
             .sql
             .contains("CREATE TABLE IF NOT EXISTS prompt_packs"));
+        assert_eq!(migrations[6].description, "prompt pack run idempotency");
+        assert!(migrations[6]
+            .sql
+            .contains("idx_prompt_pack_runs_client_request_id_unique"));
     }
 
     #[tokio::test]
@@ -276,13 +294,13 @@ mod tests {
     }
 
     #[test]
-    fn build_migrations_includes_prompt_pack_mvp_version_six() {
+    fn build_migrations_includes_prompt_pack_runtime_version_seven() {
         let versions = build_migrations()
             .iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
     }
 
     #[tokio::test]

@@ -42,7 +42,7 @@ Complete `docs/superpowers/plans/2026-06-14-youtube-summary-mvp-foundation.md` f
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 
-- [ ] **Step 1: Write migration constraint tests**
+- [x] **Step 1: Write migration constraint tests**
 
 Add tests:
 
@@ -93,7 +93,7 @@ async fn prompt_pack_runs_allow_null_client_request_id_for_pre_existing_rows() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -105,7 +105,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store::tests
 Expected: fail because migration 7 is not registered and `client_request_id`
 does not exist.
 
-- [ ] **Step 3: Add migration and register it**
+- [x] **Step 3: Add migration and register it**
 
 Create `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`:
 
@@ -143,7 +143,7 @@ Update the foundation migration version-list test from
 `build_migrations_includes_prompt_pack_runtime_version_seven` if the old name
 only mentions version six.
 
-- [ ] **Step 4: Run migration tests**
+- [x] **Step 4: Run migration tests**
 
 Run:
 
@@ -155,7 +155,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store::tests
 
 Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/migrations/0007_prompt_pack_run_idempotency.sql src-tauri/src/migrations.rs src-tauri/src/prompt_packs/store.rs
