@@ -134,6 +134,11 @@ npm run check
 git status --short
 ```
 
+Then complete the UI browser smoke from
+`2026-06-14-youtube-summary-mvp-ui.md` Task 6 Step 3, including the desktop
+launch-dialog and result-view screenshots. If the local DB has no synced
+YouTube source, use the child plan's dev-only smoke fixture fallback.
+
 ## Commit Cadence
 
 Commit at the end of each task inside a plan. Do not wait until a whole plan is complete. Preferred commit scopes:

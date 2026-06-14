@@ -255,9 +255,36 @@ it("listens to prompt pack run events", async () => {
 
   expect(listen).toHaveBeenCalledWith("prompt-pack-run-event", expect.any(Function));
 });
+
+it("keeps execution result artifact and audit wrappers available", async () => {
+  await listPromptPackStageArtifacts(1001);
+  expect(invoke).toHaveBeenCalledWith("list_prompt_pack_stage_artifacts", {
+    stageRunId: 1001,
+  });
+
+  await getPromptPackStageArtifact({
+    stageRunId: 1001,
+    artifactKind: "raw_output",
+    attemptNumber: 1,
+    artifactIndex: 2,
+  });
+  expect(invoke).toHaveBeenCalledWith("get_prompt_pack_stage_artifact", {
+    stageRunId: 1001,
+    artifactKind: "raw_output",
+    attemptNumber: 1,
+    artifactIndex: 2,
+  });
+
+  await listPromptPackAuditEvents(42);
+  expect(invoke).toHaveBeenCalledWith("list_prompt_pack_audit_events", {
+    runId: 42,
+  });
+});
 ```
 
 - [ ] **Step 2: Implement wrappers**
+
+Extend the existing `src/lib/api/prompt-packs.ts`; do not replace or remove wrappers added by the runtime and execution/result plans.
 
 Export:
 
@@ -275,6 +302,9 @@ export function listActivePromptPackRuns(): Promise<PromptPackRunSummary[]>
 export function listPromptPackRunStages(runId: number): Promise<PromptPackStageRun[]>
 export function getPromptPackResult(runId: number): Promise<PromptPackResult>
 export function getPromptPackValidationFindings(runId: number): Promise<PromptPackValidationFinding[]>
+export function listPromptPackStageArtifacts(stageRunId: number): Promise<PromptPackStageArtifactSummary[]>
+export function getPromptPackStageArtifact(input: GetPromptPackStageArtifactInput): Promise<PromptPackStageArtifact>
+export function listPromptPackAuditEvents(runId: number): Promise<PromptPackAuditEvent[]>
 export function listenToPromptPackRunEvents(handler: (event: Event<PromptPackRunEvent>) => void): Promise<UnlistenFn>
 ```
 
@@ -523,7 +553,24 @@ Run:
 npm run dev -- --host 127.0.0.1
 ```
 
-Keep the dev server running for Step 3.
+Keep the dev server running for Step 3. If the local DB has no synced YouTube
+video or playlist source, restart with the smoke fixture enabled:
+
+```powershell
+$env:VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE='1'
+npm run dev -- --host 127.0.0.1
+```
+
+Smoke fixture fallback requirements:
+
+- only activate when `import.meta.env.DEV` and
+  `VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE === "1"`;
+- inject one visibly labeled `YouTube Summary Smoke Fixture` source into the
+  launch surface;
+- provide deterministic preflight, blocked-start, active-run, recent-run, and
+  terminal-result fixture responses through the frontend API wrapper layer;
+- never call legacy `analysis_runs` APIs;
+- keep fixture-only branches out of production builds.
 
 - [ ] **Step 3: Run browser smoke on desktop viewport**
 
@@ -532,7 +579,8 @@ Use the in-app Browser or Playwright against `http://127.0.0.1:1420` with viewpo
 Smoke path:
 
 1. open the Library surface;
-2. select a synced YouTube video or playlist source;
+2. select a synced YouTube video/playlist source, or the dev-only
+   `YouTube Summary Smoke Fixture` source when the local DB is empty;
 3. open `YoutubeSummaryRunDialog`;
 4. verify preflight, partial coverage, and blocked-start states fit without text overlap;
 5. open the Prompt Pack runs panel;
@@ -574,5 +622,5 @@ Expected:
 - YouTube Summary launch is available only for synced YouTube video/playlist sources;
 - Prompt Pack run list updates from `prompt-pack-run-event`;
 - active and recent Prompt Pack runs are loaded through separate wrappers;
-- desktop browser smoke screenshots show the dialog and result viewer without layout overlap;
+- desktop browser smoke screenshots show the dialog and result viewer without layout overlap using either real synced YouTube data or the dev-only smoke fixture;
 - result viewer renders canonical/projection data without using legacy analysis APIs.

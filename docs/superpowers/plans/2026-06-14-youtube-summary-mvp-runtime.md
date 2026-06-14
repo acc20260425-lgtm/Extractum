@@ -19,10 +19,9 @@ Complete `docs/superpowers/plans/2026-06-14-youtube-summary-mvp-foundation.md` f
 ## File Structure
 
 - Modify `src-tauri/src/prompt_packs/mod.rs`: expose runtime commands and state.
-- Modify `src-tauri/migrations/0006_prompt_pack_mvp.sql` before the foundation
-  migration ships, or create the next migration if foundation is already
-  applied: add `prompt_pack_runs.client_request_id TEXT` with a partial unique
-  index for non-null values.
+- Create `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`: add
+  `prompt_pack_runs.client_request_id TEXT` with a partial unique index for
+  non-null values.
 - Create `src-tauri/src/prompt_packs/dto.rs`: preflight, start, run, stage, and event DTOs.
 - Create `src-tauri/src/prompt_packs/runtime.rs`: active run state, cancellation, events, active list, startup cleanup.
 - Create `src-tauri/src/prompt_packs/youtube_summary.rs`: source expansion, preflight partitions, deterministic snapshot creation, and stage skeleton creation.
@@ -31,6 +30,96 @@ Complete `docs/superpowers/plans/2026-06-14-youtube-summary-mvp-foundation.md` f
 - Modify `src/lib/types/prompt-packs.ts`: frontend DTO types for runtime commands.
 - Modify `src/lib/api/prompt-packs.ts`: command wrappers and event listener.
 - Modify `src/lib/api/prompt-packs.test.ts`: wrapper tests.
+
+---
+
+## Task 0: Run Idempotency Migration
+
+**Files:**
+- Create: `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`
+- Modify: `src-tauri/src/prompt_packs/store.rs`
+
+- [ ] **Step 1: Write migration constraint tests**
+
+Add tests:
+
+```rust
+#[tokio::test]
+async fn prompt_pack_runs_client_request_id_is_unique_when_present() {
+    let pool = test_pool_with_prompt_pack_schema().await;
+
+    insert_minimal_prompt_pack_run(&pool, 41, Some("req-duplicate"))
+        .await
+        .expect("first run");
+    let duplicate = insert_minimal_prompt_pack_run(&pool, 42, Some("req-duplicate"))
+        .await
+        .expect_err("duplicate request id rejected");
+
+    assert!(duplicate.to_string().contains("client_request_id"));
+}
+
+#[tokio::test]
+async fn prompt_pack_runs_allow_null_client_request_id_for_pre_existing_rows() {
+    let pool = test_pool_with_prompt_pack_schema().await;
+
+    insert_minimal_prompt_pack_run(&pool, 41, None)
+        .await
+        .expect("first legacy-compatible run");
+    insert_minimal_prompt_pack_run(&pool, 42, None)
+        .await
+        .expect("second legacy-compatible run");
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_runs WHERE client_request_id IS NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("null request ids");
+
+    assert_eq!(count, 2);
+}
+```
+
+- [ ] **Step 2: Run tests to verify failure**
+
+Run:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store::tests::prompt_pack_runs_client_request_id
+```
+
+Expected: fail because `client_request_id` does not exist.
+
+- [ ] **Step 3: Add migration**
+
+Create `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`:
+
+```sql
+ALTER TABLE prompt_pack_runs
+ADD COLUMN client_request_id TEXT
+CHECK (client_request_id IS NULL OR length(trim(client_request_id)) > 0);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_pack_runs_client_request_id_unique
+ON prompt_pack_runs(client_request_id)
+WHERE client_request_id IS NOT NULL;
+```
+
+- [ ] **Step 4: Run migration tests**
+
+Run:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store::tests::prompt_pack_runs_client_request_id
+```
+
+Expected: pass.
+
+- [ ] **Step 5: Commit**
+
+```powershell
+git add src-tauri/migrations/0007_prompt_pack_run_idempotency.sql src-tauri/src/prompt_packs/store.rs
+git commit -m "feat: add prompt pack run idempotency migration"
+```
 
 ---
 
@@ -102,6 +191,13 @@ pub struct PromptPackRunEvent {
     pub message: Option<String>,
     pub error: Option<String>,
 }
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListPromptPackRunsRequest {
+    pub project_id: Option<i64>,
+    pub limit: Option<i64>,
+}
 ```
 
 - [ ] **Step 2: Define TypeScript DTOs**
@@ -155,6 +251,11 @@ export interface StartYoutubeSummaryRunInput {
 export type StartYoutubeSummaryRunOutcome =
   | { kind: "started"; run: PromptPackRunSummary }
   | { kind: "blocked"; preflight: YoutubeSummaryPreflightResponse };
+
+export interface ListPromptPackRunsInput {
+  projectId?: number | null;
+  limit?: number;
+}
 ```
 
 `cancel_requested` is an in-memory runtime flag and may appear in message text,
@@ -457,8 +558,11 @@ git commit -m "feat: freeze youtube summary run snapshots"
 
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
+- Modify: `src-tauri/src/prompt_packs/store.rs`
+- Modify: `src-tauri/src/prompt_packs/dto.rs`
 - Modify: `src-tauri/src/prompt_packs/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
+- Modify: `src/lib/types/prompt-packs.ts`
 - Modify: `src/lib/api/prompt-packs.ts`
 - Modify: `src/lib/api/prompt-packs.test.ts`
 
@@ -525,6 +629,29 @@ async fn cleanup_interrupted_prompt_pack_runs_marks_stale_active_rows_interrupte
     assert_eq!(statuses.get(&42).map(String::as_str), Some("interrupted"));
     assert_eq!(statuses.get(&43).map(String::as_str), Some("complete"));
 }
+
+#[tokio::test]
+async fn list_prompt_pack_runs_returns_recent_runs_for_project() {
+    let pool = test_pool_with_prompt_pack_runs([
+        (41, Some(7), "complete", "2026-06-14T10:00:00Z"),
+        (42, Some(7), "running", "2026-06-14T11:00:00Z"),
+        (43, Some(8), "complete", "2026-06-14T12:00:00Z"),
+    ])
+    .await;
+
+    let runs = list_prompt_pack_runs_in_pool(
+        &pool,
+        ListPromptPackRunsRequest {
+            project_id: Some(7),
+            limit: Some(20),
+        },
+    )
+    .await
+    .expect("recent runs");
+
+    assert_eq!(runs.iter().map(|run| run.run_id).collect::<Vec<_>>(), vec![42, 41]);
+    assert!(runs.iter().all(|run| run.project_id == Some(7)));
+}
 ```
 
 - [ ] **Step 2: Implement state**
@@ -536,7 +663,8 @@ Implement `PromptPackRunState` with:
 - duplicate prevention per run id;
 - terminal event cleanup for `completed`, `partial`, `failed`, `cancelled`, and
   `interrupted` event kinds;
-- `list_active_prompt_pack_runs` support.
+- `list_active_prompt_pack_runs` support;
+- `list_prompt_pack_runs` support for recent terminal and active runs.
 
 - [ ] **Step 3: Implement backend commands**
 
@@ -553,11 +681,25 @@ pub async fn start_youtube_summary_run(...) -> AppResult<StartYoutubeSummaryRunO
 pub async fn cancel_prompt_pack_run(...) -> AppResult<()>
 
 #[tauri::command]
+pub async fn list_prompt_pack_runs(...) -> AppResult<Vec<PromptPackRunSummaryDto>>
+
+#[tauri::command]
 pub async fn list_active_prompt_pack_runs(...) -> AppResult<Vec<PromptPackRunSummaryDto>>
 
 #[tauri::command]
 pub async fn list_prompt_pack_run_stages(...) -> AppResult<Vec<PromptPackStageRunDto>>
 ```
+
+`list_prompt_pack_runs` rules:
+
+- accepts optional `project_id` and optional `limit`;
+- default `limit = 20`, maximum `limit = 100`;
+- returns active and terminal Prompt Pack runs, never legacy `analysis_runs`;
+- orders by `created_at DESC, id DESC`;
+- includes enough summary fields for the UI runs panel: `run_id`, `project_id`,
+  `pack_id`, `pack_version`, `run_status`, `result_status`, `created_at`,
+  `started_at`, `completed_at`, `latest_message`, `progress_current`,
+  `progress_total`, and `queue_position`.
 
 `StartYoutubeSummaryRunOutcomeDto` must be a tagged response:
 
@@ -638,6 +780,10 @@ export function startYoutubeSummaryRun(input: StartYoutubeSummaryRunInput) {
 export function cancelPromptPackRun(runId: number) {
   return invoke<void>("cancel_prompt_pack_run", { runId });
 }
+
+export function listPromptPackRuns(input?: ListPromptPackRunsInput) {
+  return invoke<PromptPackRunSummary[]>("list_prompt_pack_runs", { ...input });
+}
 ```
 
 Extend `src/lib/api/prompt-packs.test.ts` so it verifies:
@@ -669,6 +815,12 @@ expect(invoke).toHaveBeenCalledWith("start_youtube_summary_run", {
 
 await listenToPromptPackRunEvents(vi.fn());
 expect(listen).toHaveBeenCalledWith("prompt-pack-run-event", expect.any(Function));
+
+await listPromptPackRuns({ projectId: 7, limit: 20 });
+expect(invoke).toHaveBeenCalledWith("list_prompt_pack_runs", {
+  projectId: 7,
+  limit: 20,
+});
 ```
 
 - [ ] **Step 7: Run runtime tests**
@@ -703,6 +855,8 @@ git status --short
 
 Expected:
 
+- `0007_prompt_pack_run_idempotency.sql` enforces non-null
+  `client_request_id` uniqueness while allowing NULL for pre-existing rows;
 - preflight partitions behave as specified;
 - start recomputes preflight and returns blocked response without creating a
   failed run when start-time preflight has blocking failures;
@@ -713,6 +867,8 @@ Expected:
 - active run/cancel state works without persisting `cancel_requested` as
   `run_status`;
 - stale `queued` and `running` rows are marked `interrupted` during cleanup;
+- `list_prompt_pack_runs` returns recent Prompt Pack runs for the requested
+  project with deterministic ordering;
 - terminal events remove runs from active state and use
   `prompt-pack-run-event`;
 - frontend wrappers call the expected Tauri commands.
