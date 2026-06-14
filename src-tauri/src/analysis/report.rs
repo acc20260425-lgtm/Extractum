@@ -430,7 +430,7 @@ struct ReportRunInput {
     output_language: String,
     prompt_template: AnalysisPromptTemplate,
     model_override: Option<String>,
-    profile_id: Option<String>,
+    resolved_profile: ResolvedLlmProfile,
     preflight: AnalysisRunPreflight,
 }
 
@@ -821,13 +821,10 @@ async fn run_report_pipeline(
         .emit(&handle);
 
     let chunks = chunk_messages(&corpus, ANALYSIS_CHUNK_TARGET_CHARS);
-    let resolved_profile = resolve_profile_for_backend(&handle, input.profile_id.as_deref())
-        .await
-        .map_err(|error| ReportRunError::Failed(String::from(error)))?;
     let ctx = ReportPipelineContext {
         handle,
         pool,
-        resolved_profile,
+        resolved_profile: input.resolved_profile.clone(),
         run_id,
     };
 
@@ -1209,7 +1206,7 @@ pub(crate) async fn start_analysis_report_run(
                 output_language,
                 prompt_template,
                 model_override,
-                profile_id,
+                resolved_profile,
                 preflight,
             },
         )
@@ -1239,13 +1236,14 @@ mod tests {
         build_map_request, build_reduce_request, capture_report_corpus, extract_json_payload,
         finish_map_phase, mark_interrupted_analysis_runs, parse_chunk_summary,
         resolve_analysis_telegram_history_scope, validate_report_preflight, ReduceRequestParams,
-        ReportRunError, StartAnalysisReportRequest,
+        ReportRunError, ReportRunInput, StartAnalysisReportRequest,
     };
     use crate::analysis::corpus::{
         AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
     };
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
     use crate::error::AppErrorKind;
+    use crate::llm::{ProviderKind, ResolvedLlmProfile};
 
     const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-i2"]}"#;
 
@@ -1285,6 +1283,48 @@ mod tests {
             source_subtype: Some("channel".to_string()),
             metadata_zstd: None,
         }
+    }
+
+    fn sample_resolved_profile() -> ResolvedLlmProfile {
+        ResolvedLlmProfile {
+            profile_id: "research".to_string(),
+            provider: ProviderKind::Gemini,
+            default_model: "gemini-2.5-flash".to_string(),
+            api_key: "secret-key".to_string(),
+            base_url: String::new(),
+        }
+    }
+
+    #[test]
+    fn report_run_input_carries_resolved_profile_snapshot() {
+        let input = ReportRunInput {
+            run_id: 9,
+            scope_label: "Source".to_string(),
+            corpus_request: CorpusLoadRequest {
+                source_type: crate::sources::TELEGRAM_SOURCE_TYPE.to_string(),
+                source_ids: vec![2],
+                period_from: 10,
+                period_to: 20,
+                youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+                include_migrated_history: false,
+            },
+            period_from: 10,
+            period_to: 20,
+            output_language: "English".to_string(),
+            prompt_template: sample_prompt_template(),
+            model_override: Some("gemini-2.5-pro".to_string()),
+            resolved_profile: sample_resolved_profile(),
+            preflight: AnalysisRunPreflight {
+                source_ids: vec![2],
+                message_count: 1,
+                estimated_input_chars: 500,
+                estimated_chunks: 1,
+                limits: AnalysisRunPreflightLimits::default(),
+            },
+        };
+
+        assert_eq!(input.resolved_profile.profile_id, "research");
+        assert_eq!(input.resolved_profile.default_model, "gemini-2.5-flash");
     }
 
     #[test]
