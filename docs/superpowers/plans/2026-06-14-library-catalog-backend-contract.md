@@ -260,7 +260,7 @@ pub(crate) async fn catalog_jobs_for_sources(&self, source_ids: &[i64]) -> Vec<S
         })
         .filter(|job| {
             matches!(
-                job.status,
+                &job.status,
                 SourceJobStatus::Queued | SourceJobStatus::Running | SourceJobStatus::Failed
             )
         })
@@ -336,6 +336,18 @@ async fn list_library_catalog_returns_status_capabilities_and_filter_counts() {
         "Drone Radar",
         102,
         Some(202),
+    )
+    .await;
+    insert_source(
+        &pool,
+        4,
+        "youtube",
+        Some("channel"),
+        None,
+        "chan-1",
+        "Unsupported channel",
+        103,
+        None,
     )
     .await;
 
@@ -462,6 +474,23 @@ async fn list_library_catalog_returns_status_capabilities_and_filter_counts() {
     assert!(telegram.latest_job.is_none());
     assert!(telegram.capabilities.can_connect_to_project);
 
+    let channel = catalog
+        .sources
+        .iter()
+        .find(|record| record.source.source_id == 4)
+        .expect("youtube channel catalog record");
+    assert_eq!(channel.status, LibraryCatalogStatus::Unavailable);
+    assert_eq!(
+        channel.status_detail.as_deref(),
+        Some(YOUTUBE_CHANNEL_DISABLED_REASON)
+    );
+    assert!(!channel.capabilities.can_refresh_source);
+    assert!(!channel.capabilities.can_connect_to_project);
+    assert_eq!(
+        channel.disabled_reasons.connect_to_project.as_deref(),
+        Some(YOUTUBE_CHANNEL_DISABLED_REASON)
+    );
+
     let youtube_video_count = catalog
         .filter_counts
         .iter()
@@ -475,7 +504,7 @@ async fn list_library_catalog_returns_status_capabilities_and_filter_counts() {
         .iter()
         .find(|count| count.provider == "youtube" && count.source_subtype.as_deref() == Some("channel"))
         .expect("youtube channel count");
-    assert_eq!(youtube_channel_count.count, 0);
+    assert_eq!(youtube_channel_count.count, 1);
     assert!(youtube_channel_count.disabled);
     assert_eq!(
         youtube_channel_count.disabled_reason.as_deref(),
@@ -496,10 +525,15 @@ Expected: FAIL with missing catalog types and `query_library_catalog`.
 
 - [ ] **Step 7: Add catalog models**
 
-In `src-tauri/src/library_sources/models.rs`, add after `LibrarySourceRecord`:
+In `src-tauri/src/library_sources/models.rs`, add this import with the existing imports at the top:
 
 ```rust
 use crate::youtube::jobs::SourceJobRecord;
+```
+
+Then add these models after `LibrarySourceRecord`:
+
+```rust
 
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct LibraryCatalogResponse {
@@ -517,7 +551,7 @@ pub(crate) struct LibraryCatalogRecord {
     pub disabled_reasons: LibraryCatalogDisabledReasons,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum LibraryCatalogStatus {
     Active,
@@ -552,14 +586,14 @@ pub(crate) struct LibraryCatalogFilterCount {
 }
 ```
 
-If the new `use crate::youtube::jobs::SourceJobRecord;` must be at the top of the file to satisfy formatting, place it with the existing imports.
-
 - [ ] **Step 8: Implement catalog query and helpers**
 
 In `src-tauri/src/library_sources/mod.rs`, keep the existing public source
-record export and add crate-visible catalog exports:
+record export, keep the existing `LibrarySourceRow` import, and add
+crate-visible catalog exports:
 
 ```rust
+use models::LibrarySourceRow;
 pub(crate) use models::{
     LibraryCatalogCapabilities, LibraryCatalogDisabledReasons, LibraryCatalogFilterCount,
     LibraryCatalogRecord, LibraryCatalogResponse, LibraryCatalogStatus,
@@ -666,8 +700,15 @@ fn build_catalog_record(
     source: LibrarySourceRecord,
     latest_job: Option<SourceJobRecord>,
 ) -> LibraryCatalogRecord {
-    let (status, status_detail) = catalog_status(&latest_job);
-    let syncing = matches!(status, LibraryCatalogStatus::Syncing);
+    let unsupported_reason = unsupported_source_reason(&source);
+    let (job_status, job_status_detail) = catalog_status(&latest_job);
+    let status = if unsupported_reason.is_some() {
+        LibraryCatalogStatus::Unavailable
+    } else {
+        job_status
+    };
+    let status_detail = unsupported_reason.clone().or(job_status_detail);
+    let syncing = matches!(&status, LibraryCatalogStatus::Syncing);
     let delete_reason = (source.project_count > 0).then(|| {
         format!(
             "Source {} is used by {} project(s). Remove it from projects first.",
@@ -681,17 +722,26 @@ fn build_catalog_record(
         status,
         status_detail,
         capabilities: LibraryCatalogCapabilities {
-            can_refresh_source: !syncing,
+            can_refresh_source: unsupported_reason.is_none() && !syncing,
             can_delete: delete_reason.is_none(),
             can_edit: false,
-            can_connect_to_project: true,
+            can_connect_to_project: unsupported_reason.is_none(),
         },
         disabled_reasons: LibraryCatalogDisabledReasons {
-            refresh_source: syncing.then(|| SOURCE_SYNCING_DISABLED_REASON.to_string()),
+            refresh_source: unsupported_reason
+                .clone()
+                .or_else(|| syncing.then(|| SOURCE_SYNCING_DISABLED_REASON.to_string())),
             delete: delete_reason,
             edit: Some(SOURCE_EDIT_DISABLED_REASON.to_string()),
-            connect_to_project: None,
+            connect_to_project: unsupported_reason,
         },
+    }
+}
+
+fn unsupported_source_reason(source: &LibrarySourceRecord) -> Option<String> {
+    match (source.provider.as_str(), source.source_subtype.as_deref()) {
+        ("youtube", Some("channel")) => Some(YOUTUBE_CHANNEL_DISABLED_REASON.to_string()),
+        _ => None,
     }
 }
 
@@ -984,7 +1034,9 @@ Expected: PASS.
 
 - [ ] **Step 6: Write failing catalog model tests**
 
-In `src/lib/ui/library-catalog-model.test.ts`, replace the job-derived status test with:
+In `src/lib/ui/library-catalog-model.test.ts`, remove the `SourceJobRecord`
+import and remove the `job()` helper. Then replace the job-derived status test
+with:
 
 ```ts
   it("maps backend catalog status and status detail into catalog rows", () => {
