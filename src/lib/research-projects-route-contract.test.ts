@@ -10,6 +10,8 @@ describe("projects mvp route contract", () => {
     expect(pageSource).toContain("listProjects");
     expect(pageSource).toContain("listProjectSources");
     expect(pageSource).toContain("listLibrarySources");
+    expect(pageSource).toContain("formatAppError");
+    expect(pageSource).not.toContain("String(error)");
     expect(pageSource).not.toContain("listAnalysisSourceGroups");
     expect(pageSource).not.toContain("updateAnalysisSourceGroup");
   });

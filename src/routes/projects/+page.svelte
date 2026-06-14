@@ -15,6 +15,7 @@
     updateProject,
   } from "$lib/api/projects";
   import { listSourceJobs } from "$lib/api/source-jobs";
+  import { formatAppError } from "$lib/app-error";
   import {
     createResearchProjectsWorkflow,
     type ResearchProjectsWorkflowState,
@@ -52,7 +53,7 @@
     updateProject,
     deleteProject,
     startProjectAnalysis,
-    formatError: (action, error) => `Error ${action}: ${String(error)}`,
+    formatError: formatAppError,
   });
 
   onMount(() => {
