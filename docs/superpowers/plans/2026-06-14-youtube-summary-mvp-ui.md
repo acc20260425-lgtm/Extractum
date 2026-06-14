@@ -532,20 +532,54 @@ git commit -m "feat: add youtube summary result viewer"
 ## Task 6: Full UI Verification and Browser Smoke
 
 **Files:**
+- Create: `src/lib/youtube-summary-smoke-fixture-contract.test.ts`
 - Modify only files needed to fix issues found by verification.
 
-- [ ] **Step 1: Run frontend checks**
+- [ ] **Step 1: Add smoke fixture guard contract test**
+
+Create `src/lib/youtube-summary-smoke-fixture-contract.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+const files = [
+  "src/lib/api/prompt-packs.ts",
+  "src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte",
+  "src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte",
+  "src/lib/components/research-projects/YoutubeSummaryResultView.svelte",
+];
+
+function readUiSources() {
+  return files.map((file) => readFileSync(file, "utf8")).join("\n");
+}
+
+describe("youtube summary smoke fixture guard", () => {
+  it("keeps the smoke fixture behind a dev-only explicit opt-in", () => {
+    const source = readUiSources();
+
+    expect(source).toContain("VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE");
+    expect(source).toContain("import.meta.env.DEV");
+    expect(source).toContain('VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE === "1"');
+    expect(source).toContain("YouTube Summary Smoke Fixture");
+    expect(source).not.toContain("analysis_runs");
+  });
+});
+```
+
+- [ ] **Step 2: Run frontend checks**
 
 Run:
 
 ```powershell
 npm test -- --run src/lib/api/prompt-packs.test.ts src/lib/ui/youtube-summary-workflow.test.ts src/lib/youtube-summary-launch-contract.test.ts src/lib/youtube-summary-result-view-contract.test.ts
+npm test -- --run src/lib/youtube-summary-smoke-fixture-contract.test.ts
 npm run check
 ```
 
 Expected: pass.
 
-- [ ] **Step 2: Run app manually**
+- [ ] **Step 3: Run app manually**
 
 Run:
 
@@ -553,7 +587,7 @@ Run:
 npm run dev -- --host 127.0.0.1
 ```
 
-Keep the dev server running for Step 3. If the local DB has no synced YouTube
+Keep the dev server running for Step 4. If the local DB has no synced YouTube
 video or playlist source, restart with the smoke fixture enabled:
 
 ```powershell
@@ -572,7 +606,7 @@ Smoke fixture fallback requirements:
 - never call legacy `analysis_runs` APIs;
 - keep fixture-only branches out of production builds.
 
-- [ ] **Step 3: Run browser smoke on desktop viewport**
+- [ ] **Step 4: Run browser smoke on desktop viewport**
 
 Use the in-app Browser or Playwright against `http://127.0.0.1:1420` with viewport `1440x900`.
 
@@ -590,9 +624,9 @@ Smoke path:
 
 Capture at least one desktop screenshot of the launch dialog and one desktop screenshot of the result viewer. Save them under `artifacts/` when using Playwright, or attach them in the in-app Browser verification notes.
 
-- [ ] **Step 4: Commit verification fixes**
+- [ ] **Step 5: Commit verification fixes**
 
-If Step 1, Step 2, or Step 3 required fixes:
+If Step 1, Step 2, Step 3, or Step 4 required fixes:
 
 ```powershell
 git add src/lib src/routes
@@ -609,15 +643,17 @@ Run:
 
 ```powershell
 npm test -- --run src/lib/api/prompt-packs.test.ts src/lib/ui/youtube-summary-workflow.test.ts src/lib/youtube-summary-launch-contract.test.ts src/lib/youtube-summary-result-view-contract.test.ts
+npm test -- --run src/lib/youtube-summary-smoke-fixture-contract.test.ts
 npm run check
 git status --short
 ```
 
-Then complete the browser smoke from Task 6 Step 3.
+Then complete the browser smoke from Task 6 Step 4.
 
 Expected:
 
 - frontend tests pass;
+- smoke fixture contract test proves fixture code is dev-only and explicit opt-in;
 - Svelte check passes;
 - YouTube Summary launch is available only for synced YouTube video/playlist sources;
 - Prompt Pack run list updates from `prompt-pack-run-event`;

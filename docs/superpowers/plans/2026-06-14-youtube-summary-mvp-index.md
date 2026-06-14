@@ -105,6 +105,7 @@ Run and commit every task from `2026-06-14-youtube-summary-mvp-runtime.md`.
 Acceptance gate:
 
 ```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib migrations
 cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs
 npm test -- --run src/lib/api/prompt-packs.test.ts
 git status --short
@@ -130,12 +131,13 @@ Acceptance gate:
 
 ```powershell
 npm test -- --run src/lib/api/prompt-packs.test.ts src/lib/ui/youtube-summary-workflow.test.ts src/lib/youtube-summary-launch-contract.test.ts src/lib/youtube-summary-result-view-contract.test.ts
+npm test -- --run src/lib/youtube-summary-smoke-fixture-contract.test.ts
 npm run check
 git status --short
 ```
 
 Then complete the UI browser smoke from
-`2026-06-14-youtube-summary-mvp-ui.md` Task 6 Step 3, including the desktop
+`2026-06-14-youtube-summary-mvp-ui.md` Task 6 Step 4, including the desktop
 launch-dialog and result-view screenshots. If the local DB has no synced
 YouTube source, use the child plan's dev-only smoke fixture fallback.
 

@@ -22,6 +22,8 @@ Complete `docs/superpowers/plans/2026-06-14-youtube-summary-mvp-foundation.md` f
 - Create `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`: add
   `prompt_pack_runs.client_request_id TEXT` with a partial unique index for
   non-null values.
+- Modify `src-tauri/src/migrations.rs`: register migration version 7 and update
+  migration version-list tests.
 - Create `src-tauri/src/prompt_packs/dto.rs`: preflight, start, run, stage, and event DTOs.
 - Create `src-tauri/src/prompt_packs/runtime.rs`: active run state, cancellation, events, active list, startup cleanup.
 - Create `src-tauri/src/prompt_packs/youtube_summary.rs`: source expansion, preflight partitions, deterministic snapshot creation, and stage skeleton creation.
@@ -37,6 +39,7 @@ Complete `docs/superpowers/plans/2026-06-14-youtube-summary-mvp-foundation.md` f
 
 **Files:**
 - Create: `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`
+- Modify: `src-tauri/src/migrations.rs`
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 
 - [ ] **Step 1: Write migration constraint tests**
@@ -44,6 +47,16 @@ Complete `docs/superpowers/plans/2026-06-14-youtube-summary-mvp-foundation.md` f
 Add tests:
 
 ```rust
+#[test]
+fn build_migrations_includes_prompt_pack_runtime_version_seven() {
+    let versions = build_migrations()
+        .iter()
+        .map(|migration| migration.version)
+        .collect::<Vec<_>>();
+
+    assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+}
+
 #[tokio::test]
 async fn prompt_pack_runs_client_request_id_is_unique_when_present() {
     let pool = test_pool_with_prompt_pack_schema().await;
@@ -85,12 +98,14 @@ async fn prompt_pack_runs_allow_null_client_request_id_for_pre_existing_rows() {
 Run:
 
 ```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib migrations::tests::build_migrations_includes_prompt_pack_runtime_version_seven
 cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store::tests::prompt_pack_runs_client_request_id
 ```
 
-Expected: fail because `client_request_id` does not exist.
+Expected: fail because migration 7 is not registered and `client_request_id`
+does not exist.
 
-- [ ] **Step 3: Add migration**
+- [ ] **Step 3: Add migration and register it**
 
 Create `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`:
 
@@ -104,11 +119,38 @@ ON prompt_pack_runs(client_request_id)
 WHERE client_request_id IS NOT NULL;
 ```
 
+In `src-tauri/src/migrations.rs`, add the SQL constant and migration builder:
+
+```rust
+const PROMPT_PACK_RUN_IDEMPOTENCY_VERSION: i64 = 7;
+const PROMPT_PACK_RUN_IDEMPOTENCY_DESCRIPTION: &str = "prompt pack run idempotency";
+const PROMPT_PACK_RUN_IDEMPOTENCY_SQL: &str =
+    include_str!("../migrations/0007_prompt_pack_run_idempotency.sql");
+
+fn prompt_pack_run_idempotency_migration() -> Migration {
+    Migration {
+        version: PROMPT_PACK_RUN_IDEMPOTENCY_VERSION,
+        description: PROMPT_PACK_RUN_IDEMPOTENCY_DESCRIPTION,
+        sql: PROMPT_PACK_RUN_IDEMPOTENCY_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+```
+
+Append `prompt_pack_run_idempotency_migration()` after
+`prompt_pack_mvp_migration()` in `build_migrations()`.
+
+Update the foundation migration version-list test from
+`vec![1, 2, 3, 4, 5, 6]` to `vec![1, 2, 3, 4, 5, 6, 7]`. Rename the test to
+`build_migrations_includes_prompt_pack_runtime_version_seven` if the old name
+only mentions version six.
+
 - [ ] **Step 4: Run migration tests**
 
 Run:
 
 ```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib migrations
 cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store::tests::prompt_pack_runs_client_request_id
 ```
 
@@ -117,7 +159,7 @@ Expected: pass.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add src-tauri/migrations/0007_prompt_pack_run_idempotency.sql src-tauri/src/prompt_packs/store.rs
+git add src-tauri/migrations/0007_prompt_pack_run_idempotency.sql src-tauri/src/migrations.rs src-tauri/src/prompt_packs/store.rs
 git commit -m "feat: add prompt pack run idempotency migration"
 ```
 
@@ -848,6 +890,7 @@ git commit -m "feat: add prompt pack run runtime"
 Run:
 
 ```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib migrations
 cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs
 npm test -- --run src/lib/api/prompt-packs.test.ts
 git status --short
