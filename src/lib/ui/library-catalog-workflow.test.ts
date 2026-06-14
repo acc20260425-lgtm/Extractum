@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LibrarySourceRecord } from "$lib/types/library-sources";
-import type { SourceJobRecord } from "$lib/types/sources";
+import type { LibraryCatalogRecord, LibrarySourceRecord } from "$lib/types/library-sources";
 import {
   createLibraryCatalogWorkflow,
   type LibraryCatalogWorkflowState,
@@ -32,28 +31,32 @@ function record(overrides: Partial<LibrarySourceRecord> = {}): LibrarySourceReco
   };
 }
 
-function job(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
+function catalogRecord(overrides: Partial<LibraryCatalogRecord> = {}): LibraryCatalogRecord {
   return {
-    job_id: "job-1",
-    source_id: 1,
-    related_source_id: null,
-    job_type: "youtube_video_full_sync",
-    status: "running",
-    message: "Syncing",
-    progress_current: 1,
-    progress_total: 2,
-    started_at: 1_717_000_100,
-    finished_at: null,
-    warnings: [],
-    error: null,
+    source: record(),
+    latest_job: null,
+    status: "active",
+    status_detail: null,
+    capabilities: {
+      can_refresh_source: true,
+      can_delete: true,
+      can_edit: false,
+      can_connect_to_project: true,
+    },
+    disabled_reasons: {
+      refresh_source: null,
+      delete: null,
+      edit: "Source editing is not available yet.",
+      connect_to_project: null,
+    },
     ...overrides,
   };
 }
 
 function createHarness(initial: Partial<LibraryCatalogWorkflowState> = {}) {
   const state: LibraryCatalogWorkflowState = {
-    sourceRecords: [],
-    sourceJobs: [],
+    catalogRecords: [],
+    filterCounts: [],
     sources: [],
     loading: false,
     status: "",
@@ -62,23 +65,39 @@ function createHarness(initial: Partial<LibraryCatalogWorkflowState> = {}) {
   const deps = {
     getState: () => state,
     patch: vi.fn((patch: Partial<LibraryCatalogWorkflowState>) => Object.assign(state, patch)),
-    listSources: vi.fn(),
-    listSourceJobs: vi.fn(),
+    listCatalog: vi.fn(),
     formatError: vi.fn((action: string, error: unknown) => `Error ${action}: ${String(error)}`),
   };
   return { state, deps, workflow: createLibraryCatalogWorkflow(deps) };
 }
 
 describe("library catalog workflow", () => {
-  it("loads library source records and source jobs into catalog rows", async () => {
+  it("loads backend catalog records into catalog rows", async () => {
     const { state, deps, workflow } = createHarness();
-    deps.listSources.mockResolvedValueOnce([record()]);
-    deps.listSourceJobs.mockResolvedValueOnce([job()]);
+    deps.listCatalog.mockResolvedValueOnce({
+      sources: [
+        catalogRecord({
+          source: record(),
+          status: "syncing",
+          status_detail: "Syncing",
+        }),
+      ],
+      filter_counts: [
+        {
+          provider: "youtube",
+          source_subtype: "video",
+          count: 1,
+          disabled: false,
+          disabled_reason: null,
+        },
+      ],
+    });
 
     await workflow.loadLibrary();
 
-    expect(state.sourceRecords).toHaveLength(1);
-    expect(state.sourceJobs).toHaveLength(1);
+    expect(deps.listCatalog).toHaveBeenCalledTimes(1);
+    expect(state.catalogRecords).toHaveLength(1);
+    expect(state.filterCounts).toHaveLength(1);
     expect(state.sources[0]).toEqual(
       expect.objectContaining({
         sourceId: 1,
@@ -115,12 +134,12 @@ describe("library catalog workflow", () => {
         },
       ],
     });
-    deps.listSources.mockRejectedValueOnce(new Error("offline"));
+    deps.listCatalog.mockRejectedValueOnce(new Error("offline"));
 
     await workflow.loadLibrary();
 
     expect(state.sources.map((source) => source.id)).toEqual(["source:9"]);
-    expect(state.status).toBe("Error loading library sources: Error: offline");
+    expect(state.status).toBe("Error loading library catalog: Error: offline");
     expect(state.loading).toBe(false);
   });
 });

@@ -1304,7 +1304,7 @@ git commit -m "feat: add library catalog frontend contract"
 - Modify: `src/lib/components/research-projects/LibraryScreen.svelte`
 - Modify: `src/lib/library-prototype-contract.test.ts`
 
-- [ ] **Step 1: Write failing workflow and route tests**
+- [x] **Step 1: Write failing workflow and route tests**
 
 In `src/lib/ui/library-catalog-workflow.test.ts`, remove the `SourceJobRecord` import and the `job()` helper.
 
@@ -1415,7 +1415,7 @@ Update the screen coordination test:
     expect(screenSource).toContain("buildLibraryCatalogFilterTree(workflowState.filterCounts)");
 ```
 
-- [ ] **Step 2: Run workflow tests and verify failure**
+- [x] **Step 2: Run workflow tests and verify failure**
 
 Run:
 
@@ -1425,7 +1425,7 @@ npm.cmd test -- --run src/lib/ui/library-catalog-workflow.test.ts src/lib/librar
 
 Expected: FAIL because workflow and route still use `listSourceJobs`.
 
-- [ ] **Step 3: Update Library catalog workflow**
+- [x] **Step 3: Update Library catalog workflow**
 
 Replace `src/lib/ui/library-catalog-workflow.ts` with this shape:
 
@@ -1486,7 +1486,7 @@ export function createLibraryCatalogWorkflow(deps: LibraryCatalogWorkflowDeps) {
 }
 ```
 
-- [ ] **Step 4: Update `/projects/library` route**
+- [x] **Step 4: Update `/projects/library` route**
 
 In `src/routes/projects/library/+page.svelte`, replace the script block with:
 
@@ -1523,7 +1523,7 @@ In `src/routes/projects/library/+page.svelte`, replace the script block with:
 
 Keep the existing markup below the script.
 
-- [ ] **Step 5: Update Library screen filter source**
+- [x] **Step 5: Update Library screen filter source**
 
 In `src/lib/components/research-projects/LibraryScreen.svelte`, change:
 
@@ -1537,7 +1537,7 @@ to:
   let filterRows = $derived(buildLibraryCatalogFilterTree(workflowState.filterCounts));
 ```
 
-- [ ] **Step 6: Run Svelte autofixer for modified Svelte files**
+- [x] **Step 6: Run Svelte autofixer for modified Svelte files**
 
 Run `mcp__svelte_server__.svelte_autofixer` for:
 
@@ -1548,7 +1548,7 @@ Use desired Svelte version `5`.
 
 Expected: no blocking issues. Apply any concrete fixes the autofixer reports.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -1559,7 +1559,7 @@ npm.cmd run check
 
 Expected: all PASS and `svelte-check` reports 0 errors.
 
-- [ ] **Step 8: Commit standalone Library migration**
+- [x] **Step 8: Commit standalone Library migration**
 
 Run:
 

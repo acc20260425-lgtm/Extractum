@@ -28,7 +28,7 @@
   let status = $state("");
   let addSourceDialogOpen = $state(false);
 
-  let filterRows = $derived(buildLibraryCatalogFilterTree(workflowState.sources));
+  let filterRows = $derived(buildLibraryCatalogFilterTree(workflowState.filterCounts));
   let visibleSources = $derived(
     filterLibraryCatalogSources(workflowState.sources, { filterId: selectedFilterId, query }),
   );

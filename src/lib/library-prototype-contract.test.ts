@@ -9,7 +9,9 @@ describe("Library prototype contract", () => {
   it("renders Library as a separate route backed by the current workflow", () => {
     expect(routeSource).toContain('data-ui-route="library-prototype"');
     expect(routeSource).toContain("createLibraryCatalogWorkflow");
-    expect(routeSource).toContain("listLibrarySources");
+    expect(routeSource).toContain("listLibraryCatalog");
+    expect(routeSource).not.toContain("listLibrarySources");
+    expect(routeSource).not.toContain("listSourceJobs");
     expect(routeSource).toContain("<LibraryScreen");
   });
 
@@ -54,7 +56,7 @@ describe("Library prototype contract", () => {
   });
 
   it("coordinates filter selection, row selection, and Inspector resizing in the screen component", () => {
-    expect(screenSource).toContain("buildLibraryCatalogFilterTree");
+    expect(screenSource).toContain("buildLibraryCatalogFilterTree(workflowState.filterCounts)");
     expect(screenSource).toContain("filterLibraryCatalogSources");
     expect(screenSource).toContain("reconcileLibraryCatalogSourceSelection");
     expect(screenSource).toContain("inspectorWidth");

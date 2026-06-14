@@ -1,13 +1,16 @@
-import type { LibrarySourceRecord } from "$lib/types/library-sources";
-import type { SourceJobRecord } from "$lib/types/sources";
+import type {
+  LibraryCatalogFilterCount,
+  LibraryCatalogRecord,
+  LibraryCatalogResponse,
+} from "$lib/types/library-sources";
 import {
   buildLibraryCatalogSourcesView,
   type LibraryCatalogSourceView,
 } from "./library-catalog-model";
 
 export interface LibraryCatalogWorkflowState {
-  sourceRecords: LibrarySourceRecord[];
-  sourceJobs: SourceJobRecord[];
+  catalogRecords: LibraryCatalogRecord[];
+  filterCounts: LibraryCatalogFilterCount[];
   sources: LibraryCatalogSourceView[];
   loading: boolean;
   status: string;
@@ -16,8 +19,7 @@ export interface LibraryCatalogWorkflowState {
 export interface LibraryCatalogWorkflowDeps {
   getState(): LibraryCatalogWorkflowState;
   patch(patch: Partial<LibraryCatalogWorkflowState>): void;
-  listSources(): Promise<LibrarySourceRecord[]>;
-  listSourceJobs(): Promise<SourceJobRecord[]>;
+  listCatalog(): Promise<LibraryCatalogResponse>;
   formatError(action: string, error: unknown): string;
 }
 
@@ -25,21 +27,21 @@ export function createLibraryCatalogWorkflow(deps: LibraryCatalogWorkflowDeps) {
   function refreshDerivedState() {
     const state = deps.getState();
     deps.patch({
-      sources: buildLibraryCatalogSourcesView(state.sourceRecords, state.sourceJobs),
+      sources: buildLibraryCatalogSourcesView(state.catalogRecords),
     });
   }
 
   async function loadLibrary() {
     deps.patch({ loading: true, status: "" });
     try {
-      const [sourceRecords, sourceJobs] = await Promise.all([
-        deps.listSources(),
-        deps.listSourceJobs(),
-      ]);
-      deps.patch({ sourceRecords, sourceJobs });
+      const catalog = await deps.listCatalog();
+      deps.patch({
+        catalogRecords: catalog.sources,
+        filterCounts: catalog.filter_counts,
+      });
       refreshDerivedState();
     } catch (error) {
-      deps.patch({ status: deps.formatError("loading library sources", error) });
+      deps.patch({ status: deps.formatError("loading library catalog", error) });
     } finally {
       deps.patch({ loading: false });
     }
