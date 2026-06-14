@@ -423,7 +423,7 @@ git commit -m "feat: add youtube summary preflight"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary.rs`
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 
-- [ ] **Step 1: Write snapshot tests**
+- [x] **Step 1: Write snapshot tests**
 
 Add tests:
 
@@ -520,7 +520,7 @@ async fn comment_snapshot_selection_is_deterministic_when_enabled() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -531,7 +531,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::youtube_summ
 
 Expected: fail because snapshot creation does not exist.
 
-- [ ] **Step 3: Implement run creation transaction**
+- [x] **Step 3: Implement run creation transaction**
 
 Inside one DB transaction:
 
@@ -565,7 +565,7 @@ Runtime-only handoff rule:
 - the execution/result plan is responsible for launching LLM work and terminal
   transitions.
 
-- [ ] **Step 4: Implement deterministic comments**
+- [x] **Step 4: Implement deterministic comments**
 
 Use the policy from the approved spec:
 
@@ -576,7 +576,7 @@ Use the policy from the approved spec:
 - truncate each included comment by token estimate and write truncation metadata;
 - write excluded/truncated counts into snapshot metadata and stage input metadata.
 
-- [ ] **Step 5: Run snapshot tests**
+- [x] **Step 5: Run snapshot tests**
 
 Run:
 
@@ -586,7 +586,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::youtube_summ
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary.rs src-tauri/src/prompt_packs/store.rs

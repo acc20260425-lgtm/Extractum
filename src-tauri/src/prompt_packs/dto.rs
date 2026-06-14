@@ -124,3 +124,25 @@ pub enum StartYoutubeSummaryRunOutcomeDto {
     Started { run: PromptPackRunSummaryDto },
     Blocked { preflight: YoutubeSummaryPreflightResponse },
 }
+
+impl StartYoutubeSummaryRunOutcomeDto {
+    #[cfg(test)]
+    pub fn expect_started(self, context: &str) -> PromptPackRunSummaryDto {
+        match self {
+            StartYoutubeSummaryRunOutcomeDto::Started { run } => run,
+            StartYoutubeSummaryRunOutcomeDto::Blocked { .. } => {
+                panic!("{context}: expected started outcome")
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn expect_blocked(self, context: &str) -> YoutubeSummaryPreflightResponse {
+        match self {
+            StartYoutubeSummaryRunOutcomeDto::Blocked { preflight } => preflight,
+            StartYoutubeSummaryRunOutcomeDto::Started { .. } => {
+                panic!("{context}: expected blocked outcome")
+            }
+        }
+    }
+}
