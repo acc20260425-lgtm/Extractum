@@ -24,7 +24,8 @@ use super::models::{
 use super::store::{
     capture_run_snapshot, fetch_prompt_template, fetch_run_row, fetch_source_group,
     find_active_duplicate_run, insert_analysis_run, mark_run_capture_failed,
-    sanitize_snapshot_error, set_run_status, AnalysisRunInsert, DuplicateRunLookup,
+    sanitize_provider_error, sanitize_snapshot_error, set_run_status, AnalysisRunInsert,
+    DuplicateRunLookup,
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
@@ -869,6 +870,7 @@ async fn run_report_pipeline(
 }
 
 async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
+    let sanitized_error = sanitize_provider_error("Report run failed", &error);
     if let Ok(pool) = get_pool(handle).await {
         let _ = set_run_status(
             &pool,
@@ -876,7 +878,7 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
             ANALYSIS_STATUS_FAILED,
             None,
             None,
-            Some(&error),
+            Some(&sanitized_error),
             Some(now_secs()),
         )
         .await;
@@ -884,7 +886,7 @@ async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
 
     RunEvent::new(run_id, "failed", "persist")
         .message("Report run failed.".to_string())
-        .error(error)
+        .error(sanitized_error)
         .emit(handle);
 }
 

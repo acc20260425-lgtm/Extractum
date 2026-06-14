@@ -784,6 +784,25 @@ pub(crate) fn sanitize_snapshot_error(category: &str, raw: &str) -> String {
     }
 }
 
+pub(crate) fn sanitize_provider_error(category: &str, raw: &str) -> String {
+    let sanitized = sanitize_snapshot_error(category, raw);
+    let lower = raw.to_lowercase();
+    if lower.contains("prompt")
+        || lower.contains("payload")
+        || lower.contains("raw provider")
+        || lower.contains("authorization")
+        || lower.contains("bearer")
+        || lower.contains("api_key")
+        || lower.contains("apikey")
+        || lower.contains("sk-")
+        || lower.contains("cookie")
+    {
+        category.to_string()
+    } else {
+        sanitized
+    }
+}
+
 fn validate_snapshot_message(message: &CorpusMessage) -> AppResult<()> {
     if message.r#ref.trim().is_empty() {
         return Err(internal_error("Snapshot message ref is required"));
@@ -1075,7 +1094,8 @@ mod tests {
     use super::{
         capture_run_snapshot, delete_saved_run, ensure_sources_exist, fetch_prompt_template,
         list_analysis_run_summaries, map_run_detail, map_run_summary, mark_run_capture_failed,
-        resolve_run_scope_label, sanitize_snapshot_error, set_run_status, AnalysisRunListFilters,
+        resolve_run_scope_label, sanitize_provider_error, sanitize_snapshot_error, set_run_status,
+        AnalysisRunListFilters,
     };
     use crate::analysis::models::{
         AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, CorpusMessage,
@@ -1801,6 +1821,29 @@ mod tests {
         assert!(!sanitized.to_lowercase().contains("bearer"));
         assert!(!sanitized.contains("sk-live-secret"));
         assert!(!sanitized.contains("api_key=secret"));
+    }
+
+    #[test]
+    fn sanitize_provider_error_redacts_provider_payloads() {
+        let long = "x".repeat(600);
+        let raw = format!(
+            "OpenAI-compatible request failed with HTTP 500: \
+             api_key=sk-live-secret Authorization: Bearer token-123 \
+             prompt: private user prompt payload: raw provider body \
+             https://llm.example.test/v1/chat/completions?api_key=secret#frag {long}"
+        );
+
+        let sanitized = sanitize_provider_error("Provider request failed", &raw);
+        let lower = sanitized.to_lowercase();
+
+        assert!(sanitized.chars().count() <= 512);
+        assert!(!lower.contains("api_key"));
+        assert!(!lower.contains("bearer"));
+        assert!(!lower.contains("private user prompt"));
+        assert!(!lower.contains("raw provider body"));
+        assert!(!sanitized.contains("?api_key="));
+        assert!(!sanitized.contains("#frag"));
+        assert_ne!(sanitized.trim(), "");
     }
 
     #[tokio::test]
