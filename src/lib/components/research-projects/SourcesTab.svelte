@@ -7,11 +7,11 @@
     StatusBadge,
   } from "$lib/components/extractum-ui";
   import type {
-    LibrarySourceProvider,
     LibrarySourceView,
     ProjectSourceLinkView,
     ResearchProjectView,
   } from "$lib/ui/research-projects-model";
+  import type { LibrarySourceProvider } from "$lib/types/library-sources";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
   import ProjectSourceSummary from "./ProjectSourceSummary.svelte";
 
@@ -26,19 +26,24 @@
     project,
     projectSourceLinks,
     librarySources,
+    selectedSourceId,
+    onSelectedSourceIdChange,
     onOpenConnectLibrary,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
     librarySources: LibrarySourceView[];
+    selectedSourceId: string | null;
+    onSelectedSourceIdChange: (sourceId: string | null) => void;
     onOpenConnectLibrary: () => void;
   } = $props();
 
   const columns = [
-    { id: "title", header: "Источник", flexgrow: 1, cell: LibrarySourceCell },
-    { id: "provider", header: "Тип", width: 120 },
-    { id: "localCopyLabel", header: "Локальная копия", width: 140 },
-    { id: "connectionStatus", header: "Статус", width: 140 },
+    { id: "title", header: "Title", flexgrow: 1, cell: LibrarySourceCell },
+    { id: "provider", header: "Provider", width: 120 },
+    { id: "subtype", header: "Subtype", width: 120 },
+    { id: "localCopyLabel", header: "Details", width: 140 },
+    { id: "addedAtLabel", header: "Added to project at", width: 180 },
   ];
 
   let libraryById = $derived(new Map(librarySources.map((source) => [source.id, source])));
@@ -52,15 +57,13 @@
           id: link.sourceId,
           provider: librarySource?.provider ?? link.provider,
           subtitle: librarySource?.subtitle ?? link.filterSummary,
-          localCopyLabel: librarySource?.localCopyLabel ?? "0 материалов",
+          localCopyLabel: librarySource?.localCopyLabel ?? link.localCopyLabel,
           connectable: true,
         };
       }),
   );
 
-  let provider = $derived<LibrarySourceProvider>(
-    rows[0]?.provider ?? (project?.backing.kind === "source_group" ? project.backing.sourceType : "other"),
-  );
+  let provider = $derived<LibrarySourceProvider>(rows[0]?.provider ?? "other");
 </script>
 
 <section class="sources-tab">
@@ -86,8 +89,10 @@
     <ExtractumDataGrid
       rows={rows}
       {columns}
+      selectedRowIds={selectedSourceId ? [selectedSourceId] : []}
+      onSelectedRowIdsChange={(ids) => onSelectedSourceIdChange(ids[0] ?? null)}
       height="100%"
-      overlay="Нет подключенных источников"
+      overlay="No project sources"
     />
   </div>
 </section>

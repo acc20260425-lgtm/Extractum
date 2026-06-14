@@ -12,10 +12,10 @@
   import {
     connectableSelection,
     filterLibrarySources,
-    type LibrarySourceProvider,
     type LibrarySourceView,
     type ResearchProjectView,
   } from "$lib/ui/research-projects-model";
+  import type { LibrarySourceProvider } from "$lib/types/library-sources";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
 
   let {

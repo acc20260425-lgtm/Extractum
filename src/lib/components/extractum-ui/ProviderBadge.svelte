@@ -1,7 +1,7 @@
 <script lang="ts">
   import ExtractumBadge from "./Badge.svelte";
   import { cn } from "$lib/utils.js";
-  import type { LibrarySourceProvider } from "$lib/ui/research-projects-model";
+  import type { LibrarySourceProvider } from "$lib/types/library-sources";
   import type { ComponentProps } from "svelte";
 
   type Provider = LibrarySourceProvider | "telegram" | "youtube" | "rss" | "forum" | "web" | "other";

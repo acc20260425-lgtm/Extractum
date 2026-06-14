@@ -1,9 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import ProjectsShell from "$lib/components/research-projects/ProjectsShell.svelte";
-  import { listAnalysisSourceGroups, updateAnalysisSourceGroup } from "$lib/api/analysis-source-groups";
-  import { listAnalysisSources } from "$lib/api/analysis-workspace";
-  import { listActiveAnalysisRuns } from "$lib/api/analysis-runs";
+  import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
+  import { listLibrarySources } from "$lib/api/library-sources";
+  import {
+    addProjectSources,
+    createProject,
+    deleteProject,
+    listProjectRuns,
+    listProjectSources,
+    listProjects,
+    removeProjectSources,
+    startProjectAnalysis,
+    updateProject,
+  } from "$lib/api/projects";
   import { listSourceJobs } from "$lib/api/source-jobs";
   import {
     createResearchProjectsWorkflow,
@@ -11,10 +21,12 @@
   } from "$lib/ui/research-projects-workflow";
 
   const state = $state<ResearchProjectsWorkflowState>({
-    groups: [],
-    sources: [],
+    projectsRaw: [],
+    projectSources: [],
     runs: [],
+    libraryRecords: [],
     sourceJobs: [],
+    promptTemplates: [],
     projects: [],
     librarySources: [],
     projectSourceLinks: [],
@@ -28,12 +40,19 @@
   const workflow = createResearchProjectsWorkflow({
     getState: () => state,
     patch: (patch) => Object.assign(state, patch),
-    listGroups: listAnalysisSourceGroups,
-    listSources: listAnalysisSources,
-    listRuns: listActiveAnalysisRuns,
+    listProjects,
+    listProjectSources,
+    listLibrarySources,
+    listProjectRuns,
+    listPromptTemplates: () => listAnalysisPromptTemplates("report"),
     listSourceJobs: () => listSourceJobs({ limit: 50 }),
-    updateGroup: updateAnalysisSourceGroup,
-    formatError: (action, error) => `Ошибка ${action}: ${String(error)}`,
+    addProjectSources,
+    removeProjectSources,
+    createProject,
+    updateProject,
+    deleteProject,
+    startProjectAnalysis,
+    formatError: (action, error) => `Error ${action}: ${String(error)}`,
   });
 
   onMount(() => {
@@ -50,6 +69,11 @@
   <ProjectsShell
     {state}
     onSelectProject={selectProject}
+    onCreateProject={workflow.createProject}
+    onUpdateProject={workflow.updateProject}
+    onDeleteProject={workflow.deleteSelectedProject}
+    onRemoveProjectSource={workflow.removeProjectSource}
+    onRunProject={workflow.runProjectAnalysis}
     onConnectSelectedSources={workflow.connectSelectedSources}
     onSelectedLibrarySourceIdsChange={(ids) => (state.selectedLibrarySourceIds = new Set(ids))}
   />

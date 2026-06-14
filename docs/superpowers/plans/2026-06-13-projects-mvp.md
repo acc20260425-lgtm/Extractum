@@ -2410,7 +2410,7 @@ git commit -m "feat: model projects workspace state"
 - Create: `src/lib/components/research-projects/ProjectRunDialog.svelte`
 - Test: `src/lib/research-projects-route-contract.test.ts`
 
-- [ ] **Step 1: Write failing route contract tests**
+- [x] **Step 1: Write failing route contract tests**
 
 In `src/lib/research-projects-route-contract.test.ts`, add:
 
@@ -2444,7 +2444,7 @@ describe("projects mvp route contract", () => {
 });
 ```
 
-- [ ] **Step 2: Run test and verify failure**
+- [x] **Step 2: Run test and verify failure**
 
 Run:
 
@@ -2454,7 +2454,7 @@ npm.cmd test -- --run src/lib/research-projects-route-contract.test.ts
 
 Expected: FAIL because route still imports source group APIs and shell has no inspector region.
 
-- [ ] **Step 3: Wire route to project APIs**
+- [x] **Step 3: Wire route to project APIs**
 
 Modify `src/routes/projects/+page.svelte` imports:
 
@@ -2515,7 +2515,7 @@ Initialize `promptTemplates: []` in route state and pass workflow handlers to
 />
 ```
 
-- [ ] **Step 4: Add project editor dialog**
+- [x] **Step 4: Add project editor dialog**
 
 Create `src/lib/components/research-projects/ProjectEditorDialog.svelte`:
 
@@ -2614,7 +2614,7 @@ Create `src/lib/components/research-projects/ProjectEditorDialog.svelte`:
 
 `ExtractumDialog` exposes bindable `open`; parent components should use `bind:open` with `ProjectEditorDialog`.
 
-- [ ] **Step 5: Add project inspector**
+- [x] **Step 5: Add project inspector**
 
 Create `src/lib/components/research-projects/ProjectInspector.svelte`:
 
@@ -2750,7 +2750,7 @@ Create `src/lib/components/research-projects/ProjectInspector.svelte`:
 </style>
 ```
 
-- [ ] **Step 6: Update shell layout**
+- [x] **Step 6: Update shell layout**
 
 Modify `ProjectsShell.svelte`:
 
@@ -2771,7 +2771,7 @@ onRemoveProjectSource: (sourceId: number) => void | Promise<void>;
 onRunProject: (input: ProjectAnalysisStartCommand) => void | Promise<void>;
 ```
 
-- [ ] **Step 7: Update ProjectRail**
+- [x] **Step 7: Update ProjectRail**
 
 Add a create button in `ProjectRail.svelte`:
 
@@ -2783,7 +2783,7 @@ Add a create button in `ProjectRail.svelte`:
 
 Pass `onCreateProject` from shell.
 
-- [ ] **Step 8: Update SourcesTab**
+- [x] **Step 8: Update SourcesTab**
 
 Use `ProjectSourceLinkView.sourceNumericId`, `subtype`, `addedAtLabel`, and add a remove button column:
 
@@ -2810,7 +2810,7 @@ Pass selected row ids through the existing `ExtractumDataGrid` wrapper-managed s
 />
 ```
 
-- [ ] **Step 9: Add ProjectRunDialog**
+- [x] **Step 9: Add ProjectRunDialog**
 
 Create `ProjectRunDialog.svelte` with the current report-run fields:
 
@@ -2894,7 +2894,7 @@ Create `ProjectRunDialog.svelte` with the current report-run fields:
 
 Use local `<select>` elements in this MVP, matching the existing pattern in `TopCommandBar.svelte`.
 
-- [ ] **Step 10: Run frontend tests and Svelte check**
+- [x] **Step 10: Run frontend tests and Svelte check**
 
 Run:
 

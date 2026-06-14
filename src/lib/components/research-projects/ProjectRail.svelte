@@ -7,10 +7,12 @@
     projects,
     selectedProjectId,
     onSelectProject,
+    onCreateProject,
   }: {
     projects: ResearchProjectView[];
     selectedProjectId: string | null;
     onSelectProject: (projectId: string) => void;
+    onCreateProject: () => void;
   } = $props();
 
   let query = $state("");
@@ -29,6 +31,10 @@
     <Search size={14} aria-hidden="true" />
     <ExtractumTextInput bind:value={query} placeholder="Search projects" aria-label="Search projects" />
   </label>
+
+  <ExtractumButton data-ui-action="create-project" onclick={onCreateProject}>
+    Create project
+  </ExtractumButton>
 
   <div class="project-list" role="listbox" aria-label="Research projects">
     {#each visibleProjects as project (project.id)}

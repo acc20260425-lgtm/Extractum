@@ -17,11 +17,15 @@
     project,
     projectSourceLinks,
     librarySources,
+    selectedSourceId,
+    onSelectedSourceIdChange,
     onOpenConnectLibrary,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
     librarySources: LibrarySourceView[];
+    selectedSourceId: string | null;
+    onSelectedSourceIdChange: (sourceId: string | null) => void;
     onOpenConnectLibrary: () => void;
   } = $props();
 
@@ -75,6 +79,8 @@
         {project}
         {projectSourceLinks}
         {librarySources}
+        {selectedSourceId}
+        {onSelectedSourceIdChange}
         {onOpenConnectLibrary}
       />
     </ExtractumTabsContent>
