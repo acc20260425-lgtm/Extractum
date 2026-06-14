@@ -87,14 +87,14 @@ export type LibraryCatalogStatus =
   | "unavailable";
 
 export interface LibraryCatalogCapabilities {
-  can_refresh: boolean;
+  can_refresh_source: boolean;
   can_delete: boolean;
   can_edit: boolean;
   can_connect_to_project: boolean;
 }
 
 export interface LibraryCatalogDisabledReasons {
-  refresh: string | null;
+  refresh_source: string | null;
   delete: string | null;
   edit: string | null;
   connect_to_project: string | null;
@@ -144,8 +144,11 @@ Selection rules:
 - pick the job with the greatest `started_at`;
 - break ties by stable job id ordering.
 
-The catalog command may use a small helper in `SourceJobState` instead of
-copying list/filter logic into the Library module.
+The catalog command should use a small helper in `SourceJobState` instead of
+copying list/filter logic into the Library module. The existing
+`active_jobs_for_sources` helper is not enough for this contract because it
+filters out failed jobs as terminal, while the catalog needs the latest failed
+job to display `error` status.
 
 ### Status Semantics
 
@@ -168,14 +171,17 @@ Do not add a freshness or stale-source policy in this slice.
 
 ### Capabilities And Disabled Reasons
 
-The first catalog capabilities describe source-level operations, not
-project-specific operations.
+The first catalog capabilities describe source-level operations, not catalog
+reload and not project-specific operations. The Library toolbar's route-level
+Refresh button still reloads the catalog response; `can_refresh_source`
+describes whether a selected source can start a provider refresh/sync action.
 
 Initial capability rules:
 
-- `can_refresh` is true for supported YouTube sources and Telegram sources that
-  can be synced by the current backend.
-- `can_refresh` is false while the source has a queued or running relevant job.
+- `can_refresh_source` is true for supported YouTube sources and Telegram
+  sources that can be synced by the current backend.
+- `can_refresh_source` is false while the source has a queued or running
+  relevant job.
 - `can_delete` is false when `project_count > 0`, because source deletion is
   already blocked while a source belongs to projects.
 - `can_edit` is false in this slice because durable source overrides are not
@@ -187,7 +193,7 @@ Initial disabled reason strings:
 
 - refresh during active job: `Source is syncing.`
 - delete while used by projects:
-  `Source is used by projects. Remove it from projects first.`
+  `Source {source_id} is used by {project_count} project(s). Remove it from projects first.`
 - edit before overrides exist: `Source editing is not available yet.`
 - unsupported source subtype: a clear provider/subtype-specific reason.
 
@@ -281,9 +287,9 @@ disabled state. If the selected project already contains the source,
 `Already in project` remains a frontend-selected-project rule that overrides
 connectability for that project.
 
-The `/projects` route can continue calling `listSourceJobs` for the bottom
-queue if that UI still needs active job rows. The important simplification is
-that Library source row status no longer depends on a separate source-job fetch.
+The `/projects` route can continue calling `listSourceJobs` only for the bottom
+queue if that UI still needs active job rows. Library source row status must not
+read that route-level source-job list after this slice.
 
 ## UI Behavior
 
@@ -301,6 +307,8 @@ Expected behavior changes:
 - status and status detail come from backend catalog records;
 - filter disabled reasons come from backend filter count records;
 - source action availability can now be read from backend capabilities.
+  Route-level catalog reload availability stays separate from source-level
+  refresh/sync capability.
 
 The existing `Edit` and `Delete` buttons may remain visually disabled according
 to current prototype behavior until their mutation flows are designed. Their
