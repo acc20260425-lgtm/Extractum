@@ -22,6 +22,11 @@ use projects::{
 };
 mod prompt_packs;
 use prompt_packs::{get_prompt_pack_library, seed_builtin_prompt_packs};
+use prompt_packs::{
+    cancel_prompt_pack_run, cleanup_interrupted_prompt_pack_runs, list_active_prompt_pack_runs,
+    list_prompt_pack_run_stages, list_prompt_pack_runs, preflight_youtube_summary_run,
+    start_youtube_summary_run, PromptPackRunState,
+};
 
 mod secret_store;
 use secret_store::SecretStoreState;
@@ -125,6 +130,7 @@ pub fn run() {
         .manage(TakeoutImportState::new())
         .manage(SourceJobState::new())
         .manage(AnalysisState::new())
+        .manage(PromptPackRunState::new())
         .manage(LlmSchedulerState::new())
         .manage(SourceIdentityRepairState::new())
         .manage(SecretStoreState::system())
@@ -146,6 +152,7 @@ pub fn run() {
                 if let Err(error) = seed_builtin_prompt_packs(handle.clone()).await {
                     eprintln!("Prompt Pack seed failed: {error}");
                 }
+                cleanup_interrupted_prompt_pack_runs(handle.clone()).await;
                 cleanup_interrupted_analysis_runs(handle.clone()).await;
                 restore_telegram_accounts(handle).await;
             });
@@ -181,6 +188,12 @@ pub fn run() {
             start_project_analysis,
             list_project_runs,
             get_prompt_pack_library,
+            preflight_youtube_summary_run,
+            start_youtube_summary_run,
+            cancel_prompt_pack_run,
+            list_prompt_pack_runs,
+            list_active_prompt_pack_runs,
+            list_prompt_pack_run_stages,
             get_source_identity_repair_status,
             preview_source_identity_repair,
             audit_legacy_telegram_source_metadata,

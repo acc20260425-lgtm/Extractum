@@ -607,7 +607,7 @@ git commit -m "feat: freeze youtube summary run snapshots"
 - Modify: `src/lib/api/prompt-packs.ts`
 - Modify: `src/lib/api/prompt-packs.test.ts`
 
-- [ ] **Step 1: Add runtime state tests**
+- [x] **Step 1: Add runtime state tests**
 
 Add tests in `runtime.rs`:
 
@@ -695,7 +695,7 @@ async fn list_prompt_pack_runs_returns_recent_runs_for_project() {
 }
 ```
 
-- [ ] **Step 2: Implement state**
+- [x] **Step 2: Implement state**
 
 Implement `PromptPackRunState` with:
 
@@ -707,7 +707,7 @@ Implement `PromptPackRunState` with:
 - `list_active_prompt_pack_runs` support;
 - `list_prompt_pack_runs` support for recent terminal and active runs.
 
-- [ ] **Step 3: Implement backend commands**
+- [x] **Step 3: Implement backend commands**
 
 Expose:
 
@@ -765,7 +765,7 @@ pub enum StartYoutubeSummaryRunOutcomeDto {
 - if recomputed preflight can start, stores the recomputed response in
   `prompt_pack_runs.preflight_json_zstd`.
 
-- [ ] **Step 4: Emit lifecycle events**
+- [x] **Step 4: Emit lifecycle events**
 
 Define:
 
@@ -794,7 +794,7 @@ Terminal events are `completed`, `partial`, `failed`, `cancelled`, and
 Do not emit a terminal `failed` event only because execution has not been
 implemented in this runtime slice.
 
-- [ ] **Step 5: Register commands and state**
+- [x] **Step 5: Register commands and state**
 
 In `src-tauri/src/lib.rs`:
 
@@ -803,7 +803,7 @@ In `src-tauri/src/lib.rs`:
 - startup cleanup for interrupted active prompt-pack runs;
 - add commands to `tauri::generate_handler!`.
 
-- [ ] **Step 6: Add frontend wrappers**
+- [x] **Step 6: Add frontend wrappers**
 
 In `src/lib/api/prompt-packs.ts` expose:
 
@@ -864,7 +864,7 @@ expect(invoke).toHaveBeenCalledWith("list_prompt_pack_runs", {
 });
 ```
 
-- [ ] **Step 7: Run runtime tests**
+- [x] **Step 7: Run runtime tests**
 
 Run:
 
@@ -875,7 +875,7 @@ npm test -- --run src/lib/api/prompt-packs.test.ts
 
 Expected: pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs src-tauri/src/lib.rs src/lib/api/prompt-packs.ts src/lib/api/prompt-packs.test.ts src/lib/types/prompt-packs.ts
