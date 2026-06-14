@@ -15,7 +15,7 @@
     connected: "Connected",
     pending: "Pending",
     failed: "Failed",
-    already_connected: "Connected",
+    already_connected: "Already in project",
   };
 
   const statusClasses: Record<Status, string> = {

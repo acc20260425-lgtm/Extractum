@@ -42,8 +42,6 @@
 
   let query = $state("");
   let providerFilters = $state<LibrarySourceProvider[]>([]);
-  let includeComments = $state(true);
-  let includeTranscripts = $state(true);
 
   const columns = [
     { id: "selected", header: "", width: 44, cell: GridSelectCell },
@@ -54,9 +52,6 @@
     { id: "localCopyLabel", header: "Локальная копия", width: 120 },
     { id: "status", header: "Статус", width: 100 },
   ];
-
-  const materialChips = ["Статьи", "Посты", "Видео"];
-  const tagChips = ["bpla", "regulirovanie"];
 
   let providerOptions = $derived(Array.from(new Set(librarySources.map((source) => source.provider))));
   let filteredSources = $derived(filterLibrarySources(librarySources, { query, providers: providerFilters }));
@@ -126,36 +121,8 @@
     </div>
 
     <aside class="side-panels">
-      <section data-ui-panel="project-filters" class="side-panel">
-        <h2>Project filters</h2>
-        <dl>
-          <div>
-            <dt>Period</dt>
-            <dd>{project?.periodLabel ?? "01.01.2024 - 31.05.2025"}</dd>
-          </div>
-        </dl>
-        <div class="chip-row">
-          {#each materialChips as chip (chip)}
-            <span>{chip}</span>
-          {/each}
-        </div>
-        <label class="check-row">
-          <input type="checkbox" bind:checked={includeComments} />
-          Include comments
-        </label>
-        <label class="check-row">
-          <input type="checkbox" bind:checked={includeTranscripts} />
-          Include transcripts
-        </label>
-        <div class="chip-row">
-          {#each tagChips as chip (chip)}
-            <span>{chip}</span>
-          {/each}
-        </div>
-      </section>
-
       <section data-ui-panel="change-log" class="side-panel">
-        <h2>Change log</h2>
+        <h2>Connection status</h2>
         <div class="status-stack">
           {#each alreadyConnectedRows as source (source.id)}
             <p><StatusBadge status="already_connected" /> {source.title}</p>
@@ -236,7 +203,6 @@
   }
 
   .provider-filters,
-  .chip-row,
   .connect-actions {
     display: flex;
     align-items: center;
@@ -277,36 +243,8 @@
     letter-spacing: 0;
   }
 
-  .side-panel dl,
   .side-panel p {
     margin: 0;
-  }
-
-  .side-panel dt {
-    color: var(--extractum-muted);
-    font-size: 11px;
-    text-transform: uppercase;
-  }
-
-  .side-panel dd {
-    margin: 2px 0 10px;
-    font-size: 13px;
-  }
-
-  .chip-row span {
-    border: 1px solid var(--extractum-border);
-    border-radius: 999px;
-    padding: 2px 8px;
-    color: var(--extractum-muted);
-    font-size: 12px;
-  }
-
-  .check-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-    font-size: 13px;
   }
 
   .status-stack {
