@@ -53,7 +53,7 @@ Complete these plans first:
 - Create: `src/lib/ui/youtube-summary-workflow.test.ts`
 - Modify: `src/lib/types/prompt-packs.ts`
 
-- [ ] **Step 1: Write workflow tests**
+- [x] **Step 1: Write workflow tests**
 
 Add tests:
 
@@ -122,7 +122,7 @@ describe("youtube summary workflow", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -132,7 +132,7 @@ npm test -- --run src/lib/ui/youtube-summary-workflow.test.ts
 
 Expected: fail because workflow module does not exist.
 
-- [ ] **Step 3: Implement workflow module**
+- [x] **Step 3: Implement workflow module**
 
 Export:
 
@@ -143,7 +143,7 @@ export function updateRunListFromEvent(runs: PromptPackRunListItem[], event: Pro
 export function statusLabel(status: PromptPackRunStatus): string
 ```
 
-- [ ] **Step 4: Run workflow tests**
+- [x] **Step 4: Run workflow tests**
 
 Run:
 
@@ -153,7 +153,7 @@ npm test -- --run src/lib/ui/youtube-summary-workflow.test.ts
 
 Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/lib/ui/youtube-summary-workflow.ts src/lib/ui/youtube-summary-workflow.test.ts src/lib/types/prompt-packs.ts

@@ -159,6 +159,8 @@ export interface PromptPackRunSummary {
   queuePosition?: number | null;
 }
 
+export type PromptPackRunListItem = PromptPackRunSummary;
+
 export interface PromptPackStageRun {
   stageRunId: number;
   runId: number;
