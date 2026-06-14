@@ -31,6 +31,7 @@ describe("Library prototype contract", () => {
     expect(workspaceSource).toContain('data-ui-action="library-delete"');
     expect(workspaceSource).toContain('disabled={!selectedSource}');
     expect(workspaceSource).toContain('header: "Source"');
+    expect(workspaceSource).toContain('{ id: "title", header: "Source", width: 320, cell: LibrarySourceCell }');
     expect(workspaceSource).toContain('header: "Type"');
     expect(workspaceSource).toContain('header: "Status"');
     expect(workspaceSource).toContain('header: "Projects"');

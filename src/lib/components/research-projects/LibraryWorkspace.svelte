@@ -33,7 +33,7 @@
   } = $props();
 
   const columns = [
-    { id: "title", header: "Source", flexgrow: 1, cell: LibrarySourceCell },
+    { id: "title", header: "Source", width: 320, cell: LibrarySourceCell },
     { id: "typeLabel", header: "Type", width: 150 },
     { id: "status", header: "Status", width: 110 },
     { id: "projectCount", header: "Projects", width: 92 },
