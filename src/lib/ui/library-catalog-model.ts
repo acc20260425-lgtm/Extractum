@@ -1,11 +1,11 @@
 import type {
+  LibraryCatalogFilterCount,
+  LibraryCatalogRecord,
   LibrarySourceProvider,
-  LibrarySourceRecord,
   LibrarySourceSubtype,
   LibraryTelegramSourceDetails,
   LibraryYoutubeSourceDetails,
 } from "$lib/types/library-sources";
-import type { SourceJobRecord } from "$lib/types/sources";
 
 export type LibraryCatalogSourceStatus = "active" | "syncing" | "error" | "unavailable";
 
@@ -52,8 +52,6 @@ export type LibraryCatalogFilterState = {
 };
 
 export const LIBRARY_CATALOG_ALL_FILTER_ID: LibraryCatalogFilterId = "all";
-export const YOUTUBE_CHANNEL_DISABLED_REASON =
-  "YouTube channel sources are not supported by the current backend.";
 
 const PROVIDER_LABELS: Record<LibrarySourceProvider, string> = {
   telegram: "Telegram",
@@ -102,130 +100,91 @@ function typeLabel(provider: LibrarySourceProvider, subtype: LibrarySourceSubtyp
   return `${providerLabel} / ${SUBTYPE_LABELS[subtype] ?? subtype}`;
 }
 
-function latestJobBySource(sourceJobs: SourceJobRecord[]) {
-  const jobsBySource = new Map<number, SourceJobRecord>();
-  for (const job of sourceJobs) {
-    if (job.status !== "queued" && job.status !== "running" && job.status !== "failed") continue;
-    const current = jobsBySource.get(job.source_id);
-    if (!current || job.started_at > current.started_at) jobsBySource.set(job.source_id, job);
-  }
-  return jobsBySource;
-}
-
-function statusFromJob(job: SourceJobRecord | undefined): {
-  status: LibraryCatalogSourceStatus;
-  statusDetail: string | null;
-} {
-  if (!job) return { status: "active", statusDetail: null };
-  if (job.status === "queued" || job.status === "running") {
-    return { status: "syncing", statusDetail: job.message ?? "Syncing" };
-  }
-  if (job.status === "failed") {
-    return { status: "error", statusDetail: job.error ?? "Last sync failed" };
-  }
-  return { status: "active", statusDetail: null };
-}
-
 export function buildLibraryCatalogSourcesView(
-  records: LibrarySourceRecord[],
-  sourceJobs: SourceJobRecord[] = [],
+  records: LibraryCatalogRecord[],
 ): LibraryCatalogSourceView[] {
-  const jobsBySource = latestJobBySource(sourceJobs);
-
-  return records.map((record) => {
-    const jobStatus = statusFromJob(jobsBySource.get(record.source_id));
-    return {
-      id: sourceRowId(record.source_id),
-      sourceId: record.source_id,
-      provider: record.provider,
-      sourceSubtype: record.source_subtype,
-      title: record.title ?? `Source #${record.source_id}`,
-      subtitle: record.subtitle,
-      typeLabel: typeLabel(record.provider, record.source_subtype),
-      status: jobStatus.status,
-      statusDetail: jobStatus.statusDetail,
-      projectCount: record.project_count,
-      itemCount: record.item_count,
-      itemCountLabel: countLabel(record.item_count),
-      addedAtLabel: dateLabel(record.created_at) ?? "Unknown",
-      lastSyncedLabel: dateLabel(record.last_synced_at) ?? "Never",
-      canonicalUrl: record.canonical_url,
-      externalId: record.external_id,
-      youtube: record.youtube,
-      telegram: record.telegram,
-    };
-  });
+  return records.map((record) => ({
+    id: sourceRowId(record.source.source_id),
+    sourceId: record.source.source_id,
+    provider: record.source.provider,
+    sourceSubtype: record.source.source_subtype,
+    title: record.source.title ?? `Source #${record.source.source_id}`,
+    subtitle: record.source.subtitle,
+    typeLabel: typeLabel(record.source.provider, record.source.source_subtype),
+    status: record.status,
+    statusDetail: record.status_detail,
+    projectCount: record.source.project_count,
+    itemCount: record.source.item_count,
+    itemCountLabel: countLabel(record.source.item_count),
+    addedAtLabel: dateLabel(record.source.created_at) ?? "Unknown",
+    lastSyncedLabel: dateLabel(record.source.last_synced_at) ?? "Never",
+    canonicalUrl: record.source.canonical_url,
+    externalId: record.source.external_id,
+    youtube: record.source.youtube,
+    telegram: record.source.telegram,
+  }));
 }
 
-function countProvider(sources: LibraryCatalogSourceView[], provider: LibrarySourceProvider) {
-  return sources.filter((source) => source.provider === provider).length;
-}
-
-function countSubtype(
-  sources: LibraryCatalogSourceView[],
+function countProviderFromBackend(
+  counts: LibraryCatalogFilterCount[],
   provider: LibrarySourceProvider,
-  subtype: Exclude<LibrarySourceSubtype, null>,
 ) {
-  return sources.filter((source) => source.provider === provider && source.sourceSubtype === subtype)
-    .length;
+  return counts
+    .filter((count) => count.provider === provider)
+    .reduce((total, count) => total + count.count, 0);
 }
 
-function subtypeRow(
-  sources: LibraryCatalogSourceView[],
+function backendSubtypeRow(
+  counts: LibraryCatalogFilterCount[],
   provider: LibrarySourceProvider,
   subtype: Exclude<LibrarySourceSubtype, null>,
   label: string,
-  disabled = false,
-  disabledReason: string | null = null,
 ): LibraryCatalogFilterTreeRow {
+  const backendCount = counts.find(
+    (count) => count.provider === provider && count.source_subtype === subtype,
+  );
   return {
     id: `provider:${provider}/subtype:${subtype}` as LibraryCatalogFilterId,
     label,
     provider,
     subtype,
-    count: countSubtype(sources, provider, subtype),
-    disabled,
-    disabledReason: disabledReason ?? undefined,
+    count: backendCount?.count ?? 0,
+    disabled: backendCount?.disabled ?? false,
+    disabledReason: backendCount?.disabled_reason ?? undefined,
   };
 }
 
 export function buildLibraryCatalogFilterTree(
-  sources: LibraryCatalogSourceView[],
+  counts: LibraryCatalogFilterCount[],
 ): LibraryCatalogFilterTreeRow[] {
+  const total = counts.reduce((sum, count) => sum + count.count, 0);
   return [
     {
       id: LIBRARY_CATALOG_ALL_FILTER_ID,
       label: "All sources",
       provider: "all",
-      count: sources.length,
+      count: total,
     },
     {
       id: "provider:youtube",
       label: "YouTube",
       provider: "youtube",
-      count: countProvider(sources, "youtube"),
+      count: countProviderFromBackend(counts, "youtube"),
       data: [
-        subtypeRow(sources, "youtube", "video", "Videos"),
-        subtypeRow(sources, "youtube", "playlist", "Playlists"),
-        subtypeRow(
-          sources,
-          "youtube",
-          "channel",
-          "Channels",
-          true,
-          YOUTUBE_CHANNEL_DISABLED_REASON,
-        ),
+        backendSubtypeRow(counts, "youtube", "video", "Videos"),
+        backendSubtypeRow(counts, "youtube", "playlist", "Playlists"),
+        backendSubtypeRow(counts, "youtube", "channel", "Channels"),
       ],
     },
     {
       id: "provider:telegram",
       label: "Telegram",
       provider: "telegram",
-      count: countProvider(sources, "telegram"),
+      count: countProviderFromBackend(counts, "telegram"),
       data: [
-        subtypeRow(sources, "telegram", "channel", "Channels"),
-        subtypeRow(sources, "telegram", "supergroup", "Supergroups"),
-        subtypeRow(sources, "telegram", "group", "Groups"),
+        backendSubtypeRow(counts, "telegram", "channel", "Channels"),
+        backendSubtypeRow(counts, "telegram", "supergroup", "Supergroups"),
+        backendSubtypeRow(counts, "telegram", "group", "Groups"),
       ],
     },
   ];

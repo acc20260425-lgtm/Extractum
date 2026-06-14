@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { SourceJobRecord } from "$lib/types/sources";
-import type { LibrarySourceRecord } from "$lib/types/library-sources";
+import type {
+  LibraryCatalogFilterCount,
+  LibraryCatalogRecord,
+  LibrarySourceProvider,
+  LibrarySourceRecord,
+  LibrarySourceSubtype,
+} from "$lib/types/library-sources";
 import {
   LIBRARY_CATALOG_ALL_FILTER_ID,
   buildLibraryCatalogFilterTree,
@@ -29,29 +34,49 @@ function record(overrides: Partial<LibrarySourceRecord> = {}): LibrarySourceReco
   };
 }
 
-function job(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
+function catalogRecord(overrides: Partial<LibraryCatalogRecord> = {}): LibraryCatalogRecord {
   return {
-    job_id: "job-1",
-    source_id: 3,
-    related_source_id: null,
-    job_type: "youtube_video_full_sync",
-    status: "running",
-    message: "Syncing",
-    progress_current: 1,
-    progress_total: 3,
-    started_at: 1_717_000_100,
-    finished_at: null,
-    warnings: [],
-    error: null,
+    source: record(),
+    latest_job: null,
+    status: "active",
+    status_detail: null,
+    capabilities: {
+      can_refresh_source: true,
+      can_delete: true,
+      can_edit: false,
+      can_connect_to_project: true,
+    },
+    disabled_reasons: {
+      refresh_source: null,
+      delete: null,
+      edit: "Source editing is not available yet.",
+      connect_to_project: null,
+    },
     ...overrides,
+  };
+}
+
+function filterCount(
+  provider: LibrarySourceProvider,
+  sourceSubtype: LibrarySourceSubtype,
+  count: number,
+  disabled = false,
+  disabledReason: string | null = null,
+): LibraryCatalogFilterCount {
+  return {
+    provider,
+    source_subtype: sourceSubtype,
+    count,
+    disabled,
+    disabled_reason: disabledReason,
   };
 }
 
 describe("library catalog model", () => {
   it("maps source metadata into catalog rows without project-connect state", () => {
-    const [row] = buildLibraryCatalogSourcesView(
-      [
-        record({
+    const [row] = buildLibraryCatalogSourcesView([
+      catalogRecord({
+        source: record({
           source_id: 3,
           provider: "youtube",
           source_subtype: "video",
@@ -70,9 +95,8 @@ describe("library catalog model", () => {
           },
           telegram: null,
         }),
-      ],
-      [],
-    );
+      }),
+    ]);
 
     expect(row).toEqual(
       expect.objectContaining({
@@ -103,41 +127,49 @@ describe("library catalog model", () => {
     );
   });
 
-  it("derives syncing and failed status from the latest source job", () => {
+  it("maps backend catalog status and status detail into catalog rows", () => {
     const rows = buildLibraryCatalogSourcesView(
       [
-        record({ source_id: 3, provider: "youtube", source_subtype: "video", title: "Running" }),
-        record({ source_id: 4, provider: "youtube", source_subtype: "video", title: "Failed" }),
-      ],
-      [
-        job({ source_id: 3, status: "running", started_at: 20 }),
-        job({ source_id: 4, status: "failed", error: "Quota", started_at: 10 }),
+        catalogRecord({
+          source: record({
+            source_id: 3,
+            provider: "youtube",
+            source_subtype: "video",
+            title: "Running",
+          }),
+          status: "syncing",
+          status_detail: "Syncing playlist.",
+        }),
+        catalogRecord({
+          source: record({
+            source_id: 4,
+            provider: "youtube",
+            source_subtype: "video",
+            title: "Failed",
+          }),
+          status: "error",
+          status_detail: "Quota",
+        }),
       ],
     );
 
     expect(rows.find((row) => row.sourceId === 3)?.status).toBe("syncing");
+    expect(rows.find((row) => row.sourceId === 3)?.statusDetail).toBe("Syncing playlist.");
     expect(rows.find((row) => row.sourceId === 4)?.status).toBe("error");
     expect(rows.find((row) => row.sourceId === 4)?.statusDetail).toBe("Quota");
   });
 
   it("builds active subtype filters for YouTube and Telegram while keeping YouTube channels disabled", () => {
-    const rows = buildLibraryCatalogSourcesView(
-      [
-        record({ source_id: 1, provider: "youtube", source_subtype: "video", title: "Video" }),
-        record({ source_id: 2, provider: "youtube", source_subtype: "playlist", title: "Playlist" }),
-        record({ source_id: 3, provider: "telegram", source_subtype: "channel", title: "Channel" }),
-        record({
-          source_id: 4,
-          provider: "telegram",
-          source_subtype: "supergroup",
-          title: "Supergroup",
-        }),
-        record({ source_id: 5, provider: "telegram", source_subtype: "group", title: "Group" }),
-      ],
-      [],
-    );
-
-    expect(buildLibraryCatalogFilterTree(rows)).toEqual([
+    expect(
+      buildLibraryCatalogFilterTree([
+        filterCount("youtube", "video", 1),
+        filterCount("youtube", "playlist", 1),
+        filterCount("youtube", "channel", 0, true, "Backend disabled"),
+        filterCount("telegram", "channel", 1),
+        filterCount("telegram", "supergroup", 1),
+        filterCount("telegram", "group", 1),
+      ]),
+    ).toEqual([
       expect.objectContaining({ id: "all", count: 5 }),
       expect.objectContaining({
         id: "provider:youtube",
@@ -157,6 +189,7 @@ describe("library catalog model", () => {
             id: "provider:youtube/subtype:channel",
             count: 0,
             disabled: true,
+            disabledReason: "Backend disabled",
           }),
         ],
       }),
@@ -200,8 +233,7 @@ describe("library catalog model", () => {
           source_subtype: "channel",
           title: "Alpha Channel",
         }),
-      ],
-      [],
+      ].map((source) => catalogRecord({ source })),
     );
 
     expect(
@@ -226,8 +258,9 @@ describe("library catalog model", () => {
 
   it("reconciles selected rows after filtering", () => {
     const rows = buildLibraryCatalogSourcesView(
-      [record({ source_id: 1, title: "First" }), record({ source_id: 2, title: "Second" })],
-      [],
+      [record({ source_id: 1, title: "First" }), record({ source_id: 2, title: "Second" })].map(
+        (source) => catalogRecord({ source }),
+      ),
     );
 
     expect(reconcileLibraryCatalogSourceSelection(rows, "source:2")).toBe("source:2");

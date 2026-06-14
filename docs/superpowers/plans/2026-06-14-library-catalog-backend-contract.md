@@ -880,7 +880,7 @@ git commit -m "feat: add library catalog backend contract"
 - Modify: `src/lib/ui/library-catalog-model.ts`
 - Modify: `src/lib/ui/library-catalog-model.test.ts`
 
-- [ ] **Step 1: Write failing API wrapper test**
+- [x] **Step 1: Write failing API wrapper test**
 
 In `src/lib/api/library-sources.test.ts`, update the import:
 
@@ -946,7 +946,7 @@ Add this test:
   });
 ```
 
-- [ ] **Step 2: Run API test and verify failure**
+- [x] **Step 2: Run API test and verify failure**
 
 Run:
 
@@ -956,7 +956,7 @@ npm.cmd test -- --run src/lib/api/library-sources.test.ts
 
 Expected: FAIL because `listLibraryCatalog` is not exported.
 
-- [ ] **Step 3: Add frontend catalog types**
+- [x] **Step 3: Add frontend catalog types**
 
 In `src/lib/types/library-sources.ts`, add:
 
@@ -1004,7 +1004,7 @@ export interface LibraryCatalogResponse {
 
 Place the `import type` at the top of the file before exported type declarations.
 
-- [ ] **Step 4: Add API wrapper**
+- [x] **Step 4: Add API wrapper**
 
 In `src/lib/api/library-sources.ts`, update the type import:
 
@@ -1022,7 +1022,7 @@ export function listLibraryCatalog() {
 
 Keep `listLibrarySources()` unchanged.
 
-- [ ] **Step 5: Run API test and verify pass**
+- [x] **Step 5: Run API test and verify pass**
 
 Run:
 
@@ -1032,7 +1032,7 @@ npm.cmd test -- --run src/lib/api/library-sources.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Write failing catalog model tests**
+- [x] **Step 6: Write failing catalog model tests**
 
 In `src/lib/ui/library-catalog-model.test.ts`, remove the `SourceJobRecord`
 import and remove the `job()` helper. Then replace the job-derived status test
@@ -1147,7 +1147,7 @@ Update the expected YouTube channel row to assert `disabledReason: "Backend disa
 
 For every call to `buildLibraryCatalogSourcesView([...records], [])`, change it to `buildLibraryCatalogSourcesView([...records].map((source) => catalogRecord({ source })))`.
 
-- [ ] **Step 7: Run model test and verify failure**
+- [x] **Step 7: Run model test and verify failure**
 
 Run:
 
@@ -1157,7 +1157,7 @@ npm.cmd test -- --run src/lib/ui/library-catalog-model.test.ts
 
 Expected: FAIL because `buildLibraryCatalogSourcesView` and `buildLibraryCatalogFilterTree` still use old signatures.
 
-- [ ] **Step 8: Update catalog model**
+- [x] **Step 8: Update catalog model**
 
 In `src/lib/ui/library-catalog-model.ts`, update imports:
 
@@ -1274,7 +1274,7 @@ export function buildLibraryCatalogFilterTree(
 
 Remove `YOUTUBE_CHANNEL_DISABLED_REASON`, `countProvider`, `countSubtype`, and `subtypeRow` when they are no longer used.
 
-- [ ] **Step 9: Run model tests**
+- [x] **Step 9: Run model tests**
 
 Run:
 
@@ -1284,7 +1284,7 @@ npm.cmd test -- --run src/lib/ui/library-catalog-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit frontend API and catalog model**
+- [x] **Step 10: Commit frontend API and catalog model**
 
 Run:
 
