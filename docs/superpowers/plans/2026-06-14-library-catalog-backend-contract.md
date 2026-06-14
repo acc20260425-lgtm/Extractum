@@ -1954,7 +1954,7 @@ git commit -m "feat: use catalog records in projects library rows"
 **Files:**
 - No planned source edits unless verification exposes a defect.
 
-- [ ] **Step 1: Run backend verification**
+- [x] **Step 1: Run backend verification**
 
 Run:
 
@@ -1966,7 +1966,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: all PASS.
 
-- [ ] **Step 2: Run frontend verification**
+- [x] **Step 2: Run frontend verification**
 
 Run:
 
@@ -1977,7 +1977,7 @@ npm.cmd run check
 
 Expected: all PASS and `svelte-check` reports 0 errors.
 
-- [ ] **Step 3: Run full project verification**
+- [x] **Step 3: Run full project verification**
 
 Run:
 
@@ -1987,7 +1987,7 @@ npm.cmd run verify
 
 Expected: full verification PASS.
 
-- [ ] **Step 4: Start Tauri app for UI smoke**
+- [x] **Step 4: Start Tauri app for UI smoke**
 
 If no app is already running, start it with the existing hidden dev-process pattern:
 
@@ -2003,7 +2003,7 @@ mcp__tauri__.driver_session action=start host=localhost port=9223
 
 Expected: bridge session starts and reports connected app metadata.
 
-- [ ] **Step 5: Smoke `/projects/library` with Tauri MCP bridge**
+- [x] **Step 5: Smoke `/projects/library` with Tauri MCP bridge**
 
 Use Tauri MCP DOM snapshots and interactions.
 
@@ -2017,7 +2017,7 @@ Verify:
 - Route-level Refresh reloads catalog.
 - No visible error status appears after load.
 
-- [ ] **Step 6: Smoke `/projects` with Tauri MCP bridge**
+- [x] **Step 6: Smoke `/projects` with Tauri MCP bridge**
 
 Use Tauri MCP DOM snapshots and interactions.
 
@@ -2029,7 +2029,7 @@ Verify:
 - Bottom queue still renders active source jobs when present.
 - Library row status comes from catalog response; it does not require route-level `sourceJobs` in the model path.
 
-- [ ] **Step 7: Stop Tauri session and dev process if started by this task**
+- [x] **Step 7: Stop Tauri session and dev process if started by this task**
 
 Run:
 
@@ -2045,7 +2045,7 @@ netstat -ano | Select-String ':1420'
 
 Expected: no listener remains after stopping the process.
 
-- [ ] **Step 8: Commit verification note only if a note is created**
+- [x] **Step 8: Commit verification note only if a note is created**
 
 If a verification note is created, use:
 

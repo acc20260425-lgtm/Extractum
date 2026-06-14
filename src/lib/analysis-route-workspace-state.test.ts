@@ -66,7 +66,7 @@ describe("analysis route workspace state", () => {
     expect(mount.indexOf("restorePersistedWorkspaceState();"))
       .toBeLessThan(mount.indexOf("await Promise.all([loadSourceCatalog(), loadGroups()]);"));
     expect(mount.indexOf("await applyRestoredWorkspaceSelection();"))
-      .toBeLessThan(mount.indexOf("void loadActiveRuns();"));
+      .toBeLessThan(mount.indexOf("await loadActiveRuns();"));
   });
 
   it("persists durable workspace state and excludes run-bound transient state", () => {
