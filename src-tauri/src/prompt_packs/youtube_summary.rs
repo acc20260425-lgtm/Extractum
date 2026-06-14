@@ -7,6 +7,10 @@ use super::dto::{
 };
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{AppError, AppResult};
+use crate::prompt_packs::stage_io::{
+    build_transcript_analysis_stage_input, extract_json_payload, insert_stage_artifact_in_pool,
+};
+use crate::prompt_packs::validation::validate_transcript_analysis_output;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModelBudget {
@@ -81,6 +85,242 @@ pub(crate) async fn start_youtube_summary_run_in_pool(
     let run_id = create_youtube_summary_run_skeleton_in_pool(pool, request, 0).await?;
     let run = load_run_summary(pool, run_id).await?;
     Ok(StartYoutubeSummaryRunOutcomeDto::Started { run })
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct LlmCompletion {
+    pub text: String,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub latency_ms: i64,
+}
+
+pub(crate) async fn execute_transcript_analysis_stage_with_completion(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    completion: LlmCompletion,
+) -> AppResult<()> {
+    let (run_id,): (i64,) =
+        sqlx::query_as("SELECT run_id FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
+    let input = build_transcript_analysis_stage_input(pool, stage_run_id).await?;
+    let input_json = serde_json::to_string(&input)
+        .map_err(|error| AppError::internal(format!("serialize stage input: {error}")))?;
+    insert_stage_artifact_in_pool(pool, run_id, stage_run_id, "prompt_input", 1, 1, &input_json)
+        .await?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'running', started_at = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "raw_output",
+        1,
+        2,
+        &completion.text,
+    )
+    .await?;
+    let parsed = extract_json_payload(&completion.text)?;
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
+    insert_stage_artifact_in_pool(pool, run_id, stage_run_id, "parsed_output", 1, 3, &parsed_json)
+        .await?;
+    validate_transcript_analysis_output(&input, &parsed)
+        .map_err(|error| AppError::validation(error.message))?;
+    let metrics = serde_json::json!({
+        "input_tokens": completion.input_tokens,
+        "output_tokens": completion.output_tokens,
+        "latency_ms": completion.latency_ms,
+        "schema_id": "stage-io/youtube_summary_transcript_analysis_output",
+        "validation_error_count": 0,
+        "attempt_number": 1
+    });
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "metrics",
+        1,
+        4,
+        &metrics.to_string(),
+    )
+    .await?;
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'succeeded', completed_at = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
+    pool: &SqlitePool,
+    run_id: i64,
+    completions: Vec<Result<LlmCompletion, String>>,
+) -> AppResult<()> {
+    let stages = sqlx::query_as::<_, (i64,)>(
+        "SELECT id FROM prompt_pack_stage_runs
+         WHERE run_id = ? AND stage_name = 'youtube_summary/transcript_analysis'
+         ORDER BY id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    let mut successes = 0;
+    let mut failures = 0;
+    for ((stage_id,), completion) in stages.into_iter().zip(completions.into_iter()) {
+        match completion {
+            Ok(completion) => {
+                execute_transcript_analysis_stage_with_completion(pool, stage_id, completion)
+                    .await?;
+                successes += 1;
+            }
+            Err(error) => {
+                failures += 1;
+                insert_stage_artifact_in_pool(
+                    pool,
+                    run_id,
+                    stage_id,
+                    "error",
+                    1,
+                    1,
+                    &serde_json::json!({ "error": error }).to_string(),
+                )
+                .await?;
+                sqlx::query(
+                    "UPDATE prompt_pack_stage_runs
+                     SET stage_status = 'failed', error_message = ?, completed_at = ?, updated_at = ?
+                     WHERE id = ?",
+                )
+                .bind(error)
+                .bind(now_string())
+                .bind(now_string())
+                .bind(stage_id)
+                .execute(pool)
+                .await
+                .map_err(AppError::database)?;
+            }
+        }
+    }
+
+    let final_status = if successes > 0 && failures > 0 {
+        "partial"
+    } else if successes > 0 {
+        "complete"
+    } else {
+        "failed"
+    };
+    persist_minimal_execution_result(pool, run_id, final_status).await?;
+    Ok(())
+}
+
+async fn persist_minimal_execution_result(
+    pool: &SqlitePool,
+    run_id: i64,
+    result_status: &str,
+) -> AppResult<()> {
+    let canonical = serde_json::json!({
+        "schema_version": "1.0",
+        "result_id": format!("result_{run_id}"),
+        "run_id": run_id,
+        "pack_id": "youtube_summary",
+        "pack_version": "1.0.0",
+        "stage": "youtube_summary/transcript_analysis",
+        "created_at": now_string(),
+        "output_language": "en",
+        "metadata": {},
+        "run_context": {},
+        "outputs": { "pack_data": { "youtube_summary": { "videos": [] } } },
+        "source_refs": [],
+        "claims": [],
+        "evidence": [],
+        "warnings": [],
+        "limitations": [],
+        "quality_flags": [],
+        "audit_refs": []
+    });
+    let canonical_json = canonical.to_string();
+    let result_row_id: i64 = sqlx::query_scalar(
+        "INSERT INTO prompt_pack_results (
+            run_id, result_id, result_status, schema_version, canonical_hash,
+            canonical_json_zstd, projection_updated_at, created_at, updated_at
+         )
+         VALUES (?, ?, ?, '1.0', ?, ?, ?, ?, ?)
+         RETURNING id",
+    )
+    .bind(run_id)
+    .bind(format!("result_{run_id}"))
+    .bind(result_status)
+    .bind(format!("sha384-{}", simple_hash(&canonical_json)))
+    .bind(compress_text(&canonical_json).map_err(AppError::internal)?)
+    .bind(now_string())
+    .bind(now_string())
+    .bind(now_string())
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    if result_status == "partial" {
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_warnings (
+                result_row_id, run_id, warning_id, code, message
+             )
+             VALUES (?, ?, 'warning_1', 'partial_provider_failure', 'One or more videos failed')",
+        )
+        .bind(result_row_id)
+        .bind(run_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_quality_flags (
+                result_row_id, run_id, flag_id, severity, message
+             )
+             VALUES (?, ?, 'quality_flag_1', 'warning', 'Partial result')",
+        )
+        .bind(result_row_id)
+        .bind(run_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_status = ?, result_status = ?, completed_at = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(result_status)
+    .bind(result_status)
+    .bind(now_string())
+    .bind(now_string())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
 }
 
 pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
@@ -894,6 +1134,14 @@ fn now_string() -> String {
     "2026-06-14T00:00:00Z".to_string()
 }
 
+fn simple_hash(value: &str) -> String {
+    use sha2::{Digest, Sha384};
+    Sha384::digest(value.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 fn estimate_tokens(text: &str) -> i64 {
     ((text.chars().count() as f64) / 4.0).ceil() as i64
 }
@@ -995,8 +1243,8 @@ async fn transcript_text_for_source(pool: &SqlitePool, source_id: i64) -> AppRes
 mod tests {
     use super::{
         create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs,
-        preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool, test_comment_policy,
-        ModelBudget,
+        preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
+        test_comment_policy, ModelBudget,
     };
     use crate::compression::compress_text;
     use crate::migrations::apply_all_migrations_for_test_pool;
@@ -1004,6 +1252,10 @@ mod tests {
         PreflightYoutubeSummaryRunRequest, StartYoutubeSummaryRunRequest,
     };
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use crate::prompt_packs::youtube_summary::{
+        execute_transcript_analysis_stage_with_completion,
+        execute_youtube_summary_run_with_fake_completions, LlmCompletion,
+    };
 
     async fn migrated_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -1220,6 +1472,36 @@ mod tests {
         pool
     }
 
+    async fn test_pool_with_frozen_youtube_summary_run() -> sqlx::SqlitePool {
+        let pool = test_pool_with_ready_video().await;
+        let run_id = create_youtube_summary_run_skeleton_in_pool(
+            &pool,
+            start_request("req-execute-1", vec![901]),
+            1,
+        )
+        .await
+        .expect("run skeleton");
+        assert_eq!(run_id, 1);
+        pool
+    }
+
+    async fn test_pool_with_two_frozen_youtube_summary_sources() -> sqlx::SqlitePool {
+        let pool = migrated_pool().await;
+        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed pack");
+        insert_youtube_video(&pool, 901, "v-ready-1").await;
+        insert_youtube_video(&pool, 902, "v-ready-2").await;
+        insert_transcript(&pool, 901, "Ready transcript one").await;
+        insert_transcript(&pool, 902, "Ready transcript two").await;
+        create_youtube_summary_run_skeleton_in_pool(
+            &pool,
+            start_request("req-execute-2", vec![901, 902]),
+            1,
+        )
+        .await
+        .expect("run skeleton");
+        pool
+    }
+
     #[tokio::test]
     async fn preflight_explicit_video_without_transcript_is_blocking_failure() {
         let pool = test_pool_with_youtube_video_without_transcript().await;
@@ -1347,5 +1629,143 @@ mod tests {
 
         assert_eq!(first, second);
         assert_eq!(first[0].external_id.as_deref(), Some("comment-oldest"));
+    }
+
+    #[tokio::test]
+    async fn execute_transcript_analysis_stage_persists_raw_and_parsed_artifacts() {
+        let pool = test_pool_with_frozen_youtube_summary_run().await;
+        let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+
+        execute_transcript_analysis_stage_with_completion(
+            &pool,
+            stage_id,
+            fake_completion_with_valid_transcript_analysis_json(),
+        )
+        .await
+        .expect("execute stage");
+
+        let artifact_kinds = list_stage_artifact_kinds(&pool, stage_id).await;
+        assert_eq!(
+            artifact_kinds,
+            vec!["prompt_input", "raw_output", "parsed_output", "metrics"],
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_multi_video_run_with_one_provider_failure_finishes_partial() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+
+        execute_youtube_summary_run_with_fake_completions(
+            &pool,
+            1,
+            vec![
+                Ok(fake_completion_with_valid_transcript_analysis_json_for_source(
+                    "source_ref_1",
+                )),
+                Err(fake_provider_failure("provider timeout for source_ref_2")),
+            ],
+        )
+        .await
+        .expect("execute partial run");
+
+        let run_status: String =
+            sqlx::query_scalar("SELECT run_status FROM prompt_pack_runs WHERE id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("run status");
+        let result_status: String =
+            sqlx::query_scalar("SELECT result_status FROM prompt_pack_results WHERE run_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("result status");
+        let error_artifacts: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_stage_artifacts \
+             WHERE run_id = 1 AND artifact_kind = 'error'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("error artifacts");
+        let warning_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_warnings WHERE run_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("warning count");
+        let quality_flag_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_quality_flags WHERE run_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("quality flags");
+
+        assert_eq!(run_status, "partial");
+        assert_eq!(result_status, "partial");
+        assert_eq!(error_artifacts, 1);
+        assert!(warning_count > 0);
+        assert!(quality_flag_count > 0);
+    }
+
+    async fn transcript_analysis_stage_id(pool: &sqlx::SqlitePool, run_id: i64) -> i64 {
+        sqlx::query_scalar(
+            "SELECT id FROM prompt_pack_stage_runs
+             WHERE run_id = ? AND stage_name = 'youtube_summary/transcript_analysis'
+             ORDER BY id ASC LIMIT 1",
+        )
+        .bind(run_id)
+        .fetch_one(pool)
+        .await
+        .expect("stage id")
+    }
+
+    async fn list_stage_artifact_kinds(pool: &sqlx::SqlitePool, stage_id: i64) -> Vec<String> {
+        sqlx::query_scalar(
+            "SELECT artifact_kind FROM prompt_pack_stage_artifacts
+             WHERE stage_run_id = ?
+             ORDER BY attempt_number ASC, artifact_index ASC",
+        )
+        .bind(stage_id)
+        .fetch_all(pool)
+        .await
+        .expect("artifact kinds")
+    }
+
+    fn fake_completion_with_valid_transcript_analysis_json() -> LlmCompletion {
+        fake_completion_with_valid_transcript_analysis_json_for_source("source_ref_1")
+    }
+
+    fn fake_completion_with_valid_transcript_analysis_json_for_source(
+        source_ref_id: &str,
+    ) -> LlmCompletion {
+        LlmCompletion {
+            text: serde_json::json!({
+                "stage_io_version": "1.0",
+                "schema_version": "1.0",
+                "stage": "youtube_summary/transcript_analysis",
+                "video_candidate": {
+                    "summary_text": format!("Summary for {source_ref_id}"),
+                    "segment_candidates": [],
+                    "key_point_candidates": [],
+                    "quote_candidates": [],
+                    "action_item_candidates": [],
+                    "open_question_candidates": []
+                },
+                "claim_candidates": [
+                    {
+                        "text": "Claim",
+                        "material_refs": [format!("m_{source_ref_id}_transcript")]
+                    }
+                ],
+                "evidence_fragment_candidates": [],
+                "warning_candidates": []
+            })
+            .to_string(),
+            input_tokens: Some(10),
+            output_tokens: Some(20),
+            latency_ms: 5,
+        }
+    }
+
+    fn fake_provider_failure(message: &str) -> String {
+        message.to_string()
     }
 }

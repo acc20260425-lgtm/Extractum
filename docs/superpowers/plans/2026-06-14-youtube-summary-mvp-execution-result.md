@@ -315,7 +315,7 @@ git commit -m "feat: validate youtube summary stage output"
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 
-- [ ] **Step 1: Write fake-provider execution test**
+- [x] **Step 1: Write fake-provider execution test**
 
 Add a fake execution path behind a test-only function:
 
@@ -393,7 +393,7 @@ async fn execute_multi_video_run_with_one_provider_failure_finishes_partial() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run:
 
@@ -403,7 +403,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::youtube_summ
 
 Expected: fail because execution helper does not exist.
 
-- [ ] **Step 3: Implement testable execution helper**
+- [x] **Step 3: Implement testable execution helper**
 
 Create a helper that accepts an already-collected `LlmCompletion` for tests and a production path that calls:
 
@@ -418,7 +418,7 @@ Store:
 - parsed output artifact after JSON extraction;
 - `metrics` artifact after validator completes, containing token counts, schema id, validation summary counts, attempt number, and provider latency.
 
-- [ ] **Step 4: Implement stage status transitions**
+- [x] **Step 4: Implement stage status transitions**
 
 Rules:
 
@@ -428,7 +428,7 @@ Rules:
 - if all videos fail, final run becomes `failed`;
 - cancel request stops launching new video stages and marks active/running work as `cancelled`.
 
-- [ ] **Step 5: Run execution tests**
+- [x] **Step 5: Run execution tests**
 
 Run:
 
@@ -438,7 +438,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::youtube_summ
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/store.rs
