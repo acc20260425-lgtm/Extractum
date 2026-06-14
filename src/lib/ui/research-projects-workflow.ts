@@ -211,8 +211,12 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     deps.patch({ saving: true });
     try {
       const runId = await deps.startProjectAnalysis(input);
-      deps.patch({ status: `Project analysis queued: ${runId}` });
+      const queuedStatus = `Project analysis queued: ${runId}`;
+      deps.patch({ status: queuedStatus });
       await loadWorkspace();
+      if (deps.getState().status === queuedStatus) {
+        deps.patch({ status: "" });
+      }
     } catch (error) {
       deps.patch({ status: deps.formatError("starting project analysis", error) });
     } finally {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "./research-projects-workflow";
-import type { AnalysisPromptTemplate } from "$lib/types/analysis";
+import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
 import type { LibraryCatalogRecord, LibrarySourceRecord } from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
 import type { SourceJobRecord } from "$lib/types/sources";
@@ -104,6 +104,41 @@ function promptTemplate(overrides: Partial<AnalysisPromptTemplate> = {}): Analys
   };
 }
 
+function analysisRun(overrides: Partial<AnalysisRunSummary> = {}): AnalysisRunSummary {
+  return {
+    id: 403,
+    run_type: "report",
+    scope_type: "project",
+    source_id: null,
+    source_title: null,
+    source_group_id: null,
+    source_group_name: null,
+    project_id: 1,
+    project_name: "Alpha",
+    scope_label: "Alpha",
+    period_from: 0,
+    period_to: 1,
+    output_language: "English",
+    prompt_template_id: 1,
+    prompt_template_name: "Default",
+    prompt_template_version: 1,
+    provider_profile: "default",
+    provider: "openai_compatible",
+    model: "gpt-4.1",
+    youtube_corpus_mode: "transcript_description",
+    telegram_history_scope: "current",
+    status: "completed",
+    error: null,
+    has_trace_data: false,
+    snapshot_state: "captured",
+    snapshot_captured_at: "2026-06-14T00:00:00Z",
+    snapshot_error: null,
+    created_at: 1,
+    completed_at: 2,
+    ...overrides,
+  };
+}
+
 function createInitialState(): ResearchProjectsWorkflowState {
   return {
     projectsRaw: [],
@@ -190,5 +225,48 @@ describe("research projects workflow", () => {
     expect(state.sourceJobs).toHaveLength(1);
     expect(state.librarySources[0].status).toBe("active");
     expect(deps.listSourceJobs).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears queued project analysis status after successful workspace reload", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    const deps = createDeps(state);
+    deps.startProjectAnalysis.mockResolvedValue(403);
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource()]);
+    deps.listLibraryCatalog.mockResolvedValue({
+      sources: [libraryCatalogRecord()],
+      filter_counts: [],
+    });
+    deps.listProjectRuns.mockResolvedValue([analysisRun({ id: 403, status: "completed" })]);
+    deps.listPromptTemplates.mockResolvedValue([promptTemplate()]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.runProjectAnalysis({
+      projectId: 1,
+      periodFrom: 0,
+      periodTo: 1,
+      outputLanguage: "English",
+      promptTemplateId: 1,
+      profileId: null,
+      modelOverride: null,
+      youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: false,
+    });
+
+    expect(deps.startProjectAnalysis).toHaveBeenCalledWith({
+      projectId: 1,
+      periodFrom: 0,
+      periodTo: 1,
+      outputLanguage: "English",
+      promptTemplateId: 1,
+      profileId: null,
+      modelOverride: null,
+      youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: false,
+    });
+    expect(state.runs).toEqual([analysisRun({ id: 403, status: "completed" })]);
+    expect(state.status).toBe("");
   });
 });
