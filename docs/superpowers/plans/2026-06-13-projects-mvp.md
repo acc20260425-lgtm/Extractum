@@ -55,7 +55,7 @@ Frontend:
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `docs/database-schema.md`
 
-- [ ] **Step 1: Write failing migration tests**
+- [x] **Step 1: Write failing migration tests**
 
 Add tests to `src-tauri/src/migrations.rs`:
 
@@ -110,7 +110,7 @@ async fn projects_mvp_schema_applies_to_memory_pool() {
 }
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -120,7 +120,7 @@ cargo test projects_mvp --manifest-path src-tauri/Cargo.toml
 
 Expected: FAIL because migration version 5 is not registered.
 
-- [ ] **Step 3: Create migration SQL**
+- [x] **Step 3: Create migration SQL**
 
 Create `src-tauri/migrations/0005_projects_mvp.sql`:
 
@@ -159,7 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_analysis_runs_project_id_created_at
 ON analysis_runs(project_id, created_at DESC);
 ```
 
-- [ ] **Step 4: Register migration**
+- [x] **Step 4: Register migration**
 
 Modify `src-tauri/src/migrations.rs`:
 
@@ -205,7 +205,7 @@ assert_eq!(migrations[4].description, "projects mvp schema");
 assert!(migrations[4].sql.contains("CREATE TABLE IF NOT EXISTS projects"));
 ```
 
-- [ ] **Step 5: Update database schema docs**
+- [x] **Step 5: Update database schema docs**
 
 In `docs/database-schema.md`, add a section after `analysis_source_group_members`:
 
@@ -263,7 +263,7 @@ and note:
 
 Renumber following sections if the document uses consecutive numbering.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run:
 

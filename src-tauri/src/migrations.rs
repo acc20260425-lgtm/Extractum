@@ -20,6 +20,9 @@ const SOURCE_DELETE_CASCADE_INDEXES_VERSION: i64 = 4;
 const SOURCE_DELETE_CASCADE_INDEXES_DESCRIPTION: &str = "source delete cascade indexes";
 const SOURCE_DELETE_CASCADE_INDEXES_SQL: &str =
     include_str!("../migrations/0004_source_delete_cascade_indexes.sql");
+const PROJECTS_MVP_VERSION: i64 = 5;
+const PROJECTS_MVP_DESCRIPTION: &str = "projects mvp schema";
+const PROJECTS_MVP_SQL: &str = include_str!("../migrations/0005_projects_mvp.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -85,12 +88,22 @@ fn source_delete_cascade_indexes_migration() -> Migration {
     }
 }
 
+fn projects_mvp_migration() -> Migration {
+    Migration {
+        version: PROJECTS_MVP_VERSION,
+        description: PROJECTS_MVP_DESCRIPTION,
+        sql: PROJECTS_MVP_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
         migrated_history_opt_in_migration(),
         analysis_telegram_history_scope_migration(),
         source_delete_cascade_indexes_migration(),
+        projects_mvp_migration(),
     ]
 }
 
@@ -183,7 +196,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -203,6 +216,63 @@ mod tests {
             .contains("ADD COLUMN telegram_history_scope TEXT"));
         assert_eq!(migrations[3].description, "source delete cascade indexes");
         assert!(migrations[3].sql.contains("idx_analysis_documents_item_id"));
+        assert_eq!(migrations[4].description, "projects mvp schema");
+        assert!(migrations[4]
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS projects"));
+    }
+
+    #[test]
+    fn projects_mvp_migration_is_registered() {
+        let migrations = build_migrations();
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == 5)
+            .expect("projects MVP migration is registered");
+
+        assert_eq!(migration.description, "projects mvp schema");
+        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS projects"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS project_sources"));
+        assert!(migration
+            .sql
+            .contains("ALTER TABLE analysis_runs ADD COLUMN project_id"));
+    }
+
+    #[tokio::test]
+    async fn projects_mvp_schema_applies_to_memory_pool() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        let project_table: String = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projects'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("projects table exists");
+        assert_eq!(project_table, "projects");
+
+        let project_sources_table: String = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'project_sources'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("project_sources table exists");
+        assert_eq!(project_sources_table, "project_sources");
+
+        let project_id_columns: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('analysis_runs') WHERE name = 'project_id'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read analysis_runs columns");
+        assert_eq!(project_id_columns, 1);
     }
 
     #[tokio::test]

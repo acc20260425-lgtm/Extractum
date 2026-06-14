@@ -775,6 +775,7 @@ Important fields:
 - `scope_type`
 - `source_id`
 - `source_group_id`
+- `project_id`
 - `period_from`
 - `period_to`
 - `output_language`
@@ -806,6 +807,9 @@ Notes:
 - `telegram_history_scope` is nullable for backward compatibility. `NULL`
   means `current`. New runs store either `current` or
   `current_plus_migrated`.
+- Project-scoped runs use `scope_type = 'project'` and `project_id`.
+- Project run history is stored in `analysis_runs`; there is no separate
+  `project_runs` table in the MVP.
 
 ### 2.3 `analysis_source_groups`
 
@@ -824,7 +828,43 @@ Notes:
 
 Join table between groups and sources.
 
-### 2.5 `analysis_chat_messages`
+### 2.5 `projects`
+
+Durable research projects. Projects are first-class analysis workspaces and are
+not aliases for `analysis_source_groups`.
+
+Important fields:
+
+- `id`
+- `name`
+- `description`
+- `created_at`
+- `updated_at`
+
+Notes:
+
+- `name` is unique in the MVP after trimming. This is a product policy, not a
+  stable identity rule.
+- Timestamps are integer Unix seconds.
+
+### 2.6 `project_sources`
+
+Join table between projects and canonical Library sources.
+
+Important fields:
+
+- `project_id`
+- `source_id`
+- `added_at`
+
+Notes:
+
+- `UNIQUE(project_id, source_id)` prevents duplicate membership.
+- A source can belong to multiple projects.
+- Deleting a project deletes its project-source links.
+- Deleting a Library source is blocked while it belongs to a project.
+
+### 2.7 `analysis_chat_messages`
 
 Stores follow-up chat exchanges for a saved run.
 
@@ -836,7 +876,7 @@ Important fields:
 - `content`
 - `created_at`
 
-### 2.6 `analysis_documents`
+### 2.8 `analysis_documents`
 
 `analysis_documents` is a provider-neutral materialized read model for live
 analysis corpus loading. Provider/archive truth remains in `items` plus typed
@@ -902,7 +942,7 @@ Notes:
 - `ref` is not unique, so scoped callers must pair it with source, kind, run,
   or another owned boundary.
 
-### 2.7 `analysis_run_messages`
+### 2.9 `analysis_run_messages`
 
 Stores the frozen corpus snapshot for a saved run.
 
@@ -992,6 +1032,8 @@ post-baseline migration history.
 | 1 | `0001_current_schema_baseline.sql` | Current supported schema baseline |
 | 2 | `0002_migrated_history_opt_in_schema.sql` | Migrated small-group history opt-in schema |
 | 3 | `0003_analysis_telegram_history_scope.sql` | Telegram migrated-history analysis scope marker |
+| 4 | `0004_source_delete_cascade_indexes.sql` | Source delete cascade indexes |
+| 5 | `0005_projects_mvp.sql` | Projects MVP schema |
 
 ## 4. Current behavior implications
 
