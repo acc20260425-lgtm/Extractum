@@ -273,7 +273,7 @@ cargo test projects_mvp --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri\src\migrations.rs src-tauri\migrations\0005_projects_mvp.sql docs\database-schema.md
@@ -924,7 +924,7 @@ cargo test projects::tests --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add src-tauri\src\projects.rs src-tauri\src\lib.rs
@@ -1081,7 +1081,7 @@ cargo test delete_source_is_blocked_when_source_is_used_by_project --manifest-pa
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri\src\library_sources\mod.rs src-tauri\src\sources\store.rs
@@ -1708,7 +1708,7 @@ cargo test analysis::report --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```powershell
 git add src-tauri\src\analysis src-tauri\src\projects.rs src-tauri\src\lib.rs
@@ -1983,7 +1983,7 @@ npm.cmd test -- --run src/lib/api/projects.test.ts src/lib/api/analysis-runs.tes
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src\lib\types\projects.ts src\lib\api\projects.ts src\lib\types\analysis.ts src\lib\api\analysis-runs.ts src\lib\api\projects.test.ts src\lib\api\analysis-runs.test.ts
@@ -2387,7 +2387,7 @@ npm.cmd test -- --run src/lib/ui/research-projects-model.test.ts src/lib/ui/rese
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src\lib\ui\research-projects-model.ts src\lib\ui\research-projects-model.test.ts src\lib\ui\research-projects-workflow.ts src\lib\ui\research-projects-workflow.test.ts
@@ -2905,7 +2905,7 @@ npm.cmd run check
 
 Expected: PASS and Svelte check reports 0 errors.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```powershell
 git add src\routes\projects\+page.svelte src\lib\components\research-projects src\lib\research-projects-route-contract.test.ts
@@ -3034,7 +3034,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src\lib\types\analysis.ts src\lib\analysis-utils.ts src\lib\source-browser-model.ts src\lib\components\analysis src\lib\analysis-utils.test.ts src\lib\analysis-run-companion-tabs.test.ts src\lib\source-browser-model.test.ts src\lib\analysis-source-readers.test.ts
@@ -3048,7 +3048,7 @@ git commit -m "feat: show project-scoped analysis runs"
 **Files:**
 - No planned source edits.
 
-- [ ] **Step 1: Run focused backend tests**
+- [x] **Step 1: Run focused backend tests**
 
 Run:
 
@@ -3062,7 +3062,7 @@ cargo test delete_source_is_blocked_when_source_is_used_by_project --manifest-pa
 
 Expected: all PASS.
 
-- [ ] **Step 2: Run focused frontend tests**
+- [x] **Step 2: Run focused frontend tests**
 
 Run:
 
@@ -3073,7 +3073,7 @@ npm.cmd test -- --run src/lib/analysis-utils.test.ts src/lib/analysis-run-compan
 
 Expected: all PASS.
 
-- [ ] **Step 3: Run whole-project checks**
+- [x] **Step 3: Run whole-project checks**
 
 Run:
 
@@ -3084,7 +3084,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: Svelte check has 0 errors; cargo tests pass.
 
-- [ ] **Step 4: Manual app smoke with Tauri MCP bridge**
+- [x] **Step 4: Manual app smoke with Tauri MCP bridge**
 
 Start the app with the usual development command for this repo. If the app is already running with MCP bridge, connect with:
 
@@ -3107,7 +3107,7 @@ Manual smoke steps:
 11. Open Run Project Analysis dialog and verify period, prompt, output language, and YouTube corpus fields are visible.
 12. Delete the project and confirm Library sources remain.
 
-- [ ] **Step 5: Record verification**
+- [x] **Step 5: Record verification**
 
 Create a short verification note:
 
@@ -3143,7 +3143,7 @@ Date: 2026-06-13
 - Project delete keeps Library sources: PASS
 ```
 
-- [ ] **Step 6: Commit verification**
+- [x] **Step 6: Commit verification**
 
 ```powershell
 git add docs\superpowers\verification\2026-06-13-projects-mvp.md

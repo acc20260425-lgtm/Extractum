@@ -412,12 +412,24 @@ mod tests {
         .expect("create source groups");
         sqlx::query(
             r#"
+            CREATE TABLE projects (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create projects");
+        sqlx::query(
+            r#"
             CREATE TABLE analysis_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_type TEXT NOT NULL,
                 scope_type TEXT NOT NULL,
                 source_id INTEGER,
                 source_group_id INTEGER,
+                project_id INTEGER,
                 period_from INTEGER NOT NULL,
                 period_to INTEGER NOT NULL,
                 output_language TEXT NOT NULL,
