@@ -598,6 +598,27 @@ mod tests {
         assert_eq!(error.message, "Unsupported message role 'tool'");
     }
 
+    #[test]
+    fn openai_compat_retry_status_policy_is_bounded_to_transient_failures() {
+        for status in [429, 500, 502, 503, 504] {
+            assert!(
+                super::is_retryable_openai_compat_status(
+                    reqwest::StatusCode::from_u16(status).expect("valid status")
+                ),
+                "{status} should be retryable"
+            );
+        }
+
+        for status in [400, 401, 403, 404] {
+            assert!(
+                !super::is_retryable_openai_compat_status(
+                    reqwest::StatusCode::from_u16(status).expect("valid status")
+                ),
+                "{status} should not be retryable"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn openai_compat_stream_retries_transient_http_before_streaming() {
         let (base_url, attempts) = start_transient_openai_compat_server().await;
