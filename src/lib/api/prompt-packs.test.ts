@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getPromptPackLibrary,
+  getPromptPackResult,
   getPromptPackStageArtifact,
+  getPromptPackValidationFindings,
   listenToPromptPackRunEvents,
+  listActivePromptPackRuns,
   listPromptPackAuditEvents,
+  listPromptPackRunStages,
   listPromptPackStageArtifacts,
   listPromptPackRuns,
   PROMPT_PACK_RUN_EVENT,
@@ -66,6 +70,39 @@ describe("prompt pack api wrappers", () => {
     });
   });
 
+  it("returns blocked start outcome without hiding fresh preflight failures", async () => {
+    invokeMock.mockResolvedValueOnce({
+      kind: "blocked",
+      preflight: {
+        packId: "youtube_summary",
+        packVersion: "1.0.0",
+        includedVideos: [],
+        skippedVideos: [],
+        blockingFailures: [{ sourceId: 10, reason: "no_included_videos" }],
+        estimatedInputTokens: 0,
+        selectedModelInputLimit: 32000,
+      },
+    });
+
+    const outcome = await startYoutubeSummaryRun({
+      clientRequestId: "req-ui-blocked-1",
+      projectId: null,
+      sourceIds: [10],
+      profileId: null,
+      modelOverride: null,
+      outputLanguage: "en",
+      controlPreset: "standard",
+      evidenceMode: "standard",
+      includeComments: false,
+    });
+
+    if (outcome.kind !== "blocked") {
+      throw new Error(`expected blocked outcome, got ${outcome.kind}`);
+    }
+
+    expect(outcome.preflight.blockingFailures).toHaveLength(1);
+  });
+
   it("listens to prompt pack run events", async () => {
     const handler = vi.fn();
 
@@ -85,6 +122,18 @@ describe("prompt pack api wrappers", () => {
   });
 
   it("keeps execution result artifact and audit wrappers available", async () => {
+    await listActivePromptPackRuns();
+    expect(invokeMock).toHaveBeenCalledWith("list_active_prompt_pack_runs");
+
+    await listPromptPackRunStages(42);
+    expect(invokeMock).toHaveBeenCalledWith("list_prompt_pack_run_stages", { runId: 42 });
+
+    await getPromptPackResult(42);
+    expect(invokeMock).toHaveBeenCalledWith("get_prompt_pack_result", { runId: 42 });
+
+    await getPromptPackValidationFindings(42);
+    expect(invokeMock).toHaveBeenCalledWith("get_prompt_pack_validation_findings", { runId: 42 });
+
     await listPromptPackStageArtifacts(1001);
     expect(invokeMock).toHaveBeenCalledWith("list_prompt_pack_stage_artifacts", {
       stageRunId: 1001,

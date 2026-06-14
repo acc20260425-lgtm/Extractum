@@ -169,7 +169,7 @@ git commit -m "feat: add youtube summary ui workflow state"
 - Modify: `src/lib/api/prompt-packs.test.ts`
 - Modify: `src/lib/types/prompt-packs.ts`
 
-- [ ] **Step 1: Add wrapper tests**
+- [x] **Step 1: Add wrapper tests**
 
 Extend `src/lib/api/prompt-packs.test.ts`:
 
@@ -282,7 +282,7 @@ it("keeps execution result artifact and audit wrappers available", async () => {
 });
 ```
 
-- [ ] **Step 2: Implement wrappers**
+- [x] **Step 2: Implement wrappers**
 
 Extend the existing `src/lib/api/prompt-packs.ts`; do not replace or remove wrappers added by the runtime and execution/result plans.
 
@@ -308,7 +308,7 @@ export function listPromptPackAuditEvents(runId: number): Promise<PromptPackAudi
 export function listenToPromptPackRunEvents(handler: (event: Event<PromptPackRunEvent>) => void): Promise<UnlistenFn>
 ```
 
-- [ ] **Step 3: Run API tests**
+- [x] **Step 3: Run API tests**
 
 Run:
 
@@ -318,7 +318,7 @@ npm test -- --run src/lib/api/prompt-packs.test.ts
 
 Expected: pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add src/lib/api/prompt-packs.ts src/lib/api/prompt-packs.test.ts src/lib/types/prompt-packs.ts
