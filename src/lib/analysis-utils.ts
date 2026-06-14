@@ -35,13 +35,23 @@ export function formatPeriod(periodFromUnix: number, periodToUnix: number) {
 export function runTargetLabel(
   run: Pick<
     AnalysisRunSummary,
-    "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
+    | "scope_type"
+    | "source_id"
+    | "source_title"
+    | "source_group_id"
+    | "source_group_name"
+    | "project_id"
+    | "project_name"
+    | "scope_label"
   >
 ) {
   if (run.scope_label.trim()) {
     return run.scope_label;
   }
 
+  if (run.scope_type === "project") {
+    return run.project_name || `Project #${run.project_id ?? "unknown"}`;
+  }
   if (run.scope_type === "source_group") {
     return run.source_group_name ?? `Group ${run.source_group_id ?? "?"}`;
   }

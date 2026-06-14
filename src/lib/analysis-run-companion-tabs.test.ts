@@ -72,6 +72,12 @@ describe("run companion tabs", () => {
     expect(runsTabSource).not.toContain("sourceJobs");
   });
 
+  it("accepts project-scoped run labels in run surfaces", () => {
+    expect(companionTabsSource).toContain('"project_id" | "project_name"');
+    expect(runsTabSource).toContain('"project_id" | "project_name"');
+    expect(reportCanvasSource).toContain('"project_id" | "project_name"');
+  });
+
   it("keeps dense run filters behind an advanced filters disclosure", () => {
     expect(runsTabSource).toContain("<summary>Advanced filters</summary>");
     expect(runsTabSource).toContain('class="advanced-filters"');

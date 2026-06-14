@@ -69,7 +69,7 @@ function snapshotSubject(
   readerKind: "source_group" | "telegram_timeline" | "youtube_transcript" | "generic_items",
   overrides: Partial<{
     runId: number;
-    scopeType: "source" | "source_group";
+    scopeType: "source" | "source_group" | "project";
     scopeLabel: string;
     sourceType: Source["sourceType"] | null;
     sourceSubtype: Source["sourceSubtype"] | null;
@@ -280,6 +280,16 @@ describe("source browser model", () => {
   });
 
   it("derives run snapshot reader kinds deterministically", () => {
+    expect(deriveRunSnapshotBrowserKind({
+      scopeType: "project",
+      sourceType: "youtube",
+      sourceSubtype: "video",
+      snapshotReaderItems: [snapshotReaderItem({ kind: "youtube_transcript" })],
+    })).toBe("source_group");
+
+    expect(sourceBrowserTabsForSubject(snapshotSubject("source_group", { scopeType: "project" })).map((tab) => tab.id))
+      .toEqual(["sources", "items", "metadata"]);
+
     expect(deriveRunSnapshotBrowserKind({
       scopeType: "source_group",
       sourceType: "telegram",

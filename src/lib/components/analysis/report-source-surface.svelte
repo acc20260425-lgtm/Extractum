@@ -290,7 +290,11 @@
           kind: "run_snapshot" as const,
           snapshot: {
             runId: currentRun.id,
-            scopeType: currentRun.scope_type === "source_group" ? "source_group" as const : "source" as const,
+            scopeType: currentRun.scope_type === "project"
+              ? "project" as const
+              : currentRun.scope_type === "source_group"
+                ? "source_group" as const
+                : "source" as const,
             scopeLabel: currentRun.scope_label,
             readerKind: runSnapshotBrowserKind,
             sourceType: snapshotBrowserSourceType(snapshotSourceType),
@@ -374,7 +378,7 @@
       <SourceReaderHeader
         smokeId="run-snapshot-header"
         title="Run snapshot"
-        surfaceLabel={currentRun.scope_type === "source_group" ? "Group sources" : "Source material"}
+        surfaceLabel={currentRun.scope_type === "project" ? "Project sources" : currentRun.scope_type === "source_group" ? "Group sources" : "Source material"}
         subtitle="Frozen source material captured for the opened run."
         {sourceViewBasis}
         sourceBasisState={canvasSurface}

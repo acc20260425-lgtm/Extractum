@@ -147,6 +147,11 @@ describe("analysis source readers", () => {
     expect(reportSourceSurfaceSource).not.toContain(sourceGroupReaderTag);
   });
 
+  it("handles project-scoped run snapshots as grouped source material", () => {
+    expect(reportSourceSurfaceSource).toContain('currentRun.scope_type === "project"');
+    expect(reportSourceSurfaceSource).toContain('"Project sources"');
+  });
+
   it("keeps snapshot shell data frozen-only and live props empty", () => {
     const snapshotShellCall = sourceBrowserShellCall("subject={runSnapshotSubject}");
 

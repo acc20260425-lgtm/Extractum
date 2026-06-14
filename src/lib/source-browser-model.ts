@@ -26,7 +26,7 @@ export type RunSnapshotBrowserKind =
 
 export interface RunSnapshotBrowserSubject {
   runId: number;
-  scopeType: "source" | "source_group";
+  scopeType: "source" | "source_group" | "project";
   scopeLabel: string;
   readerKind: RunSnapshotBrowserKind;
   sourceType: SourceType | null;
@@ -185,6 +185,7 @@ export function reconcileSourceBrowserTab(
 }
 
 export function deriveRunSnapshotBrowserKind(input: RunSnapshotBrowserKindInput): RunSnapshotBrowserKind {
+  if (input.scopeType === "project") return "source_group";
   if (input.scopeType === "source_group") return "source_group";
   if (input.snapshotReaderItems.length === 0) return "generic_items";
 

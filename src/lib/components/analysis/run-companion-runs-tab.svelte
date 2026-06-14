@@ -55,7 +55,7 @@
     runTargetLabel: (
       run: Pick<
         AnalysisRunSummary,
-        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
+        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "project_id" | "project_name" | "scope_label"
       >
     ) => string;
     statusTone: (status: string) => BadgeVariant;

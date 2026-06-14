@@ -2930,7 +2930,7 @@ git commit -m "feat: replace projects workspace with real projects"
 - Test: `src/lib/source-browser-model.test.ts`
 - Test: `src/lib/analysis-source-readers.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 In `src/lib/analysis-utils.test.ts`, add:
 
@@ -2950,7 +2950,7 @@ it("labels project analysis runs from scope label", () => {
 });
 ```
 
-- [ ] **Step 2: Run test and verify failure**
+- [x] **Step 2: Run test and verify failure**
 
 Run:
 
@@ -2960,7 +2960,7 @@ npm.cmd test -- --run src/lib/analysis-utils.test.ts
 
 Expected: FAIL until project scope is handled.
 
-- [ ] **Step 3: Update labels**
+- [x] **Step 3: Update labels**
 
 In `src/lib/analysis-utils.ts`, update `runTargetLabel` to include project fields in the accepted pick type and add:
 
@@ -2972,7 +2972,7 @@ if (run.scope_type === "project") {
 
 Do not remove existing single-source/source-group branches.
 
-- [ ] **Step 4: Update run list UI copy**
+- [x] **Step 4: Update run list UI copy**
 
 In run list/header components, make labels scope-neutral:
 
@@ -2986,7 +2986,7 @@ In run list/header components, make labels scope-neutral:
   - `src/lib/components/analysis/run-companion-tabs.svelte`
   - `src/lib/components/analysis/run-companion-runs-tab.svelte`
 
-- [ ] **Step 5: Make run snapshot source browser project-aware**
+- [x] **Step 5: Make run snapshot source browser project-aware**
 
 Project snapshots are multi-source snapshots, so they must not be rendered as
 single-source snapshots.
@@ -3023,7 +3023,7 @@ Add tests:
   `report-source-surface.svelte` contains explicit `currentRun.scope_type ===
   "project"` handling.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run:
 

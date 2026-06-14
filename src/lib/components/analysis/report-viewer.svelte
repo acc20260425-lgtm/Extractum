@@ -48,7 +48,7 @@
     runTargetLabel: (
       run: Pick<
         AnalysisRunDetail,
-        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label"
+        "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "project_id" | "project_name" | "scope_label"
       >
     ) => string;
     statusTone: (status: string) => BadgeVariant;
@@ -148,7 +148,7 @@
         <div class="run-meta-grid">
           <MetaCell label="Period">{formatPeriod(currentRun.period_from, currentRun.period_to)}</MetaCell>
           <MetaCell label="Scope">
-            {currentRun.scope_type === "source_group" ? "Source group" : "Single source"}
+            {runTargetLabel(currentRun)}
           </MetaCell>
           <MetaCell label="Output language">{currentRun.output_language}</MetaCell>
           <MetaCell label="Created">{formatTimestamp(currentRun.created_at)}</MetaCell>

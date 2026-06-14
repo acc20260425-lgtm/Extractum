@@ -76,6 +76,34 @@ describe("analysis-utils", () => {
     ).toBe("Source 9");
   });
 
+  it("labels project analysis runs from scope label and project fallbacks", () => {
+    expect(
+      runTargetLabel({
+        scope_type: "project",
+        project_id: 7,
+        project_name: "Alpha",
+        source_id: null,
+        source_title: null,
+        source_group_id: null,
+        source_group_name: null,
+        scope_label: "Alpha snapshot",
+      }),
+    ).toBe("Alpha snapshot");
+
+    expect(
+      runTargetLabel({
+        scope_type: "project",
+        project_id: 7,
+        project_name: "Alpha",
+        source_id: null,
+        source_title: null,
+        source_group_id: null,
+        source_group_name: null,
+        scope_label: "",
+      }),
+    ).toBe("Alpha");
+  });
+
   it("maps phases and statuses to user-facing labels and badge tones", () => {
     expect(phaseLabel("map")).toBe("Analyzing chunks");
     expect(phaseLabel("")).toBe("Idle");

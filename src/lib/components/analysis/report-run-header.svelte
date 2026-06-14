@@ -42,7 +42,7 @@
     canCancelCurrentRun: boolean;
     formatTimestamp: (value: number | null) => string;
     formatPeriod: (from: number, to: number) => string;
-    runTargetLabel: (run: Pick<AnalysisRunDetail, "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "scope_label">) => string;
+    runTargetLabel: (run: Pick<AnalysisRunDetail, "scope_type" | "source_id" | "source_title" | "source_group_id" | "source_group_name" | "project_id" | "project_name" | "scope_label">) => string;
     statusTone: (value: string) => BadgeVariant;
     onCancelCurrentRun: () => void | Promise<void>;
   } = $props();
