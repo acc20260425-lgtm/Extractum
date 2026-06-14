@@ -49,6 +49,8 @@ export interface AnalysisRunSummary {
   source_title: string | null;
   source_group_id: number | null;
   source_group_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
   scope_label: string;
   period_from: number;
   period_to: number;

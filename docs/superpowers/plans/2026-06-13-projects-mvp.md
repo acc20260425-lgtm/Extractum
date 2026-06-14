@@ -1727,7 +1727,7 @@ git commit -m "feat: support project analysis scope"
 - Test: `src/lib/api/projects.test.ts`
 - Test: `src/lib/api/analysis-runs.test.ts`
 
-- [ ] **Step 1: Write failing API tests**
+- [x] **Step 1: Write failing API tests**
 
 Create `src/lib/api/projects.test.ts`:
 
@@ -1828,7 +1828,7 @@ describe("projects api", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -1838,7 +1838,7 @@ npm.cmd test -- --run src/lib/api/projects.test.ts
 
 Expected: FAIL because `$lib/api/projects` does not exist.
 
-- [ ] **Step 3: Add project types**
+- [x] **Step 3: Add project types**
 
 Create `src/lib/types/projects.ts`:
 
@@ -1899,7 +1899,7 @@ export interface ProjectAnalysisStartCommand {
 export type ProjectRuns = AnalysisRunSummary[];
 ```
 
-- [ ] **Step 4: Add API wrapper**
+- [x] **Step 4: Add API wrapper**
 
 Create `src/lib/api/projects.ts`:
 
@@ -1953,7 +1953,7 @@ export function startProjectAnalysis(command: ProjectAnalysisStartCommand) {
 }
 ```
 
-- [ ] **Step 5: Extend analysis run types**
+- [x] **Step 5: Extend analysis run types**
 
 In `src/lib/types/analysis.ts`, add to `AnalysisRunSummary` so
 `AnalysisRunDetail extends AnalysisRunSummary` receives the same fields:
@@ -1965,7 +1965,7 @@ project_name: string | null;
 
 Do not add `projectId` to legacy `AnalysisReportStartCommand`; project starts use `ProjectAnalysisStartCommand`.
 
-- [ ] **Step 6: Re-export startProjectAnalysis for callers**
+- [x] **Step 6: Re-export startProjectAnalysis for callers**
 
 In `src/lib/api/analysis-runs.ts`, add:
 
@@ -1973,7 +1973,7 @@ In `src/lib/api/analysis-runs.ts`, add:
 export { startProjectAnalysis } from "$lib/api/projects";
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run:
 

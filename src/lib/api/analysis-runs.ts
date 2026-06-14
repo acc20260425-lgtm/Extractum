@@ -33,6 +33,8 @@ export function startAnalysisReport(command: AnalysisReportStartCommand) {
   return invoke<number>("start_analysis_report", { ...command });
 }
 
+export { startProjectAnalysis } from "$lib/api/projects";
+
 export function cancelAnalysisRun(runId: number) {
   return invoke<void>("cancel_analysis_run", { runId });
 }
