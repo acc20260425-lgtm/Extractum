@@ -5,6 +5,7 @@ pub mod runtime;
 pub mod seed;
 pub mod stage_io;
 pub mod store;
+pub mod validation;
 pub mod youtube_summary;
 
 pub use library::get_prompt_pack_library;

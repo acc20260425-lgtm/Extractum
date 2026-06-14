@@ -129,7 +129,7 @@ git commit -m "feat: build youtube summary stage inputs"
 - Modify: `src-tauri/src/prompt_packs/stage_io.rs`
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 
-- [ ] **Step 1: Write validator tests**
+- [x] **Step 1: Write validator tests**
 
 Add tests:
 
@@ -254,7 +254,7 @@ async fn invalid_candidate_is_written_to_quarantine_artifacts() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -264,7 +264,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::validation
 
 Expected: fail because validator does not exist.
 
-- [ ] **Step 3: Implement parser**
+- [x] **Step 3: Implement parser**
 
 Implement `extract_json_payload` for provider text. Reuse the brace-balanced approach from `analysis/report.rs`, but keep the function local to `prompt_packs/stage_io.rs` or extract a shared helper only if both call sites are updated in the same commit.
 
@@ -276,7 +276,7 @@ Parser rules:
 - reject multiple top-level JSON objects with a validation error containing `multiple JSON objects`;
 - reject responses without a JSON object.
 
-- [ ] **Step 4: Implement validation**
+- [x] **Step 4: Implement validation**
 
 Validation layers:
 
@@ -288,7 +288,7 @@ Validation layers:
 - quarantine invalid candidate objects into `prompt_pack_result_quarantine_artifacts` instead of accepting partial object fragments silently;
 - write validation findings into `prompt_pack_result_validation_findings`, not as a stage artifact kind.
 
-- [ ] **Step 5: Run validator tests**
+- [x] **Step 5: Run validator tests**
 
 Run:
 
@@ -299,7 +299,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::stage_io
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/validation.rs src-tauri/src/prompt_packs/stage_io.rs src-tauri/src/prompt_packs/store.rs
