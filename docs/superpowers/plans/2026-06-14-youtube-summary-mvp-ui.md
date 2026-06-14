@@ -536,7 +536,7 @@ git commit -m "feat: add youtube summary result viewer"
 - Create: `src/lib/youtube-summary-smoke-fixture-contract.test.ts`
 - Modify only files needed to fix issues found by verification.
 
-- [ ] **Step 1: Add smoke fixture guard helper and tests**
+- [x] **Step 1: Add smoke fixture guard helper and tests**
 
 Create `src/lib/ui/youtube-summary-smoke-fixture.ts`:
 
@@ -605,7 +605,7 @@ describe("youtube summary smoke fixture guard", () => {
 });
 ```
 
-- [ ] **Step 2: Run frontend checks**
+- [x] **Step 2: Run frontend checks**
 
 Run:
 
@@ -617,7 +617,7 @@ npm run check
 
 Expected: pass.
 
-- [ ] **Step 3: Run app manually**
+- [x] **Step 3: Run app manually**
 
 Run:
 
@@ -646,7 +646,7 @@ Smoke fixture fallback requirements:
 - never call legacy `analysis_runs` APIs;
 - keep fixture-only branches out of production builds.
 
-- [ ] **Step 4: Run browser smoke on desktop viewport**
+- [x] **Step 4: Run browser smoke on desktop viewport**
 
 Use the in-app Browser or Playwright against `http://127.0.0.1:1420` with viewport `1440x900`.
 
@@ -664,7 +664,7 @@ Smoke path:
 
 Capture at least one desktop screenshot of the launch dialog and one desktop screenshot of the result viewer. Save them under `artifacts/` when using Playwright, or attach them in the in-app Browser verification notes.
 
-- [ ] **Step 5: Commit verification fixes**
+- [x] **Step 5: Commit verification fixes**
 
 If Step 1, Step 2, Step 3, or Step 4 required fixes:
 

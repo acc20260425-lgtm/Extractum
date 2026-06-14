@@ -11,6 +11,7 @@
     type LibraryCatalogFilterId,
   } from "$lib/ui/library-catalog-model";
   import type { LibraryCatalogWorkflowState } from "$lib/ui/library-catalog-workflow";
+  import { withYoutubeSummarySmokeFixtureSources } from "$lib/ui/youtube-summary-smoke-fixture";
 
   let {
     state: workflowState,
@@ -29,8 +30,9 @@
   let addSourceDialogOpen = $state(false);
 
   let filterRows = $derived(buildLibraryCatalogFilterTree(workflowState.filterCounts));
+  let sources = $derived(withYoutubeSummarySmokeFixtureSources(workflowState.sources, import.meta.env));
   let visibleSources = $derived(
-    filterLibraryCatalogSources(workflowState.sources, { filterId: selectedFilterId, query }),
+    filterLibraryCatalogSources(sources, { filterId: selectedFilterId, query }),
   );
   let selectedSource = $derived(
     visibleSources.find((source) => source.id === selectedSourceId) ?? null,
@@ -128,7 +130,7 @@
 
   <LibraryAddSourceDialog
     bind:open={addSourceDialogOpen}
-    sources={workflowState.sources}
+    sources={sources}
     onSourcesChanged={handleSourcesChanged}
     onStatus={(message) => (status = message)}
   />

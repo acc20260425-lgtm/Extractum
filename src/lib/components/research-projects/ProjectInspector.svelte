@@ -5,6 +5,7 @@
   import type { AnalysisRunSummary } from "$lib/types/analysis";
   import type { ProjectSourceRecord } from "$lib/types/projects";
   import type { ProjectSourceLinkView, ResearchProjectView } from "$lib/ui/research-projects-model";
+  import YoutubeSummaryRunsPanel from "./YoutubeSummaryRunsPanel.svelte";
 
   let {
     project,
@@ -91,6 +92,10 @@
     {:else}
       <p class="hint">No project runs</p>
     {/each}
+  </section>
+
+  <section>
+    <YoutubeSummaryRunsPanel projectId={project?.projectId ?? null} />
   </section>
 </aside>
 
