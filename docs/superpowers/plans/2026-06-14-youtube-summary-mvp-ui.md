@@ -333,7 +333,7 @@ git commit -m "feat: add prompt pack frontend api"
 - Create: `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte`
 - Modify: `src/lib/components/research-projects/LibraryInspector.svelte`
 
-- [ ] **Step 1: Add contract test**
+- [x] **Step 1: Add contract test**
 
 Create a route/component contract test if this project has one for `LibraryInspector`; otherwise add `src/lib/youtube-summary-launch-contract.test.ts` that reads component source and asserts these strings exist:
 
@@ -343,7 +343,7 @@ expect(source).toContain("preflightYoutubeSummaryRun");
 expect(source).toContain("startYoutubeSummaryRun");
 ```
 
-- [ ] **Step 2: Implement dialog**
+- [x] **Step 2: Implement dialog**
 
 Dialog behavior:
 
@@ -371,7 +371,7 @@ import { Checkbox } from "$lib/components/ui/checkbox";
 import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
 ```
 
-- [ ] **Step 3: Add Library entry point**
+- [x] **Step 3: Add Library entry point**
 
 In `LibraryInspector.svelte`, show a "YouTube Summary" action only when:
 
@@ -381,7 +381,7 @@ In `LibraryInspector.svelte`, show a "YouTube Summary" action only when:
 
 Do not show the action for Telegram or unsupported source kinds.
 
-- [ ] **Step 4: Run tests/check**
+- [x] **Step 4: Run tests/check**
 
 Run:
 
@@ -392,7 +392,7 @@ npm run check
 
 Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte src/lib/components/research-projects/LibraryInspector.svelte src/lib/youtube-summary-launch-contract.test.ts

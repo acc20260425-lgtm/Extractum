@@ -2,8 +2,10 @@
   import { ExternalLink, Link2, PlayCircle, RefreshCw } from "@lucide/svelte";
   import { ExtractumButton, ProviderBadge, StatusBadge } from "$lib/components/extractum-ui";
   import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
+  import YoutubeSummaryRunDialog from "./YoutubeSummaryRunDialog.svelte";
 
   let { selectedSource }: { selectedSource: LibraryCatalogSourceView | null } = $props();
+  let youtubeSummaryOpen = $state(false);
 
   type MetadataRow = { label: string; value: string | null; href?: string };
 
@@ -59,6 +61,13 @@
         ]
       : [],
   );
+
+  let canRunYoutubeSummary = $derived(
+    selectedSource?.provider === "youtube" &&
+      (selectedSource.sourceSubtype === "video" || selectedSource.sourceSubtype === "playlist") &&
+      selectedSource.status === "active" &&
+      selectedSource.lastSyncedLabel !== "Never",
+  );
 </script>
 
 <aside data-ui-region="library-inspector" class="library-inspector" aria-label="Library source inspector">
@@ -79,7 +88,7 @@
     </div>
 
     <dl class="meta-list">
-      {#each metadataRows as row}
+      {#each metadataRows as row (row.label)}
         <div>
           <dt>{row.label}</dt>
           <dd>
@@ -97,7 +106,7 @@
       <section class="detail-section" aria-label="YouTube details">
         <h3>YouTube details</h3>
         <dl class="meta-list">
-          {#each youtubeRows as row}
+          {#each youtubeRows as row (row.label)}
             <div>
               <dt>{row.label}</dt>
               <dd>{row.value ?? "N/A"}</dd>
@@ -111,7 +120,7 @@
       <section class="detail-section" aria-label="Telegram details">
         <h3>Telegram details</h3>
         <dl class="meta-list">
-          {#each telegramRows as row}
+          {#each telegramRows as row (row.label)}
             <div>
               <dt>{row.label}</dt>
               <dd>{row.value ?? "N/A"}</dd>
@@ -126,7 +135,13 @@
       <ExtractumButton variant="outline"><RefreshCw size={14} aria-hidden="true" />Sync</ExtractumButton>
       <ExtractumButton variant="outline"><Link2 size={14} aria-hidden="true" />Connect</ExtractumButton>
       <ExtractumButton variant="outline"><PlayCircle size={14} aria-hidden="true" />Run report</ExtractumButton>
+      {#if canRunYoutubeSummary}
+        <ExtractumButton variant="outline" onclick={() => (youtubeSummaryOpen = true)}>
+          <PlayCircle size={14} aria-hidden="true" />YouTube Summary
+        </ExtractumButton>
+      {/if}
     </div>
+    <YoutubeSummaryRunDialog bind:open={youtubeSummaryOpen} source={selectedSource} />
   {:else}
     <div class="empty-state">
       <p class="eyebrow">Inspector</p>
