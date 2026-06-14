@@ -353,7 +353,7 @@ git commit -m "feat: add bundled youtube summary pack assets"
 - Create: `src-tauri/src/prompt_packs/library.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write seed behavior tests**
+- [x] **Step 1: Write seed behavior tests**
 
 Add tests under `src-tauri/src/prompt_packs/seed.rs`:
 
@@ -497,7 +497,7 @@ async fn seed_youtube_summary_pack_preserves_unknown_newer_bundled_version() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -507,11 +507,11 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::seed
 
 Expected: fail because `prompt_packs` module and seed functions do not exist.
 
-- [ ] **Step 3: Implement asset loader and content hash**
+- [x] **Step 3: Implement asset loader and content hash**
 
 In `seed.rs`, load bundled JSON with `include_str!`, compute a SHA-384 hex content hash over normalized asset bytes, and compress JSON payloads with `crate::compression::compress_text`.
 
-- [ ] **Step 4: Implement idempotent seed SQL**
+- [x] **Step 4: Implement idempotent seed SQL**
 
 Seed rules:
 
@@ -526,7 +526,7 @@ Seed rules:
   current bundle;
 - insert or refresh stage templates and schema assets only for the matching immutable bundled version.
 
-- [ ] **Step 5: Register startup seed**
+- [x] **Step 5: Register startup seed**
 
 In `src-tauri/src/lib.rs`:
 
@@ -552,7 +552,7 @@ commands must return a validation/internal error if the required active
 `youtube_summary` pack version is unavailable. Do not silently create runs
 against missing seed assets.
 
-- [ ] **Step 6: Run seed tests**
+- [x] **Step 6: Run seed tests**
 
 Run:
 
@@ -562,7 +562,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::seed
 
 Expected: pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs src-tauri/src/lib.rs

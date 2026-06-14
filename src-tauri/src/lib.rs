@@ -20,6 +20,8 @@ use projects::{
     add_project_sources, create_project, delete_project, list_project_runs, list_project_sources,
     list_projects, remove_project_sources, start_project_analysis, update_project,
 };
+mod prompt_packs;
+use prompt_packs::seed_builtin_prompt_packs;
 
 mod secret_store;
 use secret_store::SecretStoreState;
@@ -141,6 +143,9 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                if let Err(error) = seed_builtin_prompt_packs(handle.clone()).await {
+                    eprintln!("Prompt Pack seed failed: {error}");
+                }
                 cleanup_interrupted_analysis_runs(handle.clone()).await;
                 restore_telegram_accounts(handle).await;
             });
