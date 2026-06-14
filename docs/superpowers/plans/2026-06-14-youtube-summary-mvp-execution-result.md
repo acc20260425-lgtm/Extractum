@@ -453,7 +453,7 @@ git commit -m "feat: execute youtube summary combined stage"
 - Create: `src-tauri/src/prompt_packs/result_builder.rs`
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 
-- [ ] **Step 1: Write result builder tests**
+- [x] **Step 1: Write result builder tests**
 
 Add tests:
 
@@ -484,7 +484,7 @@ async fn build_canonical_result_assigns_backend_owned_ids() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run:
 
@@ -494,7 +494,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::result_build
 
 Expected: fail because result builder does not exist.
 
-- [ ] **Step 3: Implement deterministic id assignment**
+- [x] **Step 3: Implement deterministic id assignment**
 
 Rules:
 
@@ -506,11 +506,11 @@ Rules:
 - invalid candidate objects go to quarantine instead of canonical JSON;
 - warnings and limitations include skipped playlist videos and failed stages.
 
-- [ ] **Step 4: Validate canonical identity before persistence**
+- [x] **Step 4: Validate canonical identity before persistence**
 
 Before insert, assert canonical `run_id`, `pack_id`, `pack_version`, and `schema_version` match the owning `prompt_pack_runs` row and pack snapshot.
 
-- [ ] **Step 5: Run result builder tests**
+- [x] **Step 5: Run result builder tests**
 
 Run:
 
@@ -520,7 +520,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::result_build
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/result_builder.rs src-tauri/src/prompt_packs/store.rs
