@@ -129,7 +129,7 @@ npm test -- --run src/lib/api/prompt-packs.test.ts
 git status --short
 ```
 
-- [ ] **Step 4: Execute UI plan**
+- [x] **Step 4: Execute UI plan**
 
 Run and commit every task from `2026-06-14-youtube-summary-mvp-ui.md`.
 
