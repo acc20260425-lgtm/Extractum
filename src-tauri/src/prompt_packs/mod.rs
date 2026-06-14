@@ -1,3 +1,4 @@
+pub mod dto;
 pub mod library;
 pub mod models;
 pub mod seed;

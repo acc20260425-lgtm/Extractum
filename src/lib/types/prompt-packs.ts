@@ -33,3 +33,138 @@ export interface PromptPackSchemaAsset {
   schemaKind: string;
   contentHash: string;
 }
+
+export type PromptPackRunStatus =
+  | "queued"
+  | "running"
+  | "complete"
+  | "partial"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+
+export type PromptPackRunEventKind =
+  | "queued"
+  | "started"
+  | "progress"
+  | "stage_started"
+  | "stage_completed"
+  | "stage_failed"
+  | "completed"
+  | "partial"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+
+export type PromptPackRunEventPhase =
+  | "preflight"
+  | "snapshot"
+  | "stage"
+  | "validation"
+  | "projection"
+  | "persist"
+  | "terminal";
+
+export interface PreflightYoutubeSummaryRunInput {
+  projectId: number | null;
+  sourceIds: number[];
+  profileId: string | null;
+  modelOverride: string | null;
+  outputLanguage: string;
+  controlPreset: string;
+  evidenceMode: string;
+  includeComments: boolean;
+}
+
+export interface StartYoutubeSummaryRunInput {
+  clientRequestId: string;
+  projectId: number | null;
+  sourceIds: number[];
+  profileId: string | null;
+  modelOverride: string | null;
+  outputLanguage: string;
+  controlPreset: string;
+  evidenceMode: string;
+  includeComments: boolean;
+}
+
+export type StartYoutubeSummaryRunOutcome =
+  | { kind: "started"; run: PromptPackRunSummary }
+  | { kind: "blocked"; preflight: YoutubeSummaryPreflightResponse };
+
+export interface ListPromptPackRunsInput {
+  projectId?: number | null;
+  limit?: number;
+}
+
+export interface YoutubeSummaryPreflightResponse {
+  packId: string;
+  packVersion: string;
+  includedVideos: YoutubeSummaryPreflightVideo[];
+  skippedVideos: YoutubeSummaryPreflightSkippedVideo[];
+  blockingFailures: YoutubeSummaryPreflightFailure[];
+  estimatedInputTokens: number;
+  selectedModelInputLimit: number | null;
+}
+
+export interface YoutubeSummaryPreflightVideo {
+  sourceId: number;
+  videoId: string;
+  title: string;
+  estimatedInputTokens: number;
+}
+
+export interface YoutubeSummaryPreflightSkippedVideo {
+  sourceId?: number | null;
+  videoId?: string | null;
+  title?: string | null;
+  reason: string;
+}
+
+export interface YoutubeSummaryPreflightFailure {
+  sourceId?: number | null;
+  reason: string;
+  message?: string | null;
+}
+
+export interface PromptPackRunEvent {
+  runId: number;
+  requestId: string;
+  kind: PromptPackRunEventKind;
+  runStatus: PromptPackRunStatus;
+  phase: PromptPackRunEventPhase;
+  stageRunId: number | null;
+  stageName: string | null;
+  sourceSnapshotId: number | null;
+  queuePosition: number | null;
+  progressCurrent: number | null;
+  progressTotal: number | null;
+  message: string | null;
+  error: string | null;
+}
+
+export interface PromptPackRunSummary {
+  runId: number;
+  projectId?: number | null;
+  packId?: string;
+  packVersion?: string;
+  runStatus: PromptPackRunStatus;
+  resultStatus?: string;
+  createdAt?: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  latestMessage?: string | null;
+  progressCurrent?: number | null;
+  progressTotal?: number | null;
+  queuePosition?: number | null;
+}
+
+export interface PromptPackStageRun {
+  stageRunId: number;
+  runId: number;
+  sourceSnapshotId: number | null;
+  stageName: string;
+  stageOrder: number;
+  stageStatus: string;
+  latestMessage: string | null;
+}

@@ -171,7 +171,7 @@ git commit -m "feat: add prompt pack run idempotency migration"
 - Modify: `src-tauri/src/prompt_packs/mod.rs`
 - Modify: `src/lib/types/prompt-packs.ts`
 
-- [ ] **Step 1: Define Rust DTOs**
+- [x] **Step 1: Define Rust DTOs**
 
 Create DTOs matching the approved spec:
 
@@ -241,7 +241,7 @@ pub struct ListPromptPackRunsRequest {
 }
 ```
 
-- [ ] **Step 2: Define TypeScript DTOs**
+- [x] **Step 2: Define TypeScript DTOs**
 
 Mirror the Rust DTOs in `src/lib/types/prompt-packs.ts`. Use string unions for statuses:
 
@@ -302,7 +302,7 @@ export interface ListPromptPackRunsInput {
 `cancel_requested` is an in-memory runtime flag and may appear in message text,
 but it is not a persisted `run_status` and not a `PromptPackRunEvent.kind`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/dto.rs src-tauri/src/prompt_packs/mod.rs src/lib/types/prompt-packs.ts
