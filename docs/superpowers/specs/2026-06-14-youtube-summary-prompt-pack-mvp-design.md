@@ -291,9 +291,9 @@ Required constraints and indexes:
   `CHECK(is_builtin IN (0, 1))`.
 - `prompt_pack_versions`: `PRIMARY KEY(id)`, FK `pack_id` to
   `prompt_packs(pack_id) ON DELETE CASCADE`, `UNIQUE(pack_id, pack_version)`,
-  `UNIQUE(id, pack_id)`, `CHECK(origin_kind IN ('bundled', 'user'))`,
-  `CHECK(lifecycle_status IN ('draft', 'active', 'archived'))`, and at most one
-  active version per pack.
+  `UNIQUE(id, pack_id, pack_version, schema_version)`, `CHECK(origin_kind IN
+  ('bundled', 'user'))`, `CHECK(lifecycle_status IN ('draft', 'active',
+  'archived'))`, and at most one active version per pack.
 - `prompt_pack_stage_templates`: `PRIMARY KEY(id)`, FK `pack_version_id` to
   `prompt_pack_versions(id) ON DELETE CASCADE`,
   `UNIQUE(pack_version_id, stage_name, provider_family)`, index
@@ -304,49 +304,54 @@ Required constraints and indexes:
   relative_path)`.
 - `prompt_pack_runs`: `PRIMARY KEY(id)`, nullable FK `project_id` to
   `projects(id) ON DELETE CASCADE`, FK `pack_id` to `prompt_packs(pack_id)`,
-  composite FK `(pack_version_id, pack_id)` to
-  `prompt_pack_versions(id, pack_id) ON DELETE RESTRICT`, status `CHECK`s,
+  composite FK `(pack_version_id, pack_id, pack_version, schema_version)` to
+  `prompt_pack_versions(id, pack_id, pack_version, schema_version) ON DELETE
+  RESTRICT`, status `CHECK`s,
   `result_status` nullable until a result exists, `UNIQUE(id, pack_id,
   pack_version_id, pack_version, schema_version)`, indexes `(project_id,
   created_at DESC)`, `(pack_id, created_at DESC)`, and `(run_status,
   created_at DESC)`.
 - `prompt_pack_run_scopes`: `PRIMARY KEY(id)`, FK `run_id` to
   `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `source_id` to
-  `sources(id) ON DELETE SET NULL`, `UNIQUE(run_id, selected_order)`, index
-  `(source_id)`, and `CHECK(scope_kind IN ('youtube_video',
-  'youtube_playlist'))`.
+  `sources(id) ON DELETE SET NULL`, `UNIQUE(id, run_id)`,
+  `UNIQUE(run_id, selected_order)`, index `(source_id)`, and
+  `CHECK(scope_kind IN ('youtube_video', 'youtube_playlist'))`.
 - `prompt_pack_run_source_snapshots`: `PRIMARY KEY(id)`, FK `run_id` to
   `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `live_source_id` to
-  `sources(id) ON DELETE SET NULL`,
+  `sources(id) ON DELETE SET NULL`, `UNIQUE(id, run_id)`,
   `UNIQUE(run_id, source_ref_id)`, `UNIQUE(run_id, video_id)`, partial unique
   `(run_id, live_source_id)` when `live_source_id IS NOT NULL`, and
   `CHECK(source_type = 'youtube_video')`.
 - `prompt_pack_run_source_origins`: `PRIMARY KEY(id)`, FK `run_id` to
-  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `source_snapshot_id` to
-  `prompt_pack_run_source_snapshots(id) ON DELETE CASCADE`, FK
-  `origin_scope_id` to `prompt_pack_run_scopes(id) ON DELETE CASCADE`, nullable
-  FKs `playlist_source_id` and `video_source_id` to `sources(id) ON DELETE SET
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable composite FK
+  `(source_snapshot_id, run_id)` to `prompt_pack_run_source_snapshots(id,
+  run_id) ON DELETE CASCADE`, composite FK `(origin_scope_id, run_id)` to
+  `prompt_pack_run_scopes(id, run_id) ON DELETE CASCADE`, nullable FKs
+  `playlist_source_id` and `video_source_id` to `sources(id) ON DELETE SET
   NULL`, nullable FK `live_playlist_item_id` to `youtube_playlist_items(id) ON
   DELETE SET NULL`, `UNIQUE(run_id, origin_scope_id, video_id)`, indexes
   `(source_snapshot_id)` and `(run_id, inclusion_status)`, and `CHECK`s for
   `origin_kind IN ('explicit_video', 'playlist_item')` and `inclusion_status IN
   ('included', 'skipped', 'blocking_failure')`.
 - `prompt_pack_run_material_snapshots`: `PRIMARY KEY(id)`, FK `run_id` to
-  `prompt_pack_runs(id) ON DELETE CASCADE`, FK `source_snapshot_id` to
-  `prompt_pack_run_source_snapshots(id) ON DELETE CASCADE`, nullable FK
-  `live_item_id` to `items(id) ON DELETE SET NULL`, nullable FK
+  `prompt_pack_runs(id) ON DELETE CASCADE`, composite FK `(source_snapshot_id,
+  run_id)` to `prompt_pack_run_source_snapshots(id, run_id) ON DELETE CASCADE`,
+  nullable FK `live_item_id` to `items(id) ON DELETE SET NULL`, nullable FK
   `live_segment_id` to `youtube_transcript_segments(id) ON DELETE SET NULL`,
-  `UNIQUE(run_id, ref)`, indexes `(source_snapshot_id, document_order)` and
-  `(source_snapshot_id, timestamp_start_ms)`, and `CHECK(material_kind IN
+  `UNIQUE(id, run_id)`, `UNIQUE(run_id, ref)`, indexes
+  `(source_snapshot_id, document_order)` and `(source_snapshot_id,
+  timestamp_start_ms)`, and `CHECK(material_kind IN
   ('youtube_transcript_segment', 'youtube_description', 'youtube_comment'))`.
 - `prompt_pack_stage_runs`: `PRIMARY KEY(id)`, FK `run_id` to
-  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `source_snapshot_id` to
-  `prompt_pack_run_source_snapshots(id) ON DELETE CASCADE`, stage/status
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable composite FK
+  `(source_snapshot_id, run_id)` to `prompt_pack_run_source_snapshots(id,
+  run_id) ON DELETE CASCADE`, stage/status
   `CHECK`s, `CHECK((stage_scope_kind = 'run' AND source_snapshot_id IS NULL)
   OR (stage_scope_kind = 'video' AND source_snapshot_id IS NOT NULL))`, partial
   unique `(run_id, stage_name)` for run-scoped stages, partial unique
-  `(run_id, stage_name, source_snapshot_id)` for video-scoped stages, indexes
-  `(run_id, stage_order)` and `(run_id, stage_status)`.
+  `(run_id, stage_name, source_snapshot_id)` for video-scoped stages,
+  `UNIQUE(id, run_id)`, indexes `(run_id, stage_order)` and `(run_id,
+  stage_status)`.
 - `prompt_pack_stage_artifacts`: `PRIMARY KEY(id)`, FK `stage_run_id` to
   `prompt_pack_stage_runs(id) ON DELETE CASCADE`, `attempt_number`,
   `artifact_index`, `redaction_state`, artifact-kind `CHECK`, `CHECK` that at
@@ -359,9 +364,10 @@ Required constraints and indexes:
   `prompt_pack_runs(id, pack_id, pack_version_id, pack_version,
   schema_version) ON DELETE CASCADE`, result-status `CHECK`, and index
   `(pack_id, created_at DESC)`.
-- Core projection tables: FK `result_row_id` to `prompt_pack_results(id) ON
-  DELETE CASCADE`, denormalized `run_id`, `UNIQUE(result_row_id, <canonical
-  object id>)`, relevant indexes for UI filters, and `raw_object_json_zstd`.
+- Core projection tables: composite FK `(result_row_id, run_id)` to
+  `prompt_pack_results(id, run_id) ON DELETE CASCADE`, denormalized `run_id`,
+  `UNIQUE(result_row_id, <canonical object id>)`, relevant indexes for UI
+  filters, and `raw_object_json_zstd`.
   This applies to source refs, claims, evidence, claim relations, unknowns,
   verification tasks, warnings, limitations, and audit refs. `quality_flags`
   have no canonical id, so use `flag_index` with
@@ -372,30 +378,37 @@ Required constraints and indexes:
   `UNIQUE(result_row_id, from_object_path, ref_kind, ordinal)` plus indexes
   `(result_row_id, ref_kind, target_id)` and `(result_row_id,
   from_object_kind, from_object_id)`.
-- YouTube projection tables: FK `result_row_id` to `prompt_pack_results(id) ON
-  DELETE CASCADE`, denormalized `run_id`, parent video object references, and
-  `raw_object_json_zstd`. Use `UNIQUE(result_row_id, video_id)` for videos and
-  `UNIQUE(result_row_id, video_id, <nested object id>)` for segments,
-  key points, quotes, action items, and open questions. Store synthesis rows in
+- YouTube projection tables: composite FK `(result_row_id, run_id)` to
+  `prompt_pack_results(id, run_id) ON DELETE CASCADE`, denormalized `run_id`,
+  parent video object references, and `raw_object_json_zstd`. Use
+  `UNIQUE(result_row_id, video_id)` for videos and `UNIQUE(result_row_id,
+  video_id, <nested object id>)` for segments, key points, quotes, action items,
+  and open questions. Store synthesis rows in
   `prompt_pack_youtube_synthesis_items` with `synthesis_item_kind` and
   `synthesis_item_id`, unique by `(result_row_id, synthesis_item_kind,
   synthesis_item_id)`.
 - `prompt_pack_result_validation_findings`: `PRIMARY KEY(id)`, FK
-  `result_row_id` to `prompt_pack_results(id) ON DELETE CASCADE`, nullable FK
-  `stage_run_id` to `prompt_pack_stage_runs(id) ON DELETE SET NULL`, severity
-  and layer `CHECK`s, indexes `(result_row_id, severity)`, `(rule_id)`, and
+  `(result_row_id, run_id)` to `prompt_pack_results(id, run_id) ON DELETE
+  CASCADE`, nullable composite FK `(stage_run_id, run_id)` to
+  `prompt_pack_stage_runs(id, run_id) ON DELETE CASCADE`, severity and layer
+  `CHECK`s, indexes `(result_row_id, severity)`, `(rule_id)`, and
   `(stage_run_id)`.
 - `prompt_pack_result_audit_events`: `PRIMARY KEY(id)`, FK `run_id` to
-  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FKs `result_row_id` and
-  `stage_run_id`, `audit_id`, event type fields, summary, object refs, payload,
-  and indexes `(run_id, created_at)`, `(result_row_id, audit_id)`,
-  `(stage_run_id)`.
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable composite FK
+  `(result_row_id, run_id)` to `prompt_pack_results(id, run_id) ON DELETE
+  CASCADE`, nullable composite FK `(stage_run_id, run_id)` to
+  `prompt_pack_stage_runs(id, run_id) ON DELETE CASCADE`, `audit_id`, event
+  type fields, summary, object refs, payload, and indexes `(run_id,
+  created_at)`, `(result_row_id, audit_id)`, `(stage_run_id)`.
 - `prompt_pack_result_quarantine_artifacts`: `PRIMARY KEY(id)`, FK `run_id` to
-  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FKs `result_row_id` and
-  `stage_run_id`, `quarantine_id`, reason, object path/type, validation
-  findings, invalid object payload, raw artifact payload, `redaction_state`,
-  `content_hash`, `UNIQUE(result_row_id, quarantine_id)` when both are present,
-  and indexes `(run_id, created_at)`, `(stage_run_id)`.
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable composite FK
+  `(result_row_id, run_id)` to `prompt_pack_results(id, run_id) ON DELETE
+  CASCADE`, nullable composite FK `(stage_run_id, run_id)` to
+  `prompt_pack_stage_runs(id, run_id) ON DELETE CASCADE`, `quarantine_id`,
+  reason, object path/type, validation findings, invalid object payload, raw
+  artifact payload, `redaction_state`, `content_hash`, `UNIQUE(result_row_id,
+  quarantine_id)` when both are present, and indexes `(run_id, created_at)`,
+  `(stage_run_id)`.
 
 ### `prompt_pack_runs`
 
@@ -858,6 +871,21 @@ Rules:
   surfaced in the UI, and later represented as corpus coverage limitation or
   partial result metadata.
 
+Staleness rule:
+
+- `preflight_youtube_summary_run` is a UI preview only. Its response must include
+  enough hashes/timestamps for display and debugging, but it does not authorize a
+  later start.
+- `start_youtube_summary_run` always recomputes preflight from the current
+  Library rows before creating snapshots. It stores the recomputed preflight in
+  `prompt_pack_runs.preflight_json_zstd`.
+- If the recomputed start-time preflight produces blocking failures or no
+  included videos, start fails and returns the fresh preflight response to the
+  UI.
+- If the recomputed partitions differ from the preview but still satisfy start
+  conditions, the run starts with the recomputed partitions and emits a
+  `progress` event noting that source state changed since preview.
+
 ### Snapshot
 
 The backend copies source and material data into run-local tables before LLM
@@ -1103,6 +1131,11 @@ list_prompt_pack_audit_events
 The implementation can add smaller internal commands or DTOs as needed, but the
 UI should not depend on legacy `analysis_runs` commands.
 
+`start_youtube_summary_run` must not trust a previous
+`preflight_youtube_summary_run` response from the UI. It recomputes preflight,
+persists the recomputed partitions, and either starts from those partitions or
+returns the recomputed blocking response.
+
 ## LLM Routing
 
 MVP uses existing LLM profiles.
@@ -1129,6 +1162,7 @@ Backend tests should cover:
 - playlist video transcript-missing preflight skipped entry;
 - explicit video oversized transcript preflight blocking failure;
 - playlist video oversized transcript preflight skipped entry;
+- start recomputing preflight when source state changed after UI preview;
 - run snapshot independence from live Library mutations;
 - source origin rows preserving playlist membership without duplicating canonical
   video snapshots;
@@ -1149,7 +1183,11 @@ Schema tests should verify:
 
 - foreign keys and indexes exist;
 - `prompt_pack_runs.pack_id` cannot disagree with `pack_version_id`;
+- `prompt_pack_runs.pack_version` and `schema_version` cannot disagree with
+  `pack_version_id`;
 - `prompt_pack_results` cannot disagree with owning run pack identity;
+- run-owned child rows cannot reference scope, source snapshot, stage, or result
+  rows from another run;
 - active pack-version uniqueness is enforced per pack;
 - `prompt_pack_run_source_snapshots` is unique by canonical video while
   `prompt_pack_run_source_origins` can store multiple selection origins;
