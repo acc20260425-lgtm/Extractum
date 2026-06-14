@@ -92,7 +92,7 @@ Task notes:
 - 2026-06-14: `git switch -c feat/youtube-summary-prompt-pack-mvp` failed because Git could not create `refs/heads/feat/youtube-summary-prompt-pack-mvp`; selected `codex/youtube-summary-prompt-pack-mvp` instead.
 - 2026-06-14: No unrelated dirty files were present before implementation work started.
 
-- [ ] **Step 1: Execute foundation plan**
+- [x] **Step 1: Execute foundation plan**
 
 Run and commit every task from `2026-06-14-youtube-summary-mvp-foundation.md`.
 
