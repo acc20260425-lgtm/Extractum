@@ -3,7 +3,13 @@
   import { cn } from "$lib/utils.js";
   import type { ComponentProps } from "svelte";
 
-  let { class: className, ...rest }: ComponentProps<typeof Checkbox> = $props();
+  let {
+    ref = $bindable(null),
+    checked = $bindable(false),
+    indeterminate = $bindable(false),
+    class: className,
+    ...rest
+  }: ComponentProps<typeof Checkbox> = $props();
 </script>
 
-<Checkbox class={cn("extractum-checkbox", className)} {...rest} />
+<Checkbox bind:ref bind:checked bind:indeterminate class={cn("extractum-checkbox", className)} {...rest} />

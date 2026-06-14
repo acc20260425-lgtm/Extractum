@@ -1,12 +1,12 @@
 <script lang="ts">
   import { PlayCircle } from "@lucide/svelte";
   import {
+    ExtractumCheckbox,
     ExtractumButton,
     ExtractumDialog,
     ExtractumStatusMessage,
     ExtractumTextInput,
   } from "$lib/components/extractum-ui";
-  import { Checkbox } from "$lib/components/ui/checkbox";
   import {
     preflightYoutubeSummaryRun,
     startYoutubeSummaryRun,
@@ -112,7 +112,7 @@
     <label><span>LLM profile</span><ExtractumTextInput bind:value={profileId} placeholder="Default" /></label>
     <label><span>Model override</span><ExtractumTextInput bind:value={modelOverride} placeholder="Optional" /></label>
     <label class="checkbox-row">
-      <Checkbox bind:checked={includeComments} onchange={() => void runPreflight()} />
+      <ExtractumCheckbox bind:checked={includeComments} onchange={() => void runPreflight()} />
       <span>Include comments</span>
     </label>
 
