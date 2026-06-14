@@ -104,7 +104,7 @@ npm test -- --run src/lib/api/prompt-packs.test.ts
 git status --short
 ```
 
-- [ ] **Step 2: Execute runtime plan**
+- [x] **Step 2: Execute runtime plan**
 
 Run and commit every task from `2026-06-14-youtube-summary-mvp-runtime.md`.
 
