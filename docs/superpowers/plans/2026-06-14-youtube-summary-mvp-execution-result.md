@@ -94,10 +94,12 @@ The input must include `comment_selection_policy` even when `comment_material_re
 
 Add `insert_stage_artifact_in_tx` for:
 
-- `artifact_kind = 'input'`;
-- `artifact_kind = 'raw_provider_output'`;
+- `artifact_kind = 'prompt_input'`;
+- `artifact_kind = 'raw_output'`;
 - `artifact_kind = 'parsed_output'`;
-- `artifact_kind = 'validation_report'`.
+- `artifact_kind = 'metrics'`;
+- `artifact_kind = 'error'`;
+- `artifact_kind = 'repair_input'` only when a repair loop is implemented.
 
 Store content hash, zstd JSON/text, token counts when available, redaction state, and attempt number.
 
@@ -125,6 +127,7 @@ git commit -m "feat: build youtube summary stage inputs"
 **Files:**
 - Create: `src-tauri/src/prompt_packs/validation.rs`
 - Modify: `src-tauri/src/prompt_packs/stage_io.rs`
+- Modify: `src-tauri/src/prompt_packs/store.rs`
 
 - [ ] **Step 1: Write validator tests**
 
@@ -172,6 +175,83 @@ fn transcript_analysis_output_rejects_llm_assigned_final_ids() {
 
     assert!(error.message.contains("claim_id"));
 }
+
+#[test]
+fn extract_json_payload_accepts_fenced_json_object() {
+    let text = "```json\n{\"stage_io_version\":\"1.0\",\"value\":1}\n```";
+
+    let value = extract_json_payload(text).expect("json payload");
+
+    assert_eq!(value["stage_io_version"], "1.0");
+    assert_eq!(value["value"], 1);
+}
+
+#[test]
+fn extract_json_payload_accepts_leading_and_trailing_prose() {
+    let text = "Here is the result:\n{\"stage_io_version\":\"1.0\",\"value\":1}\nDone.";
+
+    let value = extract_json_payload(text).expect("json payload");
+
+    assert_eq!(value["stage_io_version"], "1.0");
+    assert_eq!(value["value"], 1);
+}
+
+#[test]
+fn extract_json_payload_rejects_malformed_braces() {
+    let error = extract_json_payload("{\"stage_io_version\":\"1.0\"")
+        .expect_err("malformed JSON rejected");
+
+    assert!(error.message.contains("malformed"));
+}
+
+#[test]
+fn extract_json_payload_rejects_multiple_json_objects() {
+    let error = extract_json_payload("{\"a\":1}\n{\"b\":2}")
+        .expect_err("ambiguous JSON rejected");
+
+    assert!(error.message.contains("multiple JSON objects"));
+}
+
+#[tokio::test]
+async fn invalid_candidate_is_written_to_quarantine_artifacts() {
+    let pool = test_pool_with_transcript_analysis_stage().await;
+    let input = test_stage_input_with_material_refs(["m_transcript_1"]);
+    let output = serde_json::json!({
+        "stage_io_version": "1.0",
+        "schema_version": "1.0",
+        "stage": "youtube_summary/transcript_analysis",
+        "video_candidate": {
+            "summary_text": "Summary",
+            "segment_candidates": [],
+            "key_point_candidates": [],
+            "quote_candidates": [],
+            "action_item_candidates": [],
+            "open_question_candidates": []
+        },
+        "claim_candidates": [
+            {
+                "text": "Claim",
+                "material_refs": ["m_missing"]
+            }
+        ],
+        "evidence_fragment_candidates": [],
+        "warning_candidates": []
+    });
+
+    validate_and_quarantine_transcript_analysis_output(&pool, 42, 1001, &input, &output)
+        .await
+        .expect_err("invalid candidate rejected");
+
+    let quarantine_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_result_quarantine_artifacts \
+         WHERE run_id = 42 AND stage_run_id = 1001 AND object_path = '$.claim_candidates[0]'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("quarantine count");
+
+    assert_eq!(quarantine_count, 1);
+}
 ```
 
 - [ ] **Step 2: Run tests to verify failure**
@@ -188,6 +268,14 @@ Expected: fail because validator does not exist.
 
 Implement `extract_json_payload` for provider text. Reuse the brace-balanced approach from `analysis/report.rs`, but keep the function local to `prompt_packs/stage_io.rs` or extract a shared helper only if both call sites are updated in the same commit.
 
+Parser rules:
+
+- strip a single surrounding markdown JSON fence before parsing;
+- accept one JSON object with leading/trailing prose;
+- reject malformed brace balance with a validation error containing `malformed`;
+- reject multiple top-level JSON objects with a validation error containing `multiple JSON objects`;
+- reject responses without a JSON object.
+
 - [ ] **Step 4: Implement validation**
 
 Validation layers:
@@ -197,7 +285,8 @@ Validation layers:
 - closed-world source refs against `allowed_source_ref_ids`;
 - closed-world material refs against `allowed_material_refs`;
 - reject LLM-provided final ids: `claim_id`, `evidence_id`, `source_ref_id`, `segment_id`, `key_point_id`, `quote_id`, `action_item_id`, `open_question_id`;
-- quarantine invalid candidate objects instead of accepting partial object fragments silently.
+- quarantine invalid candidate objects into `prompt_pack_result_quarantine_artifacts` instead of accepting partial object fragments silently;
+- write validation findings into `prompt_pack_result_validation_findings`, not as a stage artifact kind.
 
 - [ ] **Step 5: Run validator tests**
 
@@ -213,7 +302,7 @@ Expected: pass.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add src-tauri/src/prompt_packs/validation.rs src-tauri/src/prompt_packs/stage_io.rs
+git add src-tauri/src/prompt_packs/validation.rs src-tauri/src/prompt_packs/stage_io.rs src-tauri/src/prompt_packs/store.rs
 git commit -m "feat: validate youtube summary stage output"
 ```
 
@@ -247,8 +336,60 @@ async fn execute_transcript_analysis_stage_persists_raw_and_parsed_artifacts() {
     let artifact_kinds = list_stage_artifact_kinds(&pool, stage_id).await;
     assert_eq!(
         artifact_kinds,
-        vec!["input", "raw_provider_output", "parsed_output", "validation_report"],
+        vec!["prompt_input", "raw_output", "parsed_output", "metrics"],
     );
+}
+
+#[tokio::test]
+async fn execute_multi_video_run_with_one_provider_failure_finishes_partial() {
+    let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+
+    execute_youtube_summary_run_with_fake_completions(
+        &pool,
+        42,
+        vec![
+            Ok(fake_completion_with_valid_transcript_analysis_json_for_source("source_ref_1")),
+            Err(fake_provider_failure("provider timeout for source_ref_2")),
+        ],
+    )
+    .await
+    .expect("execute partial run");
+
+    let run_status: String =
+        sqlx::query_scalar("SELECT run_status FROM prompt_pack_runs WHERE id = 42")
+            .fetch_one(&pool)
+            .await
+            .expect("run status");
+    let result_status: String =
+        sqlx::query_scalar("SELECT result_status FROM prompt_pack_results WHERE run_id = 42")
+            .fetch_one(&pool)
+            .await
+            .expect("result status");
+    let error_artifacts: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_stage_artifacts \
+         WHERE run_id = 42 AND artifact_kind = 'error'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("error artifacts");
+    let warning_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_result_warnings WHERE run_id = 42",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("warning count");
+    let quality_flag_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_result_quality_flags WHERE run_id = 42",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("quality flags");
+
+    assert_eq!(run_status, "partial");
+    assert_eq!(result_status, "partial");
+    assert_eq!(error_artifacts, 1);
+    assert!(warning_count > 0);
+    assert!(quality_flag_count > 0);
 }
 ```
 
@@ -272,18 +413,18 @@ crate::llm::run_llm_collect_with_profile(...)
 
 Store:
 
-- input artifact before provider call;
-- raw provider output artifact after provider call;
+- `prompt_input` artifact before provider call;
+- `raw_output` artifact after provider call;
 - parsed output artifact after JSON extraction;
-- validation report artifact after validator completes.
+- `metrics` artifact after validator completes, containing token counts, schema id, validation summary counts, attempt number, and provider latency.
 
 - [ ] **Step 4: Implement stage status transitions**
 
 Rules:
 
 - `pending -> running -> succeeded` for valid output;
-- provider failure marks that video stage `failed`;
-- if at least one video succeeds and at least one fails, final run can become `partial`;
+- provider failure marks that video stage `failed` and stores an `error` artifact with a sanitized provider error;
+- if at least one video succeeds and at least one fails, final run must become `partial`;
 - if all videos fail, final run becomes `failed`;
 - cancel request stops launching new video stages and marks active/running work as `cancelled`.
 
@@ -327,10 +468,19 @@ async fn build_canonical_result_assigns_backend_owned_ids() {
 
     assert_eq!(result["pack_id"], "youtube_summary");
     assert_eq!(result["run_id"], 42);
-    assert_eq!(result["sources"][0]["source_ref_id"], "source_ref_1");
+    assert_eq!(result["source_refs"][0]["source_ref_id"], "source_ref_1");
     assert_eq!(result["claims"][0]["claim_id"], "claim_1");
     assert_eq!(result["evidence"][0]["evidence_id"], "evidence_1");
-    assert_eq!(result["pack_data"]["youtube_summary"]["videos"][0]["video_id"], "video_1");
+    assert_eq!(
+        result["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["video_id"],
+        "video_1",
+    );
+    assert_eq!(
+        result["outputs"]["pack_data"]["youtube_summary"]["synthesis"],
+        serde_json::Value::Null,
+    );
+    assert!(result.get("sources").is_none());
+    assert!(result.get("pack_data").is_none());
 }
 ```
 
@@ -349,7 +499,8 @@ Expected: fail because result builder does not exist.
 Rules:
 
 - `result_id = "result_<run_id>"` or a stable generated string stored in DB;
-- source refs come from frozen snapshots, not LLM output;
+- `source_refs` come from frozen snapshots, not LLM output;
+- YouTube pack data is written under `outputs.pack_data.youtube_summary`;
 - `claim_id`, `evidence_id`, nested video object ids are assigned in stable source/stage/candidate order;
 - evidence can belong to exactly one claim;
 - invalid candidate objects go to quarantine instead of canonical JSON;
@@ -395,7 +546,7 @@ Add tests:
 async fn persist_final_result_sets_terminal_status_after_projection_rows_exist() {
     let pool = test_pool_with_canonical_result_ready().await;
 
-    persist_final_result_transaction(&pool, 42, test_canonical_result(), "completed")
+    persist_final_result_transaction(&pool, 42, test_canonical_result(), "complete")
         .await
         .expect("persist result");
 
@@ -410,8 +561,14 @@ async fn persist_final_result_sets_terminal_status_after_projection_rows_exist()
     .fetch_one(&pool)
     .await
     .expect("projected videos");
+    let result_status: String =
+        sqlx::query_scalar("SELECT result_status FROM prompt_pack_results WHERE run_id = 42")
+            .fetch_one(&pool)
+            .await
+            .expect("result status");
 
-    assert_eq!(run_status, "completed");
+    assert_eq!(run_status, "complete");
+    assert_eq!(result_status, "complete");
     assert!(projected_videos > 0);
 }
 
@@ -523,7 +680,16 @@ Expose:
 pub async fn get_prompt_pack_result(handle: AppHandle, run_id: i64) -> AppResult<PromptPackResultDto>
 
 #[tauri::command]
-pub async fn get_prompt_pack_stage_artifact(handle: AppHandle, stage_run_id: i64, artifact_kind: String) -> AppResult<PromptPackStageArtifactDto>
+pub async fn list_prompt_pack_stage_artifacts(handle: AppHandle, stage_run_id: i64) -> AppResult<Vec<PromptPackStageArtifactSummaryDto>>
+
+#[tauri::command]
+pub async fn get_prompt_pack_stage_artifact(
+    handle: AppHandle,
+    stage_run_id: i64,
+    artifact_kind: String,
+    attempt_number: i64,
+    artifact_index: i64,
+) -> AppResult<PromptPackStageArtifactDto>
 
 #[tauri::command]
 pub async fn get_prompt_pack_validation_findings(handle: AppHandle, run_id: i64) -> AppResult<Vec<PromptPackValidationFindingDto>>
@@ -531,6 +697,12 @@ pub async fn get_prompt_pack_validation_findings(handle: AppHandle, run_id: i64)
 #[tauri::command]
 pub async fn list_prompt_pack_audit_events(handle: AppHandle, run_id: i64) -> AppResult<Vec<PromptPackAuditEventDto>>
 ```
+
+Artifact access rules:
+
+- `list_prompt_pack_stage_artifacts` returns summaries ordered by `attempt_number ASC, artifact_index ASC`;
+- `get_prompt_pack_stage_artifact` requires exact `(stage_run_id, artifact_kind, attempt_number, artifact_index)`;
+- if callers need the latest artifact, frontend code must call `list_prompt_pack_stage_artifacts` and choose the last matching summary explicitly.
 
 - [ ] **Step 2: Register commands**
 
@@ -573,8 +745,11 @@ git status --short
 Expected:
 
 - stage input and output validation tests pass;
-- fake-provider execution path stores artifacts;
-- canonical result builder creates deterministic IDs;
-- final result transaction persists projections before terminal status is visible;
+- parser tests cover fenced JSON, prose-wrapped JSON, malformed braces, and multiple JSON objects;
+- invalid candidate objects create `prompt_pack_result_quarantine_artifacts` rows;
+- fake-provider execution path stores spec artifact kinds: `prompt_input`, `raw_output`, `parsed_output`, `metrics`, and `error`;
+- partial multi-video execution persists `run_status = 'partial'` and `result_status = 'partial'`;
+- canonical result builder creates deterministic IDs and uses `source_refs` plus `outputs.pack_data.youtube_summary`;
+- final result transaction persists projections before terminal status `complete` is visible;
 - repair rebuilds projections from canonical JSON;
-- frontend result command wrappers call expected Tauri commands.
+- frontend result command wrappers call expected Tauri commands, including exact artifact fetch by `(artifact_kind, attempt_number, artifact_index)`.
