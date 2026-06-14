@@ -21,7 +21,7 @@ Complete these plans first:
 
 ## File Structure
 
-- Modify `src-tauri/src/prompt_packs/youtube_summary.rs`: replace `execution_not_implemented` branch with combined stage execution.
+- Modify `src-tauri/src/prompt_packs/youtube_summary.rs`: wire combined stage execution into the runtime worker/start path.
 - Create `src-tauri/src/prompt_packs/stage_io.rs`: stage input construction, output parsing, and JSON extraction.
 - Create `src-tauri/src/prompt_packs/validation.rs`: schema identity checks and closed-world validation.
 - Create `src-tauri/src/prompt_packs/result_builder.rs`: canonical result assembly and deterministic ids.

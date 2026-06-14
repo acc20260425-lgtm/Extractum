@@ -4,7 +4,7 @@
 
 **Goal:** Add a usable YouTube Summary MVP interface for starting prompt-pack runs, watching active progress, and reading structured results.
 
-**Architecture:** Keep UI state in small TypeScript workflow modules and compose existing Svelte components. Use the new `prompt-pack://run` event stream for active updates and Tauri command wrappers for preflight/start/result reads. The UI should not call legacy `analysis_runs` APIs.
+**Architecture:** Keep UI state in small TypeScript workflow modules and compose existing Svelte components. Use the new `prompt-pack-run-event` event stream for active updates and Tauri command wrappers for preflight/start/result reads. The UI should not call legacy `analysis_runs` APIs.
 
 **Tech Stack:** Svelte 5/SvelteKit, Vitest, Tauri invoke/listen, existing `src/lib/components/ui` primitives, `@lucide/svelte` icons already available in the project.
 
@@ -99,11 +99,18 @@ describe("youtube summary workflow", () => {
   it("updates run list from prompt pack run event", () => {
     const event: PromptPackRunEvent = {
       runId: 42,
-      eventKind: "progress",
+      requestId: "req-42",
+      kind: "progress",
       runStatus: "running",
+      phase: "stage",
+      stageRunId: 1001,
       stageName: "youtube_summary/transcript_analysis",
-      sourceRefId: "source_ref_1",
+      sourceSnapshotId: 501,
+      queuePosition: null,
+      progressCurrent: 1,
+      progressTotal: 2,
       message: "Analyzing transcript",
+      error: null,
     };
 
     const runs = updateRunListFromEvent([], event);
@@ -168,10 +175,16 @@ Extend `src/lib/api/prompt-packs.test.ts`:
 
 ```ts
 it("starts youtube summary run", async () => {
-  await startYoutubeSummaryRun({
-    projectId: 7,
+  vi.mocked(invoke).mockResolvedValueOnce({
+    kind: "started",
+    run: { runId: 42, runStatus: "queued", latestMessage: "Queued" },
+  });
+
+  const outcome = await startYoutubeSummaryRun({
+    clientRequestId: "req-ui-start-1",
+    projectId: null,
     sourceIds: [10],
-    profileId: "default",
+    profileId: null,
     modelOverride: null,
     outputLanguage: "en",
     controlPreset: "standard",
@@ -179,15 +192,59 @@ it("starts youtube summary run", async () => {
     includeComments: false,
   });
 
+  expect(outcome.kind).toBe("started");
   expect(invoke).toHaveBeenCalledWith("start_youtube_summary_run", {
-    projectId: 7,
+    clientRequestId: "req-ui-start-1",
+    projectId: null,
     sourceIds: [10],
-    profileId: "default",
+    profileId: null,
     modelOverride: null,
     outputLanguage: "en",
     controlPreset: "standard",
     evidenceMode: "standard",
     includeComments: false,
+  });
+});
+
+it("returns blocked start outcome without hiding fresh preflight failures", async () => {
+  vi.mocked(invoke).mockResolvedValueOnce({
+    kind: "blocked",
+    preflight: {
+      packId: "youtube_summary",
+      packVersion: "1.0.0",
+      includedVideos: [],
+      skippedVideos: [],
+      blockingFailures: [{ sourceId: 10, reason: "no_included_videos" }],
+      estimatedInputTokens: 0,
+      selectedModelInputLimit: 32000,
+    },
+  });
+
+  const outcome = await startYoutubeSummaryRun({
+    clientRequestId: "req-ui-blocked-1",
+    projectId: null,
+    sourceIds: [10],
+    profileId: null,
+    modelOverride: null,
+    outputLanguage: "en",
+    controlPreset: "standard",
+    evidenceMode: "standard",
+    includeComments: false,
+  });
+
+  if (outcome.kind !== "blocked") {
+    throw new Error(`expected blocked outcome, got ${outcome.kind}`);
+  }
+
+  expect(outcome.preflight.blockingFailures).toHaveLength(1);
+});
+
+it("lists recent prompt pack runs", async () => {
+  await listPromptPackRuns({ projectId: 7, limit: 20 });
+
+  expect(invoke).toHaveBeenCalledWith("list_prompt_pack_runs", {
+    projectId: 7,
+    limit: 20,
   });
 });
 
@@ -196,7 +253,7 @@ it("listens to prompt pack run events", async () => {
 
   await listenToPromptPackRunEvents(handler);
 
-  expect(listen).toHaveBeenCalledWith("prompt-pack://run", expect.any(Function));
+  expect(listen).toHaveBeenCalledWith("prompt-pack-run-event", expect.any(Function));
 });
 ```
 
@@ -205,10 +262,15 @@ it("listens to prompt pack run events", async () => {
 Export:
 
 ```ts
-export const PROMPT_PACK_RUN_EVENT = "prompt-pack://run";
+export const PROMPT_PACK_RUN_EVENT = "prompt-pack-run-event";
+export interface ListPromptPackRunsInput {
+  projectId?: number | null;
+  limit?: number;
+}
 export function preflightYoutubeSummaryRun(input: PreflightYoutubeSummaryRunInput): Promise<YoutubeSummaryPreflightResponse>
-export function startYoutubeSummaryRun(input: StartYoutubeSummaryRunInput): Promise<PromptPackRunSummary>
+export function startYoutubeSummaryRun(input: StartYoutubeSummaryRunInput): Promise<StartYoutubeSummaryRunOutcome>
 export function cancelPromptPackRun(runId: number): Promise<void>
+export function listPromptPackRuns(input?: ListPromptPackRunsInput): Promise<PromptPackRunSummary[]>
 export function listActivePromptPackRuns(): Promise<PromptPackRunSummary[]>
 export function listPromptPackRunStages(runId: number): Promise<PromptPackStageRun[]>
 export function getPromptPackResult(runId: number): Promise<PromptPackResult>
@@ -267,7 +329,7 @@ Dialog behavior:
 - preflight runs before enabling start;
 - if `skippedVideos` is non-empty, show partial coverage warning;
 - if `blockingFailures` is non-empty, disable start and show reasons;
-- start button calls `startYoutubeSummaryRun`.
+- start button generates a stable `clientRequestId`, calls `startYoutubeSummaryRun`, opens the run panel for `{ kind: "started" }`, and renders the fresh blocking preflight for `{ kind: "blocked" }`.
 
 Use existing UI imports:
 
@@ -325,15 +387,22 @@ it("marks run terminal from completed event", () => {
     [{ runId: 42, runStatus: "running", latestMessage: "Running" }],
     {
       runId: 42,
-      eventKind: "completed",
-      runStatus: "completed",
+      requestId: "req-42",
+      kind: "completed",
+      runStatus: "complete",
+      phase: "terminal",
+      stageRunId: null,
       stageName: null,
-      sourceRefId: null,
+      sourceSnapshotId: null,
+      queuePosition: null,
+      progressCurrent: 2,
+      progressTotal: 2,
       message: "Completed",
+      error: null,
     },
   );
 
-  expect(runs[0].runStatus).toBe("completed");
+  expect(runs[0].runStatus).toBe("complete");
   expect(runs[0].latestMessage).toBe("Completed");
 });
 ```
@@ -342,8 +411,8 @@ it("marks run terminal from completed event", () => {
 
 Panel responsibilities:
 
-- load `listActivePromptPackRuns` on mount;
-- subscribe to `prompt-pack://run`;
+- load `listPromptPackRuns({ projectId, limit: 20 })` and `listActivePromptPackRuns` on mount;
+- subscribe to `prompt-pack-run-event`;
 - display active and recent Prompt Pack runs;
 - show status badges, current stage, message, and cancel button;
 - call `cancelPromptPackRun` for non-terminal runs;
@@ -430,7 +499,7 @@ git commit -m "feat: add youtube summary result viewer"
 
 ---
 
-## Task 6: Full UI Verification
+## Task 6: Full UI Verification and Browser Smoke
 
 **Files:**
 - Modify only files needed to fix issues found by verification.
@@ -451,14 +520,31 @@ Expected: pass.
 Run:
 
 ```powershell
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
 
-Open the local app, select a synced YouTube source, open the YouTube Summary dialog, run preflight, and verify start/cancel/result surfaces render without layout overlap.
+Keep the dev server running for Step 3.
 
-- [ ] **Step 3: Commit verification fixes**
+- [ ] **Step 3: Run browser smoke on desktop viewport**
 
-If Step 1 or Step 2 required fixes:
+Use the in-app Browser or Playwright against `http://127.0.0.1:1420` with viewport `1440x900`.
+
+Smoke path:
+
+1. open the Library surface;
+2. select a synced YouTube video or playlist source;
+3. open `YoutubeSummaryRunDialog`;
+4. verify preflight, partial coverage, and blocked-start states fit without text overlap;
+5. open the Prompt Pack runs panel;
+6. verify active/recent rows update from `prompt-pack-run-event`;
+7. open a terminal run result;
+8. verify the result viewer renders header, videos, claims/evidence, warnings, limitations, and validation findings without layout overlap.
+
+Capture at least one desktop screenshot of the launch dialog and one desktop screenshot of the result viewer. Save them under `artifacts/` when using Playwright, or attach them in the in-app Browser verification notes.
+
+- [ ] **Step 4: Commit verification fixes**
+
+If Step 1, Step 2, or Step 3 required fixes:
 
 ```powershell
 git add src/lib src/routes
@@ -479,10 +565,14 @@ npm run check
 git status --short
 ```
 
+Then complete the browser smoke from Task 6 Step 3.
+
 Expected:
 
 - frontend tests pass;
 - Svelte check passes;
 - YouTube Summary launch is available only for synced YouTube video/playlist sources;
-- Prompt Pack run list updates from `prompt-pack://run`;
+- Prompt Pack run list updates from `prompt-pack-run-event`;
+- active and recent Prompt Pack runs are loaded through separate wrappers;
+- desktop browser smoke screenshots show the dialog and result viewer without layout overlap;
 - result viewer renders canonical/projection data without using legacy analysis APIs.
