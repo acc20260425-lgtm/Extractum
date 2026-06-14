@@ -1,0 +1,363 @@
+use sqlx::SqlitePool;
+
+use crate::compression::{compress_text, decompress_text};
+use crate::error::{AppError, AppResult};
+
+pub(crate) async fn persist_final_result_transaction(
+    pool: &SqlitePool,
+    run_id: i64,
+    canonical_result: serde_json::Value,
+    terminal_status: &str,
+) -> AppResult<()> {
+    let canonical_json = canonical_result.to_string();
+    let now = "2026-06-14T00:00:00Z";
+    let result_row_id: i64 = sqlx::query_scalar(
+        "INSERT INTO prompt_pack_results (
+            run_id, result_id, result_status, schema_version, canonical_hash,
+            canonical_json_zstd, projection_updated_at, created_at, updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
+         ON CONFLICT(run_id) DO UPDATE SET
+            result_status = excluded.result_status,
+            canonical_hash = excluded.canonical_hash,
+            canonical_json_zstd = excluded.canonical_json_zstd,
+            updated_at = excluded.updated_at
+         RETURNING id",
+    )
+    .bind(run_id)
+    .bind(canonical_result["result_id"].as_str().unwrap_or("result"))
+    .bind(terminal_status)
+    .bind(canonical_result["schema_version"].as_str().unwrap_or("1.0"))
+    .bind(format!("sha384-{}", sha384_hex(canonical_json.as_bytes())))
+    .bind(compress_text(&canonical_json).map_err(AppError::internal)?)
+    .bind(now)
+    .bind(now)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    rebuild_projection_rows(pool, result_row_id, run_id, &canonical_result).await?;
+    sqlx::query(
+        "UPDATE prompt_pack_results SET projection_updated_at = ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(now)
+    .bind(now)
+    .bind(result_row_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_status = ?, result_status = ?, completed_at = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(terminal_status)
+    .bind(terminal_status)
+    .bind(now)
+    .bind(now)
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    sqlx::query(
+        "INSERT INTO prompt_pack_audit_events (run_id, event_kind, message, created_at)
+         VALUES (?, 'terminal_result_persisted', 'Prompt Pack result persisted', ?)",
+    )
+    .bind(run_id)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+pub(crate) async fn repair_prompt_pack_result_projections(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<()> {
+    let (result_row_id, canonical_json_zstd): (i64, Vec<u8>) = sqlx::query_as(
+        "SELECT id, canonical_json_zstd FROM prompt_pack_results WHERE run_id = ?",
+    )
+    .bind(run_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+    let canonical_json = decompress_text(&canonical_json_zstd).map_err(AppError::internal)?;
+    let canonical: serde_json::Value = serde_json::from_str(&canonical_json)
+        .map_err(|error| AppError::internal(format!("parse canonical result: {error}")))?;
+    rebuild_projection_rows(pool, result_row_id, run_id, &canonical).await?;
+    sqlx::query(
+        "UPDATE prompt_pack_results SET projection_updated_at = ? WHERE id = ?",
+    )
+    .bind("2026-06-14T00:00:00Z")
+    .bind(result_row_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn rebuild_projection_rows(
+    pool: &SqlitePool,
+    result_row_id: i64,
+    run_id: i64,
+    canonical: &serde_json::Value,
+) -> AppResult<()> {
+    for table in [
+        "prompt_pack_result_source_refs",
+        "prompt_pack_result_claims",
+        "prompt_pack_result_evidence",
+        "prompt_pack_result_ref_edges",
+        "prompt_pack_result_unknowns",
+        "prompt_pack_result_verification_tasks",
+        "prompt_pack_result_warnings",
+        "prompt_pack_result_limitations",
+        "prompt_pack_result_quality_flags",
+        "prompt_pack_result_audit_refs",
+        "prompt_pack_youtube_videos",
+        "prompt_pack_youtube_segments",
+        "prompt_pack_youtube_key_points",
+        "prompt_pack_youtube_quotes",
+        "prompt_pack_youtube_action_items",
+        "prompt_pack_youtube_open_questions",
+        "prompt_pack_youtube_synthesis_items",
+    ] {
+        sqlx::query(&format!("DELETE FROM {table} WHERE result_row_id = ?"))
+            .bind(result_row_id)
+            .execute(pool)
+            .await
+            .map_err(AppError::database)?;
+    }
+
+    for source_ref in canonical
+        .get("source_refs")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_source_refs (
+                result_row_id, run_id, source_ref_id, source_snapshot_id, title
+             )
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(result_row_id)
+        .bind(run_id)
+        .bind(source_ref["source_ref_id"].as_str().unwrap_or(""))
+        .bind(source_ref["source_snapshot_id"].as_i64().unwrap_or(0))
+        .bind(source_ref["title"].as_str())
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    for claim in canonical
+        .get("claims")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_claims (
+                result_row_id, run_id, claim_id, source_ref_id, text
+             )
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(result_row_id)
+        .bind(run_id)
+        .bind(claim["claim_id"].as_str().unwrap_or(""))
+        .bind(claim["source_ref_id"].as_str())
+        .bind(claim["text"].as_str().unwrap_or(""))
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    for evidence in canonical
+        .get("evidence")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_evidence (
+                result_row_id, run_id, evidence_id, claim_id, material_ref_id, text
+             )
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(result_row_id)
+        .bind(run_id)
+        .bind(evidence["evidence_id"].as_str().unwrap_or(""))
+        .bind(evidence["claim_id"].as_str())
+        .bind(evidence["material_ref_id"].as_str())
+        .bind(evidence["text"].as_str().unwrap_or(""))
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    for video in canonical["outputs"]["pack_data"]["youtube_summary"]["videos"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        sqlx::query(
+            "INSERT INTO prompt_pack_youtube_videos (
+                result_row_id, run_id, video_id, source_ref_id, title, summary_text
+             )
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(result_row_id)
+        .bind(run_id)
+        .bind(video["video_id"].as_str().unwrap_or(""))
+        .bind(video["source_ref_id"].as_str().unwrap_or(""))
+        .bind(video["title"].as_str())
+        .bind(video["summary_text"].as_str())
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    Ok(())
+}
+
+fn sha384_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha384};
+    Sha384::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{persist_final_result_transaction, repair_prompt_pack_result_projections};
+    use crate::migrations::apply_all_migrations_for_test_pool;
+    use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+
+    #[tokio::test]
+    async fn persist_final_result_sets_terminal_status_after_projection_rows_exist() {
+        let pool = test_pool_with_canonical_result_ready().await;
+
+        persist_final_result_transaction(&pool, 42, test_canonical_result(), "complete")
+            .await
+            .expect("persist result");
+
+        let run_status: String =
+            sqlx::query_scalar("SELECT run_status FROM prompt_pack_runs WHERE id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("run status");
+        let projected_videos: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 42",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("projected videos");
+        let result_status: String =
+            sqlx::query_scalar("SELECT result_status FROM prompt_pack_results WHERE run_id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("result status");
+
+        assert_eq!(run_status, "complete");
+        assert_eq!(result_status, "complete");
+        assert!(projected_videos > 0);
+    }
+
+    #[tokio::test]
+    async fn repair_rebuilds_missing_projection_rows_from_canonical_json() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        persist_final_result_transaction(&pool, 42, test_canonical_result(), "complete")
+            .await
+            .expect("persist result");
+        sqlx::query("DELETE FROM prompt_pack_result_claims WHERE run_id = 42")
+            .execute(&pool)
+            .await
+            .expect("delete claims");
+
+        repair_prompt_pack_result_projections(&pool, 42)
+            .await
+            .expect("repair projections");
+
+        let projected_claims: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_claims WHERE run_id = 42",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("projected claims");
+
+        assert!(projected_claims > 0);
+    }
+
+    async fn test_pool_with_canonical_result_ready() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        sqlx::query(
+            "INSERT INTO prompt_pack_runs (
+                id, pack_version_id, pack_id, pack_version, schema_version,
+                run_status, result_status, output_language, control_preset,
+                evidence_mode, include_comments, created_at, updated_at
+             )
+             VALUES (42, 1, 'youtube_summary', '1.0.0', '1.0',
+                'running', 'none', 'en', 'standard', 'standard', 0,
+                '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert run");
+        pool
+    }
+
+    fn test_canonical_result() -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": "1.0",
+            "result_id": "result_42",
+            "run_id": 42,
+            "pack_id": "youtube_summary",
+            "pack_version": "1.0.0",
+            "stage": "youtube_summary/transcript_analysis",
+            "created_at": "2026-06-14T00:00:00Z",
+            "output_language": "en",
+            "metadata": {},
+            "run_context": {},
+            "outputs": {
+                "pack_data": {
+                    "youtube_summary": {
+                        "videos": [{
+                            "video_id": "video_1",
+                            "source_ref_id": "source_ref_1",
+                            "title": "Video",
+                            "summary_text": "Summary"
+                        }],
+                        "synthesis": null
+                    }
+                }
+            },
+            "source_refs": [{
+                "source_ref_id": "source_ref_1",
+                "source_snapshot_id": 501,
+                "title": "Video"
+            }],
+            "claims": [{
+                "claim_id": "claim_1",
+                "source_ref_id": "source_ref_1",
+                "text": "Claim"
+            }],
+            "evidence": [{
+                "evidence_id": "evidence_1",
+                "claim_id": "claim_1",
+                "text": "Evidence"
+            }],
+            "warnings": [],
+            "limitations": [],
+            "quality_flags": [],
+            "audit_refs": []
+        })
+    }
+}

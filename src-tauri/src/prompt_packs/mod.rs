@@ -1,6 +1,7 @@
 pub mod dto;
 pub mod library;
 pub mod models;
+pub mod projections;
 pub mod result_builder;
 pub mod runtime;
 pub mod seed;

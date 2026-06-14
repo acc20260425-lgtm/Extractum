@@ -537,7 +537,7 @@ git commit -m "feat: assemble youtube summary canonical result"
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
 - Modify: `src-tauri/src/prompt_packs/mod.rs`
 
-- [ ] **Step 1: Write persistence tests**
+- [x] **Step 1: Write persistence tests**
 
 Add tests:
 
@@ -591,7 +591,7 @@ async fn repair_rebuilds_missing_projection_rows_from_canonical_json() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -601,7 +601,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::projections
 
 Expected: fail because projections module does not exist.
 
-- [ ] **Step 3: Implement projection rebuild**
+- [x] **Step 3: Implement projection rebuild**
 
 Projection rebuild must delete existing rows for `result_row_id` and reinsert:
 
@@ -618,7 +618,7 @@ Projection rebuild must delete existing rows for `result_row_id` and reinsert:
 - ref edges;
 - YouTube videos, segments, key points, quotes, action items, open questions, synthesis items.
 
-- [ ] **Step 4: Implement transaction**
+- [x] **Step 4: Implement transaction**
 
 `persist_final_result_transaction` must wrap:
 
@@ -631,7 +631,7 @@ Projection rebuild must delete existing rows for `result_row_id` and reinsert:
 
 Emit the terminal event only after commit.
 
-- [ ] **Step 5: Implement repair-on-read**
+- [x] **Step 5: Implement repair-on-read**
 
 `get_prompt_pack_result` and list/query helpers must call repair when:
 
@@ -641,7 +641,7 @@ Emit the terminal event only after commit.
 
 If repair fails, return canonical JSON plus a storage warning and write `projection_repair_failed` audit event.
 
-- [ ] **Step 6: Run projection tests**
+- [x] **Step 6: Run projection tests**
 
 Run:
 
@@ -652,7 +652,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store
 
 Expected: pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/projections.rs src-tauri/src/prompt_packs/store.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/mod.rs
