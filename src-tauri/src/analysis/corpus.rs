@@ -725,6 +725,31 @@ pub(crate) fn preflight_limit_error(preflight: &AnalysisRunPreflight) -> Option<
     ))
 }
 
+pub(crate) fn model_limit_preflight_error(
+    preflight: &AnalysisRunPreflight,
+    model_input_limit: Option<usize>,
+) -> Option<String> {
+    let model_input_limit = model_input_limit.filter(|limit| *limit > 0)?;
+    if preflight.estimated_chunks == 0 {
+        return None;
+    }
+
+    let estimated_chunk_chars = preflight
+        .estimated_input_chars
+        .div_ceil(preflight.estimated_chunks);
+    if estimated_chunk_chars <= model_input_limit {
+        return None;
+    }
+
+    Some(format!(
+        "Analysis scope is too large for the selected model: \
+         {estimated_chunk_chars} estimated input characters per chunk exceeds \
+         model input limit {model_input_limit}. \
+         Choose a model with a larger context window, narrow the period, \
+         or choose a smaller source scope."
+    ))
+}
+
 pub(crate) async fn load_run_snapshot_messages(
     pool: &Pool<Sqlite>,
     run_id: i64,
@@ -1041,9 +1066,10 @@ mod tests {
         estimate_message_input_chars, estimate_preflight_chunk_count,
         list_run_snapshot_messages_page, live_corpus_ref, load_corpus_messages,
         load_run_corpus_messages, load_run_snapshot_messages, load_trace_resolution_messages,
-        preflight_analysis_run, preflight_limit_error, resolve_analysis_sources,
-        resolve_run_source_ids, AnalysisRunPreflight, AnalysisRunPreflightLimits,
-        CorpusLoadRequest, ListRunSnapshotMessagesRequest, YoutubeCorpusMode,
+        model_limit_preflight_error, preflight_analysis_run, preflight_limit_error,
+        resolve_analysis_sources, resolve_run_source_ids, AnalysisRunPreflight,
+        AnalysisRunPreflightLimits, CorpusLoadRequest, ListRunSnapshotMessagesRequest,
+        YoutubeCorpusMode,
     };
     use crate::analysis::models::{AnalysisRunDetail, AnalysisRunMessageCursor, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
@@ -1974,6 +2000,38 @@ mod tests {
         };
 
         assert_eq!(preflight_limit_error(&preflight), None);
+    }
+
+    #[test]
+    fn model_limit_preflight_allows_unknown_or_fitting_limits() {
+        let preflight = AnalysisRunPreflight {
+            source_ids: vec![1],
+            message_count: 1_000,
+            estimated_input_chars: 120_000,
+            estimated_chunks: 3,
+            limits: AnalysisRunPreflightLimits::default(),
+        };
+
+        assert_eq!(model_limit_preflight_error(&preflight, None), None);
+        assert_eq!(model_limit_preflight_error(&preflight, Some(40_000)), None);
+    }
+
+    #[test]
+    fn model_limit_preflight_reports_oversized_chunks() {
+        let preflight = AnalysisRunPreflight {
+            source_ids: vec![1],
+            message_count: 1_000,
+            estimated_input_chars: 120_001,
+            estimated_chunks: 3,
+            limits: AnalysisRunPreflightLimits::default(),
+        };
+
+        let error =
+            model_limit_preflight_error(&preflight, Some(40_000)).expect("model limit error");
+
+        assert!(error.contains("40001 estimated input characters per chunk"));
+        assert!(error.contains("model input limit 40000"));
+        assert!(error.contains("Choose a model with a larger context window"));
     }
 
     #[tokio::test]
