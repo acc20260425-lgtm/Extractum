@@ -41,6 +41,7 @@ pub async fn start_analysis_report(
         StartAnalysisReportRequest {
             source_id,
             source_group_id,
+            project_id: None,
             period_from,
             period_to,
             output_language,

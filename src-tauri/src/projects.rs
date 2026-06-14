@@ -45,16 +45,16 @@ fn normalize_description(description: Option<String>) -> Option<String> {
 }
 
 async fn ensure_project_exists(pool: &sqlx::SqlitePool, project_id: i64) -> AppResult<()> {
-    let exists = sqlx::query_scalar::<_, i64>(
-        "SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)",
-    )
-    .bind(project_id)
-    .fetch_one(pool)
-    .await
-    .map_err(AppError::database)?;
+    let exists = sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)")
+        .bind(project_id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::database)?;
 
     if exists == 0 {
-        return Err(AppError::not_found(format!("Project {project_id} not found")));
+        return Err(AppError::not_found(format!(
+            "Project {project_id} not found"
+        )));
     }
     Ok(())
 }
@@ -64,9 +64,8 @@ async fn ensure_sources_exist(pool: &sqlx::SqlitePool, source_ids: &[i64]) -> Ap
         return Ok(());
     }
 
-    let mut query = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
-        "SELECT COUNT(*) FROM sources WHERE id IN (",
-    );
+    let mut query =
+        sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT COUNT(*) FROM sources WHERE id IN (");
     {
         let mut separated = query.separated(", ");
         for source_id in source_ids {
@@ -134,9 +133,9 @@ pub(crate) async fn create_project_in_pool(
         }
     })?;
 
-    get_project_in_pool(pool, id).await?.ok_or_else(|| {
-        AppError::not_found(format!("Project {id} not found after creation"))
-    })
+    get_project_in_pool(pool, id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Project {id} not found after creation")))
 }
 
 pub(crate) async fn get_project_in_pool(
@@ -188,12 +187,14 @@ pub(crate) async fn update_project_in_pool(
     })?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::not_found(format!("Project {project_id} not found")));
+        return Err(AppError::not_found(format!(
+            "Project {project_id} not found"
+        )));
     }
 
-    get_project_in_pool(pool, project_id).await?.ok_or_else(|| {
-        AppError::not_found(format!("Project {project_id} not found after update"))
-    })
+    get_project_in_pool(pool, project_id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Project {project_id} not found after update")))
 }
 
 pub(crate) async fn add_project_sources_in_pool(
@@ -261,9 +262,8 @@ pub(crate) async fn remove_project_sources_in_pool(
         return Ok(());
     }
 
-    let mut query = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
-        "DELETE FROM project_sources WHERE project_id = ",
-    );
+    let mut query =
+        sqlx::QueryBuilder::<sqlx::Sqlite>::new("DELETE FROM project_sources WHERE project_id = ");
     query.push_bind(project_id);
     query.push(" AND source_id IN (");
     {
@@ -345,7 +345,9 @@ pub(crate) async fn delete_project_in_pool(
     tx.commit().await.map_err(AppError::database)?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::not_found(format!("Project {project_id} not found")));
+        return Err(AppError::not_found(format!(
+            "Project {project_id} not found"
+        )));
     }
     Ok(())
 }
@@ -410,6 +412,70 @@ pub async fn remove_project_sources(
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     remove_project_sources_in_pool(&pool, project_id, source_ids).await
+}
+
+#[tauri::command]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command signature mirrors start_analysis_report for project scope."
+)]
+pub async fn start_project_analysis(
+    handle: AppHandle,
+    state: tauri::State<'_, crate::analysis::AnalysisState>,
+    project_id: i64,
+    period_from: i64,
+    period_to: i64,
+    output_language: String,
+    prompt_template_id: i64,
+    model_override: Option<String>,
+    profile_id: Option<String>,
+    youtube_corpus_mode: Option<String>,
+    include_migrated_history: bool,
+) -> AppResult<i64> {
+    crate::analysis::report::start_analysis_report_run(
+        handle,
+        state.inner(),
+        crate::analysis::report::StartAnalysisReportRequest {
+            source_id: None,
+            source_group_id: None,
+            project_id: Some(project_id),
+            period_from,
+            period_to,
+            output_language,
+            prompt_template_id,
+            model_override,
+            profile_id,
+            youtube_corpus_mode,
+            include_migrated_history,
+        },
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_project_runs(
+    handle: AppHandle,
+    project_id: i64,
+) -> AppResult<Vec<crate::analysis::models::AnalysisRunSummary>> {
+    let pool = get_pool(&handle).await?;
+    ensure_project_exists(&pool, project_id).await?;
+    crate::analysis::store::list_analysis_run_summaries(
+        &pool,
+        crate::analysis::store::AnalysisRunListFilters {
+            source_id: None,
+            source_group_id: None,
+            project_id: Some(project_id),
+            limit: 5,
+            query: None,
+            status: Some("all".to_string()),
+            provider: None,
+            model: None,
+            template: None,
+            date_from: None,
+            date_to: None,
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

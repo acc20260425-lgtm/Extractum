@@ -1102,7 +1102,7 @@ git commit -m "feat: connect library sources to projects"
 - Modify: `src-tauri/src/projects.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write failing corpus tests for project scope**
+- [x] **Step 1: Write failing corpus tests for project scope**
 
 In `src-tauri/src/analysis/corpus.rs` tests, add:
 
@@ -1209,7 +1209,7 @@ async fn create_project_scope_schema(pool: &sqlx::SqlitePool) {
 }
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -1219,7 +1219,7 @@ cargo test resolve_analysis_sources_ --manifest-path src-tauri/Cargo.toml
 
 Expected: FAIL because `resolve_analysis_sources` does not accept `project_id`.
 
-- [ ] **Step 3: Extend analysis constants and model types**
+- [x] **Step 3: Extend analysis constants and model types**
 
 In `src-tauri/src/analysis/mod.rs`, add:
 
@@ -1244,7 +1244,7 @@ project_id: None,
 project_name: None,
 ```
 
-- [ ] **Step 4: Update store queries**
+- [x] **Step 4: Update store queries**
 
 In `src-tauri/src/analysis/store.rs`, update `ANALYSIS_RUN_LIST_SELECT` and `fetch_run_row`:
 
@@ -1400,7 +1400,7 @@ async fn list_analysis_run_summaries_filters_project_runs() {
 }
 ```
 
-- [ ] **Step 5: Add `project_id` to duplicate lookup and inserts**
+- [x] **Step 5: Add `project_id` to duplicate lookup and inserts**
 
 In `DuplicateRunLookup`:
 
@@ -1438,7 +1438,7 @@ duplicate coverage, add a focused test proving a project run and a source-group
 run with the same period/template/model do not collide when their scope ids
 differ.
 
-- [ ] **Step 6: Extend corpus source resolution**
+- [x] **Step 6: Extend corpus source resolution**
 
 Change signature in `src-tauri/src/analysis/corpus.rs`:
 
@@ -1538,7 +1538,7 @@ if run.scope_type == crate::analysis::ANALYSIS_SCOPE_TYPE_PROJECT {
 Add a corpus test proving `resolve_run_source_ids` returns project source ids
 for a project-scoped run with no captured snapshot rows.
 
-- [ ] **Step 7: Extend report request**
+- [x] **Step 7: Extend report request**
 
 In `src-tauri/src/analysis/report.rs`, add to `StartAnalysisReportRequest`:
 
@@ -1604,7 +1604,7 @@ Update all existing `StartAnalysisReportRequest` constructors:
   the legacy `start_analysis_report` command;
 - in `src-tauri/src/analysis/report.rs` tests, pass `project_id: None`.
 
-- [ ] **Step 8: Add project analysis command wrapper**
+- [x] **Step 8: Add project analysis command wrapper**
 
 In `src-tauri/src/projects.rs`, add:
 
@@ -1656,7 +1656,7 @@ pub(crate) mod report;
 
 Register `start_project_analysis` in `src-tauri/src/lib.rs`.
 
-- [ ] **Step 9: Add `list_project_runs` command**
+- [x] **Step 9: Add `list_project_runs` command**
 
 In `src-tauri/src/projects.rs`, add:
 
@@ -1695,7 +1695,7 @@ pub(crate) mod models;
 pub(crate) mod store;
 ```
 
-- [ ] **Step 10: Run backend tests**
+- [x] **Step 10: Run backend tests**
 
 Run:
 

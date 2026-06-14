@@ -88,6 +88,8 @@ fn resolve_run_scope_label_parts(
     source_title: Option<&str>,
     source_group_id: Option<i64>,
     source_group_name: Option<&str>,
+    project_id: Option<i64>,
+    project_name: Option<&str>,
     scope_label_snapshot: Option<&str>,
 ) -> String {
     if let Some(label) = scope_label_snapshot {
@@ -103,6 +105,13 @@ fn resolve_run_scope_label_parts(
             .unwrap_or_else(|| format!("Group {}", source_group_id.unwrap_or_default()));
     }
 
+    if scope_type == crate::analysis::ANALYSIS_SCOPE_TYPE_PROJECT {
+        return project_name
+            .filter(|value| !value.trim().is_empty())
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("Project {}", project_id.unwrap_or_default()));
+    }
+
     source_title
         .map(ToString::to_string)
         .unwrap_or_else(|| format!("Source {}", source_id.unwrap_or_default()))
@@ -115,6 +124,8 @@ fn resolve_run_row_scope_label(row: &AnalysisRunRow) -> String {
         row.source_title.as_deref(),
         row.source_group_id,
         row.source_group_name.as_deref(),
+        row.project_id,
+        row.project_name.as_deref(),
         row.scope_label_snapshot.as_deref(),
     )
 }
@@ -151,6 +162,8 @@ pub(crate) fn map_run_summary(row: AnalysisRunRow) -> AnalysisRunSummary {
         source_title: row.source_title,
         source_group_id: row.source_group_id,
         source_group_name: row.source_group_name,
+        project_id: row.project_id,
+        project_name: row.project_name,
         scope_label,
         period_from: row.period_from,
         period_to: row.period_to,
@@ -186,6 +199,8 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
         source_title: row.source_title,
         source_group_id: row.source_group_id,
         source_group_name: row.source_group_name,
+        project_id: row.project_id,
+        project_name: row.project_name,
         scope_label,
         period_from: row.period_from,
         period_to: row.period_to,
@@ -216,6 +231,7 @@ pub(crate) fn map_run_detail(row: AnalysisRunRow) -> AnalysisRunDetail {
 pub(crate) struct AnalysisRunListFilters {
     pub(crate) source_id: Option<i64>,
     pub(crate) source_group_id: Option<i64>,
+    pub(crate) project_id: Option<i64>,
     pub(crate) limit: i64,
     pub(crate) query: Option<String>,
     pub(crate) status: Option<String>,
@@ -235,6 +251,8 @@ const ANALYSIS_RUN_LIST_SELECT: &str = r#"
         sources.title AS source_title,
         runs.source_group_id,
         groups.name AS source_group_name,
+        runs.project_id,
+        projects.name AS project_name,
         runs.period_from,
         runs.period_to,
         runs.output_language,
@@ -259,6 +277,7 @@ const ANALYSIS_RUN_LIST_SELECT: &str = r#"
     FROM analysis_runs runs
     LEFT JOIN sources ON sources.id = runs.source_id
     LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
+    LEFT JOIN projects ON projects.id = runs.project_id
     LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
     LEFT JOIN (
         SELECT run_id, COUNT(*) AS snapshot_message_count
@@ -268,10 +287,11 @@ const ANALYSIS_RUN_LIST_SELECT: &str = r#"
     WHERE 1 = 1
 "#;
 
-const RUN_QUERY_FIELDS: [&str; 8] = [
+const RUN_QUERY_FIELDS: [&str; 9] = [
     "lower(coalesce(runs.scope_label_snapshot, ''))",
     "lower(coalesce(sources.title, ''))",
     "lower(coalesce(groups.name, ''))",
+    "lower(coalesce(projects.name, ''))",
     "lower(coalesce(templates.name, ''))",
     "lower(coalesce(runs.provider_profile, ''))",
     "lower(coalesce(runs.provider, ''))",
@@ -344,9 +364,17 @@ pub(crate) async fn list_analysis_run_summaries(
     pool: &Pool<Sqlite>,
     filters: AnalysisRunListFilters,
 ) -> AppResult<Vec<AnalysisRunSummary>> {
-    if filters.source_id.is_some() && filters.source_group_id.is_some() {
+    let scope_filter_count = [
+        filters.source_id.is_some(),
+        filters.source_group_id.is_some(),
+        filters.project_id.is_some(),
+    ]
+    .into_iter()
+    .filter(|selected| *selected)
+    .count();
+    if scope_filter_count > 1 {
         return Err(AppError::validation(
-            "Pass either source_id or source_group_id, not both",
+            "Pass only one of source_id, source_group_id, or project_id",
         ));
     }
 
@@ -360,6 +388,11 @@ pub(crate) async fn list_analysis_run_summaries(
     if let Some(source_group_id) = filters.source_group_id {
         query.push(" AND runs.source_group_id = ");
         query.push_bind(source_group_id);
+    }
+
+    if let Some(project_id) = filters.project_id {
+        query.push(" AND runs.project_id = ");
+        query.push_bind(project_id);
     }
 
     match trimmed_filter(filters.status).as_deref() {
@@ -437,6 +470,8 @@ pub(crate) async fn fetch_run_row(
             sources.title AS source_title,
             runs.source_group_id,
             groups.name AS source_group_name,
+            runs.project_id,
+            projects.name AS project_name,
             runs.period_from,
             runs.period_to,
             runs.output_language,
@@ -461,6 +496,7 @@ pub(crate) async fn fetch_run_row(
         FROM analysis_runs runs
         LEFT JOIN sources ON sources.id = runs.source_id
         LEFT JOIN analysis_source_groups groups ON groups.id = runs.source_group_id
+        LEFT JOIN projects ON projects.id = runs.project_id
         LEFT JOIN analysis_prompt_templates templates ON templates.id = runs.prompt_template_id
         LEFT JOIN (
             SELECT run_id, COUNT(*) AS snapshot_message_count
@@ -556,6 +592,8 @@ pub(crate) fn resolve_run_scope_label(run: &AnalysisRunDetail) -> String {
         run.source_title.as_deref(),
         run.source_group_id,
         run.source_group_name.as_deref(),
+        run.project_id,
+        run.project_name.as_deref(),
         run.scope_label_snapshot.as_deref(),
     )
 }
@@ -564,6 +602,7 @@ pub(crate) struct DuplicateRunLookup<'a> {
     pub(crate) scope_type: &'a str,
     pub(crate) source_id: Option<i64>,
     pub(crate) source_group_id: Option<i64>,
+    pub(crate) project_id: Option<i64>,
     pub(crate) period_from: i64,
     pub(crate) period_to: i64,
     pub(crate) output_language: &'a str,
@@ -586,6 +625,7 @@ pub(crate) async fn find_active_duplicate_run(
           AND scope_type = ?
           AND (source_id = ? OR (source_id IS NULL AND ? IS NULL))
           AND (source_group_id = ? OR (source_group_id IS NULL AND ? IS NULL))
+          AND (project_id = ? OR (project_id IS NULL AND ? IS NULL))
           AND period_from = ?
           AND period_to = ?
           AND output_language = ?
@@ -605,6 +645,8 @@ pub(crate) async fn find_active_duplicate_run(
     .bind(lookup.source_id)
     .bind(lookup.source_group_id)
     .bind(lookup.source_group_id)
+    .bind(lookup.project_id)
+    .bind(lookup.project_id)
     .bind(lookup.period_from)
     .bind(lookup.period_to)
     .bind(lookup.output_language)
@@ -624,6 +666,7 @@ pub(crate) struct AnalysisRunInsert<'a> {
     pub(crate) scope_type: &'a str,
     pub(crate) source_id: Option<i64>,
     pub(crate) source_group_id: Option<i64>,
+    pub(crate) project_id: Option<i64>,
     pub(crate) period_from: i64,
     pub(crate) period_to: i64,
     pub(crate) output_language: &'a str,
@@ -633,6 +676,7 @@ pub(crate) struct AnalysisRunInsert<'a> {
     pub(crate) model: &'a str,
     pub(crate) youtube_corpus_mode: YoutubeCorpusMode,
     pub(crate) telegram_history_scope: &'a str,
+    pub(crate) scope_label_snapshot: Option<&'a str>,
 }
 
 pub(crate) async fn insert_analysis_run(
@@ -647,6 +691,7 @@ pub(crate) async fn insert_analysis_run(
             scope_type,
             source_id,
             source_group_id,
+            project_id,
             period_from,
             period_to,
             output_language,
@@ -661,7 +706,7 @@ pub(crate) async fn insert_analysis_run(
             scope_label_snapshot,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
         "#,
     )
@@ -669,6 +714,7 @@ pub(crate) async fn insert_analysis_run(
     .bind(insert.scope_type)
     .bind(insert.source_id)
     .bind(insert.source_group_id)
+    .bind(insert.project_id)
     .bind(insert.period_from)
     .bind(insert.period_to)
     .bind(insert.output_language)
@@ -680,6 +726,7 @@ pub(crate) async fn insert_analysis_run(
     .bind(insert.youtube_corpus_mode.as_wire())
     .bind(insert.telegram_history_scope)
     .bind(ANALYSIS_STATUS_QUEUED)
+    .bind(insert.scope_label_snapshot)
     .bind(created_at)
     .fetch_one(pool)
     .await
@@ -1044,6 +1091,8 @@ mod tests {
             source_title: None,
             source_group_id: Some(9),
             source_group_name: Some("Live group".to_string()),
+            project_id: None,
+            project_name: None,
             period_from: 1_700_000_000,
             period_to: 1_800_000_000,
             output_language: "English".to_string(),
@@ -1078,6 +1127,7 @@ mod tests {
         id: i64,
         source_id: Option<i64>,
         source_group_id: Option<i64>,
+        project_id: Option<i64>,
         scope_label_snapshot: &'static str,
         prompt_template_id: Option<i64>,
         provider_profile: &'static str,
@@ -1094,6 +1144,7 @@ mod tests {
                 id,
                 source_id: Some(1),
                 source_group_id: None,
+                project_id: None,
                 scope_label_snapshot: label,
                 prompt_template_id: Some(1),
                 provider_profile: "default",
@@ -1137,6 +1188,18 @@ mod tests {
 
         sqlx::query(
             r#"
+            CREATE TABLE projects (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create projects");
+
+        sqlx::query(
+            r#"
             CREATE TABLE analysis_prompt_templates (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -1161,6 +1224,7 @@ mod tests {
                 scope_type TEXT NOT NULL DEFAULT 'single_source',
                 source_id INTEGER,
                 source_group_id INTEGER,
+                project_id INTEGER,
                 period_from INTEGER NOT NULL DEFAULT 0,
                 period_to INTEGER NOT NULL DEFAULT 0,
                 output_language TEXT NOT NULL DEFAULT 'English',
@@ -1210,6 +1274,12 @@ mod tests {
             .await
             .expect("insert group");
         sqlx::query(
+            "INSERT INTO projects (id, name) VALUES (7, 'Alpha Project'), (8, 'Beta Project')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert projects");
+        sqlx::query(
             "INSERT INTO analysis_prompt_templates (id, name, template_kind, body, version, is_builtin, created_at, updated_at) VALUES (1, 'Weekly Digest', 'report', 'body', 1, 0, 1, 1), (2, 'Incident Review', 'report', 'body', 1, 0, 1, 1)",
         )
         .execute(&pool)
@@ -1228,6 +1298,7 @@ mod tests {
                 scope_type,
                 source_id,
                 source_group_id,
+                project_id,
                 period_from,
                 period_to,
                 output_language,
@@ -1248,17 +1319,20 @@ mod tests {
                 created_at,
                 completed_at
             )
-            VALUES (?, 'report', ?, ?, ?, 0, 0, 'English', ?, 1, ?, ?, ?, 'transcript_description', 'current', ?, 'Report', NULL, ?, NULL, NULL, ?, ?, ?)
+            VALUES (?, 'report', ?, ?, ?, ?, 0, 0, 'English', ?, 1, ?, ?, ?, 'transcript_description', 'current', ?, 'Report', NULL, ?, NULL, NULL, ?, ?, ?)
             "#,
         )
         .bind(fixture.id)
-        .bind(if fixture.source_group_id.is_some() {
+        .bind(if fixture.project_id.is_some() {
+            "project"
+        } else if fixture.source_group_id.is_some() {
             "source_group"
         } else {
             "single_source"
         })
         .bind(fixture.source_id)
         .bind(fixture.source_group_id)
+        .bind(fixture.project_id)
         .bind(fixture.prompt_template_id)
         .bind(fixture.provider_profile)
         .bind(fixture.provider)
@@ -1401,6 +1475,51 @@ mod tests {
 
         assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
         assert_eq!(runs[0].source_group_name.as_deref(), Some("Research Group"));
+    }
+
+    #[tokio::test]
+    async fn list_analysis_run_summaries_filters_project_runs() {
+        let pool = run_list_pool().await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 1,
+                source_id: None,
+                source_group_id: None,
+                project_id: Some(7),
+                scope_label_snapshot: "Alpha Project",
+                created_at: 300,
+                ..RunListFixture::completed(1, 300, "Alpha Project")
+            },
+        )
+        .await;
+        insert_run_list_fixture(
+            &pool,
+            RunListFixture {
+                id: 2,
+                source_id: None,
+                source_group_id: None,
+                project_id: Some(8),
+                scope_label_snapshot: "Beta Project",
+                created_at: 200,
+                ..RunListFixture::completed(2, 200, "Beta Project")
+            },
+        )
+        .await;
+
+        let runs = list_analysis_run_summaries(
+            &pool,
+            AnalysisRunListFilters {
+                project_id: Some(7),
+                limit: 50,
+                ..AnalysisRunListFilters::default()
+            },
+        )
+        .await
+        .expect("list project runs");
+
+        assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
+        assert_eq!(runs[0].project_name.as_deref(), Some("Alpha Project"));
     }
 
     #[tokio::test]
@@ -2018,6 +2137,7 @@ mod tests {
                 scope_type TEXT NOT NULL,
                 source_id INTEGER,
                 source_group_id INTEGER,
+                project_id INTEGER,
                 period_from INTEGER NOT NULL,
                 period_to INTEGER NOT NULL,
                 output_language TEXT NOT NULL,
@@ -2061,6 +2181,7 @@ mod tests {
                 scope_type: "single_source",
                 source_id: Some(7),
                 source_group_id: None,
+                project_id: None,
                 period_from: 10,
                 period_to: 20,
                 output_language: "English",
@@ -2070,6 +2191,7 @@ mod tests {
                 model: "gemini-2.5-flash",
                 youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescriptionComments,
                 telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+                scope_label_snapshot: None,
             },
         )
         .await
@@ -2104,6 +2226,7 @@ mod tests {
                 scope_type TEXT NOT NULL,
                 source_id INTEGER,
                 source_group_id INTEGER,
+                project_id INTEGER,
                 period_from INTEGER NOT NULL,
                 period_to INTEGER NOT NULL,
                 output_language TEXT NOT NULL,
@@ -2147,6 +2270,7 @@ mod tests {
                 scope_type: "single_source",
                 source_id: Some(7),
                 source_group_id: None,
+                project_id: None,
                 period_from: 10,
                 period_to: 20,
                 output_language: "English",
@@ -2156,6 +2280,7 @@ mod tests {
                 model: "gemini-2.5-flash",
                 youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
                 telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+                scope_label_snapshot: None,
             },
         )
         .await
@@ -2172,6 +2297,7 @@ mod tests {
                 scope_type: "single_source",
                 source_id: Some(7),
                 source_group_id: None,
+                project_id: None,
                 period_from: 10,
                 period_to: 20,
                 output_language: "English",
@@ -2182,6 +2308,7 @@ mod tests {
                 youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
                 telegram_history_scope:
                     crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED,
+                scope_label_snapshot: None,
             },
         )
         .await
@@ -2196,6 +2323,7 @@ mod tests {
             scope_type: "single_source",
             source_id: Some(7),
             source_group_id: None,
+            project_id: None,
             period_from: 10,
             period_to: 20,
             output_language: "English",
@@ -2221,6 +2349,129 @@ mod tests {
 
         assert_eq!(current_duplicate, Some(current_run_id));
         assert_eq!(current_plus_migrated_duplicate, Some(migrated_run_id));
+    }
+
+    #[tokio::test]
+    async fn duplicate_lookup_keeps_project_and_source_group_scopes_separate() {
+        use super::{
+            find_active_duplicate_run, insert_analysis_run, AnalysisRunInsert, DuplicateRunLookup,
+        };
+        use crate::analysis::corpus::YoutubeCorpusMode;
+
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        sqlx::query(
+            r#"
+            CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_type TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                source_id INTEGER,
+                source_group_id INTEGER,
+                project_id INTEGER,
+                period_from INTEGER NOT NULL,
+                period_to INTEGER NOT NULL,
+                output_language TEXT NOT NULL,
+                prompt_template_id INTEGER,
+                prompt_template_version INTEGER NOT NULL,
+                provider_profile TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
+                telegram_history_scope TEXT,
+                status TEXT NOT NULL,
+                result_markdown TEXT,
+                trace_data_zstd BLOB,
+                scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
+                error TEXT,
+                created_at INTEGER NOT NULL,
+                completed_at INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create runs");
+
+        let template = AnalysisPromptTemplate {
+            id: 5,
+            name: "Report".to_string(),
+            template_kind: "report".to_string(),
+            body: "Body".to_string(),
+            version: 3,
+            is_builtin: false,
+            created_at: 1,
+            updated_at: 1,
+        };
+
+        let group_run_id = insert_analysis_run(
+            &pool,
+            &AnalysisRunInsert {
+                scope_type: "source_group",
+                source_id: None,
+                source_group_id: Some(7),
+                project_id: None,
+                period_from: 10,
+                period_to: 20,
+                output_language: "English",
+                prompt_template: &template,
+                provider_profile: "default",
+                provider: "gemini",
+                model: "gemini-2.5-flash",
+                youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+                telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+                scope_label_snapshot: Some("Group"),
+            },
+        )
+        .await
+        .expect("insert group run");
+        let project_run_id = insert_analysis_run(
+            &pool,
+            &AnalysisRunInsert {
+                scope_type: "project",
+                source_id: None,
+                source_group_id: None,
+                project_id: Some(7),
+                period_from: 10,
+                period_to: 20,
+                output_language: "English",
+                prompt_template: &template,
+                provider_profile: "default",
+                provider: "gemini",
+                model: "gemini-2.5-flash",
+                youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+                telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+                scope_label_snapshot: Some("Project"),
+            },
+        )
+        .await
+        .expect("insert project run");
+
+        let project_duplicate = find_active_duplicate_run(
+            &pool,
+            &DuplicateRunLookup {
+                scope_type: "project",
+                source_id: None,
+                source_group_id: None,
+                project_id: Some(7),
+                period_from: 10,
+                period_to: 20,
+                output_language: "English",
+                prompt_template_id: 5,
+                provider_profile: "default",
+                model: "gemini-2.5-flash",
+                youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
+                telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+            },
+        )
+        .await
+        .expect("project duplicate lookup");
+
+        assert_eq!(project_duplicate, Some(project_run_id));
+        assert_ne!(project_duplicate, Some(group_run_id));
     }
 
     #[tokio::test]

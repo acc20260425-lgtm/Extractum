@@ -3,10 +3,10 @@ mod corpus;
 #[cfg(debug_assertions)]
 mod fixtures;
 mod groups;
-mod models;
-mod report;
+pub(crate) mod models;
+pub(crate) mod report;
 mod report_commands;
-mod store;
+pub(crate) mod store;
 mod templates;
 mod trace;
 
@@ -59,6 +59,7 @@ const ANALYSIS_CHAT_EVENT: &str = "analysis://chat";
 const ANALYSIS_RUN_TYPE_REPORT: &str = "report";
 const ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE: &str = "single_source";
 const ANALYSIS_SCOPE_TYPE_SOURCE_GROUP: &str = "source_group";
+pub(crate) const ANALYSIS_SCOPE_TYPE_PROJECT: &str = "project";
 const ANALYSIS_STATUS_QUEUED: &str = "queued";
 const ANALYSIS_STATUS_RUNNING: &str = "running";
 const ANALYSIS_STATUS_COMPLETED: &str = "completed";
@@ -203,6 +204,7 @@ pub async fn list_analysis_runs(
         AnalysisRunListFilters {
             source_id,
             source_group_id,
+            project_id: None,
             limit,
             query,
             status,

@@ -29,9 +29,9 @@ use super::store::{
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
     emit_analysis_event, now_secs, AnalysisState, ANALYSIS_CHUNK_TARGET_CHARS,
-    ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED,
-    ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED,
-    ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
+    ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
+    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED,
+    ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
 };
 
 const INTERRUPTED_RUN_MESSAGE: &str = "Analysis run was interrupted when the app was restarted.";
@@ -41,6 +41,7 @@ const SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed";
 pub(crate) struct StartAnalysisReportRequest {
     pub(crate) source_id: Option<i64>,
     pub(crate) source_group_id: Option<i64>,
+    pub(crate) project_id: Option<i64>,
     pub(crate) period_from: i64,
     pub(crate) period_to: i64,
     pub(crate) output_language: String,
@@ -985,6 +986,7 @@ pub(crate) async fn start_analysis_report_run(
     let StartAnalysisReportRequest {
         source_id,
         source_group_id,
+        project_id,
         period_from,
         period_to,
         output_language,
@@ -1006,10 +1008,16 @@ pub(crate) async fn start_analysis_report_run(
         return Err(AppError::validation("Output language cannot be empty"));
     }
 
-    if source_id.is_some() == source_group_id.is_some() {
-        return Err(AppError::validation(
-            "Select either a source or a source group",
-        ));
+    let selected_count = [
+        source_id.is_some(),
+        source_group_id.is_some(),
+        project_id.is_some(),
+    ]
+    .into_iter()
+    .filter(|selected| *selected)
+    .count();
+    if selected_count != 1 {
+        return Err(AppError::validation("Select exactly one analysis scope"));
     }
 
     let pool = get_pool(&handle).await?;
@@ -1025,7 +1033,7 @@ pub(crate) async fn start_analysis_report_run(
     let youtube_corpus_mode = YoutubeCorpusMode::from_wire(youtube_corpus_mode.as_deref())
         .map_err(AppError::validation)?;
 
-    let (scope_type, resolved_source_id, resolved_group_id, scope_label) =
+    let (scope_type, resolved_source_id, resolved_group_id, resolved_project_id, scope_label) =
         if let Some(source_id) = source_id {
             let source_exists =
                 sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)")
@@ -1051,10 +1059,10 @@ pub(crate) async fn start_analysis_report_run(
                 ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
                 Some(source_id),
                 None,
+                None,
                 source_title,
             )
-        } else {
-            let group_id = source_group_id.expect("validated source_group_id");
+        } else if let Some(group_id) = source_group_id {
             let group = fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
                 AppError::not_found(format!("Analysis source group {group_id} not found"))
             })?;
@@ -1069,12 +1077,40 @@ pub(crate) async fn start_analysis_report_run(
                 ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
                 None,
                 Some(group.id),
+                None,
                 group.name.clone(),
+            )
+        } else {
+            let project_id = project_id.expect("validated project_id");
+            let project = crate::projects::get_project_in_pool(&pool, project_id)
+                .await?
+                .ok_or_else(|| AppError::not_found(format!("Project {project_id} not found")))?;
+            let source_count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM project_sources WHERE project_id = ?")
+                    .bind(project_id)
+                    .fetch_one(&pool)
+                    .await
+                    .map_err(AppError::database)?;
+            if source_count == 0 {
+                return Err(AppError::validation("Project does not contain any sources"));
+            }
+
+            (
+                ANALYSIS_SCOPE_TYPE_PROJECT,
+                None,
+                None,
+                Some(project.id),
+                project.name.clone(),
             )
         };
 
-    let resolved_sources =
-        resolve_analysis_sources(&pool, resolved_source_id, resolved_group_id).await?;
+    let resolved_sources = resolve_analysis_sources(
+        &pool,
+        resolved_source_id,
+        resolved_group_id,
+        resolved_project_id,
+    )
+    .await?;
     let (telegram_history_scope, include_migrated_history) =
         resolve_analysis_telegram_history_scope(
             include_migrated_history,
@@ -1105,6 +1141,7 @@ pub(crate) async fn start_analysis_report_run(
             scope_type,
             source_id: resolved_source_id,
             source_group_id: resolved_group_id,
+            project_id: resolved_project_id,
             period_from,
             period_to,
             output_language: &output_language,
@@ -1142,6 +1179,7 @@ pub(crate) async fn start_analysis_report_run(
             scope_type,
             source_id: resolved_source_id,
             source_group_id: resolved_group_id,
+            project_id: resolved_project_id,
             period_from,
             period_to,
             output_language: &output_language,
@@ -1151,6 +1189,7 @@ pub(crate) async fn start_analysis_report_run(
             model: &effective_model,
             youtube_corpus_mode,
             telegram_history_scope,
+            scope_label_snapshot: Some(&scope_label),
         },
     )
     .await?;
@@ -1273,6 +1312,7 @@ mod tests {
         let request = StartAnalysisReportRequest {
             source_id: Some(1),
             source_group_id: None,
+            project_id: None,
             period_from: 1,
             period_to: 2,
             output_language: "Russian".to_string(),

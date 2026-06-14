@@ -8,7 +8,10 @@ use super::models::{
 };
 use super::store::fetch_source_group;
 #[cfg(test)]
-use super::{ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP};
+use super::{
+    ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
+    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
+};
 use crate::compression::{compress_json_bytes, decompress_bytes, decompress_text};
 use crate::error::{internal_error, AppError, AppResult};
 
@@ -91,6 +94,7 @@ pub(crate) struct CorpusLoadRequest {
     pub(crate) include_migrated_history: bool,
 }
 
+#[derive(Debug)]
 pub(crate) struct ResolvedAnalysisSources {
     pub(crate) source_type: String,
     pub(crate) source_ids: Vec<i64>,
@@ -200,14 +204,21 @@ pub(crate) async fn resolve_analysis_sources(
     pool: &Pool<Sqlite>,
     source_id: Option<i64>,
     source_group_id: Option<i64>,
+    project_id: Option<i64>,
 ) -> AppResult<ResolvedAnalysisSources> {
-    if source_id.is_some() == source_group_id.is_some() {
-        return Err(AppError::validation(
-            "Select either a source or a source group",
-        ));
+    let selected_count = [
+        source_id.is_some(),
+        source_group_id.is_some(),
+        project_id.is_some(),
+    ]
+    .into_iter()
+    .filter(|selected| *selected)
+    .count();
+    if selected_count != 1 {
+        return Err(AppError::validation("Select exactly one analysis scope"));
     }
 
-    let source_type;
+    let source_type: String;
     let mut source_ids = Vec::new();
     let mut seen_source_ids = HashSet::new();
     let mut skipped_unlinked_playlist_items = 0usize;
@@ -215,19 +226,15 @@ pub(crate) async fn resolve_analysis_sources(
     if let Some(source_id) = source_id {
         let source = load_source_scope_row(pool, source_id).await?;
         source_type = source.source_type.clone();
-        if source.source_type == "youtube" && source.source_subtype.as_deref() == Some("playlist") {
-            skipped_unlinked_playlist_items +=
-                count_skipped_unlinked_playlist_items(pool, source.id).await?;
-            for video_source_id in linked_playlist_video_source_ids(pool, source.id).await? {
-                if seen_source_ids.insert(video_source_id) {
-                    source_ids.push(video_source_id);
-                }
-            }
-        } else if seen_source_ids.insert(source.id) {
-            source_ids.push(source.id);
-        }
-    } else {
-        let group_id = source_group_id.expect("validated source_group_id");
+        push_scope_source(
+            pool,
+            source,
+            &mut source_ids,
+            &mut seen_source_ids,
+            &mut skipped_unlinked_playlist_items,
+        )
+        .await?;
+    } else if let Some(group_id) = source_group_id {
         let group = fetch_source_group(pool, group_id).await?.ok_or_else(|| {
             AppError::not_found(format!("Analysis source group {group_id} not found"))
         })?;
@@ -235,19 +242,52 @@ pub(crate) async fn resolve_analysis_sources(
 
         for member in group.members {
             let source = load_source_scope_row(pool, member.source_id).await?;
-            if source.source_type == "youtube"
-                && source.source_subtype.as_deref() == Some("playlist")
-            {
-                skipped_unlinked_playlist_items +=
-                    count_skipped_unlinked_playlist_items(pool, source.id).await?;
-                for video_source_id in linked_playlist_video_source_ids(pool, source.id).await? {
-                    if seen_source_ids.insert(video_source_id) {
-                        source_ids.push(video_source_id);
-                    }
-                }
-            } else if seen_source_ids.insert(source.id) {
-                source_ids.push(source.id);
-            }
+            push_scope_source(
+                pool,
+                source,
+                &mut source_ids,
+                &mut seen_source_ids,
+                &mut skipped_unlinked_playlist_items,
+            )
+            .await?;
+        }
+    } else {
+        let project_id = project_id.expect("validated project_id");
+        let rows: Vec<AnalysisSourceScopeRow> = sqlx::query_as(
+            r#"
+            SELECT s.id, s.source_type, s.source_subtype
+            FROM project_sources ps
+            JOIN sources s ON s.id = ps.source_id
+            WHERE ps.project_id = ?
+            ORDER BY ps.added_at ASC, s.id ASC
+            "#,
+        )
+        .bind(project_id)
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)?;
+
+        if rows.is_empty() {
+            return Err(AppError::validation("Project does not contain any sources"));
+        }
+
+        let first_type = rows[0].source_type.clone();
+        if rows.iter().any(|row| row.source_type != first_type) {
+            return Err(AppError::validation(
+                "mixed_provider_project_runs_not_supported",
+            ));
+        }
+        source_type = first_type;
+
+        for source in rows {
+            push_scope_source(
+                pool,
+                source,
+                &mut source_ids,
+                &mut seen_source_ids,
+                &mut skipped_unlinked_playlist_items,
+            )
+            .await?;
         }
     }
 
@@ -262,6 +302,27 @@ pub(crate) async fn resolve_analysis_sources(
         source_ids,
         skipped_unlinked_playlist_items,
     })
+}
+
+async fn push_scope_source(
+    pool: &Pool<Sqlite>,
+    source: AnalysisSourceScopeRow,
+    source_ids: &mut Vec<i64>,
+    seen_source_ids: &mut HashSet<i64>,
+    skipped_unlinked_playlist_items: &mut usize,
+) -> AppResult<()> {
+    if source.source_type == "youtube" && source.source_subtype.as_deref() == Some("playlist") {
+        *skipped_unlinked_playlist_items +=
+            count_skipped_unlinked_playlist_items(pool, source.id).await?;
+        for video_source_id in linked_playlist_video_source_ids(pool, source.id).await? {
+            if seen_source_ids.insert(video_source_id) {
+                source_ids.push(video_source_id);
+            }
+        }
+    } else if seen_source_ids.insert(source.id) {
+        source_ids.push(source.id);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -305,6 +366,16 @@ pub(crate) async fn resolve_run_source_ids(
             .into_iter()
             .map(|member| member.source_id)
             .collect());
+    }
+
+    if run.scope_type == ANALYSIS_SCOPE_TYPE_PROJECT {
+        let project_id = run
+            .project_id
+            .ok_or_else(|| format!("Analysis run {} is missing project_id", run.id))?;
+        return resolve_analysis_sources(pool, None, None, Some(project_id))
+            .await
+            .map(|resolved| resolved.source_ids)
+            .map_err(|error| error.to_string());
     }
 
     Err(format!("Unsupported analysis scope '{}'", run.scope_type))
@@ -1016,6 +1087,52 @@ mod tests {
         ]
     }
 
+    async fn create_project_scope_schema(pool: &sqlx::SqlitePool) {
+        for statement in [
+            r#"
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY,
+                source_type TEXT NOT NULL,
+                source_subtype TEXT,
+                external_id TEXT,
+                title TEXT,
+                is_active INTEGER NOT NULL,
+                is_member INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            "#,
+            r#"
+            CREATE TABLE projects (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            "#,
+            r#"
+            CREATE TABLE project_sources (
+                project_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                added_at INTEGER NOT NULL
+            )
+            "#,
+            r#"
+            CREATE TABLE youtube_playlist_items (
+                playlist_source_id INTEGER NOT NULL,
+                video_source_id INTEGER,
+                video_id TEXT NOT NULL,
+                position INTEGER,
+                is_removed_from_playlist INTEGER NOT NULL DEFAULT 0
+            )
+            "#,
+        ] {
+            sqlx::query(statement)
+                .execute(pool)
+                .await
+                .expect("create project scope test schema");
+        }
+    }
+
     async fn snapshot_pool() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:")
             .await
@@ -1101,6 +1218,33 @@ mod tests {
 
         sqlx::query(
             r#"
+            CREATE TABLE projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create projects");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE project_sources (
+                project_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL,
+                added_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("create project sources");
+
+        sqlx::query(
+            r#"
             CREATE TABLE youtube_playlist_items (
                 playlist_source_id INTEGER NOT NULL,
                 video_id TEXT NOT NULL,
@@ -1148,6 +1292,7 @@ mod tests {
                 scope_type TEXT NOT NULL,
                 source_id INTEGER,
                 source_group_id INTEGER,
+                project_id INTEGER,
                 period_from INTEGER NOT NULL,
                 period_to INTEGER NOT NULL,
                 output_language TEXT NOT NULL,
@@ -1727,6 +1872,8 @@ mod tests {
             source_title: None,
             source_group_id: Some(9),
             source_group_name: Some("Live group".to_string()),
+            project_id: None,
+            project_name: None,
             scope_label: "Frozen group".to_string(),
             period_from: 1_700_000_000,
             period_to: 1_800_000_000,
@@ -2197,6 +2344,44 @@ mod tests {
         let source_ids = resolve_run_source_ids(&pool, &sample_run())
             .await
             .expect("resolve source ids");
+
+        assert_eq!(source_ids, vec![2, 4]);
+    }
+
+    #[tokio::test]
+    async fn resolve_run_source_ids_loads_project_sources_without_snapshot() {
+        let pool = snapshot_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO projects (id, name, created_at, updated_at)
+            VALUES (9, 'Live project', 1, 1)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project");
+        sqlx::query(
+            r#"
+            INSERT INTO project_sources (project_id, source_id, added_at)
+            VALUES (9, 2, 1), (9, 4, 2)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project sources");
+
+        let mut run = sample_run();
+        run.scope_type = crate::analysis::ANALYSIS_SCOPE_TYPE_PROJECT.to_string();
+        run.source_group_id = None;
+        run.source_group_name = None;
+        run.project_id = Some(9);
+        run.project_name = Some("Live project".to_string());
+        run.scope_label = "Live project".to_string();
+        run.scope_label_snapshot = None;
+
+        let source_ids = resolve_run_source_ids(&pool, &run)
+            .await
+            .expect("resolve project source ids");
 
         assert_eq!(source_ids, vec![2, 4]);
     }
@@ -2826,13 +3011,70 @@ mod tests {
         .await
         .expect("insert playlist rows");
 
-        let resolved = resolve_analysis_sources(&pool, Some(10), None)
+        let resolved = resolve_analysis_sources(&pool, Some(10), None, None)
             .await
             .expect("resolve playlist scope");
 
         assert_eq!(resolved.source_type, "youtube");
         assert_eq!(resolved.source_ids, vec![20]);
         assert_eq!(resolved.skipped_unlinked_playlist_items, 1);
+    }
+
+    #[tokio::test]
+    async fn resolve_analysis_sources_rejects_mixed_provider_project() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        create_project_scope_schema(&pool).await;
+        sqlx::query(
+            "INSERT INTO projects (id, name, created_at, updated_at) VALUES (9, 'Mixed', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project");
+        sqlx::query("INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at) VALUES (1, 'youtube', 'video', 'v1', 'Video', 1, 0, 1), (2, 'telegram', 'supergroup', 'tg2', 'Telegram', 1, 0, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert sources");
+        sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1), (9, 2, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert project sources");
+
+        let error = resolve_analysis_sources(&pool, None, None, Some(9))
+            .await
+            .expect_err("mixed project rejected");
+        assert!(error
+            .to_string()
+            .contains("mixed_provider_project_runs_not_supported"));
+    }
+
+    #[tokio::test]
+    async fn resolve_analysis_sources_loads_single_provider_project() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        create_project_scope_schema(&pool).await;
+        sqlx::query(
+            "INSERT INTO projects (id, name, created_at, updated_at) VALUES (9, 'YouTube', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project");
+        sqlx::query("INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at) VALUES (1, 'youtube', 'video', 'v1', 'Video 1', 1, 0, 1), (2, 'youtube', 'video', 'v2', 'Video 2', 1, 0, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert sources");
+        sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1), (9, 2, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert project sources");
+
+        let resolved = resolve_analysis_sources(&pool, None, None, Some(9))
+            .await
+            .expect("resolve project");
+        assert_eq!(resolved.source_type, "youtube");
+        assert_eq!(resolved.source_ids, vec![1, 2]);
     }
 
     #[tokio::test]

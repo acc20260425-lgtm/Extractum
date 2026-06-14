@@ -561,6 +561,8 @@ mod tests {
             source_title: Some("Source".to_string()),
             source_group_id: None,
             source_group_name: None,
+            project_id: None,
+            project_name: None,
             scope_label: "Source".to_string(),
             period_from: 10,
             period_to: 20,

@@ -12,13 +12,13 @@ mod library_sources;
 use library_sources::list_library_sources;
 mod media;
 mod migrations;
-mod readiness;
 mod projects;
+mod readiness;
 mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
 use projects::{
-    add_project_sources, create_project, delete_project, list_project_sources, list_projects,
-    remove_project_sources, update_project,
+    add_project_sources, create_project, delete_project, list_project_runs, list_project_sources,
+    list_projects, remove_project_sources, start_project_analysis, update_project,
 };
 
 mod secret_store;
@@ -173,6 +173,8 @@ pub fn run() {
             list_project_sources,
             add_project_sources,
             remove_project_sources,
+            start_project_analysis,
+            list_project_runs,
             get_source_identity_repair_status,
             preview_source_identity_repair,
             audit_legacy_telegram_source_metadata,
