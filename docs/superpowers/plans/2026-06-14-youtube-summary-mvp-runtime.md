@@ -110,9 +110,7 @@ does not exist.
 Create `src-tauri/migrations/0007_prompt_pack_run_idempotency.sql`:
 
 ```sql
-ALTER TABLE prompt_pack_runs
-ADD COLUMN client_request_id TEXT
-CHECK (client_request_id IS NULL OR length(trim(client_request_id)) > 0);
+ALTER TABLE prompt_pack_runs ADD COLUMN client_request_id TEXT CHECK (client_request_id IS NULL OR length(trim(client_request_id)) > 0);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_pack_runs_client_request_id_unique
 ON prompt_pack_runs(client_request_id)
@@ -150,6 +148,7 @@ only mentions version six.
 Run:
 
 ```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib migrations::tests::build_migrations_includes_prompt_pack_runtime_version_seven
 cargo test --manifest-path src-tauri/Cargo.toml --lib migrations
 cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::store::tests::prompt_pack_runs_client_request_id
 ```

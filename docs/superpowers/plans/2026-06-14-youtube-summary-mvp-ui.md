@@ -532,16 +532,33 @@ git commit -m "feat: add youtube summary result viewer"
 ## Task 6: Full UI Verification and Browser Smoke
 
 **Files:**
+- Create: `src/lib/ui/youtube-summary-smoke-fixture.ts`
 - Create: `src/lib/youtube-summary-smoke-fixture-contract.test.ts`
 - Modify only files needed to fix issues found by verification.
 
-- [ ] **Step 1: Add smoke fixture guard contract test**
+- [ ] **Step 1: Add smoke fixture guard helper and tests**
+
+Create `src/lib/ui/youtube-summary-smoke-fixture.ts`:
+
+```ts
+export interface YoutubeSummarySmokeFixtureEnv {
+  DEV?: boolean;
+  VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE?: string;
+}
+
+export function isYoutubeSummarySmokeFixtureEnabled(
+  env: YoutubeSummarySmokeFixtureEnv,
+): boolean {
+  return env.DEV === true && env.VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE === "1";
+}
+```
 
 Create `src/lib/youtube-summary-smoke-fixture-contract.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { isYoutubeSummarySmokeFixtureEnabled } from "$lib/ui/youtube-summary-smoke-fixture";
 
 const files = [
   "src/lib/api/prompt-packs.ts",
@@ -555,12 +572,33 @@ function readUiSources() {
 }
 
 describe("youtube summary smoke fixture guard", () => {
-  it("keeps the smoke fixture behind a dev-only explicit opt-in", () => {
+  it("enables smoke fixture only in dev with explicit opt-in flag", () => {
+    expect(
+      isYoutubeSummarySmokeFixtureEnabled({
+        DEV: true,
+        VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE: "1",
+      }),
+    ).toBe(true);
+    expect(
+      isYoutubeSummarySmokeFixtureEnabled({
+        DEV: true,
+        VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE: "0",
+      }),
+    ).toBe(false);
+    expect(
+      isYoutubeSummarySmokeFixtureEnabled({
+        DEV: false,
+        VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE: "1",
+      }),
+    ).toBe(false);
+    expect(isYoutubeSummarySmokeFixtureEnabled({ DEV: true })).toBe(false);
+  });
+
+  it("wires fixture code through the guard helper and not legacy analysis APIs", () => {
     const source = readUiSources();
 
+    expect(source).toContain("isYoutubeSummarySmokeFixtureEnabled(import.meta.env)");
     expect(source).toContain("VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE");
-    expect(source).toContain("import.meta.env.DEV");
-    expect(source).toContain('VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE === "1"');
     expect(source).toContain("YouTube Summary Smoke Fixture");
     expect(source).not.toContain("analysis_runs");
   });
@@ -597,8 +635,10 @@ npm run dev -- --host 127.0.0.1
 
 Smoke fixture fallback requirements:
 
-- only activate when `import.meta.env.DEV` and
-  `VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE === "1"`;
+- only activate through
+  `isYoutubeSummarySmokeFixtureEnabled(import.meta.env)`, which returns true
+  only when `import.meta.env.DEV === true` and
+  `import.meta.env.VITE_YOUTUBE_SUMMARY_SMOKE_FIXTURE === "1"`;
 - inject one visibly labeled `YouTube Summary Smoke Fixture` source into the
   launch surface;
 - provide deterministic preflight, blocked-start, active-run, recent-run, and

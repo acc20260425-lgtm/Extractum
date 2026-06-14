@@ -166,6 +166,7 @@ Commit at the end of each task inside a plan. Do not wait until a whole plan is 
 After all plans are executed and before merge or final handoff:
 
 ```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --lib migrations
 cargo test --manifest-path src-tauri/Cargo.toml --lib
 npm test
 npm run check
