@@ -3,6 +3,12 @@ import analysisPageSource from "../routes/analysis/+page.svelte?raw";
 import chatWorkflowSource from "./analysis-chat-workflow.ts?raw";
 import traceWorkflowSource from "./analysis-trace-workflow.ts?raw";
 
+const rootErrorRoutes = import.meta.glob("../routes/+error.svelte", {
+  eager: true,
+  query: "?raw",
+  import: "default",
+});
+
 function functionSlice(name: string, nextName: string) {
   const start = analysisPageSource.indexOf(`  ${name}`);
   const end = analysisPageSource.indexOf(`\n  ${nextName}`, start + 1);
@@ -14,6 +20,11 @@ function functionSlice(name: string, nextName: string) {
 }
 
 describe("analysis route run companion wiring", () => {
+  it("defines a root error page so SvelteKit does not import the Windows fallback path", () => {
+    expect(Object.keys(rootErrorRoutes)).toEqual(["../routes/+error.svelte"]);
+    expect(String(rootErrorRoutes["../routes/+error.svelte"])).toContain("$app/state");
+  });
+
   it("renders RunCompanionTabs instead of WorkspaceInspector", () => {
     expect(analysisPageSource).toContain(
       'import RunCompanionTabs from "$lib/components/analysis/run-companion-tabs.svelte";',
