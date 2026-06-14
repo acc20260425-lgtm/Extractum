@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getPromptPackLibrary,
+  getPromptPackStageArtifact,
   listenToPromptPackRunEvents,
+  listPromptPackAuditEvents,
+  listPromptPackStageArtifacts,
   listPromptPackRuns,
   PROMPT_PACK_RUN_EVENT,
   startYoutubeSummaryRun,
@@ -78,6 +81,31 @@ describe("prompt pack api wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("list_prompt_pack_runs", {
       projectId: 7,
       limit: 20,
+    });
+  });
+
+  it("keeps execution result artifact and audit wrappers available", async () => {
+    await listPromptPackStageArtifacts(1001);
+    expect(invokeMock).toHaveBeenCalledWith("list_prompt_pack_stage_artifacts", {
+      stageRunId: 1001,
+    });
+
+    await getPromptPackStageArtifact({
+      stageRunId: 1001,
+      artifactKind: "raw_output",
+      attemptNumber: 1,
+      artifactIndex: 2,
+    });
+    expect(invokeMock).toHaveBeenCalledWith("get_prompt_pack_stage_artifact", {
+      stageRunId: 1001,
+      artifactKind: "raw_output",
+      attemptNumber: 1,
+      artifactIndex: 2,
+    });
+
+    await listPromptPackAuditEvents(42);
+    expect(invokeMock).toHaveBeenCalledWith("list_prompt_pack_audit_events", {
+      runId: 42,
     });
   });
 });

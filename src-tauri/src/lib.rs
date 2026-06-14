@@ -27,6 +27,11 @@ use prompt_packs::{
     list_prompt_pack_run_stages, list_prompt_pack_runs, preflight_youtube_summary_run,
     start_youtube_summary_run, PromptPackRunState,
 };
+use prompt_packs::{
+    get_prompt_pack_result, get_prompt_pack_stage_artifact,
+    get_prompt_pack_validation_findings, list_prompt_pack_audit_events,
+    list_prompt_pack_stage_artifacts,
+};
 
 mod secret_store;
 use secret_store::SecretStoreState;
@@ -194,6 +199,11 @@ pub fn run() {
             list_prompt_pack_runs,
             list_active_prompt_pack_runs,
             list_prompt_pack_run_stages,
+            get_prompt_pack_result,
+            list_prompt_pack_stage_artifacts,
+            get_prompt_pack_stage_artifact,
+            get_prompt_pack_validation_findings,
+            list_prompt_pack_audit_events,
             get_source_identity_repair_status,
             preview_source_identity_repair,
             audit_legacy_telegram_source_metadata,

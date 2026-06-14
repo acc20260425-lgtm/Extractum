@@ -3,10 +3,16 @@ import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ListPromptPackRunsInput,
   PreflightYoutubeSummaryRunInput,
+  GetPromptPackStageArtifactInput,
+  PromptPackAuditEvent,
   PromptPackLibrary,
+  PromptPackResult,
   PromptPackRunEvent,
   PromptPackRunSummary,
+  PromptPackStageArtifact,
+  PromptPackStageArtifactSummary,
   PromptPackStageRun,
+  PromptPackValidationFinding,
   StartYoutubeSummaryRunInput,
   StartYoutubeSummaryRunOutcome,
   YoutubeSummaryPreflightResponse,
@@ -40,6 +46,28 @@ export function listActivePromptPackRuns() {
 
 export function listPromptPackRunStages(runId: number) {
   return invoke<PromptPackStageRun[]>("list_prompt_pack_run_stages", { runId });
+}
+
+export function getPromptPackResult(runId: number) {
+  return invoke<PromptPackResult>("get_prompt_pack_result", { runId });
+}
+
+export function getPromptPackValidationFindings(runId: number) {
+  return invoke<PromptPackValidationFinding[]>("get_prompt_pack_validation_findings", { runId });
+}
+
+export function listPromptPackStageArtifacts(stageRunId: number) {
+  return invoke<PromptPackStageArtifactSummary[]>("list_prompt_pack_stage_artifacts", {
+    stageRunId,
+  });
+}
+
+export function getPromptPackStageArtifact(input: GetPromptPackStageArtifactInput) {
+  return invoke<PromptPackStageArtifact>("get_prompt_pack_stage_artifact", { ...input });
+}
+
+export function listPromptPackAuditEvents(runId: number) {
+  return invoke<PromptPackAuditEvent[]>("list_prompt_pack_audit_events", { runId });
 }
 
 export function listenToPromptPackRunEvents(

@@ -671,7 +671,7 @@ git commit -m "feat: persist prompt pack result projections"
 - Modify: `src/lib/api/prompt-packs.test.ts`
 - Modify: `src/lib/types/prompt-packs.ts`
 
-- [ ] **Step 1: Implement backend commands**
+- [x] **Step 1: Implement backend commands**
 
 Expose:
 
@@ -704,15 +704,15 @@ Artifact access rules:
 - `get_prompt_pack_stage_artifact` requires exact `(stage_run_id, artifact_kind, attempt_number, artifact_index)`;
 - if callers need the latest artifact, frontend code must call `list_prompt_pack_stage_artifacts` and choose the last matching summary explicitly.
 
-- [ ] **Step 2: Register commands**
+- [x] **Step 2: Register commands**
 
 Add the commands to `tauri::generate_handler!` in `src-tauri/src/lib.rs`.
 
-- [ ] **Step 3: Add frontend wrappers and tests**
+- [x] **Step 3: Add frontend wrappers and tests**
 
 Extend `src/lib/api/prompt-packs.ts` and `src/lib/api/prompt-packs.test.ts` for all result commands.
 
-- [ ] **Step 4: Run command tests**
+- [x] **Step 4: Run command tests**
 
 Run:
 
@@ -723,7 +723,7 @@ npm test -- --run src/lib/api/prompt-packs.test.ts
 
 Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs src-tauri/src/lib.rs src/lib/api/prompt-packs.ts src/lib/api/prompt-packs.test.ts src/lib/types/prompt-packs.ts

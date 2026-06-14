@@ -125,6 +125,61 @@ pub enum StartYoutubeSummaryRunOutcomeDto {
     Blocked { preflight: YoutubeSummaryPreflightResponse },
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPackResultDto {
+    pub run_id: i64,
+    pub result_status: String,
+    pub canonical: serde_json::Value,
+    pub storage_warning: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPackStageArtifactSummaryDto {
+    pub stage_run_id: i64,
+    pub artifact_kind: String,
+    pub attempt_number: i64,
+    pub artifact_index: i64,
+    pub content_type: String,
+    pub content_hash: String,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPackStageArtifactDto {
+    pub stage_run_id: i64,
+    pub artifact_kind: String,
+    pub attempt_number: i64,
+    pub artifact_index: i64,
+    pub content_type: String,
+    pub content: serde_json::Value,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPackValidationFindingDto {
+    pub run_id: i64,
+    pub stage_run_id: Option<i64>,
+    pub severity: String,
+    pub code: String,
+    pub message: String,
+    pub object_path: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptPackAuditEventDto {
+    pub run_id: i64,
+    pub event_kind: String,
+    pub message: Option<String>,
+    pub payload: Option<serde_json::Value>,
+    pub created_at: String,
+}
+
 impl StartYoutubeSummaryRunOutcomeDto {
     #[cfg(test)]
     pub fn expect_started(self, context: &str) -> PromptPackRunSummaryDto {

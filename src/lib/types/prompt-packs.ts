@@ -168,3 +168,55 @@ export interface PromptPackStageRun {
   stageStatus: string;
   latestMessage: string | null;
 }
+
+export interface PromptPackResult {
+  runId: number;
+  resultStatus: string;
+  canonical: Record<string, unknown>;
+  storageWarning?: string | null;
+}
+
+export interface PromptPackValidationFinding {
+  runId: number;
+  stageRunId: number | null;
+  severity: string;
+  code: string;
+  message: string;
+  objectPath: string | null;
+  createdAt: string;
+}
+
+export interface PromptPackStageArtifactSummary {
+  stageRunId: number;
+  artifactKind: string;
+  attemptNumber: number;
+  artifactIndex: number;
+  contentType: string;
+  contentHash: string;
+  createdAt: string;
+}
+
+export interface GetPromptPackStageArtifactInput {
+  stageRunId: number;
+  artifactKind: string;
+  attemptNumber: number;
+  artifactIndex: number;
+}
+
+export interface PromptPackStageArtifact {
+  stageRunId: number;
+  artifactKind: string;
+  attemptNumber: number;
+  artifactIndex: number;
+  contentType: string;
+  content: unknown;
+  createdAt: string;
+}
+
+export interface PromptPackAuditEvent {
+  runId: number;
+  eventKind: string;
+  message: string | null;
+  payload: unknown | null;
+  createdAt: string;
+}
