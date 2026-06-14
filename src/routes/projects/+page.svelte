@@ -3,7 +3,7 @@
   import ProjectsShell from "$lib/components/research-projects/ProjectsShell.svelte";
   import { listenToAnalysisRunEvents } from "$lib/api/analysis-runs";
   import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
-  import { listLibrarySources } from "$lib/api/library-sources";
+  import { listLibraryCatalog } from "$lib/api/library-sources";
   import {
     addProjectSources,
     createProject,
@@ -26,7 +26,7 @@
     projectsRaw: [],
     projectSources: [],
     runs: [],
-    libraryRecords: [],
+    libraryCatalogRecords: [],
     sourceJobs: [],
     promptTemplates: [],
     projects: [],
@@ -44,7 +44,7 @@
     patch: (patch) => Object.assign(state, patch),
     listProjects,
     listProjectSources,
-    listLibrarySources,
+    listLibraryCatalog,
     listProjectRuns,
     listPromptTemplates: () => listAnalysisPromptTemplates("report"),
     listSourceJobs: () => listSourceJobs({ limit: 50 }),

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "./research-projects-workflow";
 import type { AnalysisPromptTemplate } from "$lib/types/analysis";
-import type { LibrarySourceRecord } from "$lib/types/library-sources";
+import type { LibraryCatalogRecord, LibrarySourceRecord } from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
 import type { SourceJobRecord } from "$lib/types/sources";
 
@@ -50,6 +50,28 @@ function librarySource(overrides: Partial<LibrarySourceRecord> = {}): LibrarySou
   };
 }
 
+function libraryCatalogRecord(overrides: Partial<LibraryCatalogRecord> = {}): LibraryCatalogRecord {
+  return {
+    source: librarySource(),
+    latest_job: null,
+    status: "active",
+    status_detail: null,
+    capabilities: {
+      can_refresh_source: true,
+      can_delete: true,
+      can_edit: false,
+      can_connect_to_project: true,
+    },
+    disabled_reasons: {
+      refresh_source: null,
+      delete: null,
+      edit: "Source editing is not available yet.",
+      connect_to_project: null,
+    },
+    ...overrides,
+  };
+}
+
 function sourceJob(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
   return {
     job_id: "job-1",
@@ -87,7 +109,7 @@ function createInitialState(): ResearchProjectsWorkflowState {
     projectsRaw: [],
     projectSources: [],
     runs: [],
-    libraryRecords: [],
+    libraryCatalogRecords: [],
     sourceJobs: [],
     promptTemplates: [],
     projects: [],
@@ -107,7 +129,7 @@ function createDeps(state: ResearchProjectsWorkflowState) {
     patch: vi.fn((patch: Partial<ResearchProjectsWorkflowState>) => Object.assign(state, patch)),
     listProjects: vi.fn(),
     listProjectSources: vi.fn(),
-    listLibrarySources: vi.fn(),
+    listLibraryCatalog: vi.fn(),
     listProjectRuns: vi.fn(),
     listPromptTemplates: vi.fn(),
     listSourceJobs: vi.fn(),
@@ -127,7 +149,10 @@ describe("research projects workflow", () => {
     const deps = createDeps(state);
     deps.listProjects.mockResolvedValue([project()]);
     deps.listProjectSources.mockResolvedValue([]);
-    deps.listLibrarySources.mockResolvedValue([librarySource({ source_id: 10 })]);
+    deps.listLibraryCatalog.mockResolvedValue({
+      sources: [libraryCatalogRecord({ source: librarySource({ source_id: 10 }) })],
+      filter_counts: [],
+    });
     deps.listProjectRuns.mockResolvedValue([]);
     deps.listPromptTemplates.mockResolvedValue([]);
     deps.listSourceJobs.mockResolvedValue([]);
@@ -147,7 +172,10 @@ describe("research projects workflow", () => {
     const deps = createDeps(state);
     deps.listProjects.mockResolvedValue([project()]);
     deps.listProjectSources.mockResolvedValue([projectSource()]);
-    deps.listLibrarySources.mockResolvedValue([librarySource()]);
+    deps.listLibraryCatalog.mockResolvedValue({
+      sources: [libraryCatalogRecord()],
+      filter_counts: [],
+    });
     deps.listProjectRuns.mockResolvedValue([]);
     deps.listPromptTemplates.mockResolvedValue([promptTemplate()]);
     deps.listSourceJobs.mockResolvedValue([sourceJob()]);
@@ -159,6 +187,8 @@ describe("research projects workflow", () => {
     expect(state.projects[0].sourceCount).toBe(1);
     expect(state.projectSourceLinks).toHaveLength(1);
     expect(state.promptTemplates).toHaveLength(1);
-    expect(state.librarySources[0].status).toBe("syncing");
+    expect(state.sourceJobs).toHaveLength(1);
+    expect(state.librarySources[0].status).toBe("active");
+    expect(deps.listSourceJobs).toHaveBeenCalledTimes(1);
   });
 });

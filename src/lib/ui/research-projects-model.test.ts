@@ -5,7 +5,7 @@ import {
   buildResearchProjectsView,
   projectRunDisabledReason,
 } from "./research-projects-model";
-import type { LibrarySourceRecord } from "$lib/types/library-sources";
+import type { LibraryCatalogRecord } from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
 
 const projects: ProjectRecord[] = [
@@ -25,28 +25,45 @@ const projectSources: ProjectSourceRecord[] = [
   },
 ];
 
-const library: LibrarySourceRecord[] = [
+const library: LibraryCatalogRecord[] = [
   {
-    source_id: 10,
-    provider: "youtube",
-    source_subtype: "video",
-    account_id: null,
-    external_id: "v1",
-    title: "Video",
-    subtitle: "Channel",
-    canonical_url: "https://youtu.be/v1",
-    created_at: 100,
-    last_synced_at: 110,
-    item_count: 3,
-    project_count: 1,
-    youtube: {
-      video_form: "video",
-      duration_seconds: 120,
-      playlist_video_count: null,
-      channel_title: "Channel",
-      availability_status: "available",
+    source: {
+      source_id: 10,
+      provider: "youtube",
+      source_subtype: "video",
+      account_id: null,
+      external_id: "v1",
+      title: "Video",
+      subtitle: "Channel",
+      canonical_url: "https://youtu.be/v1",
+      created_at: 100,
+      last_synced_at: 110,
+      item_count: 3,
+      project_count: 1,
+      youtube: {
+        video_form: "video",
+        duration_seconds: 120,
+        playlist_video_count: null,
+        channel_title: "Channel",
+        availability_status: "available",
+      },
+      telegram: null,
     },
-    telegram: null,
+    latest_job: null,
+    status: "error",
+    status_detail: "Last sync failed",
+    capabilities: {
+      can_refresh_source: true,
+      can_delete: false,
+      can_edit: false,
+      can_connect_to_project: true,
+    },
+    disabled_reasons: {
+      refresh_source: null,
+      delete: "Source 10 is used by 1 project(s). Remove it from projects first.",
+      edit: "Source editing is not available yet.",
+      connect_to_project: null,
+    },
   },
 ];
 
@@ -67,12 +84,38 @@ describe("research projects model", () => {
   });
 
   it("marks already connected library sources without hiding them", () => {
-    const rows = buildLibrarySourcesView(library, projectSources, "project:1", []);
+    const rows = buildLibrarySourcesView(library, projectSources, "project:1");
     expect(rows[0]).toMatchObject({
       sourceId: 10,
       alreadyConnected: true,
       connectable: false,
       disabledReason: "Already in project",
+    });
+  });
+
+  it("uses catalog disabled reasons as project Library source base state", () => {
+    const rows = buildLibrarySourcesView(
+      [
+        {
+          ...library[0],
+          capabilities: {
+            ...library[0].capabilities,
+            can_connect_to_project: false,
+          },
+          disabled_reasons: {
+            ...library[0].disabled_reasons,
+            connect_to_project: "Source type cannot be connected.",
+          },
+        },
+      ],
+      [],
+      "project:1",
+    );
+
+    expect(rows[0]).toMatchObject({
+      status: "error",
+      disabledReason: "Source type cannot be connected.",
+      connectable: false,
     });
   });
 

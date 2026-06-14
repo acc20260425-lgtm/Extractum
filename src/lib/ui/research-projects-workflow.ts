@@ -10,7 +10,7 @@ import {
   type ResearchProjectView,
 } from "./research-projects-model";
 import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
-import type { LibrarySourceRecord } from "$lib/types/library-sources";
+import type { LibraryCatalogRecord, LibraryCatalogResponse } from "$lib/types/library-sources";
 import type {
   AddProjectSourcesOutcome,
   ProjectAnalysisStartCommand,
@@ -26,7 +26,7 @@ export interface ResearchProjectsWorkflowState {
   projectsRaw: ProjectRecord[];
   projectSources: ProjectSourceRecord[];
   runs: AnalysisRunSummary[];
-  libraryRecords: LibrarySourceRecord[];
+  libraryCatalogRecords: LibraryCatalogRecord[];
   sourceJobs: SourceJobRecord[];
   promptTemplates: AnalysisPromptTemplate[];
   projects: ResearchProjectView[];
@@ -44,7 +44,7 @@ export interface ResearchProjectsWorkflowDeps {
   patch(patch: Partial<ResearchProjectsWorkflowState>): void;
   listProjects(): Promise<ProjectRecord[]>;
   listProjectSources(projectId: number): Promise<ProjectSourceRecord[]>;
-  listLibrarySources(): Promise<LibrarySourceRecord[]>;
+  listLibraryCatalog(): Promise<LibraryCatalogResponse>;
   listProjectRuns(projectId: number): Promise<AnalysisRunSummary[]>;
   listPromptTemplates(): Promise<AnalysisPromptTemplate[]>;
   listSourceJobs(): Promise<SourceJobRecord[]>;
@@ -68,10 +68,9 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     const currentProject = selectedProject(projects, state.selectedProjectId);
     const selectedProjectId = currentProject?.id ?? null;
     const librarySources = buildLibrarySourcesView(
-      state.libraryRecords,
+      state.libraryCatalogRecords,
       state.projectSources,
       selectedProjectId,
-      state.sourceJobs,
     );
     deps.patch({
       projects,
@@ -84,9 +83,9 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
   async function loadWorkspace() {
     deps.patch({ loading: true });
     try {
-      const [projectsRaw, libraryRecords, sourceJobs, promptTemplates] = await Promise.all([
+      const [projectsRaw, libraryCatalog, sourceJobs, promptTemplates] = await Promise.all([
         deps.listProjects(),
-        deps.listLibrarySources(),
+        deps.listLibraryCatalog(),
         deps.listSourceJobs(),
         deps.listPromptTemplates(),
       ]);
@@ -98,7 +97,7 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
       ).flat();
       deps.patch({
         projectsRaw,
-        libraryRecords,
+        libraryCatalogRecords: libraryCatalog.sources,
         projectSources: allProjectSources,
         runs,
         sourceJobs,

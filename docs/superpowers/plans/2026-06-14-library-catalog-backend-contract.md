@@ -1580,7 +1580,7 @@ git commit -m "feat: load library screen from catalog contract"
 - Modify: `src/routes/projects/+page.svelte`
 - Modify: `src/lib/research-projects-route-contract.test.ts`
 
-- [ ] **Step 1: Write failing Projects model tests**
+- [x] **Step 1: Write failing Projects model tests**
 
 In `src/lib/ui/research-projects-model.test.ts`, change the Library type import:
 
@@ -1666,7 +1666,7 @@ Add this test:
 
 Update the existing already-connected test to call `buildLibrarySourcesView(library, projectSources, "project:1")` with no source-job argument and keep expecting `Already in project`.
 
-- [ ] **Step 2: Write failing Projects workflow and route tests**
+- [x] **Step 2: Write failing Projects workflow and route tests**
 
 In `src/lib/ui/research-projects-workflow.test.ts`, replace `LibrarySourceRecord` import with `LibraryCatalogRecord` and update helper:
 
@@ -1745,7 +1745,7 @@ In `src/lib/research-projects-route-contract.test.ts`, update the first test:
     expect(pageSource).not.toContain("listLibrarySources");
 ```
 
-- [ ] **Step 3: Run Projects tests and verify failure**
+- [x] **Step 3: Run Projects tests and verify failure**
 
 Run:
 
@@ -1755,7 +1755,7 @@ npm.cmd test -- --run src/lib/ui/research-projects-model.test.ts src/lib/ui/rese
 
 Expected: FAIL because Projects still uses raw Library sources.
 
-- [ ] **Step 4: Update Projects model**
+- [x] **Step 4: Update Projects model**
 
 In `src/lib/ui/research-projects-model.ts`, replace the Library import:
 
@@ -1807,7 +1807,7 @@ export function buildLibrarySourcesView(
 }
 ```
 
-- [ ] **Step 5: Update Projects workflow**
+- [x] **Step 5: Update Projects workflow**
 
 In `src/lib/ui/research-projects-workflow.ts`, replace the Library type import:
 
@@ -1875,7 +1875,7 @@ and patch:
 
 Remove the old `libraryRecords` patch.
 
-- [ ] **Step 6: Update Projects route**
+- [x] **Step 6: Update Projects route**
 
 In `src/routes/projects/+page.svelte`, replace:
 
@@ -1921,13 +1921,13 @@ Keep:
 
 This is still needed by `BottomQueue`.
 
-- [ ] **Step 7: Run Svelte autofixer for modified route**
+- [x] **Step 7: Run Svelte autofixer for modified route**
 
 Run `mcp__svelte_server__.svelte_autofixer` for `src/routes/projects/+page.svelte` with desired Svelte version `5`.
 
 Expected: no blocking issues. Apply any concrete fixes the autofixer reports.
 
-- [ ] **Step 8: Run focused Projects tests**
+- [x] **Step 8: Run focused Projects tests**
 
 Run:
 
@@ -1938,7 +1938,7 @@ npm.cmd run check
 
 Expected: all PASS and `svelte-check` reports 0 errors.
 
-- [ ] **Step 9: Commit Projects catalog migration**
+- [x] **Step 9: Commit Projects catalog migration**
 
 Run:
 

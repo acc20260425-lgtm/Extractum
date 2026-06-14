@@ -12,7 +12,8 @@ describe("projects mvp route contract", () => {
   it("uses real project APIs instead of analysis source group APIs", () => {
     expect(pageSource).toContain("listProjects");
     expect(pageSource).toContain("listProjectSources");
-    expect(pageSource).toContain("listLibrarySources");
+    expect(pageSource).toContain("listLibraryCatalog");
+    expect(pageSource).not.toContain("listLibrarySources");
     expect(pageSource).toContain("listenToAnalysisRunEvents");
     expect(pageSource).toContain("formatAppError");
     expect(pageSource).not.toContain("String(error)");

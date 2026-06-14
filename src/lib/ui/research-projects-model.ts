@@ -1,6 +1,5 @@
 import type { AnalysisRunSummary } from "$lib/types/analysis";
-import type { LibrarySourceProvider, LibrarySourceRecord } from "$lib/types/library-sources";
-import type { SourceJobRecord } from "$lib/types/sources";
+import type { LibraryCatalogRecord, LibrarySourceProvider } from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
 
 export type ProjectStatus = "ready" | "running" | "needs_attention" | "empty";
@@ -92,37 +91,6 @@ function dateLabel(unixSeconds: number | null) {
   }).format(new Date(unixSeconds * 1000));
 }
 
-function activeJobBySource(sourceJobs: SourceJobRecord[]) {
-  const jobsBySource = new Map<number, SourceJobRecord>();
-  for (const job of sourceJobs) {
-    if (job.status !== "queued" && job.status !== "running" && job.status !== "failed") {
-      continue;
-    }
-    const current = jobsBySource.get(job.source_id);
-    if (!current || job.started_at > current.started_at) {
-      jobsBySource.set(job.source_id, job);
-    }
-  }
-  return jobsBySource;
-}
-
-function jobBlockedState(job: SourceJobRecord | undefined) {
-  if (!job) return null;
-  if (job.status === "queued" || job.status === "running") {
-    return {
-      status: "syncing" as const,
-      disabledReason: "Source is syncing.",
-    };
-  }
-  if (job.status === "failed") {
-    return {
-      status: "error" as const,
-      disabledReason: job.error ? `Last sync failed: ${job.error}` : "Last sync failed.",
-    };
-  }
-  return null;
-}
-
 export function buildResearchProjectsView(
   projects: ProjectRecord[],
   projectSources: ProjectSourceRecord[],
@@ -154,10 +122,9 @@ export function buildResearchProjectsView(
 }
 
 export function buildLibrarySourcesView(
-  sources: LibrarySourceRecord[],
+  catalogRecords: LibraryCatalogRecord[],
   projectSources: ProjectSourceRecord[],
   selectedProjectId: string | null,
-  sourceJobs: SourceJobRecord[] = [],
 ): LibrarySourceView[] {
   const projectId = projectIdFromViewId(selectedProjectId);
   const connectedIds = new Set(
@@ -165,13 +132,13 @@ export function buildLibrarySourcesView(
       .filter((source) => projectId !== null && source.project_id === projectId)
       .map((source) => source.source_id),
   );
-  const jobsBySource = activeJobBySource(sourceJobs);
 
-  return sources.map((source) => {
+  return catalogRecords.map((record) => {
+    const source = record.source;
     const alreadyConnected = connectedIds.has(source.source_id);
-    const jobState = jobBlockedState(jobsBySource.get(source.source_id));
-    const disabledReason = jobState?.disabledReason ?? (alreadyConnected ? "Already in project" : null);
-    const connectable = disabledReason === null;
+    const catalogDisabledReason = record.disabled_reasons.connect_to_project;
+    const disabledReason = alreadyConnected ? "Already in project" : catalogDisabledReason;
+    const connectable = disabledReason === null && record.capabilities.can_connect_to_project;
 
     return {
       id: sourceRowId(source.source_id),
@@ -182,7 +149,7 @@ export function buildLibrarySourcesView(
       projectCount: source.project_count,
       lastCollectedLabel: dateLabel(source.last_synced_at),
       localCopyLabel: materialLabel(source.item_count),
-      status: jobState?.status ?? (connectable || alreadyConnected ? "active" : "unavailable"),
+      status: record.status,
       disabledReason,
       alreadyConnected,
       connectable,
