@@ -54,9 +54,9 @@ where
 {
     match profile.provider {
         ProviderKind::Gemini => stream_gemini_response(request, profile, on_delta).await,
-        ProviderKind::OmniRoute => {
+        ProviderKind::OpenAiCompatible => {
             let config = OpenAiCompatProviderConfig {
-                provider: ProviderKind::OmniRoute,
+                provider: ProviderKind::OpenAiCompatible,
                 base_url: profile.base_url.clone(),
             };
             stream_openai_compat_response(request, profile, on_delta, &config).await

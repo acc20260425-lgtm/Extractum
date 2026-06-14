@@ -46,21 +46,21 @@ const OPENAI_COMPAT_MODELS_TIMEOUT_SECS: u64 = 30;
 #[serde(rename_all = "snake_case")]
 pub(crate) enum ProviderKind {
     Gemini,
-    OmniRoute,
+    OpenAiCompatible,
 }
 
 impl ProviderKind {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Gemini => DEFAULT_PROVIDER,
-            Self::OmniRoute => "omniroute",
+            Self::OpenAiCompatible => "openai_compatible",
         }
     }
 
     pub(crate) fn parse(value: &str) -> AppResult<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             DEFAULT_PROVIDER => Ok(Self::Gemini),
-            "omniroute" => Ok(Self::OmniRoute),
+            "openai_compatible" | "omniroute" => Ok(Self::OpenAiCompatible),
             other => Err(AppError::validation(format!(
                 "Unsupported provider '{other}'"
             ))),
@@ -70,7 +70,7 @@ impl ProviderKind {
     pub(super) fn display_name(self) -> &'static str {
         match self {
             Self::Gemini => "Gemini",
-            Self::OmniRoute => "OpenAI-compatible",
+            Self::OpenAiCompatible => "OpenAI-compatible",
         }
     }
 }
@@ -78,7 +78,7 @@ impl ProviderKind {
 fn default_base_url_for_provider_kind(provider: ProviderKind) -> &'static str {
     match provider {
         ProviderKind::Gemini => "",
-        ProviderKind::OmniRoute => DEFAULT_OPENAI_COMPAT_BASE_URL,
+        ProviderKind::OpenAiCompatible => DEFAULT_OPENAI_COMPAT_BASE_URL,
     }
 }
 
@@ -91,7 +91,7 @@ fn default_base_url_for_provider(provider: &str) -> &'static str {
 fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> AppResult<String> {
     match provider {
         ProviderKind::Gemini => Ok(String::new()),
-        ProviderKind::OmniRoute => {
+        ProviderKind::OpenAiCompatible => {
             let candidate = base_url
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
@@ -355,7 +355,7 @@ pub async fn list_llm_provider_models(
 
     let timeout_secs = match provider_kind {
         ProviderKind::Gemini => GEMINI_MODELS_TIMEOUT_SECS,
-        ProviderKind::OmniRoute => OPENAI_COMPAT_MODELS_TIMEOUT_SECS,
+        ProviderKind::OpenAiCompatible => OPENAI_COMPAT_MODELS_TIMEOUT_SECS,
     };
     let openai_compat_config = OpenAiCompatProviderConfig {
         provider: provider_kind,
@@ -365,7 +365,7 @@ pub async fn list_llm_provider_models(
     let result = timeout(Duration::from_secs(timeout_secs), async move {
         match provider_kind {
             ProviderKind::Gemini => list_gemini_models(&api_key).await,
-            ProviderKind::OmniRoute => {
+            ProviderKind::OpenAiCompatible => {
                 list_openai_compat_models(&api_key, &openai_compat_config).await
             }
         }
@@ -568,8 +568,19 @@ mod tests {
     }
 
     #[test]
+    fn provider_parse_accepts_openai_compatible_aliases() {
+        let provider = ProviderKind::parse("openai_compatible").expect("parse canonical provider");
+        assert_eq!(provider.as_str(), "openai_compatible");
+        assert_eq!(provider.display_name(), "OpenAI-compatible");
+
+        let legacy_provider = ProviderKind::parse("omniroute").expect("parse legacy provider");
+        assert_eq!(legacy_provider.as_str(), "openai_compatible");
+        assert_eq!(legacy_provider.display_name(), "OpenAI-compatible");
+    }
+
+    #[test]
     fn normalize_base_url_returns_typed_validation_error() {
-        let error = normalize_base_url(ProviderKind::OmniRoute, Some("ftp://localhost"))
+        let error = normalize_base_url(ProviderKind::OpenAiCompatible, Some("ftp://localhost"))
             .expect_err("reject non-http base url");
 
         assert_eq!(error.kind, AppErrorKind::Validation);

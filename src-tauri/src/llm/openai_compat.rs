@@ -477,7 +477,7 @@ mod tests {
     #[tokio::test]
     async fn openai_compat_model_listing_requires_typed_auth_error() {
         let config = OpenAiCompatProviderConfig {
-            provider: ProviderKind::OmniRoute,
+            provider: ProviderKind::OpenAiCompatible,
             base_url: "http://localhost:20128/v1".to_string(),
         };
 

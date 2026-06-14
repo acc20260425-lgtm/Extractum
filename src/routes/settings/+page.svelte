@@ -43,7 +43,7 @@
       supportsBaseUrl: false,
     },
     {
-      value: "omniroute",
+      value: "openai_compatible",
       label: "OpenAI-compatible",
       placeholder: "if/kimi-k2-thinking",
       keyPlaceholder: "sk_omniroute",
@@ -110,7 +110,7 @@
 
   function suggestNewProfileId() {
     const existingIds = new Set(profiles.map((profile) => profile.profile_id));
-    const base = provider === "omniroute" ? "omniroute_profile" : "gemini_profile";
+    const base = provider === "openai_compatible" ? "openai_compatible_profile" : "gemini_profile";
 
     if (!existingIds.has(base)) {
       return base;

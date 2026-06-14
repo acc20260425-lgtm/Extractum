@@ -62,13 +62,13 @@ describe("llm api wrappers", () => {
     invokeMock.mockResolvedValueOnce([]);
 
     await listLlmProviderModels({
-      provider: "omniroute",
+      provider: "openai_compatible",
       apiKey: "secret",
       baseUrl: "http://localhost:20128/v1",
     });
 
     expect(invokeMock).toHaveBeenCalledWith("list_llm_provider_models", {
-      provider: "omniroute",
+      provider: "openai_compatible",
       apiKey: "secret",
       baseUrl: "http://localhost:20128/v1",
     });
