@@ -1,5 +1,6 @@
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
+use tokio::time::{sleep, Duration};
 
 use crate::error::{AppError, AppResult};
 
@@ -8,6 +9,9 @@ use super::{
     resolve_effective_model, LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderModel, LlmUsage,
     ProviderKind, ResolvedLlmProfile,
 };
+
+const OPENAI_COMPAT_STREAM_MAX_ATTEMPTS: usize = 3;
+const OPENAI_COMPAT_RETRY_DELAY_MS: u64 = 600;
 
 #[derive(Clone)]
 pub(super) struct OpenAiCompatProviderConfig {
@@ -197,6 +201,10 @@ fn format_openai_compat_error(
     }
 }
 
+fn is_retryable_openai_compat_status(status: reqwest::StatusCode) -> bool {
+    matches!(status.as_u16(), 429 | 500 | 502 | 503 | 504)
+}
+
 fn map_openai_compat_model(model: OpenAiCompatModel) -> LlmProviderModel {
     let description = model.owned_by.unwrap_or_default();
     let generation_method = model.object.unwrap_or_else(|| "model".to_string());
@@ -243,24 +251,52 @@ where
     let request_body = build_openai_compat_request(&request.messages, &model)?;
     let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
     let client = HttpClient::new();
-    let response = client
-        .post(url)
-        .bearer_auth(profile.api_key.as_str())
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(AppError::llm_network)?;
+    let mut response = None;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(AppError::llm_network(format_openai_compat_error(
-            config, status, &body,
-        )));
+    for attempt in 1..=OPENAI_COMPAT_STREAM_MAX_ATTEMPTS {
+        let candidate = match client
+            .post(url.clone())
+            .bearer_auth(profile.api_key.as_str())
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+        {
+            Ok(candidate) => candidate,
+            Err(_) if attempt < OPENAI_COMPAT_STREAM_MAX_ATTEMPTS => {
+                sleep(Duration::from_millis(
+                    OPENAI_COMPAT_RETRY_DELAY_MS * attempt as u64,
+                ))
+                .await;
+                continue;
+            }
+            Err(error) => return Err(AppError::llm_network(error)),
+        };
+
+        if candidate.status().is_success() {
+            response = Some(candidate);
+            break;
+        }
+
+        let status = candidate.status();
+        let body = candidate.text().await.unwrap_or_default();
+        let error = format_openai_compat_error(config, status, &body);
+
+        if is_retryable_openai_compat_status(status) && attempt < OPENAI_COMPAT_STREAM_MAX_ATTEMPTS
+        {
+            sleep(Duration::from_millis(
+                OPENAI_COMPAT_RETRY_DELAY_MS * attempt as u64,
+            ))
+            .await;
+            continue;
+        }
+
+        return Err(AppError::llm_network(error));
     }
 
-    let mut response = response;
+    let mut response = response.ok_or_else(|| {
+        AppError::llm_network("OpenAI-compatible request failed before streaming")
+    })?;
     let mut buffer = Vec::new();
     let mut full_text = String::new();
     let mut last_usage = None;
@@ -363,12 +399,100 @@ pub(super) async fn list_openai_compat_models(
 mod tests {
     use super::{
         build_openai_compat_request, extract_openai_compat_delta, list_openai_compat_models,
-        map_openai_compat_model, map_openai_compat_usage, OpenAiCompatChatChunk, OpenAiCompatModel,
-        OpenAiCompatModelsResponse, OpenAiCompatProviderConfig,
+        map_openai_compat_model, map_openai_compat_usage, stream_openai_compat_response,
+        OpenAiCompatChatChunk, OpenAiCompatModel, OpenAiCompatModelsResponse,
+        OpenAiCompatProviderConfig,
     };
     use crate::error::AppErrorKind;
-    use crate::llm::LlmMessage;
-    use crate::llm::ProviderKind;
+    use crate::llm::{LlmChatRequest, LlmMessage, ProviderKind, ResolvedLlmProfile};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::{TcpListener, TcpStream},
+    };
+
+    async fn read_http_request(socket: &mut TcpStream) {
+        let mut buffer = Vec::new();
+        let mut chunk = [0_u8; 1024];
+        let header_end = loop {
+            let read = socket.read(&mut chunk).await.expect("read request");
+            if read == 0 {
+                return;
+            }
+            buffer.extend_from_slice(&chunk[..read]);
+            if let Some(position) = buffer.windows(4).position(|window| window == b"\r\n\r\n") {
+                break position + 4;
+            }
+        };
+
+        let headers = String::from_utf8_lossy(&buffer[..header_end]);
+        let content_length = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+            .unwrap_or(0);
+
+        let body_read = buffer.len().saturating_sub(header_end);
+        if content_length > body_read {
+            let mut body_tail = vec![0_u8; content_length - body_read];
+            socket
+                .read_exact(&mut body_tail)
+                .await
+                .expect("read request body");
+        }
+    }
+
+    async fn start_transient_openai_compat_server() -> (String, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test server");
+        let base_url = format!("http://{}", listener.local_addr().expect("server address"));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let server_attempts = Arc::clone(&attempts);
+
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.expect("accept request");
+                read_http_request(&mut socket).await;
+                let attempt = server_attempts.fetch_add(1, Ordering::SeqCst) + 1;
+
+                if attempt == 1 {
+                    let body = r#"{"error":{"message":"temporary outage","type":"server_error"}}"#;
+                    let response = format!(
+                        "HTTP/1.1 500 Internal Server Error\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    socket
+                        .write_all(response.as_bytes())
+                        .await
+                        .expect("write transient response");
+                    continue;
+                }
+
+                let body = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                socket
+                    .write_all(response.as_bytes())
+                    .await
+                    .expect("write success response");
+                break;
+            }
+        });
+
+        (base_url, attempts)
+    }
 
     #[test]
     fn openai_compat_request_keeps_standard_roles() {
@@ -472,6 +596,48 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Unsupported message role 'tool'");
+    }
+
+    #[tokio::test]
+    async fn openai_compat_stream_retries_transient_http_before_streaming() {
+        let (base_url, attempts) = start_transient_openai_compat_server().await;
+        let config = OpenAiCompatProviderConfig {
+            provider: ProviderKind::OpenAiCompatible,
+            base_url,
+        };
+        let profile = ResolvedLlmProfile {
+            profile_id: "default".to_string(),
+            provider: ProviderKind::OpenAiCompatible,
+            default_model: "if/kimi-k2-thinking".to_string(),
+            api_key: "test-key".to_string(),
+            base_url: config.base_url.clone(),
+        };
+        let request = LlmChatRequest {
+            request_id: "retry-test".to_string(),
+            profile_id: None,
+            messages: vec![LlmMessage {
+                role: "user".to_string(),
+                content: "hello".to_string(),
+            }],
+            model_override: None,
+        };
+        let mut deltas = Vec::new();
+
+        let completion = stream_openai_compat_response(
+            &request,
+            &profile,
+            &mut |delta| {
+                deltas.push(delta.to_string());
+            },
+            &config,
+        )
+        .await
+        .expect("retry transient response");
+
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(completion.provider, "openai_compatible");
+        assert_eq!(completion.text, "ok");
+        assert_eq!(deltas, vec!["ok"]);
     }
 
     #[tokio::test]
