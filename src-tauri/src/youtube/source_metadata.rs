@@ -145,7 +145,8 @@ impl YoutubeVideoSourceMetadata {
                 .video_form_for_provider()
                 .unwrap_or(YoutubeVideoForm::Regular),
             availability_status: availability_status_from_wire(&self.availability_status),
-            raw_metadata_json: Value::Null,
+            raw_metadata_json: decode_raw_metadata_json(self.raw_metadata_zstd.as_deref())
+                .unwrap_or(Value::Null),
         }
     }
 }
@@ -635,6 +636,11 @@ fn raw_metadata_columns(raw: &Value) -> AppResult<(Option<i64>, Option<Vec<u8>>)
     Ok((Some(YOUTUBE_RAW_METADATA_VERSION), Some(compressed)))
 }
 
+fn decode_raw_metadata_json(bytes: Option<&[u8]>) -> Option<Value> {
+    let json = crate::compression::decompress_bytes(bytes?).ok()?;
+    serde_json::from_slice(&json).ok()
+}
+
 fn sanitize_raw_metadata(value: &Value) -> Value {
     match value {
         Value::Object(map) => Value::Object(
@@ -1026,6 +1032,49 @@ mod tests {
         assert!(raw.get("http_headers").is_none());
         assert!(raw.get("command_args").is_none());
         assert!(!raw.to_string().contains("secret"));
+    }
+
+    #[test]
+    fn video_source_metadata_restores_raw_caption_metadata_for_provider_sync() {
+        let metadata = video_metadata(json!({
+            "id": "video01",
+            "language": "ru",
+            "automatic_captions": {
+                "ru": [{ "ext": "json3", "name": "Russian" }]
+            }
+        }));
+        let columns = YoutubeVideoSourceColumns::try_from_metadata(&metadata)
+            .expect("convert video metadata");
+        let loaded = YoutubeVideoSourceMetadata {
+            source_id: 2,
+            video_id: columns.video_id,
+            canonical_url: columns.canonical_url,
+            title: columns.title,
+            channel_title: columns.channel_title,
+            channel_id: columns.channel_id,
+            channel_handle: columns.channel_handle,
+            channel_url: columns.channel_url,
+            author_display: columns.author_display,
+            published_at: columns.published_at,
+            duration_seconds: columns.duration_seconds,
+            description: columns.description,
+            thumbnail_url: columns.thumbnail_url,
+            view_count: columns.view_count,
+            like_count: columns.like_count,
+            comment_count: columns.comment_count,
+            category: columns.category,
+            video_form: columns.video_form,
+            availability_status: columns.availability_status,
+            caption_language_override: columns.caption_language_override,
+            raw_metadata_version: columns.raw_metadata_version,
+            raw_metadata_zstd: columns.raw_metadata_zstd,
+        };
+
+        let provider_metadata = loaded.to_provider_metadata();
+        let tracks = crate::youtube::captions::caption_tracks_from_metadata(&provider_metadata);
+
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].language.as_deref(), Some("ru"));
     }
 
     #[test]

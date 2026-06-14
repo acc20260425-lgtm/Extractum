@@ -6,10 +6,10 @@ use crate::error::{AppError, AppResult};
 use crate::time::ymd_to_unix_midnight;
 
 use super::dto::{YoutubeComment, YoutubeVideoMetadata};
-use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
+use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions};
 
 pub(crate) const DEFAULT_MAX_COMMENTS_PER_VIDEO: usize = 1_000;
-pub(crate) const YOUTUBE_COMMENTS_FETCH_TIMEOUT: Duration = YTDLP_PREVIEW_TIMEOUT;
+pub(crate) const YOUTUBE_COMMENTS_FETCH_TIMEOUT: Duration = Duration::from_secs(120);
 
 pub(crate) struct YoutubeCommentsIngest {
     pub(crate) comments: Vec<YoutubeComment>,
@@ -229,8 +229,9 @@ mod tests {
 
     use super::{
         comment_published_at, comments_fetch_args, normalize_comments_from_ytdlp,
-        DEFAULT_MAX_COMMENTS_PER_VIDEO,
+        DEFAULT_MAX_COMMENTS_PER_VIDEO, YOUTUBE_COMMENTS_FETCH_TIMEOUT,
     };
+    use crate::youtube::ytdlp::YTDLP_PREVIEW_TIMEOUT;
 
     #[test]
     fn comments_fetch_args_include_bounded_extractor_args() {
@@ -255,6 +256,11 @@ mod tests {
     #[test]
     fn default_comment_limit_is_bounded() {
         assert_eq!(DEFAULT_MAX_COMMENTS_PER_VIDEO, 1_000);
+    }
+
+    #[test]
+    fn comments_fetch_timeout_is_longer_than_metadata_preview_timeout() {
+        assert!(YOUTUBE_COMMENTS_FETCH_TIMEOUT > YTDLP_PREVIEW_TIMEOUT);
     }
 
     #[test]
