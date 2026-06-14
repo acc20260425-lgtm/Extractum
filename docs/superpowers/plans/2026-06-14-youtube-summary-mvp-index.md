@@ -41,6 +41,51 @@
 
 ## Execution Order
 
+Tracking rules:
+
+- Mark an index step complete only after every checkbox in the child plan is
+  complete, the child plan acceptance gate passes, and all child task commits
+  are present.
+- If a child plan acceptance gate finds a failure, leave the index step
+  unchecked until the fix is committed and the gate is rerun successfully.
+- Keep `git status --short` output visible at every gate. If unrelated user
+  changes appear, do not include them in Prompt Pack commits.
+
+- [ ] **Step 0: Prepare implementation branch**
+
+Run before Step 1:
+
+```powershell
+git status --short
+git branch --show-current
+```
+
+Expected:
+
+- current branch and dirty state are known;
+- any dirty files are classified before work starts.
+
+Branch policy:
+
+- If the workspace is clean, create the implementation branch:
+
+```powershell
+git switch -c feat/youtube-summary-prompt-pack-mvp
+```
+
+- If the branch already exists, switch to it:
+
+```powershell
+git switch feat/youtube-summary-prompt-pack-mvp
+```
+
+- If the workspace has unrelated user changes, stop and document them in the
+  task notes. Do not stash, commit, reset, or overwrite them without explicit
+  owner approval.
+
+Mark Step 0 complete only after the branch is selected and the dirty-state
+policy is recorded in the task notes.
+
 - [ ] **Step 1: Execute foundation plan**
 
 Run and commit every task from `2026-06-14-youtube-summary-mvp-foundation.md`.
@@ -49,6 +94,8 @@ Acceptance gate:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --lib
+npm test -- --run src/lib/api/prompt-packs.test.ts
+git status --short
 ```
 
 - [ ] **Step 2: Execute runtime plan**
@@ -59,6 +106,8 @@ Acceptance gate:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs
+npm test -- --run src/lib/api/prompt-packs.test.ts
+git status --short
 ```
 
 - [ ] **Step 3: Execute execution/result plan**
@@ -69,6 +118,8 @@ Acceptance gate:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs
+npm test -- --run src/lib/api/prompt-packs.test.ts
+git status --short
 ```
 
 - [ ] **Step 4: Execute UI plan**
@@ -78,8 +129,9 @@ Run and commit every task from `2026-06-14-youtube-summary-mvp-ui.md`.
 Acceptance gate:
 
 ```powershell
-npm test -- --run src/lib/api/prompt-packs.test.ts src/lib/ui/youtube-summary-workflow.test.ts
+npm test -- --run src/lib/api/prompt-packs.test.ts src/lib/ui/youtube-summary-workflow.test.ts src/lib/youtube-summary-launch-contract.test.ts src/lib/youtube-summary-result-view-contract.test.ts
 npm run check
+git status --short
 ```
 
 ## Commit Cadence
@@ -104,7 +156,7 @@ Commit at the end of each task inside a plan. Do not wait until a whole plan is 
 
 ## Final Verification
 
-After all plans are executed:
+After all plans are executed and before merge or final handoff:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --lib
@@ -118,4 +170,6 @@ Expected:
 - Rust tests pass.
 - Vitest tests pass.
 - Svelte check passes.
-- Working tree contains only intentional changes before the final commit.
+- Any final verification fixes are committed before handoff.
+- `git status --short` is clean or contains only explicitly documented,
+  intentionally uncommitted handoff changes.
