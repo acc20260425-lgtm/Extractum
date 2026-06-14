@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import ProjectsShell from "$lib/components/research-projects/ProjectsShell.svelte";
+  import { listenToAnalysisRunEvents } from "$lib/api/analysis-runs";
   import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
   import { listLibrarySources } from "$lib/api/library-sources";
   import {
@@ -56,8 +57,50 @@
     formatError: formatAppError,
   });
 
+  let projectRunsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleProjectRunsRefresh() {
+    if (projectRunsRefreshTimer) {
+      clearTimeout(projectRunsRefreshTimer);
+    }
+    projectRunsRefreshTimer = setTimeout(() => {
+      projectRunsRefreshTimer = null;
+      void workflow.loadWorkspace();
+    }, 350);
+  }
+
+  function shouldRefreshForRunEvent(kind: string) {
+    return kind === "queued" || kind === "started" || kind === "completed" || kind === "failed" || kind === "cancelled";
+  }
+
   onMount(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+
     void workflow.loadWorkspace();
+    void listenToAnalysisRunEvents(({ payload }) => {
+      if (shouldRefreshForRunEvent(payload.kind)) {
+        scheduleProjectRunsRefresh();
+      }
+    })
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error) => {
+        state.status = formatAppError("listening to analysis run events", error);
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+      if (projectRunsRefreshTimer) {
+        clearTimeout(projectRunsRefreshTimer);
+      }
+    };
   });
 
   function selectProject(projectId: string) {
@@ -77,5 +120,6 @@
     onRunProject={workflow.runProjectAnalysis}
     onConnectSelectedSources={workflow.connectSelectedSources}
     onSelectedLibrarySourceIdsChange={(ids) => (state.selectedLibrarySourceIds = new Set(ids))}
+    onRefreshProjectRuns={workflow.loadWorkspace}
   />
 </section>

@@ -20,6 +20,7 @@
     onRunProject,
     onConnectSelectedSources,
     onSelectedLibrarySourceIdsChange,
+    onRefreshProjectRuns,
   }: {
     state: ResearchProjectsWorkflowState;
     onSelectProject: (projectId: string) => void;
@@ -30,6 +31,7 @@
     onRunProject: (input: ProjectAnalysisStartCommand) => void | Promise<void>;
     onConnectSelectedSources: () => void | Promise<void>;
     onSelectedLibrarySourceIdsChange: (ids: string[]) => void;
+    onRefreshProjectRuns: () => void | Promise<void>;
   } = $props();
 
   let currentProject = $derived(
@@ -97,9 +99,12 @@
         project={currentProject}
         projectSourceLinks={workflowState.projectSourceLinks}
         librarySources={workflowState.librarySources}
+        runs={currentRuns}
+        loading={workflowState.loading}
         {selectedSourceId}
         onSelectedSourceIdChange={(id) => (selectedSourceId = id)}
         onOpenConnectLibrary={openConnectLibrary}
+        onRefreshProjectRuns={onRefreshProjectRuns}
       />
     </div>
     <BottomQueue

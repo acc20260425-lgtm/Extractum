@@ -11,22 +11,30 @@
     ProjectSourceLinkView,
     ResearchProjectView,
   } from "$lib/ui/research-projects-model";
+  import type { AnalysisRunSummary } from "$lib/types/analysis";
+  import ProjectRunsTab from "./ProjectRunsTab.svelte";
   import SourcesTab from "./SourcesTab.svelte";
 
   let {
     project,
     projectSourceLinks,
     librarySources,
+    runs,
+    loading = false,
     selectedSourceId,
     onSelectedSourceIdChange,
     onOpenConnectLibrary,
+    onRefreshProjectRuns,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
     librarySources: LibrarySourceView[];
+    runs: AnalysisRunSummary[];
+    loading?: boolean;
     selectedSourceId: string | null;
     onSelectedSourceIdChange: (sourceId: string | null) => void;
     onOpenConnectLibrary: () => void;
+    onRefreshProjectRuns: () => void | Promise<void>;
   } = $props();
 
   let activeTab = $state("overview");
@@ -91,7 +99,7 @@
       <div class="placeholder-panel">Reports stay in the legacy analysis workspace until the next slice.</div>
     </ExtractumTabsContent>
     <ExtractumTabsContent value="runs">
-      <div class="placeholder-panel">Runs will surface active LLM jobs in the bottom queue slice.</div>
+      <ProjectRunsTab {runs} {loading} {onRefreshProjectRuns} />
     </ExtractumTabsContent>
     <ExtractumTabsContent value="prompts">
       <div class="placeholder-panel">Prompt controls are represented in the top command bar.</div>

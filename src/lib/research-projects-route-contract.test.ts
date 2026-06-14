@@ -3,14 +3,17 @@ import pageSource from "../routes/projects/+page.svelte?raw";
 import shellSource from "$lib/components/research-projects/ProjectsShell.svelte?raw";
 import railSource from "$lib/components/research-projects/ProjectRail.svelte?raw";
 import inspectorSource from "$lib/components/research-projects/ProjectInspector.svelte?raw";
+import runsTabSource from "$lib/components/research-projects/ProjectRunsTab.svelte?raw";
 import runDialogSource from "$lib/components/research-projects/ProjectRunDialog.svelte?raw";
 import topCommandBarSource from "$lib/components/research-projects/TopCommandBar.svelte?raw";
+import workspaceSource from "$lib/components/research-projects/ProjectWorkspace.svelte?raw";
 
 describe("projects mvp route contract", () => {
   it("uses real project APIs instead of analysis source group APIs", () => {
     expect(pageSource).toContain("listProjects");
     expect(pageSource).toContain("listProjectSources");
     expect(pageSource).toContain("listLibrarySources");
+    expect(pageSource).toContain("listenToAnalysisRunEvents");
     expect(pageSource).toContain("formatAppError");
     expect(pageSource).not.toContain("String(error)");
     expect(pageSource).not.toContain("listAnalysisSourceGroups");
@@ -33,6 +36,15 @@ describe("projects mvp route contract", () => {
     expect(runDialogSource).toContain('PROJECT_RUN_DEFAULT_FROM_DATE = "1970-01-01"');
     expect(runDialogSource).toContain("defaultDateOffset(0)");
     expect(runDialogSource).not.toContain("new Date().toISOString().slice(0, 10)");
+  });
+
+  it("shows project runs in the central Runs tab", () => {
+    expect(shellSource).toContain("runs={currentRuns}");
+    expect(shellSource).toContain("onRefreshProjectRuns={onRefreshProjectRuns}");
+    expect(workspaceSource).toContain("ProjectRunsTab");
+    expect(workspaceSource).not.toContain("Runs will surface active LLM jobs");
+    expect(runsTabSource).toContain("Open Analysis workspace");
+    expect(runsTabSource).toContain("formatPeriod");
   });
 
   it("keeps top command actions honest while project export is out of scope", () => {
