@@ -13,8 +13,13 @@ use library_sources::list_library_sources;
 mod media;
 mod migrations;
 mod readiness;
+mod projects;
 mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
+use projects::{
+    add_project_sources, create_project, delete_project, list_project_sources, list_projects,
+    remove_project_sources, update_project,
+};
 
 mod secret_store;
 use secret_store::SecretStoreState;
@@ -161,6 +166,13 @@ pub fn run() {
             clear_account_phone,
             delete_account,
             delete_source,
+            list_projects,
+            create_project,
+            update_project,
+            delete_project,
+            list_project_sources,
+            add_project_sources,
+            remove_project_sources,
             get_source_identity_repair_status,
             preview_source_identity_repair,
             audit_legacy_telegram_source_metadata,

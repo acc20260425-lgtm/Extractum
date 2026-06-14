@@ -289,7 +289,7 @@ git commit -m "feat: add projects mvp schema"
 - Modify: `src-tauri/src/lib.rs`
 - Test: `src-tauri/src/projects.rs`
 
-- [ ] **Step 1: Write failing backend tests**
+- [x] **Step 1: Write failing backend tests**
 
 Create `src-tauri/src/projects.rs` with tests first:
 
@@ -444,7 +444,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -454,7 +454,7 @@ cargo test projects::tests --manifest-path src-tauri/Cargo.toml
 
 Expected: FAIL because helper functions and structs are not implemented.
 
-- [ ] **Step 3: Implement project models and helpers**
+- [x] **Step 3: Implement project models and helpers**
 
 Add to `src-tauri/src/projects.rs` above tests:
 
@@ -549,7 +549,7 @@ async fn ensure_sources_exist(pool: &sqlx::SqlitePool, source_ids: &[i64]) -> Ap
 }
 ```
 
-- [ ] **Step 4: Implement CRUD functions**
+- [x] **Step 4: Implement CRUD functions**
 
 Add:
 
@@ -662,7 +662,7 @@ pub(crate) async fn update_project_in_pool(
 }
 ```
 
-- [ ] **Step 5: Implement membership and delete functions**
+- [x] **Step 5: Implement membership and delete functions**
 
 Add:
 
@@ -822,7 +822,7 @@ pub(crate) async fn delete_project_in_pool(
 }
 ```
 
-- [ ] **Step 6: Implement Tauri commands**
+- [x] **Step 6: Implement Tauri commands**
 
 Add command wrappers:
 
@@ -890,7 +890,7 @@ pub async fn remove_project_sources(
 }
 ```
 
-- [ ] **Step 7: Register module and commands**
+- [x] **Step 7: Register module and commands**
 
 Modify `src-tauri/src/lib.rs`:
 
@@ -914,7 +914,7 @@ add_project_sources,
 remove_project_sources,
 ```
 
-- [ ] **Step 8: Run tests**
+- [x] **Step 8: Run tests**
 
 Run:
 
