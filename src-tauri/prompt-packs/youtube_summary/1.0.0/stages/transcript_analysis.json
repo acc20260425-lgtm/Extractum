@@ -1,0 +1,12 @@
+{
+  "stage_name": "youtube_summary/transcript_analysis",
+  "stage_order": 20,
+  "provider_family": "generic_chat",
+  "input_schema_id": "stage-io/youtube_summary_transcript_analysis_input",
+  "output_schema_id": "stage-io/youtube_summary_transcript_analysis_output",
+  "validator_mode": "stage_output",
+  "prompt_template": {
+    "system": "Return strict JSON for the YouTube Summary transcript analysis stage. Use only refs from the provided registries.",
+    "user": "Analyze the frozen transcript and return video_candidate, claim_candidates, evidence_fragment_candidates, and warning_candidates."
+  }
+}

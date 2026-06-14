@@ -1,0 +1,11 @@
+{
+  "pack_id": "youtube_summary",
+  "pack_version": "1.0.0",
+  "schema_version": "1.0",
+  "display_name": "YouTube Summary",
+  "origin_kind": "bundled",
+  "lifecycle_status": "active",
+  "default_control_preset": "standard",
+  "default_evidence_mode": "standard",
+  "default_include_comments": false
+}

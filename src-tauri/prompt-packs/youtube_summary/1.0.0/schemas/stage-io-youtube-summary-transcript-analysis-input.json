@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage-io/youtube_summary_transcript_analysis_input",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "stage_io_version",
+    "schema_version",
+    "stage",
+    "pack_id",
+    "pack_version",
+    "run_id",
+    "source_ref_id",
+    "allowed_source_ref_ids",
+    "allowed_material_refs",
+    "transcript_segment_registry",
+    "comment_selection_policy",
+    "control_preset",
+    "evidence_mode",
+    "output_language"
+  ],
+  "properties": {
+    "stage_io_version": { "const": "1.0" },
+    "schema_version": { "const": "1.0" },
+    "stage": { "const": "youtube_summary/transcript_analysis" },
+    "pack_id": { "const": "youtube_summary" },
+    "pack_version": { "type": "string" },
+    "run_id": { "type": ["integer", "string"] },
+    "source_ref_id": { "type": "string" },
+    "allowed_source_ref_ids": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "allowed_material_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "transcript_segment_registry": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "comment_selection_policy": { "type": "object" },
+    "control_preset": { "type": "string" },
+    "evidence_mode": { "type": "string" },
+    "output_language": { "type": "string" }
+  }
+}

@@ -221,7 +221,7 @@ git commit -m "feat: add prompt pack mvp schema"
 - Create: `src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json`
 - Create: `src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json`
 
-- [ ] **Step 1: Create pack metadata**
+- [x] **Step 1: Create pack metadata**
 
 Write `pack.json`:
 
@@ -239,7 +239,7 @@ Write `pack.json`:
 }
 ```
 
-- [ ] **Step 2: Create combined stage template metadata**
+- [x] **Step 2: Create combined stage template metadata**
 
 Write `stages/transcript_analysis.json`:
 
@@ -258,11 +258,11 @@ Write `stages/transcript_analysis.json`:
 }
 ```
 
-- [ ] **Step 3: Create minimal input schema asset**
+- [x] **Step 3: Create minimal input schema asset**
 
 Write `schemas/stage-io-youtube-summary-transcript-analysis-input.json` with required fields: `stage_io_version`, `schema_version`, `stage`, `pack_id`, `pack_version`, `run_id`, `source_ref_id`, `allowed_source_ref_ids`, `allowed_material_refs`, `transcript_segment_registry`, `comment_selection_policy`, `control_preset`, `evidence_mode`, and `output_language`.
 
-- [ ] **Step 4: Create minimal output schema asset**
+- [x] **Step 4: Create minimal output schema asset**
 
 Write `schemas/stage-io-youtube-summary-transcript-analysis-output.json` requiring:
 
@@ -274,7 +274,7 @@ Write `schemas/stage-io-youtube-summary-transcript-analysis-output.json` requiri
 - `evidence_fragment_candidates`;
 - `warning_candidates`.
 
-- [ ] **Step 5: Create canonical result schema asset**
+- [x] **Step 5: Create canonical result schema asset**
 
 Write `schemas/canonical-result.json` with a `$comment` pointing to
 `docs/prompt-packs/prompt_pack_json_contract_v1_draft.md`.
@@ -305,7 +305,7 @@ The YouTube-specific objects live under
 list is `source_refs`, not `sources`. Audit references are stored in
 `audit_refs`, not `audit`.
 
-- [ ] **Step 6: Run asset parse and manifest check**
+- [x] **Step 6: Run asset parse and manifest check**
 
 Run:
 
@@ -334,7 +334,7 @@ foreach ($wrongKey in @("sources", "pack_data", "audit")) {
 Expected: no output and exit code 0 after every JSON asset parses and the
 canonical schema uses contract-compatible top-level keys.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/prompt-packs/youtube_summary/1.0.0

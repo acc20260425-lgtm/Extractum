@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prompt-pack/youtube_summary/canonical-result",
+  "$comment": "Contract source: docs/prompt-packs/prompt_pack_json_contract_v1_draft.md",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "result_id",
+    "run_id",
+    "pack_id",
+    "pack_version",
+    "stage",
+    "created_at",
+    "output_language",
+    "metadata",
+    "run_context",
+    "outputs",
+    "source_refs",
+    "claims",
+    "evidence",
+    "warnings",
+    "limitations",
+    "quality_flags",
+    "audit_refs"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "result_id": { "type": "string" },
+    "run_id": { "type": ["integer", "string"] },
+    "pack_id": { "const": "youtube_summary" },
+    "pack_version": { "type": "string" },
+    "stage": { "type": "string" },
+    "created_at": { "type": "string" },
+    "output_language": { "type": "string" },
+    "metadata": { "type": "object" },
+    "run_context": { "type": "object" },
+    "outputs": {
+      "type": "object",
+      "required": ["pack_data"],
+      "properties": {
+        "pack_data": {
+          "type": "object",
+          "required": ["youtube_summary"],
+          "properties": {
+            "youtube_summary": { "type": "object" }
+          }
+        }
+      }
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "quality_flags": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "audit_refs": {
+      "type": "array",
+      "items": { "type": "object" }
+    }
+  }
+}
