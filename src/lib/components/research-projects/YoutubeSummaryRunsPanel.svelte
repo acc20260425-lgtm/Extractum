@@ -10,16 +10,19 @@
   } from "$lib/api/prompt-packs";
   import { statusLabel, updateRunListFromEvent } from "$lib/ui/youtube-summary-workflow";
   import type { PromptPackRunListItem } from "$lib/types/prompt-packs";
+  import YoutubeSummaryResultView from "./YoutubeSummaryResultView.svelte";
 
   let { projectId = null }: { projectId?: number | null } = $props();
 
   let runs = $state<PromptPackRunListItem[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
+  let selectedRunId = $state<number | null>(null);
   let unlisten: (() => void) | null = null;
 
   let activeRuns = $derived(runs.filter((run) => run.runStatus === "queued" || run.runStatus === "running"));
   let recentRuns = $derived(runs.filter((run) => run.runStatus !== "queued" && run.runStatus !== "running"));
+  let selectedRun = $derived(runs.find((run) => run.runId === selectedRunId) ?? null);
 
   onMount(() => {
     void refreshRuns();
@@ -105,18 +108,25 @@
       {:else}
         <ul>
           {#each recentRuns as run (run.runId)}
-            <li>
+            <li class:selected={run.runId === selectedRunId}>
               <div>
                 <strong>Run #{run.runId}</strong>
                 <ExtractumBadge>{statusLabel(run.runStatus)}</ExtractumBadge>
                 <p>{run.latestMessage ?? run.resultStatus ?? "Completed"}</p>
               </div>
+              <ExtractumButton variant="outline" onclick={() => (selectedRunId = run.runId)}>
+                View result
+              </ExtractumButton>
             </li>
           {/each}
         </ul>
       {/if}
     </section>
   </div>
+
+  {#key selectedRunId}
+    <YoutubeSummaryResultView run={selectedRun} runId={selectedRunId} />
+  {/key}
 </section>
 
 <style>
@@ -175,6 +185,10 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
+  }
+
+  li.selected {
+    border-color: var(--extractum-info);
   }
 
   li div {

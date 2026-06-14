@@ -478,7 +478,7 @@ git commit -m "feat: show active prompt pack runs"
 - Create: `src/lib/components/research-projects/YoutubeSummaryResultView.svelte`
 - Modify: `src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte`
 
-- [ ] **Step 1: Add result view contract test**
+- [x] **Step 1: Add result view contract test**
 
 Create `src/lib/youtube-summary-result-view-contract.test.ts` asserting the component imports and displays key structures:
 
@@ -490,7 +490,7 @@ expect(source).toContain("limitations");
 expect(source).toContain("qualityFlags");
 ```
 
-- [ ] **Step 2: Implement result viewer**
+- [x] **Step 2: Implement result viewer**
 
 Viewer sections:
 
@@ -505,11 +505,11 @@ Viewer sections:
 
 Use existing compact operational styling. Avoid nested cards; use full-width sections, separators, badges, and scroll areas.
 
-- [ ] **Step 3: Wire selected run**
+- [x] **Step 3: Wire selected run**
 
 `YoutubeSummaryRunsPanel` passes selected run id into `YoutubeSummaryResultView`. The viewer loads canonical/projection data through `getPromptPackResult`.
 
-- [ ] **Step 4: Run tests/check**
+- [x] **Step 4: Run tests/check**
 
 Run:
 
@@ -520,7 +520,7 @@ npm run check
 
 Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/lib/components/research-projects/YoutubeSummaryResultView.svelte src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte src/lib/youtube-summary-result-view-contract.test.ts
