@@ -43,7 +43,7 @@ Complete these plans first:
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary.rs`
 
-- [ ] **Step 1: Write stage input tests**
+- [x] **Step 1: Write stage input tests**
 
 Add tests:
 
@@ -68,7 +68,7 @@ async fn build_transcript_analysis_stage_input_uses_frozen_registries() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -78,7 +78,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::stage_io::te
 
 Expected: fail because `stage_io.rs` does not exist.
 
-- [ ] **Step 3: Implement stage input builder**
+- [x] **Step 3: Implement stage input builder**
 
 Build input from run-local tables only:
 
@@ -90,7 +90,7 @@ Build input from run-local tables only:
 
 The input must include `comment_selection_policy` even when `comment_material_refs` is empty.
 
-- [ ] **Step 4: Implement artifact insert helper**
+- [x] **Step 4: Implement artifact insert helper**
 
 Add `insert_stage_artifact_in_tx` for:
 
@@ -103,7 +103,7 @@ Add `insert_stage_artifact_in_tx` for:
 
 Store content hash, zstd JSON/text, token counts when available, redaction state, and attempt number.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -113,7 +113,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::stage_io
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/stage_io.rs src-tauri/src/prompt_packs/store.rs src-tauri/src/prompt_packs/youtube_summary.rs

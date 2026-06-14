@@ -3,6 +3,7 @@ pub mod library;
 pub mod models;
 pub mod runtime;
 pub mod seed;
+pub mod stage_io;
 pub mod store;
 pub mod youtube_summary;
 
