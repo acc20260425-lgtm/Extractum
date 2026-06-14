@@ -51,7 +51,7 @@ Tracking rules:
 - Keep `git status --short` output visible at every gate. If unrelated user
   changes appear, do not include them in Prompt Pack commits.
 
-- [ ] **Step 0: Prepare implementation branch**
+- [x] **Step 0: Prepare implementation branch**
 
 Run before Step 1:
 
@@ -85,6 +85,12 @@ git switch feat/youtube-summary-prompt-pack-mvp
 
 Mark Step 0 complete only after the branch is selected and the dirty-state
 policy is recorded in the task notes.
+
+Task notes:
+
+- 2026-06-14: Started from `main` with `git status --short --branch` showing a clean tree.
+- 2026-06-14: `git switch -c feat/youtube-summary-prompt-pack-mvp` failed because Git could not create `refs/heads/feat/youtube-summary-prompt-pack-mvp`; selected `codex/youtube-summary-prompt-pack-mvp` instead.
+- 2026-06-14: No unrelated dirty files were present before implementation work started.
 
 - [ ] **Step 1: Execute foundation plan**
 
