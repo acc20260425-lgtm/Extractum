@@ -74,6 +74,9 @@ struct OpenAiCompatModel {
     id: String,
     object: Option<String>,
     owned_by: Option<String>,
+    context_length: Option<i64>,
+    max_output_tokens: Option<i64>,
+    capabilities: Option<std::collections::BTreeMap<String, bool>>,
 }
 
 #[derive(Deserialize)]
@@ -197,13 +200,23 @@ fn format_openai_compat_error(
 fn map_openai_compat_model(model: OpenAiCompatModel) -> LlmProviderModel {
     let description = model.owned_by.unwrap_or_default();
     let generation_method = model.object.unwrap_or_else(|| "model".to_string());
+    let mut supported_generation_methods = model
+        .capabilities
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(capability, enabled)| enabled.then_some(capability))
+        .collect::<Vec<_>>();
+
+    if supported_generation_methods.is_empty() {
+        supported_generation_methods.push(generation_method);
+    }
 
     LlmProviderModel {
         display_name: model.id.clone(),
         description,
-        input_token_limit: None,
-        output_token_limit: None,
-        supported_generation_methods: vec![generation_method],
+        input_token_limit: model.context_length,
+        output_token_limit: model.max_output_tokens,
+        supported_generation_methods,
         model: model.id.clone(),
         name: model.id,
     }
@@ -351,7 +364,7 @@ mod tests {
     use super::{
         build_openai_compat_request, extract_openai_compat_delta, list_openai_compat_models,
         map_openai_compat_model, map_openai_compat_usage, OpenAiCompatChatChunk, OpenAiCompatModel,
-        OpenAiCompatProviderConfig,
+        OpenAiCompatModelsResponse, OpenAiCompatProviderConfig,
     };
     use crate::error::AppErrorKind;
     use crate::llm::LlmMessage;
@@ -398,12 +411,50 @@ mod tests {
             id: "gg/gemini-2.5-pro".to_string(),
             object: Some("model".to_string()),
             owned_by: Some("omniroute".to_string()),
+            context_length: None,
+            max_output_tokens: None,
+            capabilities: None,
         });
 
         assert_eq!(model.model, "gg/gemini-2.5-pro");
         assert_eq!(model.name, "gg/gemini-2.5-pro");
         assert_eq!(model.display_name, "gg/gemini-2.5-pro");
         assert_eq!(model.description, "omniroute");
+    }
+
+    #[test]
+    fn openai_compat_model_mapping_reads_omniroute_limits_and_capabilities() {
+        let response: OpenAiCompatModelsResponse = serde_json::from_str(
+            r#"{
+                "data": [{
+                    "id": "gemini/gemini-2.5-flash",
+                    "object": "model",
+                    "owned_by": "gemini",
+                    "context_length": 1048576,
+                    "max_output_tokens": 8192,
+                    "capabilities": {
+                        "tool_calling": true,
+                        "reasoning": true
+                    }
+                }]
+            }"#,
+        )
+        .expect("parse OmniRoute model metadata");
+
+        let model = map_openai_compat_model(
+            response
+                .data
+                .into_iter()
+                .next()
+                .expect("model metadata exists"),
+        );
+
+        assert_eq!(model.input_token_limit, Some(1_048_576));
+        assert_eq!(model.output_token_limit, Some(8_192));
+        assert_eq!(
+            model.supported_generation_methods,
+            vec!["reasoning".to_string(), "tool_calling".to_string()]
+        );
     }
 
     #[test]
