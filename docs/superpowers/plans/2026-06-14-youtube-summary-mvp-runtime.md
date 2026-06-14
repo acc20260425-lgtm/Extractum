@@ -317,7 +317,7 @@ git commit -m "feat: add prompt pack runtime dto contracts"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary.rs`
 - Modify: `src-tauri/src/prompt_packs/store.rs`
 
-- [ ] **Step 1: Write preflight tests**
+- [x] **Step 1: Write preflight tests**
 
 Add tests in `youtube_summary.rs` using an in-memory migrated DB:
 
@@ -365,7 +365,7 @@ async fn preflight_playlist_video_without_transcript_is_skipped() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -375,7 +375,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::youtube_summ
 
 Expected: fail because preflight implementation does not exist.
 
-- [ ] **Step 3: Implement source expansion**
+- [x] **Step 3: Implement source expansion**
 
 Rules:
 
@@ -387,7 +387,7 @@ Rules:
 - unlinked playlist items become `skipped_videos` with `reason = "unlinked_playlist_item"`;
 - an explicit invalid source becomes `blocking_failures`.
 
-- [ ] **Step 4: Implement transcript and budget checks**
+- [x] **Step 4: Implement transcript and budget checks**
 
 Rules:
 
@@ -398,7 +398,7 @@ Rules:
 - if an explicit video exceeds the selected model budget, it becomes `blocking_failures` with `reason = "input_budget_exceeded"`;
 - start is allowed only when `included_videos` is non-empty and `blocking_failures` is empty.
 
-- [ ] **Step 5: Run preflight tests**
+- [x] **Step 5: Run preflight tests**
 
 Run:
 
@@ -408,7 +408,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs::youtube_summ
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary.rs src-tauri/src/prompt_packs/store.rs
