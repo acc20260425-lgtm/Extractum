@@ -2000,7 +2000,7 @@ git commit -m "feat: add frontend projects api"
 - Test: `src/lib/ui/research-projects-model.test.ts`
 - Test: `src/lib/ui/research-projects-workflow.test.ts`
 
-- [ ] **Step 1: Write failing model tests**
+- [x] **Step 1: Write failing model tests**
 
 Replace source-group-oriented expectations in `src/lib/ui/research-projects-model.test.ts` with project expectations:
 
@@ -2106,7 +2106,7 @@ describe("research projects model", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -2116,7 +2116,7 @@ npm.cmd test -- --run src/lib/ui/research-projects-model.test.ts
 
 Expected: FAIL because model still expects `AnalysisSourceGroup`.
 
-- [ ] **Step 3: Update model types and builders**
+- [x] **Step 3: Update model types and builders**
 
 In `src/lib/ui/research-projects-model.ts`, replace legacy backing with:
 
@@ -2216,7 +2216,7 @@ export function projectRunDisabledReason(
 }
 ```
 
-- [ ] **Step 4: Update workflow tests**
+- [x] **Step 4: Update workflow tests**
 
 In `src/lib/ui/research-projects-workflow.test.ts`, use deps with `listProjects`, `listProjectSources`, `listLibrarySources`, `listProjectRuns`, `listPromptTemplates`, `addProjectSources`, and `removeProjectSources`. Add this test:
 
@@ -2242,7 +2242,7 @@ it("loads projects and connects selected Library sources through project APIs", 
 });
 ```
 
-- [ ] **Step 5: Update workflow implementation**
+- [x] **Step 5: Update workflow implementation**
 
 In `src/lib/ui/research-projects-workflow.ts`, replace state:
 
@@ -2377,7 +2377,7 @@ Expose these methods from `createResearchProjectsWorkflow` together with
 `loadWorkspace`, `refreshDerivedState`, `connectSelectedSources`, and
 `removeProjectSource`.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run:
 

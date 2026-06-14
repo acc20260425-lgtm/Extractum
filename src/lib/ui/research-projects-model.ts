@@ -1,23 +1,18 @@
-import type {
-  AnalysisGroupSourceType,
-  AnalysisRunSummary,
-  AnalysisSourceGroup,
-  AnalysisSourceOption,
-  AnalysisSourceOptionType,
-  UpdateAnalysisSourceGroupInput,
-} from "$lib/types/analysis";
+import type { AnalysisRunSummary } from "$lib/types/analysis";
+import type { LibrarySourceProvider, LibrarySourceRecord } from "$lib/types/library-sources";
 import type { SourceJobRecord } from "$lib/types/sources";
+import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
 
-export type LibrarySourceProvider = AnalysisSourceOptionType | "web" | "other";
 export type ProjectStatus = "ready" | "running" | "needs_attention" | "empty";
 export type LibrarySourceStatus = "active" | "needs_account" | "syncing" | "error" | "unavailable";
 
 export type ResearchProjectBacking =
-  | { kind: "source_group"; groupId: number; sourceType: AnalysisGroupSourceType }
-  | { kind: "synthetic"; disabledReason: string };
+  | { kind: "project"; projectId: number }
+  | { kind: "source_group"; groupId: number; sourceType: LibrarySourceProvider };
 
 export type ResearchProjectView = {
   id: string;
+  projectId: number;
   title: string;
   description: string | null;
   periodLabel: string;
@@ -47,9 +42,16 @@ export type LibrarySourceView = {
 export type ProjectSourceLinkView = {
   projectId: string;
   sourceId: string;
+  sourceNumericId: number;
   provider: LibrarySourceProvider;
+  subtype: string | null;
   title: string;
-  connectionStatus: "connected" | "pending" | "failed" | "already_connected";
+  subtitle: string | null;
+  itemCount: number;
+  localCopyLabel: string;
+  addedAt: number;
+  addedAtLabel: string | null;
+  connectionStatus: "connected";
   filterSummary: string;
 };
 
@@ -58,28 +60,16 @@ export type LibraryFilterState = {
   providers: LibrarySourceProvider[];
 };
 
-export type SourceGroupUpdateDecision =
-  | {
-      ok: true;
-      input: UpdateAnalysisSourceGroupInput;
-      connectedCount: number;
-      refusedCount: number;
-    }
-  | { ok: false; reason: string; connectedCount: 0; refusedCount: number };
+export const PROJECT_PERIOD_LABEL = "All time";
 
-export const PROJECT_PERIOD_LABEL = "01.01.2024 - 31.05.2025";
+export function projectViewId(projectId: number) {
+  return `project:${projectId}`;
+}
 
-const PROVIDER_LABELS: Record<LibrarySourceProvider, string> = {
-  telegram: "Telegram",
-  youtube: "YouTube",
-  rss: "RSS",
-  forum: "форумов",
-  web: "Web",
-  other: "источников этого типа",
-};
-
-function sourceProjectId(groupId: number) {
-  return `source-group:${groupId}`;
+export function projectIdFromViewId(viewId: string | null) {
+  if (!viewId?.startsWith("project:")) return null;
+  const value = Number(viewId.slice("project:".length));
+  return Number.isFinite(value) ? value : null;
 }
 
 function sourceRowId(sourceId: number) {
@@ -87,90 +77,19 @@ function sourceRowId(sourceId: number) {
 }
 
 function materialLabel(count: number) {
-  if (count === 1) return "1 материал";
-  return `${count} материалов`;
+  if (count === 1) return "1 material";
+  return `${count} materials`;
 }
 
 function dateLabel(unixSeconds: number | null) {
   if (!unixSeconds) return null;
-  return new Intl.DateTimeFormat("ru-RU", {
+  return new Intl.DateTimeFormat("en", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(unixSeconds * 1000));
-}
-
-function latestRunLabel(project: AnalysisSourceGroup, runs: AnalysisRunSummary[]) {
-  const run = runs
-    .filter((candidate) => candidate.source_group_id === project.id)
-    .sort((left, right) => right.created_at - left.created_at)[0];
-  return run ? dateLabel(run.created_at) : null;
-}
-
-function projectStatus(group: AnalysisSourceGroup, runs: AnalysisRunSummary[]): ProjectStatus {
-  if (
-    runs.some(
-      (run) =>
-        run.source_group_id === group.id && (run.status === "queued" || run.status === "running"),
-    )
-  ) {
-    return "running";
-  }
-  if (group.members.length === 0) return "empty";
-  if (group.members.every((member) => member.item_count <= 0)) return "needs_attention";
-  return "ready";
-}
-
-export function buildResearchProjectsView(
-  groups: AnalysisSourceGroup[],
-  runs: AnalysisRunSummary[] = [],
-): ResearchProjectView[] {
-  return groups.map((group) => {
-    const materialCount = group.members.reduce((total, member) => total + member.item_count, 0);
-    return {
-      id: sourceProjectId(group.id),
-      title: group.name,
-      description: `${PROVIDER_LABELS[group.source_type]} проект, сохраненный через текущую модель источников.`,
-      periodLabel: PROJECT_PERIOD_LABEL,
-      sourceCount: group.members.length,
-      evidenceCount: materialCount,
-      materialCount,
-      lastRunLabel: latestRunLabel(group, runs),
-      status: projectStatus(group, runs),
-      backing: { kind: "source_group", groupId: group.id, sourceType: group.source_type },
-    };
-  });
-}
-
-function groupMembership(groups: AnalysisSourceGroup[]) {
-  const membership = new Map<number, Set<number>>();
-  for (const group of groups) {
-    for (const member of group.members) {
-      const current = membership.get(member.source_id) ?? new Set<number>();
-      current.add(group.id);
-      membership.set(member.source_id, current);
-    }
-  }
-  return membership;
-}
-
-function selectedGroup(groups: AnalysisSourceGroup[], selectedProjectId: string | null) {
-  if (!selectedProjectId?.startsWith("source-group:")) return null;
-  const groupId = Number(selectedProjectId.replace("source-group:", ""));
-  return groups.find((group) => group.id === groupId) ?? null;
-}
-
-function unsupportedReason(provider: LibrarySourceProvider) {
-  if (provider === "telegram" || provider === "youtube") return null;
-  return `Подключение ${PROVIDER_LABELS[provider]} к проектам будет доступно после миграции библиотеки.`;
-}
-
-function providerMismatchReason(project: AnalysisSourceGroup | null, provider: LibrarySourceProvider) {
-  if (!project) return "Выберите проект с сохраняемой группой источников.";
-  if (provider === project.source_type) return null;
-  return `Этот проект сейчас сохраняет только ${PROVIDER_LABELS[project.source_type]} источники.`;
 }
 
 function activeJobBySource(sourceJobs: SourceJobRecord[]) {
@@ -192,47 +111,75 @@ function jobBlockedState(job: SourceJobRecord | undefined) {
   if (job.status === "queued" || job.status === "running") {
     return {
       status: "syncing" as const,
-      disabledReason: "Источник сейчас синхронизируется.",
+      disabledReason: "Source is syncing.",
     };
   }
   if (job.status === "failed") {
     return {
       status: "error" as const,
-      disabledReason: job.error
-        ? `Последняя синхронизация завершилась ошибкой: ${job.error}`
-        : "Последняя синхронизация завершилась ошибкой.",
+      disabledReason: job.error ? `Last sync failed: ${job.error}` : "Last sync failed.",
     };
   }
   return null;
 }
 
+export function buildResearchProjectsView(
+  projects: ProjectRecord[],
+  projectSources: ProjectSourceRecord[],
+  runs: AnalysisRunSummary[] = [],
+): ResearchProjectView[] {
+  return projects.map((project) => {
+    const sources = projectSources.filter((source) => source.project_id === project.id);
+    const materialCount = sources.reduce((total, source) => total + source.item_count, 0);
+    const latestRun = runs
+      .filter((run) => run.project_id === project.id)
+      .sort((left, right) => right.created_at - left.created_at)[0];
+    const running = runs.some(
+      (run) => run.project_id === project.id && (run.status === "queued" || run.status === "running"),
+    );
+    return {
+      id: projectViewId(project.id),
+      projectId: project.id,
+      title: project.name,
+      description: project.description,
+      periodLabel: PROJECT_PERIOD_LABEL,
+      sourceCount: sources.length,
+      evidenceCount: materialCount,
+      materialCount,
+      lastRunLabel: latestRun ? dateLabel(latestRun.created_at) : null,
+      status: running ? "running" : sources.length === 0 ? "empty" : "ready",
+      backing: { kind: "project", projectId: project.id },
+    };
+  });
+}
+
 export function buildLibrarySourcesView(
-  sources: AnalysisSourceOption[],
-  groups: AnalysisSourceGroup[],
+  sources: LibrarySourceRecord[],
+  projectSources: ProjectSourceRecord[],
   selectedProjectId: string | null,
   sourceJobs: SourceJobRecord[] = [],
 ): LibrarySourceView[] {
-  const membership = groupMembership(groups);
-  const project = selectedGroup(groups, selectedProjectId);
-  const connectedIds = new Set(project?.members.map((member) => member.source_id) ?? []);
+  const projectId = projectIdFromViewId(selectedProjectId);
+  const connectedIds = new Set(
+    projectSources
+      .filter((source) => projectId !== null && source.project_id === projectId)
+      .map((source) => source.source_id),
+  );
   const jobsBySource = activeJobBySource(sourceJobs);
 
   return sources.map((source) => {
-    const provider = source.source_type;
-    const alreadyConnected = connectedIds.has(source.id);
-    const jobState = jobBlockedState(jobsBySource.get(source.id));
-    const disabledReason = jobState?.disabledReason ?? (alreadyConnected
-      ? "Источник уже подключен к этому проекту."
-      : unsupportedReason(provider) ?? providerMismatchReason(project, provider));
+    const alreadyConnected = connectedIds.has(source.source_id);
+    const jobState = jobBlockedState(jobsBySource.get(source.source_id));
+    const disabledReason = jobState?.disabledReason ?? (alreadyConnected ? "Already in project" : null);
     const connectable = disabledReason === null;
 
     return {
-      id: sourceRowId(source.id),
-      sourceId: source.id,
-      provider,
-      title: source.title ?? `Source #${source.id}`,
-      subtitle: source.account_id ? `Account #${source.account_id}` : null,
-      projectCount: membership.get(source.id)?.size ?? 0,
+      id: sourceRowId(source.source_id),
+      sourceId: source.source_id,
+      provider: source.provider,
+      title: source.title ?? `Source #${source.source_id}`,
+      subtitle: source.subtitle,
+      projectCount: source.project_count,
       lastCollectedLabel: dateLabel(source.last_synced_at),
       localCopyLabel: materialLabel(source.item_count),
       status: jobState?.status ?? (connectable || alreadyConnected ? "active" : "unavailable"),
@@ -243,10 +190,7 @@ export function buildLibrarySourcesView(
   });
 }
 
-export function filterLibrarySources(
-  sources: LibrarySourceView[],
-  filters: LibraryFilterState,
-) {
+export function filterLibrarySources(sources: LibrarySourceView[], filters: LibraryFilterState) {
   const query = filters.query.trim().toLocaleLowerCase();
   const providers = new Set(filters.providers);
   return sources.filter((source) => {
@@ -261,68 +205,38 @@ export function connectableSelection(sources: LibrarySourceView[], selectedIds: 
   return sources.filter((source) => selectedIds.has(source.id) && source.connectable);
 }
 
-export function buildSourceGroupUpdateInput(
-  project: ResearchProjectView | null,
-  group: AnalysisSourceGroup | null,
-  selectedIds: Set<string>,
-  librarySources: LibrarySourceView[],
-): SourceGroupUpdateDecision {
-  const selected = librarySources.filter((source) => selectedIds.has(source.id));
-  const connectable = selected.filter((source) => source.connectable);
-
-  if (!project || project.backing.kind !== "source_group" || !group) {
-    return {
-      ok: false,
-      reason: "Этот проект пока нельзя сохранить через текущую модель групп источников.",
-      connectedCount: 0,
-      refusedCount: selected.length,
-    };
-  }
-
-  const sourceType = project.backing.sourceType;
-  const allowed = connectable.filter((source) => source.provider === sourceType);
-  if (allowed.length === 0) {
-    return {
-      ok: false,
-      reason: "В выбранных строках нет источников, которые можно подключить к этому проекту.",
-      connectedCount: 0,
-      refusedCount: selected.length,
-    };
-  }
-
-  const sourceIds = Array.from(
-    new Set([
-      ...group.members.map((member) => member.source_id),
-      ...allowed.map((source) => source.sourceId),
-    ]),
-  ).sort((left, right) => left - right);
-
-  return {
-    ok: true,
-    input: {
-      groupId: group.id,
-      name: group.name,
-      sourceType,
-      sourceIds,
-    },
-    connectedCount: allowed.length,
-    refusedCount: selected.length - allowed.length,
-  };
-}
-
 export function buildProjectSourceLinksView(
   projectId: string | null,
-  librarySources: LibrarySourceView[],
+  projectSources: ProjectSourceRecord[],
 ): ProjectSourceLinkView[] {
-  if (!projectId) return [];
-  return librarySources
-    .filter((source) => source.alreadyConnected)
+  const numericProjectId = projectIdFromViewId(projectId);
+  if (!projectId || numericProjectId === null) return [];
+  return projectSources
+    .filter((source) => source.project_id === numericProjectId)
     .map((source) => ({
       projectId,
-      sourceId: source.id,
+      sourceId: sourceRowId(source.source_id),
+      sourceNumericId: source.source_id,
       provider: source.provider,
-      title: source.title,
+      subtype: source.source_subtype,
+      title: source.title ?? `Source #${source.source_id}`,
+      subtitle: source.subtitle,
+      itemCount: source.item_count,
+      localCopyLabel: materialLabel(source.item_count),
+      addedAt: source.added_at,
+      addedAtLabel: dateLabel(source.added_at),
       connectionStatus: "connected",
-      filterSummary: "Фильтры проекта применяются при запуске анализа.",
+      filterSummary: source.subtitle ?? source.provider,
     }));
+}
+
+export function projectRunDisabledReason(
+  project: ProjectRecord | ResearchProjectView | null,
+  sources: Pick<ProjectSourceRecord, "provider">[],
+) {
+  if (!project) return "Select a project";
+  if (sources.length === 0) return "Add sources to run analysis";
+  const providers = new Set(sources.map((source) => source.provider));
+  if (providers.size > 1) return "Mixed-provider project runs are not supported yet.";
+  return null;
 }

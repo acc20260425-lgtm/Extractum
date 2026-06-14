@@ -1,28 +1,51 @@
 import { describe, expect, it, vi } from "vitest";
 import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "./research-projects-workflow";
-import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
+import type { AnalysisPromptTemplate } from "$lib/types/analysis";
+import type { LibrarySourceRecord } from "$lib/types/library-sources";
+import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
 import type { SourceJobRecord } from "$lib/types/sources";
 
-function group(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGroup {
+function project(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
   return {
-    id: 10,
-    name: "Рынок БПЛА",
-    source_type: "telegram",
-    members: [{ source_id: 1, source_title: "Radar BPLA", item_count: 12 }],
-    created_at: 100,
-    updated_at: 200,
+    id: 1,
+    name: "Alpha",
+    description: null,
+    created_at: 1,
+    updated_at: 1,
     ...overrides,
   };
 }
 
-function source(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOption {
+function projectSource(overrides: Partial<ProjectSourceRecord> = {}): ProjectSourceRecord {
   return {
-    id: 2,
-    account_id: 1,
-    source_type: "telegram",
-    title: "Drone News",
-    item_count: 20,
-    last_synced_at: 300,
+    project_id: 1,
+    source_id: 10,
+    provider: "youtube",
+    source_subtype: "video",
+    title: "Video",
+    subtitle: "Channel",
+    item_count: 3,
+    added_at: 1,
+    ...overrides,
+  };
+}
+
+function librarySource(overrides: Partial<LibrarySourceRecord> = {}): LibrarySourceRecord {
+  return {
+    source_id: 10,
+    provider: "youtube",
+    source_subtype: "video",
+    account_id: null,
+    external_id: "v1",
+    title: "Video",
+    subtitle: "Channel",
+    canonical_url: "https://youtu.be/v1",
+    created_at: 1,
+    last_synced_at: 1,
+    item_count: 3,
+    project_count: 0,
+    youtube: null,
+    telegram: null,
     ...overrides,
   };
 }
@@ -30,7 +53,7 @@ function source(overrides: Partial<AnalysisSourceOption> = {}): AnalysisSourceOp
 function sourceJob(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
   return {
     job_id: "job-1",
-    source_id: 2,
+    source_id: 10,
     related_source_id: null,
     job_type: "youtube_video_full_sync",
     status: "running",
@@ -45,12 +68,28 @@ function sourceJob(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
   };
 }
 
-function createHarness(initial: Partial<ResearchProjectsWorkflowState> = {}) {
-  const state: ResearchProjectsWorkflowState = {
-    groups: [],
-    sources: [],
+function promptTemplate(overrides: Partial<AnalysisPromptTemplate> = {}): AnalysisPromptTemplate {
+  return {
+    id: 1,
+    name: "Default",
+    template_kind: "report",
+    body: "Body",
+    version: 1,
+    is_builtin: true,
+    created_at: 1,
+    updated_at: 1,
+    ...overrides,
+  };
+}
+
+function createInitialState(): ResearchProjectsWorkflowState {
+  return {
+    projectsRaw: [],
+    projectSources: [],
     runs: [],
+    libraryRecords: [],
     sourceJobs: [],
+    promptTemplates: [],
     projects: [],
     librarySources: [],
     projectSourceLinks: [],
@@ -59,109 +98,67 @@ function createHarness(initial: Partial<ResearchProjectsWorkflowState> = {}) {
     loading: false,
     saving: false,
     status: "",
-    ...initial,
   };
+}
 
-  const deps = {
+function createDeps(state: ResearchProjectsWorkflowState) {
+  return {
     getState: () => state,
     patch: vi.fn((patch: Partial<ResearchProjectsWorkflowState>) => Object.assign(state, patch)),
-    listGroups: vi.fn(),
-    listSources: vi.fn(),
-    listRuns: vi.fn(),
+    listProjects: vi.fn(),
+    listProjectSources: vi.fn(),
+    listLibrarySources: vi.fn(),
+    listProjectRuns: vi.fn(),
+    listPromptTemplates: vi.fn(),
     listSourceJobs: vi.fn(),
-    updateGroup: vi.fn(),
+    addProjectSources: vi.fn(),
+    removeProjectSources: vi.fn(),
+    createProject: vi.fn(),
+    updateProject: vi.fn(),
+    deleteProject: vi.fn(),
+    startProjectAnalysis: vi.fn(),
     formatError: vi.fn((action: string, error: unknown) => `Error ${action}: ${String(error)}`),
   };
-
-  return { state, deps, workflow: createResearchProjectsWorkflow(deps) };
 }
 
 describe("research projects workflow", () => {
-  it("loads projects, sources, and selects the first project", async () => {
-    const { state, deps, workflow } = createHarness();
-    deps.listGroups.mockResolvedValueOnce([group()]);
-    deps.listSources.mockResolvedValueOnce([source({ id: 1, title: "Radar BPLA" })]);
-    deps.listRuns.mockResolvedValueOnce([]);
-    deps.listSourceJobs.mockResolvedValueOnce([]);
+  it("loads projects and connects selected Library sources through project APIs", async () => {
+    const state = createInitialState();
+    const deps = createDeps(state);
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([]);
+    deps.listLibrarySources.mockResolvedValue([librarySource({ source_id: 10 })]);
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+    deps.addProjectSources.mockResolvedValue({ added_count: 1, already_present_count: 0 });
 
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.loadWorkspace();
+    state.selectedLibrarySourceIds = new Set(["source:10"]);
+    await workflow.connectSelectedSources();
+
+    expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
+    expect(state.status).toContain("Connected sources: 1");
+  });
+
+  it("loads project sources, runs, prompts and source jobs into derived state", async () => {
+    const state = createInitialState();
+    const deps = createDeps(state);
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource()]);
+    deps.listLibrarySources.mockResolvedValue([librarySource()]);
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([promptTemplate()]);
+    deps.listSourceJobs.mockResolvedValue([sourceJob()]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
     await workflow.loadWorkspace();
 
-    expect(state.selectedProjectId).toBe("source-group:10");
-    expect(state.projects[0].title).toBe("Рынок БПЛА");
-    expect(state.librarySources[0].alreadyConnected).toBe(true);
+    expect(state.selectedProjectId).toBe("project:1");
+    expect(state.projects[0].sourceCount).toBe(1);
     expect(state.projectSourceLinks).toHaveLength(1);
-    expect(state.loading).toBe(false);
-  });
-
-  it("threads source jobs into derived library rows", async () => {
-    const { state, deps, workflow } = createHarness();
-    deps.listGroups.mockResolvedValueOnce([group({ source_type: "youtube", members: [] })]);
-    deps.listSources.mockResolvedValueOnce([
-      source({ id: 2, source_type: "youtube", title: "Alpha Drones" }),
-    ]);
-    deps.listRuns.mockResolvedValueOnce([]);
-    deps.listSourceJobs.mockResolvedValueOnce([sourceJob()]);
-
-    await workflow.loadWorkspace();
-
-    expect(state.sourceJobs).toHaveLength(1);
-    expect(state.librarySources[0]).toEqual(expect.objectContaining({
-      status: "syncing",
-      connectable: false,
-      disabledReason: "Источник сейчас синхронизируется.",
-    }));
-  });
-
-  it("persists only safe selected rows through updateGroup", async () => {
-    const currentGroup = group();
-    const { state, deps, workflow } = createHarness({
-      groups: [currentGroup],
-      sources: [source({ id: 1, title: "Radar BPLA" }), source({ id: 2, title: "Drone News" })],
-      selectedProjectId: "source-group:10",
-      selectedLibrarySourceIds: new Set(["source:2"]),
-    });
-    deps.updateGroup.mockResolvedValueOnce({
-      ...currentGroup,
-      members: [...currentGroup.members, { source_id: 2, source_title: "Drone News", item_count: 20 }],
-    });
-    deps.listGroups.mockResolvedValueOnce([
-      {
-        ...currentGroup,
-        members: [...currentGroup.members, { source_id: 2, source_title: "Drone News", item_count: 20 }],
-      },
-    ]);
-    deps.listSources.mockResolvedValueOnce(state.sources);
-    deps.listRuns.mockResolvedValueOnce([]);
-    deps.listSourceJobs.mockResolvedValueOnce([]);
-
-    await workflow.refreshDerivedState();
-    await workflow.connectSelectedSources();
-
-    expect(deps.updateGroup).toHaveBeenCalledWith({
-      groupId: 10,
-      name: "Рынок БПЛА",
-      sourceType: "telegram",
-      sourceIds: [1, 2],
-    });
-    expect(state.status).toBe("Подключено источников: 1.");
-    expect(state.selectedLibrarySourceIds.size).toBe(0);
-    expect(state.saving).toBe(false);
-  });
-
-  it("refuses unsupported or already-connected selections without calling updateGroup", async () => {
-    const { state, deps, workflow } = createHarness({
-      groups: [group()],
-      sources: [source({ id: 3, source_type: "rss", title: "Новости БПЛА" })],
-      selectedProjectId: "source-group:10",
-      selectedLibrarySourceIds: new Set(["source:3"]),
-    });
-
-    await workflow.refreshDerivedState();
-    await workflow.connectSelectedSources();
-
-    expect(deps.updateGroup).not.toHaveBeenCalled();
-    expect(state.status).toBe(
-      "В выбранных строках нет источников, которые можно подключить к этому проекту.",
-    );
+    expect(state.promptTemplates).toHaveLength(1);
+    expect(state.librarySources[0].status).toBe("syncing");
   });
 });

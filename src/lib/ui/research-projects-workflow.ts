@@ -2,24 +2,33 @@ import {
   buildLibrarySourcesView,
   buildProjectSourceLinksView,
   buildResearchProjectsView,
-  buildSourceGroupUpdateInput,
+  connectableSelection,
+  projectIdFromViewId,
+  projectViewId,
   type LibrarySourceView,
   type ProjectSourceLinkView,
   type ResearchProjectView,
 } from "./research-projects-model";
+import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
+import type { LibrarySourceRecord } from "$lib/types/library-sources";
 import type {
-  AnalysisRunSummary,
-  AnalysisSourceGroup,
-  AnalysisSourceOption,
-  UpdateAnalysisSourceGroupInput,
-} from "$lib/types/analysis";
+  AddProjectSourcesOutcome,
+  ProjectAnalysisStartCommand,
+  ProjectEditorInput,
+  ProjectRecord,
+  ProjectSourceRecord,
+  ProjectSourcesInput,
+  UpdateProjectInput,
+} from "$lib/types/projects";
 import type { SourceJobRecord } from "$lib/types/sources";
 
 export interface ResearchProjectsWorkflowState {
-  groups: AnalysisSourceGroup[];
-  sources: AnalysisSourceOption[];
+  projectsRaw: ProjectRecord[];
+  projectSources: ProjectSourceRecord[];
   runs: AnalysisRunSummary[];
+  libraryRecords: LibrarySourceRecord[];
   sourceJobs: SourceJobRecord[];
+  promptTemplates: AnalysisPromptTemplate[];
   projects: ResearchProjectView[];
   librarySources: LibrarySourceView[];
   projectSourceLinks: ProjectSourceLinkView[];
@@ -33,11 +42,18 @@ export interface ResearchProjectsWorkflowState {
 export interface ResearchProjectsWorkflowDeps {
   getState(): ResearchProjectsWorkflowState;
   patch(patch: Partial<ResearchProjectsWorkflowState>): void;
-  listGroups(): Promise<AnalysisSourceGroup[]>;
-  listSources(): Promise<AnalysisSourceOption[]>;
-  listRuns(): Promise<AnalysisRunSummary[]>;
+  listProjects(): Promise<ProjectRecord[]>;
+  listProjectSources(projectId: number): Promise<ProjectSourceRecord[]>;
+  listLibrarySources(): Promise<LibrarySourceRecord[]>;
+  listProjectRuns(projectId: number): Promise<AnalysisRunSummary[]>;
+  listPromptTemplates(): Promise<AnalysisPromptTemplate[]>;
   listSourceJobs(): Promise<SourceJobRecord[]>;
-  updateGroup(input: UpdateAnalysisSourceGroupInput): Promise<AnalysisSourceGroup>;
+  addProjectSources(input: ProjectSourcesInput): Promise<AddProjectSourcesOutcome>;
+  removeProjectSources(input: ProjectSourcesInput): Promise<void>;
+  createProject(input: ProjectEditorInput): Promise<ProjectRecord>;
+  updateProject(input: UpdateProjectInput): Promise<ProjectRecord>;
+  deleteProject(projectId: number): Promise<void>;
+  startProjectAnalysis(input: ProjectAnalysisStartCommand): Promise<number>;
   formatError(action: string, error: unknown): string;
 }
 
@@ -45,21 +61,15 @@ function selectedProject(projects: ResearchProjectView[], selectedProjectId: str
   return projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
 }
 
-function selectedGroup(groups: AnalysisSourceGroup[], selectedProjectId: string | null) {
-  if (!selectedProjectId?.startsWith("source-group:")) return null;
-  const groupId = Number(selectedProjectId.replace("source-group:", ""));
-  return groups.find((group) => group.id === groupId) ?? null;
-}
-
 export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDeps) {
   async function refreshDerivedState() {
     const state = deps.getState();
-    const projects = buildResearchProjectsView(state.groups, state.runs);
+    const projects = buildResearchProjectsView(state.projectsRaw, state.projectSources, state.runs);
     const currentProject = selectedProject(projects, state.selectedProjectId);
     const selectedProjectId = currentProject?.id ?? null;
     const librarySources = buildLibrarySourcesView(
-      state.sources,
-      state.groups,
+      state.libraryRecords,
+      state.projectSources,
       selectedProjectId,
       state.sourceJobs,
     );
@@ -67,20 +77,33 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
       projects,
       selectedProjectId,
       librarySources,
-      projectSourceLinks: buildProjectSourceLinksView(selectedProjectId, librarySources),
+      projectSourceLinks: buildProjectSourceLinksView(selectedProjectId, state.projectSources),
     });
   }
 
   async function loadWorkspace() {
     deps.patch({ loading: true });
     try {
-      const [groups, sources, runs, sourceJobs] = await Promise.all([
-        deps.listGroups(),
-        deps.listSources(),
-        deps.listRuns(),
+      const [projectsRaw, libraryRecords, sourceJobs, promptTemplates] = await Promise.all([
+        deps.listProjects(),
+        deps.listLibrarySources(),
         deps.listSourceJobs(),
+        deps.listPromptTemplates(),
       ]);
-      deps.patch({ groups, sources, runs, sourceJobs });
+      const allProjectSources = (
+        await Promise.all(projectsRaw.map((project) => deps.listProjectSources(project.id)))
+      ).flat();
+      const runs = (
+        await Promise.all(projectsRaw.map((project) => deps.listProjectRuns(project.id)))
+      ).flat();
+      deps.patch({
+        projectsRaw,
+        libraryRecords,
+        projectSources: allProjectSources,
+        runs,
+        sourceJobs,
+        promptTemplates,
+      });
       await refreshDerivedState();
     } catch (error) {
       deps.patch({ status: deps.formatError("loading research projects", error) });
@@ -91,27 +114,24 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
 
   async function connectSelectedSources() {
     const state = deps.getState();
-    const project = selectedProject(state.projects, state.selectedProjectId);
-    const group = selectedGroup(state.groups, state.selectedProjectId);
-    const decision = buildSourceGroupUpdateInput(
-      project,
-      group,
-      state.selectedLibrarySourceIds,
-      state.librarySources,
+    const projectId = projectIdFromViewId(state.selectedProjectId);
+    if (!projectId) {
+      deps.patch({ status: "Select a project" });
+      return;
+    }
+    const sourceIds = connectableSelection(state.librarySources, state.selectedLibrarySourceIds).map(
+      (source) => source.sourceId,
     );
-
-    if (!decision.ok) {
-      deps.patch({ status: decision.reason });
+    if (sourceIds.length === 0) {
+      deps.patch({ status: "No selected sources can be connected." });
       return;
     }
 
     deps.patch({ saving: true });
     try {
-      await deps.updateGroup(decision.input);
+      const outcome = await deps.addProjectSources({ projectId, sourceIds });
       deps.patch({
-        status: decision.refusedCount > 0
-          ? `Подключено источников: ${decision.connectedCount}. Отклонено: ${decision.refusedCount}.`
-          : `Подключено источников: ${decision.connectedCount}.`,
+        status: `Connected sources: ${outcome.added_count}. Already in project: ${outcome.already_present_count}.`,
         selectedLibrarySourceIds: new Set<string>(),
       });
       await loadWorkspace();
@@ -122,9 +142,93 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     }
   }
 
+  async function removeProjectSource(sourceId: number) {
+    const projectId = projectIdFromViewId(deps.getState().selectedProjectId);
+    if (!projectId) {
+      deps.patch({ status: "Select a project" });
+      return;
+    }
+    deps.patch({ saving: true });
+    try {
+      await deps.removeProjectSources({ projectId, sourceIds: [sourceId] });
+      await loadWorkspace();
+    } catch (error) {
+      deps.patch({ status: deps.formatError("removing project source", error) });
+    } finally {
+      deps.patch({ saving: false });
+    }
+  }
+
+  async function createProject(input: ProjectEditorInput) {
+    deps.patch({ saving: true });
+    try {
+      const project = await deps.createProject(input);
+      deps.patch({ selectedProjectId: projectViewId(project.id), status: "Project created." });
+      await loadWorkspace();
+    } catch (error) {
+      deps.patch({ status: deps.formatError("creating project", error) });
+    } finally {
+      deps.patch({ saving: false });
+    }
+  }
+
+  async function updateProject(input: ProjectEditorInput) {
+    const projectId = projectIdFromViewId(deps.getState().selectedProjectId);
+    if (!projectId) {
+      deps.patch({ status: "Select a project" });
+      return;
+    }
+    deps.patch({ saving: true });
+    try {
+      await deps.updateProject({ projectId, ...input });
+      deps.patch({ status: "Project updated." });
+      await loadWorkspace();
+    } catch (error) {
+      deps.patch({ status: deps.formatError("updating project", error) });
+    } finally {
+      deps.patch({ saving: false });
+    }
+  }
+
+  async function deleteSelectedProject() {
+    const projectId = projectIdFromViewId(deps.getState().selectedProjectId);
+    if (!projectId) {
+      deps.patch({ status: "Select a project" });
+      return;
+    }
+    deps.patch({ saving: true });
+    try {
+      await deps.deleteProject(projectId);
+      deps.patch({ selectedProjectId: null, status: "Project deleted." });
+      await loadWorkspace();
+    } catch (error) {
+      deps.patch({ status: deps.formatError("deleting project", error) });
+    } finally {
+      deps.patch({ saving: false });
+    }
+  }
+
+  async function runProjectAnalysis(input: ProjectAnalysisStartCommand) {
+    deps.patch({ saving: true });
+    try {
+      const runId = await deps.startProjectAnalysis(input);
+      deps.patch({ status: `Project analysis queued: ${runId}` });
+      await loadWorkspace();
+    } catch (error) {
+      deps.patch({ status: deps.formatError("starting project analysis", error) });
+    } finally {
+      deps.patch({ saving: false });
+    }
+  }
+
   return {
     refreshDerivedState,
     loadWorkspace,
     connectSelectedSources,
+    removeProjectSource,
+    createProject,
+    updateProject,
+    deleteSelectedProject,
+    runProjectAnalysis,
   };
 }
