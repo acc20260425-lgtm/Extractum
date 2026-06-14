@@ -18,6 +18,7 @@ artifacts
 
 /.codex
 /.codex-logs/
+/.agents/
 /.kilo/
 /.superpowers/
 /.playwright-mcp/
