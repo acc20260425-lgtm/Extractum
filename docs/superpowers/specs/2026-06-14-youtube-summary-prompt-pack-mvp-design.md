@@ -208,6 +208,9 @@ prompt_pack_youtube_videos
 prompt_pack_youtube_segments
 prompt_pack_youtube_key_points
 prompt_pack_youtube_quotes
+prompt_pack_youtube_action_items
+prompt_pack_youtube_open_questions
+prompt_pack_youtube_synthesis_items
 ```
 
 ### `prompt_pack_runs`
@@ -345,6 +348,9 @@ MVP stage set:
 
 - `source_ingestion`
 - `youtube_summary/transcript_analysis`
+- `youtube_summary/segment_extraction`
+- `youtube_summary/key_point_extraction`
+- `youtube_summary/quote_extraction`
 - `youtube_summary/synthesis`
 - `final_synthesis`
 - `validation`
@@ -364,11 +370,15 @@ Important fields:
 - `resolved_profile_snapshot_json_zstd`
 - `started_at`
 - `completed_at`
+- `status_reason`
 - `error`
 
 For MVP, `youtube_summary/transcript_analysis` runs once per video.
-`youtube_summary/synthesis` is recorded for multi-video runs as
-`not_implemented` or `skipped`.
+`youtube_summary/segment_extraction`, `youtube_summary/key_point_extraction`,
+and `youtube_summary/quote_extraction` are recorded as `skipped` with
+`status_reason = "combined_into_transcript_analysis_mvp"` because the first real
+LLM stage returns those objects together. `youtube_summary/synthesis` is
+recorded for multi-video runs as `not_implemented` or `skipped`.
 
 ### `prompt_pack_stage_artifacts`
 
@@ -423,6 +433,9 @@ Projection tables store queryable slices of canonical JSON:
 - `prompt_pack_youtube_segments`
 - `prompt_pack_youtube_key_points`
 - `prompt_pack_youtube_quotes`
+- `prompt_pack_youtube_action_items`
+- `prompt_pack_youtube_open_questions`
+- `prompt_pack_youtube_synthesis_items`
 
 Every projection row should store:
 
@@ -522,7 +535,9 @@ It runs once per video. The stage prompt asks for a structured JSON result with:
 - enough local references for backend assembly.
 
 The backend owns canonical IDs and canonical evidence/source refs. LLM output is
-treated as a candidate payload.
+treated as a candidate payload. The LLM must use only run-local material refs
+provided in the prompt; it must not assign canonical `claim_id`, `evidence_id`,
+or `source_ref_id` values.
 
 ### Assembly
 
@@ -555,11 +570,18 @@ Checks:
 - evidence timestamps are inside source transcript bounds;
 - `video.source_ref_id` points to a `youtube_video` source ref;
 - every `Video.source_refs` includes its `source_ref_id`;
+- `Video.claim_refs`, `Video.evidence_refs`, and `Video.source_refs` match the
+  derived traversal unions for retained nested objects;
 - standard key points have non-empty `claim_refs`;
+- action items, when present, have non-empty `claim_refs`;
+- claims and evidence obey one-claim-per-direct-evidence ownership;
 - notable quotes have non-empty `evidence_refs`;
 - quote evidence points to top-level evidence with
   `fragment_type = "video_timestamp_range"` and `text_mode = "verbatim"`;
 - quote text is at most 50 words;
+- quote `word_count`, when present, matches the same word-counting convention;
+- segment evidence refs point to evidence whose locator overlaps the segment
+  timestamp range;
 - multi-video `synthesis = null` produces a warning or limitation.
 
 MVP does not implement the full reference validator, graph healing, retry
@@ -680,6 +702,8 @@ Backend tests should cover:
 - per-video LLM failure producing partial multi-video run;
 - canonical result storage and projection rebuild;
 - spec-aware validator success and failure cases;
+- validator coverage for traversal unions, quote word counts, segment evidence
+  ranges, and one-claim-per-evidence ownership;
 - stage artifact storage with sanitized provider errors.
 
 Schema tests should verify:
