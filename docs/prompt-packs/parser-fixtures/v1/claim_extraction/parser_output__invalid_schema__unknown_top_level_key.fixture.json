@@ -1,0 +1,29 @@
+{
+  "fixture_id": "parser_output__invalid_schema__unknown_top_level_key",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "claim_extraction",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_fragment_candidate_ids": ["fragcand_1"],
+  "raw_message_content": "{\n  \"claim_candidates\": [],\n  \"unknown_candidates\": [],\n  \"verification_task_candidates\": [],\n  \"warnings\": [],\n  \"claims\": []\n}",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "claim_extraction",
+    "candidate_count": 0,
+    "validation_findings": [
+      {
+        "rule_id": "STAGE-PARSE-003",
+        "severity": "error",
+        "layer": "schema",
+        "object_path": "$.claims",
+        "message_contains": "unknown top-level key"
+      }
+    ]
+  },
+  "expected_stage_output": null
+}

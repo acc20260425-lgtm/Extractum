@@ -1,0 +1,41 @@
+{
+  "fixture_id": "parser_output__valid__claim_extraction_minimal",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "claim_extraction",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_fragment_candidate_ids": ["fragcand_1"],
+  "raw_message_content": "{\n  \"claim_candidates\": [\n    {\n      \"claim_text\": \"Local LLM agents are being used in pilot deployments.\",\n      \"claim_type\": \"factual\",\n      \"claim_status\": \"extracted\",\n      \"fragment_candidate_refs\": [\"fragcand_1\"],\n      \"confidence\": {\n        \"score\": 0.82,\n        \"basis\": \"strong_direct_evidence\",\n        \"custom_basis\": null,\n        \"method\": \"llm_assessment\",\n        \"custom_method\": null\n      },\n      \"rationale\": \"The fragment explicitly describes pilot deployments.\"\n    }\n  ],\n  \"unknown_candidates\": [],\n  \"verification_task_candidates\": [],\n  \"warnings\": []\n}",
+  "expected_parse_result": {
+    "parse_status": "valid",
+    "stage": "claim_extraction",
+    "candidate_count": 1,
+    "validation_findings": []
+  },
+  "expected_stage_output": {
+    "claim_candidates": [
+      {
+        "claim_text": "Local LLM agents are being used in pilot deployments.",
+        "claim_type": "factual",
+        "claim_status": "extracted",
+        "fragment_candidate_refs": ["fragcand_1"],
+        "confidence": {
+          "score": 0.82,
+          "basis": "strong_direct_evidence",
+          "custom_basis": null,
+          "method": "llm_assessment",
+          "custom_method": null
+        },
+        "rationale": "The fragment explicitly describes pilot deployments."
+      }
+    ],
+    "unknown_candidates": [],
+    "verification_task_candidates": [],
+    "warnings": []
+  }
+}

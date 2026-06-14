@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/text_range.schema.json",
+  "title": "Fragment Locator: text_range",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for evidence.locator_data where fragment_type = text_range. char_start/char_end are Unicode codepoint offsets, 0-based, [start,end). Cross-field rule char_end > char_start remains a pipeline/code validation rule.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "char_start": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "char_end": {
+      "type": "integer",
+      "exclusiveMinimum": 0
+    },
+    "snapshot_text_id": {
+      "type": ["string", "null"]
+    }
+  },
+  "required": [
+    "schema_version",
+    "char_start",
+    "char_end"
+  ],
+  "additionalProperties": false
+}

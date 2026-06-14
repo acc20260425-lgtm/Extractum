@@ -1,0 +1,32 @@
+{
+  "fixture_id": "parser_output__invalid_schema__final_synthesis_unknown_top_level_key",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "final_synthesis",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "pack_id": "technology_watch",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_claim_ids": ["claim_1"],
+  "allowed_evidence_ids": ["evidence_1"],
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "raw_message_content": "{\n  \"outputs_candidate\": {\n    \"summary\": {\n      \"summary_text\": \"Summary.\",\n      \"claim_refs\": [],\n      \"evidence_refs\": [],\n      \"source_refs\": []\n    },\n    \"sections\": []\n  },\n  \"metadata\": {}\n}",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "final_synthesis",
+    "candidate_count": 1,
+    "validation_findings": [
+      {
+        "rule_id": "STAGE-PARSE-003",
+        "severity": "error",
+        "layer": "schema",
+        "object_path": "$.metadata",
+        "message_contains": "unknown top-level key"
+      }
+    ]
+  },
+  "expected_stage_output": null
+}

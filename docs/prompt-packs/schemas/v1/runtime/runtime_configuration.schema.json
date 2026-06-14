@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/runtime/runtime_configuration.schema.json",
+  "title": "Runtime Configuration",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for prompt-pack runtime configuration artifacts. This schema validates implementation configuration for orchestration; runtime configuration is not part of canonical result JSON.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "runtime_configuration": {
+      "$ref": "#/$defs/runtime_configuration"
+    }
+  },
+  "required": [
+    "runtime_configuration"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "model_class": {
+      "enum": [
+        "cheap_extractor",
+        "balanced_extractor",
+        "reasoning",
+        "pack_reasoning",
+        "writer",
+        "repair",
+        "strong_repair"
+      ]
+    },
+    "stage_route_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtime_configuration": {
+      "type": "object",
+      "properties": {
+        "runtime_config_version": {
+          "const": "1.0"
+        },
+        "model_routing": {
+          "$ref": "#/$defs/model_routing"
+        },
+        "feature_flags": {
+          "$ref": "#/$defs/feature_flags"
+        },
+        "budget_limits": {
+          "$ref": "#/$defs/budget_limits"
+        },
+        "retry_policy": {
+          "$ref": "#/$defs/retry_policy"
+        },
+        "quarantine_policy": {
+          "$ref": "#/$defs/quarantine_policy"
+        },
+        "telemetry": {
+          "$ref": "#/$defs/telemetry"
+        }
+      },
+      "required": [
+        "runtime_config_version",
+        "model_routing",
+        "feature_flags",
+        "budget_limits",
+        "retry_policy",
+        "quarantine_policy",
+        "telemetry"
+      ],
+      "additionalProperties": false
+    },
+    "model_routing": {
+      "type": "object",
+      "properties": {
+        "model_routing_version": {
+          "const": "1.0"
+        },
+        "default_provider_family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_classes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/model_class_config"
+          }
+        },
+        "stage_routes": {
+          "$ref": "#/$defs/stage_routes"
+        }
+      },
+      "required": [
+        "model_routing_version",
+        "default_provider_family",
+        "stage_routes"
+      ],
+      "additionalProperties": false
+    },
+    "model_class_config": {
+      "type": "object",
+      "properties": {
+        "provider_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "temperature": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2
+        },
+        "max_output_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      },
+      "required": [
+        "provider_model"
+      ],
+      "additionalProperties": false
+    },
+    "stage_routes": {
+      "type": "object",
+      "properties": {
+        "fragment_candidate_mining": {
+          "$ref": "#/$defs/model_class"
+        },
+        "claim_extraction": {
+          "$ref": "#/$defs/model_class"
+        },
+        "claim_linking": {
+          "$ref": "#/$defs/model_class"
+        },
+        "pack_data_generation": {
+          "$ref": "#/$defs/model_class"
+        },
+        "final_synthesis": {
+          "$ref": "#/$defs/model_class"
+        },
+        "retry_repair": {
+          "$ref": "#/$defs/model_class"
+        }
+      },
+      "required": [
+        "fragment_candidate_mining",
+        "claim_extraction",
+        "claim_linking",
+        "pack_data_generation",
+        "final_synthesis",
+        "retry_repair"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/model_class"
+      }
+    },
+    "feature_flags": {
+      "type": "object",
+      "properties": {
+        "retry_enabled": {
+          "type": "boolean"
+        },
+        "object_repair_enabled": {
+          "type": "boolean"
+        },
+        "quarantine_enabled": {
+          "type": "boolean"
+        },
+        "strict_reference_validation": {
+          "type": "boolean"
+        },
+        "parser_fallback_enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "retry_enabled",
+        "object_repair_enabled",
+        "quarantine_enabled",
+        "strict_reference_validation",
+        "parser_fallback_enabled"
+      ],
+      "additionalProperties": false
+    },
+    "budget_limits": {
+      "type": "object",
+      "properties": {
+        "max_retry_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stage_timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_prompt_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "max_retry_attempts",
+        "stage_timeout_seconds",
+        "max_prompt_tokens",
+        "max_output_tokens"
+      ],
+      "additionalProperties": false
+    },
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "retryable_layers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "schema",
+              "reference",
+              "pipeline",
+              "qa"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "escalate_after_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fallback_model_class": {
+          "$ref": "#/$defs/model_class"
+        }
+      },
+      "required": [
+        "retryable_layers",
+        "escalate_after_attempts",
+        "fallback_model_class"
+      ],
+      "additionalProperties": false
+    },
+    "quarantine_policy": {
+      "type": "object",
+      "properties": {
+        "store": {
+          "type": "string",
+          "minLength": 1
+        },
+        "redact_raw_provider_output": {
+          "type": "boolean"
+        },
+        "retention_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      },
+      "required": [
+        "store",
+        "redact_raw_provider_output",
+        "retention_days"
+      ],
+      "additionalProperties": false
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "sink": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "enabled",
+        "sink"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

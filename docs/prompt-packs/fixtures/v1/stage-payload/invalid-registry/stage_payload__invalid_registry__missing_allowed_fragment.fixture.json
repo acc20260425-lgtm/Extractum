@@ -1,0 +1,41 @@
+{
+  "stage_io_version": "1.0",
+  "schema_version": "1.0",
+  "stage": "claim_extraction",
+  "run_id": "run_1",
+  "pack_id": "technology_watch",
+  "pack_version": "v1",
+  "input_result_ids": ["result_fragment_mining_1"],
+  "allowed_fragment_candidate_ids": ["fragcand_missing"],
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "source_registry": [
+    {
+      "source_ref_id": "source_ref_1",
+      "source_type": "web_page",
+      "canonical_url": "https://example.com/local-llm-agents",
+      "source_title": "Local LLM agents report"
+    }
+  ],
+  "fragment_registry": [
+    {
+      "candidate_id": "fragcand_1",
+      "source_ref_id": "source_ref_1",
+      "fragment_type": "text_range",
+      "locator_data": {
+        "schema_version": "1.0",
+        "char_start": 0,
+        "char_end": 72,
+        "snapshot_text_id": "snapshot_text_1"
+      },
+      "fragment_text": "The team moved local LLM agents from demos into two pilot deployments.",
+      "context_text": "The report describes deployment status for local LLM agents.",
+      "observation_summary": "The source describes pilot deployments of local LLM agents.",
+      "candidate_type": "adoption_signal",
+      "salience": "high"
+    }
+  ],
+  "task": {
+    "instruction": "Create claim candidates using only allowed fragment candidates.",
+    "output_contract": "claim_extraction_stage_output_v1"
+  }
+}

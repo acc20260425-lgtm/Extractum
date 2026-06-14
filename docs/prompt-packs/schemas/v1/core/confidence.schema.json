@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/core/confidence.schema.json",
+  "title": "Unified Confidence Object",
+  "type": ["object", "null"],
+  "$comment": "Semantic schema for nullable confidence objects used across claims, evidence, relations, and unknowns. confidence.score is a confidence scalar, not a truth-value scalar.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "basis": {
+      "type": "string",
+      "enum": [
+        "multiple_corroborating_sources",
+        "single_source",
+        "strong_direct_evidence",
+        "weak_or_indirect_evidence",
+        "conflicting_sources",
+        "inference_chain",
+        "expert_consensus",
+        "llm_prior_only",
+        "no_evidence",
+        "custom"
+      ]
+    },
+    "custom_basis": {
+      "type": ["string", "null"]
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "llm_assessment",
+        "rule_based",
+        "human_review",
+        "aggregated",
+        "inherited",
+        "custom"
+      ]
+    },
+    "custom_method": {
+      "type": ["string", "null"]
+    }
+  },
+  "required": [
+    "score",
+    "basis",
+    "custom_basis",
+    "method",
+    "custom_method"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "basis": {
+            "const": "custom"
+          }
+        },
+        "required": ["basis"]
+      },
+      "then": {
+        "properties": {
+          "custom_basis": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "custom_basis": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "custom"
+          }
+        },
+        "required": ["method"]
+      },
+      "then": {
+        "properties": {
+          "custom_method": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "custom_method": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

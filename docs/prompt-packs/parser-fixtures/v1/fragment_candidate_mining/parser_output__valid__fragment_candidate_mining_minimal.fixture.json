@@ -1,0 +1,33 @@
+{
+  "fixture_id": "parser_output__valid__fragment_candidate_mining_minimal",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "fragment_candidate_mining",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "allowed_window_ids": ["window_1"],
+  "raw_message_content": "{\n  \"fragment_candidates\": [\n    {\n      \"source_ref_id\": \"source_ref_1\",\n      \"window_id\": \"window_1\",\n      \"fragment_text\": \"This quarter it is running in two internal pilots.\",\n      \"observation_summary\": \"The item has moved from demo to internal pilots.\",\n      \"candidate_type\": \"adoption_signal\",\n      \"salience\": \"high\"\n    }\n  ]\n}",
+  "expected_parse_result": {
+    "parse_status": "valid",
+    "stage": "fragment_candidate_mining",
+    "candidate_count": 1,
+    "validation_findings": []
+  },
+  "expected_stage_output": {
+    "fragment_candidates": [
+      {
+        "source_ref_id": "source_ref_1",
+        "window_id": "window_1",
+        "fragment_text": "This quarter it is running in two internal pilots.",
+        "observation_summary": "The item has moved from demo to internal pilots.",
+        "candidate_type": "adoption_signal",
+        "salience": "high"
+      }
+    ]
+  }
+}

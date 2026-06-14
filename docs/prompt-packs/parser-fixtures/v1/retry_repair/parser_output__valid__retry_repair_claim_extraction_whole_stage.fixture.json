@@ -1,0 +1,37 @@
+{
+  "fixture_id": "parser_output__valid__retry_repair_claim_extraction_whole_stage",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "retry_repair",
+  "repair_target_stage": "claim_extraction",
+  "repair_scope": "whole_stage",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_fragment_candidate_ids": ["fragcand_1"],
+  "raw_message_content": "{\n  \"claim_candidates\": [\n    {\n      \"claim_text\": \"Local LLM agents are being used in pilot deployments.\",\n      \"claim_type\": \"factual\",\n      \"claim_status\": \"extracted\",\n      \"fragment_candidate_refs\": [\"fragcand_1\"],\n      \"confidence\": null,\n      \"rationale\": \"The repaired claim uses the allowed fragment candidate.\"\n    }\n  ],\n  \"unknown_candidates\": [],\n  \"verification_task_candidates\": [],\n  \"warnings\": []\n}",
+  "expected_parse_result": {
+    "parse_status": "valid",
+    "stage": "retry_repair",
+    "candidate_count": 1,
+    "validation_findings": []
+  },
+  "expected_stage_output": {
+    "claim_candidates": [
+      {
+        "claim_text": "Local LLM agents are being used in pilot deployments.",
+        "claim_type": "factual",
+        "claim_status": "extracted",
+        "fragment_candidate_refs": ["fragcand_1"],
+        "confidence": null,
+        "rationale": "The repaired claim uses the allowed fragment candidate."
+      }
+    ],
+    "unknown_candidates": [],
+    "verification_task_candidates": [],
+    "warnings": []
+  }
+}

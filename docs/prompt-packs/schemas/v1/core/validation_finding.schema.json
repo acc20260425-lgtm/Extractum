@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/core/validation_finding.schema.json",
+  "title": "Validation Finding",
+  "type": "object",
+  "$comment": "Semantic schema for the minimal validator finding payload. Implementations may add extra top-level fields, but these fields keep their v1 semantics.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "rule_id": {
+      "type": "string",
+      "pattern": "^[A-Z]+(?:-[A-Z]+)*-[0-9]{3}$"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["error", "warning", "info"]
+    },
+    "layer": {
+      "type": "string",
+      "enum": ["schema", "reference", "pipeline", "qa"]
+    },
+    "object_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_refs": {
+      "type": "object",
+      "properties": {
+        "claim_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relation_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unknown_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "verification_task_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warning_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitation_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "rule_id",
+    "severity",
+    "layer",
+    "object_path",
+    "message",
+    "object_refs"
+  ],
+  "additionalProperties": true
+}

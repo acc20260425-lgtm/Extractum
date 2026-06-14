@@ -1,0 +1,16 @@
+{
+  "fixture_id": "stage_output__partial_failure__one_bad_claim_candidate",
+  "validation_mode": "stage_output",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "STAGE-REF-001",
+      "severity": "error",
+      "object_path": "$.claim_candidates[1].fragment_candidate_refs[0]",
+      "message_contains": "fragcand_missing"
+    }
+  ],
+  "valid_sibling_paths": ["$.claim_candidates[0]"]
+}

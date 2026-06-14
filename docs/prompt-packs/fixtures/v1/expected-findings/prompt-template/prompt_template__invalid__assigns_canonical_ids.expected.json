@@ -1,0 +1,16 @@
+{
+  "fixture_id": "prompt_template__invalid__assigns_canonical_ids",
+  "validation_mode": "prompt_template",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "PROMPT-SHAPE-001",
+      "severity": "error",
+      "layer": "schema",
+      "object_path": "$.template_text",
+      "message_contains": "canonical IDs"
+    }
+  ]
+}

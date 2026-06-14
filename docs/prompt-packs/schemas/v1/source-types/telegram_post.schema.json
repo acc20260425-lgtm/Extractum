@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/source-types/telegram_post.schema.json",
+  "title": "Source Type Data: telegram_post",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for source_ref.type_data where source_type = telegram_post. post_type and discussion_collection_status are free normalized strings with recommended values in source_type_schemas.md. reply_count is the platform counter; discussion_message_count is the pipeline-collected discussion layer count.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "post_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "has_media": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "view_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "forward_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "reply_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "reaction_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "discussion_collection_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "discussion_message_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "is_pinned": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_forwarded": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "forwarded_from_channel_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "forwarded_from_channel_title": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "last_edited_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "scraped_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "creator": {
+      "type": "object",
+      "properties": {
+        "creator_type": {
+          "enum": [
+            "channel",
+            "user"
+          ]
+        },
+        "custom_creator_type": {
+          "type": "null"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "profile_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "creator_type",
+        "custom_creator_type",
+        "id",
+        "platform_specific_id",
+        "display_name",
+        "profile_url"
+      ],
+      "additionalProperties": false
+    },
+    "parent_context": {
+      "type": "object",
+      "properties": {
+        "context_type": {
+          "const": "telegram_channel"
+        },
+        "custom_context_type": {
+          "type": "null"
+        },
+        "context_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "context_type",
+        "custom_context_type",
+        "context_id",
+        "platform_specific_id",
+        "context_title",
+        "context_url"
+      ],
+      "additionalProperties": false
+    },
+    "extra_metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "message_id",
+    "post_type",
+    "has_media",
+    "view_count",
+    "forward_count",
+    "reply_count",
+    "reaction_count",
+    "discussion_collection_status",
+    "discussion_message_count",
+    "is_pinned",
+    "is_forwarded",
+    "forwarded_from_channel_id",
+    "forwarded_from_channel_title",
+    "last_edited_at",
+    "scraped_at",
+    "creator",
+    "parent_context",
+    "extra_metadata"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "is_forwarded": {
+            "const": false
+          }
+        },
+        "required": [
+          "is_forwarded"
+        ]
+      },
+      "then": {
+        "properties": {
+          "forwarded_from_channel_id": {
+            "type": "null"
+          },
+          "forwarded_from_channel_title": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

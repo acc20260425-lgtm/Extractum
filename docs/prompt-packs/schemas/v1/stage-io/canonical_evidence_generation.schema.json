@@ -1,0 +1,606 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/stage-io/canonical_evidence_generation.schema.json",
+  "title": "Stage I/O: canonical_evidence_generation",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for canonical_evidence_generation input and pipeline output payloads. This stage is pipeline-owned: it assigns canonical claim_id and evidence_id values, creates one-claim-per-evidence objects, and rebuilds claim.source_refs. Cross-object ownership and traversal rules remain validator/pipeline checks.",
+  "x-prompt-pack-schema-status": "semantic",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/input_payload"
+    },
+    {
+      "$ref": "#/$defs/pipeline_output"
+    }
+  ],
+  "$defs": {
+    "ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "optional_ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "id_with_numeric_suffix": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*_[0-9]+$"
+    },
+    "claim_type": {
+      "enum": [
+        "factual",
+        "evaluative",
+        "predictive",
+        "causal",
+        "normative",
+        "hypothesis",
+        "custom"
+      ]
+    },
+    "claim_status": {
+      "enum": [
+        "extracted",
+        "inferred",
+        "verified",
+        "partially_verified",
+        "unverified",
+        "retracted",
+        "custom"
+      ]
+    },
+    "evidence_type": {
+      "enum": [
+        "fragment",
+        "inference",
+        "custom"
+      ]
+    },
+    "evidence_role": {
+      "enum": [
+        "supports",
+        "contradicts",
+        "qualifies",
+        "contextualizes",
+        "custom"
+      ]
+    },
+    "fragment_type": {
+      "enum": [
+        "text_range",
+        "paragraph",
+        "video_timestamp_range",
+        "audio_timestamp_range",
+        "post",
+        "comment",
+        "thread_reply",
+        "image_region",
+        "document_section",
+        "aggregate",
+        "custom"
+      ]
+    },
+    "fragment_type_or_null": {
+      "enum": [
+        "text_range",
+        "paragraph",
+        "video_timestamp_range",
+        "audio_timestamp_range",
+        "post",
+        "comment",
+        "thread_reply",
+        "image_region",
+        "document_section",
+        "aggregate",
+        "custom",
+        null
+      ]
+    },
+    "text_mode": {
+      "enum": [
+        "verbatim",
+        "paraphrase",
+        "summary",
+        "description"
+      ]
+    },
+    "text_mode_or_null": {
+      "enum": [
+        "verbatim",
+        "paraphrase",
+        "summary",
+        "description",
+        null
+      ]
+    },
+    "input_payload": {
+      "type": "object",
+      "properties": {
+        "stage_io_version": {
+          "const": "1.0"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "stage": {
+          "const": "canonical_evidence_generation"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_result_ids": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "audit_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "claim_candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/claim_candidate"
+          }
+        },
+        "fragment_registry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment_registry_entry"
+          }
+        }
+      },
+      "required": [
+        "claim_candidates",
+        "fragment_registry"
+      ],
+      "additionalProperties": false
+    },
+    "pipeline_output": {
+      "type": "object",
+      "properties": {
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/canonical_claim"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/canonical_evidence"
+          }
+        }
+      },
+      "required": [
+        "claims",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "claim_candidate": {
+      "type": "object",
+      "properties": {
+        "claim_candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_type": {
+          "$ref": "#/$defs/claim_type"
+        },
+        "custom_claim_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "claim_status": {
+          "$ref": "#/$defs/claim_status"
+        },
+        "custom_claim_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "fragment_candidate_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "rationale": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_candidate_id",
+        "claim_text",
+        "claim_type",
+        "fragment_candidate_refs"
+      ],
+      "additionalProperties": false
+    },
+    "fragment_registry_entry": {
+      "type": "object",
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fragment_type": {
+          "$ref": "#/$defs/fragment_type"
+        },
+        "custom_fragment_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "locator_data": {
+          "$ref": "#/$defs/locator_data_stub"
+        },
+        "fragment_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "observation_summary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "candidate_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "salience": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "verbatim_quote": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "parent_candidate_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "child_candidate_ids": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "created_by_stage": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "candidate_id",
+        "source_ref_id",
+        "fragment_type",
+        "locator_data"
+      ],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "fragment_text"
+          ],
+          "properties": {
+            "fragment_text": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "observation_summary"
+          ],
+          "properties": {
+            "observation_summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "canonical_claim": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "claim_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_type": {
+          "$ref": "#/$defs/claim_type"
+        },
+        "custom_claim_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "claim_status": {
+          "$ref": "#/$defs/claim_status"
+        },
+        "custom_claim_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      },
+      "required": [
+        "claim_id",
+        "claim_text",
+        "claim_type",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "canonical_evidence": {
+      "type": "object",
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "claim_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "source_ref_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_type": {
+          "$ref": "#/$defs/evidence_type"
+        },
+        "custom_evidence_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_role": {
+          "$ref": "#/$defs/evidence_role"
+        },
+        "custom_evidence_role": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "fragment_type": {
+          "$ref": "#/$defs/fragment_type_or_null"
+        },
+        "custom_fragment_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "locator_data": {
+          "$ref": "#/$defs/locator_data_or_null"
+        },
+        "text_mode": {
+          "$ref": "#/$defs/text_mode_or_null"
+        },
+        "fragment_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "contributing_evidence_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "reasoning_summary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "claim_id",
+        "source_ref_id",
+        "evidence_type",
+        "evidence_role",
+        "fragment_type",
+        "locator_data",
+        "text_mode",
+        "fragment_text"
+      ],
+      "additionalProperties": false
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "basis": {
+              "enum": [
+                "multiple_corroborating_sources",
+                "single_source",
+                "strong_direct_evidence",
+                "weak_or_indirect_evidence",
+                "conflicting_sources",
+                "inference_chain",
+                "expert_consensus",
+                "llm_prior_only",
+                "no_evidence",
+                "custom"
+              ]
+            },
+            "custom_basis": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "method": {
+              "enum": [
+                "llm_assessment",
+                "rule_based",
+                "human_review",
+                "aggregated",
+                "inherited",
+                "custom"
+              ]
+            },
+            "custom_method": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
+          },
+          "required": [
+            "score",
+            "basis",
+            "custom_basis",
+            "method",
+            "custom_method"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "locator_data_stub": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": true
+    },
+    "locator_data_or_null": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/locator_data_stub"
+        }
+      ]
+    }
+  }
+}

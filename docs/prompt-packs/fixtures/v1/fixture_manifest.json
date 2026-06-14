@@ -1,0 +1,233 @@
+{
+  "fixture_manifest_version": "1.0",
+  "validator_manifest_version": "1.0",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "fixtures": [
+    {
+      "fixture_id": "canonical_result__valid__technology_watch_minimal",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/valid/canonical_result__valid__technology_watch_minimal.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__valid__technology_watch_minimal.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "canonical_result__valid__youtube_summary_minimal",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/valid/canonical_result__valid__youtube_summary_minimal.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__valid__youtube_summary_minimal.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "canonical_result__invalid_schema__missing_outputs",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-schema/canonical_result__invalid_schema__missing_outputs.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_schema__missing_outputs.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "canonical_result__invalid_reference__dangling_evidence_claim",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-reference/canonical_result__invalid_reference__dangling_evidence_claim.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_reference__dangling_evidence_claim.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__claim_source_refs_not_superset",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__claim_source_refs_not_superset.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__claim_source_refs_not_superset.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__relation_cycle",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__relation_cycle.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__relation_cycle.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__claim_evidence_wrong_owner",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__claim_evidence_wrong_owner.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__claim_evidence_wrong_owner.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__technology_watch_stale_traversal",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__technology_watch_stale_traversal.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__technology_watch_stale_traversal.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__technology_watch_strict_single_claim",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__technology_watch_strict_single_claim.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__technology_watch_strict_single_claim.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__youtube_quote_text_range_evidence",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__youtube_quote_text_range_evidence.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__youtube_quote_text_range_evidence.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__youtube_segment_evidence_out_of_range",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__youtube_segment_evidence_out_of_range.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__youtube_segment_evidence_out_of_range.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__evidence_contributing_cycle",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__evidence_contributing_cycle.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__evidence_contributing_cycle.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__contradicts_wrong_natural_sort",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__contradicts_wrong_natural_sort.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__contradicts_wrong_natural_sort.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__technology_watch_strict_single_source_coverage",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__technology_watch_strict_single_source_coverage.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__technology_watch_strict_single_source_coverage.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__youtube_synthesis_stale_traversal",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__youtube_synthesis_stale_traversal.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__youtube_synthesis_stale_traversal.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__invalid_pipeline__youtube_standard_multi_video_missing_synthesis",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__youtube_standard_multi_video_missing_synthesis.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__youtube_standard_multi_video_missing_synthesis.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": false
+    },
+    {
+      "fixture_id": "canonical_result__qa_warning__single_source_claim",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/qa-warning/canonical_result__qa_warning__single_source_claim.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__qa_warning__single_source_claim.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 1,
+      "required": true
+    },
+    {
+      "fixture_id": "stage_payload__valid__claim_extraction_minimal",
+      "validation_mode": "stage_payload",
+      "fixture_path": "stage-payload/valid/stage_payload__valid__claim_extraction_minimal.fixture.json",
+      "expected_findings_path": "expected-findings/stage-payload/stage_payload__valid__claim_extraction_minimal.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "stage_payload__invalid_registry__missing_allowed_fragment",
+      "validation_mode": "stage_payload",
+      "fixture_path": "stage-payload/invalid-registry/stage_payload__invalid_registry__missing_allowed_fragment.fixture.json",
+      "expected_findings_path": "expected-findings/stage-payload/stage_payload__invalid_registry__missing_allowed_fragment.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "stage_payload__invalid_version__unsupported_stage_io_version",
+      "validation_mode": "stage_payload",
+      "fixture_path": "stage-payload/invalid-version/stage_payload__invalid_version__unsupported_stage_io_version.fixture.json",
+      "expected_findings_path": "expected-findings/stage-payload/stage_payload__invalid_version__unsupported_stage_io_version.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "stage_output__valid__claim_extraction_minimal",
+      "validation_mode": "stage_output",
+      "fixture_path": "stage-output/valid/stage_output__valid__claim_extraction_minimal.fixture.json",
+      "expected_findings_path": "expected-findings/stage-output/stage_output__valid__claim_extraction_minimal.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "stage_output__invalid_reference__disallowed_fragment_candidate",
+      "validation_mode": "stage_output",
+      "fixture_path": "stage-output/invalid-reference/stage_output__invalid_reference__disallowed_fragment_candidate.fixture.json",
+      "expected_findings_path": "expected-findings/stage-output/stage_output__invalid_reference__disallowed_fragment_candidate.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "stage_output__partial_failure__one_bad_claim_candidate",
+      "validation_mode": "stage_output",
+      "fixture_path": "stage-output/partial-failure/stage_output__partial_failure__one_bad_claim_candidate.fixture.json",
+      "expected_findings_path": "expected-findings/stage-output/stage_output__partial_failure__one_bad_claim_candidate.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "prompt_template__valid__claim_extraction_minimal",
+      "validation_mode": "prompt_template",
+      "fixture_path": "prompt-template/valid/prompt_template__valid__claim_extraction_minimal.fixture.json",
+      "expected_findings_path": "expected-findings/prompt-template/prompt_template__valid__claim_extraction_minimal.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
+      "fixture_id": "prompt_template__invalid__assigns_canonical_ids",
+      "validation_mode": "prompt_template",
+      "fixture_path": "prompt-template/invalid/prompt_template__invalid__assigns_canonical_ids.fixture.json",
+      "expected_findings_path": "expected-findings/prompt-template/prompt_template__invalid__assigns_canonical_ids.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    }
+  ]
+}

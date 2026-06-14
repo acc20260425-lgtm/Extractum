@@ -1,0 +1,37 @@
+{
+  "fixture_id": "parser_output__invalid_schema__retry_repair_unknown_top_level_key",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "retry_repair",
+  "repair_target_stage": "claim_extraction",
+  "repair_scope": "whole_stage",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_fragment_candidate_ids": ["fragcand_1"],
+  "raw_message_content": "{\n  \"claim_candidates\": [],\n  \"unknown_candidates\": [],\n  \"verification_task_candidates\": [],\n  \"warnings\": [],\n  \"notes\": \"This key is not allowed in retry repair output.\"\n}",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "retry_repair",
+    "candidate_count": 0,
+    "validation_findings": [
+      {
+        "rule_id": "STAGE-PARSE-003",
+        "severity": "error",
+        "layer": "schema",
+        "object_path": "$.notes",
+        "message_contains": "unknown top-level key"
+      }
+    ]
+  },
+  "expected_stage_output": {
+    "claim_candidates": [],
+    "unknown_candidates": [],
+    "verification_task_candidates": [],
+    "warnings": [],
+    "notes": "This key is not allowed in retry repair output."
+  }
+}

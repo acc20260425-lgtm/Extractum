@@ -1,0 +1,32 @@
+{
+  "fixture_id": "parser_output__invalid_parse__pack_data_generation_malformed_json",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "pack_data_generation",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "pack_id": "technology_watch",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_claim_ids": ["claim_1"],
+  "allowed_evidence_ids": ["evidence_1"],
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "raw_message_content": "{ \"pack_data_candidate\": ",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "pack_data_generation",
+    "candidate_count": 0,
+    "validation_findings": [
+      {
+        "rule_id": "STAGE-PARSE-001",
+        "severity": "error",
+        "layer": "schema",
+        "object_path": "$",
+        "message_contains": "not valid JSON"
+      }
+    ]
+  },
+  "expected_stage_output": null
+}

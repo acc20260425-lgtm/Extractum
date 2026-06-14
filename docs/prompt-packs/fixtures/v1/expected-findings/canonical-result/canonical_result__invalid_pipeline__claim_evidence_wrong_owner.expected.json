@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__invalid_pipeline__claim_evidence_wrong_owner",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "VR-CORE-050",
+      "severity": "error",
+      "object_path": "$.claims[1].evidence_refs[0]",
+      "message_contains": "same claim"
+    }
+  ]
+}

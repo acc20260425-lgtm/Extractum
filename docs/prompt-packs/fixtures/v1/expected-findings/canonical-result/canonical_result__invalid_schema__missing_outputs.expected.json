@@ -1,0 +1,21 @@
+{
+  "fixture_id": "canonical_result__invalid_schema__missing_outputs",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 2,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "SCHEMA-VALIDATION-001",
+      "severity": "error",
+      "object_path": "$.outputs",
+      "message_contains": "core/result"
+    },
+    {
+      "rule_id": "VR-CORE-005",
+      "severity": "error",
+      "object_path": "$.outputs",
+      "message_contains": "outputs"
+    }
+  ]
+}

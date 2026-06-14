@@ -1,0 +1,289 @@
+{
+  "schema_version": "1.0",
+  "result_id": "result_ys_1",
+  "parent_result_ids": null,
+  "run_id": "run_ys_1",
+  "pack_id": "youtube_summary",
+  "pack_version": "v1",
+  "stage": "final_result",
+  "created_at": "2026-06-12T08:00:00Z",
+  "output_language": "en",
+  "metadata": {
+    "result_status": "complete",
+    "producer_type": "llm",
+    "contains_partial_results": false,
+    "contains_unverified_claims": false
+  },
+  "run_context": {
+    "project_id": "project_fixture",
+    "run_goal": "Validate a minimal YouTube summary result.",
+    "selected_pack": {
+      "pack_id": "youtube_summary",
+      "pack_version": "v1"
+    },
+    "control_preset": "standard",
+    "evidence_mode": "standard",
+    "output_language": "en",
+    "source_languages": [
+      "en"
+    ],
+    "period": {
+      "from": "2026-06-01",
+      "to": "2026-06-12"
+    },
+    "input_corpus": {
+      "source_count": 1,
+      "material_count": 1,
+      "fragment_count": 1,
+      "source_types": [
+        "youtube_video"
+      ]
+    },
+    "model_selection": [
+      {
+        "stage": "youtube_summary/key_point_extraction",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini"
+      }
+    ]
+  },
+  "outputs": {
+    "summary": {
+      "summary_text": "The video argues that local LLM agents are moving into internal pilot deployments.",
+      "claim_refs": [
+        "claim_1"
+      ],
+      "evidence_refs": [
+        "evidence_1"
+      ],
+      "source_refs": [
+        "source_ref_1"
+      ]
+    },
+    "sections": [
+      {
+        "section_id": "section_summary",
+        "section_type": "summary",
+        "custom_section_type": null,
+        "title": "Summary",
+        "items": [
+          {
+            "item_id": "item_1",
+            "text": "The speaker frames local LLM agents as ready for internal pilots.",
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ]
+      }
+    ],
+    "pack_data": {
+      "youtube_summary": {
+        "videos": [
+          {
+            "video_id": "video_ys_001",
+            "source_ref_id": "source_ref_1",
+            "segments": [
+              {
+                "segment_id": "segment_1",
+                "title": "Pilot deployments",
+                "timestamp_start": 120,
+                "timestamp_end": 150,
+                "creator_defined": false,
+                "claim_refs": [
+                  "claim_1"
+                ],
+                "evidence_refs": [
+                  "evidence_1"
+                ],
+                "summary_text": "The speaker describes moving from demos into internal pilots."
+              }
+            ],
+            "key_points": [
+              {
+                "key_point_id": "key_point_1",
+                "claim_refs": [
+                  "claim_1"
+                ],
+                "evidence_refs": [
+                  "evidence_1"
+                ],
+                "point_text": "Local LLM agents are moving from demos into internal pilots."
+              }
+            ],
+            "notable_quotes": [
+              {
+                "quote_id": "quote_1",
+                "quote_text": "We are moving from demos into internal pilots.",
+                "word_count": 8,
+                "speaker_label": "Speaker",
+                "speaker_id": null,
+                "timestamp_start": 300,
+                "timestamp_end": 310,
+                "claim_refs": [
+                  "claim_1"
+                ],
+                "evidence_refs": [
+                  "evidence_1"
+                ]
+              }
+            ],
+            "action_items": [],
+            "open_questions": [],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "synthesis": null
+      }
+    }
+  },
+  "source_refs": [
+    {
+      "source_ref_id": "source_ref_1",
+      "source_type": "youtube_video",
+      "custom_source_type": null,
+      "material_id": "material_ys_1",
+      "source_id": "source_ys_1",
+      "snapshot_id": "snapshot_ys_1",
+      "canonical_url": "https://www.youtube.com/watch?v=fixture001",
+      "internal_uri": "extractum://materials/material_ys_1",
+      "source_title": "Local LLM Agents: From Demos to Pilots",
+      "published_at": "2026-06-01T00:00:00Z",
+      "accessed_at": "2026-06-12T08:00:00Z",
+      "access_status": "live",
+      "type_data": {
+        "schema_version": "1.0",
+        "video_id": "fixture001",
+        "duration_seconds": 600,
+        "language": "en",
+        "captions_available": true,
+        "transcript_available": true,
+        "is_live_recording": false,
+        "view_count": 1200,
+        "like_count": 84,
+        "comment_count": 12,
+        "comment_collection_status": "not_requested",
+        "playlist_id": null,
+        "playlist_title": null,
+        "playlist_position": null,
+        "scraped_at": "2026-06-12T08:00:00Z",
+        "creator": {
+          "creator_type": "channel",
+          "custom_creator_type": null,
+          "id": "channel_001",
+          "platform_specific_id": "UCfixture001",
+          "display_name": "Example Channel",
+          "profile_url": "https://youtube.com/@example"
+        },
+        "parent_context": {
+          "context_type": "youtube_channel",
+          "custom_context_type": null,
+          "context_id": "channel_001",
+          "platform_specific_id": "UCfixture001",
+          "context_title": "Example Channel",
+          "context_url": "https://youtube.com/@example"
+        },
+        "extra_metadata": {}
+      }
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "claim_1",
+      "claim_type": "factual",
+      "custom_claim_type": null,
+      "claim_status": "verified",
+      "custom_claim_status": null,
+      "claim_text": "The speaker says local LLM agents are moving from demos into internal pilots.",
+      "normalized_claim_text": "The speaker says local LLM agents are moving from demos into internal pilots.",
+      "normalized_claim_language": "en",
+      "scope": {
+        "period": {
+          "from": "2026-06-01",
+          "to": "2026-06-12"
+        },
+        "geo": null,
+        "applies_to": [
+          "local_llm_agents"
+        ]
+      },
+      "confidence": {
+        "score": 0.88,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "evidence_refs": [
+        "evidence_1"
+      ],
+      "source_refs": [
+        "source_ref_1"
+      ],
+      "relation_refs": [],
+      "provenance": {
+        "stage": "youtube_summary/key_point_extraction",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_1",
+      "claim_id": "claim_1",
+      "source_ref_id": "source_ref_1",
+      "evidence_type": "fragment",
+      "custom_evidence_type": null,
+      "evidence_role": "supports",
+      "custom_evidence_role": null,
+      "fragment_type": "video_timestamp_range",
+      "custom_fragment_type": null,
+      "locator_data": {
+        "schema_version": "1.0",
+        "timestamp_start": 300,
+        "timestamp_end": 310
+      },
+      "text_mode": "verbatim",
+      "fragment_text": "We are moving from demos into internal pilots.",
+      "context_text": "The speaker is describing adoption status for local LLM agents.",
+      "contributing_evidence_refs": [],
+      "reasoning_summary": null,
+      "confidence": {
+        "score": 0.9,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "provenance": {
+        "stage": "youtube_summary/quote_extraction",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "claim_relations": [],
+  "unknowns": [],
+  "verification_tasks": [],
+  "warnings": [],
+  "limitations": [],
+  "quality_flags": [],
+  "audit_refs": []
+}

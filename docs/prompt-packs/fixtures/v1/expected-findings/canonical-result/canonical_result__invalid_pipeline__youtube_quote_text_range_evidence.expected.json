@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__invalid_pipeline__youtube_quote_text_range_evidence",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "VR-YS-010",
+      "severity": "error",
+      "object_path": "$.outputs.pack_data.youtube_summary.videos[0].notable_quotes[0].evidence_refs",
+      "message_contains": "video_timestamp_range"
+    }
+  ]
+}

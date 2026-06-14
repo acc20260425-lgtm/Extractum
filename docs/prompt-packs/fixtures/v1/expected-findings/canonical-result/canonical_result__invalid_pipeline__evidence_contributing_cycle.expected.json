@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__invalid_pipeline__evidence_contributing_cycle",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "VR-CORE-026",
+      "severity": "error",
+      "object_path": "$.evidence[0].contributing_evidence_refs",
+      "message_contains": "self-reference"
+    }
+  ]
+}

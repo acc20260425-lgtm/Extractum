@@ -1,0 +1,7 @@
+{
+  "template_id": "claim_extraction_assigns_canonical_ids",
+  "validation_mode": "prompt_template",
+  "stage": "claim_extraction",
+  "pack_id": "technology_watch",
+  "template_text": "Create final claims for the result. Assign a new claim_id to every claim candidate and assign evidence_id values for each supporting quote. Return the final canonical JSON result."
+}

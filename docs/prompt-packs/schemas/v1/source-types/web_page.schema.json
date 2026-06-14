@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/source-types/web_page.schema.json",
+  "title": "Source Type Data: web_page",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for source_ref.type_data where source_type = web_page. canonical_url is intentionally not duplicated here; it lives on source_ref.canonical_url. page_type, content_extraction_status, and comment_collection_status are free normalized strings with recommended values in source_type_schemas.md.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "page_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "site_name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "word_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "content_extraction_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "comment_collection_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "last_modified_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "scraped_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "creator": {
+      "type": "object",
+      "properties": {
+        "creator_type": {
+          "enum": [
+            "user",
+            "organization",
+            "publication",
+            "website"
+          ]
+        },
+        "custom_creator_type": {
+          "type": "null"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "profile_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "creator_type",
+        "custom_creator_type",
+        "id",
+        "platform_specific_id",
+        "display_name",
+        "profile_url"
+      ],
+      "additionalProperties": false
+    },
+    "parent_context": {
+      "type": "object",
+      "properties": {
+        "context_type": {
+          "enum": [
+            "website",
+            null
+          ]
+        },
+        "custom_context_type": {
+          "type": "null"
+        },
+        "context_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "context_type",
+        "custom_context_type",
+        "context_id",
+        "platform_specific_id",
+        "context_title",
+        "context_url"
+      ],
+      "additionalProperties": false
+    },
+    "extra_metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "page_type",
+    "site_name",
+    "language",
+    "word_count",
+    "content_extraction_status",
+    "comment_collection_status",
+    "last_modified_at",
+    "scraped_at",
+    "creator",
+    "parent_context",
+    "extra_metadata"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "parent_context": {
+            "properties": {
+              "context_type": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "context_type"
+            ]
+          }
+        },
+        "required": [
+          "parent_context"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parent_context": {
+            "properties": {
+              "custom_context_type": {
+                "type": "null"
+              },
+              "context_id": {
+                "type": "null"
+              },
+              "platform_specific_id": {
+                "type": "null"
+              },
+              "context_title": {
+                "type": "null"
+              },
+              "context_url": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

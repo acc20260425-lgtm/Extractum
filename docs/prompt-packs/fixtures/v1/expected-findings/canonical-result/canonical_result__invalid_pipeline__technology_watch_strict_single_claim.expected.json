@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__invalid_pipeline__technology_watch_strict_single_claim",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "VR-TW-008",
+      "severity": "error",
+      "object_path": "$.outputs.pack_data.technology_watch.technologies[0].maturity.claim_refs",
+      "message_contains": "two independent claim_refs"
+    }
+  ]
+}

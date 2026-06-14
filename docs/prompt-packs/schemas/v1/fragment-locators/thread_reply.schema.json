@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/thread_reply.schema.json",
+  "title": "Fragment Locator: thread_reply",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for evidence.locator_data where fragment_type = thread_reply. reply_id is preferred for reproducibility; reply_index is allowed when platform ID is unavailable.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "scope": {
+      "const": "full"
+    },
+    "reply_id": {
+      "type": ["string", "null"]
+    },
+    "reply_index": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "scope"
+  ],
+  "anyOf": [
+    {
+      "required": ["reply_id"],
+      "properties": {
+        "reply_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "required": ["reply_index"],
+      "properties": {
+        "reply_index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

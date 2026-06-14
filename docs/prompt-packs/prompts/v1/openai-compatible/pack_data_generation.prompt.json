@@ -1,0 +1,47 @@
+{
+  "prompt_id": "openai_compatible__pack_data_generation__v1",
+  "provider_family": "openai_compatible",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "stage": "pack_data_generation",
+  "description": "OpenAI-compatible message template for closed-world pack-specific data candidate generation.",
+  "response_format": {
+    "type": "json_object"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are operating inside a closed-world extraction pipeline. Return only valid JSON. Use only claim_id, evidence_id, and source_ref_id values provided in allowed ID arrays. Do not invent IDs. Do not create final canonical result JSON."
+    },
+    {
+      "role": "developer",
+      "content": "Stage: pack_data_generation\n\nTask:\nCreate pack-specific structured candidates over the fixed claim/evidence/source graph.\n\nRules:\n- Return pack_data_candidate with exactly the requested pack namespace.\n- Use only IDs from allowed_claim_ids, allowed_evidence_ids, and allowed_source_ref_ids.\n- Do not treat traversal fields as authoritative; the pipeline may rebuild them.\n- Follow the pack-specific spec for object names and required fields.\n- If the pack-specific conclusion is unsupported, return an unknown_candidate or weaker object instead.\n- Do not add unknown top-level keys."
+    },
+    {
+      "role": "user",
+      "content": "Stage payload:\n{{stage_payload_json}}\n\nPack:\n{{pack_id}} {{pack_version}}\n\nAllowed claim IDs:\n{{allowed_claim_ids}}\n\nAllowed evidence IDs:\n{{allowed_evidence_ids}}\n\nAllowed source ref IDs:\n{{allowed_source_ref_ids}}\n\nClaim registry:\n{{claim_registry}}\n\nEvidence registry:\n{{evidence_registry}}\n\nSource registry:\n{{source_registry}}\n\nReturn only this JSON object shape:\n{\n  \"pack_data_candidate\": {\n    \"{{pack_id}}\": {}\n  },\n  \"unknown_candidates\": [],\n  \"warning_candidates\": []\n}"
+    }
+  ],
+  "expected_top_level_keys": [
+    "pack_data_candidate",
+    "unknown_candidates",
+    "warning_candidates"
+  ],
+  "prohibited_output_keys": [
+    "result_id",
+    "outputs",
+    "claims",
+    "evidence",
+    "claim_relations",
+    "audit_refs"
+  ],
+  "parser_contract": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true,
+    "allowed_claim_ids_source": "stage_payload.allowed_claim_ids",
+    "allowed_evidence_ids_source": "stage_payload.allowed_evidence_ids",
+    "allowed_source_ref_ids_source": "stage_payload.allowed_source_ref_ids",
+    "success_output_mode": "stage_output"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/document_section.schema.json",
+  "title": "Fragment Locator: document_section",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for evidence.locator_data where fragment_type = document_section. At least one of section_heading, page_number, or section_index must identify the section. Cross-field rule page_number <= page_count remains a pipeline/code validation rule.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "section_heading": {
+      "type": ["string", "null"]
+    },
+    "page_number": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "section_index": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "page_count": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    }
+  },
+  "required": [
+    "schema_version"
+  ],
+  "anyOf": [
+    {
+      "required": ["section_heading"],
+      "properties": {
+        "section_heading": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "required": ["page_number"],
+      "properties": {
+        "page_number": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    {
+      "required": ["section_index"],
+      "properties": {
+        "section_index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/source-types/youtube_video.schema.json",
+  "title": "Source Type Data: youtube_video",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for source_ref.type_data where source_type = youtube_video. channel_id is intentionally not duplicated as a top-level field; use creator.platform_specific_id and parent_context.platform_specific_id. comment_collection_status is a free normalized string with recommended values not_requested, collected, partial, unavailable.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "video_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "duration_seconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "captions_available": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "transcript_available": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_live_recording": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "view_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "like_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "comment_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "comment_collection_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "playlist_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "playlist_title": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "playlist_position": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "scraped_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "creator": {
+      "type": "object",
+      "properties": {
+        "creator_type": {
+          "const": "channel"
+        },
+        "custom_creator_type": {
+          "type": "null"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "profile_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "creator_type",
+        "custom_creator_type",
+        "id",
+        "platform_specific_id",
+        "display_name",
+        "profile_url"
+      ],
+      "additionalProperties": false
+    },
+    "parent_context": {
+      "type": "object",
+      "properties": {
+        "context_type": {
+          "const": "youtube_channel"
+        },
+        "custom_context_type": {
+          "type": "null"
+        },
+        "context_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "context_type",
+        "custom_context_type",
+        "context_id",
+        "platform_specific_id",
+        "context_title",
+        "context_url"
+      ],
+      "additionalProperties": false
+    },
+    "extra_metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "video_id",
+    "duration_seconds",
+    "language",
+    "captions_available",
+    "transcript_available",
+    "is_live_recording",
+    "view_count",
+    "like_count",
+    "comment_count",
+    "comment_collection_status",
+    "playlist_id",
+    "playlist_title",
+    "playlist_position",
+    "scraped_at",
+    "creator",
+    "parent_context",
+    "extra_metadata"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "playlist_id": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "playlist_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "playlist_title": {
+            "type": "null"
+          },
+          "playlist_position": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "playlist_position": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "playlist_position"
+        ]
+      },
+      "then": {
+        "properties": {
+          "playlist_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,52 @@
+{
+  "fixture_id": "parser_output__valid__pack_data_generation_youtube_summary_minimal",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "pack_data_generation",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "pack_id": "youtube_summary",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_claim_ids": ["claim_1"],
+  "allowed_evidence_ids": ["evidence_1"],
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "raw_message_content": "{\n  \"pack_data_candidate\": {\n    \"youtube_summary\": {\n      \"videos\": [\n        {\n          \"source_ref_id\": \"source_ref_1\",\n          \"segments\": [],\n          \"key_points\": [\n            {\n              \"text\": \"The speaker says the work has moved into internal pilots.\",\n              \"claim_refs\": [\"claim_1\"],\n              \"evidence_refs\": [\"evidence_1\"],\n              \"source_refs\": [\"source_ref_1\"]\n            }\n          ],\n          \"notable_quotes\": [],\n          \"action_items\": [],\n          \"open_questions\": [],\n          \"claim_refs\": [\"claim_1\"],\n          \"evidence_refs\": [\"evidence_1\"],\n          \"source_refs\": [\"source_ref_1\"]\n        }\n      ],\n      \"synthesis\": null\n    }\n  },\n  \"unknown_candidates\": [],\n  \"warning_candidates\": []\n}",
+  "expected_parse_result": {
+    "parse_status": "valid",
+    "stage": "pack_data_generation",
+    "candidate_count": 1,
+    "validation_findings": []
+  },
+  "expected_stage_output": {
+    "pack_data_candidate": {
+      "youtube_summary": {
+        "videos": [
+          {
+            "source_ref_id": "source_ref_1",
+            "segments": [],
+            "key_points": [
+              {
+                "text": "The speaker says the work has moved into internal pilots.",
+                "claim_refs": ["claim_1"],
+                "evidence_refs": ["evidence_1"],
+                "source_refs": ["source_ref_1"]
+              }
+            ],
+            "notable_quotes": [],
+            "action_items": [],
+            "open_questions": [],
+            "claim_refs": ["claim_1"],
+            "evidence_refs": ["evidence_1"],
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "synthesis": null
+      }
+    },
+    "unknown_candidates": [],
+    "warning_candidates": []
+  }
+}

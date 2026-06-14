@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__invalid_pipeline__claim_source_refs_not_superset",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "VR-CORE-017",
+      "severity": "error",
+      "object_path": "$.claims[0].source_refs",
+      "message_contains": "source_ref_2"
+    }
+  ]
+}

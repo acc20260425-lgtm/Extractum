@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/stage-io/source_ingestion.schema.json",
+  "title": "Stage I/O: source_ingestion",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for source_ingestion input and output payloads. Source identity is pipeline-owned; full type_data validation is delegated to source-type schemas before canonical result assembly.",
+  "x-prompt-pack-schema-status": "semantic",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/input_payload"
+    },
+    {
+      "$ref": "#/$defs/output_payload"
+    }
+  ],
+  "$defs": {
+    "ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "source_type": {
+      "enum": [
+        "youtube_video",
+        "web_page",
+        "rss_entry",
+        "telegram_post",
+        "telegram_channel_snapshot",
+        "telegram_chat_snapshot",
+        "forum_thread",
+        "custom"
+      ]
+    },
+    "common_envelope": {
+      "type": "object",
+      "properties": {
+        "stage_io_version": {
+          "const": "1.0"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "stage": {
+          "const": "source_ingestion"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_result_ids": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "audit_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "stage_io_version",
+        "schema_version",
+        "stage",
+        "run_id",
+        "pack_id",
+        "pack_version"
+      ],
+      "additionalProperties": false
+    },
+    "input_payload": {
+      "type": "object",
+      "properties": {
+        "stage_io_version": {
+          "const": "1.0"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "stage": {
+          "const": "source_ingestion"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_result_ids": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "audit_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "raw_material_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/raw_material_ref"
+          }
+        }
+      },
+      "required": [
+        "stage_io_version",
+        "schema_version",
+        "stage",
+        "run_id",
+        "pack_id",
+        "pack_version",
+        "raw_material_refs"
+      ],
+      "additionalProperties": false
+    },
+    "raw_material_ref": {
+      "type": "object",
+      "properties": {
+        "material_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_type": {
+          "$ref": "#/$defs/source_type"
+        },
+        "custom_source_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "canonical_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "internal_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "published_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "accessed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "material_id",
+        "source_type",
+        "canonical_url",
+        "snapshot_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_type": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "source_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "custom_source_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "custom_source_type"
+            ]
+          },
+          "else": {
+            "properties": {
+              "custom_source_type": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "output_payload": {
+      "type": "object",
+      "properties": {
+        "source_registry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_registry_entry"
+          }
+        }
+      },
+      "required": [
+        "source_registry"
+      ],
+      "additionalProperties": false
+    },
+    "source_registry_entry": {
+      "type": "object",
+      "properties": {
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_type": {
+          "$ref": "#/$defs/source_type"
+        },
+        "custom_source_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "material_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "canonical_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "internal_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "published_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "accessed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "access_status": {
+          "enum": [
+            "live",
+            "cached",
+            "unavailable",
+            null
+          ]
+        },
+        "type_data": {
+          "$ref": "#/$defs/type_data_stub"
+        }
+      },
+      "required": [
+        "source_ref_id",
+        "source_type",
+        "material_id",
+        "snapshot_id",
+        "canonical_url",
+        "internal_uri",
+        "source_title",
+        "type_data"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_type": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "source_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "custom_source_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "custom_source_type"
+            ]
+          }
+        }
+      ]
+    },
+    "type_data_stub": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

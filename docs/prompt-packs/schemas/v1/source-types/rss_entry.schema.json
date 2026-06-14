@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/source-types/rss_entry.schema.json",
+  "title": "Source Type Data: rss_entry",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for source_ref.type_data where source_type = rss_entry. entry_url is the URL declared by the feed; source_ref.canonical_url remains the canonical material locator. rss_entry has no collection_status in v1; content completeness is represented by free-string content_mode.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "entry_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entry_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
+    "feed_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
+    "feed_title": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "content_mode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "categories": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "word_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "scraped_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "creator": {
+      "type": "object",
+      "properties": {
+        "creator_type": {
+          "enum": [
+            "user",
+            "organization",
+            "publication",
+            "website"
+          ]
+        },
+        "custom_creator_type": {
+          "type": "null"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "profile_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "creator_type",
+        "custom_creator_type",
+        "id",
+        "platform_specific_id",
+        "display_name",
+        "profile_url"
+      ],
+      "additionalProperties": false
+    },
+    "parent_context": {
+      "type": "object",
+      "properties": {
+        "context_type": {
+          "const": "rss_feed"
+        },
+        "custom_context_type": {
+          "type": "null"
+        },
+        "context_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "context_type",
+        "custom_context_type",
+        "context_id",
+        "platform_specific_id",
+        "context_title",
+        "context_url"
+      ],
+      "additionalProperties": false
+    },
+    "extra_metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "entry_id",
+    "entry_url",
+    "feed_url",
+    "feed_title",
+    "content_mode",
+    "categories",
+    "word_count",
+    "language",
+    "scraped_at",
+    "creator",
+    "parent_context",
+    "extra_metadata"
+  ],
+  "additionalProperties": false
+}

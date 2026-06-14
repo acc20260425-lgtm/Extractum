@@ -1,0 +1,45 @@
+{
+  "prompt_id": "openai_compatible__claim_linking__v1",
+  "provider_family": "openai_compatible",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "stage": "claim_linking",
+  "description": "OpenAI-compatible message template for closed-world claim relation candidate detection.",
+  "response_format": {
+    "type": "json_object"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are operating inside a closed-world extraction pipeline. Return only valid JSON. Use only claim_id and evidence_id values provided in allowed ID arrays. Do not invent IDs. Do not create relation_id, claim_id, evidence_id, or final canonical result JSON."
+    },
+    {
+      "role": "developer",
+      "content": "Stage: claim_linking\n\nTask:\nFind meaningful relation candidates between already fixed claims.\n\nRules:\n- Use only IDs from allowed_claim_ids and allowed_evidence_ids.\n- Do not create relation_id.\n- relation_type must be one of: contradicts, supports, qualifies, supersedes, custom.\n- custom_relation_type must be null unless relation_type is custom.\n- evidence_refs must refer only to evidence that supports the relation.\n- Use description for contradicts and qualifies.\n- Do not duplicate existing relations if they are present in the input.\n- The pipeline may normalize source_claim_id and target_claim_id for contradicts.\n- Do not add unknown top-level keys."
+    },
+    {
+      "role": "user",
+      "content": "Stage payload:\n{{stage_payload_json}}\n\nAllowed claim IDs:\n{{allowed_claim_ids}}\n\nAllowed evidence IDs:\n{{allowed_evidence_ids}}\n\nClaim registry:\n{{claim_registry}}\n\nEvidence registry:\n{{evidence_registry}}\n\nReturn only this JSON object shape:\n{\n  \"relation_candidates\": [\n    {\n      \"relation_type\": \"contradicts | supports | qualifies | supersedes | custom\",\n      \"custom_relation_type\": null,\n      \"source_claim_id\": \"claim_N\",\n      \"target_claim_id\": \"claim_N\",\n      \"description\": \"short explanation or null\",\n      \"evidence_refs\": [\"evidence_N\"],\n      \"confidence\": {\n        \"score\": 0.0,\n        \"basis\": \"multiple_corroborating_sources | single_source | strong_direct_evidence | weak_or_indirect_evidence | conflicting_sources | inference_chain | expert_consensus | llm_prior_only | no_evidence | custom\",\n        \"custom_basis\": null,\n        \"method\": \"llm_assessment | rule_based | human_review | aggregated | inherited | custom\",\n        \"custom_method\": null\n      }\n    }\n  ]\n}"
+    }
+  ],
+  "expected_top_level_keys": [
+    "relation_candidates"
+  ],
+  "prohibited_output_keys": [
+    "relation_id",
+    "claim_id",
+    "evidence_id",
+    "claims",
+    "evidence",
+    "claim_relations",
+    "outputs"
+  ],
+  "parser_contract": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true,
+    "allowed_claim_ids_source": "stage_payload.allowed_claim_ids",
+    "allowed_evidence_ids_source": "stage_payload.allowed_evidence_ids",
+    "success_output_mode": "stage_output"
+  }
+}

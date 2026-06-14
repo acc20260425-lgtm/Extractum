@@ -1,0 +1,47 @@
+{
+  "prompt_id": "openai_compatible__claim_extraction__v1",
+  "provider_family": "openai_compatible",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "stage": "claim_extraction",
+  "description": "OpenAI-compatible message template for closed-world claim candidate extraction.",
+  "response_format": {
+    "type": "json_object"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are operating inside a closed-world extraction pipeline. Return only valid JSON. Use only IDs provided in allowed ID arrays. Do not invent IDs. Do not assign canonical claim_id or evidence_id values. Do not output final canonical result JSON."
+    },
+    {
+      "role": "developer",
+      "content": "Stage: claim_extraction\n\nTask:\nCreate atomic claim candidates supported by the provided pre-contract fragment candidates.\n\nRules:\n- Use fragment_candidate_refs, not evidence_refs.\n- Every claim_candidate must reference at least one allowed fragment candidate.\n- If the fragments are insufficient, return an unknown_candidate instead of inventing support.\n- Keep claim_text atomic: one checkable assertion per claim.\n- Do not create derived traversal fields such as source_refs.\n- Do not add unknown top-level keys."
+    },
+    {
+      "role": "user",
+      "content": "Stage payload:\n{{stage_payload_json}}\n\nAllowed fragment candidate IDs:\n{{allowed_fragment_candidate_ids}}\n\nFragment registry cards:\n{{fragment_registry}}\n\nReturn only this JSON object shape:\n{\n  \"claim_candidates\": [\n    {\n      \"claim_text\": \"string\",\n      \"claim_type\": \"factual | evaluative | predictive | normative | causal | hypothesis\",\n      \"claim_status\": \"extracted | inferred | verified | partially_verified | unverified | retracted\",\n      \"fragment_candidate_refs\": [\"fragcand_N\"],\n      \"confidence\": {\n        \"score\": 0.0,\n        \"basis\": \"multiple_corroborating_sources | single_source | strong_direct_evidence | weak_or_indirect_evidence | conflicting_sources | inference_chain | expert_consensus | llm_prior_only | no_evidence | custom\",\n        \"custom_basis\": null,\n        \"method\": \"llm_assessment | rule_based | human_review | aggregated | inherited | custom\",\n        \"custom_method\": null\n      },\n      \"rationale\": \"short explanation\"\n    }\n  ],\n  \"unknown_candidates\": [],\n  \"verification_task_candidates\": [],\n  \"warnings\": []\n}"
+    }
+  ],
+  "expected_top_level_keys": [
+    "claim_candidates",
+    "unknown_candidates",
+    "verification_task_candidates",
+    "warnings"
+  ],
+  "prohibited_output_keys": [
+    "claim_id",
+    "evidence_id",
+    "evidence_refs",
+    "source_refs",
+    "outputs",
+    "claims",
+    "evidence"
+  ],
+  "parser_contract": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true,
+    "allowed_fragment_candidate_ids_source": "stage_payload.allowed_fragment_candidate_ids",
+    "success_output_mode": "stage_output"
+  }
+}

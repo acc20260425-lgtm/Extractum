@@ -1,0 +1,8 @@
+{
+  "fixture_id": "prompt_template__valid__claim_extraction_minimal",
+  "validation_mode": "prompt_template",
+  "expected_valid": true,
+  "expected_error_count": 0,
+  "expected_warning_count": 0,
+  "expected_findings": []
+}

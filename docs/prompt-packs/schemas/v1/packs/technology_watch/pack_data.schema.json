@@ -1,0 +1,640 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/packs/technology_watch/pack_data.schema.json",
+  "title": "Pack Data: technology_watch",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for outputs.pack_data.technology_watch. This schema covers the Technology object model and nested object shapes. Traversal union rules, strict-mode coverage, claim/source independence, and result-level obligations remain validator/pipeline checks.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "technologies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/technology"
+      }
+    }
+  },
+  "required": [
+    "technologies"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "maturity_level": {
+      "enum": [
+        "experiment",
+        "pilot",
+        "limited_production",
+        "production",
+        "deprecated",
+        "unknown"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "confidence": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "basis": {
+          "enum": [
+            "multiple_corroborating_sources",
+            "single_source",
+            "strong_direct_evidence",
+            "weak_or_indirect_evidence",
+            "conflicting_sources",
+            "inference_chain",
+            "expert_consensus",
+            "llm_prior_only",
+            "no_evidence",
+            "custom"
+          ]
+        },
+        "custom_basis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "method": {
+          "enum": [
+            "llm_assessment",
+            "rule_based",
+            "human_review",
+            "aggregated",
+            "inherited",
+            "custom"
+          ]
+        },
+        "custom_method": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "score",
+        "basis",
+        "custom_basis",
+        "method",
+        "custom_method"
+      ],
+      "additionalProperties": false
+    },
+    "technology": {
+      "type": "object",
+      "properties": {
+        "technology_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "normalized_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "maturity": {
+          "$ref": "#/$defs/maturity"
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/signal"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool"
+          }
+        },
+        "adoption_barriers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/adoption_barrier"
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/risk"
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/recommendation"
+          }
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "technology_id",
+        "name",
+        "normalized_name",
+        "maturity",
+        "signals",
+        "tools",
+        "adoption_barriers",
+        "risks",
+        "recommendations",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "maturity": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/maturity_level"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "rationale": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "level",
+        "confidence",
+        "rationale",
+        "claim_refs"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "level": {
+                "not": {
+                  "const": "unknown"
+                }
+              }
+            },
+            "required": [
+              "level"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim_refs": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "signal": {
+      "type": "object",
+      "properties": {
+        "signal_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signal_type": {
+          "enum": [
+            "adoption_evidence",
+            "maturity_indicator",
+            "community_activity",
+            "vendor_movement",
+            "research_publication",
+            "tool_release",
+            "custom"
+          ]
+        },
+        "custom_signal_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "signal_id",
+        "signal_type",
+        "custom_signal_type",
+        "description",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "signal_type": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "signal_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "custom_signal_type": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "custom_signal_type": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "claim_refs": {
+                  "minItems": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "evidence_refs": {
+                  "minItems": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "source_refs": {
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "tool": {
+      "type": "object",
+      "properties": {
+        "tool_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "tool_maturity": {
+          "$ref": "#/$defs/maturity_level"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "tool_id",
+        "name",
+        "canonical_url",
+        "description",
+        "tool_maturity",
+        "claim_refs",
+        "source_refs"
+      ],
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "claim_refs": {
+                  "minItems": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "source_refs": {
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "adoption_barrier": {
+      "type": "object",
+      "properties": {
+        "barrier_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "barrier_type": {
+          "enum": [
+            "technical",
+            "organizational",
+            "cost",
+            "regulatory",
+            "knowledge",
+            "ecosystem",
+            "custom"
+          ]
+        },
+        "custom_barrier_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array",
+          "minItems": 1
+        }
+      },
+      "required": [
+        "barrier_id",
+        "barrier_type",
+        "custom_barrier_type",
+        "description",
+        "severity",
+        "claim_refs"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "barrier_type": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "barrier_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "custom_barrier_type": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "custom_barrier_type": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "risk": {
+      "type": "object",
+      "properties": {
+        "risk_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "risk_type": {
+          "enum": [
+            "technical",
+            "security",
+            "adoption",
+            "strategic",
+            "regulatory",
+            "vendor_dependency",
+            "custom"
+          ]
+        },
+        "custom_risk_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array",
+          "minItems": 1
+        }
+      },
+      "required": [
+        "risk_id",
+        "risk_type",
+        "custom_risk_type",
+        "description",
+        "severity",
+        "claim_refs"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "risk_type": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "risk_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "custom_risk_type": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "custom_risk_type": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "recommendation": {
+      "type": "object",
+      "properties": {
+        "recommendation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recommendation_type": {
+          "enum": [
+            "evaluate",
+            "pilot",
+            "adopt",
+            "monitor",
+            "avoid",
+            "deprecate",
+            "custom"
+          ]
+        },
+        "custom_recommendation_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "$ref": "#/$defs/severity"
+        },
+        "target_audience": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array",
+          "minItems": 1
+        }
+      },
+      "required": [
+        "recommendation_id",
+        "recommendation_type",
+        "custom_recommendation_type",
+        "description",
+        "priority",
+        "target_audience",
+        "claim_refs"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recommendation_type": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "recommendation_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "custom_recommendation_type": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "custom_recommendation_type": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

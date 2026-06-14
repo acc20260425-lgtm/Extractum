@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/source-types/forum_thread.schema.json",
+  "title": "Source Type Data: forum_thread",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for source_ref.type_data where source_type = forum_thread. platform is a free normalized string, not an enum. vote_score is the only v1 cross-platform vote aggregate; upvote_count/downvote_count remain extra_metadata when available. reply_collection_status is intentionally absent because replies are fragment/evidence layer.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "thread_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "platform": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "board_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "board_name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "reply_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "participant_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "view_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "vote_score": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "is_locked": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_pinned": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "last_reply_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "scraped_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "creator": {
+      "type": "object",
+      "properties": {
+        "creator_type": {
+          "const": "user"
+        },
+        "custom_creator_type": {
+          "type": "null"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "profile_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "creator_type",
+        "custom_creator_type",
+        "id",
+        "platform_specific_id",
+        "display_name",
+        "profile_url"
+      ],
+      "additionalProperties": false
+    },
+    "parent_context": {
+      "type": "object",
+      "properties": {
+        "context_type": {
+          "enum": [
+            "forum",
+            "forum_category"
+          ]
+        },
+        "custom_context_type": {
+          "type": "null"
+        },
+        "context_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_specific_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      },
+      "required": [
+        "context_type",
+        "custom_context_type",
+        "context_id",
+        "platform_specific_id",
+        "context_title",
+        "context_url"
+      ],
+      "additionalProperties": false
+    },
+    "extra_metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "integer",
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "thread_id",
+    "platform",
+    "board_id",
+    "board_name",
+    "reply_count",
+    "participant_count",
+    "view_count",
+    "vote_score",
+    "is_locked",
+    "is_pinned",
+    "last_reply_at",
+    "scraped_at",
+    "creator",
+    "parent_context",
+    "extra_metadata"
+  ],
+  "additionalProperties": false
+}

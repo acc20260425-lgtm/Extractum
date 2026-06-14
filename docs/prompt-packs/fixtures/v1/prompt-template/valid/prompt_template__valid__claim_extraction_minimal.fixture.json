@@ -1,0 +1,7 @@
+{
+  "template_id": "claim_extraction_minimal",
+  "validation_mode": "prompt_template",
+  "stage": "claim_extraction",
+  "pack_id": "technology_watch",
+  "template_text": "You are performing claim_extraction. Use only the provided allowed_fragment_candidate_ids and source_registry. Do not create canonical claim_id or evidence_id values. Do not output a final canonical result. Return strict JSON with claim_candidates, unknown_candidates, verification_task_candidates, and warnings. Each claim_candidate must reference only allowed fragment_candidate_refs."
+}

@@ -1,0 +1,40 @@
+{
+  "fixture_id": "parser_output__valid__claim_linking_qualifies_minimal",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "claim_linking",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_claim_ids": ["claim_1", "claim_2"],
+  "allowed_evidence_ids": ["evidence_1", "evidence_2"],
+  "raw_message_content": "{\n  \"relation_candidates\": [\n    {\n      \"relation_type\": \"qualifies\",\n      \"custom_relation_type\": null,\n      \"source_claim_id\": \"claim_2\",\n      \"target_claim_id\": \"claim_1\",\n      \"description\": \"The second claim narrows when the first claim applies.\",\n      \"evidence_refs\": [\"evidence_2\"],\n      \"confidence\": {\n        \"score\": 0.74,\n        \"basis\": \"inference_chain\",\n        \"custom_basis\": null,\n        \"method\": \"llm_assessment\",\n        \"custom_method\": null\n      }\n    }\n  ]\n}",
+  "expected_parse_result": {
+    "parse_status": "valid",
+    "stage": "claim_linking",
+    "candidate_count": 1,
+    "validation_findings": []
+  },
+  "expected_stage_output": {
+    "relation_candidates": [
+      {
+        "relation_type": "qualifies",
+        "custom_relation_type": null,
+        "source_claim_id": "claim_2",
+        "target_claim_id": "claim_1",
+        "description": "The second claim narrows when the first claim applies.",
+        "evidence_refs": ["evidence_2"],
+        "confidence": {
+          "score": 0.74,
+          "basis": "inference_chain",
+          "custom_basis": null,
+          "method": "llm_assessment",
+          "custom_method": null
+        }
+      }
+    ]
+  }
+}

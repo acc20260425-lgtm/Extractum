@@ -1,0 +1,481 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/packs/youtube_summary/pack_data.schema.json",
+  "title": "Pack Data: youtube_summary",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for outputs.pack_data.youtube_summary. This schema covers videos[], nested per-video objects, and nullable/object synthesis shape. Video source anchors, traversal unions, quote evidence authority, word-count equality, segment timestamp membership, and multi-video synthesis obligations remain validator/pipeline checks.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "videos": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/video"
+      }
+    },
+    "synthesis": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/synthesis"
+        }
+      ]
+    }
+  },
+  "required": [
+    "videos",
+    "synthesis"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "priority": {
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        null
+      ]
+    },
+    "video": {
+      "type": "object",
+      "properties": {
+        "video_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/segment"
+          }
+        },
+        "key_points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/key_point"
+          }
+        },
+        "notable_quotes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/notable_quote"
+          }
+        },
+        "action_items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action_item"
+          }
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/open_question"
+          }
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "video_id",
+        "source_ref_id",
+        "segments",
+        "key_points",
+        "notable_quotes",
+        "action_items",
+        "open_questions",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "segment": {
+      "type": "object",
+      "properties": {
+        "segment_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestamp_start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "timestamp_end": {
+          "type": "number",
+          "minimum": 0
+        },
+        "creator_defined": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "segment_id",
+        "title",
+        "summary_text",
+        "timestamp_start",
+        "timestamp_end",
+        "creator_defined",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "key_point": {
+      "type": "object",
+      "properties": {
+        "key_point_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "point_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "key_point_id",
+        "point_text",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "notable_quote": {
+      "type": "object",
+      "properties": {
+        "quote_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quote_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "speaker_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "speaker_label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "word_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 50
+        },
+        "timestamp_start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "timestamp_end": {
+          "type": "number",
+          "minimum": 0
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array",
+          "minItems": 1
+        }
+      },
+      "required": [
+        "quote_id",
+        "quote_text",
+        "speaker_id",
+        "speaker_label",
+        "word_count",
+        "timestamp_start",
+        "timestamp_end",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "action_item": {
+      "type": "object",
+      "properties": {
+        "action_item_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_audience": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "priority": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            null
+          ]
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "action_item_id",
+        "action_text",
+        "target_audience",
+        "priority",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "open_question": {
+      "type": "object",
+      "properties": {
+        "open_question_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "question_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "raised_by_speaker": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "timestamp_start": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "timestamp_end": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "open_question_id",
+        "question_text",
+        "raised_by_speaker",
+        "timestamp_start",
+        "timestamp_end",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "synthesis": {
+      "type": "object",
+      "properties": {
+        "cross_video_themes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cross_video_theme"
+          }
+        },
+        "common_claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/common_claim"
+          }
+        },
+        "contradictions_across_videos": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cross_video_contradiction"
+          }
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "relation_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "cross_video_themes",
+        "common_claims",
+        "contradictions_across_videos",
+        "claim_refs",
+        "relation_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "cross_video_theme": {
+      "type": "object",
+      "properties": {
+        "theme_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "theme_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "video_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "theme_id",
+        "theme_text",
+        "video_refs",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "common_claim": {
+      "type": "object",
+      "properties": {
+        "common_claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "video_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "common_claim_id",
+        "summary_text",
+        "video_refs",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "cross_video_contradiction": {
+      "type": "object",
+      "properties": {
+        "contradiction_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "video_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "relation_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "contradiction_id",
+        "description",
+        "video_refs",
+        "relation_refs",
+        "claim_refs",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

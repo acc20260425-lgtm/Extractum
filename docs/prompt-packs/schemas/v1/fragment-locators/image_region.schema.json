@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/image_region.schema.json",
+  "title": "Fragment Locator: image_region",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for evidence.locator_data where fragment_type = image_region. Coordinates are relative 0.0-1.0 with origin top-left. Cross-field rules x + width <= 1.0 and y + height <= 1.0 remain pipeline/code validation rules.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "x": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "y": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "width": {
+      "type": "number",
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0
+    },
+    "height": {
+      "type": "number",
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0
+    },
+    "snapshot_width_px": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "snapshot_height_px": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "x",
+    "y",
+    "width",
+    "height"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "required": ["snapshot_width_px"],
+        "properties": {
+          "snapshot_width_px": {
+            "type": "integer"
+          }
+        }
+      },
+      "then": {
+        "required": ["snapshot_height_px"],
+        "properties": {
+          "snapshot_height_px": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["snapshot_height_px"],
+        "properties": {
+          "snapshot_height_px": {
+            "type": "integer"
+          }
+        }
+      },
+      "then": {
+        "required": ["snapshot_width_px"],
+        "properties": {
+          "snapshot_width_px": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

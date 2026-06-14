@@ -1,0 +1,72 @@
+{
+  "prompt_id": "openai_compatible__retry_repair__v1",
+  "provider_family": "openai_compatible",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "stage": "retry_repair",
+  "description": "OpenAI-compatible message template for compact retry/repair of failed stage outputs.",
+  "response_format": {
+    "type": "json_object"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are repairing one failed output inside a closed-world extraction pipeline. Return only valid JSON. Use only IDs provided in allowed ID arrays. Do not invent IDs. Do not assign canonical result IDs. Do not output final canonical result JSON."
+    },
+    {
+      "role": "developer",
+      "content": "Stage: retry_repair\nRepair target stage: {{repair_target_stage}}\n\nTask:\nFix the previous stage output according to the validation findings.\n\nRules:\n- Preserve valid candidate objects when possible.\n- If repair_scope is object, return replacement_candidates only.\n- If repair_scope is whole_stage, return the same top-level JSON shape as the original target stage.\n- Use only IDs from the allowed ID arrays.\n- Do not add unknown top-level keys.\n- Do not explain outside JSON."
+    },
+    {
+      "role": "user",
+      "content": "Retry payload:\n{{retry_repair_payload_json}}\n\nValidation findings:\n{{validation_findings}}\n\nAllowed IDs:\n{{allowed_id_summary}}\n\nPrevious output summary:\n{{previous_output_summary}}\n\nRepair scope:\n{{repair_scope}}\n\nFor object-isolated repair, return only this JSON object shape:\n{\n  \"replacement_candidates\": [\n    {\n      \"replacement_for_path\": \"claim_candidates[0]\",\n      \"claim_text\": \"...\",\n      \"claim_type\": \"factual\",\n      \"claim_status\": \"extracted\",\n      \"fragment_candidate_refs\": [\"fragcand_N\"],\n      \"confidence\": null,\n      \"rationale\": \"short explanation\"\n    }\n  ]\n}\n\nFor whole-stage repair, return the target stage output shape exactly."
+    }
+  ],
+  "expected_top_level_key_sets": [
+    [
+      "replacement_candidates"
+    ],
+    [
+      "claim_candidates",
+      "unknown_candidates",
+      "verification_task_candidates",
+      "warnings"
+    ],
+    [
+      "fragment_candidates"
+    ],
+    [
+      "relation_candidates"
+    ],
+    [
+      "pack_data_candidate",
+      "unknown_candidates",
+      "warning_candidates"
+    ],
+    [
+      "outputs_candidate"
+    ]
+  ],
+  "prohibited_output_keys": [
+    "result_id",
+    "claim_id",
+    "evidence_id",
+    "relation_id",
+    "claims",
+    "evidence",
+    "claim_relations",
+    "metadata",
+    "audit_refs"
+  ],
+  "parser_contract": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true,
+    "repair_target_stage_source": "retry_payload.stage",
+    "allowed_fragment_candidate_ids_source": "retry_payload.allowed_fragment_candidate_ids",
+    "allowed_claim_ids_source": "retry_payload.allowed_claim_ids",
+    "allowed_evidence_ids_source": "retry_payload.allowed_evidence_ids",
+    "allowed_source_ref_ids_source": "retry_payload.allowed_source_ref_ids",
+    "success_output_mode": "stage_output"
+  }
+}

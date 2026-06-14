@@ -1,0 +1,30 @@
+{
+  "fixture_id": "parser_output__invalid_schema__fragment_candidate_mining_unknown_top_level_key",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "fragment_candidate_mining",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "allowed_window_ids": ["window_1"],
+  "raw_message_content": "{\n  \"fragment_candidates\": [],\n  \"evidence\": []\n}",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "fragment_candidate_mining",
+    "candidate_count": 0,
+    "validation_findings": [
+      {
+        "rule_id": "STAGE-PARSE-003",
+        "severity": "error",
+        "layer": "schema",
+        "object_path": "$.evidence",
+        "message_contains": "unknown top-level key"
+      }
+    ]
+  },
+  "expected_stage_output": null
+}

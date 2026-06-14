@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.0",
+  "result_id": "result_dangling_evidence_claim_1",
+  "parent_result_ids": null,
+  "run_id": "run_1",
+  "pack_id": "technology_watch",
+  "pack_version": "v1",
+  "stage": "final_result",
+  "created_at": "2026-06-12T08:00:00Z",
+  "output_language": "en",
+  "metadata": {
+    "result_status": "complete",
+    "producer_type": "llm",
+    "contains_partial_results": false,
+    "contains_unverified_claims": false
+  },
+  "run_context": {
+    "project_id": "project_fixture",
+    "run_goal": "Exercise dangling evidence claim validation.",
+    "selected_pack": {
+      "pack_id": "technology_watch",
+      "pack_version": "v1"
+    },
+    "control_preset": "standard",
+    "evidence_mode": "standard",
+    "output_language": "en",
+    "source_languages": [
+      "en"
+    ],
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-06-12"
+    },
+    "input_corpus": {
+      "source_count": 1,
+      "material_count": 1,
+      "fragment_count": 1,
+      "source_types": [
+        "web_page"
+      ]
+    },
+    "model_selection": []
+  },
+  "outputs": {
+    "summary": {
+      "summary_text": "The cited source indicates that local LLM agents are in pilot use.",
+      "claim_refs": [
+        "claim_1"
+      ],
+      "evidence_refs": [],
+      "source_refs": [
+        "source_ref_1"
+      ]
+    },
+    "sections": [
+      {
+        "section_id": "section_assessment",
+        "section_type": "assessment",
+        "custom_section_type": null,
+        "title": "Assessment",
+        "items": [
+          {
+            "item_id": "item_1",
+            "text": "Local LLM agents are assessed at pilot maturity.",
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ]
+      }
+    ],
+    "pack_data": {
+      "technology_watch": {
+        "technologies": [
+          {
+            "technology_id": "tech_1",
+            "name": "Local LLM agents",
+            "normalized_name": "local_llm_agents",
+            "maturity": {
+              "level": "pilot",
+              "confidence": {
+                "score": 0.82,
+                "basis": "single_source",
+                "custom_basis": null,
+                "method": "llm_assessment",
+                "custom_method": null
+              },
+              "rationale": "The fixture keeps the claim valid while evidence points to a missing claim.",
+              "claim_refs": [
+                "claim_1"
+              ]
+            },
+            "signals": [],
+            "tools": [],
+            "adoption_barriers": [],
+            "risks": [],
+            "recommendations": [],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [],
+            "source_refs": []
+          }
+        ]
+      }
+    }
+  },
+  "source_refs": [
+    {
+      "source_ref_id": "source_ref_1",
+      "source_type": "web_page",
+      "custom_source_type": null,
+      "material_id": "material_1",
+      "source_id": "source_1",
+      "snapshot_id": "snapshot_1",
+      "canonical_url": "https://example.com/local-llm-agents",
+      "internal_uri": "extractum://materials/material_1",
+      "source_title": "Local LLM agents report",
+      "published_at": "2026-06-01T00:00:00Z",
+      "accessed_at": "2026-06-12T08:00:00Z",
+      "access_status": "live",
+      "type_data": {
+        "schema_version": "1.0",
+        "page_type": "article",
+        "site_name": "Example Research",
+        "language": "en",
+        "content_extraction_status": "complete",
+        "comment_collection_status": "not_requested",
+        "creator": {
+          "creator_type": "organization",
+          "platform_specific_id": null,
+          "display_name": "Example Research",
+          "profile_url": "https://example.com",
+          "custom_creator_type": null,
+          "id": null
+        },
+        "parent_context": {
+          "context_type": null,
+          "context_id": null,
+          "context_title": null,
+          "context_url": null,
+          "custom_context_type": null,
+          "platform_specific_id": null
+        },
+        "extra_metadata": {},
+        "word_count": null,
+        "last_modified_at": null,
+        "scraped_at": null
+      }
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "claim_1",
+      "claim_type": "factual",
+      "custom_claim_type": null,
+      "claim_status": "verified",
+      "custom_claim_status": null,
+      "claim_text": "Local LLM agents are being used in pilot deployments.",
+      "normalized_claim_text": "Local LLM agents are being used in pilot deployments.",
+      "normalized_claim_language": "en",
+      "scope": {
+        "period": {
+          "from": "2026-01-01",
+          "to": "2026-06-12"
+        },
+        "geo": null,
+        "applies_to": [
+          "local_llm_agents"
+        ]
+      },
+      "confidence": {
+        "score": 0.82,
+        "basis": "single_source",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "evidence_refs": [],
+      "source_refs": [
+        "source_ref_1"
+      ],
+      "relation_refs": [],
+      "provenance": {
+        "stage": "claim_extraction",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_1",
+      "claim_id": "claim_999",
+      "source_ref_id": "source_ref_1",
+      "evidence_type": "fragment",
+      "custom_evidence_type": null,
+      "evidence_role": "supports",
+      "custom_evidence_role": null,
+      "fragment_type": "text_range",
+      "custom_fragment_type": null,
+      "locator_data": {
+        "schema_version": "1.0",
+        "char_start": 0,
+        "char_end": 72,
+        "snapshot_text_id": "snapshot_text_1"
+      },
+      "text_mode": "verbatim",
+      "fragment_text": "The team moved local LLM agents from demos into two pilot deployments.",
+      "context_text": "The report describes deployment status for local LLM agents.",
+      "contributing_evidence_refs": [],
+      "reasoning_summary": null,
+      "confidence": {
+        "score": 0.86,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "provenance": {
+        "stage": "evidence_linking",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "claim_relations": [],
+  "unknowns": [],
+  "verification_tasks": [],
+  "warnings": [],
+  "limitations": [],
+  "quality_flags": [],
+  "audit_refs": []
+}

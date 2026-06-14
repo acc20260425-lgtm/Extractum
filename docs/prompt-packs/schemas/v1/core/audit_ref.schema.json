@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/core/audit_ref.schema.json",
+  "title": "Audit Reference",
+  "type": "object",
+  "$comment": "Semantic schema for lightweight inline audit pointers. Full prompts, inputs/outputs, tokens, costs, errors, and repair requests remain in the external audit log.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "audit_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audit_uri": {
+      "type": ["string", "null"]
+    },
+    "audit_store": {
+      "type": ["string", "null"]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "stage_start",
+        "stage_end",
+        "model_call",
+        "validation",
+        "repair",
+        "error",
+        "human_review",
+        "system_event",
+        "custom"
+      ]
+    },
+    "custom_event_type": {
+      "type": ["string", "null"]
+    },
+    "stage": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "summary": {
+      "type": ["string", "null"]
+    },
+    "object_refs": {
+      "type": "object",
+      "properties": {
+        "claim_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relation_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unknown_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "verification_task_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warning_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitation_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "audit_id",
+    "event_type",
+    "stage",
+    "timestamp"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "custom"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "custom_event_type": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "custom_event_type": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

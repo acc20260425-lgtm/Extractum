@@ -1,0 +1,42 @@
+{
+  "fixture_id": "parser_output__invalid_reference__disallowed_claim",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "claim_linking",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_claim_ids": ["claim_1", "claim_2"],
+  "allowed_evidence_ids": ["evidence_1", "evidence_2"],
+  "raw_message_content": "{\n  \"relation_candidates\": [\n    {\n      \"relation_type\": \"supports\",\n      \"custom_relation_type\": null,\n      \"source_claim_id\": \"claim_999\",\n      \"target_claim_id\": \"claim_1\",\n      \"description\": null,\n      \"evidence_refs\": [\"evidence_1\"],\n      \"confidence\": null\n    }\n  ]\n}",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "claim_linking",
+    "candidate_count": 1,
+    "validation_findings": [
+      {
+        "rule_id": "STAGE-REF-001",
+        "severity": "error",
+        "layer": "reference",
+        "object_path": "$.relation_candidates[0].source_claim_id",
+        "message_contains": "not allowed"
+      }
+    ]
+  },
+  "expected_stage_output": {
+    "relation_candidates": [
+      {
+        "relation_type": "supports",
+        "custom_relation_type": null,
+        "source_claim_id": "claim_999",
+        "target_claim_id": "claim_1",
+        "description": null,
+        "evidence_refs": ["evidence_1"],
+        "confidence": null
+      }
+    ]
+  }
+}

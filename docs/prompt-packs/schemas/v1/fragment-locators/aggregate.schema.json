@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/aggregate.schema.json",
+  "title": "Fragment Locator: aggregate",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for evidence.locator_data where fragment_type = aggregate. Parent evidence.contributing_evidence_refs must be non-empty and fragment_count must match its length when present; those are pipeline/code validation rules because they require parent evidence access.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "fragment_count": {
+      "type": ["integer", "null"],
+      "exclusiveMinimum": 0
+    }
+  },
+  "required": [
+    "schema_version"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__invalid_pipeline__contradicts_wrong_natural_sort",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "VR-CORE-031",
+      "severity": "error",
+      "object_path": "$.claim_relations[0]",
+      "message_contains": "natural sort"
+    }
+  ]
+}

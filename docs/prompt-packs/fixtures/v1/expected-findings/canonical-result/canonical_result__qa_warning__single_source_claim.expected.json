@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__qa_warning__single_source_claim",
+  "validation_mode": "canonical_result",
+  "expected_valid": true,
+  "expected_error_count": 0,
+  "expected_warning_count": 1,
+  "expected_findings": [
+    {
+      "rule_id": "VR-CORE-041",
+      "severity": "warning",
+      "object_path": "$.warnings[0]",
+      "message_contains": "single_source_claim"
+    }
+  ]
+}

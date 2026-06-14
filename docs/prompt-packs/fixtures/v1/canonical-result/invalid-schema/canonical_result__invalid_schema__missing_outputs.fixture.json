@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "result_id": "result_missing_outputs_1",
+  "parent_result_ids": null,
+  "run_id": "run_1",
+  "pack_id": "technology_watch",
+  "pack_version": "v1",
+  "stage": "final_result",
+  "created_at": "2026-06-12T08:00:00Z",
+  "output_language": "en",
+  "metadata": {
+    "result_status": "error",
+    "producer_type": "pipeline",
+    "contains_partial_results": true,
+    "contains_unverified_claims": false
+  },
+  "run_context": {
+    "project_id": "project_fixture",
+    "run_goal": "Exercise missing outputs validation.",
+    "selected_pack": {
+      "pack_id": "technology_watch",
+      "pack_version": "v1"
+    },
+    "control_preset": "standard",
+    "evidence_mode": "standard",
+    "output_language": "en",
+    "source_languages": [
+      "en"
+    ],
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-06-12"
+    },
+    "input_corpus": {
+      "source_count": 0,
+      "material_count": 0,
+      "fragment_count": 0,
+      "source_types": []
+    },
+    "model_selection": []
+  },
+  "source_refs": [],
+  "claims": [],
+  "evidence": [],
+  "claim_relations": [],
+  "unknowns": [],
+  "verification_tasks": [],
+  "warnings": [],
+  "limitations": [],
+  "quality_flags": [
+    {
+      "flag": "processing_failed",
+      "custom_flag": null,
+      "severity": "high",
+      "claim_refs": [],
+      "source_refs": [],
+      "evidence_refs": [],
+      "message": "Fixture intentionally omits outputs."
+    },
+    {
+      "flag": "partial_result",
+      "custom_flag": null,
+      "severity": "high",
+      "claim_refs": [],
+      "source_refs": [],
+      "evidence_refs": [],
+      "message": "The result is partial because the required outputs object is absent."
+    }
+  ],
+  "audit_refs": []
+}

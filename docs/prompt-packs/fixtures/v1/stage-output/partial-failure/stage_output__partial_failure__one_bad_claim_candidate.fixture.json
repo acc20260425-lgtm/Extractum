@@ -1,0 +1,53 @@
+{
+  "_fixture_context": {
+    "allowed_fragment_candidate_ids": ["fragcand_1"],
+    "allowed_source_ref_ids": ["source_ref_1"]
+  },
+  "stage_io_version": "1.0",
+  "schema_version": "1.0",
+  "stage": "claim_extraction",
+  "run_id": "run_1",
+  "pack_id": "technology_watch",
+  "pack_version": "v1",
+  "claim_candidates": [
+    {
+      "temp_claim_id": "tmp_claim_1",
+      "claim_text": "Local LLM agents are being used in pilot deployments.",
+      "claim_type": "factual",
+      "claim_status": "extracted",
+      "normalized_claim_text": "Local LLM agents are being used in pilot deployments.",
+      "normalized_claim_language": "en",
+      "confidence": {
+        "score": 0.82,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "fragment_candidate_refs": ["fragcand_1"],
+      "source_ref_ids": ["source_ref_1"],
+      "rationale": "This sibling candidate is valid."
+    },
+    {
+      "temp_claim_id": "tmp_claim_2",
+      "claim_text": "Local LLM agents are already the default architecture.",
+      "claim_type": "factual",
+      "claim_status": "extracted",
+      "normalized_claim_text": "Local LLM agents are already the default architecture.",
+      "normalized_claim_language": "en",
+      "confidence": {
+        "score": 0.31,
+        "basis": "weak_or_indirect_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "fragment_candidate_refs": ["fragcand_missing"],
+      "source_ref_ids": ["source_ref_1"],
+      "rationale": "This sibling candidate intentionally references a disallowed fragment candidate."
+    }
+  ],
+  "unknown_candidates": [],
+  "verification_task_candidates": [],
+  "warnings": []
+}

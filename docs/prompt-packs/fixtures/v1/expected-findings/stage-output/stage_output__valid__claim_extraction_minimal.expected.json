@@ -1,0 +1,8 @@
+{
+  "fixture_id": "stage_output__valid__claim_extraction_minimal",
+  "validation_mode": "stage_output",
+  "expected_valid": true,
+  "expected_error_count": 0,
+  "expected_warning_count": 0,
+  "expected_findings": []
+}

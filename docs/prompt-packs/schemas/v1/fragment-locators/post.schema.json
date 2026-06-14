@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/post.schema.json",
+  "title": "Fragment Locator: post",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for evidence.locator_data where fragment_type = post. The locator addresses the full post in v1.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "scope": {
+      "const": "full"
+    }
+  },
+  "required": [
+    "schema_version",
+    "scope"
+  ],
+  "additionalProperties": false
+}

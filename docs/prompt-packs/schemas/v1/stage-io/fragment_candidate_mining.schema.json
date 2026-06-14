@@ -1,0 +1,505 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/stage-io/fragment_candidate_mining.schema.json",
+  "title": "Stage I/O: fragment_candidate_mining",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for fragment_candidate_mining input, LLM output, and pipeline output payloads. It validates bounded windows, LLM candidate cards, and pipeline fragment registry entries. Full locator semantics and allowed-ID checks remain validator/pipeline checks.",
+  "x-prompt-pack-schema-status": "semantic",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/input_payload"
+    },
+    {
+      "$ref": "#/$defs/llm_output"
+    },
+    {
+      "$ref": "#/$defs/pipeline_output"
+    }
+  ],
+  "$defs": {
+    "ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "source_type": {
+      "enum": [
+        "youtube_video",
+        "web_page",
+        "rss_entry",
+        "telegram_post",
+        "telegram_channel_snapshot",
+        "telegram_chat_snapshot",
+        "forum_thread",
+        "custom"
+      ]
+    },
+    "fragment_type": {
+      "enum": [
+        "text_range",
+        "paragraph",
+        "video_timestamp_range",
+        "audio_timestamp_range",
+        "post",
+        "comment",
+        "thread_reply",
+        "image_region",
+        "document_section",
+        "aggregate",
+        "custom"
+      ]
+    },
+    "common_envelope": {
+      "type": "object",
+      "properties": {
+        "stage_io_version": {
+          "const": "1.0"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "stage": {
+          "const": "fragment_candidate_mining"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_result_ids": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "audit_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "stage_io_version",
+        "schema_version",
+        "stage",
+        "run_id",
+        "pack_id",
+        "pack_version"
+      ],
+      "additionalProperties": false
+    },
+    "input_payload": {
+      "type": "object",
+      "properties": {
+        "stage_io_version": {
+          "const": "1.0"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "stage": {
+          "const": "fragment_candidate_mining"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_result_ids": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "audit_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_registry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_registry_entry"
+          }
+        },
+        "material_windows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/material_window"
+          }
+        }
+      },
+      "required": [
+        "stage_io_version",
+        "schema_version",
+        "stage",
+        "run_id",
+        "pack_id",
+        "pack_version",
+        "source_registry",
+        "material_windows"
+      ],
+      "additionalProperties": false
+    },
+    "source_registry_entry": {
+      "type": "object",
+      "properties": {
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_type": {
+          "$ref": "#/$defs/source_type"
+        },
+        "custom_source_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "material_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "canonical_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "internal_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "type_data": {
+          "$ref": "#/$defs/type_data_stub"
+        }
+      },
+      "required": [
+        "source_ref_id",
+        "source_type",
+        "source_title"
+      ],
+      "additionalProperties": false
+    },
+    "material_window": {
+      "type": "object",
+      "properties": {
+        "window_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fragment_type": {
+          "$ref": "#/$defs/fragment_type"
+        },
+        "custom_fragment_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "locator_data": {
+          "$ref": "#/$defs/locator_data_stub"
+        },
+        "window_text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "window_id",
+        "source_ref_id",
+        "fragment_type",
+        "locator_data",
+        "window_text"
+      ],
+      "additionalProperties": false
+    },
+    "llm_output": {
+      "type": "object",
+      "properties": {
+        "fragment_candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llm_fragment_candidate"
+          }
+        }
+      },
+      "required": [
+        "fragment_candidates"
+      ],
+      "additionalProperties": false
+    },
+    "llm_fragment_candidate": {
+      "type": "object",
+      "properties": {
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "window_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fragment_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "observation_summary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "candidate_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "salience": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "verbatim_quote": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "source_ref_id",
+        "window_id"
+      ],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "fragment_text"
+          ]
+        },
+        {
+          "required": [
+            "observation_summary"
+          ]
+        }
+      ]
+    },
+    "pipeline_output": {
+      "type": "object",
+      "properties": {
+        "fragment_registry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment_registry_entry"
+          }
+        }
+      },
+      "required": [
+        "fragment_registry"
+      ],
+      "additionalProperties": false
+    },
+    "fragment_registry_entry": {
+      "type": "object",
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fragment_type": {
+          "$ref": "#/$defs/fragment_type"
+        },
+        "custom_fragment_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "locator_data": {
+          "$ref": "#/$defs/locator_data_stub"
+        },
+        "fragment_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "observation_summary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "candidate_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "salience": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "context_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "verbatim_quote": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "parent_candidate_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "child_candidate_ids": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "created_by_stage": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "candidate_id",
+        "source_ref_id",
+        "fragment_type",
+        "locator_data"
+      ],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "fragment_text"
+          ]
+        },
+        {
+          "required": [
+            "observation_summary"
+          ]
+        }
+      ]
+    },
+    "locator_data_stub": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": true
+    },
+    "type_data_stub": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

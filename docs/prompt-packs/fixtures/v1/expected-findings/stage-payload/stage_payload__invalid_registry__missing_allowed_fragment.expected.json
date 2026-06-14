@@ -1,0 +1,15 @@
+{
+  "fixture_id": "stage_payload__invalid_registry__missing_allowed_fragment",
+  "validation_mode": "stage_payload",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "STAGE-REF-001",
+      "severity": "error",
+      "object_path": "$.allowed_fragment_candidate_ids[0]",
+      "message_contains": "fragcand_missing"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/comment.schema.json",
+  "title": "Fragment Locator: comment",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for evidence.locator_data where fragment_type = comment. comment_id is preferred for reproducibility; comment_index is allowed when platform ID is unavailable and refers to the flat top-level comment order.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "scope": {
+      "const": "full"
+    },
+    "comment_id": {
+      "type": ["string", "null"]
+    },
+    "comment_index": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "scope"
+  ],
+  "anyOf": [
+    {
+      "required": ["comment_id"],
+      "properties": {
+        "comment_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "required": ["comment_index"],
+      "properties": {
+        "comment_index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

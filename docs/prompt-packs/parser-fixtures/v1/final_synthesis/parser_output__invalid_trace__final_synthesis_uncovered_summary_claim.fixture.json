@@ -1,0 +1,56 @@
+{
+  "fixture_id": "parser_output__invalid_trace__final_synthesis_uncovered_summary_claim",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "final_synthesis",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "pack_id": "technology_watch",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_claim_ids": ["claim_1", "claim_2"],
+  "allowed_evidence_ids": ["evidence_1"],
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "raw_message_content": "{\n  \"outputs_candidate\": {\n    \"summary\": {\n      \"summary_text\": \"Summary mentions two claims.\",\n      \"claim_refs\": [\"claim_1\", \"claim_2\"],\n      \"evidence_refs\": [\"evidence_1\"],\n      \"source_refs\": [\"source_ref_1\"]\n    },\n    \"sections\": [\n      {\n        \"section_type\": \"trends\",\n        \"custom_section_type\": null,\n        \"title\": \"Trend\",\n        \"items\": [\n          {\n            \"text\": \"The section only covers claim one.\",\n            \"claim_refs\": [\"claim_1\"],\n            \"evidence_refs\": [\"evidence_1\"],\n            \"source_refs\": [\"source_ref_1\"]\n          }\n        ]\n      }\n    ]\n  }\n}",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "final_synthesis",
+    "candidate_count": 1,
+    "validation_findings": [
+      {
+        "rule_id": "STAGE-TRACE-001",
+        "severity": "error",
+        "layer": "pipeline",
+        "object_path": "$.outputs_candidate.summary.claim_refs[1]",
+        "message_contains": "not covered"
+      }
+    ]
+  },
+  "expected_stage_output": {
+    "outputs_candidate": {
+      "summary": {
+        "summary_text": "Summary mentions two claims.",
+        "claim_refs": ["claim_1", "claim_2"],
+        "evidence_refs": ["evidence_1"],
+        "source_refs": ["source_ref_1"]
+      },
+      "sections": [
+        {
+          "section_type": "trends",
+          "custom_section_type": null,
+          "title": "Trend",
+          "items": [
+            {
+              "text": "The section only covers claim one.",
+              "claim_refs": ["claim_1"],
+              "evidence_refs": ["evidence_1"],
+              "source_refs": ["source_ref_1"]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "prompt_id": "openai_compatible__final_synthesis__v1",
+  "provider_family": "openai_compatible",
+  "template_version": "1.0",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "stage": "final_synthesis",
+  "description": "OpenAI-compatible message template for closed-world readable output synthesis.",
+  "response_format": {
+    "type": "json_object"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are operating inside a closed-world extraction pipeline. Return only valid JSON. Use only claim_id, evidence_id, and source_ref_id values provided in allowed ID arrays. Do not invent IDs. Do not create final canonical result JSON."
+    },
+    {
+      "role": "developer",
+      "content": "Stage: final_synthesis\n\nTask:\nDraft readable outputs over the fixed canonical graph and pack data.\n\nRules:\n- Return outputs_candidate only.\n- Use only IDs from allowed_claim_ids, allowed_evidence_ids, and allowed_source_ref_ids.\n- Do not create or rewrite claims, evidence, relations, source_refs, metadata, quality_flags, warnings, limitations, or audit_refs.\n- summary.claim_refs must be covered by at least one section item claim_refs entry.\n- Every section item that makes a substantive statement should include claim_refs.\n- Do not add unknown top-level keys."
+    },
+    {
+      "role": "user",
+      "content": "Stage payload:\n{{stage_payload_json}}\n\nPack:\n{{pack_id}} {{pack_version}}\n\nAllowed claim IDs:\n{{allowed_claim_ids}}\n\nAllowed evidence IDs:\n{{allowed_evidence_ids}}\n\nAllowed source ref IDs:\n{{allowed_source_ref_ids}}\n\nCanonical graph summary:\n{{canonical_graph_summary}}\n\nPack data candidate:\n{{pack_data_candidate}}\n\nReturn only this JSON object shape:\n{\n  \"outputs_candidate\": {\n    \"summary\": {\n      \"summary_text\": \"...\",\n      \"claim_refs\": [],\n      \"evidence_refs\": [],\n      \"source_refs\": []\n    },\n    \"sections\": []\n  }\n}"
+    }
+  ],
+  "expected_top_level_keys": [
+    "outputs_candidate"
+  ],
+  "prohibited_output_keys": [
+    "result_id",
+    "metadata",
+    "quality_flags",
+    "warnings",
+    "limitations",
+    "audit_refs",
+    "claims",
+    "evidence",
+    "claim_relations",
+    "source_refs"
+  ],
+  "parser_contract": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true,
+    "allowed_claim_ids_source": "stage_payload.allowed_claim_ids",
+    "allowed_evidence_ids_source": "stage_payload.allowed_evidence_ids",
+    "allowed_source_ref_ids_source": "stage_payload.allowed_source_ref_ids",
+    "success_output_mode": "stage_output"
+  }
+}

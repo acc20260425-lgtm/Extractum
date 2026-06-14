@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/stage-io/retry_repair_payload.schema.json",
+  "title": "Stage I/O: retry_repair_payload",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for compact retry/repair payloads sent back to LLM stages. The repair output itself uses the same shape as the original stage output or an implementation-specific object-isolated replacement wrapper.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "stage_io_version": {
+      "const": "1.0"
+    },
+    "stage": {
+      "$ref": "#/$defs/retryable_stage"
+    },
+    "retry_attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_retry_attempts": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "repair_scope": {
+      "enum": [
+        "object",
+        "whole_stage",
+        null
+      ]
+    },
+    "previous_output_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "validation_findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/validation_finding"
+      },
+      "minItems": 1
+    },
+    "failed_object_paths": {
+      "$ref": "#/$defs/optional_ref_array"
+    },
+    "allowed_fragment_candidate_ids": {
+      "$ref": "#/$defs/optional_ref_array"
+    },
+    "allowed_claim_ids": {
+      "$ref": "#/$defs/optional_ref_array"
+    },
+    "allowed_evidence_ids": {
+      "$ref": "#/$defs/optional_ref_array"
+    },
+    "allowed_source_ref_ids": {
+      "$ref": "#/$defs/optional_ref_array"
+    },
+    "allowed_window_ids": {
+      "$ref": "#/$defs/optional_ref_array"
+    },
+    "allowed_raw_material_refs": {
+      "$ref": "#/$defs/optional_ref_array"
+    },
+    "stage_payload_summary": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "repair_instructions": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    }
+  },
+  "required": [
+    "stage_io_version",
+    "stage",
+    "retry_attempt",
+    "max_retry_attempts",
+    "previous_output_summary",
+    "validation_findings"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "retryable_stage": {
+      "enum": [
+        "fragment_candidate_mining",
+        "claim_extraction",
+        "claim_linking",
+        "pack_data_generation",
+        "final_synthesis"
+      ]
+    },
+    "optional_ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "validation_finding": {
+      "type": "object",
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "pattern": "^[A-Z]+(?:-[A-Z]+)*-[0-9]{3}$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "layer": {
+          "type": "string",
+          "enum": [
+            "schema",
+            "reference",
+            "pipeline",
+            "qa"
+          ]
+        },
+        "object_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "object_refs": {
+          "$ref": "#/$defs/object_refs"
+        }
+      },
+      "required": [
+        "rule_id",
+        "severity",
+        "layer",
+        "object_path",
+        "message",
+        "object_refs"
+      ],
+      "additionalProperties": false
+    },
+    "object_refs": {
+      "type": "object",
+      "properties": {
+        "claim_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "relation_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "unknown_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "verification_task_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "warning_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "limitation_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

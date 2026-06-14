@@ -1,0 +1,226 @@
+{
+  "schema_manifest_version": "1.0",
+  "schema_version": "1.0",
+  "status": "semantic",
+  "json_schema_draft": "https://json-schema.org/draft/2020-12/schema",
+  "notes": "Machine-readable schema inventory. All entries have reviewed local shape coverage; prose specs and validation_rules.md remain authoritative for cross-object, pipeline, and QA semantics.",
+  "schemas": [
+    {
+      "schema_id": "core/result",
+      "group": "core",
+      "path": "core/result.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/core/result.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "core/validation_finding",
+      "group": "core",
+      "path": "core/validation_finding.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/core/validation_finding.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "core/audit_ref",
+      "group": "core",
+      "path": "core/audit_ref.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/core/audit_ref.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "core/confidence",
+      "group": "core",
+      "path": "core/confidence.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/core/confidence.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "source-types/youtube_video",
+      "group": "source-types",
+      "path": "source-types/youtube_video.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/source-types/youtube_video.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "source-types/web_page",
+      "group": "source-types",
+      "path": "source-types/web_page.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/source-types/web_page.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "source-types/rss_entry",
+      "group": "source-types",
+      "path": "source-types/rss_entry.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/source-types/rss_entry.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "source-types/telegram_post",
+      "group": "source-types",
+      "path": "source-types/telegram_post.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/source-types/telegram_post.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "source-types/telegram_channel_snapshot",
+      "group": "source-types",
+      "path": "source-types/telegram_channel_snapshot.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/source-types/telegram_channel_snapshot.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "source-types/telegram_chat_snapshot",
+      "group": "source-types",
+      "path": "source-types/telegram_chat_snapshot.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/source-types/telegram_chat_snapshot.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "source-types/forum_thread",
+      "group": "source-types",
+      "path": "source-types/forum_thread.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/source-types/forum_thread.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/video_timestamp_range",
+      "group": "fragment-locators",
+      "path": "fragment-locators/video_timestamp_range.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/video_timestamp_range.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/audio_timestamp_range",
+      "group": "fragment-locators",
+      "path": "fragment-locators/audio_timestamp_range.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/audio_timestamp_range.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/text_range",
+      "group": "fragment-locators",
+      "path": "fragment-locators/text_range.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/text_range.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/image_region",
+      "group": "fragment-locators",
+      "path": "fragment-locators/image_region.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/image_region.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/document_section",
+      "group": "fragment-locators",
+      "path": "fragment-locators/document_section.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/document_section.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/post",
+      "group": "fragment-locators",
+      "path": "fragment-locators/post.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/post.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/comment",
+      "group": "fragment-locators",
+      "path": "fragment-locators/comment.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/comment.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/thread_reply",
+      "group": "fragment-locators",
+      "path": "fragment-locators/thread_reply.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/thread_reply.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "fragment-locators/aggregate",
+      "group": "fragment-locators",
+      "path": "fragment-locators/aggregate.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/fragment-locators/aggregate.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/source_ingestion",
+      "group": "stage-io",
+      "path": "stage-io/source_ingestion.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/source_ingestion.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/fragment_candidate_mining",
+      "group": "stage-io",
+      "path": "stage-io/fragment_candidate_mining.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/fragment_candidate_mining.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/claim_extraction",
+      "group": "stage-io",
+      "path": "stage-io/claim_extraction.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/claim_extraction.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/canonical_evidence_generation",
+      "group": "stage-io",
+      "path": "stage-io/canonical_evidence_generation.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/canonical_evidence_generation.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/claim_linking",
+      "group": "stage-io",
+      "path": "stage-io/claim_linking.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/claim_linking.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/pack_data_generation",
+      "group": "stage-io",
+      "path": "stage-io/pack_data_generation.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/pack_data_generation.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/final_synthesis",
+      "group": "stage-io",
+      "path": "stage-io/final_synthesis.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/final_synthesis.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "stage-io/retry_repair_payload",
+      "group": "stage-io",
+      "path": "stage-io/retry_repair_payload.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/stage-io/retry_repair_payload.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "runtime/runtime_configuration",
+      "group": "runtime",
+      "path": "runtime/runtime_configuration.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/runtime/runtime_configuration.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "packs/technology_watch/pack_data",
+      "group": "packs",
+      "path": "packs/technology_watch/pack_data.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/packs/technology_watch/pack_data.schema.json",
+      "status": "semantic"
+    },
+    {
+      "schema_id": "packs/youtube_summary/pack_data",
+      "group": "packs",
+      "path": "packs/youtube_summary/pack_data.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/packs/youtube_summary/pack_data.schema.json",
+      "status": "semantic"
+    }
+  ]
+}

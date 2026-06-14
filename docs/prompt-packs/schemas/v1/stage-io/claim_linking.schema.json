@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/stage-io/claim_linking.schema.json",
+  "title": "Stage I/O: claim_linking",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for claim_linking input and LLM output payloads. The stage proposes relation candidates over fixed claims; pipeline code assigns relation_id, normalizes contradicts order, and validates allowed IDs and relation evidence ownership.",
+  "x-prompt-pack-schema-status": "semantic",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/input_payload"
+    },
+    {
+      "$ref": "#/$defs/llm_output"
+    }
+  ],
+  "$defs": {
+    "ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "optional_ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "id_with_numeric_suffix": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*_[0-9]+$"
+    },
+    "relation_type": {
+      "enum": [
+        "contradicts",
+        "supports",
+        "qualifies",
+        "supersedes",
+        "custom"
+      ]
+    },
+    "claim_type": {
+      "enum": [
+        "factual",
+        "evaluative",
+        "predictive",
+        "causal",
+        "normative",
+        "hypothesis",
+        "custom"
+      ]
+    },
+    "evidence_type": {
+      "enum": [
+        "fragment",
+        "inference",
+        "custom"
+      ]
+    },
+    "evidence_role": {
+      "enum": [
+        "supports",
+        "contradicts",
+        "qualifies",
+        "contextualizes",
+        "custom"
+      ]
+    },
+    "input_payload": {
+      "type": "object",
+      "properties": {
+        "stage_io_version": {
+          "const": "1.0"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "stage": {
+          "const": "claim_linking"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_result_ids": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "audit_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "allowed_claim_ids": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "allowed_evidence_ids": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_registry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/claim_registry_entry"
+          }
+        },
+        "evidence_registry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence_registry_entry"
+          }
+        },
+        "registry_refs": {
+          "$ref": "#/$defs/registry_refs"
+        }
+      },
+      "required": [
+        "stage_io_version",
+        "schema_version",
+        "stage",
+        "run_id",
+        "pack_id",
+        "pack_version",
+        "allowed_claim_ids",
+        "allowed_evidence_ids",
+        "claim_registry"
+      ],
+      "additionalProperties": false
+    },
+    "llm_output": {
+      "type": "object",
+      "properties": {
+        "relation_candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relation_candidate"
+          }
+        }
+      },
+      "required": [
+        "relation_candidates"
+      ],
+      "additionalProperties": false
+    },
+    "claim_registry_entry": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "claim_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_type": {
+          "$ref": "#/$defs/claim_type"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        }
+      },
+      "required": [
+        "claim_id",
+        "claim_text"
+      ],
+      "additionalProperties": false
+    },
+    "evidence_registry_entry": {
+      "type": "object",
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "claim_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "source_ref_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_type": {
+          "$ref": "#/$defs/evidence_type"
+        },
+        "evidence_role": {
+          "$ref": "#/$defs/evidence_role"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "claim_id"
+      ],
+      "additionalProperties": false
+    },
+    "relation_candidate": {
+      "type": "object",
+      "properties": {
+        "relation_type": {
+          "$ref": "#/$defs/relation_type"
+        },
+        "custom_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source_claim_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "target_claim_id": {
+          "$ref": "#/$defs/id_with_numeric_suffix"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/optional_ref_array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      },
+      "required": [
+        "relation_type",
+        "custom_relation_type",
+        "source_claim_id",
+        "target_claim_id",
+        "description",
+        "evidence_refs",
+        "confidence"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "relation_type": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "relation_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "custom_relation_type": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "custom_relation_type"
+            ]
+          },
+          "else": {
+            "properties": {
+              "custom_relation_type": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "basis": {
+              "enum": [
+                "multiple_corroborating_sources",
+                "single_source",
+                "strong_direct_evidence",
+                "weak_or_indirect_evidence",
+                "conflicting_sources",
+                "inference_chain",
+                "expert_consensus",
+                "llm_prior_only",
+                "no_evidence",
+                "custom"
+              ]
+            },
+            "custom_basis": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "method": {
+              "enum": [
+                "llm_assessment",
+                "rule_based",
+                "human_review",
+                "aggregated",
+                "inherited",
+                "custom"
+              ]
+            },
+            "custom_method": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
+          },
+          "required": [
+            "score",
+            "basis",
+            "custom_basis",
+            "method",
+            "custom_method"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "registry_refs": {
+      "type": "object",
+      "properties": {
+        "fragment_registry_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "claim_registry_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "evidence_registry_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "fragment_registry_uri",
+        "claim_registry_uri",
+        "evidence_registry_uri"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
