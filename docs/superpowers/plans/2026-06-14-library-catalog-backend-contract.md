@@ -636,22 +636,26 @@ fn latest_catalog_jobs_by_source(
     let mut latest = HashMap::<i64, SourceJobRecord>::new();
 
     for job in jobs {
-        let matched_source_id = if source_ids.contains(&job.source_id) {
-            Some(job.source_id)
-        } else {
-            job.related_source_id
-                .filter(|source_id| source_ids.contains(source_id))
-        };
-        let Some(source_id) = matched_source_id else {
-            continue;
-        };
+        let mut matched_source_ids = Vec::new();
+        if source_ids.contains(&job.source_id) {
+            matched_source_ids.push(job.source_id);
+        }
+        if let Some(related_source_id) = job.related_source_id {
+            if source_ids.contains(&related_source_id)
+                && !matched_source_ids.contains(&related_source_id)
+            {
+                matched_source_ids.push(related_source_id);
+            }
+        }
 
-        let replace = latest.get(&source_id).is_none_or(|current| {
-            job.started_at > current.started_at
-                || (job.started_at == current.started_at && job.job_id > current.job_id)
-        });
-        if replace {
-            latest.insert(source_id, job);
+        for source_id in matched_source_ids {
+            let replace = latest.get(&source_id).is_none_or(|current| {
+                job.started_at > current.started_at
+                    || (job.started_at == current.started_at && job.job_id > current.job_id)
+            });
+            if replace {
+                latest.insert(source_id, job.clone());
+            }
         }
     }
 
@@ -719,7 +723,7 @@ fn build_catalog_filter_counts(sources: &[LibrarySourceRecord]) -> Vec<LibraryCa
             .or_insert(0) += 1;
     }
 
-    [
+    let stable_rows = [
         ("youtube", Some("video"), false, None),
         ("youtube", Some("playlist"), false, None),
         (
@@ -731,22 +735,45 @@ fn build_catalog_filter_counts(sources: &[LibrarySourceRecord]) -> Vec<LibraryCa
         ("telegram", Some("channel"), false, None),
         ("telegram", Some("supergroup"), false, None),
         ("telegram", Some("group"), false, None),
-    ]
-    .into_iter()
-    .map(|(provider, subtype, disabled, disabled_reason)| {
-        let subtype = subtype.map(str::to_string);
-        LibraryCatalogFilterCount {
-            provider: provider.to_string(),
-            source_subtype: subtype.clone(),
-            count: counts
-                .get(&(provider.to_string(), subtype))
-                .copied()
-                .unwrap_or(0),
-            disabled,
-            disabled_reason: disabled_reason.map(str::to_string),
+    ];
+
+    let mut rows = stable_rows
+        .iter()
+        .map(|(provider, subtype, disabled, disabled_reason)| {
+            let subtype = subtype.map(str::to_string);
+            LibraryCatalogFilterCount {
+                provider: (*provider).to_string(),
+                source_subtype: subtype.clone(),
+                count: counts
+                    .get(&((*provider).to_string(), subtype))
+                    .copied()
+                    .unwrap_or(0),
+                disabled: *disabled,
+                disabled_reason: disabled_reason.map(|reason| (*reason).to_string()),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for ((provider, subtype), count) in counts {
+        if stable_rows
+            .iter()
+            .any(|(stable_provider, stable_subtype, _, _)| {
+                *stable_provider == provider.as_str()
+                    && stable_subtype.map(str::to_string) == subtype
+            })
+        {
+            continue;
         }
-    })
-    .collect()
+        rows.push(LibraryCatalogFilterCount {
+            provider,
+            source_subtype: subtype,
+            count,
+            disabled: false,
+            disabled_reason: None,
+        });
+    }
+
+    rows
 }
 ```
 
@@ -1017,7 +1044,17 @@ function catalogRecord(overrides: Partial<LibraryCatalogRecord> = {}): LibraryCa
 }
 ```
 
-Update the import from `$lib/types/library-sources` to include `LibraryCatalogRecord` and `LibraryCatalogFilterCount`.
+Update the import from `$lib/types/library-sources` to include:
+
+```ts
+import type {
+  LibraryCatalogFilterCount,
+  LibraryCatalogRecord,
+  LibrarySourceProvider,
+  LibrarySourceRecord,
+  LibrarySourceSubtype,
+} from "$lib/types/library-sources";
+```
 
 Add this filter count helper:
 
@@ -1077,7 +1114,6 @@ import type {
   LibraryCatalogFilterCount,
   LibraryCatalogRecord,
   LibrarySourceProvider,
-  LibrarySourceRecord,
   LibrarySourceSubtype,
   LibraryTelegramSourceDetails,
   LibraryYoutubeSourceDetails,
@@ -1118,17 +1154,6 @@ export function buildLibraryCatalogSourcesView(
 Change `buildLibraryCatalogFilterTree` to:
 
 ```ts
-function countFor(
-  counts: LibraryCatalogFilterCount[],
-  provider: LibrarySourceProvider,
-  subtype: Exclude<LibrarySourceSubtype, null>,
-) {
-  return (
-    counts.find((count) => count.provider === provider && count.source_subtype === subtype)
-      ?.count ?? 0
-  );
-}
-
 function countProviderFromBackend(
   counts: LibraryCatalogFilterCount[],
   provider: LibrarySourceProvider,
@@ -1710,7 +1735,7 @@ export function buildLibrarySourcesView(
     const alreadyConnected = connectedIds.has(source.source_id);
     const catalogDisabledReason = record.disabled_reasons.connect_to_project;
     const disabledReason = alreadyConnected ? "Already in project" : catalogDisabledReason;
-    const connectable = !alreadyConnected && record.capabilities.can_connect_to_project;
+    const connectable = disabledReason === null && record.capabilities.can_connect_to_project;
 
     return {
       id: sourceRowId(source.source_id),
