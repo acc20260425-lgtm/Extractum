@@ -275,6 +275,9 @@ Important fields:
 - `source_type`: `youtube_video`
 - `video_id`
 - `canonical_url`
+- `internal_uri`
+- `material_id`
+- `snapshot_id`
 - `title`
 - `channel_title`
 - `channel_handle`
@@ -282,6 +285,8 @@ Important fields:
 - `duration_seconds`
 - `language`
 - `published_at`
+- `accessed_at`
+- `access_status`
 - `scraped_at`
 - `captions_available`
 - `transcript_available`
@@ -479,10 +484,16 @@ Rules:
 - selected source must be YouTube video or playlist;
 - playlist expands through linked, non-removed `youtube_playlist_items`;
 - unavailable or unlinked playlist entries are skipped and reported;
-- every analyzable video needs usable transcript;
+- every selected explicit video and every linked playlist video selected for
+  analysis needs usable transcript;
+- a linked playlist video without usable transcript fails preflight rather than
+  falling back to description or comments;
 - comments are excluded unless explicitly enabled;
 - estimated token/cost/chunk info is shown to the user;
-- if no video has usable transcript, preflight fails.
+- each video's estimated stage input must fit the selected model budget for the
+  MVP single-request per-video stage;
+- if any selected analyzable video lacks transcript or exceeds the MVP input
+  budget, preflight fails.
 
 ### Snapshot
 
@@ -637,6 +648,7 @@ list_prompt_pack_run_stages
 get_prompt_pack_stage_artifact
 get_prompt_pack_result
 get_prompt_pack_validation_findings
+list_prompt_pack_audit_events
 ```
 
 The implementation can add smaller internal commands or DTOs as needed, but the
@@ -661,6 +673,7 @@ Backend tests should cover:
 - video preflight success;
 - playlist expansion and skipped unlinked items;
 - transcript-missing preflight failure;
+- oversized per-video transcript preflight failure;
 - run snapshot independence from live Library mutations;
 - stage skeleton creation;
 - per-video LLM success path using a fake provider;
@@ -694,4 +707,6 @@ UI tests should cover:
 - Add full reference validator.
 - Add prompt-pack editor and version comparison UI.
 - Add hybrid search over canonical claims/evidence.
+- Add chunked per-video transcript analysis for videos that exceed one model
+  request.
 - Add URL-to-sync-to-summary workflow after ingest boundaries are settled.
