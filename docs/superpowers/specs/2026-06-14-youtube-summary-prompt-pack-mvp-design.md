@@ -115,6 +115,40 @@ Bundled Prompt Pack assets are shipped with the application and seeded into DB:
 Runtime uses DB pack versions. A run stores both a foreign key to the selected
 pack version and a snapshot of the exact prompt/schema/config used.
 
+### Seed and Update Policy
+
+Bundled pack versions are immutable. The seed process treats
+`(pack_id, pack_version)` as a semantic version identity and `content_hash` as
+the byte-level identity of all bundled definition, prompt, schema, and render
+assets for that version.
+
+Rules:
+
+- If `(pack_id, pack_version)` does not exist, seed inserts the pack version and
+  all stage/schema assets.
+- If `(pack_id, pack_version)` exists as `origin_kind = "bundled"` with the same
+  `content_hash`, seed is idempotent. It may refresh non-semantic metadata such
+  as `bundled_source_path` and `last_seeded_at`, but it must not rewrite
+  definition, prompt, or schema payloads.
+- If `(pack_id, pack_version)` exists with a different `content_hash`, seed must
+  fail with a pack-version hash conflict. Bundled assets are not silently
+  overwritten; the bundled pack must bump `pack_version` or the existing DB must
+  be repaired explicitly.
+- User-created drafts are never overwritten by bundled seed. Drafts should use a
+  distinct `pack_version` or a non-bundled pack namespace; collision with a
+  bundled `(pack_id, pack_version)` is a validation error even if the hash
+  happens to match.
+- Activation is explicit per bundled manifest. At most one version per pack is
+  active, but versions absent from the current application bundle are not
+  automatically deleted or archived.
+- Downgrade is non-destructive. If the DB already contains a newer bundled pack
+  version than the running application knows about, startup keeps it archived or
+  inactive and does not delete it. New runs may only select pack versions whose
+  stage/schema assets are present and whose lifecycle is allowed by the current
+  runtime.
+- Existing runs always read `pack_snapshot_json_zstd` and never require the
+  library row to remain active.
+
 Proposed tables:
 
 ```text
@@ -148,12 +182,14 @@ Important fields:
 - `pack_id`
 - `pack_version`
 - `schema_version`
+- `origin_kind`: `bundled` or `user`
 - `lifecycle_status` such as `active`, `draft`, `archived`
 - `definition_json_zstd`
 - `bundled_source_path`
 - `content_hash`
 - `created_at`
 - `activated_at`
+- `last_seeded_at`
 
 ### `prompt_pack_stage_templates`
 
@@ -255,8 +291,9 @@ Required constraints and indexes:
   `CHECK(is_builtin IN (0, 1))`.
 - `prompt_pack_versions`: `PRIMARY KEY(id)`, FK `pack_id` to
   `prompt_packs(pack_id) ON DELETE CASCADE`, `UNIQUE(pack_id, pack_version)`,
-  `UNIQUE(id, pack_id)`, `CHECK(lifecycle_status IN ('draft', 'active',
-  'archived'))`, and at most one active version per pack.
+  `UNIQUE(id, pack_id)`, `CHECK(origin_kind IN ('bundled', 'user'))`,
+  `CHECK(lifecycle_status IN ('draft', 'active', 'archived'))`, and at most one
+  active version per pack.
 - `prompt_pack_stage_templates`: `PRIMARY KEY(id)`, FK `pack_version_id` to
   `prompt_pack_versions(id) ON DELETE CASCADE`,
   `UNIQUE(pack_version_id, stage_name, provider_family)`, index
@@ -269,7 +306,8 @@ Required constraints and indexes:
   `projects(id) ON DELETE CASCADE`, FK `pack_id` to `prompt_packs(pack_id)`,
   composite FK `(pack_version_id, pack_id)` to
   `prompt_pack_versions(id, pack_id) ON DELETE RESTRICT`, status `CHECK`s,
-  `result_status` nullable until a result exists, indexes `(project_id,
+  `result_status` nullable until a result exists, `UNIQUE(id, pack_id,
+  pack_version_id, pack_version, schema_version)`, indexes `(project_id,
   created_at DESC)`, `(pack_id, created_at DESC)`, and `(run_status,
   created_at DESC)`.
 - `prompt_pack_run_scopes`: `PRIMARY KEY(id)`, FK `run_id` to
@@ -316,8 +354,11 @@ Required constraints and indexes:
   attempt_number, artifact_index)`, index `(stage_run_id, created_at)`.
 - `prompt_pack_results`: `PRIMARY KEY(id)`, FK `run_id` to
   `prompt_pack_runs(id) ON DELETE CASCADE`, `UNIQUE(run_id)` for MVP,
-  `UNIQUE(run_id, result_id)`, `UNIQUE(id, run_id)`, result-status `CHECK`, and
-  index `(pack_id, created_at DESC)`.
+  `UNIQUE(run_id, result_id)`, `UNIQUE(id, run_id)`, composite FK `(run_id,
+  pack_id, pack_version_id, pack_version, schema_version)` to
+  `prompt_pack_runs(id, pack_id, pack_version_id, pack_version,
+  schema_version) ON DELETE CASCADE`, result-status `CHECK`, and index
+  `(pack_id, created_at DESC)`.
 - Core projection tables: FK `result_row_id` to `prompt_pack_results(id) ON
   DELETE CASCADE`, denormalized `run_id`, `UNIQUE(result_row_id, <canonical
   object id>)`, relevant indexes for UI filters, and `raw_object_json_zstd`.
@@ -559,6 +600,77 @@ and `youtube_summary/quote_extraction` are recorded as `skipped` with
 LLM stage returns those objects together. `youtube_summary/synthesis` is
 recorded for multi-video runs as `not_implemented` or `skipped`.
 
+### Combined MVP Stage I/O
+
+The combined MVP stage still uses the generic stage I/O rules from
+`docs/prompt-packs/stage_io_contracts.md`.
+
+Stage input envelope:
+
+- `stage_io_version = "1.0"`
+- `schema_version = "1.0"`
+- `stage = "youtube_summary/transcript_analysis"`
+- `pack_id = "youtube_summary"`
+- `pack_version`
+- `run_id`
+- `source_ref_id`
+- `allowed_source_ref_ids`
+- `allowed_material_refs`
+- `transcript_segment_registry`
+- `description_material_ref`
+- `comment_material_refs`
+- `control_preset`
+- `evidence_mode`
+- `output_language`
+
+Closed-world rules:
+
+- LLM output may reference only `source_ref_id` values from
+  `allowed_source_ref_ids`.
+- LLM output may reference only material `ref` values from
+  `allowed_material_refs`.
+- The LLM must not assign canonical `claim_id`, `evidence_id`, `source_ref_id`,
+  or final pack object ids.
+- The validator rejects any candidate object that references a material outside
+  the stage input registry.
+
+Expected parsed output shape:
+
+```json
+{
+  "stage_io_version": "1.0",
+  "schema_version": "1.0",
+  "stage": "youtube_summary/transcript_analysis",
+  "video_candidate": {
+    "summary_text": "string",
+    "segment_candidates": [],
+    "key_point_candidates": [],
+    "quote_candidates": [],
+    "action_item_candidates": [],
+    "open_question_candidates": []
+  },
+  "claim_candidates": [],
+  "evidence_fragment_candidates": [],
+  "warning_candidates": []
+}
+```
+
+Mapping to canonical result:
+
+- `evidence_fragment_candidates` become top-level `evidence[]` only after the
+  backend assigns `claim_id` and `evidence_id`.
+- `claim_candidates` become top-level `claims[]`; backend assigns `claim_id`
+  and rebuilds `claim.source_refs`.
+- `segment_candidates`, `key_point_candidates`, `quote_candidates`,
+  `action_item_candidates`, and `open_question_candidates` become
+  pack-specific objects inside one `Video`.
+- Backend assigns final nested ids (`segment_id`, `key_point_id`, `quote_id`,
+  `action_item_id`, `open_question_id`) and derives traversal refs from the
+  accepted canonical claims/evidence.
+- The skipped `segment_extraction`, `key_point_extraction`, and
+  `quote_extraction` stage rows point to the successful combined stage through
+  `status_reason` and audit events; they do not have separate LLM artifacts.
+
 ### `prompt_pack_stage_artifacts`
 
 Stores operational stage payloads.
@@ -593,6 +705,7 @@ Important fields:
 - `result_id`
 - `schema_version`
 - `pack_id`
+- `pack_version_id`
 - `pack_version`
 - `result_status`
 - `canonical_json_zstd`
@@ -601,7 +714,10 @@ Important fields:
 - `projection_updated_at`
 
 The canonical JSON is the contract source of truth. Projection tables are
-derived from it and may be rebuilt.
+derived from it and may be rebuilt. Before insertion, the backend validates that
+the canonical JSON `run_id`, `pack_id`, `pack_version`, and `schema_version`
+match the owning `prompt_pack_runs` row and `pack_snapshot_json_zstd`; DB
+constraints then prevent row-level pack identity drift.
 
 ### Projection Tables
 
@@ -1003,6 +1119,10 @@ video failure, partial run, or failed run according to status semantics.
 Backend tests should cover:
 
 - prompt-pack library seed idempotency;
+- prompt-pack library seed conflict when the same `(pack_id, pack_version)` has
+  a different `content_hash`;
+- bundled seed not overwriting user drafts;
+- downgrade-safe seed behavior preserving unknown newer versions;
 - video preflight success;
 - playlist expansion into included, skipped, and blocking partitions;
 - explicit video transcript-missing preflight blocking failure;
@@ -1016,7 +1136,11 @@ Backend tests should cover:
 - per-video LLM success path using a fake provider;
 - per-video LLM failure producing partial multi-video run;
 - canonical result storage and projection rebuild;
+- canonical result insert rejected when row pack identity and canonical JSON or
+  owning run identity disagree;
 - spec-aware validator success and failure cases;
+- combined `youtube_summary/transcript_analysis` stage output validation against
+  `stage_io_version`, allowed source ids, and allowed material refs;
 - validator coverage for traversal unions, quote word counts, segment evidence
   ranges, and one-claim-per-evidence ownership;
 - stage artifact storage with sanitized provider errors.
@@ -1025,6 +1149,7 @@ Schema tests should verify:
 
 - foreign keys and indexes exist;
 - `prompt_pack_runs.pack_id` cannot disagree with `pack_version_id`;
+- `prompt_pack_results` cannot disagree with owning run pack identity;
 - active pack-version uniqueness is enforced per pack;
 - `prompt_pack_run_source_snapshots` is unique by canonical video while
   `prompt_pack_run_source_origins` can store multiple selection origins;

@@ -510,6 +510,14 @@ Pack-specific stage names используют namespace `{pack_id}/{stage_name}
 используется только если вход содержит несколько видео или pack явно строит
 cross-video view.
 
+MVP может запускать только `youtube_summary/transcript_analysis` как combined
+stage. В таком режиме `segment_extraction`, `key_point_extraction` и
+`quote_extraction` остаются stage-skeleton rows со статусом `skipped`; их
+кандидаты возвращаются внутри parsed output combined stage и проходят тот же
+`stage_io_version = "1.0"` closed-world validation по allowed source/material
+registries. Pipeline, а не LLM, назначает final canonical IDs и nested pack
+object IDs.
+
 ---
 
 ## 10. Минимальный `pack_data` пример
