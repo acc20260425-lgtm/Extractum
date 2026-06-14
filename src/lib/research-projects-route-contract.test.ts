@@ -43,7 +43,9 @@ describe("projects mvp route contract", () => {
     expect(shellSource).toContain("onRefreshProjectRuns={onRefreshProjectRuns}");
     expect(workspaceSource).toContain("ProjectRunsTab");
     expect(workspaceSource).not.toContain("Runs will surface active LLM jobs");
-    expect(runsTabSource).toContain("Open Analysis workspace");
+    expect(runsTabSource).toContain("analysisRunHref");
+    expect(runsTabSource).toContain("`/analysis?runId=${run.id}`");
+    expect(runsTabSource).toContain("Open report");
     expect(runsTabSource).toContain("formatPeriod");
   });
 

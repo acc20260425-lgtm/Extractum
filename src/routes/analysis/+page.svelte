@@ -939,6 +939,20 @@
     workspacePersistenceReady = true;
   }
 
+  function openRunIdFromLocation() {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const rawRunId = new URL(window.location.href).searchParams.get("runId");
+    if (!rawRunId) {
+      return null;
+    }
+
+    const runId = Number(rawRunId);
+    return Number.isInteger(runId) && runId > 0 ? runId : null;
+  }
+
   function persistWorkspaceState() {
     if (typeof window === "undefined" || !workspacePersistenceReady) {
       return;
@@ -2923,7 +2937,11 @@
           selected?.sourceType === "youtube" ? loadYoutubeDetail(selected) : Promise.resolve(),
         ]);
       }
-      void loadActiveRuns();
+      await loadActiveRuns();
+      const openedRunIdFromLocation = openRunIdFromLocation();
+      if (openedRunIdFromLocation !== null) {
+        void openRun(openedRunIdFromLocation);
+      }
     })();
     void loadTemplates();
     void loadLlmProfiles();

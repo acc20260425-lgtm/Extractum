@@ -127,6 +127,12 @@ describe("analysis route run companion wiring", () => {
     expect(analysisPageSource).toContain("runsFilter");
   });
 
+  it("opens a run from the runId query parameter", () => {
+    expect(analysisPageSource).toContain("openRunIdFromLocation");
+    expect(analysisPageSource).toContain('new URL(window.location.href).searchParams.get("runId")');
+    expect(analysisPageSource).toContain("void openRun(openedRunIdFromLocation);");
+  });
+
   it("updates trace workflow patches from inspector mode to evidence companion", () => {
     expect(traceWorkflowSource).toContain('companionTab: "evidence"');
     expect(traceWorkflowSource).not.toContain("inspectorMode");

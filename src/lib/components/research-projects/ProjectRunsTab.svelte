@@ -15,6 +15,10 @@
   } = $props();
 
   const sortedRuns = $derived([...runs].sort((left, right) => right.created_at - left.created_at));
+
+  function analysisRunHref(run: AnalysisRunSummary) {
+    return `/analysis?runId=${run.id}`;
+  }
 </script>
 
 <section class="project-runs-tab" aria-label="Project runs">
@@ -49,9 +53,9 @@
               <p class="run-error">{run.error}</p>
             {/if}
           </div>
-          <a class="analysis-link" href="/analysis" aria-label={`Open Analysis workspace for run ${run.id}`}>
+          <a class="analysis-link" href={analysisRunHref(run)} aria-label={`Open report for run ${run.id}`}>
             <ExternalLink size={14} aria-hidden="true" />
-            Open Analysis workspace
+            Open report
           </a>
         </li>
       {/each}
