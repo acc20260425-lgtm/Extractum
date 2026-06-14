@@ -3,6 +3,7 @@ import pageSource from "../routes/projects/+page.svelte?raw";
 import shellSource from "$lib/components/research-projects/ProjectsShell.svelte?raw";
 import railSource from "$lib/components/research-projects/ProjectRail.svelte?raw";
 import inspectorSource from "$lib/components/research-projects/ProjectInspector.svelte?raw";
+import runDialogSource from "$lib/components/research-projects/ProjectRunDialog.svelte?raw";
 import topCommandBarSource from "$lib/components/research-projects/TopCommandBar.svelte?raw";
 
 describe("projects mvp route contract", () => {
@@ -26,6 +27,12 @@ describe("projects mvp route contract", () => {
     expect(railSource).toContain("Create project");
     expect(inspectorSource).toContain("Run project analysis");
     expect(inspectorSource).toContain("Mixed-provider project runs are not supported yet.");
+  });
+
+  it("defaults project run dates to all synced history instead of today only", () => {
+    expect(runDialogSource).toContain('PROJECT_RUN_DEFAULT_FROM_DATE = "1970-01-01"');
+    expect(runDialogSource).toContain("defaultDateOffset(0)");
+    expect(runDialogSource).not.toContain("new Date().toISOString().slice(0, 10)");
   });
 
   it("keeps top command actions honest while project export is out of scope", () => {

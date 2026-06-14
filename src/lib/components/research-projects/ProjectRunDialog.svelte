@@ -1,9 +1,11 @@
 <script lang="ts">
   import { ExtractumButton, ExtractumDialog, ExtractumTextInput } from "$lib/components/extractum-ui";
-  import { endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
+  import { defaultDateOffset, endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
   import type { AnalysisPromptTemplate, YoutubeCorpusMode } from "$lib/types/analysis";
   import type { ProjectAnalysisStartCommand } from "$lib/types/projects";
   import type { ResearchProjectView } from "$lib/ui/research-projects-model";
+
+  const PROJECT_RUN_DEFAULT_FROM_DATE = "1970-01-01";
 
   let {
     open = $bindable(false),
@@ -19,8 +21,8 @@
     onSubmit: (input: ProjectAnalysisStartCommand) => void | Promise<void>;
   } = $props();
 
-  let periodFrom = $state(new Date().toISOString().slice(0, 10));
-  let periodTo = $state(new Date().toISOString().slice(0, 10));
+  let periodFrom = $state(PROJECT_RUN_DEFAULT_FROM_DATE);
+  let periodTo = $state(defaultDateOffset(0));
   let outputLanguage = $state("en");
   let selectedTemplateId = $state("");
   let youtubeCorpusMode = $state<YoutubeCorpusMode>("transcript_description");
