@@ -23,6 +23,9 @@ const SOURCE_DELETE_CASCADE_INDEXES_SQL: &str =
 const PROJECTS_MVP_VERSION: i64 = 5;
 const PROJECTS_MVP_DESCRIPTION: &str = "projects mvp schema";
 const PROJECTS_MVP_SQL: &str = include_str!("../migrations/0005_projects_mvp.sql");
+const PROMPT_PACK_MVP_VERSION: i64 = 6;
+const PROMPT_PACK_MVP_DESCRIPTION: &str = "prompt pack mvp schema";
+const PROMPT_PACK_MVP_SQL: &str = include_str!("../migrations/0006_prompt_pack_mvp.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -97,6 +100,15 @@ fn projects_mvp_migration() -> Migration {
     }
 }
 
+fn prompt_pack_mvp_migration() -> Migration {
+    Migration {
+        version: PROMPT_PACK_MVP_VERSION,
+        description: PROMPT_PACK_MVP_DESCRIPTION,
+        sql: PROMPT_PACK_MVP_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
@@ -104,6 +116,7 @@ pub fn build_migrations() -> Vec<Migration> {
         analysis_telegram_history_scope_migration(),
         source_delete_cascade_indexes_migration(),
         projects_mvp_migration(),
+        prompt_pack_mvp_migration(),
     ]
 }
 
@@ -196,7 +209,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -220,6 +233,107 @@ mod tests {
         assert!(migrations[4]
             .sql
             .contains("CREATE TABLE IF NOT EXISTS projects"));
+        assert_eq!(migrations[5].description, "prompt pack mvp schema");
+        assert!(migrations[5]
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS prompt_packs"));
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_mvp_migration_creates_library_and_run_tables() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        for table in [
+            "prompt_packs",
+            "prompt_pack_versions",
+            "prompt_pack_stage_templates",
+            "prompt_pack_schema_assets",
+            "prompt_pack_runs",
+            "prompt_pack_run_source_snapshots",
+            "prompt_pack_run_source_origins",
+            "prompt_pack_run_material_snapshots",
+            "prompt_pack_stage_runs",
+            "prompt_pack_stage_artifacts",
+            "prompt_pack_results",
+            "prompt_pack_result_ref_edges",
+            "prompt_pack_youtube_videos",
+        ] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .bind(table)
+            .fetch_one(&pool)
+            .await
+            .expect("check table");
+            assert_eq!(exists, 1, "missing table {table}");
+        }
+    }
+
+    #[test]
+    fn build_migrations_includes_prompt_pack_mvp_version_six() {
+        let versions = build_migrations()
+            .iter()
+            .map(|migration| migration.version)
+            .collect::<Vec<_>>();
+
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_mvp_migration_declares_required_integrity_constraints() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        let prompt_pack_runs_sql = table_sql(&pool, "prompt_pack_runs").await;
+        assert!(prompt_pack_runs_sql.contains(
+            "FOREIGN KEY (pack_version_id, pack_id, pack_version, schema_version)"
+        ));
+        assert!(prompt_pack_runs_sql.contains(
+            "REFERENCES prompt_pack_versions(id, pack_id, pack_version, schema_version)"
+        ));
+
+        let origins_sql = table_sql(&pool, "prompt_pack_run_source_origins").await;
+        assert!(origins_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
+        assert!(origins_sql.contains("FOREIGN KEY (origin_scope_id, run_id)"));
+        assert!(origins_sql.contains(
+            "inclusion_status <> 'included' OR source_snapshot_id IS NOT NULL"
+        ));
+
+        let material_sql = table_sql(&pool, "prompt_pack_run_material_snapshots").await;
+        assert!(material_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
+
+        let stages_sql = table_sql(&pool, "prompt_pack_stage_runs").await;
+        assert!(stages_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
+        assert!(stages_sql.contains("UNIQUE(id, run_id)"));
+
+        let active_version_index: Option<String> = sqlx::query_scalar(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'prompt_pack_versions' AND sql LIKE '%UNIQUE%' AND sql LIKE '%lifecycle_status = ''active''%'",
+        )
+        .fetch_optional(&pool)
+        .await
+        .expect("active version index lookup");
+        assert!(active_version_index.is_some(), "missing active version unique index");
+    }
+
+    async fn table_sql(pool: &sqlx::SqlitePool, table_name: &str) -> String {
+        sqlx::query_scalar::<_, String>(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .bind(table_name)
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|error| panic!("load table sql for {table_name}: {error}"))
     }
 
     #[test]

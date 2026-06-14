@@ -34,7 +34,7 @@
 - Create: `src-tauri/migrations/0006_prompt_pack_mvp.sql`
 - Modify: `src-tauri/src/migrations.rs`
 
-- [ ] **Step 1: Write the failing migration tests**
+- [x] **Step 1: Write the failing migration tests**
 
 Add tests in `src-tauri/src/migrations.rs`:
 
@@ -137,7 +137,7 @@ async fn table_sql(pool: &sqlx::SqlitePool, table_name: &str) -> String {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -150,7 +150,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib migrations::tests::prompt_
 Expected: fail because migration 6 is not registered, the tables do not exist,
 and the required FK/UNIQUE/CHECK contracts are not declared.
 
-- [ ] **Step 3: Add migration registration**
+- [x] **Step 3: Add migration registration**
 
 In `src-tauri/src/migrations.rs`, add:
 
@@ -171,7 +171,7 @@ fn prompt_pack_mvp_migration() -> Migration {
 
 Append `prompt_pack_mvp_migration()` to `build_migrations()`.
 
-- [ ] **Step 4: Add schema SQL**
+- [x] **Step 4: Add schema SQL**
 
 Create `src-tauri/migrations/0006_prompt_pack_mvp.sql` with tables and constraints from the approved spec:
 
@@ -193,7 +193,7 @@ Create `src-tauri/migrations/0006_prompt_pack_mvp.sql` with tables and constrain
   - `prompt_pack_schema_assets.schema_kind` accepts only canonical result,
     stage input, stage output, and pack data schema kinds.
 
-- [ ] **Step 5: Run migration tests**
+- [x] **Step 5: Run migration tests**
 
 Run:
 
@@ -203,7 +203,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib migrations
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/migrations/0006_prompt_pack_mvp.sql src-tauri/src/migrations.rs
