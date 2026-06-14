@@ -212,6 +212,7 @@ Pack-specific stages v1:
 
 - ~~OQ-YS-01~~ — закрыт через `speaker_id` в `notable_quote`;
 - OQ-YS-02 — достаточно ли текущей granularity `synthesis`;
-- OQ-YS-03 — нужен ли отдельный playlist-level context.
+- OQ-YS-03 — storage ambiguity закрыт через внешний run-local origin layer;
+  открытым остаётся только будущий editorial playlist context.
 
-Все три вопроса non-blocking для первой реализации pack.
+Оставшиеся вопросы non-blocking для первой реализации pack.

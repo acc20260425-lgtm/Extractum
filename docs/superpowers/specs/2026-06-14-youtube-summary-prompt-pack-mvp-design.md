@@ -193,6 +193,7 @@ Proposed tables:
 prompt_pack_runs
 prompt_pack_run_scopes
 prompt_pack_run_source_snapshots
+prompt_pack_run_source_origins
 prompt_pack_run_material_snapshots
 prompt_pack_stage_runs
 prompt_pack_stage_artifacts
@@ -277,11 +278,21 @@ Required constraints and indexes:
   `(source_id)`, and `CHECK(scope_kind IN ('youtube_video',
   'youtube_playlist'))`.
 - `prompt_pack_run_source_snapshots`: `PRIMARY KEY(id)`, FK `run_id` to
-  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FKs `live_source_id` and
-  `playlist_source_id` to `sources(id) ON DELETE SET NULL`,
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `live_source_id` to
+  `sources(id) ON DELETE SET NULL`,
   `UNIQUE(run_id, source_ref_id)`, `UNIQUE(run_id, video_id)`, partial unique
   `(run_id, live_source_id)` when `live_source_id IS NOT NULL`, and
   `CHECK(source_type = 'youtube_video')`.
+- `prompt_pack_run_source_origins`: `PRIMARY KEY(id)`, FK `run_id` to
+  `prompt_pack_runs(id) ON DELETE CASCADE`, nullable FK `source_snapshot_id` to
+  `prompt_pack_run_source_snapshots(id) ON DELETE CASCADE`, FK
+  `origin_scope_id` to `prompt_pack_run_scopes(id) ON DELETE CASCADE`, nullable
+  FKs `playlist_source_id` and `video_source_id` to `sources(id) ON DELETE SET
+  NULL`, nullable FK `live_playlist_item_id` to `youtube_playlist_items(id) ON
+  DELETE SET NULL`, `UNIQUE(run_id, origin_scope_id, video_id)`, indexes
+  `(source_snapshot_id)` and `(run_id, inclusion_status)`, and `CHECK`s for
+  `origin_kind IN ('explicit_video', 'playlist_item')` and `inclusion_status IN
+  ('included', 'skipped', 'blocking_failure')`.
 - `prompt_pack_run_material_snapshots`: `PRIMARY KEY(id)`, FK `run_id` to
   `prompt_pack_runs(id) ON DELETE CASCADE`, FK `source_snapshot_id` to
   `prompt_pack_run_source_snapshots(id) ON DELETE CASCADE`, nullable FK
@@ -398,9 +409,11 @@ selected video sources.
 
 ### `prompt_pack_run_source_snapshots`
 
-Stores frozen per-video source snapshots. Playlist is not a canonical
-`source_ref`, but playlist context is copied into each video source snapshot
-when applicable.
+Stores frozen canonical per-video source snapshots. Playlist is not a canonical
+`source_ref`, and playlist membership/origin context is intentionally not stored
+on this table. A video appears at most once per run even if it was selected
+directly and also appears in a playlist, or appears in multiple selected
+playlists.
 
 Important fields:
 
@@ -431,14 +444,47 @@ Important fields:
 - `like_count`
 - `comment_count`
 - `comment_collection_status`
-- `playlist_source_id`
-- `playlist_id`
-- `playlist_title`
-- `playlist_position`
 - `type_data_json_zstd`
 - `raw_metadata_zstd`
 - `content_hash`
 - `created_at`
+
+### `prompt_pack_run_source_origins`
+
+Stores how each selected scope expanded into included, skipped, or blocking
+video candidates. This separates selection/origin context from canonical video
+snapshots.
+
+Important fields:
+
+- `id`
+- `run_id`
+- `origin_scope_id`
+- `source_snapshot_id`
+- `origin_kind`: `explicit_video` or `playlist_item`
+- `inclusion_status`: `included`, `skipped`, or `blocking_failure`
+- `skip_reason`
+- `live_playlist_item_id`
+- `playlist_source_id`
+- `playlist_id`
+- `playlist_title`
+- `playlist_position`
+- `video_source_id`
+- `video_id`
+- `title_snapshot`
+- `availability_status_snapshot`
+- `estimated_input_tokens`
+- `estimated_input_chars`
+- `budget_status`
+- `origin_metadata_json_zstd`
+- `created_at`
+
+Rows with `inclusion_status = "included"` must point to a
+`source_snapshot_id`. Skipped and blocking rows may have no source snapshot,
+because the live video row can be unavailable, unlinked, missing transcript, or
+over budget. For explicit video selections, invalid candidates are normally
+`blocking_failure`; for playlist expansions, invalid entries are normally
+`skipped` unless no videos remain includable.
 
 ### `prompt_pack_run_material_snapshots`
 
@@ -675,17 +721,26 @@ Rules:
 - source must already be synced in Library;
 - selected source must be YouTube video or playlist;
 - playlist expands through linked, non-removed `youtube_playlist_items`;
-- unavailable or unlinked playlist entries are skipped and reported;
-- every selected explicit video and every linked playlist video selected for
-  analysis needs usable transcript;
-- a linked playlist video without usable transcript fails preflight rather than
-  falling back to description or comments;
+- preflight returns three explicit partitions:
+  - `included_videos`: linked, available videos with usable transcript and input
+    size within the selected model budget;
+  - `skipped_videos`: playlist entries excluded before execution, with
+    structured reasons such as `unlinked_playlist_item`, `unavailable_video`,
+    `no_usable_transcript`, or `input_budget_exceeded`;
+  - `blocking_failures`: selected explicit videos that cannot be analyzed,
+    invalid source selections, or playlist selections with zero includable
+    videos;
+- every included video needs a usable transcript;
+- preflight never falls back from transcript to description or comments;
 - comments are excluded unless explicitly enabled;
 - estimated token/cost/chunk info is shown to the user;
 - each video's estimated stage input must fit the selected model budget for the
   MVP single-request per-video stage;
-- if any selected analyzable video lacks transcript or exceeds the MVP input
-  budget, preflight fails.
+- start is allowed when `blocking_failures` is empty and `included_videos` is
+  non-empty;
+- any `skipped_videos` entry is copied into `prompt_pack_run_source_origins`,
+  surfaced in the UI, and later represented as corpus coverage limitation or
+  partial result metadata.
 
 ### Snapshot
 
@@ -695,7 +750,8 @@ execution.
 Snapshots include:
 
 - video metadata;
-- playlist context for playlist-origin videos;
+- origin rows for explicit selections, playlist entries, skipped entries, and
+  blocking preflight candidates;
 - transcript segments with timestamps;
 - description;
 - optional comments;
@@ -776,12 +832,18 @@ Single video:
 
 Multi-video or playlist:
 
-- all videos succeed -> run `complete`, with synthesis limitation if applicable;
-- some videos succeed and some fail -> run `partial`;
+- all included videos succeed and preflight skipped no selected playlist entries
+  -> run `complete`, with synthesis limitation if applicable;
+- all included videos succeed but preflight skipped one or more selected
+  playlist entries -> run `partial` with `corpus_coverage_limited` or
+  `partial_result` quality flag;
+- some included videos succeed and some fail during execution -> run `partial`;
 - no videos succeed -> run `failed`.
 
-Per-video failures are retained in stage rows, validation findings, audit, and
-result quality flags where a partial result exists.
+Preflight `skipped_videos`, runtime per-video failures, and quarantined invalid
+objects are retained separately. Skipped videos live in source origin rows and
+result limitations. Runtime failures live in stage rows, validation findings,
+audit, and result quality flags where a partial result exists.
 
 ## UI Scope
 
@@ -835,12 +897,82 @@ Shows:
 Pack library UI is read-only or absent in MVP. Full prompt-pack editing is a
 future slice.
 
+### Runtime/UI Lifecycle
+
+Prompt Pack runs should have their own runtime state and event stream, separate
+from legacy analysis runtime.
+
+Backend state:
+
+- `PromptPackRunState` tracks active run ids and cancel-requested run ids in
+  memory.
+- DB `run_status` remains authoritative for persisted history.
+- On app startup or runtime cleanup, stale `queued` or `running` rows without an
+  active task are marked `interrupted`.
+- The LLM scheduler may still provide queue position, but Prompt Pack runtime
+  owns run status transitions and emitted events.
+
+Event channel:
+
+```text
+prompt-pack-run-event
+```
+
+`PromptPackRunEvent` fields:
+
+- `run_id`
+- `request_id`
+- `kind`: `queued`, `started`, `progress`, `stage_started`,
+  `stage_completed`, `stage_failed`, `completed`, `partial`, `failed`,
+  `cancelled`, `interrupted`
+- `run_status`: `queued`, `running`, `complete`, `partial`, `failed`,
+  `cancelled`, `interrupted`
+- `phase`: `preflight`, `snapshot`, `stage`, `validation`, `projection`,
+  `persist`, or `terminal`
+- `stage_run_id`
+- `stage_name`
+- `source_snapshot_id`
+- `queue_position`
+- `progress_current`
+- `progress_total`
+- `message`
+- `error`
+
+Event rules:
+
+- `start_youtube_summary_run` creates the run, writes preflight partitions,
+  creates included source/material snapshots and stage skeleton, registers the
+  run as active, and emits `queued` or `started`.
+- Every stage status change emits an event with `stage_run_id` and `stage_name`.
+- Per-video progress advances over included videos, not skipped entries.
+- Terminal events are `completed`, `partial`, `failed`, `cancelled`, or
+  `interrupted`; after a terminal event the backend removes the run from active
+  state.
+- Cancellation is cooperative. `cancel_prompt_pack_run` marks cancel requested,
+  cancels queued scheduler work where possible, and stages check cancellation
+  between videos and before/after provider calls. If a provider call cannot be
+  interrupted, the run becomes `cancelled` after the current call returns.
+
+UI sync rules:
+
+- On mount, UI calls `list_prompt_pack_runs` and
+  `list_active_prompt_pack_runs`, then subscribes to `prompt-pack-run-event`.
+- Events update in-memory active rows immediately.
+- Terminal events trigger a debounced refresh of the run list, active list, run
+  detail, stage list, result, validation findings, and audit events for the
+  affected run.
+- UI keeps a polling fallback while any active run exists, so missed Tauri
+  events do not leave the run list stale.
+- The bottom queue/runs surface shows queued/running Prompt Pack runs using
+  `queue_position`, `progress_current`, and `progress_total`.
+
 ## Backend Commands
 
 Initial command/API surface:
 
 ```text
 list_prompt_pack_runs
+list_active_prompt_pack_runs
 get_prompt_pack_run
 preflight_youtube_summary_run
 start_youtube_summary_run
@@ -872,10 +1004,14 @@ Backend tests should cover:
 
 - prompt-pack library seed idempotency;
 - video preflight success;
-- playlist expansion and skipped unlinked items;
-- transcript-missing preflight failure;
-- oversized per-video transcript preflight failure;
+- playlist expansion into included, skipped, and blocking partitions;
+- explicit video transcript-missing preflight blocking failure;
+- playlist video transcript-missing preflight skipped entry;
+- explicit video oversized transcript preflight blocking failure;
+- playlist video oversized transcript preflight skipped entry;
 - run snapshot independence from live Library mutations;
+- source origin rows preserving playlist membership without duplicating canonical
+  video snapshots;
 - stage skeleton creation;
 - per-video LLM success path using a fake provider;
 - per-video LLM failure producing partial multi-video run;
@@ -890,6 +1026,8 @@ Schema tests should verify:
 - foreign keys and indexes exist;
 - `prompt_pack_runs.pack_id` cannot disagree with `pack_version_id`;
 - active pack-version uniqueness is enforced per pack;
+- `prompt_pack_run_source_snapshots` is unique by canonical video while
+  `prompt_pack_run_source_origins` can store multiple selection origins;
 - stage skeleton uniqueness handles run-scoped and video-scoped stages;
 - cascade behavior for run-owned data;
 - deleting live Library rows nulls live links but keeps run snapshots readable;
@@ -900,8 +1038,11 @@ Schema tests should verify:
 UI tests should cover:
 
 - preflight failure display;
+- preflight skipped-video display for playlist runs;
 - run progress for multi-video;
 - partial run display;
+- active run event updates, terminal refresh, and polling fallback;
+- cancel request behavior for queued and running runs;
 - result view timestamp links;
 - stage inspector artifact display.
 

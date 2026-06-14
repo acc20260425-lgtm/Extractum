@@ -646,3 +646,9 @@ Supporting per-video claims остаются достижимыми через `
 Playlist не является самостоятельным `source_ref` в v1. Если pack начнёт
 суммировать playlist как editorial unit, потребуется отдельный контекстный слой,
 не заменяющий `videos[]`.
+
+Для MVP run storage selection/origin context не копируется в `youtube_video`
+`source_ref`. Canonical video snapshot остаётся уникальным по video, а direct
+selection или playlist membership хранится во внешнем run-local origin слое.
+Открытым остаётся только будущий вопрос: нужен ли pack-level editorial context
+для playlist summary как отдельного readable объекта.
