@@ -939,7 +939,7 @@ git commit -m "feat: add project crud commands"
 - Modify: `src-tauri/src/library_sources/mod.rs`
 - Modify: `src-tauri/src/sources/store.rs`
 
-- [ ] **Step 1: Write failing Library project count test**
+- [x] **Step 1: Write failing Library project count test**
 
 In `src-tauri/src/library_sources/mod.rs`, update `create_schema` in tests to create `projects` and `project_sources`:
 
@@ -981,7 +981,7 @@ Keep the assertion:
 assert_eq!(video.project_count, 2);
 ```
 
-- [ ] **Step 2: Run test and verify failure**
+- [x] **Step 2: Run test and verify failure**
 
 Run:
 
@@ -991,7 +991,7 @@ cargo test library_sources::tests::list_library_sources_returns_youtube_and_tele
 
 Expected: FAIL because `LIBRARY_SOURCES_SQL` still reads `analysis_source_group_members`.
 
-- [ ] **Step 3: Update Library source query**
+- [x] **Step 3: Update Library source query**
 
 In `src-tauri/src/library_sources/mod.rs`, change the CTE:
 
@@ -1003,7 +1003,7 @@ project_counts AS (
 )
 ```
 
-- [ ] **Step 4: Write source deletion guard test**
+- [x] **Step 4: Write source deletion guard test**
 
 In `src-tauri/src/sources/store.rs` tests, add a focused unit test using an in-memory schema:
 
@@ -1040,7 +1040,7 @@ async fn delete_source_is_blocked_when_source_is_used_by_project() {
 }
 ```
 
-- [ ] **Step 5: Run test and verify failure**
+- [x] **Step 5: Run test and verify failure**
 
 Run:
 
@@ -1050,7 +1050,7 @@ cargo test delete_source_is_blocked_when_source_is_used_by_project --manifest-pa
 
 Expected: FAIL because delete currently removes the source directly.
 
-- [ ] **Step 6: Implement guard**
+- [x] **Step 6: Implement guard**
 
 In `delete_source_from_pool`, before `DELETE FROM sources`, add:
 
@@ -1070,7 +1070,7 @@ if project_count > 0 {
 }
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run:
 

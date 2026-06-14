@@ -72,6 +72,20 @@ async fn delete_source_from_pool(
     .await
     .map_err(AppError::database)?;
 
+    let project_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM project_sources WHERE source_id = ?",
+    )
+    .bind(source_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(AppError::database)?;
+
+    if project_count > 0 {
+        return Err(AppError::validation(format!(
+            "Source {source_id} is used by {project_count} project(s). Remove it from projects first."
+        )));
+    }
+
     sqlx::query("DELETE FROM sources WHERE id = ?")
         .bind(source_id)
         .execute(&mut *conn)
@@ -636,6 +650,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_source_is_blocked_when_source_is_used_by_project() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        for statement in [
+            "CREATE TABLE sources (id INTEGER PRIMARY KEY, source_type TEXT NOT NULL, created_at INTEGER NOT NULL)",
+            "CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+            "CREATE TABLE project_sources (project_id INTEGER NOT NULL, source_id INTEGER NOT NULL, added_at INTEGER NOT NULL)",
+        ] {
+            sqlx::query(statement)
+                .execute(&pool)
+                .await
+                .expect("create schema");
+        }
+        sqlx::query("INSERT INTO sources (id, source_type, created_at) VALUES (7, 'youtube', 1)")
+            .execute(&pool)
+            .await
+            .expect("insert source");
+        sqlx::query(
+            "INSERT INTO projects (id, name, created_at, updated_at) VALUES (3, 'Project', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project");
+        sqlx::query(
+            "INSERT INTO project_sources (project_id, source_id, added_at) VALUES (3, 7, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert membership");
+
+        let error = delete_source_from_pool(&pool, 7)
+            .await
+            .expect_err("source delete blocked");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+    }
+
+    #[tokio::test]
     async fn delete_source_waits_for_temporary_database_write_lock() {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let db_path = temp_dir.path().join("delete-lock.db");
@@ -653,6 +705,10 @@ mod tests {
             .execute(&pool)
             .await
             .expect("create sources table");
+        sqlx::query("CREATE TABLE project_sources (project_id INTEGER NOT NULL, source_id INTEGER NOT NULL, added_at INTEGER NOT NULL)")
+            .execute(&pool)
+            .await
+            .expect("create project sources table");
         sqlx::query("INSERT INTO sources (id, title) VALUES (1, 'Locked source')")
             .execute(&pool)
             .await

@@ -37,8 +37,8 @@ const LIBRARY_SOURCES_SQL: &str = r#"
         GROUP BY source_id
     ),
     project_counts AS (
-        SELECT source_id, COUNT(DISTINCT group_id) AS project_count
-        FROM analysis_source_group_members
+        SELECT source_id, COUNT(DISTINCT project_id) AS project_count
+        FROM project_sources
         GROUP BY source_id
     )
     SELECT
@@ -194,19 +194,19 @@ mod tests {
             )
             "#,
             r#"
-            CREATE TABLE analysis_source_groups (
+            CREATE TABLE projects (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
-                source_type TEXT NOT NULL,
+                description TEXT,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )
             "#,
             r#"
-            CREATE TABLE analysis_source_group_members (
-                group_id INTEGER NOT NULL,
+            CREATE TABLE project_sources (
+                project_id INTEGER NOT NULL,
                 source_id INTEGER NOT NULL,
-                created_at INTEGER NOT NULL
+                added_at INTEGER NOT NULL
             )
             "#,
             r#"
@@ -317,14 +317,14 @@ mod tests {
             .execute(&pool)
             .await
             .expect("insert items");
-        sqlx::query("INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at) VALUES (10, 'Project A', 'youtube', 1, 1), (11, 'Project B', 'youtube', 1, 1)")
+        sqlx::query("INSERT INTO projects (id, name, created_at, updated_at) VALUES (10, 'Project A', 1, 1), (11, 'Project B', 1, 1)")
             .execute(&pool)
             .await
-            .expect("insert groups");
-        sqlx::query("INSERT INTO analysis_source_group_members (group_id, source_id, created_at) VALUES (10, 1, 1), (11, 1, 1), (10, 3, 1)")
+            .expect("insert projects");
+        sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (10, 1, 1), (11, 1, 1), (10, 3, 1)")
             .execute(&pool)
             .await
-            .expect("insert members");
+            .expect("insert project sources");
         sqlx::query(
             r#"
             INSERT INTO youtube_video_sources (
