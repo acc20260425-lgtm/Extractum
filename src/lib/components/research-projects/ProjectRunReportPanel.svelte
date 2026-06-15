@@ -34,6 +34,7 @@
   let error = $state("");
   let resultError = $state("");
   let selectedRef = $state<string | null>(null);
+  let artifactCopied = $state(false);
 
   const runId = $derived(run?.runId ?? null);
   const expectedMissingResult = $derived(
@@ -78,6 +79,7 @@
     resultError = "";
     selectedArtifact = null;
     selectedRef = null;
+    artifactCopied = false;
     try {
       await Promise.all([loadRunResult(runId), loadRunDiagnostics(runId)]);
     } catch (cause) {
@@ -131,12 +133,14 @@
     stages = [];
     artifactsByStage = {};
     selectedArtifact = null;
+    artifactCopied = false;
     findings = [];
     auditEvents = [];
   }
 
   async function openArtifact(artifact: PromptPackStageArtifactSummary) {
     loadingArtifact = true;
+    artifactCopied = false;
     try {
       selectedArtifact = await getPromptPackStageArtifact({
         stageRunId: artifact.stageRunId,
@@ -148,6 +152,19 @@
       error = formatAppError("loading project run artifact", cause);
     } finally {
       loadingArtifact = false;
+    }
+  }
+
+  async function copySelectedArtifactJson() {
+    if (!selectedArtifact) return;
+    try {
+      await navigator.clipboard.writeText(jsonPreview(selectedArtifact));
+      artifactCopied = true;
+      setTimeout(() => {
+        artifactCopied = false;
+      }, 1400);
+    } catch (cause) {
+      error = formatAppError("copying project run artifact", cause);
     }
   }
 
@@ -186,6 +203,26 @@
   function numberAt(value: Record<string, unknown>, key: string) {
     const next = value[key];
     return typeof next === "number" ? next : null;
+  }
+
+  function artifactTitle(artifactKind: string) {
+    switch (artifactKind) {
+      case "prompt_input":
+        return "Prompt input";
+      case "raw_output":
+        return "Raw output";
+      case "parsed_output":
+        return "Parsed output";
+      case "metrics":
+        return "Metrics";
+      default:
+        return artifactKind;
+    }
+  }
+
+  function artifactPreview(value: unknown) {
+    if (typeof value === "string") return value;
+    return jsonPreview(value);
   }
 
   function textFromKeys(value: Record<string, unknown>, keys: string[], fallback = "") {
@@ -498,7 +535,7 @@
         <div class="report-section">
           <h3>Selected Artifact</h3>
           {#if selectedArtifact}
-            <pre>{jsonPreview(selectedArtifact.content)}</pre>
+            {@render ArtifactDetail({ artifact: selectedArtifact })}
           {:else}
             <p class="muted">Select a stage artifact.</p>
           {/if}
@@ -585,6 +622,38 @@
       {/each}
     </div>
   {/if}
+{/snippet}
+
+{#snippet ArtifactDetail({ artifact }: { artifact: PromptPackStageArtifact })}
+  <div class="artifact-detail">
+    <div class="artifact-detail-header">
+      <div>
+        <h4>{artifactTitle(artifact.artifactKind)}</h4>
+        <p>
+          stage #{artifact.stageRunId} - attempt {artifact.attemptNumber} - item {artifact.artifactIndex}
+        </p>
+      </div>
+      <button type="button" onclick={() => void copySelectedArtifactJson()}>
+        {artifactCopied ? "Copied" : "Copy JSON"}
+      </button>
+    </div>
+
+    <div class="artifact-meta">
+      <span>{artifact.artifactKind}</span>
+      <span>{artifact.contentType}</span>
+      <span>{artifact.createdAt}</span>
+    </div>
+
+    <div class="artifact-preview">
+      <h4>{artifactTitle(artifact.artifactKind)}</h4>
+      <pre>{artifactPreview(artifact.content)}</pre>
+    </div>
+
+    <details class="artifact-json">
+      <summary>Full JSON</summary>
+      <pre>{jsonPreview(artifact)}</pre>
+    </details>
+  </div>
 {/snippet}
 
 {#snippet SynthesisGroup({
@@ -904,6 +973,88 @@
     background: var(--extractum-surface-subtle);
     padding: 4px 7px;
     color: var(--extractum-text);
+    font-size: 12px;
+  }
+
+  .artifact-detail,
+  .artifact-preview,
+  .artifact-json {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .artifact-detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .artifact-detail-header h4,
+  .artifact-preview h4 {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 0;
+  }
+
+  .artifact-detail-header p {
+    margin-top: 3px;
+    color: var(--extractum-muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .artifact-detail-header button {
+    flex: 0 0 auto;
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface-subtle);
+    padding: 5px 8px;
+    color: var(--extractum-text);
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .artifact-detail-header button:hover {
+    border-color: color-mix(in srgb, var(--extractum-primary) 45%, var(--extractum-border));
+    color: var(--extractum-primary);
+  }
+
+  .artifact-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .artifact-meta span {
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface-subtle);
+    padding: 4px 6px;
+    color: var(--extractum-muted);
+    font-size: 11px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .artifact-preview {
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface);
+    padding: 10px;
+  }
+
+  .artifact-preview pre,
+  .artifact-json pre {
+    max-height: 260px;
+    margin: 0;
+  }
+
+  .artifact-json summary {
+    color: var(--extractum-muted);
+    cursor: pointer;
     font-size: 12px;
   }
 

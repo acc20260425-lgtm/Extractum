@@ -104,4 +104,19 @@ describe("project runs screen", () => {
     expect(reportSource).toContain("class:ref-target");
     expect(reportSource).toContain("Selected ref");
   });
+
+  it("renders selected artifacts with typed previews and copy support", () => {
+    const reportSource = readProjectFile("src/lib/components/research-projects/ProjectRunReportPanel.svelte");
+
+    expect(reportSource).toContain("ArtifactDetail");
+    expect(reportSource).toContain("copySelectedArtifactJson");
+    expect(reportSource).toContain("artifactTitle");
+    expect(reportSource).toContain("artifact-preview");
+    expect(reportSource).toContain("Prompt input");
+    expect(reportSource).toContain("Raw output");
+    expect(reportSource).toContain("Parsed output");
+    expect(reportSource).toContain("Metrics");
+    expect(reportSource).toContain("Copy JSON");
+    expect(reportSource).toContain("Copied");
+  });
 });
