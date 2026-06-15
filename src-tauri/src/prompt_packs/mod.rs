@@ -11,6 +11,9 @@ pub mod stage_io;
 pub mod store;
 pub mod validation;
 pub mod youtube_summary;
+pub mod youtube_summary_execution;
+pub mod youtube_summary_stage_outputs;
+pub mod youtube_summary_synthesis_input;
 
 pub use library::get_prompt_pack_library;
 pub use result_commands::{
