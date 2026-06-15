@@ -18,6 +18,8 @@ pub mod youtube_summary_snapshots;
 pub mod youtube_summary_sources;
 pub mod youtube_summary_stage_outputs;
 pub mod youtube_summary_synthesis_input;
+#[cfg(test)]
+pub(crate) mod youtube_summary_test_support;
 
 pub use library::get_prompt_pack_library;
 pub use result_commands::{
