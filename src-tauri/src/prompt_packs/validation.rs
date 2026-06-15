@@ -4,6 +4,7 @@ use sqlx::SqlitePool;
 
 use super::stage_io::TranscriptAnalysisStageInput;
 use crate::compression::compress_text;
+use crate::error::{AppError, AppResult};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PromptPackValidationError {
@@ -85,6 +86,112 @@ pub(crate) async fn validate_and_quarantine_transcript_analysis_output(
     }
 }
 
+pub(crate) fn validate_synthesis_output(
+    output: &serde_json::Value,
+    allowed_source_refs: &HashSet<String>,
+) -> Result<(), PromptPackValidationError> {
+    expect_string(output, "stage_io_version", "1.0")?;
+    expect_string(output, "schema_version", "1.0")?;
+    expect_string(output, "stage", "youtube_summary/synthesis")?;
+    let candidate = output
+        .get("synthesis_candidate")
+        .ok_or_else(|| PromptPackValidationError {
+            message: "missing required key synthesis_candidate".to_string(),
+            object_path: Some("$.synthesis_candidate".to_string()),
+        })?;
+    expect_non_empty_string_at(
+        candidate,
+        "summary_text",
+        "$.synthesis_candidate.summary_text",
+    )?;
+    for key in [
+        "cross_video_themes",
+        "common_claims",
+        "contradictions_across_videos",
+    ] {
+        expect_array_at(candidate, key, &format!("$.synthesis_candidate.{key}"))?;
+    }
+    for key in ["limitations", "warning_candidates"] {
+        expect_array(output, key)?;
+    }
+    reject_non_empty_synthesis_candidate_ref_arrays(candidate, "$.synthesis_candidate")?;
+    reject_backend_owned_ids(output, "$")?;
+    reject_unknown_synthesis_source_refs(output, "$", allowed_source_refs)?;
+    Ok(())
+}
+
+pub(crate) async fn validate_and_quarantine_synthesis_output(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    output: &serde_json::Value,
+) -> AppResult<()> {
+    let empty_source_refs = HashSet::new();
+    if let Err(error) = validate_synthesis_output(output, &empty_source_refs) {
+        if !error.message.contains("unknown synthesis source ref") {
+            return quarantine_synthesis_output(pool, run_id, stage_run_id, output, error).await;
+        }
+    }
+
+    let allowed_source_refs = load_allowed_synthesis_source_refs(pool, run_id).await?;
+    match validate_synthesis_output(output, &allowed_source_refs) {
+        Ok(()) => Ok(()),
+        Err(error) => quarantine_synthesis_output(pool, run_id, stage_run_id, output, error).await,
+    }
+}
+
+async fn quarantine_synthesis_output(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    output: &serde_json::Value,
+    error: PromptPackValidationError,
+) -> AppResult<()> {
+    let object_path = error
+        .object_path
+        .clone()
+        .unwrap_or_else(|| "$".to_string());
+    let validation_message = error.message.clone();
+    let candidate = value_at_path(output, &object_path).unwrap_or(output);
+    let content = serde_json::to_string(candidate).unwrap_or_else(|_| "{}".to_string());
+    sqlx::query(
+        "INSERT INTO prompt_pack_result_quarantine_artifacts (
+            run_id, stage_run_id, object_path, reason, content_json_zstd, created_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(run_id)
+    .bind(stage_run_id)
+    .bind(&object_path)
+    .bind(&validation_message)
+    .bind(compress_text(&content).unwrap_or_default())
+    .bind("2026-06-14T00:00:00Z")
+    .execute(pool)
+    .await
+    .map_err(|db_error| {
+        AppError::internal(format!(
+            "quarantine synthesis output after validation error `{validation_message}` failed: {db_error}"
+        ))
+    })?;
+    Err(AppError::validation(validation_message))
+}
+
+async fn load_allowed_synthesis_source_refs(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<HashSet<String>> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT source_ref_id FROM prompt_pack_run_source_snapshots
+         WHERE run_id = ?
+         ORDER BY id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map(|refs| refs.into_iter().collect())
+    .map_err(AppError::database)
+}
+
 fn expect_string(
     output: &serde_json::Value,
     key: &str,
@@ -96,6 +203,48 @@ fn expect_string(
         Err(PromptPackValidationError {
             message: format!("{key} must be {expected}"),
             object_path: Some(format!("$.{key}")),
+        })
+    }
+}
+
+fn expect_non_empty_string_at(
+    output: &serde_json::Value,
+    key: &str,
+    object_path: &str,
+) -> Result<(), PromptPackValidationError> {
+    if output
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty())
+    {
+        Ok(())
+    } else {
+        Err(PromptPackValidationError {
+            message: format!("{key} must be a non-empty string"),
+            object_path: Some(object_path.to_string()),
+        })
+    }
+}
+
+fn expect_array(
+    output: &serde_json::Value,
+    key: &str,
+) -> Result<(), PromptPackValidationError> {
+    expect_array_at(output, key, &format!("$.{key}"))
+}
+
+fn expect_array_at(
+    output: &serde_json::Value,
+    key: &str,
+    object_path: &str,
+) -> Result<(), PromptPackValidationError> {
+    if output.get(key).and_then(serde_json::Value::as_array).is_some() {
+        Ok(())
+    } else {
+        Err(PromptPackValidationError {
+            message: format!("{key} must be an array"),
+            object_path: Some(object_path.to_string()),
         })
     }
 }
@@ -113,6 +262,12 @@ fn reject_backend_owned_ids(
         "quote_id",
         "action_item_id",
         "open_question_id",
+        "section_id",
+        "video_id",
+        "synthesis_item_id",
+        "theme_id",
+        "common_claim_id",
+        "contradiction_id",
     ];
     match value {
         serde_json::Value::Object(map) => {
@@ -135,6 +290,93 @@ fn reject_backend_owned_ids(
         _ => {}
     }
     Ok(())
+}
+
+fn reject_unknown_synthesis_source_refs(
+    value: &serde_json::Value,
+    path: &str,
+    allowed_source_refs: &HashSet<String>,
+) -> Result<(), PromptPackValidationError> {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, nested) in map {
+                let child_path = format!("{path}.{key}");
+                if key == "source_refs" {
+                    let refs = nested.as_array().ok_or_else(|| PromptPackValidationError {
+                        message: "source_refs must be an array".to_string(),
+                        object_path: Some(child_path.clone()),
+                    })?;
+                    for (index, item) in refs.iter().enumerate() {
+                        let item_path = format!("{child_path}[{index}]");
+                        let source_ref = item.as_str().ok_or_else(|| PromptPackValidationError {
+                            message: "source_refs entries must be strings".to_string(),
+                            object_path: Some(item_path.clone()),
+                        })?;
+                        if !allowed_source_refs.contains(source_ref) {
+                            return Err(PromptPackValidationError {
+                                message: format!("unknown synthesis source ref {source_ref}"),
+                                object_path: Some(item_path),
+                            });
+                        }
+                    }
+                } else {
+                    reject_unknown_synthesis_source_refs(nested, &child_path, allowed_source_refs)?;
+                }
+            }
+            Ok(())
+        }
+        serde_json::Value::Array(items) => {
+            for (index, nested) in items.iter().enumerate() {
+                reject_unknown_synthesis_source_refs(
+                    nested,
+                    &format!("{path}[{index}]"),
+                    allowed_source_refs,
+                )?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn reject_non_empty_synthesis_candidate_ref_arrays(
+    value: &serde_json::Value,
+    path: &str,
+) -> Result<(), PromptPackValidationError> {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, nested) in map {
+                let child_path = format!("{path}.{key}");
+                if ["claim_refs", "evidence_refs", "relation_refs"].contains(&key.as_str()) {
+                    let refs = nested.as_array().ok_or_else(|| PromptPackValidationError {
+                        message: format!("{key} must be an array"),
+                        object_path: Some(child_path.clone()),
+                    })?;
+                    if !refs.is_empty() {
+                        return Err(PromptPackValidationError {
+                            message: format!(
+                                "{key} must be empty in synthesis_candidate until the backend exposes an allowed ref map"
+                            ),
+                            object_path: Some(child_path),
+                        });
+                    }
+                } else {
+                    reject_non_empty_synthesis_candidate_ref_arrays(nested, &child_path)?;
+                }
+            }
+            Ok(())
+        }
+        serde_json::Value::Array(items) => {
+            for (index, nested) in items.iter().enumerate() {
+                reject_non_empty_synthesis_candidate_ref_arrays(
+                    nested,
+                    &format!("{path}[{index}]"),
+                )?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 fn reject_unknown_material_refs(
@@ -190,8 +432,9 @@ fn value_at_path<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
+        validate_and_quarantine_synthesis_output,
         validate_and_quarantine_transcript_analysis_output,
-        validate_transcript_analysis_output,
+        validate_synthesis_output, validate_transcript_analysis_output,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
@@ -318,6 +561,231 @@ mod tests {
         assert_eq!(quarantine_count, 1);
     }
 
+    #[test]
+    fn synthesis_output_validator_accepts_valid_output() {
+        let output = valid_synthesis_output();
+
+        validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect("valid synthesis output");
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_missing_summary_text() {
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]
+            .as_object_mut()
+            .expect("candidate")
+            .remove("summary_text");
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("missing summary rejected");
+
+        assert!(error.message.contains("summary_text"));
+        assert_eq!(
+            error.object_path.as_deref(),
+            Some("$.synthesis_candidate.summary_text")
+        );
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_wrong_stage_io_version() {
+        let mut output = valid_synthesis_output();
+        output["stage_io_version"] = serde_json::json!("2.0");
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("stage io version rejected");
+
+        assert!(error.message.contains("stage_io_version"));
+        assert_eq!(error.object_path.as_deref(), Some("$.stage_io_version"));
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_wrong_schema_version() {
+        let mut output = valid_synthesis_output();
+        output["schema_version"] = serde_json::json!("2.0");
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("schema version rejected");
+
+        assert!(error.message.contains("schema_version"));
+        assert_eq!(error.object_path.as_deref(), Some("$.schema_version"));
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_wrong_stage() {
+        let mut output = valid_synthesis_output();
+        output["stage"] = serde_json::json!("youtube_summary/transcript_analysis");
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("wrong stage rejected");
+
+        assert!(error.message.contains("stage"));
+        assert_eq!(error.object_path.as_deref(), Some("$.stage"));
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_non_array_fields() {
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]["cross_video_themes"] = serde_json::json!("not an array");
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("array contract rejected");
+
+        assert!(error.message.contains("cross_video_themes"));
+        assert_eq!(
+            error.object_path.as_deref(),
+            Some("$.synthesis_candidate.cross_video_themes")
+        );
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_backend_owned_ids() {
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]["cross_video_themes"] = serde_json::json!([
+            {
+                "theme_id": "theme_1",
+                "text": "Provider must not assign final IDs"
+            }
+        ]);
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("backend ids rejected");
+
+        assert!(error.message.contains("theme_id"));
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_unknown_source_ref() {
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]["cross_video_themes"][0]["source_refs"] =
+            serde_json::json!(["source_ref_999"]);
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("unknown source ref rejected");
+
+        assert!(error.message.contains("source_ref_999"));
+        assert_eq!(
+            error.object_path.as_deref(),
+            Some("$.synthesis_candidate.cross_video_themes[0].source_refs[0]")
+        );
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_provider_authored_claim_ref() {
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]["cross_video_themes"][0]["claim_refs"] =
+            serde_json::json!(["claim_999"]);
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("provider-authored claim ref rejected");
+
+        assert!(error.message.contains("claim_refs"));
+        assert_eq!(
+            error.object_path.as_deref(),
+            Some("$.synthesis_candidate.cross_video_themes[0].claim_refs")
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_synthesis_output_is_written_to_quarantine_artifacts() {
+        let pool = test_pool_with_synthesis_stage().await;
+        let mut output = valid_synthesis_output();
+        output["warning_candidates"] = serde_json::json!([
+            {
+                "source_ref_id": "source_ref_1",
+                "text": "Provider must not assign backend source refs"
+            }
+        ]);
+
+        validate_and_quarantine_synthesis_output(&pool, 42, 2001, &output)
+            .await
+            .expect_err("invalid synthesis rejected");
+
+        let quarantine_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_quarantine_artifacts
+             WHERE run_id = 42 AND stage_run_id = 2001",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("quarantine count");
+
+        assert_eq!(quarantine_count, 1);
+    }
+
+    #[tokio::test]
+    async fn invalid_synthesis_output_with_unknown_source_ref_is_quarantined() {
+        let pool = test_pool_with_synthesis_stage().await;
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]["cross_video_themes"][0]["source_refs"] =
+            serde_json::json!(["source_ref_999"]);
+
+        validate_and_quarantine_synthesis_output(&pool, 42, 2001, &output)
+            .await
+            .expect_err("unknown source ref rejected");
+
+        let quarantine_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_quarantine_artifacts
+             WHERE run_id = 42
+               AND stage_run_id = 2001
+               AND reason LIKE '%source_ref_999%'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("quarantine count");
+
+        assert_eq!(quarantine_count, 1);
+    }
+
+    #[tokio::test]
+    async fn invalid_synthesis_output_surfaces_quarantine_write_failure() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite without migrations");
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]["cross_video_themes"] = serde_json::json!([
+            {
+                "theme_id": "theme_1",
+                "theme_text": "Provider must not assign backend IDs"
+            }
+        ]);
+
+        let error = validate_and_quarantine_synthesis_output(&pool, 42, 2001, &output)
+            .await
+            .expect_err("quarantine write failure is surfaced");
+
+        assert!(error.message.contains("quarantine synthesis output"));
+    }
+
+    fn valid_synthesis_output() -> serde_json::Value {
+        serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/synthesis",
+            "synthesis_candidate": {
+                "summary_text": "Combined summary",
+                "cross_video_themes": [
+                    {
+                        "theme_text": "Shared theme",
+                        "source_refs": ["source_ref_1", "source_ref_2"],
+                        "claim_refs": [],
+                        "evidence_refs": []
+                    }
+                ],
+                "common_claims": [],
+                "contradictions_across_videos": []
+            },
+            "limitations": [],
+            "warning_candidates": []
+        })
+    }
+
+    fn allowed_synthesis_source_refs() -> std::collections::HashSet<String> {
+        ["source_ref_1", "source_ref_2"]
+            .into_iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
     fn test_stage_input_with_material_refs<const N: usize>(
         material_refs: [&str; N],
     ) -> TranscriptAnalysisStageInput {
@@ -396,6 +864,64 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert stage");
+        pool
+    }
+
+    async fn test_pool_with_synthesis_stage() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        sqlx::query(
+            "INSERT INTO prompt_pack_runs (
+                id, pack_version_id, pack_id, pack_version, schema_version,
+                run_status, result_status, output_language, control_preset,
+                evidence_mode, include_comments, created_at, updated_at
+             )
+             VALUES (42, 1, 'youtube_summary', '1.0.0', '1.0',
+                'running', 'none', 'en', 'standard', 'standard', 0,
+                '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert run");
+        sqlx::query(
+            "INSERT INTO sources (
+                id, source_type, source_subtype, external_id, title,
+                is_active, is_member, created_at
+             )
+             VALUES
+                (901, 'youtube', 'video', 'provider-video-1', 'Video 1', 1, 0, 1),
+                (902, 'youtube', 'video', 'provider-video-2', 'Video 2', 1, 0, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert sources");
+        sqlx::query(
+            "INSERT INTO prompt_pack_run_source_snapshots (
+                id, run_id, source_id, source_ref_id, video_id, title, created_at
+             )
+             VALUES
+                (501, 42, 901, 'source_ref_1', 'provider-video-1', 'Video 1', '2026-06-14T00:00:00Z'),
+                (502, 42, 902, 'source_ref_2', 'provider-video-2', 'Video 2', '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert snapshots");
+        sqlx::query(
+            "INSERT INTO prompt_pack_stage_runs (
+                id, run_id, source_snapshot_id, stage_name, stage_order, stage_status,
+                created_at, updated_at
+             )
+             VALUES (2001, 42, NULL, 'youtube_summary/synthesis', 103, 'running',
+                '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert synthesis stage");
         pool
     }
 }

@@ -505,7 +505,7 @@ git commit -m "Build YouTube Summary synthesis stage input"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary.rs`
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
 
-- [ ] **Step 1: Write the failing synthesis validation tests**
+- [x] **Step 1: Write the failing synthesis validation tests**
 
 In `src-tauri/src/prompt_packs/validation.rs`, add tests beside the transcript-analysis validation tests:
 
@@ -794,7 +794,7 @@ async fn test_pool_with_synthesis_stage() -> sqlx::SqlitePool {
 }
 ```
 
-- [ ] **Step 2: Run the validation tests to verify they fail**
+- [x] **Step 2: Run the validation tests to verify they fail**
 
 Run:
 
@@ -816,7 +816,7 @@ Expected:
 - `invalid_synthesis_output_with_unknown_source_ref_is_quarantined` FAILS because unknown source refs are not quarantined.
 - `invalid_synthesis_output_surfaces_quarantine_write_failure` FAILS because `validate_and_quarantine_synthesis_output` does not exist and must not swallow quarantine write errors.
 
-- [ ] **Step 3: Implement synthesis validation and quarantine**
+- [x] **Step 3: Implement synthesis validation and quarantine**
 
 In `src-tauri/src/prompt_packs/validation.rs`, add:
 
@@ -1086,7 +1086,7 @@ const FORBIDDEN: &[&str] = &[
 
 Add `use crate::error::{AppError, AppResult};` near the top of `validation.rs` if those names are not already imported.
 
-- [ ] **Step 4: Write the failing persistence test**
+- [x] **Step 4: Write the failing persistence test**
 
 Add a test:
 
@@ -1233,7 +1233,7 @@ async fn execute_synthesis_stage_rejects_invalid_output_without_success_artifact
 }
 ```
 
-- [ ] **Step 5: Run the persistence test to verify it fails**
+- [x] **Step 5: Run the persistence test to verify it fails**
 
 Run:
 
@@ -1244,7 +1244,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: both tests FAIL because `execute_synthesis_stage_with_completion` does not exist.
 
-- [ ] **Step 6: Implement persistence**
+- [x] **Step 6: Implement persistence**
 
 Implement `execute_synthesis_stage_with_completion` parallel to `execute_transcript_analysis_stage_with_completion`, with these differences:
 
@@ -1270,7 +1270,7 @@ It should:
 - persist `metrics #4` with `schema_id`, token usage, latency, and `validation_error_count = 0`;
 - mark stage `succeeded`.
 
-- [ ] **Step 7: Add LLM request construction**
+- [x] **Step 7: Add LLM request construction**
 
 In `runtime.rs`, add the request builder below. `LlmChatRequest.max_output_tokens` already exists in the current LLM contract; this task must not add or rename LLM contract fields.
 
@@ -1305,7 +1305,7 @@ fn build_synthesis_llm_request(
 }
 ```
 
-- [ ] **Step 8: Run validation and persistence tests**
+- [x] **Step 8: Run validation and persistence tests**
 
 Run:
 
@@ -1322,7 +1322,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/validation.rs src-tauri/src/prompt_packs/youtube_summary.rs src-tauri/src/prompt_packs/runtime.rs

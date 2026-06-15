@@ -12,7 +12,9 @@ use crate::error::{AppError, AppResult};
 use crate::prompt_packs::stage_io::{
     build_transcript_analysis_stage_input, extract_json_payload, insert_stage_artifact_in_pool,
 };
-use crate::prompt_packs::validation::validate_transcript_analysis_output;
+use crate::prompt_packs::validation::{
+    validate_and_quarantine_synthesis_output, validate_transcript_analysis_output,
+};
 use crate::prompt_packs::{
     projections::persist_final_result_transaction,
     result_builder::build_youtube_summary_canonical_result,
@@ -109,6 +111,11 @@ pub(crate) struct TranscriptAnalysisStageExecutionRequest {
     pub source_ref_id: String,
     pub prompt_input_json: String,
 }
+
+const SYNTHESIS_STAGE_NAME: &str = "youtube_summary/synthesis";
+// Metrics-only schema identifier for this slice. Do not seed it into
+// prompt_pack_schemas until a foundation/schema task adds the asset.
+const SYNTHESIS_SCHEMA_ID: &str = "stage-io/youtube_summary_synthesis_output";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct YoutubeSummaryRunExecutionOutcome {
@@ -223,6 +230,134 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
          SET stage_status = 'succeeded', completed_at = ?, updated_at = ?
          WHERE id = ?",
     )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+pub(crate) async fn execute_synthesis_stage_with_completion(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    completion: LlmCompletion,
+) -> AppResult<()> {
+    let (run_id,): (i64,) =
+        sqlx::query_as("SELECT run_id FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'running', started_at = COALESCE(started_at, ?), updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    let input = build_synthesis_stage_input(pool, run_id).await?;
+    let input_json = serde_json::to_string(&input)
+        .map_err(|error| AppError::internal(format!("serialize synthesis stage input: {error}")))?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "prompt_input",
+        1,
+        1,
+        &input_json,
+    )
+    .await?;
+
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "raw_output",
+        1,
+        2,
+        &completion.text,
+    )
+    .await?;
+
+    let parsed = extract_json_payload(&completion.text)?;
+    if let Err(error) =
+        validate_and_quarantine_synthesis_output(pool, run_id, stage_run_id, &parsed).await
+    {
+        mark_synthesis_stage_failed(pool, stage_run_id, &error.message).await?;
+        return Err(error);
+    }
+
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize synthesis parsed output: {error}")))?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        1,
+        3,
+        &parsed_json,
+    )
+    .await?;
+
+    let metrics = serde_json::json!({
+        "input_tokens": completion.input_tokens,
+        "output_tokens": completion.output_tokens,
+        "latency_ms": completion.latency_ms,
+        "schema_id": SYNTHESIS_SCHEMA_ID,
+        "validation_error_count": 0,
+        "attempt_number": 1
+    });
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "metrics",
+        1,
+        4,
+        &metrics.to_string(),
+    )
+    .await?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'succeeded', completed_at = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_synthesis_stage_failed(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    error: &str,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'failed',
+             error_message = ?,
+             latest_message = ?,
+             completed_at = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(error)
+    .bind(error)
     .bind(now_string())
     .bind(now_string())
     .bind(stage_run_id)
@@ -2191,6 +2326,147 @@ mod tests {
         assert_eq!(claims[0]["source_ref_id"], "source_ref_1");
         assert_eq!(claims[0]["candidate"]["text"], "New first claim");
         assert!(claims[0]["candidate"].get("source_ref_id").is_none());
+    }
+
+    #[tokio::test]
+    async fn execute_synthesis_stage_persists_raw_parsed_and_metrics_artifacts() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        persist_succeeded_transcript_stage_fixtures(
+            &pool,
+            1,
+            vec![
+                TranscriptStageFixture {
+                    summary: "First summary",
+                    claim: "First claim",
+                    evidence: "First evidence",
+                },
+                TranscriptStageFixture {
+                    summary: "Second summary",
+                    claim: "Second claim",
+                    evidence: "Second evidence",
+                },
+            ],
+        )
+        .await
+        .expect("persist transcript fixtures");
+
+        let stage_run_id: i64 = sqlx::query_scalar(
+            "SELECT id FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("stage row");
+
+        super::execute_synthesis_stage_with_completion(
+            &pool,
+            stage_run_id,
+            LlmCompletion {
+                text: synthesis_json("Combined summary"),
+                input_tokens: Some(100),
+                output_tokens: Some(200),
+                latency_ms: 300,
+            },
+        )
+        .await
+        .expect("execute synthesis");
+
+        let kinds: Vec<String> = sqlx::query_scalar(
+            "SELECT artifact_kind FROM prompt_pack_stage_artifacts
+             WHERE stage_run_id = ?
+             ORDER BY artifact_index ASC",
+        )
+        .bind(stage_run_id)
+        .fetch_all(&pool)
+        .await
+        .expect("artifacts");
+
+        assert_eq!(kinds, vec!["prompt_input", "raw_output", "parsed_output", "metrics"]);
+    }
+
+    #[tokio::test]
+    async fn execute_synthesis_stage_rejects_invalid_output_without_success_artifacts() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        persist_succeeded_transcript_stage_fixtures(
+            &pool,
+            1,
+            vec![
+                TranscriptStageFixture {
+                    summary: "First summary",
+                    claim: "First claim",
+                    evidence: "First evidence",
+                },
+                TranscriptStageFixture {
+                    summary: "Second summary",
+                    claim: "Second claim",
+                    evidence: "Second evidence",
+                },
+            ],
+        )
+        .await
+        .expect("persist transcript fixtures");
+
+        let stage_run_id: i64 = sqlx::query_scalar(
+            "SELECT id FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("stage row");
+
+        let invalid = r#"{
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/synthesis",
+            "synthesis_candidate": {
+                "summary_text": "Combined summary",
+                "cross_video_themes": [{ "theme_id": "theme_1", "theme_text": "bad" }],
+                "common_claims": [],
+                "contradictions_across_videos": []
+            },
+            "limitations": [],
+            "warning_candidates": []
+        }"#;
+        super::execute_synthesis_stage_with_completion(
+            &pool,
+            stage_run_id,
+            LlmCompletion {
+                text: invalid.to_string(),
+                input_tokens: Some(100),
+                output_tokens: Some(200),
+                latency_ms: 300,
+            },
+        )
+        .await
+        .expect_err("invalid synthesis fails stage");
+
+        let status: String = sqlx::query_scalar(
+            "SELECT stage_status FROM prompt_pack_stage_runs WHERE id = ?",
+        )
+        .bind(stage_run_id)
+        .fetch_one(&pool)
+        .await
+        .expect("stage status");
+        let success_artifacts: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_stage_artifacts
+             WHERE stage_run_id = ? AND artifact_kind IN ('parsed_output', 'metrics')",
+        )
+        .bind(stage_run_id)
+        .fetch_one(&pool)
+        .await
+        .expect("success artifacts");
+        let quarantine_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_quarantine_artifacts
+             WHERE run_id = 1 AND stage_run_id = ?",
+        )
+        .bind(stage_run_id)
+        .fetch_one(&pool)
+        .await
+        .expect("quarantine count");
+
+        assert_eq!(status, "failed");
+        assert_eq!(success_artifacts, 0);
+        assert_eq!(quarantine_count, 1);
     }
 
     #[tokio::test]

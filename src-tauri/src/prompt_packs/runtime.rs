@@ -504,6 +504,35 @@ fn build_transcript_analysis_llm_request(
     }
 }
 
+fn build_synthesis_llm_request(
+    run_id: i64,
+    stage_run_id: i64,
+    prompt_input_json: String,
+    profile_id: Option<String>,
+    model_override: Option<String>,
+    max_output_tokens: Option<i64>,
+) -> LlmChatRequest {
+    LlmChatRequest {
+        request_id: format!("prompt-pack-run-{run_id}-stage-{stage_run_id}"),
+        profile_id,
+        model_override,
+        max_output_tokens,
+        messages: vec![
+            LlmMessage {
+                role: "system".to_string(),
+                content: "Return strict JSON for the YouTube Summary synthesis stage. Produce a synthesis_candidate only; the backend assigns canonical IDs and traversal fields.".to_string(),
+            },
+            LlmMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "Synthesize the transcript-analysis candidates into one strict JSON object with stage_io_version, schema_version, stage, synthesis_candidate, limitations, and warning_candidates.\n\nRequired synthesis_candidate shape:\n{{\n  \"summary_text\": \"combined readable summary\",\n  \"cross_video_themes\": [{{ \"theme_text\": \"theme\", \"source_refs\": [\"source_ref_1\"], \"claim_refs\": [], \"evidence_refs\": [] }}],\n  \"common_claims\": [],\n  \"contradictions_across_videos\": []\n}}\n\nThe input wrapper field source_ref_id may be used only for reasoning. Do not copy the key source_ref_id into the output. If you need to cite videos, use source_refs arrays inside synthesis_candidate and only values present in the input. For this slice, keep claim_refs, evidence_refs, and relation_refs as empty arrays because the backend has not exposed allowed claim/evidence/relation ref maps to synthesis output. Do not include backend-owned IDs or keys such as source_ref_id, theme_id, common_claim_id, contradiction_id, claim_id, evidence_id, video_id, section_id, or synthesis_item_id. Do not wrap the JSON in Markdown.\n\nSynthesis input JSON:\n{}",
+                    prompt_input_json
+                ),
+            },
+        ],
+    }
+}
+
 fn transcript_analysis_stage_max_output_token_budget() -> AppResult<i64> {
     stage_max_output_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
 }
