@@ -1632,6 +1632,96 @@ async fn transcript_text_for_source(pool: &SqlitePool, source_id: i64) -> AppRes
     Ok(segments.join("\n"))
 }
 
+pub(crate) async fn build_synthesis_stage_input(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<serde_json::Value> {
+    let rows = sqlx::query_as::<_, (i64, i64, String, Option<String>, Vec<u8>)>(
+        "SELECT stages.id, snapshots.id, snapshots.source_ref_id, snapshots.title, artifacts.content_zstd
+         FROM prompt_pack_run_source_snapshots snapshots
+         JOIN prompt_pack_stage_runs stages
+           ON stages.run_id = snapshots.run_id
+          AND stages.source_snapshot_id = snapshots.id
+          AND stages.stage_name = 'youtube_summary/transcript_analysis'
+          AND stages.stage_status = 'succeeded'
+         JOIN prompt_pack_stage_artifacts artifacts
+           ON artifacts.stage_run_id = stages.id
+          AND artifacts.artifact_kind = 'parsed_output'
+          AND artifacts.id = (
+              SELECT latest.id
+              FROM prompt_pack_stage_artifacts latest
+              WHERE latest.stage_run_id = stages.id
+                AND latest.artifact_kind = 'parsed_output'
+              ORDER BY latest.attempt_number DESC, latest.artifact_index DESC, latest.id DESC
+              LIMIT 1
+          )
+         WHERE snapshots.run_id = ?
+         ORDER BY snapshots.id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    let mut videos = Vec::new();
+    let mut claim_candidates = Vec::new();
+    let mut evidence_fragment_candidates = Vec::new();
+    let mut warning_candidates = Vec::new();
+
+    for (_stage_run_id, source_snapshot_id, source_ref_id, title, content_zstd) in rows {
+        let text = decompress_text(&content_zstd).map_err(AppError::internal)?;
+        let parsed: serde_json::Value = serde_json::from_str(&text).map_err(|error| {
+            AppError::internal(format!("parse transcript parsed_output: {error}"))
+        })?;
+        videos.push(serde_json::json!({
+            "source_snapshot_id": source_snapshot_id,
+            "source_ref_id": source_ref_id,
+            "title": title,
+            "video_candidate": parsed
+                .get("video_candidate")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}))
+        }));
+        wrap_candidates(&mut claim_candidates, parsed.get("claim_candidates"), &source_ref_id);
+        wrap_candidates(
+            &mut evidence_fragment_candidates,
+            parsed.get("evidence_fragment_candidates"),
+            &source_ref_id,
+        );
+        wrap_candidates(
+            &mut warning_candidates,
+            parsed.get("warning_candidates"),
+            &source_ref_id,
+        );
+    }
+
+    Ok(serde_json::json!({
+        "stage_io_version": "1.0",
+        "schema_version": "1.0",
+        "stage": "youtube_summary/synthesis",
+        "run_id": run_id,
+        "videos": videos,
+        "claim_candidates": claim_candidates,
+        "evidence_fragment_candidates": evidence_fragment_candidates,
+        "warning_candidates": warning_candidates
+    }))
+}
+
+fn wrap_candidates(
+    target: &mut Vec<serde_json::Value>,
+    value: Option<&serde_json::Value>,
+    source_ref_id: &str,
+) {
+    if let Some(items) = value.and_then(serde_json::Value::as_array) {
+        for item in items {
+            target.push(serde_json::json!({
+                "source_ref_id": source_ref_id,
+                "candidate": item
+            }));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1903,6 +1993,204 @@ mod tests {
         .await
         .expect("run skeleton");
         pool
+    }
+
+    struct TranscriptStageFixture {
+        summary: &'static str,
+        claim: &'static str,
+        evidence: &'static str,
+    }
+
+    fn transcript_analysis_json(summary: &str, claim: &str, evidence: &str) -> String {
+        serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/transcript_analysis",
+            "video_candidate": {
+                "summary_text": summary,
+                "segment_candidates": [],
+                "key_point_candidates": [],
+                "quote_candidates": [],
+                "action_item_candidates": [],
+                "open_question_candidates": []
+            },
+            "claim_candidates": [
+                {
+                    "text": claim
+                }
+            ],
+            "evidence_fragment_candidates": [
+                {
+                    "text": evidence
+                }
+            ],
+            "warning_candidates": []
+        })
+        .to_string()
+    }
+
+    #[allow(dead_code)]
+    fn synthesis_json(summary: &str) -> String {
+        serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/synthesis",
+            "synthesis_candidate": {
+                "summary_text": summary,
+                "cross_video_themes": [
+                    {
+                        "theme_text": "Shared theme",
+                        "source_refs": ["source_ref_1", "source_ref_2"],
+                        "claim_refs": [],
+                        "evidence_refs": []
+                    }
+                ],
+                "common_claims": [],
+                "contradictions_across_videos": []
+            },
+            "limitations": [],
+            "warning_candidates": []
+        })
+        .to_string()
+    }
+
+    async fn persist_succeeded_transcript_stage_fixtures(
+        pool: &sqlx::SqlitePool,
+        run_id: i64,
+        fixtures: Vec<TranscriptStageFixture>,
+    ) -> crate::error::AppResult<()> {
+        let stage_rows = sqlx::query_as::<_, (i64, i64)>(
+            "SELECT id, source_snapshot_id
+             FROM prompt_pack_stage_runs
+             WHERE run_id = ?
+               AND stage_name = 'youtube_summary/transcript_analysis'
+             ORDER BY id ASC",
+        )
+        .bind(run_id)
+        .fetch_all(pool)
+        .await
+        .map_err(crate::error::AppError::database)?;
+
+        assert_eq!(stage_rows.len(), fixtures.len());
+
+        for ((stage_run_id, _source_snapshot_id), fixture) in stage_rows.into_iter().zip(fixtures) {
+            sqlx::query(
+                "UPDATE prompt_pack_stage_runs
+                 SET stage_status = 'succeeded', updated_at = ?
+                 WHERE id = ?",
+            )
+            .bind(super::now_string())
+            .bind(stage_run_id)
+            .execute(pool)
+            .await
+            .map_err(crate::error::AppError::database)?;
+
+            let parsed = transcript_analysis_json(fixture.summary, fixture.claim, fixture.evidence);
+            crate::prompt_packs::stage_io::insert_stage_artifact_in_pool(
+                pool,
+                run_id,
+                stage_run_id,
+                "parsed_output",
+                1,
+                3,
+                &parsed,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn build_synthesis_stage_input_collects_successful_transcript_outputs() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        persist_succeeded_transcript_stage_fixtures(
+            &pool,
+            1,
+            vec![
+                TranscriptStageFixture {
+                    summary: "First summary",
+                    claim: "First claim",
+                    evidence: "First evidence",
+                },
+                TranscriptStageFixture {
+                    summary: "Second summary",
+                    claim: "Second claim",
+                    evidence: "Second evidence",
+                },
+            ],
+        )
+        .await
+        .expect("persist transcript fixtures");
+
+        let input = super::build_synthesis_stage_input(&pool, 1)
+            .await
+            .expect("synthesis input");
+
+        assert_eq!(input["stage"], "youtube_summary/synthesis");
+        assert_eq!(input["videos"].as_array().expect("videos").len(), 2);
+        assert_eq!(input["claim_candidates"].as_array().expect("claims").len(), 2);
+        assert_eq!(
+            input["evidence_fragment_candidates"]
+                .as_array()
+                .expect("evidence")
+                .len(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn build_synthesis_stage_input_uses_latest_parsed_output_wrappers() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        persist_succeeded_transcript_stage_fixtures(
+            &pool,
+            1,
+            vec![
+                TranscriptStageFixture {
+                    summary: "Old first summary",
+                    claim: "Old first claim",
+                    evidence: "Old first evidence",
+                },
+                TranscriptStageFixture {
+                    summary: "Second summary",
+                    claim: "Second claim",
+                    evidence: "Second evidence",
+                },
+            ],
+        )
+        .await
+        .expect("persist transcript fixtures");
+
+        let first_stage_run_id: i64 = sqlx::query_scalar(
+            "SELECT id FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/transcript_analysis'
+             ORDER BY id ASC
+             LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("first stage row");
+        crate::prompt_packs::stage_io::insert_stage_artifact_in_pool(
+            &pool,
+            1,
+            first_stage_run_id,
+            "parsed_output",
+            2,
+            3,
+            &transcript_analysis_json("New first summary", "New first claim", "New first evidence"),
+        )
+        .await
+        .expect("insert retry parsed output");
+
+        let input = super::build_synthesis_stage_input(&pool, 1)
+            .await
+            .expect("synthesis input");
+        let claims = input["claim_candidates"].as_array().expect("claims");
+
+        assert_eq!(claims.len(), 2);
+        assert_eq!(claims[0]["source_ref_id"], "source_ref_1");
+        assert_eq!(claims[0]["candidate"]["text"], "New first claim");
+        assert!(claims[0]["candidate"].get("source_ref_id").is_none());
     }
 
     #[tokio::test]

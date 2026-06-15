@@ -166,7 +166,7 @@ git commit -m "Add YouTube Summary synthesis runtime config"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary.rs`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add these helper definitions near the existing transcript execution test helpers:
 
@@ -377,7 +377,7 @@ async fn build_synthesis_stage_input_uses_latest_parsed_output_wrappers() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -388,7 +388,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: both tests FAIL because `build_synthesis_stage_input` does not exist.
 
-- [ ] **Step 3: Implement the input builder**
+- [x] **Step 3: Implement the input builder**
 
 The test helpers from Step 1 already mark existing transcript-analysis stage rows as `succeeded` and persist exactly one `parsed_output` artifact per stage without terminalizing the whole run. Now add the private input builder in `youtube_summary.rs`:
 
@@ -478,7 +478,7 @@ fn wrap_candidates(target: &mut Vec<serde_json::Value>, value: Option<&serde_jso
 
 Do not write `source_ref_id` into the LLM-authored candidate object itself. The wrapper is pipeline-owned metadata; the nested `candidate` remains the provider output exactly as validated and persisted.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run:
 
@@ -489,7 +489,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary.rs
