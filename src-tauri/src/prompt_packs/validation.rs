@@ -75,7 +75,7 @@ pub(crate) async fn validate_and_quarantine_transcript_analysis_output(
             .bind(&object_path)
             .bind(&error.message)
             .bind(compress_text(&content).unwrap_or_default())
-            .bind("2026-06-14T00:00:00Z")
+            .bind(crate::time::now_rfc3339_utc())
             .execute(pool)
             .await;
             Err(error)
@@ -159,7 +159,7 @@ async fn quarantine_synthesis_output(
     .bind(&object_path)
     .bind(&validation_message)
     .bind(compress_text(&content).unwrap_or_default())
-    .bind("2026-06-14T00:00:00Z")
+    .bind(crate::time::now_rfc3339_utc())
     .execute(pool)
     .await
     .map_err(|db_error| {
@@ -556,6 +556,39 @@ mod tests {
         assert_eq!(quarantine_count, 1);
     }
 
+    #[tokio::test]
+    async fn transcript_quarantine_artifact_uses_current_time() {
+        let pool = test_pool_with_transcript_analysis_stage().await;
+        let input = test_stage_input_with_material_refs(["m_transcript_1"]);
+        let output = serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/transcript_analysis",
+            "video_candidate": {
+                "summary_text": "Summary",
+                "segment_candidates": [],
+                "key_point_candidates": [],
+                "quote_candidates": [],
+                "action_item_candidates": [],
+                "open_question_candidates": []
+            },
+            "claim_candidates": [
+                {
+                    "text": "Claim",
+                    "material_refs": ["m_missing"]
+                }
+            ],
+            "evidence_fragment_candidates": [],
+            "warning_candidates": []
+        });
+
+        validate_and_quarantine_transcript_analysis_output(&pool, 42, 1001, &input, &output)
+            .await
+            .expect_err("invalid candidate rejected");
+
+        assert_quarantine_created_at_is_current(&pool, 1001).await;
+    }
+
     #[test]
     fn synthesis_output_validator_accepts_valid_output() {
         let output = valid_synthesis_output();
@@ -708,6 +741,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn synthesis_quarantine_artifact_uses_current_time() {
+        let pool = test_pool_with_synthesis_stage().await;
+        let mut output = valid_synthesis_output();
+        output["warning_candidates"] = serde_json::json!([
+            {
+                "source_ref_id": "source_ref_1",
+                "text": "Provider must not assign backend source refs"
+            }
+        ]);
+
+        validate_and_quarantine_synthesis_output(&pool, 42, 2001, &output)
+            .await
+            .expect_err("invalid synthesis rejected");
+
+        assert_quarantine_created_at_is_current(&pool, 2001).await;
+    }
+
+    #[tokio::test]
     async fn invalid_synthesis_output_with_unknown_source_ref_is_quarantined() {
         let pool = test_pool_with_synthesis_stage().await;
         let mut output = valid_synthesis_output();
@@ -779,6 +830,30 @@ mod tests {
             .into_iter()
             .map(ToString::to_string)
             .collect()
+    }
+
+    async fn assert_quarantine_created_at_is_current(pool: &sqlx::SqlitePool, stage_run_id: i64) {
+        use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+        let created_at: String = sqlx::query_scalar(
+            "SELECT created_at FROM prompt_pack_result_quarantine_artifacts
+             WHERE run_id = 42 AND stage_run_id = ?
+             ORDER BY id DESC
+             LIMIT 1",
+        )
+        .bind(stage_run_id)
+        .fetch_one(pool)
+        .await
+        .expect("quarantine created_at");
+        let parsed = OffsetDateTime::parse(&created_at, &Rfc3339).expect("parse created_at");
+        let before = OffsetDateTime::now_utc() - Duration::seconds(5);
+        let after = OffsetDateTime::now_utc() + Duration::seconds(5);
+
+        assert_ne!(created_at, "2026-06-14T00:00:00Z");
+        assert!(
+            parsed >= before && parsed <= after,
+            "expected {created_at} to be between {before} and {after}"
+        );
     }
 
     fn test_stage_input_with_material_refs<const N: usize>(
